@@ -1,5 +1,21 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.448 (2026-09-25) — import alias must keep remapped Owned identity
+
+| Gate | Status |
+|------|--------|
+| `import_alias_must_not_steal_foreign_fn_ownership` | ✅ isolate GREEN — `use owned_pkg::get as query_get` must not emit `query_get(&` |
+| `import_alias_owned_get_must_not_merge_foreign_query_get_refresh` | ✅ unit GREEN — pick/merge/prefer reject different simple names |
+| encode / spawn / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** signature / registry boundary. Two gaps: (1) `--metadata owned_pkg=a,borrowed_pkg=b` was parsed as a single NAME=PATH, so `owned_pkg` was overwritten with a garbage path and `owned_pkg::get` never registered; (2) refresh/merge/`local_sig` treated the alias string `query_get` as `borrowed_pkg::query_get` (method-index / first-shared-ref) even when remapped to `owned_pkg::get`.
+
+**What became unnecessary:** alias-name registry keys in codegen refresh (`codegen_refresh_lookup_keys` uses only the remapped fn); `get_signature(func_name)` steal in `regular_call_arguments`; merge/pick/prefer OR-union of `get` vs `query_get`; bare external-crate keys when a crate alias is present. No new `ir_call_site` peel.
+
+**Gates:** `cargo test --release --lib -- import_alias_owned_get` → 1 passed. `cargo test --release --test all --features integration_tests,codegen_tests -- import_alias_must_not_steal_foreign_fn_ownership bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` → 6 passed.
+
+**Still RED:** WDB-127 isolate cargo-check — borrow is already present; `vec![10, 20]` emits `i32` into `Vec<u64>` (constraint / int-width, not this alias steal).
+
 ## P3.447 (2026-09-25) — same-crate `&T` passthrough + for-in-self shared borrow
 
 | Gate | Status |
@@ -610,7 +626,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | ✅ tip GREEN (P3.282) — import alias + qualified registry lookup; no bare `encode` homonym borrow |
-| P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.283) — `import_fn_alias_map` + refresh skips alias homonym challengers |
+| P1 | **Import alias must not steal foreign fn ownership metadata** | `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.448) — remapped `owned_pkg::get` only; comma `--metadata`; no foreign `query_get` merge |
 | P1 | **Owned `Vec<Custom>` filter helper must not demote + clone** | `bug_owned_vec_custom_filter_helper_must_not_demote_and_clone_test` | ✅ tip GREEN (P3.284) — forwarder keeps owned `Vec` when callee preregistered owned |
 | P0 | **`std::thread::spawn(\|\| …)` must not wrap closure in `&(move \|\| …)` (E0716/E0525)** | `bug_thread_spawn_closure_must_not_be_ref_test` | ✅ tip GREEN (P3.286) — qualified `thread::spawn` + FnOnce owned peel; no bare `spawn` homonym |
 | P1 | **`std::sync::mpsc::sync_channel` missing boundary signature** | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ tip GREEN (P3.287) — `mpsc::sync_channel` aliased from runtime; SyncSender typing is P3.293 |
@@ -1438,7 +1454,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Change | Status |
 |--------|--------|
 | Ecosystem: `wj-url` `join_url` → `Location` on `POST /notes` + `public_base_url` config | ✅ **60/60** on cargo-bin `wj` 0.50.0 |
-| Gate `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.283) |
+| Gate `bug_import_alias_must_not_steal_foreign_fn_ownership_test` | ✅ tip GREEN (P3.448 restore) |
 | Product workaround | ✅ alias as `qs_get` (not `query_get`) |
 
 **Compiler agent:** resolve call-site ownership by the *imported* function identity (crate + original name), not by the local alias string colliding with another crate's free-fn metadata.

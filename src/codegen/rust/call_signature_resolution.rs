@@ -96,6 +96,48 @@ pub(crate) fn import_alias_registry_lookup_key<'a>(
     (Cow::Borrowed(callee_name), false)
 }
 
+/// Defining-module codegen-refresh keys. Import aliases use only the remapped
+/// qualified fn (`owned_pkg::get`) — never the alias (`query_get`), which may
+/// collide with a foreign crate's free fn of that name (P3.283 / P3.448).
+pub(crate) fn codegen_refresh_lookup_keys(
+    callee_name: &str,
+    remapped: &str,
+    import_alias: bool,
+    skip_bare_homonym: bool,
+) -> Vec<String> {
+    if import_alias {
+        return vec![remapped.to_string()];
+    }
+    if skip_bare_homonym {
+        return vec![callee_name.to_string(), remapped.to_string()];
+    }
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    vec![
+        callee_name.to_string(),
+        remapped.to_string(),
+        simple.to_string(),
+    ]
+}
+
+/// `local_sig` is this call's remapped callee — not a foreign fn that shares the
+/// import alias (`query_get` → `owned_pkg::get`, never `borrowed_pkg::query_get`).
+pub(crate) fn signature_matches_resolved_callee(
+    sig: &crate::analyzer::FunctionSignature,
+    callee_name: &str,
+    resolved_lookup: &str,
+) -> bool {
+    let sig_simple = sig.name.rsplit("::").next().unwrap_or(sig.name.as_str());
+    let lookup_simple = resolved_lookup
+        .rsplit("::")
+        .next()
+        .unwrap_or(resolved_lookup);
+    if resolved_lookup != callee_name {
+        return sig.name == resolved_lookup || sig_simple == lookup_simple;
+    }
+    sig.name == callee_name
+        || (!callee_name.contains("::") && sig_simple == callee_name)
+}
+
 pub(crate) fn is_lowercase_user_module_qualified_call(callee_name: &str) -> bool {
     callee_name.rsplit_once("::").is_some_and(|(module, _)| {
         module

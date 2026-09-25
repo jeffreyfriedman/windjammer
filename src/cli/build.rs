@@ -6,6 +6,24 @@ use anyhow::Result;
 use colored::*;
 use std::path::Path;
 
+/// `--metadata NAME=PATH` is repeatable; one flag may also list `NAME=PATH,NAME=PATH`.
+fn parse_external_metadata_args(metadata: &[String]) -> Vec<(&str, &Path)> {
+    metadata
+        .iter()
+        .flat_map(|s| s.split(','))
+        .filter_map(|part| {
+            let part = part.trim();
+            let (name, path_str) = part.split_once('=')?;
+            let name = name.trim();
+            let path_str = path_str.trim();
+            if name.is_empty() || path_str.is_empty() {
+                return None;
+            }
+            Some((name, Path::new(path_str)))
+        })
+        .collect()
+}
+
 /// Build options for JavaScript target
 pub struct BuildOptions {
     pub minify: bool,
@@ -102,14 +120,7 @@ pub fn execute(
         }
     };
 
-    // Parse --metadata NAME=PATH into (name, path) pairs
-    let external_metadata: Vec<(&str, &Path)> = metadata
-        .iter()
-        .filter_map(|s| {
-            let (name, path_str) = s.split_once('=')?;
-            Some((name, Path::new(path_str)))
-        })
-        .collect();
+    let external_metadata = parse_external_metadata_args(metadata);
 
     crate::cargo_toml::set_skip_cargo_toml_generation(no_generate_cargo_toml);
     crate::build_project_ext(
@@ -219,13 +230,7 @@ fn build_with_json_output(
 ) -> Result<()> {
     use crate::cli::json_diagnostics::{JsonCompilationOutput, Severity, JsonDiagnostic};
 
-    let external_metadata: Vec<(&str, &Path)> = metadata
-        .iter()
-        .filter_map(|s| {
-            let (name, path_str) = s.split_once('=')?;
-            Some((name, Path::new(path_str)))
-        })
-        .collect();
+    let external_metadata = parse_external_metadata_args(metadata);
 
     let target = match target_str.to_lowercase().as_str() {
         "rust" => crate::CompilationTarget::Rust,
