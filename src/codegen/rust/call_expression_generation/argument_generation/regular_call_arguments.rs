@@ -656,10 +656,6 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             signature.clone(),
                             gen.get_signature_with_global(func_name).cloned(),
                             gen.get_signature_with_global(lookup.as_ref()).cloned(),
-                            gen.signature_registry.get_signature(func_name).cloned(),
-                            gen.signature_registry
-                                .get_signature(lookup.as_ref())
-                                .cloned(),
                         ];
                         let wants_str = candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
@@ -709,12 +705,9 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     }
                     if let Expression::Identifier { name, .. } = arg {
-                        let lookup = gen.signature_lookup_callee_name(func_name);
-                        if let Some(rs) = gen
-                            .signature_registry
-                            .get_signature(func_name)
-                            .or_else(|| gen.signature_registry.get_signature(lookup.as_ref()))
-                        {
+                        // Import aliases (`use owned_pkg::get as query_get`): never look up
+                        // the alias string — it collides with foreign `query_get` metadata.
+                        if let Some(rs) = gen.get_signature_with_global(func_name) {
                             let pidx = rs.arg_param_index(i);
                             // Emission-confirmed shared ref only — stale param_types
                             // Reference(str) must not force `&` into owned String formals.

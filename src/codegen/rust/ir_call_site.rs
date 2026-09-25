@@ -1040,19 +1040,18 @@ impl<'ast> CodeGenerator<'ast> {
             let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
             let lookup_callee = self.signature_lookup_callee_name(callee_name);
             let lookup_ref = lookup_callee.as_ref();
+            let import_alias = self.is_import_alias_cross_crate_call(callee_name);
             let skip_bare_spawn_homonym =
                 crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
                     callee_name,
+                ) || import_alias;
+            let refresh_keys =
+                crate::codegen::rust::call_signature_resolution::codegen_refresh_lookup_keys(
+                    callee_name,
+                    lookup_ref,
+                    import_alias,
+                    skip_bare_spawn_homonym,
                 );
-            let refresh_keys = if skip_bare_spawn_homonym {
-                vec![callee_name.to_string(), lookup_ref.to_string()]
-            } else {
-                vec![
-                    callee_name.to_string(),
-                    lookup_ref.to_string(),
-                    simple.to_string(),
-                ]
-            };
             crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
                 &mut sig,
                 registry,
@@ -1095,17 +1094,33 @@ impl<'ast> CodeGenerator<'ast> {
                     self.global_signature_registry
                         .as_ref()
                         .and_then(|g| g.get_signature(lookup_ref).cloned()),
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(callee_name).cloned()),
+                    if import_alias {
+                        None
+                    } else {
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(callee_name).cloned())
+                    },
                     homonym_sigs[0].clone(),
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.lookup_method(callee_name).cloned()),
+                    if import_alias {
+                        None
+                    } else {
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.lookup_method(callee_name).cloned())
+                    },
                     homonym_sigs[1].clone(),
-                    self.signature_registry.get_signature(callee_name).cloned(),
+                    if import_alias {
+                        None
+                    } else {
+                        self.signature_registry.get_signature(callee_name).cloned()
+                    },
                     homonym_sigs[2].clone(),
-                    self.signature_registry.lookup_method(callee_name).cloned(),
+                    if import_alias {
+                        None
+                    } else {
+                        self.signature_registry.lookup_method(callee_name).cloned()
+                    },
                     homonym_sigs[3].clone(),
                     Some(sig.clone()),
                 ])
@@ -8792,10 +8807,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Prefer emitted owned contracts over stale Borrowed analyzer/global stubs.
         if let Some(sig) = local_sig {
-            if sig.name == callee_name
-                || (!callee_name.contains("::")
-                    && sig.name.rsplit("::").next() == callee_name.rsplit("::").next())
-            {
+            if crate::codegen::rust::call_signature_resolution::signature_matches_resolved_callee(
+                sig, callee_name, lookup,
+            ) {
                 if self.ir_callee_arg_emits_owned_contract(
                     registry,
                     callee_name,
@@ -8874,10 +8888,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Call-resolved signatures are authoritative only when they match this callee.
         // Enclosing-fn homonyms (`pub fn write` while lowering `csv.write`) must not win.
         if let Some(sig) = local_sig {
-            if sig.name == callee_name
-                || (!callee_name.contains("::")
-                    && sig.name.rsplit("::").next() == callee_name.rsplit("::").next())
-            {
+            if crate::codegen::rust::call_signature_resolution::signature_matches_resolved_callee(
+                sig, callee_name, lookup,
+            ) {
                 return check(sig);
             }
         }

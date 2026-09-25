@@ -297,7 +297,12 @@ pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
     }
     for (name, sig) in &crate_meta.functions {
         let added = if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
-            registry.add_function(name.clone(), a_sig.clone());
+            // Path-dep / `--metadata` crates: register `crate_key::fn` only.
+            // Bare `query_get` from `borrowed_pkg` steals `use owned_pkg::get as query_get`
+            // (P3.283 / P3.448). Local crates (no alias) still install the bare key.
+            if crate_alias.is_none() || name.contains("::") {
+                registry.add_function(name.clone(), a_sig.clone());
+            }
             Some(a_sig)
         } else if sig.is_extern {
             // Extern functions with no param_ownership still need registry entries
@@ -330,7 +335,9 @@ pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
                 field_extract_params: None,
                 forwarding_borrow_params: None,
             };
-            registry.add_function(name.clone(), a_sig.clone());
+            if crate_alias.is_none() || name.contains("::") {
+                registry.add_function(name.clone(), a_sig.clone());
+            }
             Some(a_sig)
         } else {
             None

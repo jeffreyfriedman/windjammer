@@ -773,6 +773,12 @@ pub(crate) fn merge_codegen_refresh_metadata(
     into: &mut FunctionSignature,
     from: &FunctionSignature,
 ) {
+    // Distinct functions (`owned_pkg::get` vs foreign `query_get`) must never
+    // OR-union emission flags even when param shapes match. Same simple name
+    // (`join` vs `strings::join`) still merges when shapes / std-stub rules allow.
+    if sig_simple_name(&into.name) != sig_simple_name(&from.name) {
+        return;
+    }
     // Distinct APIs that share a suffix (`join(string, string)` vs `strings::join(Vec, str)`)
     // must not OR-union emission flags. Same-API WJ stub vs runtime `&str` still merges.
     if !signature_param_shapes_compatible(into, from)
@@ -911,10 +917,14 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
     keys: &[String],
 ) {
     let mut best: Option<&FunctionSignature> = None;
+    let into_simple = sig_simple_name(&into.name);
     for key in keys {
         let Some(reg) = registry.get_signature(key) else {
             continue;
         };
+        if sig_simple_name(&reg.name) != into_simple {
+            continue;
+        }
         if reg.emitted_rust_ref_params.is_some() {
             if signature_param_shapes_compatible(into, reg)
                 || signature_is_wj_std_stub_or_runtime_qualified(into)
@@ -927,12 +937,15 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
         .last()
         .map(|k| k.rsplit("::").next().unwrap_or(k.as_str()))
     {
-        if let Some(reg) = registry.find_unique_signature_ending_with(simple) {
-            if reg.emitted_rust_ref_params.is_some()
-                && (signature_param_shapes_compatible(into, reg)
-                    || signature_is_wj_std_stub_or_runtime_qualified(into))
-            {
-                best = Some(pick_stronger_codegen_refresh(best, reg));
+        if simple == into_simple {
+            if let Some(reg) = registry.find_unique_signature_ending_with(simple) {
+                if sig_simple_name(&reg.name) == into_simple
+                    && reg.emitted_rust_ref_params.is_some()
+                    && (signature_param_shapes_compatible(into, reg)
+                        || signature_is_wj_std_stub_or_runtime_qualified(into))
+                {
+                    best = Some(pick_stronger_codegen_refresh(best, reg));
+                }
             }
         }
     }
@@ -1361,7 +1374,14 @@ where
                         .saturating_sub(usize::from(sig.has_self_receiver_slot()));
                     prev_n == sig_n
                 });
-                if arity_ok {
+                let identity = first
+                    .as_ref()
+                    .or(refresh_without_shared_ref.as_ref())
+                    .or(shared_ref_refresh.as_ref());
+                let same_fn = identity.is_none_or(|prev: &FunctionSignature| {
+                    sig_simple_name(&prev.name) == sig_simple_name(&sig.name)
+                });
+                if arity_ok && same_fn {
                     match &shared_ref_refresh {
                         None => shared_ref_refresh = Some(sig),
                         Some(incumbent) if defining_mixed_owned_emission_beats(&sig, incumbent) => {
@@ -1424,6 +1444,9 @@ where
         }
     }
     if let (Some(shared), Some(owned)) = (&shared_ref_refresh, &refresh_without_shared_ref) {
+        if sig_simple_name(&shared.name) != sig_simple_name(&owned.name) {
+            return Some(owned.clone());
+        }
         if owned_user_refresh_beats_stdlib_shared_ref(owned, shared) {
             return Some(owned.clone());
         }
@@ -1431,6 +1454,9 @@ where
     // User `join(string, string)` with no `emitted_rust_ref_params` yet only lands
     // in `first`. Do not let first-shared-ref keep `strings::join(Vec, str)`.
     if let (Some(shared), Some(user)) = (&shared_ref_refresh, &first) {
+        if sig_simple_name(&shared.name) != sig_simple_name(&user.name) {
+            return Some(user.clone());
+        }
         if !signature_param_shapes_compatible(user, shared)
             && !signature_is_wj_std_stub_or_runtime_qualified(user)
             && signature_is_wj_std_stub_or_runtime_qualified(shared)
@@ -1890,6 +1916,13 @@ pub(crate) fn prefer_shared_ref_signature(
     let Some(challenger) = challenger else {
         return preferred;
     };
+    // Import-alias / foreign-fn collision: `owned_pkg::get` must not inherit
+    // `borrowed_pkg::query_get` shared-ref flags just because shapes match.
+    if preferred.as_ref().is_some_and(|pref| {
+        sig_simple_name(&pref.name) != sig_simple_name(&challenger.name)
+    }) {
+        return preferred;
+    }
     // Runtime-scanned `&str`/`AsRef<str>` (empty WJ formal_param_types + Reference(str)
     // + emitted). Detected via empty `formal_param_types`, not `formal_param_type()`
     // (that falls back to `param_types`).
@@ -3607,6 +3640,90 @@ pub fn resolve() -> string {
         assert_eq!(
             into.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
+        );
+    }
+
+    #[test]
+    fn import_alias_owned_get_must_not_merge_foreign_query_get_refresh() {
+        let owned_get = FunctionSignature {
+            name: "owned_pkg::get".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Option(Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let borrowed_query_get = FunctionSignature {
+            name: "query_get".into(),
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: Some(Type::Option(Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let mut merged = owned_get.clone();
+        merge_codegen_refresh_metadata(&mut merged, &borrowed_query_get);
+        assert_eq!(
+            merged.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false][..]),
+            "foreign query_get must not OR-union shared-ref onto owned_pkg::get"
+        );
+        assert_eq!(
+            merged.param_ownership,
+            vec![OwnershipMode::Owned, OwnershipMode::Owned]
+        );
+
+        let picked = pick_codegen_refreshed_signature([
+            Some(owned_get.clone()),
+            Some(borrowed_query_get.clone()),
+        ])
+        .expect("pick");
+        assert_eq!(
+            sig_simple_name(&picked.name),
+            "get",
+            "first-shared-ref must not steal a different simple name"
+        );
+        assert_eq!(
+            picked.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false][..])
+        );
+
+        let preferred =
+            prefer_shared_ref_signature(Some(owned_get), Some(&borrowed_query_get), 0).unwrap();
+        assert_eq!(sig_simple_name(&preferred.name), "get");
+        assert_eq!(
+            preferred.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false][..])
+        );
+
+        let mut local = SignatureRegistry::empty();
+        local.add_function("owned_pkg::get".into(), merged.clone());
+        local.add_function("query_get".into(), borrowed_query_get);
+        let mut into = merged;
+        merge_registry_codegen_refresh_if_present(
+            &mut into,
+            &local,
+            &["query_get".into(), "owned_pkg::get".into()],
+        );
+        assert_eq!(
+            into.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false][..]),
+            "registry suffix/key query_get must not refresh owned_pkg::get"
         );
     }
 

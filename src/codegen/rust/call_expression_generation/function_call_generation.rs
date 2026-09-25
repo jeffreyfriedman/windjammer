@@ -801,19 +801,23 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 if let Some(ref mut sig) = signature {
                     // Prefer defining-module codegen refresh from the converged global registry.
                     if let Some(global) = gen.global_signature_registry.as_ref() {
+                        let import_alias = gen.is_import_alias_cross_crate_call(func_name);
+                        let skip_bare = crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+                            func_name,
+                        ) || import_alias;
+                        let refresh_keys =
+                            crate::codegen::rust::call_signature_resolution::codegen_refresh_lookup_keys(
+                                func_name,
+                                &sig_lookup_name,
+                                import_alias,
+                                skip_bare,
+                            );
+                        let mut keys = vec![r.qualified_key.clone()];
+                        keys.extend(refresh_keys);
                         crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(
                             sig,
                             global,
-                            &[
-                                r.qualified_key.clone(),
-                                sig_lookup_name.clone(),
-                                func_name.to_string(),
-                                func_name
-                                    .rsplit("::")
-                                    .next()
-                                    .unwrap_or(func_name)
-                                    .to_string(),
-                            ],
+                            &keys,
                         );
                     }
                 }
