@@ -418,15 +418,7 @@ impl<'ast> CodeGenerator<'ast> {
                         let formal = sig
                             .formal_param_type(sig_param_idx)
                             .or_else(|| sig.param_types.get(sig_param_idx));
-                        let already_usize = match arg {
-                            Expression::Identifier { name, .. } => {
-                                self.identifier_emits_as_usize(name)
-                            }
-                            _ => {
-                                self.infer_expression_type_is_usize(arg)
-                                    || self.expression_produces_usize(arg)
-                            }
-                        };
+                        let already_usize = self.arg_expression_already_usize(arg);
                         crate::codegen::rust::type_casting::coerce_arg_str_for_usize_formal(
                             Some(self),
                             arg,
