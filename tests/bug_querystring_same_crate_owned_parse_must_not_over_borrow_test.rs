@@ -55,31 +55,51 @@ fn same_crate_owned_parse_must_not_over_borrow() {
         r#"
 use std::strings
 
-pub fn parse(text: string) -> string {
+pub fn parse(text: string) -> Vec<(string, string)> {
+    let mut pairs = Vec::new()
     if strings.len(text) == 0 {
-        return ""
+        return pairs
     }
-    text
-}
-
-pub fn get(query: string, key: string) -> string {
-    if strings.len(key) == 0 {
-        return ""
-    }
-    parse(query)
-}
-
-pub fn stringify(pairs: Vec<(string, string)>) -> Vec<(string, string)> {
+    pairs.push((text, empty_string()))
     pairs
 }
 
-pub fn remove(query: string, key: string) -> Vec<(string, string)> {
+fn empty_string() -> string {
+    ""
+}
+
+pub fn get(query: string, key: string) -> Option<string> {
+    let pairs = parse(query)
+    let mut i = 0
+    while i < pairs.len() {
+        let pair = pairs[i]
+        if pair.0 == key {
+            return Some(pair.1)
+        }
+        i = i + 1
+    }
+    None
+}
+
+pub fn stringify(pairs: Vec<(string, string)>) -> string {
+    let mut pairs = pairs
+    if pairs.len() == 0 {
+        return empty_string()
+    }
+    let pair = pairs[0]
+    pair.0
+}
+
+pub fn remove(query: string, key: string) -> string {
     let pairs = parse(query)
     stringify(pairs)
 }
 
 pub fn has(query: string, key: string) -> bool {
-    strings.len(get(query, key)) > 0
+    match get(query, key) {
+        Some(_) => true,
+        None => false,
+    }
 }
 "#,
     )
