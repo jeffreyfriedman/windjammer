@@ -3679,8 +3679,8 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | `nested_self_field_in_struct_lit_must_not_force_owned_self` | ✅ MultiFile GREEN (2026-09-23) — `fn update_params(&self)` |
-| `cross_file_nested_self_field_in_struct_lit_must_not_force_owned_self` | 🆕 P3.424b — struct in types.wj, impl in renderer.wj (product shape) |
-| Tip-out `update_raymarch_params(self)` | ❌ RED after 2026-09-24 tip regen (same-file isolate GREEN) |
+| `cross_file_nested_self_field_in_struct_lit_must_not_force_owned_self` | ✅ MultiFile GREEN (2026-09-24) — `fn update_params(&self)` + cargo-check |
+| Tip-out `update_raymarch_params(self)` | ❌ RED pending regen with P3.424b tip |
 
 **Product:** `update_raymarch_params(self)` (reads only) called from `&mut self` loop → E0507 move. Atmosphere/water update_* already emit `&self`. Engine cargo-check after regen: **288 rustc errors** (E0308×197, E0277×33, E0507×21).
 

@@ -100,7 +100,7 @@ pub struct Uni {
 }
 
 impl Uni {
-    pub fn to_bytes(self) -> Vec<u8> {
+    pub fn pack(self) -> Vec<u8> {
         Vec::new()
     }
 }
@@ -130,7 +130,7 @@ impl Renderer {
             b: self.current_quality.steps,
             c: self.voxel_size,
         }
-        let bytes = params.to_bytes()
+        let bytes = params.pack()
         gpu_update(self.resources.handle, bytes.as_ptr(), bytes.len())
     }
 }
