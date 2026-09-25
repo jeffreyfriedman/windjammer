@@ -900,18 +900,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                     || g.find_unique_signature_ending_with(simple).is_some()
             });
     if cross_crate_import {
-        let dep_sig = gen
-            .global_signature_registry
-            .as_ref()
-            .and_then(|global_reg| {
-                global_reg
-                    .get_signature(lookup_ref)
-                    .or_else(|| global_reg.get_signature(simple))
-                    .or_else(|| global_reg.find_unique_signature_ending_with(simple))
-            })
-            .or_else(|| signature.as_ref())
-            .or_else(|| gen.get_signature_with_global(func_name))
-            .or_else(|| gen.get_signature_with_global(simple));
+        let resolved_dep = gen.resolve_cross_crate_dep_signature(func_name);
+        let dep_sig = resolved_dep.as_ref().or_else(|| signature.as_ref());
         if let Some(gs) = dep_sig {
             for (i, (_, arg)) in arguments.iter().enumerate() {
                 let Some(arg_str) = args.get_mut(i) else {
