@@ -201,7 +201,9 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int32 | Type::Uint => true,
             Type::Custom(n) if matches!(n.as_str(), "i32" | "u32") => true,
             Type::Int | Type::Bool | Type::String => false,
-            Type::Custom(n) if matches!(n.as_str(), "int" | "i64") => false,
+            Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "u64" | "usize" | "isize") => {
+                false
+            }
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => false,
             Type::Custom(n) if self.type_contains_wj_int_width(&Type::Custom(n.clone())) => false,
             // `(Once, SharedInt)` / `(int, int)` / `(Pool, bool)` — do not force i32
