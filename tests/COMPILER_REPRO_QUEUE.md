@@ -15,18 +15,22 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
-## P3.443 (2026-09-24) — File WDB-384–387 tip RED gates (DB agent)
+## P3.443 (2026-09-24) — TDD WDB-384–387 (DB agent)
 
 | Gate | Status |
 |------|--------|
-| WDB-384 Copy enum variant `.clone()` | 🆕 filed — `FaceDirection::PosX.clone()` |
-| WDB-385 `f32::MAX.clone()` | 🆕 filed — voxel_scene bounds |
-| WDB-386 indexed `shader_file` clone | 🆕 filed — twin WDB-377 |
-| WDB-387 `].clone().get_id()` | 🆕 filed — twin WDB-362 |
+| WDB-384 MultiFile | ✅ isolate GREEN — `Face::PosX` |
+| WDB-384 tip-out | ❌ RED — mesh_generator / squad / npc / streaming / material_editor |
+| WDB-385 MultiFile | ❌ isolate RED — `Vec3::new(f32::MAX.clone(), …)` |
+| WDB-385 tip-out | ❌ RED — voxel_scene |
+| WDB-386 MultiFile | ✅ isolate GREEN |
+| WDB-386 tip-out | ❌ RED — shader_graph_compiler / shader_effect_test |
+| WDB-387 MultiFile | ✅ isolate GREEN |
+| WDB-387 tip-out | ❌ RED — world_partition/streaming |
 
-**Root cause layer:** none this session — DB agent files gates only. Isolates vs stale tip-out.
+**Root cause layer:** none this session — DB agent files gates only. **WDB-385 isolate is live tip RED** (associated const clone).
 
-**Gates:** `cargo test --release --test bug_wdb384_… --test bug_wdb385_… --test bug_wdb386_… --test bug_wdb387_…`
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_wdb384_ bug_wdb385_ bug_wdb386_ bug_wdb387_` → **3 passed / 5 failed**.
 
 ## P3.442 (2026-09-24) — local Copy scalar into owned Copy formal must not `&x`
 
@@ -697,10 +701,10 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-373 |
 | P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-374/377 |
 | P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-353 |
-| P1 | **Copy enum variant must not `FaceDirection::PosX.clone()`** | `bug_wdb384_module_file_copy_enum_variant_must_not_clone_test` | 🆕 RED / filed (P3.443) |
-| P1 | **`f32::MAX`/`MIN` must not emit `.clone()`** | `bug_wdb385_module_file_f32_assoc_const_must_not_clone_test` | 🆕 RED / filed (P3.443) |
-| P1 | **indexed Copy ShaderFile must not `].clone().shader_file`** | `bug_wdb386_module_file_copy_shader_file_must_not_double_clone_test` | 🆕 RED / filed (P3.443); twin WDB-377 |
-| P1 | **indexed `get_id()` must not `].clone().get_id()`** | `bug_wdb387_module_file_index_get_id_must_not_clone_element_test` | 🆕 RED / filed (P3.443); twin WDB-362 |
+| P1 | **Copy enum variant must not `FaceDirection::PosX.clone()`** | `bug_wdb384_module_file_copy_enum_variant_must_not_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED |
+| P1 | **`f32::MAX`/`MIN` must not emit `.clone()`** | `bug_wdb385_module_file_f32_assoc_const_must_not_clone_test` | ❌ isolate + tip RED (P3.443 TDD) — live `f32::MAX.clone()` |
+| P1 | **indexed Copy ShaderFile must not `].clone().shader_file`** | `bug_wdb386_module_file_copy_shader_file_must_not_double_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-377 |
+| P1 | **indexed `get_id()` must not `].clone().get_id()`** | `bug_wdb387_module_file_index_get_id_must_not_clone_element_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-362 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
