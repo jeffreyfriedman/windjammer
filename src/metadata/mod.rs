@@ -24,7 +24,7 @@ pub use crate_metadata::{
 };
 pub use function_metadata::{
     default_skeleton_param_ownership_from_types, metadata_function_sig_from_analyzer,
-    try_analyzer_signature_from_metadata, FunctionSignature,
+    stamp_trait_method_flag, try_analyzer_signature_from_metadata, FunctionSignature,
 };
 pub use type_metadata::infer_copy_from_metadata_structs_pub;
 
@@ -402,6 +402,7 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                         forwarding_borrow_params: None,
                         has_self_receiver: false,
                         is_extern: decl.is_extern,
+                        is_trait_method: false,
                     },
                 );
             }
@@ -438,6 +439,7 @@ pub fn collect_ast_skeleton_metadata(program: &crate::parser::Program) -> Module
                             forwarding_borrow_params: None,
                             has_self_receiver: false,
                             is_extern: false,
+                            is_trait_method: false,
                         },
                     );
                 }
@@ -495,8 +497,9 @@ pub fn collect_analyzed_module_metadata(
                     } else {
                         format!("{}::{}", module_name, decl.name)
                     };
-                    meta.functions
-                        .insert(key, metadata_function_sig_from_analyzer(sig, false, None));
+                    let mut meta_sig = metadata_function_sig_from_analyzer(sig, false, None);
+                    stamp_trait_method_flag(registry, &key, &mut meta_sig);
+                    meta.functions.insert(key, meta_sig);
                 }
             }
             Item::Impl { block, .. } => {
@@ -509,14 +512,13 @@ pub fn collect_analyzed_module_metadata(
                             registry,
                         )
                     {
-                        meta.functions.insert(
-                            full_name,
-                            metadata_function_sig_from_analyzer(
-                                sig,
-                                true,
-                                Some(block.type_name.clone()),
-                            ),
+                        let mut meta_sig = metadata_function_sig_from_analyzer(
+                            sig,
+                            true,
+                            Some(block.type_name.clone()),
                         );
+                        stamp_trait_method_flag(registry, &full_name, &mut meta_sig);
+                        meta.functions.insert(full_name, meta_sig);
                     }
                 }
             }
@@ -540,10 +542,13 @@ pub fn collect_analyzed_module_metadata(
                             registry,
                         )
                     {
-                        meta.functions.insert(
-                            full_name,
-                            metadata_function_sig_from_analyzer(sig, true, Some(decl.name.clone())),
+                        let mut meta_sig = metadata_function_sig_from_analyzer(
+                            sig,
+                            true,
+                            Some(decl.name.clone()),
                         );
+                        meta_sig.is_trait_method = true;
+                        meta.functions.insert(full_name, meta_sig);
                     }
                 }
             }

@@ -297,6 +297,9 @@ pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
     }
     for (name, sig) in &crate_meta.functions {
         let added = if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
+            if sig.is_trait_method {
+                registry.record_trait_method_key(name.clone());
+            }
             // Path-dep / `--metadata` crates: register `crate_key::fn` only.
             // Bare `query_get` from `borrowed_pkg` steals `use owned_pkg::get as query_get`
             // (P3.283 / P3.448). Local crates (no alias) still install the bare key.

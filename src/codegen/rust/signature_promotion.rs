@@ -952,6 +952,12 @@ pub(crate) fn merge_registry_codegen_refresh_if_present(
     if let Some(reg) = best {
         merge_codegen_refresh_metadata(into, reg);
     }
+    // Impl-body shared-ref refresh (`emitted_rust_ref_params[i]=true`) must not undo
+    // trait AST owned `string` (E0053 / port traits).
+    let method = sig_simple_name(&into.name).to_string();
+    crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+        registry, &method, into,
+    );
 }
 
 pub(crate) fn method_registry_reflects_emitted_owned(sig: &FunctionSignature) -> bool {
@@ -3613,6 +3619,79 @@ pub fn resolve() -> string {
             stub.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Owned]
         );
+    }
+
+    #[test]
+    fn merge_refresh_must_not_undo_trait_owned_string_password() {
+        let mut registry = SignatureRegistry::empty();
+        registry.record_trait_method_key("CredentialAuthenticator::authenticate".into());
+        registry.add_function(
+            "CredentialAuthenticator::authenticate".into(),
+            FunctionSignature {
+                name: "authenticate".into(),
+                param_types: vec![
+                    Type::Custom("Self".into()),
+                    Type::String,
+                    Type::String,
+                ],
+                formal_param_types: vec![
+                    Type::Custom("Self".into()),
+                    Type::String,
+                    Type::String,
+                ],
+                param_ownership: vec![
+                    OwnershipMode::Borrowed,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                ],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false, false, false]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let impl_refresh = FunctionSignature {
+            name: "SeedCredentialAuthenticator::authenticate".into(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String, Type::String],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        registry.add_function(
+            "SeedCredentialAuthenticator::authenticate".into(),
+            impl_refresh.clone(),
+        );
+        let mut into = impl_refresh;
+        merge_registry_codegen_refresh_if_present(
+            &mut into,
+            &registry,
+            &["SeedCredentialAuthenticator::authenticate".into()],
+        );
+        assert_eq!(
+            into.param_ownership.get(2),
+            Some(&OwnershipMode::Owned),
+            "trait owned string must beat impl shared-ref refresh on password"
+        );
+        assert_eq!(into.param_types.get(2), Some(&Type::String));
     }
 
     #[test]

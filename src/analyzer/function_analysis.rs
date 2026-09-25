@@ -1616,6 +1616,7 @@ impl<'ast> Analyzer<'ast> {
             for (method_name, analyzed_func) in methods {
                 let sig = self.build_signature(analyzed_func, registry);
                 let qualified_name = format!("{}::{}", trait_name, method_name);
+                registry.record_trait_method_key(qualified_name.clone());
                 registry.add_function(qualified_name, sig);
             }
         }

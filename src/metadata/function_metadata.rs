@@ -67,6 +67,12 @@ pub struct FunctionSignature {
     /// True when this is an `extern fn` (FFI). Used by codegen to wrap calls in `unsafe`.
     #[serde(default)]
     pub is_extern: bool,
+
+    /// True when this key was registered from a `trait` item (`Trait::method`).
+    /// Restored into `SignatureRegistry::trait_method_keys` on metadata load so
+    /// multipass call sites can apply the trait owned-`string` contract (E0053).
+    #[serde(default)]
+    pub is_trait_method: bool,
 }
 
 /// Build metadata JSON signature from an analyzer registry entry (post-inference).
@@ -103,6 +109,18 @@ pub fn metadata_function_sig_from_analyzer(
         forwarding_borrow_params: sig.forwarding_borrow_params.clone(),
         has_self_receiver: sig.has_self_receiver,
         is_extern: sig.is_extern,
+        is_trait_method: false,
+    }
+}
+
+/// Stamp `is_trait_method` from the in-memory registry (trait item keys).
+pub fn stamp_trait_method_flag(
+    registry: &crate::analyzer::SignatureRegistry,
+    name: &str,
+    meta: &mut FunctionSignature,
+) {
+    if registry.is_trait_method_key(name) {
+        meta.is_trait_method = true;
     }
 }
 
@@ -224,6 +242,9 @@ pub(in crate::metadata) fn merge_module_metadata_signatures(
 ) {
     for (name, sig) in &meta.functions {
         if let Some(a_sig) = try_analyzer_signature_from_metadata(name, sig) {
+            if sig.is_trait_method {
+                registry.record_trait_method_key(name.clone());
+            }
             registry.add_function(name.clone(), a_sig.clone());
             // Always install `module_path::…` aliases. Keys are often already
             // `Type::method` (contain `::`); still need `mod::Type::method` so

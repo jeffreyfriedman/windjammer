@@ -1234,6 +1234,19 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        // Affinity can re-select a body-converged impl; trait AST `string` is last writer.
+        crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+            &self.signature_registry,
+            method_simple,
+            &mut sig,
+        );
+        if let Some(global) = self.global_signature_registry.as_ref() {
+            crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                global,
+                method_simple,
+                &mut sig,
+            );
+        }
 
         // Constraint write-back: MutBorrowed + bare T (including Copy aggregates)
         // becomes MutableReference so expected ownership is MutRef, not owned-mut.
@@ -4987,6 +5000,20 @@ impl<'ast> CodeGenerator<'ast> {
             &mut text_sig,
             Some(callee_name),
         );
+        // Trait AST `string` beats prefer_shared_text_ref / impl-body `&str` refresh
+        // (`authenticate(email: string, password: string)`).
+        crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+            &self.signature_registry,
+            simple,
+            &mut text_sig,
+        );
+        if let Some(g) = self.global_signature_registry.as_ref() {
+            crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                g,
+                simple,
+                &mut text_sig,
+            );
+        }
 
         let arg_already_rust_ref = matches!(
             arg_expr,

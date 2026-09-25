@@ -734,12 +734,30 @@ pub fn resolve_method_for_call_site_in_module(
                 }
             }
         }
+        apply_trait_owned_string_call_site_contracts(local, method, &mut resolved.sig);
         if let Some(g) = global {
             apply_trait_owned_string_call_site_contracts(g, method, &mut resolved.sig);
         }
         resolved.sig = finalize_call_site_signature(resolved.sig);
         resolved
     })
+}
+
+/// Trait item `string` (or analyzer-polluted `&str` on a trait key) is owned `String`.
+fn trait_declares_owned_text_param(sig: &FunctionSignature, idx: usize) -> bool {
+    if formal_is_plain_windjammer_string(sig, idx) {
+        return true;
+    }
+    let Some(t) = sig.formal_param_type(idx).or_else(|| sig.param_types.get(idx)) else {
+        return false;
+    };
+    crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+        || crate::codegen::rust::types::is_windjammer_text_type(t)
+        || matches!(
+            t,
+            Type::Reference(inner) | Type::MutableReference(inner)
+                if crate::codegen::rust::types::is_windjammer_text_type(inner)
+        )
 }
 
 /// When an impl method body converged `string` to `&str`, restore trait declaration owned
@@ -750,25 +768,70 @@ pub fn resolve_method_for_call_site_in_module(
 /// (e.g. `Registry::register` must not affect `ComponentRegistry::register`).
 /// True when any trait definition in `global` declares an owned plain `string` at `arg_index`
 /// for instance method `method` (port-trait E0053 keep-owned at call sites).
+fn trait_definition_sigs_for_method(
+    registry: &SignatureRegistry,
+    method: &str,
+) -> Vec<(String, FunctionSignature)> {
+    let suffix = format!("::{method}");
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for tk in registry.all_trait_method_keys() {
+        if tk != method && !tk.ends_with(&suffix) {
+            continue;
+        }
+        if let Some(sig) = registry.get_signature(&tk).cloned() {
+            if seen.insert(tk.clone()) {
+                out.push((tk, sig));
+            }
+        }
+    }
+    for (key, sig) in &registry.signatures {
+        if (key == method || key.ends_with(&suffix))
+            && registry.is_trait_method_key(key)
+            && seen.insert(key.clone())
+        {
+            out.push((key.clone(), sig.clone()));
+        }
+    }
+    out
+}
+
 pub(crate) fn global_trait_owned_plain_string_arg(
     global: &SignatureRegistry,
     method: &str,
     arg_index: usize,
 ) -> bool {
-    let suffix = format!("::{method}");
-    for (key, trait_sig) in &global.signatures {
-        if !key.ends_with(&suffix) || !global.is_trait_method_key(key) {
-            continue;
-        }
+    for (_key, trait_sig) in trait_definition_sigs_for_method(global, method) {
         if !trait_sig.has_self_receiver {
             continue;
         }
         let pidx = trait_sig.arg_param_index(arg_index);
-        if formal_is_plain_windjammer_string(trait_sig, pidx) {
+        if trait_declares_owned_text_param(&trait_sig, pidx) {
             return true;
         }
     }
     false
+}
+
+/// Write trait AST `string` (E0053) onto `impl Trait for Type` method signatures
+/// in `registry`. Inherent homonyms are left alone (`trait_impl_method_keys`).
+pub(crate) fn write_back_trait_owned_string_to_impls(registry: &mut SignatureRegistry) {
+    let impl_keys = registry.all_trait_impl_method_keys();
+    if impl_keys.is_empty() {
+        return;
+    }
+    let mut updates: Vec<(String, FunctionSignature)> = Vec::new();
+    for key in impl_keys {
+        let Some(mut sig) = registry.get_signature(&key).cloned() else {
+            continue;
+        };
+        let method = key.rsplit("::").next().unwrap_or(&key).to_string();
+        apply_trait_owned_string_call_site_contracts(registry, &method, &mut sig);
+        updates.push((key, sig));
+    }
+    for (key, sig) in updates {
+        registry.add_function(key, sig);
+    }
 }
 
 pub(crate) fn apply_trait_owned_string_call_site_contracts(
@@ -782,15 +845,8 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
     if !sig.has_self_receiver {
         return;
     }
-    let suffix = format!("::{method}");
-    for (key, trait_sig) in &global.signatures {
-        if key == &sig.name || !key.ends_with(&suffix) {
-            continue;
-        }
-        // Only apply contracts from trait definitions, not arbitrary impl methods
-        // with the same name. This prevents `Registry::register` (a regular impl)
-        // from incorrectly upgrading `ComponentRegistry::register` to Owned.
-        if !global.is_trait_method_key(key) {
+    for (key, trait_sig) in trait_definition_sigs_for_method(global, method) {
+        if key == sig.name {
             continue;
         }
         if trait_sig.has_self_receiver != sig.has_self_receiver {
@@ -800,13 +856,13 @@ pub(crate) fn apply_trait_owned_string_call_site_contracts(
             if sig.has_self_receiver && idx == 0 {
                 continue;
             }
-            if !formal_is_plain_windjammer_string(trait_sig, idx) {
+            if !trait_declares_owned_text_param(&trait_sig, idx) {
                 continue;
             }
             // For trait definitions, the formal `string` type determines the contract
             // (Owned String). Body analysis may have overwritten param_ownership to
             // Borrowed, but the trait declaration is the source of truth.
-            if !global.is_trait_method_key(key)
+            if !global.is_trait_method_key(&key)
                 && !matches!(
                     trait_sig.param_ownership.get(idx),
                     Some(OwnershipMode::Owned)
@@ -2024,6 +2080,222 @@ mod tests {
                 .iter()
                 .all(|t| { crate::codegen::rust::string_utilities::param_is_rust_str_ref(t) }),
             "static impl must keep converged &str despite global owned stub"
+        );
+    }
+
+    #[test]
+    fn apply_trait_owned_string_restores_polluted_str_ref_on_trait_key() {
+        let mut global = SignatureRegistry::new();
+        global.record_trait_method_key("CredentialAuthenticator::authenticate".into());
+        global.add_function(
+            "CredentialAuthenticator::authenticate".into(),
+            FunctionSignature {
+                name: "authenticate".into(),
+                param_types: vec![
+                    Type::Custom("Self".into()),
+                    Type::String,
+                    Type::Reference(Box::new(Type::Custom("str".into()))),
+                ],
+                formal_param_types: vec![
+                    Type::Custom("Self".into()),
+                    Type::String,
+                    Type::Reference(Box::new(Type::Custom("str".into()))),
+                ],
+                param_ownership: vec![
+                    OwnershipMode::Borrowed,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Borrowed,
+                ],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false, false, true]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+
+        let mut sig = FunctionSignature {
+            name: "SeedCredentialAuthenticator::authenticate".into(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String, Type::String],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+
+        apply_trait_owned_string_call_site_contracts(&global, "authenticate", &mut sig);
+        assert_eq!(
+            sig.param_ownership.get(2),
+            Some(&OwnershipMode::Owned),
+            "trait AST string must beat impl-body &str on password"
+        );
+        assert_eq!(sig.param_types.get(2), Some(&Type::String));
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_ref().and_then(|f| f.get(2)).copied(),
+            Some(false)
+        );
+        assert!(
+            global_trait_owned_plain_string_arg(&global, "authenticate", 1),
+            "password arg must be owned on the trait key"
+        );
+    }
+
+    #[test]
+    fn apply_trait_owned_string_finds_module_qualified_alias_and_local_only_registry() {
+        let mut local = SignatureRegistry::new();
+        local.record_trait_method_key("CredentialAuthenticator::authenticate".into());
+        local.add_function(
+            "ports::CredentialAuthenticator::authenticate".into(),
+            FunctionSignature {
+                name: "authenticate".into(),
+                param_types: vec![
+                    Type::Custom("Self".into()),
+                    Type::String,
+                    Type::String,
+                ],
+                formal_param_types: vec![
+                    Type::Custom("Self".into()),
+                    Type::String,
+                    Type::String,
+                ],
+                param_ownership: vec![
+                    OwnershipMode::Borrowed,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                ],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        assert!(
+            local.is_trait_method_key("ports::CredentialAuthenticator::authenticate"),
+            "module-qualified alias must match recorded Trait::method key"
+        );
+        assert!(global_trait_owned_plain_string_arg(
+            &local,
+            "authenticate",
+            1
+        ));
+
+        let mut sig = FunctionSignature {
+            name: "SeedCredentialAuthenticator::authenticate".into(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String, Type::String],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        apply_trait_owned_string_call_site_contracts(&local, "authenticate", &mut sig);
+        assert_eq!(
+            sig.param_ownership.get(2),
+            Some(&OwnershipMode::Owned),
+            "local-only trait alias must restore owned password"
+        );
+        assert_eq!(sig.param_types.get(2), Some(&Type::String));
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_ref().and_then(|f| f.get(2)).copied(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn write_back_restores_trait_impl_not_inherent_homonym() {
+        let mut registry = SignatureRegistry::new();
+        registry.record_trait_method_key("ReportReader::report_lines".into());
+        registry.add_function(
+            "ReportReader::report_lines".into(),
+            FunctionSignature {
+                name: "report_lines".into(),
+                param_types: vec![Type::Custom("Self".into()), Type::String],
+                formal_param_types: vec![Type::Custom("Self".into()), Type::String],
+                param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: true,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let borrowed_slug = FunctionSignature {
+            name: "SeedReader::report_lines".into(),
+            param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        registry.add_function("SeedReader::report_lines".into(), borrowed_slug.clone());
+        registry.add_function("DbReportReader::report_lines".into(), borrowed_slug);
+        registry.record_trait_impl_method_key("SeedReader::report_lines".into());
+
+        write_back_trait_owned_string_to_impls(&mut registry);
+
+        let impl_sig = registry
+            .get_signature("SeedReader::report_lines")
+            .expect("trait impl key");
+        assert_eq!(
+            impl_sig.param_ownership.get(1),
+            Some(&OwnershipMode::Owned),
+            "trait impl must receive owned string write-back"
+        );
+        assert_eq!(impl_sig.param_types.get(1), Some(&Type::String));
+
+        let inherent = registry
+            .get_signature("DbReportReader::report_lines")
+            .expect("inherent homonym");
+        assert_eq!(
+            inherent.param_ownership.get(1),
+            Some(&OwnershipMode::Borrowed),
+            "inherent report_lines must keep body-converged &str"
         );
     }
 

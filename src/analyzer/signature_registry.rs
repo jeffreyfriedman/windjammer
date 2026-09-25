@@ -137,6 +137,10 @@ pub struct SignatureRegistry {
     /// Used by `apply_trait_owned_string_call_site_contracts` to avoid matching
     /// unrelated impl methods with the same name suffix.
     trait_method_keys: HashSet<String>,
+    /// `Type::method` keys from `impl Trait for Type` (not inherent impls).
+    /// Write-back restores trait AST `string` onto these without touching
+    /// inherent homonyms (`DbReportReader::report_lines`).
+    trait_impl_method_keys: HashSet<String>,
     /// WJ `std::module` names populated by the runtime scanner (`http`, `csv` from
     /// `csv_mod.rs`, `async` from `async_runtime.rs`) — never a hand-maintained list.
     runtime_std_modules: HashSet<String>,
@@ -199,6 +203,7 @@ impl SignatureRegistry {
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
             trait_method_keys: HashSet::new(),
+            trait_impl_method_keys: HashSet::new(),
             runtime_std_modules: HashSet::new(),
             runtime_std_rust_stems: HashMap::new(),
             runtime_type_modules: HashMap::new(),
@@ -920,12 +925,94 @@ impl SignatureRegistry {
 
     /// Returns true if the given key was registered from a trait definition.
     pub fn is_trait_method_key(&self, key: &str) -> bool {
-        if self.trait_method_keys.contains(key) {
+        if self.trait_method_key_matches_local(key) {
             return true;
         }
         self.global_fallback
             .as_ref()
             .is_some_and(|g| g.is_trait_method_key(key))
+    }
+
+    fn trait_method_key_matches_local(&self, key: &str) -> bool {
+        if self.trait_method_keys.contains(key) {
+            return true;
+        }
+        // `ports::CredentialAuthenticator::authenticate` matches recorded
+        // `CredentialAuthenticator::authenticate`.
+        if let Some((parent, method)) = key.rsplit_once("::") {
+            if parent.contains("::") {
+                if let Some(trait_name) = parent.rsplit("::").next() {
+                    let short = format!("{trait_name}::{method}");
+                    if self.trait_method_keys.contains(&short) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Trait-definition keys on this layer plus `global_fallback`.
+    pub fn all_trait_method_keys(&self) -> Vec<String> {
+        let mut keys: Vec<String> = self.trait_method_keys.iter().cloned().collect();
+        if let Some(g) = self.global_fallback.as_ref() {
+            for k in g.all_trait_method_keys() {
+                if !keys.iter().any(|e| e == &k) {
+                    keys.push(k);
+                }
+            }
+        }
+        keys
+    }
+
+    /// Record that `key` is a `Trait::method` definition (not an inherent impl).
+    pub fn record_trait_method_key(&mut self, key: String) {
+        self.trait_method_keys.insert(key);
+    }
+
+    /// Record that `key` is a `Type::method` from `impl Trait for Type`.
+    pub fn record_trait_impl_method_key(&mut self, key: String) {
+        self.trait_impl_method_keys.insert(key);
+    }
+
+    /// True when `key` (or a module-qualified alias) is a trait-impl method.
+    pub fn is_trait_impl_method_key(&self, key: &str) -> bool {
+        if self.trait_impl_method_key_matches_local(key) {
+            return true;
+        }
+        self.global_fallback
+            .as_ref()
+            .is_some_and(|g| g.is_trait_impl_method_key(key))
+    }
+
+    fn trait_impl_method_key_matches_local(&self, key: &str) -> bool {
+        if self.trait_impl_method_keys.contains(key) {
+            return true;
+        }
+        if let Some((parent, method)) = key.rsplit_once("::") {
+            if parent.contains("::") {
+                if let Some(type_name) = parent.rsplit("::").next() {
+                    let short = format!("{type_name}::{method}");
+                    if self.trait_impl_method_keys.contains(&short) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// `Type::method` keys from `impl Trait for Type` on this layer plus fallback.
+    pub fn all_trait_impl_method_keys(&self) -> Vec<String> {
+        let mut keys: Vec<String> = self.trait_impl_method_keys.iter().cloned().collect();
+        if let Some(g) = self.global_fallback.as_ref() {
+            for k in g.all_trait_impl_method_keys() {
+                if !keys.iter().any(|e| e == &k) {
+                    keys.push(k);
+                }
+            }
+        }
+        keys
     }
 
     pub fn all_signatures(&self) -> impl Iterator<Item = (&String, &FunctionSignature)> {
@@ -1294,10 +1381,24 @@ impl SignatureRegistry {
         }
         for (name, sig) in &source.signatures {
             if !name.contains("::") {
-                self.add_function(format!("{}::{}", file_stem, name), sig.clone());
+                let aliased = format!("{}::{}", file_stem, name);
+                if source.is_trait_method_key(name) {
+                    self.record_trait_method_key(aliased.clone());
+                }
+                if source.is_trait_impl_method_key(name) {
+                    self.record_trait_impl_method_key(aliased.clone());
+                }
+                self.add_function(aliased, sig.clone());
             }
             if !module_path.is_empty() && !name.starts_with(&format!("{}::", module_path)) {
-                self.add_function(format!("{}::{}", module_path, name), sig.clone());
+                let aliased = format!("{}::{}", module_path, name);
+                if source.is_trait_method_key(name) {
+                    self.record_trait_method_key(aliased.clone());
+                }
+                if source.is_trait_impl_method_key(name) {
+                    self.record_trait_impl_method_key(aliased.clone());
+                }
+                self.add_function(aliased, sig.clone());
             }
         }
     }
@@ -1382,6 +1483,9 @@ impl SignatureRegistry {
                                 func.name
                             )
                         };
+                        if block.trait_name.is_some() {
+                            registry.record_trait_impl_method_key(qualified_name.clone());
+                        }
                         registry.add_function(qualified_name, sig.clone());
                         if module_prefix.is_empty() {
                             registry.add_function(func.name.clone(), sig);
@@ -1659,6 +1763,11 @@ impl SignatureRegistry {
                                     .get(idx)
                                     .is_some_and(|eo| matches!(eo, OwnershipMode::Owned))
                         });
+                    // E0053: trait AST `string` is the call-site contract. Impl-body
+                    // borrow "refinement" must not overwrite `Trait::method`.
+                    if sig_refines_with_borrows && self.is_trait_method_key(name) {
+                        continue;
+                    }
                     if !sig_refines_with_borrows
                     && (crate::codegen::rust::signature_promotion::prefer_converged_over_stub(
                         sig, existing,
@@ -1701,6 +1810,8 @@ impl SignatureRegistry {
             .extend(other.ownership_collision_keys.iter().cloned());
         self.trait_method_keys
             .extend(other.trait_method_keys.iter().cloned());
+        self.trait_impl_method_keys
+            .extend(other.trait_impl_method_keys.iter().cloned());
         self.runtime_std_modules
             .extend(other.runtime_std_modules.iter().cloned());
         self.runtime_std_rust_stems
