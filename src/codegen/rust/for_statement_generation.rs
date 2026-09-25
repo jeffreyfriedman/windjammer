@@ -65,10 +65,14 @@ impl<'ast> CodeGenerator<'ast> {
             if needs_mut {
                 // `for mut x in self.field` on &mut self: borrow mutably, never move the field.
                 needs_borrow = true;
-            } else if Self::variable_used_in_statements(body, "self") {
-                // Body also uses `self` — clone for by-value iteration (E0505/E0507).
+            } else if body.iter().any(|s| {
+                self.statement_mutates_variable_field(s, "self")
+                    || self.statement_nonreadonly_method_call_on_var(s, "self")
+            }) {
+                // Body mutates `self` / calls `&mut self` — clone (E0502 with `&self.field`).
                 needs_borrow = false;
             } else {
+                // Shared uses of `self` (`has_dependents`) overlap `&self.field` — keep borrow.
                 needs_borrow = true;
             }
         }

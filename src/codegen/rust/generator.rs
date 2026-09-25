@@ -2616,6 +2616,15 @@ impl<'ast> CodeGenerator<'ast> {
             || self.identifier_already_ref(name)
             || self.emitted_rust_ref_formals.contains(name)
             || self.binding_emits_as_rust_shared_ref(name)
+            || self.current_fn_emitted_formal_is_shared_ref(name)
+    }
+
+    /// True when the function currently being emitted wrote `name: &T` (not `&mut T`).
+    ///
+    /// Uses preregistered formal strings when `emitted_rust_ref_formals` was cleared
+    /// between sibling prepare and body emit (same-file `run(csr: &DenseCsr)`).
+    pub(crate) fn current_fn_emitted_formal_is_shared_ref(&self, name: &str) -> bool {
+        !self.identifier_already_mut_ref(name) && self.caller_formal_emitted_shared_ref(name)
     }
 
     /// Peel spurious leading `&` when a binding is already emitted as `&T` / `&mut T` and the
@@ -2805,6 +2814,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_function_params.iter().any(|p| {
             p.name == name
                 && !self.emitted_rust_ref_formals.contains(name)
+                && !self.caller_formal_emitted_shared_ref(name)
                 && !self.is_type_copy(&p.type_)
         })
     }
