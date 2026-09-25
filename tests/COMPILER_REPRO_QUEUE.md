@@ -1,22 +1,17 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.444 (2026-09-24) — i32-heavy impl `0..node.params.len()` + `buf.clone()` into `&mut Vec`
+## P3.446 (2026-09-25) — TDD WDB-388 + user-join pick unit
 
 | Gate | Status |
 |------|--------|
-| `i32_heavy_impl_match_field_len_must_not_emit_i32_range` | 🆕 isolate RED (TDD) — CsgScene impl + Option match + poisoned custom `len() -> i32` |
-| `p3444_tip_out_game_core_csg_must_not_emit_i32_len_range` | 🆕 tip-out RED — `gen/csg/scene.rs` `0_i32..node.params.len()` + `buf.clone()` |
-| P3.359 `for_zero_to_len_must_not_emit_i32_range` | ✅ isolate GREEN — free `count_slots(node) -> int` (does not cover impl/match) |
-| WDB-345 MultiFile | ✅ isolate GREEN — free `emit_instruction(buf)` (does not cover recursive self + match) |
-| WDB-345 tip-out | ❌ RED — same product file |
+| WDB-388 MultiFile | 🆕 isolate (P3.442 twin) — `Vec3::new(a, b, c)` must not `&a` |
+| WDB-388 tip-out | 🆕 product scan — `Vec3::new(&` in gen/ |
+| `prefer_shared_ref_keeps_local_user_join_over_strings_join` | 🆕 unit — bare user `join` must not inherit `strings::join` |
+| `user_join_two_strings_moves_owned_locals` | ❌ isolate RED — formals mixed `(&str, String)`; call still `join(&base, &relative)` |
 
-**Product:** `CsgScene::emit_node_instructions` after `let node = match self.get_node(node_id)`. Engine rustc: `expected i32, found usize` on range end + `expected &mut Vec<f32>, found Vec<f32>` on `buf.clone()`.
+**Root cause layer:** signature pick (bootstrap). `prefer_shared_ref_signature` keeps local owned WJ string API when challenger is runtime-std `strings::join`. Isolate call-site still over-borrows the owned `relative` slot.
 
-**Root cause layer (hyp):** `generate_range` `end_is_usize` is false when match-bound `node.params` type is unresolved **and** `consensus_return_is_usize("len")` is poisoned by a custom `len() -> i32`. Start literal then keeps `_i32` from i32-heavy body affinity. Recursive `buf: Vec<f32>` demotes to `&mut` but call sites still emit `buf.clone()`.
-
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- i32_heavy_impl_match_field_len p3444_tip_out_game_core_csg`
-
-
+**Gates:** not yet GREEN for isolate — next: pick by formal types (two `string` vs `Vec`+`&str`), not more peels.
 
 ## P3.445 (2026-09-24) — `f32::MAX` associated path is Copy (no `.clone()`)
 

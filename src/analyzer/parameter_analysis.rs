@@ -741,9 +741,7 @@ impl<'ast> Analyzer<'ast> {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
             Expression::MacroInvocation {
-                name: macro_name,
-                args,
-                ..
+                name: macro_name, ..
             } if matches!(
                 macro_name.as_str(),
                 "format" | "println" | "print" | "eprintln" | "eprint"
