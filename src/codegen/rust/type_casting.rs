@@ -3,6 +3,28 @@
 
 use crate::parser::ast::*;
 
+/// `let mut colon_at = -1` / `let mut i = -1` — signed sentinel, never Rust `usize`.
+pub fn expression_is_negative_int_init(expr: &Expression) -> bool {
+    match expr {
+        Expression::Literal {
+            value: Literal::Int(n),
+            ..
+        } => *n < 0,
+        Expression::Unary {
+            op: UnaryOp::Neg,
+            operand,
+            ..
+        } => matches!(
+            *operand,
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } if *n >= 0
+        ),
+        _ => false,
+    }
+}
+
 /// Check if an expression is a usize literal
 pub fn is_usize_literal(expr: &Expression) -> bool {
     matches!(
@@ -522,6 +544,20 @@ pub fn cast_for_usize_binary_op(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn negative_int_literal_is_signed_sentinel_init() {
+        let neg = Expression::Literal {
+            value: Literal::Int(-1),
+            location: Default::default(),
+        };
+        assert!(expression_is_negative_int_init(&neg));
+        let pos = Expression::Literal {
+            value: Literal::Int(0),
+            location: Default::default(),
+        };
+        assert!(!expression_is_negative_int_init(&pos));
+    }
 
     #[test]
     fn test_maybe_cast_usize_to_int() {

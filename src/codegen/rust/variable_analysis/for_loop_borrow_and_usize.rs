@@ -574,11 +574,19 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(t) = type_ {
                         self.local_var_types.insert(name.clone(), t.clone());
                     }
-                    let is_usize = self.expression_produces_usize(value)
-                        || self.infer_expression_type_is_usize(value)
-                        || matches!(value, Expression::MethodCall { method, .. } if method == "len");
-                    if is_usize {
-                        self.usize_variables.insert(name.clone());
+                    // Constraint: negative sentinels stay WJ `int` (`colon_at = -1`
+                    // then `colon_at = j` must not promote the binding to usize).
+                    if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
+                        self.local_var_types.insert(name.clone(), Type::Int);
+                        self.literal_init_wj_int_loop_counters
+                            .insert(name.clone());
+                    } else {
+                        let is_usize = self.expression_produces_usize(value)
+                            || self.infer_expression_type_is_usize(value)
+                            || matches!(value, Expression::MethodCall { method, .. } if method == "len");
+                        if is_usize {
+                            self.usize_variables.insert(name.clone());
+                        }
                     }
                 }
                 if let Some(b) = else_block {
@@ -651,6 +659,9 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|p| p.name == name && matches!(&p.type_, Type::Int))
         {
+            return true;
+        }
+        if self.literal_init_wj_int_loop_counters.contains(name) {
             return true;
         }
         self.local_var_types.get(name).is_some_and(|t| {
