@@ -15,6 +15,19 @@ call-site no extra `&`, shadowed owned local → owned callee move, compound
 clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 `std::compress` gzip wiring.
 
+## P3.440 (2026-09-24) — WDB-379 `format!` must not lower to `write!`/`unwrap`
+
+| Gate | Status |
+|------|--------|
+| `wdb379_module_file_format_must_not_emit_write_unwrap` | ✅ isolate GREEN — let-bound `format!("{}-{}", …)` stays `format!` |
+| WDB-379 tip-out / `gen/` | ❌ stale product — needs retranpile with tip `wj` |
+
+**Root cause layer:** codegen — capacity-hint path emitted `String::with_capacity` + `write!(&mut __s).unwrap()` (Rust leakage). Direct `return format!(…)` skipped the hint; `let s = format!(…)` (product shape) hit it.
+
+**What became unnecessary:** rustc `write!` prealloc for `format!`. Hints remain recorded for a future WJ-native path.
+
+**Gates:** `cargo test --release --test all -- wdb379_module_file_format_must_not_emit_write_unwrap` → isolate GREEN / tip-out RED.
+
 ## P3.438 (2026-09-24) — Defining demotion beats importer stubs; runtime `&str` still wins
 
 | Gate | Status |
@@ -634,7 +647,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | ✅ isolate GREEN (P3.430) — `self.lifetimes[i].buffer_id`; tip-out pending regen |
 | P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-374 |
 | P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-370/375 |
-| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD) |
+| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.440) — let-bound `format!` (capacity hint) no longer `write!`/`unwrap`; tip-out pending regen |
 | P1 | **remaining product `None.clone()` (tilemap/blend/music/…)** | `bug_wdb380_module_file_remaining_none_must_not_emit_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-367 |
 | P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-373 |
 | P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-374/377 |

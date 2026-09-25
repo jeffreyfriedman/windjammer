@@ -1814,7 +1814,14 @@ impl<'ast> CodeGenerator<'ast> {
             arg_expr,
             Expression::Call { .. } | Expression::MethodCall { .. }
         );
-        if call_temp_autoborrow && matches!(resolved_kind, CoercionKind::Borrow) {
+        let owned_clone_temp = prepared_arg.ends_with(".clone()")
+            || prepared_arg.ends_with(".to_string()")
+            || prepared_arg.ends_with(".to_owned()");
+        // Call temps that rustc can autoborrow (`encode_startup()`) stay Identity.
+        // Owned `.clone()` into Custom `&T` does not autoborrow (encode_line).
+        let rust_autoborrows_temp = call_temp_autoborrow
+            && !(owned_clone_temp && !crate::ir::coercion::is_string_base(&expected.base));
+        if rust_autoborrows_temp && matches!(resolved_kind, CoercionKind::Borrow) {
             resolved_kind = CoercionKind::Identity;
         }
         let coerced = apply_coercion(&resolved_kind, prepared_arg.as_str(), Target::Rust);
@@ -1830,7 +1837,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &actual,
                 &expected,
                 false,
-                call_temp_autoborrow,
+                rust_autoborrows_temp,
                 false,
             );
         }
@@ -5487,7 +5494,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         let wants_shared_terminal = global_confirms_shared_ref(param_idx)
             || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
-            || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx);
+            || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
+            || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index);
         if wants_shared_terminal && coerced.ends_with(".clone()") {
             let base = coerced.trim_end_matches(".clone()").trim();
             // Demoted caller `&T` is already shared — bare pass (P3.390).
@@ -5661,7 +5669,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         let wants_shared = global_confirms_shared_ref(param_idx)
             || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
-            || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx);
+            || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx)
+            || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index);
         if wants_shared
             && !coerced.starts_with("&mut ")
             && !coerced.ends_with(".to_string()")
@@ -7130,13 +7139,14 @@ impl<'ast> CodeGenerator<'ast> {
         if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
             || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx)
         {
-            // Owned clones/`to_string` already satisfy `&str` / `&T` via deref —
-            // never emit `&x.clone()` (E0308 into owned String, redundant for `&str`).
-            // WDB-165: also peel a leading `&` so `&state.clone()` cannot survive when
-            // shared-borrow was expected from stale metadata but the arg is already owned.
-            if coerced.ends_with(".clone()")
+            // Owned clones/`to_string` deref-coerce to `&str` only. Custom `&T`
+            // formals need `&item.clone()` (encode_line / WDB-125).
+            let expected_for_clone = safety_type_from_signature_param(sig, param_idx);
+            if crate::ir::coercion::rust_owned_temp_deref_coerces_into_shared_ref(
+                &expected_for_clone,
+            ) && (coerced.ends_with(".clone()")
                 || coerced.ends_with(".to_string()")
-                || coerced.ends_with(".to_owned()")
+                || coerced.ends_with(".to_owned()"))
             {
                 let mut s = coerced.trim().to_string();
                 while s.starts_with('&') {
@@ -7181,20 +7191,26 @@ impl<'ast> CodeGenerator<'ast> {
                     .to_string();
                 return;
             }
-            // WDB-169/WDB-190: Call/MethodCall temps coerce to `&T` via Rust autoborrow —
-            // never emit `&empty_bakeoff_run()` / `&encode_startup(…)` (E0308 / product gates).
-            // WDB-329: Cast-to-Copy/`usize` is a value (`idx as usize`), not a place —
-            // `&idx as usize` is E0606; Owned usize formals take the cast by value.
+            // WDB-169/WDB-190: Call temps into owned formals must not grow `&`.
+            // MethodCall `.clone()` into Custom `&T` does not autoborrow.
+            // WDB-329: Cast-to-Copy/`usize` is a value (`idx as usize`), not a place.
+            let clone_temp_needs_explicit_ref = matches!(arg_expr, Expression::MethodCall { .. })
+                && (coerced.ends_with(".clone()")
+                    || coerced.ends_with(".to_string()")
+                    || coerced.ends_with(".to_owned()"))
+                && !crate::ir::coercion::rust_owned_temp_deref_coerces_into_shared_ref(
+                    &expected_for_clone,
+                );
             if !coerced.starts_with('&')
                 && !coerced.starts_with("&mut ")
                 && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
-                && !matches!(
+                && (!matches!(
                     arg_expr,
                     Expression::Call { .. }
                         | Expression::MethodCall { .. }
                         | Expression::Closure { .. }
                         | Expression::Cast { .. }
-                )
+                ) || clone_temp_needs_explicit_ref)
                 && !coerced.contains(" as usize")
             {
                 *coerced = format!("&{coerced}");
@@ -8459,6 +8475,11 @@ impl<'ast> CodeGenerator<'ast> {
         callee: &str,
         arg_index: usize,
     ) -> bool {
+        // Same-file demotion (`encode_line(todo: Todo)` → `todo: &Todo`) is recorded
+        // on preregistered emitted formals before sibling bodies run.
+        if self.preregistered_free_call_arg_expects_borrow(callee, arg_index) {
+            return true;
+        }
         self.ir_callee_arg_expects_shared_borrow(
             &self.signature_registry,
             callee,

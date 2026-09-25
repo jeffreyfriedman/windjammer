@@ -112,43 +112,8 @@ impl<'ast> CodeGenerator<'ast> {
         let prev_suppress = self.suppress_string_conversion.get();
         self.suppress_string_conversion.set(true);
 
-        // PHASE 4 OPTIMIZATION: Check for format! with capacity hints
-        if name == "format" {
-            if let Some(&capacity) = self.string_capacity_hints.get(&self.current_statement_idx) {
-                // Clone capacity to avoid borrow issues
-                let capacity_val = capacity;
-                // Generate optimized String::with_capacity + write! instead of format!
-                self.needs_write_import = true;
-                // write! expects the first argument to be a &str format template, not String.
-                let arg_strs: Vec<String> = if args.is_empty() {
-                    Vec::new()
-                } else {
-                    let fmt = self.format_macro_template_arg(args[0]);
-                    let rest: Vec<String> = args[1..]
-                        .iter()
-                        .map(|e| self.generate_expression(e))
-                        .collect();
-                    let mut v = Vec::with_capacity(1 + rest.len());
-                    v.push(fmt);
-                    v.extend(rest);
-                    v
-                };
-
-                self.coerce_string_literals_to_owned = prev_coerce;
-                self.in_match_arm_needing_string = prev_match_arm;
-                self.suppress_string_conversion.set(prev_suppress);
-
-                return format!(
-                    "{{\n{}    let mut __s = String::with_capacity({});\n{}    write!(&mut __s, {}).unwrap();\n{}    __s\n{}}}",
-                    self.indent(),
-                    capacity_val,
-                    self.indent(),
-                    arg_strs.join(", "),
-                    self.indent(),
-                    self.indent()
-                );
-            }
-        }
+        // WDB-379: never lower `format!` to `write!(&mut __s).unwrap()` (Rust leakage).
+        // Capacity hints stay recorded for a future WJ-native prealloc, not rustc `write!`.
 
         // Special case: if this is println!/eprintln!/print!/eprint! and first arg is format!, flatten it
         let should_flatten = (name == "println"
