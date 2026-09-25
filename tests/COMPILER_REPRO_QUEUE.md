@@ -1,5 +1,19 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.454 (2026-09-25) — `Vec[int]` index cast without undoing sentinel i64
+
+| Gate | Status |
+|------|--------|
+| `bug_vec_int_index_loop_test` | ✅ isolate GREEN — `lines[(idx as usize)]` |
+| `bug_int_loop_assign_end_bound_must_unify_test` | ✅ GREEN — `colon_at` stays `-1_i64`; `colon_at = j as i64` |
+| haystack / substring / spawn / mpsc / `for_zero_to_len` / WDB-119 / WDB-121 | ✅ GREEN — no regression |
+
+**Root cause layer:** encoding. Untyped `let mut idx = 0` is recorded as a literal-init WJ `int` counter so index sites still emit `as usize` after `.len()` usize promotion. `reconcile_ambiguous_int_local_after_let` was painting `let mut colon_at = -1_i64` as `usize` (mixed-int inference) *before* the emitted `_i64` suffix could win, so `colon_at = j` skipped the i64 cast.
+
+**What became unnecessary:** stamping *all* `let mut x = 0` as `Type::Int` (that dual-oracle broke `i < strings::len`). Emitted `_i64` / negative-init now wins over mixed-codegen usize in reconcile — no new `ir_call_site` peel.
+
+**Gates:** `cargo test --release --lib -- type_casting::tests` → **6 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_vec_int_index_loop_test bug_int_loop_assign_end_bound_must_unify_test bug_haystack_contains_substring_int_index_unify_test bug_substring_int_indices_usize_test bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test for_zero_to_len` → **11 passed**. Broader `bug_int_loop|bug_vec_int|bug_substring|bug_haystack|bug_for_zero|wdb119|wdb121` → **11 passed**.
+
 ## P3.453 (2026-09-25) — negative `int` sentinels stay i64 (`colon_at = -1`)
 
 | Gate | Status |
@@ -13,7 +27,7 @@
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_int_loop_assign_end_bound_must_unify_test bug_haystack_contains_substring_int_index_unify_test bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **8 passed**.
 
-**Still RED:** `bug_vec_int_index_loop_test` (loop emits `idx: usize` with no index `as usize` — assertion vs rustc-valid emit).
+**Follow-up:** `bug_vec_int_index_loop_test` → GREEN in P3.454.
 
 ## P3.452 (2026-09-25) — usize formals wrap mixed i64 + `1_usize` arith
 
@@ -30,7 +44,7 @@
 
 **Gates:** `cargo test --release --lib -- coerce_usize_formal_wraps_mixed` → **2 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_haystack_contains_substring_int_index_unify_test bug_substring_int_indices_usize_test bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **8 passed** (2 haystack + 2 substring + 4 spawn/mpsc).
 
-**Still RED (pre-existing, not this change):** `bug_vec_int_index_loop_test` (loop counter emits as `usize` with no index cast). `bug_int_loop_assign_end_bound_must_unify_test` → GREEN in P3.453.
+**Follow-up:** `bug_vec_int_index_loop_test` → GREEN in P3.454. `bug_int_loop_assign_end_bound_must_unify_test` → GREEN in P3.453.
 
 ## P3.451 (2026-09-25) — trait AST `string` stays owned at FieldAccess call sites
 
@@ -652,7 +666,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::mime` constants + fn wiring (`wj-mime`)** | `bug_std_mime_module_wiring_test` | ✅ tip GREEN (runtime consts + stdlib const scan) |
 | P1 | **Module `const string` return codegen as `&str` (`wj-mime`)** | `bug_module_const_string_return_test` | ✅ tip GREEN (`module_string_consts` + owned return/match coercion) |
 | P1 | **Recursive owned `Vec<string>` helper over-borrowed at call site (`wj-yaml`)** | `bug_recursive_owned_vec_call_site_test` | ✅ tip GREEN |
-| P1 | **`Vec` index with Windjammer `int` loop var (`wj-yaml`)** | `bug_vec_int_index_loop_test` (see also `bug_substring_int_indices_usize_test`) | ❌ isolate RED (2026-09-25) — loop emits `let mut idx: usize` / `lines[idx]` with no `as usize` |
+| P1 | **`Vec` index with Windjammer `int` loop var (`wj-yaml`)** | `bug_vec_int_index_loop_test` (see also `bug_substring_int_indices_usize_test`) | ✅ isolate GREEN (P3.454) — `lines[(idx as usize)]` without stamping all `let mut x = 0` as i64 |
 | P1 | **`vec.len() - int` loop bound usize/i64 (`wj-migrate`)** | `bug_vec_len_minus_int_loop_test` | ✅ tip GREEN |
 | P1 | **`string` ordinal compare (`ch < "0"`) after substring (`wj-todo-cli`)** | `bug_string_char_ordinal_compare_test` | ✅ tip GREEN (owned text vs str literal → `.as_str()` in comparisons) |
 | P1 | **`HashMap.insert` as if-body expr must discard `Option` (`wj-todo-cli`)** | `bug_hashmap_insert_if_body_unit_test` | ✅ tip GREEN (void-block `let _ =` for non-unit expr stmts) |

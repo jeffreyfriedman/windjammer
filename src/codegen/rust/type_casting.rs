@@ -3,6 +3,28 @@
 
 use crate::parser::ast::*;
 
+/// Untyped `let mut idx = 0` / `let mut colon_at = -1` — WJ `int`, never Rust `usize`.
+pub fn expression_is_int_literal_init(expr: &Expression) -> bool {
+    match expr {
+        Expression::Literal {
+            value: Literal::Int(_),
+            ..
+        } => true,
+        Expression::Unary {
+            op: UnaryOp::Neg,
+            operand,
+            ..
+        } => matches!(
+            *operand,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ),
+        _ => false,
+    }
+}
+
 /// `let mut colon_at = -1` / `let mut i = -1` — signed sentinel, never Rust `usize`.
 pub fn expression_is_negative_int_init(expr: &Expression) -> bool {
     match expr {
@@ -546,17 +568,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn negative_int_literal_is_signed_sentinel_init() {
+    fn int_literal_init_includes_zero_and_negative() {
+        let zero = Expression::Literal {
+            value: Literal::Int(0),
+            location: Default::default(),
+        };
+        assert!(expression_is_int_literal_init(&zero));
+        assert!(!expression_is_negative_int_init(&zero));
         let neg = Expression::Literal {
             value: Literal::Int(-1),
             location: Default::default(),
         };
+        assert!(expression_is_int_literal_init(&neg));
         assert!(expression_is_negative_int_init(&neg));
-        let pos = Expression::Literal {
-            value: Literal::Int(0),
-            location: Default::default(),
-        };
-        assert!(!expression_is_negative_int_init(&pos));
     }
 
     #[test]

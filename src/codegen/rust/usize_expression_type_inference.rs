@@ -470,6 +470,9 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Identifier { name, .. }
                     if self.usize_variables.contains(name.as_str())
                         || self.identifier_emits_as_usize(name)
+                        // `let mut j = 0` may emit `0_usize` without staying in
+                        // `usize_variables` once recorded as a literal-init counter.
+                        || self.literal_init_wj_int_loop_counters.contains(name.as_str())
             );
         if rhs_is_usize && !expr_str.contains(" as i64") && !expr_str.contains(" as i32") {
             // Copy usize may have a stale `.clone()` from auto-clone; drop it before the width cast.
@@ -674,6 +677,17 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // Already a usize index form — never double-cast (`0_usize as usize`).
+        // WJ `int` literal-init counters (`let mut idx = 0`) may emit as usize after
+        // `.len()` promotion — still cast at the index so `[String]` is not indexed by
+        // an inferred i64 (vec_int_index) and the gate sees `as usize`.
+        if let Expression::Identifier { name, .. } = index {
+            if self.literal_init_wj_int_loop_counters.contains(name.as_str())
+                && !idx_str.contains(" as usize")
+            {
+                *idx_str = format!("({} as usize)", idx_str);
+                return;
+            }
+        }
         if idx_str.contains(" as usize") || idx_str.ends_with("_usize") {
             return;
         }

@@ -320,6 +320,17 @@ impl<'ast> CodeGenerator<'ast> {
         if self.explicit_wj_int_annotated_locals.contains(name) {
             return;
         }
+        // P3.454: rustc sees the emitted suffix. Mixed-int inference must not
+        // paint `let mut colon_at = -1_i64` as usize (then `colon_at = j` skips
+        // the i64 cast). Negative sentinels stay WJ `int`.
+        if crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
+            || emitted_rhs.ends_with("_i64")
+        {
+            self.local_var_types.insert(name.to_string(), Type::Int);
+            self.codegen_i32_binding_names.remove(name);
+            self.usize_variables.remove(name);
+            return;
+        }
         // P3.329: Call/MethodCall WJ `int` results must not become usize via later
         // substring formals (`let plus_pos = find_tz_sign(...)`).
         if matches!(value, Expression::Call { .. } | Expression::MethodCall { .. }) {
@@ -361,15 +372,6 @@ impl<'ast> CodeGenerator<'ast> {
             self.local_var_types
                 .insert(name.to_string(), Type::Custom("usize".into()));
             self.usize_variables.insert(name.to_string());
-            return;
-        }
-        // WDB-302: Custom-return builders register untyped `let mut total = 0` as Int32
-        // while the literal still emits `_i64`. Emitted suffix wins so compound assign
-        // does not append `as i32` onto `triangles as i64`, and `total / 3` peers i64
-        // (not `3_u64` from an outer `as u64`).
-        if emitted_rhs.ends_with("_i64") {
-            self.local_var_types.insert(name.to_string(), Type::Int);
-            self.codegen_i32_binding_names.remove(name);
             return;
         }
         if emitted_rhs.ends_with("_i32")
