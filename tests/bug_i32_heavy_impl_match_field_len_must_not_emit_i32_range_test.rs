@@ -11,14 +11,16 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.444: impl + `let node = match get_node` + `0..node.params.len()` must stay usize.
+//! P3.444: product `CsgScene::emit_node_instructions` still emits
+//!   `for i in 0_i32..node.params.len()` (E0308) and `buf.clone()` into
+//!   demoted `&mut Vec<f32>`.
 //!
-//! Product `CsgScene::emit_node_instructions` after `let node = match self.get_node(node_id)`:
-//! emitted `0_i32..node.params.len()` (E0308 expected i32, found usize) and
-//! `self.emit_node_instructions(..., buf.clone())` into a demoted `&mut Vec<f32>`.
-//!
-//! Free-fn isolate (`for_zero_to_len_must_not_emit_i32_range`) does not cover match-bound
-//! field access. A same-crate `len() -> i32` homonym must not poison `Vec::len`.
+//! P3.359 covers a free function `count_slots(node: Node) -> int`.
+//! Product is an i32-heavy impl: `node_id: i32`, `primitive_type == 2`,
+//! `get_node` → `Option`, then `for i in 0..node.params.len()`.
+//! Engine also registers custom `len() -> i32` methods, which poisons
+//! `consensus_return_is_usize("len")` when the match-bound receiver is
+//! unresolved.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -27,8 +29,20 @@ use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
 const SRC: &str = r#"
+pub struct PoisonLen {
+    pub n: i32,
+}
+
+impl PoisonLen {
+    pub fn len(self) -> i32 {
+        self.n
+    }
+}
+
 pub struct CsgNode {
-    pub id: i32,
+    pub node_type: i32,
+    pub primitive_type: i32,
+    pub material_id: u8,
     pub params: Vec<f32>,
     pub left_child: i32,
     pub right_child: i32,
@@ -36,29 +50,29 @@ pub struct CsgNode {
 
 pub struct CsgScene {
     pub nodes: Vec<CsgNode>,
-    pub root_id: i32,
-}
-
-pub struct NameLen {
-    pub name: string,
-}
-
-impl NameLen {
-    pub fn len(self) -> i32 {
-        0
-    }
 }
 
 impl CsgScene {
     pub fn get_node(self, id: i32) -> Option<CsgNode> {
-        let mut i = 0
-        while i < self.nodes.len() {
-            if self.nodes[i].id == id {
-                return Some(self.nodes[i])
-            }
-            i = i + 1
+        if id < 0 {
+            return None
+        }
+        if (id as usize) < self.nodes.len() {
+            return Some(self.nodes[id as usize])
         }
         None
+    }
+
+    fn emit_instruction(self, buf: Vec<f32>, opcode: f32, material: u8, params: Vec<f32>) {
+        buf.push(opcode)
+        buf.push(material as f32)
+        for i in 0..14 {
+            if i < params.len() {
+                buf.push(params[i])
+            } else {
+                buf.push(0.0)
+            }
+        }
     }
 
     fn emit_node_instructions(self, node_id: i32, buf: Vec<f32>) {
@@ -70,35 +84,32 @@ impl CsgScene {
             Some(n) => n,
             None => return,
         }
-        let mut i = 0
-        for _ in 0..node.params.len() {
-            buf.push(node.params[i])
-            i = i + 1
-        }
-        if node.left_child >= 0 {
-            self.emit_node_instructions(node.left_child, buf)
-        }
-        if node.right_child >= 0 {
-            self.emit_node_instructions(node.right_child, buf)
-        }
-    }
 
-    pub fn to_instruction_buffer(self) -> Vec<f32> {
-        let mut buf = Vec::new()
-        self.emit_node_instructions(self.root_id, buf)
-        buf
+        if node.node_type == 0 {
+            let opcode = if node.primitive_type == 2 { 8.0 } else if node.primitive_type >= 3 { (node.primitive_type) as f32 } else { (node.primitive_type + 1) as f32 }
+            let mut p = Vec::new()
+            for i in 0..node.params.len() {
+                p.push(node.params[i])
+            }
+            self.emit_instruction(buf, opcode, node.material_id, p)
+        } else if node.node_type == 1 {
+            self.emit_node_instructions(node.left_child, buf)
+            self.emit_node_instructions(node.right_child, buf)
+            self.emit_instruction(buf, 20.0, 0, Vec::new())
+        }
     }
 }
 "#;
 
-fn bad_i32_len_range(rs: &str) -> bool {
-    rs.contains("0_i32..") && rs.contains(".len()")
+fn bad_i32_field_len_range(rs: &str) -> bool {
+    rs.contains("0_i32..") && rs.contains("params.len()")
 }
 
-fn bad_mut_vec_clone(rs: &str) -> bool {
+fn bad_owned_buf_clone_into_mut(rs: &str) -> bool {
     let formal_mut = rs.contains("buf: &mut Vec") || rs.contains("buf: &mut ");
     let bad_call = rs.lines().any(|line| {
-        line.contains("emit_node_instructions(") && line.contains("buf.clone()")
+        (line.contains("emit_node_instructions(") || line.contains("emit_instruction("))
+            && line.contains("buf.clone()")
     });
     formal_mut && bad_call
 }
@@ -109,47 +120,40 @@ fn i32_heavy_impl_match_field_len_must_not_emit_i32_range() {
     test.add_file("lib.wj", SRC);
     let map = test.compile().expect("P3.444 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("P3.444 isolate lib.rs:\n{rs}");
+    eprintln!("P3.444 MultiFile lib.rs:\n{rs}");
     assert!(
-        !bad_i32_len_range(rs),
-        "P3.444: match-bound node.params.len() must not emit 0_i32..len():\n{rs}"
+        !bad_i32_field_len_range(rs),
+        "P3.444 RED: i32-heavy impl 0..node.params.len() must not emit 0_i32:\n{rs}"
     );
     assert!(
-        !bad_mut_vec_clone(rs),
-        "P3.444: demoted &mut Vec must not receive buf.clone():\n{rs}"
+        !bad_owned_buf_clone_into_mut(rs),
+        "P3.444 RED: demoted &mut Vec received owned buf.clone():\n{rs}"
     );
     test.cargo_check().expect("P3.444 cargo-check");
 }
 
 #[test]
 fn p3444_tip_out_game_core_csg_must_not_emit_i32_len_range() {
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
     let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
-        .join("windjammer-game/windjammer-game-core");
-    let paths = [
-        tip.join("scene.rs"),
-        tip.join("csg/scene.rs"),
-        game.join("gen/csg/scene.rs"),
-        game.join("csg/scene.rs"),
-    ];
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("csg scene");
-        if bad_i32_len_range(&text) || bad_mut_vec_clone(&text) {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(saw, "P3.444: game-core/tip csg/scene missing");
+        .join("windjammer-game/windjammer-game-core/gen/csg/scene.rs");
     assert!(
-        bad_paths.is_empty(),
-        "P3.444 RED: i32 len range or buf.clone() into &mut Vec in:\n  {}",
-        bad_paths.join("\n  ")
+        game.exists(),
+        "P3.444: tip-out gen/csg/scene.rs missing at {}",
+        game.display()
+    );
+    let text = std::fs::read_to_string(&game).expect("csg scene");
+    assert!(
+        !bad_i32_field_len_range(&text),
+        "P3.444 RED: tip-out gen/csg/scene.rs still has 0_i32..params.len():\n{}",
+        text.lines()
+            .filter(|l| l.contains("0_i32") || l.contains("params.len()"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(
+        !bad_owned_buf_clone_into_mut(&text),
+        "P3.444 RED: tip-out gen/csg/scene.rs still passes buf.clone() into &mut Vec"
     );
 }

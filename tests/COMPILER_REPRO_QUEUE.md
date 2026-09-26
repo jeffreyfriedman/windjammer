@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.459 (2026-09-25) — user `join(string, string)` owned slot beats `strings::join` homonym
+
+| Gate | Status |
+|------|--------|
+| `skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join` | ✅ unit GREEN |
+| `codegen_user_join_must_not_borrow_owned_relative` | ✅ unit GREEN |
+| `user_join_two_strings_moves_owned_locals` | ✅ isolate GREEN — `join(base, relative)` not `join(&base, &relative)` |
+| spawn / mpsc / mut_param / WDB-217 / demoted Vec | ✅ GREEN — P3.456/458 helpers restored (other-agent WIP had deleted them) |
+| P3.444 fixture | closer product `CsgScene` + scan `windjammer-game-core/gen/csg/scene.rs` (tip-out still host-lag) |
+
+**Root cause layer:** signature / lookup boundary. Local user `join` (`(&str, String)`) must win over runtime `strings::join` (`Vec`, delimiter `&str`) at the same bare name. `user_owned_slot_beats_stdlib_homonym` was already the pick; it was not consulted by `skip_stale_borrow`, `preregistered_free_call_arg_expects_borrow`, or regular-call last-writer, so `call_sig`/`global` still froze `&relative`.
+
+**What became unnecessary:** treating a stdlib homonym's shared-ref flags as the user API. Duplicate `user_owned_slot_beats_stdlib_homonym` (other-agent copy) deleted. No new `ir_call_site` peel / method-name list. P3.456 `vec_formal_only_forwards_as_call_arg` and P3.458 MutRef Identity last-writers kept.
+
+**Temporary remaining:** regular-call terminal peel of `&name` when local owned slot beats stdlib homonym. Delete path: once `call_sig` is the local user join (not `strings::join`) through prepare + skip_stale, last-writer `rust_shared_borrow` will not prefix and the peel can go.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3459` `cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join codegen_user_join_must_not_borrow_owned_relative mut_ref_to_shared_ref_is_identity_reborrow` → **3 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_mut_param_passthrough_no_shared_amp_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test user_join_two_strings_moves_owned_locals` → **11 passed**.
+
 ## P3.458 (2026-09-25) — `&mut T` / `&T` reborrow stays Identity (`take_in_edges(csr)`)
 
 | Gate | Status |

@@ -177,10 +177,7 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
 
     if let Some(global) = gen.global_signature_registry.as_ref() {
         let lookup_keys: Vec<String> = match (receiver_type, method) {
-            (Some(rt), Some(method)) => vec![
-                format!("{rt}::{method}"),
-                method.to_string(),
-            ],
+            (Some(rt), Some(method)) => vec![format!("{rt}::{method}"), method.to_string()],
             _ => vec![sig.name.clone()],
         };
         for key in lookup_keys {
@@ -273,11 +270,28 @@ pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
         let pidx = sig.arg_param_index(arg_index);
         callee_emits_shared_rust_ref_param(sig, pidx)
     };
+    // Runtime-std homonym (`strings::join`) must not freeze `&` on a distinct
+    // local user API (`join(string, string)` owned relative).
+    if let Some(local) = lookup_free_fn_signature(registry, registry_lookup_name) {
+        if crate::codegen::rust::signature_promotion::user_owned_slot_beats_stdlib_homonym(
+            local, call_sig, arg_index,
+        ) {
+            return true;
+        }
+        if let Some(g) = global.and_then(|g| lookup_free_fn_signature(g, registry_lookup_name)) {
+            if crate::codegen::rust::signature_promotion::user_owned_slot_beats_stdlib_homonym(
+                local, g, arg_index,
+            ) {
+                return true;
+            }
+        }
+    }
     if any_emits_shared_ref(call_sig)
         || global
             .and_then(|g| lookup_free_fn_signature(g, registry_lookup_name))
             .is_some_and(any_emits_shared_ref)
-        || lookup_free_fn_signature(registry, registry_lookup_name).is_some_and(any_emits_shared_ref)
+        || lookup_free_fn_signature(registry, registry_lookup_name)
+            .is_some_and(any_emits_shared_ref)
     {
         return false;
     }
@@ -659,9 +673,7 @@ pub fn finalize_collection_key_call_site_arg(
             Expression::Identifier { .. } | Expression::FieldAccess { .. }
         )
     {
-        *arg_str = arg_str
-            .trim_end_matches(".to_string()")
-            .to_string();
+        *arg_str = arg_str.trim_end_matches(".to_string()").to_string();
     }
     if expression_is_string_literal(arg_expr) || expression_is_copy_literal(arg_expr) {
         // Match arms that bind `HashMap<string, _>` may blanket-own every string
@@ -750,8 +762,7 @@ pub(crate) fn callee_formal_is_owned_vec_container(sig: &FunctionSignature, pidx
     sig.formal_param_type(pidx)
         .or_else(|| sig.param_types.get(pidx))
         .is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                && type_is_vec_container(t)
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && type_is_vec_container(t)
         })
 }
 
@@ -776,16 +787,17 @@ pub(crate) fn reconcile_explicit_user_clone_into_owned_vec_formal<'ast>(
     if !callee_formal_is_owned_vec_container(sig, pidx) {
         return coerced;
     }
-    if !gen.current_function_params.iter().any(|p| {
-        p.name == name && type_is_vec_container(&p.type_)
-    }) {
+    if !gen
+        .current_function_params
+        .iter()
+        .any(|p| p.name == name && type_is_vec_container(&p.type_))
+    {
         return coerced;
     }
     let preserve_clone = gen.caller_param_has_later_owned_formal_pass(name)
         || gen.local_binding_reused_after_current_statement(name)
         || gen.auto_clone_analysis.as_ref().is_some_and(|a| {
-            a.needs_clone(name, gen.current_statement_idx).is_some()
-                || a.needs_clone_anywhere(name)
+            a.needs_clone(name, gen.current_statement_idx).is_some() || a.needs_clone_anywhere(name)
         });
     if preserve_clone {
         return coerced;
@@ -819,9 +831,10 @@ pub(crate) fn clone_reused_binding_for_owned_vec_formal<'ast>(
     {
         return None;
     }
-    let caller_vec = gen.current_function_params.iter().any(|p| {
-        p.name == *name && type_is_vec_container(&p.type_)
-    });
+    let caller_vec = gen
+        .current_function_params
+        .iter()
+        .any(|p| p.name == *name && type_is_vec_container(&p.type_));
     let owned_vec_slot = callee_formal_is_owned_vec_container(sig, pidx)
         || (caller_vec
             && callee_name.is_some_and(|c| {
@@ -838,14 +851,15 @@ pub(crate) fn clone_reused_binding_for_owned_vec_formal<'ast>(
         return None;
     }
     let reused = gen.local_binding_reused_after_current_statement(name)
-        || gen.auto_clone_analysis.as_ref().is_some_and(|a| {
-            a.needs_clone(name, gen.current_statement_idx).is_some()
-        });
+        || gen
+            .auto_clone_analysis
+            .as_ref()
+            .is_some_and(|a| a.needs_clone(name, gen.current_statement_idx).is_some());
     if !reused {
         return None;
     }
-    let base =
-        crate::codegen::rust::expression_utilities::borrow_base_expr(coerced).trim_end_matches(".clone()");
+    let base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+        .trim_end_matches(".clone()");
     Some(gen.append_clone_for_owned_non_copy_binding(name, base))
 }
 

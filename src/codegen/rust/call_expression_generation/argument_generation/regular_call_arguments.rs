@@ -656,6 +656,10 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             signature.clone(),
                             gen.get_signature_with_global(func_name).cloned(),
                             gen.get_signature_with_global(lookup.as_ref()).cloned(),
+                            gen.signature_registry.get_signature(func_name).cloned(),
+                            gen.signature_registry
+                                .get_signature(lookup.as_ref())
+                                .cloned(),
                         ];
                         let wants_str = candidates.iter().flatten().any(|sig| {
                             let pidx = sig.arg_param_index(i);
@@ -705,9 +709,12 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     }
                     if let Expression::Identifier { name, .. } = arg {
-                        // Import aliases (`use owned_pkg::get as query_get`): never look up
-                        // the alias string — it collides with foreign `query_get` metadata.
-                        if let Some(rs) = gen.get_signature_with_global(func_name) {
+                        let lookup = gen.signature_lookup_callee_name(func_name);
+                        if let Some(rs) = gen
+                            .signature_registry
+                            .get_signature(func_name)
+                            .or_else(|| gen.signature_registry.get_signature(lookup.as_ref()))
+                        {
                             let pidx = rs.arg_param_index(i);
                             // Emission-confirmed shared ref only — stale param_types
                             // Reference(str) must not force `&` into owned String formals.
@@ -755,6 +762,47 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             || stale_shared_clone)
                     {
                         coerced = crate::ir::target_encodings::rust_shared_borrow(&coerced);
+                    }
+                    // Terminal: emitted owned `String` (user `join` relative) must not keep
+                    // `&binding` inherited from a stdlib homonym (`strings::join`).
+                    if let Expression::Identifier { name, .. } = arg {
+                        let lookup = gen.signature_lookup_callee_name(func_name);
+                        let owned_slot = peel_sig.as_ref().is_some_and(|sig| {
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig,
+                                sig.arg_param_index(i),
+                            )
+                        }) || gen.preregistered_free_call_arg_emits_owned(func_name, i)
+                            || gen.preregistered_free_call_arg_emits_owned(lookup.as_ref(), i)
+                            || gen.signature_registry.get_signature(func_name).is_some_and(
+                                |local| {
+                                    gen.global_signature_registry.as_ref().is_some_and(|g| {
+                                        g.get_signature(func_name)
+                                            .or_else(|| {
+                                                g.find_unique_signature_ending_with(
+                                                    func_name
+                                                        .rsplit("::")
+                                                        .next()
+                                                        .unwrap_or(func_name),
+                                                )
+                                            })
+                                            .is_some_and(|gs| {
+                                                crate::codegen::rust::signature_promotion::user_owned_slot_beats_stdlib_homonym(
+                                                    local, gs, i,
+                                                )
+                                            })
+                                    })
+                                },
+                            );
+                        if owned_slot
+                            && coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                            && crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &coerced,
+                            ) == name.as_str()
+                        {
+                            coerced = name.to_string();
+                        }
                     }
                     // Absolute terminal: never emit `n as usize.clone()` (WDB-300).
                     coerced =
