@@ -694,19 +694,6 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = coerced[1..].to_string();
                         }
-                        let pidx_term = contract_sig.arg_param_index(i);
-                        let wants_shared_text = crate::ir::signature_bridge::call_site_wants_shared_text_ref(
-                            &contract_sig, pidx_term,
-                        ) || contract_sig
-                            .param_types
-                            .get(pidx_term)
-                            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
-                        self.restore_display_to_owned_string_for_text_formal(
-                            arg_to_generate,
-                            &mut coerced,
-                            wants_shared_text,
-                            false,
-                        );
                         return coerced;
                     }
                     debug_assert!(

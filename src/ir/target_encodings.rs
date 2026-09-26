@@ -641,6 +641,11 @@ mod tests {
             rust_shared_borrow("self.max_length.to_string()"),
             "&self.max_length.to_string()"
         );
+        assert_eq!(
+            apply_coercion(&CoercionKind::ToOwnedString, "self.rows", Target::Rust),
+            "self.rows.to_string()",
+            "genuine Display convert must encode ToOwnedString, not Identity/Borrow"
+        );
         // Owned String → &str still borrows non-literals.
         let actual = SafetyType::owned(BaseType::String);
         let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));

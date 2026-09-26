@@ -47,44 +47,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Display / language-level `.to_string()` into a text formal must stay a
-    /// conversion. Intermediate shared-ref peels (`&self.rows`) are type-wrong.
-    pub(crate) fn restore_display_to_owned_string_for_text_formal(
-        &self,
-        arg_expr: &Expression<'_>,
-        coerced: &mut String,
-        wants_shared_text: bool,
-        wants_owned_text: bool,
-    ) {
-        // User-written conversions only. Never invent `.to_string()` on a bare
-        // Display value (WDB-332 sibling `new(name: string)` vs `new(priority: i32)`).
-        if !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
-            arg_expr,
-        ) {
-            return;
-        }
-        let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
-            .trim()
-            .to_string();
-        if let Some(stripped) = base.strip_suffix(".to_string()") {
-            base = stripped.to_string();
-        } else if let Some(stripped) = base.strip_suffix(".to_owned()") {
-            base = stripped.to_string();
-        }
-        if base.is_empty() {
-            return;
-        }
-        let owned = format!("{base}.to_string()");
-        // Unknown formal + already-borrowed Display (`&self.rows` into `push_str`):
-        // keep the conversion. Owned text formals stay `x.to_string()` without `&`.
-        let shared = wants_shared_text || !wants_owned_text;
-        *coerced = if shared {
-            crate::ir::target_encodings::rust_shared_borrow(&owned)
-        } else {
-            owned
-        };
-    }
-
     /// WJ `std/*.wj` stubs may still own-coerce literals after generate.
     /// Stdlib/runtime `&str` is the source of truth (WDB-144 needle).
     pub(crate) fn peel_owned_literal_when_stdlib_expects_str_ref(
@@ -1836,7 +1798,13 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Borrow;
         }
+        // Already-owned text / literals into `&str` stay Identity (deref-coerce).
+        // User-written Display `.to_string()` must keep ToOwnedString — Identity
+        // then Borrow emits `&self.rows` (not `&self.rows.to_string()`).
         if matches!(kind, CoercionKind::ToOwnedString)
+            && !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                arg_expr,
+            )
             && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
                 || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
                 || (crate::codegen::rust::types::is_windjammer_text_type(
@@ -3995,25 +3963,6 @@ impl<'ast> CodeGenerator<'ast> {
         coerced =
             crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&coerced);
 
-        let wants_shared_text = crate::ir::signature_bridge::call_site_wants_shared_text_ref(
-            &sig, param_idx,
-        ) || sig
-            .formal_param_type(param_idx)
-            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-            || sig
-                .param_types
-                .get(param_idx)
-                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
-        let wants_owned_text =
-            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                &sig, arg_index,
-            );
-        self.restore_display_to_owned_string_for_text_formal(
-            arg_expr,
-            &mut coerced,
-            wants_shared_text,
-            wants_owned_text && !wants_shared_text,
-        );
         self.peel_owned_literal_when_stdlib_expects_str_ref(
             callee_name,
             arg_index,
@@ -5817,25 +5766,6 @@ impl<'ast> CodeGenerator<'ast> {
             };
         }
 
-        let wants_shared_text = crate::ir::signature_bridge::call_site_wants_shared_text_ref(
-            &sig, param_idx,
-        ) || sig
-            .formal_param_type(param_idx)
-            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-            || sig
-                .param_types
-                .get(param_idx)
-                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
-        let wants_owned_text =
-            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                &sig, arg_index,
-            );
-        self.restore_display_to_owned_string_for_text_formal(
-            arg_expr,
-            coerced,
-            wants_shared_text,
-            wants_owned_text && !wants_shared_text,
-        );
         self.peel_owned_literal_when_stdlib_expects_str_ref(
             callee_name,
             arg_index,

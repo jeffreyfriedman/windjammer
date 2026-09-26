@@ -1,5 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.469 (2026-09-26) — delete `restore_display`; keep ToOwnedString for genuine converts
+
+| Gate | Status |
+|------|--------|
+| `test_to_string_on_non_string_field_in_push_str` | ✅ isolate GREEN without post-IR restore |
+| `test_to_string_on_int_preserved_for_push_str` | ✅ isolate GREEN |
+| WDB-144 / WDB-152 / HashMap i64 / spawn / mpsc / WDB-332 | ✅ GREEN — no invent on bare Display |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** coercion/encoding.
+
+`apply_ir` forced `ToOwnedString` for user-written `.to_string()`, then immediately downgraded it to Identity whenever the formal was a shared text ref. Identity + later Borrow emitted `&self.rows`. `restore_display` was a post-IR patch that put `.to_string()` back.
+
+**What became unnecessary:** `restore_display_to_owned_string_for_text_formal` and its three terminal call sites (`apply_ir`, reconcile, method arguments). Genuine converts now keep `ToOwnedString` through encode.
+
+**Temporary remaining:** `peel_owned_literal_when_stdlib_expects_str_ref` still counters WJ owned stubs vs runtime `&str` (WDB-144). Dual-oracle `apply_owned_string_literal_coercion` still exists.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3469-fix`
+- `cargo test --release -p windjammer --lib -- display_int_into_str_ref_needs_to_owned_string rust_shared_borrow_skips_string_literals` → **2 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- to_string_on_non_string_field_in_push_str to_string_on_int_preserved_for_push_str wdb144_module_file_demoted_str_formal_must_not_receive_owned_string wdb152_module_file_string_lit_into_owned_string_formal_must_to_string bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test hashmap_field_get_i64_key_must_auto_borrow wdb332` → **11 passed**
+- HEAD full suite (pre-this-commit binary): `5377 passed / 192 failed` — remaining are almost all tip-out/gen-lag scans.
+
 ## P3.468 (2026-09-26) — Display `.to_string()` + `strings::contains` `&str` needle
 
 | Gate | Status |
