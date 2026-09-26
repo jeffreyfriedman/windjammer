@@ -102,7 +102,10 @@ impl CsgScene {
 "#;
 
 fn bad_i32_field_len_range(rs: &str) -> bool {
-    rs.contains("0_i32..") && rs.contains("params.len()")
+    rs.lines().any(|line| {
+        let t = line.trim_start();
+        !t.starts_with("//") && t.contains("0_i32..") && t.contains("params.len()")
+    })
 }
 
 fn bad_owned_buf_clone_into_mut(rs: &str) -> bool {

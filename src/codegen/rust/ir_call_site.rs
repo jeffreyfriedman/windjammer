@@ -944,7 +944,13 @@ impl<'ast> CodeGenerator<'ast> {
                             );
                         local_owned && global_borrows
                     });
-                if prefer_global {
+                if prefer_global
+                    && !sig.as_ref().is_some_and(|local_sig| {
+                        crate::codegen::rust::signature_promotion::user_owned_slot_beats_stdlib_homonym(
+                            local_sig, global_sig, arg_index,
+                        )
+                    })
+                {
                     sig = Some(global_sig.clone());
                 }
             }

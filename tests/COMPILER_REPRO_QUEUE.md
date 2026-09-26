@@ -1,5 +1,22 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.475 (2026-09-26) — user `join(string, string)` must not inherit `strings::join` `&relative`
+
+| Gate | Status |
+|------|--------|
+| `two_string_join_shape_is_not_strings_join_vec` | ✅ unit GREEN |
+| `pick_prefers_user_join_without_emitted_flags_over_strings_join` | ✅ unit GREEN |
+| `prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter` | ✅ unit GREEN |
+| `skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join` | ✅ unit GREEN |
+| `codegen_user_join_must_not_borrow_owned_relative` | ✅ unit GREEN — `join(&base, relative)` / `relative: String` |
+| `user_join_two_strings_moves_owned_locals` | isolate (re-run this session) |
+
+**Root cause layer:** signature + call-site peel. Registry already mixed `[true, false]` after interpolation demotes `base`. `strings::join` still leaked through `skip_stale_borrow` / global-first `expects_borrow` / `prefer_global`. `user_owned_slot_beats_stdlib_homonym` (shape `string,string` ≠ `Vec,&str`) peels `&relative`. No new `ir_call_site` peel tree.
+
+**What became unnecessary:** more pick peels; renaming product `join` → `join_url`.
+
+**Gates:** `unset CARGO_TARGET_DIR && cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join pick_prefers_user_join_without_emitted_flags_over_strings_join two_string_join_shape_is_not_strings_join_vec prefer_shared_ref_keeps_local_user_join_over_strings_join prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter codegen_user_join_must_not_borrow_owned_relative` → **6 passed**.
+
 ## P3.474 (2026-09-26) — P3.444 isolate same-line range + notes `strings.len` borrow
 
 | Gate | Status |
@@ -52,6 +69,7 @@ P3.471 restored `strings::len` on `SignatureRegistry::stdlib()`, but library mul
 
 **Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3472`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- demoted_str_formal_must_not_receive_cloned_string owned_match_binding_cross_fn_owned_string_formal wdb110 wdb111 wdb144_module_file wdb152_module_file bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **12 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test demoted_str_formal_must_not_receive_cloned_string wdb144_module_file` → **3 passed**
 
 ## P3.471 (2026-09-26) — `strings::len` Borrowed boundary + Phase-2 match-binding borrow
 
