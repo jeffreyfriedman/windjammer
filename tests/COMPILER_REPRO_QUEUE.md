@@ -1,5 +1,18 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.467 (2026-09-26) — WDB-203 MultiFile isolate is GREEN (tip-out lag)
+
+| Gate | Status |
+|------|--------|
+| `wdb203_module_file_owned_sql_into_demoted_str_must_borrow` | ✅ isolate GREEN — owned `let sql = make_sql()` into demoted `&str` borrows; cargo-check |
+| Tip-out / gen unified_port | ⚠️ host-lag — not a compiler isolate target |
+
+**Root cause layer:** none in compiler. Owned `String` local → demoted `&str` already Borrow on tip MultiFile (twin WDB-181). Queue ❌ was product gen scan.
+
+**What became unnecessary:** treating WDB-203 as a missing borrow peel. No `ir_call_site` change.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3466` `cargo test --release --test all --features integration_tests,codegen_tests -- wdb203_module_file_owned_sql_into_demoted_str_must_borrow` → **1 passed**.
+
 ## P3.466 (2026-09-26) — WDB-201 MultiFile isolate is GREEN (tip-out lag)
 
 | Gate | Status |
@@ -2060,7 +2073,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Tip **WDB-200** u32 counter `1_i64` (df_provider) | ✅ **GREEN** after tip-out→gen sync |
 | Tip **WDB-201** `&mut Key` → owned `entries.push` | ✅ isolate GREEN (P3.466); tip-out/gen ⚠️ host-lag |
 | Tip **WDB-202** `&mut MulticolState` → owned return | ✅ **GREEN** — tip-out/gen owned `state:` (no demoted `&mut`) |
-| Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ❌ RED — unified bare `sql` |
+| Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ✅ isolate GREEN (P3.467); tip-out/gen ⚠️ host-lag |
 | Tip **WDB-204** `u64 == 0_usize` (sysbench) | ❌ RED — tip-out/gen |
 | Tip **WDB-205** `inbound.clone()` → demoted `&Vec<u8>` | ✅ tip GREEN (no bare owned into demoted decode) |
 | Tip-out→gen sync | ✅ multicol serve + prior df_provider/module_file |
@@ -2556,7 +2569,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Tip **WDB-200** `u32` / `1_i64` df_provider | ✅ **GREEN** after tip→gen sync (`i += 1`) |
 | Tip **WDB-201** `&mut Key` push into owned Key | ❌ RED — `out.entries.push((key, …))` |
 | Tip **WDB-202** `&mut MulticolState` return as owned | ✅ **GREEN** — tip-out/gen now owned `state:` formal |
-| Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ❌ RED — unified bare `sql` |
+| Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ✅ isolate GREEN (P3.467); tip-out/gen ⚠️ host-lag |
 | Tip **WDB-204** `u64 == 0_usize` (sysbench) | ❌ RED — tip-out `median == 0_usize` |
 | Tip **WDB-205** `inbound.clone()` → demoted `&Vec` decode | ✅ **GREEN** (tip-out/product) |
 | Dogfood / tip-cluster | ❄️ frozen (manual tip-out→gen only) |
