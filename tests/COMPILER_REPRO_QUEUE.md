@@ -35,7 +35,9 @@
 
 **What became unnecessary:** more pick peels; renaming product `join` → `join_url`.
 
-**Gates:** `unset CARGO_TARGET_DIR && cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join pick_prefers_user_join_without_emitted_flags_over_strings_join two_string_join_shape_is_not_strings_join_vec prefer_shared_ref_keeps_local_user_join_over_strings_join prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter codegen_user_join_must_not_borrow_owned_relative` → **6 passed**.
+**Gates:** `unset CARGO_TARGET_DIR && cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join pick_prefers_user_join_without_emitted_flags_over_strings_join two_string_join_shape_is_not_strings_join_vec prefer_shared_ref_keeps_local_user_join_over_strings_join prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter codegen_user_join_must_not_borrow_owned_relative prefer_shared_ref_picks_runtime_str_over_wj_owned_emission` → **7 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- user_join_two_strings_moves_owned_locals` → **1 passed**.
+
+**Next:** path-dep notes-api product (`log_tagged(level)`, `parse_level(probe)`, `slugify(title)`) — isolate GREEN; `bug_notes_api_product_owned_into_demoted_str_must_auto_borrow_test` files the tip-out.
 
 ## P3.474 (2026-09-26) — P3.444 isolate same-line range + notes `strings.len` borrow
 
