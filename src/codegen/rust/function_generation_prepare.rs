@@ -3333,48 +3333,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn stdlib_vec_push_value_arg_is_owned(&self) -> bool {
-        let sig = self
-            .signature_registry
-            .get_signature("Vec::push")
-            .cloned()
-            .or_else(|| {
-                self.global_signature_registry
-                    .as_ref()
-                    .and_then(|g| g.get_signature("Vec::push").cloned())
-            });
-        let Some(sig) = sig else {
-            return false;
-        };
-        let pidx = sig.arg_param_index(0);
-        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
-            return false;
-        }
-        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx)
-            || matches!(
-                sig.param_ownership.get(pidx),
-                Some(crate::analyzer::OwnershipMode::Owned)
-            )
-    }
-
-    fn expr_is_vec_like_receiver(
-        &self,
-        object: &Expression<'ast>,
-        func: &FunctionDecl<'ast>,
-    ) -> bool {
-        if self
-            .infer_expression_type(object)
-            .is_some_and(|t| crate::type_classification::type_is_vec_container(&t))
-        {
-            return true;
-        }
-        self.mc_infer_method_receiver_type_name(object)
-            .is_some_and(|name| {
-                crate::type_classification::is_collect_turbofish_target_base(&name)
-                    || name.starts_with("Vec<")
-            })
-    }
-
     fn callee_name_is_borrow_only_formatting(name: &str) -> bool {
         matches!(
             name,
@@ -3513,17 +3471,6 @@ impl<'ast> CodeGenerator<'ast> {
                             return true;
                         }
                     }
-                }
-                // WDB-209: `out.columns.push(col)` — registry `Vec::push(T)` owns `T` even
-                // when field-receiver signature lookup misses during formal emission.
-                if *method == "push"
-                    && self.expr_is_vec_like_receiver(object, func)
-                    && self.stdlib_vec_push_value_arg_is_owned()
-                    && arguments.iter().any(|(_, arg)| {
-                        matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                    })
-                {
-                    return true;
                 }
                 self.expression_has_owning_method_use(object, param_name, func)
                     || arguments.iter().any(|(_, arg)| {
@@ -10798,23 +10745,6 @@ impl<'ast> CodeGenerator<'ast> {
                             });
                         if let Some(sig) = sig {
                             visit(&sig, i);
-                        } else if i == 0
-                            && *method == "push"
-                            && self.stdlib_vec_push_value_arg_is_owned()
-                        {
-                            // WDB-209: field-receiver `out.columns.push(col)` before local
-                            // type inference converges — use registry `Vec::push(T)`.
-                            if let Some(push_sig) = self
-                                .signature_registry
-                                .get_signature("Vec::push")
-                                .or_else(|| {
-                                    self.global_signature_registry
-                                        .as_ref()
-                                        .and_then(|g| g.get_signature("Vec::push"))
-                                })
-                            {
-                                visit(push_sig, 0);
-                            }
                         }
                     }
                 }
@@ -11363,15 +11293,50 @@ impl<'ast> CodeGenerator<'ast> {
                 .or_else(|| self.infer_type_name(object))
         };
         let rt = receiver_type?;
+        // `Vec<T>::push` / `HashMap<K,V>::get` must resolve to the stdlib base key
+        // (`Vec::push`) — same peel as `resolve_function_signature` Step 3a.
+        // Field-receiver formals (`out.columns.push(col)`) used to miss and fall
+        // back to a `method == "push"` name heuristic.
+        let base = rt.split('<').next().unwrap_or(rt.as_str());
         let qualified = format!("{rt}::{method}");
+        let base_qualified = format!("{base}::{method}");
         let mut sig = self
             .lookup_method_signature(&rt, method)
+            .or_else(|| {
+                if base != rt {
+                    self.lookup_method_signature(base, method)
+                } else {
+                    None
+                }
+            })
             .map(|ms| ms.to_function_signature())
             .or_else(|| self.get_signature_with_global(&qualified).cloned())
-            .or_else(|| self.signature_registry.get_signature(&qualified).cloned())?;
+            .or_else(|| self.signature_registry.get_signature(&qualified).cloned())
+            .or_else(|| {
+                if base != rt {
+                    self.get_signature_with_global(&base_qualified)
+                        .cloned()
+                        .or_else(|| {
+                            self.signature_registry
+                                .get_signature(&base_qualified)
+                                .cloned()
+                        })
+                } else {
+                    None
+                }
+            })?;
         // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over the
         // importer's analysis stub — never take local-only when global has emission.
-        if let Some(reg) = self.get_signature_with_global(&qualified) {
+        if let Some(reg) = self
+            .get_signature_with_global(&qualified)
+            .or_else(|| {
+                if base != rt {
+                    self.get_signature_with_global(&base_qualified)
+                } else {
+                    None
+                }
+            })
+        {
             Self::merge_registry_sig_into_method_sig(&mut sig, reg);
         }
         if let Some(global) = self.global_signature_registry.as_ref() {

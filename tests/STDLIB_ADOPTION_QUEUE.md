@@ -75,9 +75,9 @@ Definition of done per row:
 
 | Need | Repro | Gate status (2026-09-19) | Fix hint |
 |---|---|---|---|
-| Loop `j = end` unify int/usize | `bug_int_loop_assign_end_bound_must_unify_test` | ❌ RED | Index assign from peer bound (`wj-url` authority scan) |
+| Loop `j = end` unify int/usize | `bug_int_loop_assign_end_bound_must_unify_test` | ✅ GREEN (P3.453; stale ❌) | `colon_at` i64 unify; isolate cargo-check |
 | `std::url.parse` / `format` / `join` | `bug_std_url_parse_wiring_test` | ✅ GREEN (P3.463) | Runtime `url.rs` + `std/url.wj`; scanner registers `url::parse|format|join` |
-| Owned struct arg must not auto-ref `&T` | `bug_owned_struct_arg_must_not_auto_ref_test` | ❌ RED | Cross-crate `parse(MultipartBody)` must not emit `parse(&MultipartBody)` |
+| Owned struct arg must not auto-ref `&T` | `bug_owned_struct_arg_must_not_auto_ref_test` | ✅ GREEN (stale ❌) | `parse(MultipartBody { … })` not `parse(&MultipartBody` |
 
 ## Run
 
@@ -87,4 +87,4 @@ unset CARGO_TARGET_DIR
 cargo test --release --test all --features skip_fixtures -- bug_std_ -- --test-threads=1
 ```
 
-Expected on tip: form / url / config.resolve / glob / strings.contains GREEN (P3.463–464); loop-int unify still RED.
+Expected on tip: form / url / config / glob / contains / loop-int / owned-struct GREEN (P3.453–464). Remaining ❌ in this file were stale.
