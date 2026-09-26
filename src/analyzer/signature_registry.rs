@@ -190,6 +190,7 @@ impl SignatureRegistry {
             let mut registry = SignatureRegistry::layered(std::sync::Arc::new(runtime));
             Self::load_stdlib_meta(&mut registry);
             super::primitive_float_signatures::register_primitive_float_signatures(&mut registry);
+            super::primitive_int_signatures::register_primitive_int_signatures(&mut registry);
             // WJ `std/strings.wj` / stdlib_meta stubs shadow the fallback layer.
             // Re-apply runtime boundary last so `get_signature` is the Rust API
             // (`strings::contains` needle `&str`, not owned `string`).

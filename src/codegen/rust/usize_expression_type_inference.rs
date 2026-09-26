@@ -608,6 +608,12 @@ impl<'ast> CodeGenerator<'ast> {
         idx_str: &mut String,
         index: &Expression<'ast>,
     ) {
+        // Binding already emits `usize` (`let mut i: usize`) — never `(i as usize)` (WDB-361).
+        if let Expression::Identifier { name, .. } = index {
+            if self.identifier_emits_as_usize(name) {
+                return;
+            }
+        }
         // P3.369: binary index already cast the i64 base to usize — do not wrap again.
         if idx_str.contains(" as usize)") {
             return;

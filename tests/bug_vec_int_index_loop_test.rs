@@ -36,11 +36,17 @@ pub fn second(lines: Vec<string>) -> string {
 "#,
     );
 
+    // Either the binding is already `usize` (WDB-361) or the index is cast.
+    let already_usize = generated.contains("idx: usize") || generated.contains("0_usize");
     let has_cast = generated.contains("as usize")
         || generated.contains("try_into()")
         || generated.contains("usize::try_from");
     assert!(
-        has_cast,
-        "Vec index with int loop var must cast to usize:\n{generated}"
+        already_usize || has_cast,
+        "Vec index with int loop var must be usize (binding or cast):\n{generated}"
+    );
+    assert!(
+        !generated.contains("idx: i64") && !generated.contains("lines[idx as i64]"),
+        "Vec must not be indexed by i64:\n{generated}"
     );
 }

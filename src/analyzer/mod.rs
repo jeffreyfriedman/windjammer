@@ -19,6 +19,7 @@ mod optimization_detectors;
 mod parameter_analysis;
 mod passthrough_inference;
 mod primitive_float_signatures;
+mod primitive_int_signatures;
 mod program_initialization;
 mod section_render_ownership_test;
 mod self_access_and_option_refs;

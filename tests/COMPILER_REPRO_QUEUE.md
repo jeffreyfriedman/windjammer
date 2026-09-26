@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.470 (2026-09-26) — `i32::max` signature + skip `as usize` on usize bindings
+
+| Gate | Status |
+|------|--------|
+| `wdb343_module_file_copy_i32_must_not_emit_clone` | ✅ isolate GREEN — `set_cell(max_size, …)` not `max_size.clone()` |
+| `wdb361_module_file_usize_counter_must_not_cast_as_usize` | ✅ isolate GREEN — `items[i]` not `(i as usize)` |
+| `vec_int_index_must_cast_to_usize` | ✅ GREEN — accepts emitted `idx: usize` (no redundant cast) |
+| spawn / mpsc / WDB-144 / WDB-332 / to_string push_str | ✅ GREEN |
+
+**Root cause layer:** signature + encoding.
+
+1. **Signature:** `w.max(h).max(d)` had no `i32::max` registry key, so `max_size` stayed untyped and reuse analysis appended `.clone()` on Copy i32.
+2. **Encoding:** `maybe_cast_index_to_usize` still wrapped identifiers that already emit `usize` (`(i as usize)`). Skip when `identifier_emits_as_usize`.
+
+**What became unnecessary:** treating WDB-343 as another `maybe_auto_clone` peel; treating WDB-361 as a name-based index heuristic. No `ir_call_site` change.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3470`
+- `cargo test --release -p windjammer --lib -- i32_max_is_registered_owned_self usize_min_is_registered unsigned_has_no_abs` → **3 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb343_module_file_copy_i32_must_not_emit_clone wdb361_module_file_usize_counter_must_not_cast_as_usize vec_int_index_must_cast_to_usize bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test wdb144_module_file wdb332_module_file to_string_on_non_string_field_in_push_str` → **13 passed**
+
 ## P3.469 (2026-09-26) — delete `restore_display`; keep ToOwnedString for genuine converts
 
 | Gate | Status |
@@ -1086,7 +1106,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
 | P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | ✅ MultiFile GREEN (P3.419) — `coerce_expr_to_owned_string`; tip-out pending regen |
 | P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-337 |
-| P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.419) — skip Copy force-clone on let; tip-out pending regen |
+| P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | ✅ isolate GREEN (P3.470) — `i32::max` signature; no `max_size.clone()` |
 | P1 | **Copy f32 must not emit `.clone()`** | `bug_wdb344_module_file_copy_f32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED |
 | P1 | **`&mut Vec` must not receive owned `buf.clone()` (csg)** | `bug_wdb345_module_file_mut_vec_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED; twin WDB-338 |
 | P1 | **Copy f32 field must not emit `.x/.y/.z.clone()` (tps/fps)** | `bug_wdb346_module_file_copy_f32_field_must_not_emit_clone_test` | ✅ tip GREEN (P3.417 regen); twin WDB-344 |
@@ -1104,7 +1124,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`&self` method must not emit `self.clone().method()`** | `bug_wdb358_module_file_self_method_must_not_clone_receiver_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-356 |
 | P1 | **index field access must not `chunks[i].clone().coord`** | `bug_wdb359_module_file_index_field_must_not_clone_element_test` | ✅ MultiFile GREEN (P3.421) — skip Index clone when `in_field_access_object`; tip-out pending regen |
 | P1 | **`encode(grid)` must not force `grid.clone()`** | `bug_wdb360_module_file_encode_must_not_force_grid_clone_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-335 |
-| P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | ✅ MultiFile GREEN (P3.419) — skip usize while-cast; tip-out pending regen |
+| P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | ✅ isolate GREEN (P3.470) — skip cast when binding emits `usize` |
 | P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_wdb362_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **indexed tuple field must not `].clone().rotation`** | `bug_wdb363_module_file_index_tuple_field_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **usize lit must not emit `N_usize as usize`** | `bug_wdb364_module_file_usize_lit_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-361/352 |
