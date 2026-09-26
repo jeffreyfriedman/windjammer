@@ -28,6 +28,7 @@ use std::collections::HashMap
 
 pub struct Achievement {
     id: i32,
+    name: string,
 }
 
 impl Achievement {
