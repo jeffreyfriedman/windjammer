@@ -138,6 +138,54 @@ pub fn as_os_str(path: &StdPath) -> &OsStr {
     path.as_os_str()
 }
 
+/// Shell-style glob: `*` / `?` in a segment, `**` across segments (`/` or `\`).
+pub fn glob_match(pattern: &str, path: &str) -> bool {
+    match_glob_segments(&split_glob_segments(pattern), &split_glob_segments(path))
+}
+
+fn split_glob_segments(s: &str) -> Vec<&str> {
+    s.split(['/', '\\'])
+        .filter(|p| !p.is_empty() && *p != ".")
+        .collect()
+}
+
+fn match_glob_segments(pattern: &[&str], path: &[&str]) -> bool {
+    match (pattern.split_first(), path.split_first()) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some((&"**", rest)), _) => {
+            match_glob_segments(rest, path)
+                || path
+                    .split_first()
+                    .is_some_and(|(_, path_rest)| match_glob_segments(pattern, path_rest))
+        }
+        (Some((pat, rest)), Some((seg, path_rest))) => {
+            match_glob_segment(pat, seg) && match_glob_segments(rest, path_rest)
+        }
+        (Some(_), None) => false,
+    }
+}
+
+fn match_glob_segment(pattern: &str, segment: &str) -> bool {
+    match_glob_chars(pattern.as_bytes(), segment.as_bytes())
+}
+
+fn match_glob_chars(pattern: &[u8], segment: &[u8]) -> bool {
+    match (pattern.split_first(), segment.split_first()) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some((b'*', rest)), _) => {
+            match_glob_chars(rest, segment)
+                || segment
+                    .split_first()
+                    .is_some_and(|(_, seg_rest)| match_glob_chars(pattern, seg_rest))
+        }
+        (Some((b'?', rest)), Some((_, seg_rest))) => match_glob_chars(rest, seg_rest),
+        (Some((p, rest)), Some((s, seg_rest))) if p == s => match_glob_chars(rest, seg_rest),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,5 +216,15 @@ mod tests {
         let path = new("file.wj");
         assert!(has_extension(path, "wj"));
         assert!(!has_extension(path, "rs"));
+    }
+
+    #[test]
+    fn glob_match_star_and_recursive() {
+        assert!(glob_match("*.md", "README.md"));
+        assert!(!glob_match("*.md", "dir/README.md"));
+        assert!(glob_match("src/**/*.wj", "src/lib.wj"));
+        assert!(glob_match("src/**/*.wj", "src/a/b.wj"));
+        assert!(!glob_match("src/**/*.wj", "lib.wj"));
+        assert!(glob_match("file.?", "file.c"));
     }
 }

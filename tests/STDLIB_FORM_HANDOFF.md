@@ -1,11 +1,11 @@
 # Tip agent handoff — form-urlencoded + path glob
 
-**Status:** form + `config.resolve` GREEN (P3.463). Glob still RED. Ecosystem can thin-wrap `encoding.form_*`; stay on `wj-glob` until that gate greens.
+**Status:** form + `config.resolve` GREEN (P3.463). `path.glob_match` GREEN (P3.464). Ecosystem can thin-wrap `encoding.form_*` / `path.glob_match`.
 
 ## Ask
 
 1. ~~Green `bug_std_encoding_form_urlencoded_wiring_test`~~ — done P3.463.
-2. Green `bug_std_path_glob_match_wiring_test` — `std::path.glob_match`.
+2. ~~Green `bug_std_path_glob_match_wiring_test`~~ — done P3.464.
 
 Also still open:
 

@@ -9,3 +9,8 @@ fn join(a: string, b: string) -> string {
 fn file_name(path: string) -> Option<string> {
     None
 }
+
+/// Shell-style glob (`*` / `?` / `**`).
+fn glob_match(pattern: string, path: string) -> bool {
+    false
+}

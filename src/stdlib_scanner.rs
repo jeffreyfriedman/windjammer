@@ -1714,4 +1714,17 @@ mod tests {
             .expect("encoding::form_stringify");
         assert_eq!(stringify.param_ownership, vec![OwnershipMode::Borrowed]);
     }
+
+    #[test]
+    fn scanned_runtime_path_glob_match_is_registered() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        let sig = reg
+            .get_signature("path::glob_match")
+            .expect("path::glob_match");
+        assert_eq!(
+            sig.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed]
+        );
+    }
 }

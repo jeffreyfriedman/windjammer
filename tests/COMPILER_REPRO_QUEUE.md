@@ -1,5 +1,19 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.464 (2026-09-26) — `path::glob_match` boundary signature
+
+| Gate | Status |
+|------|--------|
+| `bug_std_path_glob_match_wiring_test` | ✅ isolate GREEN — `path::glob_match` scanned from `path.rs` |
+| `bug_std_strings_contains_owned_needle_test` | ✅ GREEN — stale adoption-queue ❌; already wired |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** signature. Missing `glob_match` in `windjammer_runtime::path` (E0425). Added `&str`/`&str` so the scanner registers Borrowed (no method-name list).
+
+**What became unnecessary:** treating glob as a peel/codegen issue. No `ir_call_site` change.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3462` `cargo test --release --lib -- scanned_runtime_path_glob_match_is_registered` → **1 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_std_path_glob_match_wiring_test bug_std_strings_contains_owned_needle_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **7 passed**.
+
 ## P3.463 (2026-09-26) — `std::url` / `encoding::form_*` signatures + owned HashMap forward
 
 | Gate | Status |
