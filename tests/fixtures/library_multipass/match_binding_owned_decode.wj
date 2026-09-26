@@ -9,7 +9,7 @@ fn read_file(path: string) -> Result<string, string> {
     Ok(path)
 }
 
-/// `wj-todo-cli` `import` branch class: `Ok(body) => decode_store(body)` must move, not borrow.
+/// `wj-todo-cli` `import` branch class: comparison-only `decode_store` demotes to `&str`.
 pub fn load_snapshot(raw_path: string) -> Result<int, string> {
     match read_file(raw_path) {
         Ok(body) => decode_store(body),

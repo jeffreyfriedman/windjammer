@@ -4,7 +4,7 @@ fn read_file(path: string) -> Result<string, string> {
     Ok(path)
 }
 
-/// `wj-todo-cli` `import` branch — adapter calls domain `decode_store` with owned match binding.
+/// `wj-todo-cli` `import` branch — adapter borrows owned match binding into demoted `&str`.
 pub fn load_snapshot(raw_path: string) -> Result<int, string> {
     match read_file(raw_path) {
         Ok(body) => decode_store(body),

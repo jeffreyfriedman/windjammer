@@ -195,6 +195,7 @@ impl SignatureRegistry {
             // Re-apply runtime boundary last so `get_signature` is the Rust API
             // (`strings::contains` needle `&str`, not owned `string`).
             crate::stdlib_scanner::register_rust_std_boundary_signatures(&mut registry);
+            registry.restore_runtime_borrowed_strings_signatures();
             registry
         })
     }
@@ -1889,6 +1890,46 @@ impl SignatureRegistry {
         SignatureDelta { changed }
     }
 
+    /// WJ `std/strings.wj` / stdlib_meta stubs last-write owned `string` over scanned
+    /// runtime `AsRef<str>` / `&str` (e.g. `strings::len`). Restore the fallback
+    /// borrow contract for `strings::*` keys so wrapper formals can demote.
+    pub fn restore_runtime_borrowed_strings_signatures(&mut self) {
+        let Some(fallback) = self.global_fallback.clone() else {
+            return;
+        };
+        let keys: Vec<String> = self
+            .signatures
+            .keys()
+            .filter(|k| k.starts_with("strings::") || k.starts_with("std::strings::"))
+            .cloned()
+            .collect();
+        for key in keys {
+            let Some(fb) = fallback.get_signature(&key) else {
+                continue;
+            };
+            let Some(local) = self.signatures.get(&key) else {
+                continue;
+            };
+            if fb.param_ownership.len() != local.param_ownership.len() {
+                continue;
+            }
+            let runtime_stronger = fb.param_ownership.iter().zip(&local.param_ownership).any(
+                |(rt, loc)| {
+                    matches!(
+                        rt,
+                        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                    ) && matches!(loc, OwnershipMode::Owned)
+                },
+            );
+            if !runtime_stronger {
+                continue;
+            }
+            let mut sig = fb.clone();
+            sig.name = key.clone();
+            self.add_function(key, sig);
+        }
+    }
+
     /// Merge a delta into this registry (changed keys only).
     pub fn merge_delta(&mut self, delta: &SignatureDelta) {
         for (name, sig) in &delta.changed {
@@ -2263,6 +2304,20 @@ pub fn parse_field(line: string) -> string {
             reg.resolve_runtime_emit_method_name("DirEntry::name").as_deref(),
             Some("file_name"),
             "WJ fs DirEntry::name stub must codegen to runtime file_name()"
+        );
+    }
+
+    #[test]
+    fn strings_len_stdlib_signature_is_borrowed() {
+        let reg = SignatureRegistry::stdlib();
+        let sig = reg
+            .get_signature("strings::len")
+            .expect("strings::len must be registered");
+        assert_eq!(
+            sig.param_ownership,
+            vec![OwnershipMode::Borrowed],
+            "runtime AsRef<str> must win over WJ owned stub, got {:?}",
+            sig.param_ownership
         );
     }
 }

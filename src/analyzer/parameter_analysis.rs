@@ -133,8 +133,12 @@ impl<'ast> Analyzer<'ast> {
 
         // 2.3. WINDJAMMER FIX: Check if parameter is used in if/else expression
         // When a parameter appears in an if/else that's assigned or returned,
-        // it needs to be owned to match the other branch's ownership
-        if self.is_used_in_if_else_expression(param_name, body) {
+        // it needs to be owned to match the other branch's ownership.
+        // Windjammer text is `&str`-safe in conditions / Display / `.trim()` —
+        // forcing Owned here blocked Phase-2 demotion (`parse_body` / demoted_str).
+        if self.is_used_in_if_else_expression(param_name, body)
+            && !Self::is_windjammer_text_param_type(param_type)
+        {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -379,15 +383,6 @@ impl<'ast> Analyzer<'ast> {
             if !body
                 .iter()
                 .any(|stmt| self.statement_uses_identifier(param_name, stmt))
-            {
-                return Ok(OwnershipMode::Owned);
-            }
-            // Pub free validation APIs that only compare against string literals
-            // (`text == ""`) keep Owned so match-arm payloads can move
-            // (`Ok(body) => decode_store(body)`). Relational predicates
-            // (`pattern == path`) stay Borrowed for loop reuse (wj-glob).
-            if func.is_pub
-                && self.param_has_readonly_string_equality_comparison(param_name, body)
             {
                 return Ok(OwnershipMode::Owned);
             }

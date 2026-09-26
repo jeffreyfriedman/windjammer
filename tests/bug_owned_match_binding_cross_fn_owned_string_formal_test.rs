@@ -10,8 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — `Ok(body) => decode_store(body)` must move owned `string` into owned formal,
-//! not emit `decode_store(&body)` (`wj-todo-cli` import branch).
+//! Phase-2: comparison-only `decode_store(text: string)` demotes to `&str`.
+//! Match-arm `Ok(body)` must borrow into that formal (`decode_store(&body)`), not
+//! keep a dual-oracle owned API just so the payload can move.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -39,8 +40,14 @@ pub use codec::load_snapshot
         .expect("load_snapshot multipass compile should succeed");
     let codec_rs = map.get("codec.rs").expect("codec.rs");
     assert!(
-        !codec_rs.contains("decode_store(&body") && !codec_rs.contains("decode_store( &body"),
-        "RED: must move owned match binding into owned formal; emitted:\n{codec_rs}"
+        codec_rs.contains("fn decode_store(text: &str)"),
+        "comparison-only string formal demotes to &str. emitted:\n{codec_rs}"
+    );
+    assert!(
+        codec_rs.contains("decode_store(&body")
+            || codec_rs.contains("decode_store(body.as_str()")
+            || codec_rs.contains("decode_store(&*body"),
+        "owned match binding must borrow into demoted &str formal. emitted:\n{codec_rs}"
     );
 }
 
@@ -66,7 +73,9 @@ pub mod adapters
         .get("adapters/import_snapshot.rs")
         .expect("adapters/import_snapshot.rs");
     assert!(
-        !adapter.contains("decode_store(&body") && !adapter.contains("decode_store( &body"),
-        "RED: hexagonal adapter must move owned match binding; emitted:\n{adapter}"
+        adapter.contains("decode_store(&body")
+            || adapter.contains("decode_store(body.as_str()")
+            || adapter.contains("decode_store(&*body"),
+        "hexagonal adapter must borrow owned match binding into demoted &str. emitted:\n{adapter}"
     );
 }

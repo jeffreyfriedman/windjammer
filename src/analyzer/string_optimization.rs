@@ -146,21 +146,6 @@ impl<'ast> Analyzer<'ast> {
                     continue;
                 }
 
-                // Pub free validation APIs that only compare against string literals
-                // (`text == ""`) keep owned `String` so match-arm payloads can move
-                // (`Ok(body) => decode_store(body)`). Relational predicates
-                // (`pattern == path`) still demote for loop reuse (wj-glob).
-                if !needs_string_ref
-                    && func.is_pub
-                    && func.parent_type.is_none()
-                    && self.param_has_readonly_string_equality_comparison(
-                        &param.name,
-                        &func.body,
-                    )
-                {
-                    continue;
-                }
-
                 if !needs_string_ref {
                     if self.string_param_consumed_owned(&param.name, &func.body, registry) {
                         continue;
@@ -432,117 +417,6 @@ impl<'ast> Analyzer<'ast> {
                     || self.expr_uses_param_in_string_concat(param_name, right)
             }
             _ => false,
-        }
-    }
-
-    /// Param used only in `==` / `!=` comparisons against **string literals**
-    /// (pub validation APIs like `decode_store(text) { if text == "" … }`).
-    ///
-    /// Relational predicates (`pattern == path`) return false so those formals
-    /// can still demote to `&str` for loop reuse.
-    pub(crate) fn param_has_readonly_string_equality_comparison(
-        &self,
-        param_name: &str,
-        body: &[&Statement],
-    ) -> bool {
-        let mut saw_eq = false;
-        for stmt in body {
-            if !self.stmt_param_literal_equality_use_only(param_name, stmt, &mut saw_eq) {
-                return false;
-            }
-        }
-        saw_eq
-    }
-
-    fn stmt_param_literal_equality_use_only(
-        &self,
-        param_name: &str,
-        stmt: &Statement,
-        saw_eq: &mut bool,
-    ) -> bool {
-        match stmt {
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                if !self.expr_is_literal_equality_use_of_param(param_name, condition, saw_eq) {
-                    return false;
-                }
-                then_block
-                    .iter()
-                    .all(|s| self.stmt_param_literal_equality_use_only(param_name, s, saw_eq))
-                    && else_block.as_ref().map_or(true, |b| {
-                        b.iter().all(|s| {
-                            self.stmt_param_literal_equality_use_only(param_name, s, saw_eq)
-                        })
-                    })
-            }
-            Statement::Return {
-                value: Some(expr), ..
-            } => {
-                self.expr_is_literal_equality_use_of_param(param_name, expr, saw_eq)
-                    || !self.expr_contains_bare_param(param_name, expr)
-            }
-            Statement::Expression { expr, .. } | Statement::Let { value: expr, .. } => {
-                self.expr_is_literal_equality_use_of_param(param_name, expr, saw_eq)
-                    || !self.expr_contains_bare_param(param_name, expr)
-            }
-            _ => true,
-        }
-    }
-
-    fn expr_is_literal_equality_use_of_param(
-        &self,
-        param_name: &str,
-        expr: &Expression,
-        saw_eq: &mut bool,
-    ) -> bool {
-        match expr {
-            Expression::Binary { left, right, op, .. }
-                if matches!(
-                    op,
-                    crate::parser::BinaryOp::Eq | crate::parser::BinaryOp::Ne
-                ) =>
-            {
-                let left_is_param = self.expr_contains_bare_param(param_name, left);
-                let right_is_param = self.expr_contains_bare_param(param_name, right);
-                if !left_is_param && !right_is_param {
-                    return true;
-                }
-                // Param on one side; peer must be a string literal (not another binding).
-                let peer = if left_is_param { right } else { left };
-                if matches!(
-                    &**peer,
-                    Expression::Literal {
-                        value: crate::parser::Literal::String(_),
-                        ..
-                    }
-                ) {
-                    *saw_eq = true;
-                    true
-                } else {
-                    false
-                }
-            }
-            Expression::Binary { left, right, .. } => {
-                self.expr_is_literal_equality_use_of_param(param_name, left, saw_eq)
-                    && self.expr_is_literal_equality_use_of_param(param_name, right, saw_eq)
-            }
-            Expression::Unary { operand, .. } | Expression::Cast { expr: operand, .. } => {
-                self.expr_is_literal_equality_use_of_param(param_name, operand, saw_eq)
-            }
-            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-                arguments.iter().all(|(_, a)| {
-                    !self.expr_contains_bare_param(param_name, a)
-                        || self.expr_is_literal_equality_use_of_param(param_name, a, saw_eq)
-                })
-            }
-            Expression::Block { statements, .. } => statements.iter().all(|s| {
-                self.stmt_param_literal_equality_use_only(param_name, s, saw_eq)
-            }),
-            _ => !self.expr_contains_bare_param(param_name, expr),
         }
     }
 
