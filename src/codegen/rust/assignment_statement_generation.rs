@@ -627,3 +627,54 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::analyzer::Analyzer;
+    use crate::codegen::rust::CodeGenerator;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use crate::CompilationTarget;
+
+    /// WDB-391: helper `u32` assigned to a field and reused must not `.clone()`.
+    #[test]
+    fn copy_u32_helper_return_assign_must_not_clone() {
+        let source = r#"
+pub fn get_screen_width() -> u32 {
+    1280
+}
+
+pub fn get_screen_height() -> u32 {
+    720
+}
+
+pub struct Renderer {
+    pub screen_width: u32,
+    pub screen_height: u32,
+}
+
+impl Renderer {
+    pub fn init_gpu(self) {
+        let w = get_screen_width()
+        let h = get_screen_height()
+        self.screen_width = w
+        self.screen_height = h
+        let pixel_count = w * h
+        let _ = pixel_count
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !generated.contains("w.clone()") && !generated.contains("h.clone()"),
+            "Copy u32 helper return must not clone on field assign/reuse:\n{generated}"
+        );
+    }
+}

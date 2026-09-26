@@ -34,8 +34,7 @@
 
 **What became unnecessary:** per-width assignment peels (`u32` vs `i32` vs `usize`); name lists. One `ident_skips_auto_clone_as_copy` shared by identifier + assignment. Also skip when the *target* type is Copy (`self.screen_width: u32`).
 
-**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3478`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb391_module_file_ffi_u32_return_must_not_clone_on_assign wdb393_module_file_i32_formal_field_assign_must_not_clone wdb394_module_file_usize_loop_index_assign_must_not_clone` → **3 isolate passed / 3 tip-out failed**
+**Gates:** `unset CARGO_TARGET_DIR && cargo test --release --lib -- copy_u32_helper_return_assign_must_not_clone` → **1 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- wdb391_module_file_ffi_u32_return_must_not_clone_on_assign` → isolate **GREEN** / tip-out **RED** (stale gen).
 - spawn + mpsc → **4 passed**
 - Prior full suite (pre-fix tree): **5430 passed / 144 failed** (mostly tip-out + known isolate cluster)
 
