@@ -1,5 +1,19 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.466 (2026-09-26) — WDB-201 MultiFile isolate is GREEN (tip-out lag)
+
+| Gate | Status |
+|------|--------|
+| `wdb201_module_file_reused_key_into_owned_entries_push_must_clone` | ✅ isolate GREEN — reused `key` into `Vec<(Key, Value)>::push` clones or stays owned; cargo-check |
+| Tip-out / gen `relational_secondary_index_port` | ⚠️ host-lag — not a compiler isolate target |
+| spawn / mpsc / WDB-209 | ✅ GREEN (P3.465) |
+
+**Root cause layer:** none in compiler. Product `relational_secondary_index_put` compare-then-push already emits owned/clone on tip MultiFile. Queue ❌ was tip-out/gen string-scan only.
+
+**What became unnecessary:** treating WDB-201 as a missing `method == "push"` heuristic. P3.465 generic peel + `Vec::push` owned T is enough.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3465` `cargo test --release --test all --features integration_tests,codegen_tests -- wdb201_module_file_reused_key_into_owned_entries_push_must_clone` → **1 passed**.
+
 ## P3.465 (2026-09-26) — peel `Vec<T>::method` so field-receiver `push` is signature-driven
 
 | Gate | Status |
@@ -2044,7 +2058,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **~123** (↓ after module_file + df_provider tip→gen sync; re-census after docs) |
 | Tip **WDB-200** u32 counter `1_i64` (df_provider) | ✅ **GREEN** after tip-out→gen sync |
-| Tip **WDB-201** `&mut Key` → owned `entries.push` | ❌ RED — tip-out/gen `push((key, …))` |
+| Tip **WDB-201** `&mut Key` → owned `entries.push` | ✅ isolate GREEN (P3.466); tip-out/gen ⚠️ host-lag |
 | Tip **WDB-202** `&mut MulticolState` → owned return | ✅ **GREEN** — tip-out/gen owned `state:` (no demoted `&mut`) |
 | Tip **WDB-203** owned `sql` → demoted `&str` simple_query | ❌ RED — unified bare `sql` |
 | Tip **WDB-204** `u64 == 0_usize` (sysbench) | ❌ RED — tip-out/gen |
