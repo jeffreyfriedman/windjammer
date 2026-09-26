@@ -4022,6 +4022,29 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// True when every resolved call-site formal for `param_name` expects a shared borrow.
+    /// Unlike `param_only_forwards_to_registry_borrow_callees`, extra readonly uses
+    /// (`.trim()`, interpolation) are allowed — so `strings::len` + Display reads can demote.
+    pub(in crate::codegen::rust) fn param_call_sites_expect_borrow(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut sites = 0usize;
+        let mut borrow_sites = 0usize;
+        self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, arg_index| {
+            sites += 1;
+            let pidx = sig.arg_param_index(arg_index);
+            if self.signature_param_expects_borrow(sig, arg_index)
+                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx)
+            {
+                borrow_sites += 1;
+            }
+        });
+        sites > 0 && borrow_sites == sites
+    }
+
     /// True when every call-site forward of `param_name` targets a callee formal that
     /// already converged to shared borrow in the signature registry (post-preregister).
     pub(in crate::codegen::rust) fn param_only_forwards_to_registry_borrow_callees(
@@ -10685,12 +10708,18 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = object else {
             return None;
         };
+        // Typed locals are resolved by `method_call_signature_for_arg` first.
+        // Untyped identifiers (`strings` after `use std::strings`) look up the
+        // free-fn key only — no suffix homonym for `len`.
         let key = format!("{name}::{method}");
-        self.global_signature_registry.as_ref().and_then(|g| {
-            g.get_signature(&key)
-                .or_else(|| g.find_signature_ending_with(method))
-                .cloned()
-        })
+        self.get_signature_with_global(&key)
+            .cloned()
+            .or_else(|| self.signature_registry.get_signature(&key).cloned())
+            .or_else(|| {
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(&key).cloned())
+            })
     }
 
     fn global_free_call_signature_fallback(
@@ -11292,7 +11321,12 @@ impl<'ast> CodeGenerator<'ast> {
             self.mc_infer_method_receiver_type_name(object)
                 .or_else(|| self.infer_type_name(object))
         };
-        let rt = receiver_type?;
+        // Module-qualified stdlib (`strings.len(json)`) is a MethodCall on an
+        // untyped identifier — `{module}::{method}` is the free-fn key.
+        if receiver_type.is_none() {
+            return self.global_free_call_signature_fallback_for_method(object, method);
+        }
+        let rt = receiver_type.as_ref()?;
         // `Vec<T>::push` / `HashMap<K,V>::get` must resolve to the stdlib base key
         // (`Vec::push`) — same peel as `resolve_function_signature` Step 3a.
         // Field-receiver formals (`out.columns.push(col)`) used to miss and fall

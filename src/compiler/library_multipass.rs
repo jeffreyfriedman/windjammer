@@ -607,6 +607,11 @@ pub(crate) fn build_library_multipass(
             }
         }
 
+        // `std/strings.wj` merge aliases `len` → `strings::len` as owned stubs.
+        // Restore the runtime borrow contract after every convergence round.
+        std::sync::Arc::make_mut(&mut global_registry)
+            .restore_runtime_borrowed_strings_signatures();
+
         profile_phase(&format!("Step 3 round {}", pass_number), round_start);
 
         if !pass_changed || pass_number >= MAX_GLOBAL_PASSES {
@@ -1157,6 +1162,9 @@ pub(crate) fn build_library_multipass(
             reg,
             &program_refs,
         );
+        // 4B-a / `.wj.meta` alias inserts re-apply `strings.wj` owned stubs
+        // (`len` → `strings::len`). Runtime AsRef/&str must win before codegen.
+        reg.restore_runtime_borrowed_strings_signatures();
     }
     profile_phase("Step 4B-a-IR: IR lowering", step4b_ir_start);
 
