@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.476 (2026-09-26) — TDD WDB-391/392 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-391 MultiFile | ⏳ TDD — FFI/helper `u32` reuse after field assign must not `w.clone()` |
+| WDB-391 tip-out | ⏳ TDD — `gen/rendering/voxel_gpu_buffers.rs` `screen_width = w.clone()` |
+| WDB-392 MultiFile | ⏳ TDD — `Direction::PosX` must not `.clone()` |
+| WDB-392 tip-out | ⏳ TDD — `gen/voxel/meshing.rs` (WDB-384 path-list miss) |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why these are new classes:**
+- WDB-343 isolate is GREEN for typed i32 formals; product still clones **u32 helper/FFI returns** (`let w = gpu::get_screen_width()` then `self.screen_width = w` + `w * h`).
+- WDB-384 tip list misses `Direction::` in `voxel/meshing.rs` (`direction: Direction::PosX` → `Direction::PosX.clone()`).
+
+**What became unnecessary:** do not refile FaceDirection (384) or author-written `(i as u32) as u8`.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb384`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb391_ wdb392_` — results after TDD this session.
+
 ## P3.475 (2026-09-26) — user `join(string, string)` must not inherit `strings::join` `&relative`
 
 | Gate | Status |
@@ -9,7 +29,7 @@
 | `prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter` | ✅ unit GREEN |
 | `skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join` | ✅ unit GREEN |
 | `codegen_user_join_must_not_borrow_owned_relative` | ✅ unit GREEN — `join(&base, relative)` / `relative: String` |
-| `user_join_two_strings_moves_owned_locals` | isolate (re-run this session) |
+| `user_join_two_strings_moves_owned_locals` | ✅ isolate GREEN |
 
 **Root cause layer:** signature + call-site peel. Registry already mixed `[true, false]` after interpolation demotes `base`. `strings::join` still leaked through `skip_stale_borrow` / global-first `expects_borrow` / `prefer_global`. `user_owned_slot_beats_stdlib_homonym` (shape `string,string` ≠ `Vec,&str`) peels `&relative`. No new `ir_call_site` peel tree.
 
