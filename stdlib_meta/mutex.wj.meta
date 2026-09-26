@@ -1,0 +1,30 @@
+{
+  "module_path": "Mutex",
+  "structs": {},
+  "functions": {
+    "Mutex::lock": {
+      "params": ["Reference(Custom(\"Mutex\"))"],
+      "return_type": "Result(Parameterized(\"MutexGuard\", [Custom(\"T\")]), Custom(\"_\"))",
+      "is_associated": true,
+      "parent_type": "Mutex",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "RwLock::read": {
+      "params": ["Reference(Custom(\"RwLock\"))"],
+      "return_type": "Result(Parameterized(\"RwLockReadGuard\", [Custom(\"T\")]), Custom(\"_\"))",
+      "is_associated": true,
+      "parent_type": "RwLock",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    },
+    "RwLock::write": {
+      "params": ["Reference(Custom(\"RwLock\"))"],
+      "return_type": "Result(Parameterized(\"RwLockWriteGuard\", [Custom(\"T\")]), Custom(\"_\"))",
+      "is_associated": true,
+      "parent_type": "RwLock",
+      "param_ownership": ["Borrowed"],
+      "has_self_receiver": true
+    }
+  }
+}

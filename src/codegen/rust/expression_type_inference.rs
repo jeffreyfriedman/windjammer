@@ -291,6 +291,11 @@ impl<'ast> CodeGenerator<'ast> {
                             // `f32::MAX` / `i32::MIN`: associated const on a Copy primitive
                             // has that primitive type — never treat as an untyped reuse path.
                             return Some(Type::Custom(name.clone()));
+                        } else if let Some(ft) = self.unique_registered_struct_field_type(field) {
+                            // `Ok(g) => g.data.get` — match binding may lack a type until
+                            // Mutex::lock is resolved. A unique registered `data: HashMap<…>`
+                            // still types the field so HashMap::get (`&K`) is used.
+                            return Some(ft);
                         }
                     }
                 } else {
@@ -328,7 +333,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                None
+                self.unique_registered_struct_field_type(field)
             }
             // &expr or &mut expr → Reference(inner_type)
             Expression::Unary {
@@ -684,22 +689,57 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Uses [`Self::type_to_name`] so `HashMap<K,V>`, `Vec<T>`, and other parameterized
     /// receivers resolve (`HashMap::get` → `Option<&V>`), not only bare `Custom`/`String`.
+    /// `Arc<Mutex<T>>.lock()` peels `Arc`/`Rc`/`Box` so `Mutex::lock` applies.
     pub(in crate::codegen::rust) fn registry_method_return_type(
         &self,
         receiver: &Type,
         method: &str,
     ) -> Option<Type> {
-        let type_name = Self::type_to_name(receiver)?;
-        let base = type_name.split('<').next().unwrap_or(type_name.as_str());
-        for candidate in [type_name.as_str(), base] {
-            let qualified = format!("{candidate}::{method}");
-            if let Some(sig) = self.get_signature_with_global(&qualified) {
-                if let Some(ret) = &sig.return_type {
-                    return Some(Self::substitute_stdlib_generics(ret, receiver));
+        for recv in Self::deref_method_lookup_receivers(receiver) {
+            let Some(type_name) = Self::type_to_name(&recv) else {
+                continue;
+            };
+            let base = type_name.split('<').next().unwrap_or(type_name.as_str());
+            for candidate in [type_name.as_str(), base] {
+                let qualified = format!("{candidate}::{method}");
+                if let Some(sig) = self.get_signature_with_global(&qualified) {
+                    if let Some(ret) = &sig.return_type {
+                        return Some(Self::substitute_stdlib_generics(ret, &recv));
+                    }
                 }
             }
         }
         None
+    }
+
+    /// Receivers to try for method return lookup: the type itself, then Deref payloads.
+    fn deref_method_lookup_receivers(receiver: &Type) -> Vec<Type> {
+        let peeled = Self::peel_references(receiver).clone();
+        let mut out = vec![peeled.clone()];
+        if let Type::Parameterized(name, args) = &peeled {
+            let leaf = crate::type_classification::type_name_leaf(name);
+            if matches!(leaf, "Arc" | "Rc" | "Box") && args.len() == 1 {
+                out.push(args[0].clone());
+            }
+        }
+        out
+    }
+
+    /// When a match/guard binding is untyped, a field name that appears on exactly one
+    /// registered struct (same type) still types `g.data` so map-key methods resolve.
+    fn unique_registered_struct_field_type(&self, field: &str) -> Option<Type> {
+        let mut found: Option<Type> = None;
+        for fields in self.struct_field_types.values() {
+            let Some(ft) = fields.get(field) else {
+                continue;
+            };
+            match &found {
+                None => found = Some(ft.clone()),
+                Some(prev) if prev == ft => {}
+                Some(_) => return None,
+            }
+        }
+        found
     }
 
     /// Tuple destructuring via numeric fields: `i_c.0` when `i_c: (usize, char)`.
@@ -831,6 +871,10 @@ impl<'ast> CodeGenerator<'ast> {
         match ret {
             Type::Custom(n) if n == "T" => Self::peeled_collection_element_type(receiver)
                 .cloned()
+                .or_else(|| match Self::peel_references(receiver) {
+                    Type::Parameterized(_, params) if params.len() == 1 => Some(params[0].clone()),
+                    _ => None,
+                })
                 .unwrap_or_else(|| ret.clone()),
             Type::Custom(n) if n == "V" => {
                 if let Type::Parameterized(_, params) = Self::peel_references(receiver) {
@@ -851,6 +895,16 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Option(inner) => {
                 Type::Option(Box::new(Self::substitute_stdlib_generics(inner, receiver)))
             }
+            Type::Result(ok, err) => Type::Result(
+                Box::new(Self::substitute_stdlib_generics(ok, receiver)),
+                Box::new(Self::substitute_stdlib_generics(err, receiver)),
+            ),
+            Type::Parameterized(name, args) => Type::Parameterized(
+                name.clone(),
+                args.iter()
+                    .map(|a| Self::substitute_stdlib_generics(a, receiver))
+                    .collect(),
+            ),
             Type::Reference(inner) => {
                 Type::Reference(Box::new(Self::substitute_stdlib_generics(inner, receiver)))
             }

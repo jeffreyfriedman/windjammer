@@ -26,10 +26,7 @@ use std::process::Command;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_mut_upgrade_in_tuple_match() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
@@ -122,10 +119,7 @@ impl Renderer {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_hashmap_get_mut_upgrade_in_if_let_tuple() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
