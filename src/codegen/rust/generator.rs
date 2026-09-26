@@ -2542,16 +2542,16 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return true;
         }
-        self.current_function_params.iter().any(|p| {
-            p.name == name
-                && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-                    || matches!(&p.type_, Type::Reference(_))
-                    || (crate::codegen::rust::types::param_generates_as_rust_ref(
-                        &p.type_,
-                        &p.name,
-                        &self.inferred_borrowed_params,
-                    ) && !matches!(&p.type_, Type::MutableReference(_))))
-        })
+        // Preregistered `name: &T` when `emitted_rust_ref_formals` was cleared
+        // between sibling prepare and body emit (P3.458 `run(csr: &DenseCsr)`).
+        if self.current_fn_emitted_formal_is_shared_ref(name) {
+            return true;
+        }
+        // Analyzer `Type::Reference` / `OwnershipHint::Ref` is not emit-truth.
+        // Source `&T` formals are already covered above. Emitted-owned Custom
+        // (`col: CatalogColumnBinding`) must stay owned at call sites — last-use
+        // into `Vec::push` is a move, not `.clone()` (WDB-209).
+        false
     }
 
     /// Whether an identifier already lowers as a Rust shared-reference binding (`&T`).
@@ -2837,10 +2837,18 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Demoted `&T` outer formal (multipass readonly reuse) passed into an owned callee.
+    ///
+    /// Analyzer `inferred_borrowed_params` is not emit-truth: an owned formal
+    /// (`col: CatalogColumnBinding`) can still be marked Borrowed while Rust
+    /// emits by value. Last-use into `Vec::push` must move, not `.clone()`.
     pub(crate) fn caller_demoted_non_copy_formal_into_owned_callee(&self, name: &str) -> bool {
+        if self.caller_keeps_owned_outer_formal(name) {
+            return false;
+        }
         (self.emitted_rust_ref_formals.contains(name)
             || self.inferred_borrowed_params.contains(name)
-            || self.str_ref_optimized_params.contains(name))
+            || self.str_ref_optimized_params.contains(name)
+            || self.current_fn_emitted_formal_is_shared_ref(name))
             && self.current_function_params.iter().any(|p| {
                 p.name == name && !self.is_type_copy(&p.type_)
             })

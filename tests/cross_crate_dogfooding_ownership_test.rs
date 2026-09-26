@@ -784,8 +784,8 @@ pub fn run() {
         "owned Key must borrow for has_key-style forward ref. Got:\n{rs}"
     );
     assert!(
-        rs.contains("latest.has_key(key.clone())") || rs.contains("latest.has_key(&key.clone())"),
-        "borrowed outer Key formal must clone for owned callee has_key. Got:\n{rs}"
+        rs.contains("latest.has_key(key)") && !rs.contains("latest.has_key(key.clone())"),
+        "last-use owned Key into owned has_key must move (WDB-209), not blanket-clone. Got:\n{rs}"
     );
 }
 

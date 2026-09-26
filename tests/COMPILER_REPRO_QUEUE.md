@@ -1,5 +1,22 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.461 (2026-09-26) — last-use owned `col` into `Vec::push` moves (WDB-209)
+
+| Gate | Status |
+|------|--------|
+| `wdb209_multipass_catalog_push_column_col_must_stay_owned` | ✅ isolate GREEN — `push(col)` not `push(col.clone())` |
+| `dogfood_store_has_key_forward_ref_borrows_owned_key` | ✅ GREEN — last-use `has_key(key)` moves |
+| WDB-124 / 125 / demoted Vec reuse clone | ✅ GREEN — demoted `&T` still clones into owned callees |
+| mut_param / WDB-217 / spawn / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** constraint/emit-truth + reconcile shrink. IR already computed Owned→Owned Identity for last-use `col` into `Vec::push`. Terminal reconcile then blanket-cloned every non-Copy param into an owned slot when the receiver was not `self`/field (`latest.has_key(key)` heuristic), undoing last-use Identity.
+
+**What became unnecessary:** the post-IR blanket `.clone()` on local-receiver owned slots. Analyzer `Type::Reference` / `inferred_borrowed_params` no longer mark an emitted-owned formal as already-`&T`. `caller_demoted_non_copy_formal_into_owned_callee` now requires emit-truth (owned outer formal wins). Reuse clones stay in `ensure_owned_move_clone_for_reuse`.
+
+**Temporary remaining:** prepare still has a `Vec::push` registry fallback when field-receiver lookup misses (`method == "push"` then `stdlib_vec_push_value_arg_is_owned`). Delete path: once field-receiver `Vec::push` always resolves, that gate can go. `bug_vec_push_borrowed_loop_elem_must_clone_test` fixture uses Copy `Achievement` (`i32` only) so `push(ach)` is Identity — rewrite the fixture to a non-Copy elem before treating it as a compiler RED.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3461` `cargo test --release --test all --features integration_tests,codegen_tests -- wdb209_multipass_catalog_push_column_col_must_stay_owned dogfood_store_has_key_forward_ref_borrows_owned_key bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test bug_wdb124_module_file_demoted_vec_i64_formal_must_borrow_clone_call_sites_test bug_wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites_test bug_mut_param_passthrough_no_shared_amp_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **14 passed**.
+
 ## P3.460 (2026-09-26) — `Mutex::lock` types `Ok(g)` so `g.data.get` borrows `&K`
 
 | Gate | Status |
@@ -2430,7 +2447,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 | Gate | Status |
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ **~523** (tip-out regen churn; was ~125 earlier this session — binder/pg_wire tip regression) |
-| Tip **WDB-209** `catalog_push_column` `&mut CatalogColumnBinding` | ✅ **GREEN** — multipass + Vec::push registry; regen gen/tip-out |
+| Tip **WDB-209** `catalog_push_column` `&mut CatalogColumnBinding` | ✅ **GREEN** — P3.461 last-use `push(col)` move; formal owned |
 | Tip **WDB-210** `&mut Wave1Sf1Session`→owned clock | ✅ **GREEN** — tip uses `sess.clone()`; tip→gen sync |
 | Tip **WDB-211** `fill_bundle_from_six` `&mut OptOperatorFill` | ✅ **GREEN** after tip→gen (+ module_file) sync |
 | Tip **WDB-212** owned Timeseries batch→demoted `&` | ✅ **GREEN** — `sig_arg_confirms_owned_emission` respects emission; multipass borrow gate |

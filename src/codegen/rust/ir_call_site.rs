@@ -5559,27 +5559,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.peel_fn_trait_or_closure_call_arg(coerced, arg_expr, callee_name, &sig, arg_index);
 
-        // `latest.has_key(key)` — local receiver, owned callee: clone param for reuse upstream.
-        if let Some(recv) = receiver {
-            if !crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(recv)
-                && global_or_local_confirms_owned_emission()
-            {
-                if let Expression::Identifier { name, .. } = arg_expr {
-                    let param_non_copy = self.current_function_params.iter().any(|p| {
-                        p.name == *name
-                            && !self.is_type_copy(&p.type_)
-                            && !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-                    });
-                    if param_non_copy
-                        && !coerced.ends_with(".clone()")
-                        && !coerced.starts_with('&')
-                        && !coerced.starts_with("&mut ")
-                    {
-                        *coerced = format!("{coerced}.clone()");
-                    }
-                }
-            }
-        }
+        // Reuse clones for owned non-Copy params live in
+        // `ensure_owned_move_clone_for_reuse` (auto_clone + later-owned-pass).
+        // A blanket `.clone()` on every local-receiver owned slot undoes last-use
+        // Identity (`out.columns.push(col)` / WDB-209).
 
         let wants_shared_terminal = global_confirms_shared_ref(param_idx)
             || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
@@ -8128,20 +8111,33 @@ impl<'ast> CodeGenerator<'ast> {
                 return self
                     .safety_type_for_param_binding(arg_expr, OwnedType::Ref(Region::fresh(0)));
             }
-            // Forward-ref / owned formals: analyzer may still infer `&str` while Rust
-            // emits `String` — coerce as owned at call sites (`check(&text)`).
+            // Emitted owned formals: analyzer may still infer `Reference` / `&str`
+            // while Rust emits `col: CatalogColumnBinding` or `text: String`.
+            // Classify as Owned so last-use into `Vec::push` is Identity (move),
+            // not Clone (`col.clone()`).
             if self.current_function_params.iter().any(|p| p.name == *name)
                 && !self.emitted_rust_ref_formals.contains(name)
+                && !self.current_fn_emitted_formal_is_shared_ref(name)
+                && !self.identifier_already_mut_ref(name)
             {
-                if let Some(ty) = self.infer_expression_type(arg_expr) {
-                    if matches!(
-                        &ty,
-                        Type::Reference(inner) | Type::MutableReference(inner)
-                            if crate::codegen::rust::types::is_windjammer_text_type(inner.as_ref())
-                    ) || crate::codegen::rust::types::is_windjammer_text_type(&ty)
+                if let Some(param) = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                {
+                    let bare = match &param.type_ {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    if crate::codegen::rust::types::is_windjammer_text_type(bare)
+                        || crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     {
                         return SafetyType::owned(BaseType::String);
                     }
+                    if self.is_type_copy(bare) {
+                        return SafetyType::copy(crate::ir::node::parser_type_to_base_type(bare));
+                    }
+                    return SafetyType::owned(crate::ir::node::parser_type_to_base_type(bare));
                 }
             }
         }
