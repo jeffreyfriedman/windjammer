@@ -1,5 +1,17 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.474 (2026-09-26) — P3.444 isolate same-line range + notes `strings.len` borrow
+
+| Gate | Status |
+|------|--------|
+| `i32_heavy_impl_match_field_len_must_not_emit_i32_range` | isolate codegen GREEN (`0_usize..node.params.len()`) — assertion was a false RED (`0_i32..14` + `params.len()` on different lines). Tightened to same-line. Recursive `buf.clone()` remains when sibling formal stays owned `Vec`. |
+| `p3444_tip_out_game_core_csg_must_not_emit_i32_len_range` | same-line check — product/tip still has `0_i32..node.params.len()` until regen |
+| `strings_len_must_borrow_owned_local_for_later_use` | ✅ isolate GREEN — `strings::len(&want)` then `want == tag` |
+| WDB-389 MultiFile | isolate codegen GREEN (`0_usize` / no `buf.clone()`); cargo-check timed out on cold target |
+| WDB-389 / WDB-390 tip-out | ❌ stale product / `.agent-wip/rel_tip_out` |
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- strings_len_must_borrow i32_heavy_impl_match_field_len wdb389 wdb390` → 1 passed / 6 failed before assertion tighten (timeouts + loose range + stale gen).
+
 ## P3.473 (2026-09-26) — TDD WDB-389/390 (DB agent; no compiler src)
 
 | Gate | Status |
@@ -28,6 +40,7 @@
 | `owned_match_binding_cross_fn_owned_string_formal_*` | ✅ isolate GREEN |
 | WDB-110 / WDB-111 / WDB-144 / WDB-152 | ✅ isolate GREEN — non-text AsRef helpers stay owned `String` |
 | spawn / mpsc | ✅ isolate GREEN |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ isolate GREEN — `require_nonempty(&field, value)` (mixed `&str` + owned `String`) |
 
 **Root cause layer:** signature.
 
