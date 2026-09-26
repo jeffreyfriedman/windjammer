@@ -1,5 +1,19 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.462 (2026-09-26) — borrowed loop elem clone gate is non-Copy (P3.303)
+
+| Gate | Status |
+|------|--------|
+| `vec_push_borrowed_loop_elem_must_clone_for_owned_push` | ✅ isolate GREEN — `Achievement { id, name: string }`; `push(ach.clone())` |
+| spawn / mpsc | ✅ GREEN |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ GREEN — stale queue ❌; P3.436/437 already landed |
+
+**Root cause layer:** none in compiler — the P3.303 fixture used Copy `Achievement` (`i32` only), so `push(ach)` is Identity. Tip already clones borrowed **non-Copy** `values()` elems into owned `Vec::push`.
+
+**What became unnecessary:** treating Copy Identity as a compiler RED. No new `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3462` `cargo test --release --test all --features integration_tests,codegen_tests -- vec_push_borrowed_loop_elem_must_clone_for_owned_push bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` → **6 passed** after fixture rewrite (Copy fixture was the only RED).
+
 ## P3.461 (2026-09-26) — last-use owned `col` into `Vec::push` moves (WDB-209)
 
 | Gate | Status |
@@ -13,7 +27,7 @@
 
 **What became unnecessary:** the post-IR blanket `.clone()` on local-receiver owned slots. Analyzer `Type::Reference` / `inferred_borrowed_params` no longer mark an emitted-owned formal as already-`&T`. `caller_demoted_non_copy_formal_into_owned_callee` now requires emit-truth (owned outer formal wins). Reuse clones stay in `ensure_owned_move_clone_for_reuse`.
 
-**Temporary remaining:** prepare still has a `Vec::push` registry fallback when field-receiver lookup misses (`method == "push"` then `stdlib_vec_push_value_arg_is_owned`). Delete path: once field-receiver `Vec::push` always resolves, that gate can go. `bug_vec_push_borrowed_loop_elem_must_clone_test` fixture uses Copy `Achievement` (`i32` only) so `push(ach)` is Identity — rewrite the fixture to a non-Copy elem before treating it as a compiler RED.
+**Temporary remaining:** prepare still has a `Vec::push` registry fallback when field-receiver lookup misses (`method == "push"` then `stdlib_vec_push_value_arg_is_owned`). Delete path: once field-receiver `Vec::push` always resolves, that gate can go. P3.462 rewrote the borrowed-loop-elem fixture to non-Copy.
 
 **Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3461` `cargo test --release --test all --features integration_tests,codegen_tests -- wdb209_multipass_catalog_push_column_col_must_stay_owned dogfood_store_has_key_forward_ref_borrows_owned_key bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test bug_wdb124_module_file_demoted_vec_i64_formal_must_borrow_clone_call_sites_test bug_wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites_test bug_mut_param_passthrough_no_shared_amp_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **14 passed**.
 
