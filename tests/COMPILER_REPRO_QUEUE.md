@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.472 (2026-09-26) — keep `strings::*` Borrowed through multipass + demote `parse_body`
+
+| Gate | Status |
+|------|--------|
+| `demoted_str_formal_must_not_receive_cloned_string` | ✅ isolate GREEN — `parse_body(json: &str)` |
+| `owned_match_binding_cross_fn_owned_string_formal_*` | ✅ isolate GREEN |
+| WDB-110 / WDB-111 / WDB-144 / WDB-152 | ✅ isolate GREEN — non-text AsRef helpers stay owned `String` |
+| spawn / mpsc | ✅ isolate GREEN |
+
+**Root cause layer:** signature.
+
+P3.471 restored `strings::len` on `SignatureRegistry::stdlib()`, but library multipass last-writes `std/strings.wj` owned stubs (`len` → `strings::len`) during Step 3 merge and 4B-a alias/meta inserts. Formal emit then treated `strings.len(json)` (MethodCall on a module identifier) as a WJ owned sibling and kept `parse_body(json: String)`.
+
+**What became unnecessary:** the keep-owned sibling/asref pin firing on text-returning helpers whose only call is runtime `strings::*`. Method-call formal lookup now resolves `{module}::{method}` when the receiver is untyped; `pub_module_api` does not treat borrow-only call sites as owned forwards.
+
+**Still remaining:** other RED/⚠️ queue rows; full `cargo test --release --test all` not re-run this commit.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3472`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- demoted_str_formal_must_not_receive_cloned_string owned_match_binding_cross_fn_owned_string_formal wdb110 wdb111 wdb144_module_file wdb152_module_file bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **12 passed**
+
 ## P3.471 (2026-09-26) — `strings::len` Borrowed boundary + Phase-2 match-binding borrow
 
 | Gate | Status |
@@ -9,7 +29,7 @@
 | `comparison_only_string_formal_demotes_to_str` | ✅ GREEN — same Phase-2 contract |
 | `codegen_str_to_string` | ✅ GREEN — `CARGO_BIN_EXE_wj` (isolated `CARGO_TARGET_DIR`) |
 | spawn / mpsc / WDB-144 / WDB-152 | ✅ GREEN |
-| `demoted_str_formal_must_not_receive_cloned_string` | ❌ still RED — `parse_body` stays `json: String` (`strings::len` + `.trim()` + text return) |
+| `demoted_str_formal_must_not_receive_cloned_string` | ✅ GREEN in P3.472 |
 
 **Root cause layer:** signature + constraint/solver.
 
@@ -18,7 +38,7 @@
 
 **What became unnecessary:** ~110 LOC of literal-equality keep-owned helpers in `string_optimization.rs` plus the analyzer early-return that fought Phase-2 demotion. No `ir_call_site` peel.
 
-**Still remaining:** `parse_body` / demoted_str — formal emit still pins text-returning helpers that both call `strings::len` and use `.trim()`. `strings::len` is now Borrowed; next step is IR expected Borrowed write-back that beats keep-owned without breaking WDB-110 (`is_empty` + `.len()` stay owned).
+**Still remaining (resolved in P3.472):** `parse_body` / demoted_str stayed RED because multipass re-shadowed the restored `strings::*` borrow contract.
 
 **Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3471`
 - `cargo test --release --lib -- strings_len_stdlib_signature_is_borrowed` → **1 passed**
@@ -945,7 +965,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Owned call-site temp must not become `&` (multi-arm routes)** | tip `codegen_library_multipass_owned_custom_call_site`, `codegen_owned_plus_empty_call_site_must_move` | ✅ tip GREEN — P3.179 dropped product `clone_tenant_slug`; routes pass bare `tenant_slug` (demoted `&str` or owned move) |
 | P1 | **Struct field into owned `string` formal must not `&field`** | `codegen_struct_field_owned_string_formal_must_not_borrow` | ✅ tip GREEN — P3.180 dogfood drops `field + ""` into `escape_html` / status helpers |
 | P1 | **`trim` local `== "lit"` must not emit `.as_str()` (E0658)** | `codegen_trim_eq_literal_must_not_emit_as_str` | ✅ tip GREEN — product restored bare `fmt == "csv"` |
-| P1 | **Demoted `&str` formal must not receive `String.clone()` at call site** | `codegen_demoted_str_formal_must_not_receive_owned_clone_gate_test` | ❌ isolate RED (P3.471) — `parse_body` stays `json: String`; `strings::len` boundary is now Borrowed |
+| P1 | **Demoted `&str` formal must not receive `String.clone()` at call site** | `codegen_demoted_str_formal_must_not_receive_owned_clone_gate_test` | ✅ isolate GREEN (P3.472) — multipass re-restores `strings::*` Borrowed; `parse_body(json: &str)` |
 | P1 | **Multi-use owned param → two owned `String` formals must auto-`.clone()`** | `codegen_multi_use_owned_param_must_auto_clone_gate_test` | ✅ tip GREEN — analysis-driven reuse clone survives stale shared-borrow registry + IR reconcile; P3.182 dogfood drops hub `title + ""` |
 | P1 | **Full `finance-screens` tip codegen hang (type-inference recursion)** | `codegen_method_consensus_scales_with_matching_methods_not_registry_size_gate_test`, tip `wj build … --module-file` on 43-file screens crate | ✅ tip GREEN — method-index consensus (`signatures_for_method_name`); finance-screens tip build <2 min |
 | P1 | **Cross-crate `Type::new(copy i64/f64)` must not emit `&arg`** | `codegen_cross_crate_associated_new_copy_arg_must_not_borrow_gate_test` | ✅ tip GREEN — associated `Type::method` fails closed (no bare `new` → `path::new` borrow); P3.183 tip screens regen drops hand-patches |

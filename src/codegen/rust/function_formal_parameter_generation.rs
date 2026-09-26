@@ -670,6 +670,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // Runtime AsRef<str> forwards (`strings::is_empty` + `.len()`) keep owned
                 // `String` formals before blackboard-style demotion (WDB-110/111).
+                // Text-returning helpers (`parse_body` → `string`) skip this pin so
+                // Phase-2 can emit `&str` — WDB-110/111 stay owned via non-text return.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
@@ -679,9 +681,13 @@ impl<'ast> CodeGenerator<'ast> {
                         func,
                     )
                 {
-                    self.str_ref_optimized_params.remove(&param.name);
-                    self.inferred_borrowed_params.remove(&param.name);
-                    return format!("{}: String", param.name);
+                    let text_return_skips_asref_pin = self.function_return_is_text(func)
+                        && !analyzed.returned_parameters.contains(&param.name);
+                    if !text_return_skips_asref_pin {
+                        self.str_ref_optimized_params.remove(&param.name);
+                        self.inferred_borrowed_params.remove(&param.name);
+                        return format!("{}: String", param.name);
+                    }
                 }
                 // Blackboard-style keys: forward only to readonly `&str` callees (`find_index`).
                 // Runtime AsRef<str> (`strings::`, `db::`) keep owned WJ `string` (CSV gates).
@@ -3866,7 +3872,8 @@ impl<'ast> CodeGenerator<'ast> {
         // `body + ""` into owned concat2 must keep owned formals — do not early-return
         // demote on readonly empty-append before checking owned-callee forwards.
         let passed_into_owned = self.param_passed_as_call_argument(body, &param.name, func)
-            && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func);
+            && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func)
+            && !self.param_call_sites_expect_borrow(body, &param.name, func);
         if (self.param_has_readonly_expression_use(body, &param.name)
             || self.param_only_appears_in_formatting_macro(body, &param.name))
             && !self.param_has_owning_method_use(body, &param.name, func)

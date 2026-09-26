@@ -793,6 +793,10 @@ impl<'ast> Analyzer<'ast> {
             }
         }
 
+        // WJ `std/strings.wj` stubs register owned `string` under `strings::len`
+        // (and aliases). Re-apply the runtime AsRef/&str boundary so multipass
+        // merge cannot last-write Owned over the scanned Rust API.
+        registry.restore_runtime_borrowed_strings_signatures();
         Ok((analyzed, registry))
     }
 }
