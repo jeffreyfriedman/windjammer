@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.471 (2026-09-26) — `strings::len` Borrowed boundary + Phase-2 match-binding borrow
+
+| Gate | Status |
+|------|--------|
+| `strings_len_stdlib_signature_is_borrowed` | ✅ lib GREEN — WJ stub no longer last-writes Owned over runtime `AsRef<str>` |
+| `owned_match_binding_cross_fn_owned_string_formal_*` | ✅ isolate GREEN — comparison-only `decode_store` is `&str`; call sites borrow |
+| `comparison_only_string_formal_demotes_to_str` | ✅ GREEN — same Phase-2 contract |
+| `codegen_str_to_string` | ✅ GREEN — `CARGO_BIN_EXE_wj` (isolated `CARGO_TARGET_DIR`) |
+| spawn / mpsc / WDB-144 / WDB-152 | ✅ GREEN |
+| `demoted_str_formal_must_not_receive_cloned_string` | ❌ still RED — `parse_body` stays `json: String` (`strings::len` + `.trim()` + text return) |
+
+**Root cause layer:** signature + constraint/solver.
+
+1. **Signature:** `SignatureRegistry::restore_runtime_borrowed_strings_signatures` re-applies scanned `strings::*` borrow contracts after `load_stdlib_meta` shadows them with WJ owned stubs (`strings::len` is `AsRef<str>`).
+2. **Constraint:** deleted the literal-equality keep-owned dual oracle (`param_has_readonly_string_equality_comparison`) so analyzer/IR/emit agree with Phase-2 (`account_type_valid` / `decode_store` → `&str`). Text if-expression inference no longer forces Owned (aligned with the existing 2.4 exemption).
+
+**What became unnecessary:** ~110 LOC of literal-equality keep-owned helpers in `string_optimization.rs` plus the analyzer early-return that fought Phase-2 demotion. No `ir_call_site` peel.
+
+**Still remaining:** `parse_body` / demoted_str — formal emit still pins text-returning helpers that both call `strings::len` and use `.trim()`. `strings::len` is now Borrowed; next step is IR expected Borrowed write-back that beats keep-owned without breaking WDB-110 (`is_empty` + `.len()` stay owned).
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3471`
+- `cargo test --release --lib -- strings_len_stdlib_signature_is_borrowed` → **1 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_match_binding_cross_fn_owned_string_formal codegen_str_to_string bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test wdb144_module_file wdb152_module_file wdb110 wdb111` → **13 passed**
+
 ## P3.470 (2026-09-26) — `i32::max` signature + skip `as usize` on usize bindings
 
 | Gate | Status |
@@ -921,7 +945,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Owned call-site temp must not become `&` (multi-arm routes)** | tip `codegen_library_multipass_owned_custom_call_site`, `codegen_owned_plus_empty_call_site_must_move` | ✅ tip GREEN — P3.179 dropped product `clone_tenant_slug`; routes pass bare `tenant_slug` (demoted `&str` or owned move) |
 | P1 | **Struct field into owned `string` formal must not `&field`** | `codegen_struct_field_owned_string_formal_must_not_borrow` | ✅ tip GREEN — P3.180 dogfood drops `field + ""` into `escape_html` / status helpers |
 | P1 | **`trim` local `== "lit"` must not emit `.as_str()` (E0658)** | `codegen_trim_eq_literal_must_not_emit_as_str` | ✅ tip GREEN — product restored bare `fmt == "csv"` |
-| P1 | **Demoted `&str` formal must not receive `String.clone()` at call site** | `codegen_demoted_str_formal_must_not_receive_owned_clone_gate_test` | ✅ tip GREEN — if-condition clone guard skips demoted `&str`; IR strips stale `.clone()` before borrow |
+| P1 | **Demoted `&str` formal must not receive `String.clone()` at call site** | `codegen_demoted_str_formal_must_not_receive_owned_clone_gate_test` | ❌ isolate RED (P3.471) — `parse_body` stays `json: String`; `strings::len` boundary is now Borrowed |
 | P1 | **Multi-use owned param → two owned `String` formals must auto-`.clone()`** | `codegen_multi_use_owned_param_must_auto_clone_gate_test` | ✅ tip GREEN — analysis-driven reuse clone survives stale shared-borrow registry + IR reconcile; P3.182 dogfood drops hub `title + ""` |
 | P1 | **Full `finance-screens` tip codegen hang (type-inference recursion)** | `codegen_method_consensus_scales_with_matching_methods_not_registry_size_gate_test`, tip `wj build … --module-file` on 43-file screens crate | ✅ tip GREEN — method-index consensus (`signatures_for_method_name`); finance-screens tip build <2 min |
 | P1 | **Cross-crate `Type::new(copy i64/f64)` must not emit `&arg`** | `codegen_cross_crate_associated_new_copy_arg_must_not_borrow_gate_test` | ✅ tip GREEN — associated `Type::method` fails closed (no bare `new` → `path::new` borrow); P3.183 tip screens regen drops hand-patches |
@@ -981,7 +1005,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **LedgerKit clean row mapping without empty-concat** | `bug_ledgerkit_clean_row_mapping_no_plus_empty_test` | ✅ tip GREEN — P3.241 dogfood |
 | P1 | **WDB-116: mutually recursive owned struct fields → Box** | `wdb116_module_file_mutually_recursive_struct_fields_must_box_or_cargo_check` | ✅ tip GREEN (recheck 2026-09-10) |
 | P1 | **`strings.substring` int indices must not emit `i64 + 1_usize`** | `bug_haystack_contains_substring_int_index_unify_test` | ✅ tip GREEN (P3.452) — wrap before `already_usize`; `(i + j + 1) as usize` |
-| P1 | **Match `Ok(body)` → owned `string` formal must move (not `&body`)** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN — literal-equality pub APIs keep owned `String` |
+| P1 | **Match `Ok(body)` → comparison-only formal demotes; call site borrows** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN (P3.471) — Phase-2 `&str` + `decode_store(&body)` |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
 | P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |

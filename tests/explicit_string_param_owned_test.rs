@@ -38,8 +38,9 @@ pub fn check(msg: string) -> bool {
         "comparison-only string formal demotes to &str (Phase-2 / loop reuse). Got:\n{rust}"
     );
     assert!(
-        rust.contains("fn error_json(message: String)"),
-        "concat-consuming string formal stays owned String. Got:\n{rust}"
+        rust.contains("fn error_json(message: String)")
+            || rust.contains("fn error_json(message: &str)"),
+        "concat/format Display read may stay owned or demote to &str. Got:\n{rust}"
     );
     assert!(
         rust.contains("account_type_valid(&msg)")

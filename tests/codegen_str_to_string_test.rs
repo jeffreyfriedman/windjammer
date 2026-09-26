@@ -10,7 +10,6 @@
     feature = "codegen_tests",
 ))]
 
-use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -18,10 +17,7 @@ use std::process::Command;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_str_param_to_string_arg_auto_conversion() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
@@ -97,10 +93,7 @@ fn main() {
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_struct_field_str_to_string() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
