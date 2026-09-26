@@ -1369,6 +1369,11 @@ pub fn is_collection_key_lookup_with_project(
                 project_registry,
             );
         }
+        // User `NoteStore::get(id: i64)` must not inherit HashMap::get `&K`.
+        // Signature-owned first arg on a non-map receiver is not a key lookup.
+        if !callee_arg_expects_reference_param(sig, arg_index) {
+            return false;
+        }
     }
     // `g.data.get` / guard-wrapped map fields: callee may be `HashMap::get` while the
     // inferred receiver name is `MapCell` / `MutexGuard<…>` — still a map key lookup.

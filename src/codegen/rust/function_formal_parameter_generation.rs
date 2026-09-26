@@ -3858,6 +3858,11 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         let body = func.body.as_slice();
+        // Unused pub `string` formals keep Owned (WDB-152): sibling APIs that
+        // consume the same formal (`claim_next`) must share call-site `.to_string()`.
+        if !Self::variable_used_in_statements(body, &param.name) {
+            return true;
+        }
         // `body + ""` into owned concat2 must keep owned formals — do not early-return
         // demote on readonly empty-append before checking owned-callee forwards.
         let passed_into_owned = self.param_passed_as_call_argument(body, &param.name, func)

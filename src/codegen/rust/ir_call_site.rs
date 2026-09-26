@@ -13,6 +13,154 @@ use crate::ir::target_encodings::{apply_coercion, Target};
 use crate::parser::{Expression, Literal, Statement, Type};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `.to_string()` is a no-op text coercion only when the source is already text.
+    /// Numeric / non-text conversions (`self.rows.to_string()`) must stay so `push_str`
+    /// can borrow `&i32.to_string()`, not `&i32`.
+    fn to_string_suffix_is_redundant_text_coercion(&self, arg_expr: &Expression<'_>) -> bool {
+        let source = match arg_expr {
+            Expression::MethodCall { object, .. } => *object,
+            other => other,
+        };
+        if crate::codegen::rust::call_site_borrow::expression_is_string_literal(source) {
+            return true;
+        }
+        self.infer_expression_type(source)
+            .is_some_and(|t| crate::codegen::rust::types::is_windjammer_text_type(&t))
+    }
+
+    fn peel_redundant_to_string_for_shared_ref(
+        &self,
+        arg_expr: &Expression<'_>,
+        coerced: &mut String,
+    ) {
+        if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+            arg_expr,
+        ) {
+            return;
+        }
+        if coerced.ends_with(".to_string()")
+            && self.to_string_suffix_is_redundant_text_coercion(arg_expr)
+        {
+            if let Some(stripped) = coerced.strip_suffix(".to_string()") {
+                *coerced = stripped.to_string();
+            }
+        }
+    }
+
+    /// Display / language-level `.to_string()` into a text formal must stay a
+    /// conversion. Intermediate shared-ref peels (`&self.rows`) are type-wrong.
+    pub(crate) fn restore_display_to_owned_string_for_text_formal(
+        &self,
+        arg_expr: &Expression<'_>,
+        coerced: &mut String,
+        wants_shared_text: bool,
+        wants_owned_text: bool,
+    ) {
+        let source = match arg_expr {
+            Expression::MethodCall { object, method, .. }
+                if crate::type_classification::is_language_level_owned_string_convert(method) =>
+            {
+                *object
+            }
+            other => other,
+        };
+        let display_non_text = self.infer_expression_type(source).as_ref().is_some_and(|t| {
+            !crate::codegen::rust::types::is_windjammer_text_type(t)
+                && crate::ir::coercion::is_display_coercible_to_string(
+                    &crate::ir::node::parser_type_to_base_type(t),
+                )
+        });
+        let genuine =
+            crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                arg_expr,
+            );
+        if !genuine && !display_non_text {
+            return;
+        }
+        // Unknown / non-text formals (`usize`, `i64`, HashMap<&i64>): never invent
+        // `.to_string()`. User-written conversions (`self.rows.to_string()`) stay
+        // even when the formal signature is incomplete (`push_str`).
+        if !wants_shared_text && !wants_owned_text && !genuine {
+            return;
+        }
+        let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+            .trim()
+            .to_string();
+        if let Some(stripped) = base.strip_suffix(".to_string()") {
+            base = stripped.to_string();
+        } else if let Some(stripped) = base.strip_suffix(".to_owned()") {
+            base = stripped.to_string();
+        }
+        if base.is_empty() {
+            return;
+        }
+        let owned = format!("{base}.to_string()");
+        // Unknown formal + already-borrowed Display (`&self.rows` into `push_str`):
+        // keep the conversion. Owned text formals stay `x.to_string()` without `&`.
+        let shared = wants_shared_text || !wants_owned_text;
+        *coerced = if shared {
+            crate::ir::target_encodings::rust_shared_borrow(&owned)
+        } else {
+            owned
+        };
+    }
+
+    /// WJ `std/*.wj` stubs may still own-coerce literals after generate.
+    /// Stdlib/runtime `&str` is the source of truth (WDB-144 needle).
+    pub(crate) fn peel_owned_literal_when_stdlib_expects_str_ref(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+        arg_expr: &Expression<'_>,
+        coerced: &mut String,
+    ) {
+        if !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
+            return;
+        }
+        let stdlib = SignatureRegistry::stdlib();
+        let lookup = self.signature_lookup_callee_name(callee_name);
+        let simple = lookup
+            .rsplit("::")
+            .next()
+            .unwrap_or(lookup.as_ref())
+            .to_string();
+        let module = crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+            lookup.as_ref(),
+        )
+        .to_string();
+        let qualified = if lookup.contains("::") {
+            lookup.into_owned()
+        } else if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(&module) {
+            format!("{module}::{simple}")
+        } else {
+            lookup.into_owned()
+        };
+        // Last-write `get_signature` is the boundary (`&str` needle). Fallback is
+        // the raw runtime scan and must not win when it still owns the slot.
+        let std_sig = stdlib
+            .get_signature(&qualified)
+            .or_else(|| stdlib.get_signature(callee_name))
+            .or_else(|| stdlib.get_fallback_signature(&qualified))
+            .or_else(|| stdlib.get_fallback_signature(callee_name))
+            .or_else(|| {
+                if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(
+                    &qualified,
+                ) {
+                    stdlib.get_signature(&format!("{module}::{simple}"))
+                } else {
+                    None
+                }
+            });
+        if !crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+            std_sig, arg_index,
+        ) {
+            return;
+        }
+        crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+            arg_expr, coerced,
+        );
+    }
+
     /// Defining-module / registry view: this argument slot emits owned Rust (not `&T`).
     fn sig_arg_confirms_owned_emission(
         sig: &crate::analyzer::FunctionSignature,
@@ -335,7 +483,8 @@ impl<'ast> CodeGenerator<'ast> {
                     .copied()
                     == Some(true);
                 if wants_borrow {
-                    return Some(crate::ir::target_encodings::rust_shared_borrow(arg_str));
+                    let early = crate::ir::target_encodings::rust_shared_borrow(arg_str);
+                    return Some(early);
                 }
             }
         }
@@ -526,9 +675,35 @@ impl<'ast> CodeGenerator<'ast> {
             };
             let from_reg = registry.get_signature(lookup).cloned();
             let from_local = local_sig.cloned();
+            // Bare `contains` after `use std::strings` must still see the runtime
+            // `&str` needle (WDB-144) — not only the qualified `strings::contains` path.
+            let runtime_mod =
+                crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
+                    lookup,
+                );
+            let from_stdlib_top;
+            let from_stdlib_fb;
+            if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(lookup)
+                || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(runtime_mod)
+            {
+                let stdlib = SignatureRegistry::stdlib();
+                from_stdlib_top = stdlib
+                    .get_signature(lookup)
+                    .or_else(|| stdlib.get_signature(&format!("{runtime_mod}::{simple}")))
+                    .cloned();
+                from_stdlib_fb = stdlib
+                    .get_fallback_signature(lookup)
+                    .or_else(|| stdlib.get_fallback_signature(&format!("{runtime_mod}::{simple}")))
+                    .cloned();
+            } else {
+                from_stdlib_top = None;
+                from_stdlib_fb = None;
+            }
             // Prefer defining-module / global refresh first so cross-module free calls
             // see `&str` (regression-049 `replay_to_lsn`) over stale local owned stubs.
             crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                from_stdlib_top,
+                from_stdlib_fb,
                 from_global,
                 from_global_simple,
                 from_reg,
@@ -573,7 +748,14 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 None
             };
+            // Exact stdlib key (`strings::contains`) — do not gate on the
+            // runtime-module set; WJ stubs must not own-coerce `&str` needles.
+            let stdlib = SignatureRegistry::stdlib();
+            let from_stdlib_top = stdlib.get_signature(callee_name).cloned();
+            let from_stdlib_fb = stdlib.get_fallback_signature(callee_name).cloned();
             crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                from_stdlib_top,
+                from_stdlib_fb,
                 from_global,
                 from_reg,
                 from_simple,
@@ -592,9 +774,12 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
                     callee_name,
                 );
+            let stdlib = SignatureRegistry::stdlib();
             let challengers: Vec<Option<&crate::analyzer::FunctionSignature>> =
                 if skip_bare_homonym || import_alias_resolved {
                     vec![
+                        stdlib.get_signature(lookup),
+                        stdlib.get_signature(callee_name),
                         self.global_signature_registry
                             .as_ref()
                             .and_then(|g| g.get_signature(lookup)),
@@ -602,6 +787,8 @@ impl<'ast> CodeGenerator<'ast> {
                     ]
                 } else {
                     vec![
+                        stdlib.get_signature(lookup),
+                        stdlib.get_signature(callee_name),
                         self.global_signature_registry
                             .as_ref()
                             .and_then(|g| g.get_signature(callee_name)),
@@ -818,6 +1005,24 @@ impl<'ast> CodeGenerator<'ast> {
                 if prefer_global {
                     sig = Some(global_sig.clone());
                 }
+            }
+        }
+
+        // Last-write stdlib/runtime boundary (`strings::contains` needle `&str`)
+        // beats WJ `std/*.wj` owned `string` stubs that shadowed pick/challengers.
+        {
+            let stdlib = SignatureRegistry::stdlib();
+            let std_sig = stdlib
+                .get_signature(callee_name)
+                .or_else(|| stdlib.get_signature(lookup));
+            if let Some(std_sig) = std_sig {
+                let pidx = sig
+                    .as_ref()
+                    .map(|s| s.arg_param_index(arg_index))
+                    .unwrap_or(arg_index);
+                sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                    sig, Some(std_sig), pidx,
+                );
             }
         }
 
@@ -1491,6 +1696,17 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } if self.into_string_formal_params.contains(name)
         );
         let mut kind = compute_coercion(&actual, &expected);
+        // Language-level `.to_string()` / `.string()` on a non-text receiver must stay
+        // a conversion even when generate_expression dropped the suffix and types
+        // already say Owned String (Borrow would emit `&self.rows`).
+        if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+            arg_expr,
+        ) && crate::ir::coercion::is_string_base(&expected.base)
+            && !prepared_arg.ends_with(".to_string()")
+            && !prepared_arg.ends_with(".to_owned()")
+        {
+            kind = CoercionKind::ToOwnedString;
+        }
         // P3.402: Copy literals (incl. char) must pass by value — never Borrow→`&'.'`.
         if matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
             && crate::codegen::rust::call_site_borrow::expression_is_copy_literal(arg_expr)
@@ -2909,9 +3125,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if is_text_shared {
                     // Confirmed `&str`/`&String` under collision: keep `&`, drop owned
                     // literal coercion (string_literal_no_conversion / regression-048).
-                    if let Some(stripped) = coerced.strip_suffix(".to_string()") {
-                        coerced = stripped.to_string();
-                    }
+                    // Keep i32→String `.to_string()` (push_str of `self.rows.to_string()`).
+                    self.peel_redundant_to_string_for_shared_ref(arg_expr, &mut coerced);
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
                 }
                 // Confirmed shared-ref Custom (`item: &Item`): ensure `&` survives
@@ -2937,10 +3152,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 &mut coerced,
                             );
                         }
-                        if coerced.ends_with(".to_string()") && is_text_shared {
-                            if let Some(stripped) = coerced.strip_suffix(".to_string()") {
-                                coerced = stripped.to_string();
-                            }
+                        if is_text_shared {
+                            self.peel_redundant_to_string_for_shared_ref(arg_expr, &mut coerced);
                         }
                         if !coerced.starts_with('&') {
                             coerced = format!("&{coerced}");
@@ -3105,12 +3318,8 @@ impl<'ast> CodeGenerator<'ast> {
         coerced = self.normalize_borrowed_iter_elem_for_owned_copy_scalar(
             arg_expr, &coerced, &sig, arg_index,
         );
-        if coerced.ends_with(".to_string()")
-            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
-        {
-            if let Some(stripped) = coerced.strip_suffix(".to_string()") {
-                coerced = stripped.to_string();
-            }
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx) {
+            self.peel_redundant_to_string_for_shared_ref(arg_expr, &mut coerced);
         }
         // `&str` / `&String` caller bindings → owned `String` formals need `.to_string()`
         // (types-crate `batch_column_i64(name: &str)` → `ArrowBatch::column_i64(name: String)`).
@@ -3806,6 +4015,32 @@ impl<'ast> CodeGenerator<'ast> {
         coerced =
             crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&coerced);
 
+        let wants_shared_text = crate::ir::signature_bridge::call_site_wants_shared_text_ref(
+            &sig, param_idx,
+        ) || sig
+            .formal_param_type(param_idx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+            || sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
+        let wants_owned_text =
+            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &sig, arg_index,
+            );
+        self.restore_display_to_owned_string_for_text_formal(
+            arg_expr,
+            &mut coerced,
+            wants_shared_text,
+            wants_owned_text && !wants_shared_text,
+        );
+        self.peel_owned_literal_when_stdlib_expects_str_ref(
+            callee_name,
+            arg_index,
+            arg_expr,
+            &mut coerced,
+        );
+
         Some(coerced)
     }
 
@@ -3835,6 +4070,9 @@ impl<'ast> CodeGenerator<'ast> {
             && matches!(
                 arg_expr,
                 Expression::Identifier { .. } | Expression::FieldAccess { .. }
+            )
+            && !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                arg_expr,
             )
         {
             *arg_str = arg_str.trim_end_matches(".to_string()").to_string();
@@ -3886,7 +4124,11 @@ impl<'ast> CodeGenerator<'ast> {
             if arg_str.ends_with(".to_string().clone()") {
                 let base = arg_str.trim_end_matches(".to_string().clone()");
                 *arg_str = base.to_string();
-            } else if arg_str.ends_with(".to_string()") {
+            } else if arg_str.ends_with(".to_string()")
+                && !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                    arg_expr,
+                )
+            {
                 let base = arg_str.trim_end_matches(".to_string()");
                 *arg_str = base.to_string();
             }
@@ -3983,6 +4225,12 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
                     });
             if callee_wants_str_ref {
+                if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                    arg_expr,
+                ) || !self.to_string_suffix_is_redundant_text_coercion(arg_expr)
+                {
+                    return arg_str.to_string();
+                }
                 let base = arg_str.trim_end_matches(".to_string()");
                 if let Expression::Identifier { name, .. } = arg_expr {
                     if self.emitted_rust_ref_formals.contains(name) {
@@ -5588,6 +5836,32 @@ impl<'ast> CodeGenerator<'ast> {
                 format!("&{base}")
             };
         }
+
+        let wants_shared_text = crate::ir::signature_bridge::call_site_wants_shared_text_ref(
+            &sig, param_idx,
+        ) || sig
+            .formal_param_type(param_idx)
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+            || sig
+                .param_types
+                .get(param_idx)
+                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
+        let wants_owned_text =
+            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &sig, arg_index,
+            );
+        self.restore_display_to_owned_string_for_text_formal(
+            arg_expr,
+            coerced,
+            wants_shared_text,
+            wants_owned_text && !wants_shared_text,
+        );
+        self.peel_owned_literal_when_stdlib_expects_str_ref(
+            callee_name,
+            arg_index,
+            arg_expr,
+            coerced,
+        );
     }
 
     pub(crate) fn peel_fn_trait_or_closure_call_arg(
@@ -7389,11 +7663,7 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 {
                     crate::codegen::rust::expression_utilities::strip_trailing_clone(coerced);
-                    if coerced.ends_with(".to_string()") {
-                        if let Some(stripped) = coerced.strip_suffix(".to_string()") {
-                            *coerced = stripped.to_string();
-                        }
-                    }
+                    self.peel_redundant_to_string_for_shared_ref(arg_expr, coerced);
                     if !coerced.starts_with('&') {
                         *coerced = format!("&{coerced}");
                     }
@@ -7992,6 +8262,11 @@ impl<'ast> CodeGenerator<'ast> {
         // classified as a borrowed string-literal — that causes a later `&` prefix
         // (`&"lit".to_string()`) for Owned formals (Objective::kill factory).
         if arg_str.ends_with(".to_string()") || arg_str.ends_with(".to_owned()") {
+            return SafetyType::owned(BaseType::String);
+        }
+        if crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+            arg_expr,
+        ) {
             return SafetyType::owned(BaseType::String);
         }
 

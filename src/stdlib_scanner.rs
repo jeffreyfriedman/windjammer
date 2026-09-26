@@ -368,7 +368,9 @@ fn parse_pub_struct_field(trimmed: &str) -> Option<(String, String)> {
 /// `use std::sync::mpsc` lowers to Rust `std::sync::mpsc`, not `windjammer_runtime::sync`.
 /// Exact keys avoid fail-closed homonyms (`sync::sync_channel`) and wrong ownership
 /// (`subprocess::spawn` borrows its args; `thread::spawn` takes `FnOnce` by value).
-fn register_rust_std_boundary_signatures(registry: &mut SignatureRegistry) {
+/// Last-write runtime contracts that WJ `std/*.wj` / stdlib_meta stubs must not shadow.
+/// Call after `load_stdlib_meta` so `get_signature("strings::contains")` is `&str`.
+pub(crate) fn register_rust_std_boundary_signatures(registry: &mut SignatureRegistry) {
     const MPSC_FROM_SYNC: &[(&str, &str)] = &[
         ("mpsc::channel", "sync::channel"),
         ("mpsc::sync_channel", "sync::sync_channel"),
@@ -384,6 +386,19 @@ fn register_rust_std_boundary_signatures(registry: &mut SignatureRegistry) {
     // So `thread::spawn` qualifies as a runtime-std path for bare-homonym skip
     // (without hardcoding the leaf name at call sites).
     registry.register_runtime_std_module("thread");
+    // Runtime `strings::{contains,starts_with,ends_with}`: haystack `AsRef<str>`,
+    // needle `&str`. WJ `std/strings.wj` stubs list owned `string` and must not
+    // last-write `String::from("lit")` into the needle (WDB-144).
+    for name in [
+        "strings::contains",
+        "strings::starts_with",
+        "strings::ends_with",
+    ] {
+        registry.add_function(
+            name.to_string(),
+            strings_asref_haystack_str_needle_signature(name),
+        );
+    }
 }
 
 fn register_boundary_signature_alias(registry: &mut SignatureRegistry, dst: &str, src: &str) {
@@ -447,6 +462,28 @@ fn thread_spawn_boundary_signature(name: &str) -> FunctionSignature {
         has_self_receiver: false,
         is_extern: false,
         emitted_rust_ref_params: Some(vec![false]),
+        string_ref_string_formal_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
+/// Runtime `contains` / `starts_with` / `ends_with`: `S: AsRef<str>` + needle `&str`.
+fn strings_asref_haystack_str_needle_signature(name: &str) -> FunctionSignature {
+    let str_ref = Type::Reference(Box::new(Type::Custom("str".into())));
+    FunctionSignature {
+        name: name.to_string(),
+        param_types: vec![str_ref.clone(), str_ref],
+        // Empty formals match runtime-scan shape (`get_fallback_signature`).
+        // Filling `Type::String` made pick/safety_type treat the needle as owned
+        // and emit `String::from("lit")` into `contains(..., substring: &str)`.
+        formal_param_types: vec![],
+        param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
+        return_type: Some(Type::Bool),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: Some(vec![true, true]),
         string_ref_string_formal_params: None,
         field_extract_params: None,
         forwarding_borrow_params: None,
@@ -1528,6 +1565,44 @@ mod tests {
         assert_eq!(sig.name, "strings::len");
         assert_eq!(sig.param_ownership, vec![OwnershipMode::Borrowed]);
         assert_eq!(sig.emitted_rust_ref_params, Some(vec![true]));
+    }
+
+    #[test]
+    fn strings_contains_needle_is_str_ref() {
+        let line = "pub fn contains<S: AsRef<str>>(s: S, substring: &str) -> bool {";
+        let sig = parse_function_signature(line, "strings").unwrap();
+        assert_eq!(sig.name, "strings::contains");
+        assert_eq!(
+            sig.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed]
+        );
+        assert!(
+            matches!(
+                &sig.param_types[1],
+                Type::Reference(inner) if matches!(**inner, Type::Custom(ref n) if n == "str")
+            ),
+            "contains needle must be &str, got {:?}",
+            sig.param_types[1]
+        );
+    }
+
+    #[test]
+    fn stdlib_get_signature_contains_needle_is_str_ref_after_meta() {
+        let sig = crate::analyzer::SignatureRegistry::stdlib()
+            .get_signature("strings::contains")
+            .expect("strings::contains");
+        assert!(
+            matches!(
+                sig.param_types.get(1),
+                Some(Type::Reference(inner)) if matches!(**inner, Type::Custom(ref n) if n == "str")
+            ),
+            "WJ std/strings.wj must not shadow runtime needle `&str`, got {:?}",
+            sig.param_types.get(1)
+        );
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[true, true][..])
+        );
     }
 
     #[test]

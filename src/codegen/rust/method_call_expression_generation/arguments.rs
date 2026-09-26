@@ -660,7 +660,11 @@ impl<'ast> CodeGenerator<'ast> {
                             i,
                             key_receiver.as_deref(),
                         ) {
-                            if coerced.ends_with(".to_string()") {
+                            if coerced.ends_with(".to_string()")
+                                && !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                                    arg_to_generate,
+                                )
+                            {
                                 coerced = coerced.trim_end_matches(".to_string()").to_string();
                             }
                             crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
@@ -690,6 +694,19 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = coerced[1..].to_string();
                         }
+                        let pidx_term = contract_sig.arg_param_index(i);
+                        let wants_shared_text = crate::ir::signature_bridge::call_site_wants_shared_text_ref(
+                            &contract_sig, pidx_term,
+                        ) || contract_sig
+                            .param_types
+                            .get(pidx_term)
+                            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
+                        self.restore_display_to_owned_string_for_text_formal(
+                            arg_to_generate,
+                            &mut coerced,
+                            wants_shared_text,
+                            false,
+                        );
                         return coerced;
                     }
                     debug_assert!(

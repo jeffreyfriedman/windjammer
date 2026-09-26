@@ -25,6 +25,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" { "to_string" } else { method };
+        // Language-level owned conversion must emit `.to_string()` before IR Borrow
+        // (`push_str(&self.rows)` is invalid). Not an ownership oracle — syntax sugar.
+        if crate::type_classification::is_language_level_owned_string_convert(method)
+            && arguments.is_empty()
+        {
+            let obj_str = self.mc_build_method_receiver_string(object, method);
+            let base = obj_str
+                .trim_end_matches(".to_string()")
+                .trim_end_matches(".to_owned()");
+            return format!("{base}.to_string()");
+        }
         if super::rust_stdlib_annotations::is_strip_redundant(method) && arguments.is_empty() {
             if let Expression::Identifier { name, .. } = object {
                 let is_borrowed = self.inferred_borrowed_params.contains(name.as_str());

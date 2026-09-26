@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.468 (2026-09-26) — Display `.to_string()` + `strings::contains` `&str` needle
+
+| Gate | Status |
+|------|--------|
+| `test_to_string_on_non_string_field_in_push_str` | ✅ isolate GREEN — `push_str(&self.rows.to_string())` |
+| `test_to_string_on_int_preserved_for_push_str` | ✅ isolate GREEN |
+| `wdb144_module_file_demoted_str_formal_must_not_receive_owned_string` | ✅ isolate GREEN — `strings::contains(&label, "lit")` not `String::from` |
+| WDB-152 / HashMap i64 get / spawn / mpsc | ✅ GREEN — restore no longer invents `.to_string()` on non-text formals |
+
+**Root cause layer:** signature + coercion/encoding + narrowed reconcile.
+
+1. **Signature:** `apply_owned_string_literal_coercion` re-wrapped IR-peeled `"lit"` using the WJ `std/strings.wj` owned stub. Stdlib last-write `strings::contains` needle is `&str` (`get_signature` first, not fallback). Dual-oracle wrap now skips when that boundary says `&str`.
+2. **Coercion/encoding:** `rust_shared_borrow` keeps `.to_string()` (no peel). Language-level convert infers Owned String.
+3. **Reconcile (narrowed):** collection-key `.to_string()` peel skips genuine non-literal converts. `restore_display_to_owned_string_for_text_formal` only fires for text formals or a user-written convert — not Display `i64`/`usize` into numeric slots.
+
+**What became unnecessary:** collection-key peel of `self.rows.to_string()`; post-IR `String::from("lit")` into runtime `&str` needles. No new method-name ownership list.
+
+**Temporary remaining:** `restore_display` is still a post-IR safety net for Display→`&str` when apply_ir's early `rust_shared_borrow` skips constraint write-back. Delete path: expected SafetyType for language-level convert is Owned String and `compute_coercion` emits `ToOwnedString` before any shared-ref peel.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3468` `cargo test --release --test all --features integration_tests,codegen_tests -- to_string_on_non_string_field_in_push_str to_string_on_int_preserved_for_push_str wdb144_module_file_demoted_str_formal_must_not_receive_owned_string wdb152_module_file_string_lit_into_owned_string_formal_must_to_string bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test hashmap_field_get_i64_key_must_auto_borrow` → **9 passed**.
+
 ## P3.467 (2026-09-26) — WDB-203 MultiFile isolate is GREEN (tip-out lag)
 
 | Gate | Status |

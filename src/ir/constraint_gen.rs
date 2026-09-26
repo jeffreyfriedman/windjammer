@@ -351,6 +351,31 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Write callee return type (and language-level `.to_string()` / `.string()`) onto
+    /// the call result so later call sites see Owned String, not the receiver type.
+    fn emit_call_result_type_constraints(
+        &mut self,
+        result: ConstraintVar,
+        sig: Option<&FunctionSignature>,
+        method: Option<&str>,
+    ) {
+        if let Some(sig) = sig {
+            if let Some(ret) = sig.return_type.as_ref() {
+                let base = parser_type_to_base_type(ret);
+                if base != BaseType::Inferred {
+                    self.cs.add(Constraint::TypeIs(result, base));
+                }
+                let ret_own = self.ownership_mode_to_owned(sig.return_ownership);
+                self.cs.add(Constraint::OwnershipIs(result, ret_own));
+            }
+        }
+        if method.is_some_and(crate::type_classification::is_language_level_owned_string_convert) {
+            self.cs.add(Constraint::TypeIs(result, BaseType::String));
+            self.cs
+                .add(Constraint::OwnershipIs(result, OwnedType::Owned));
+        }
+    }
+
     fn resolve_callee_signature(
         &self,
         name: &str,
@@ -705,6 +730,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                         .cloned()
                     {
                         self.emit_call_site_constraints(&sig, &arg_vars);
+                        self.emit_call_result_type_constraints(result, Some(&sig), None);
                     }
 
                     let callee_effects =
@@ -786,6 +812,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 if let Some(sig) = sig.as_ref() {
                     self.emit_call_site_constraints(sig, &arg_vars);
                 }
+                self.emit_call_result_type_constraints(result, sig.as_ref(), Some(method.as_str()));
 
                 let callee_effects = crate::ir::effects::effects_for_runtime_callee(&qualified);
                 if !callee_effects.is_empty() {

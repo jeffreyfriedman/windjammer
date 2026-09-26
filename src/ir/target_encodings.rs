@@ -247,12 +247,10 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
     // Stale auto-/user-clone before Borrow: `&x.clone()` is never needed for a shared
     // formal — peel to the binding then borrow (WDB-270 / Connection reuse / demoted `&str`).
     // Must run even when `expr` already starts with `&` (early-return used to keep `&x.clone()`).
+    // Do **not** peel `.to_string()` / `.to_owned()`: those convert Display/non-text
+    // (`i32.to_string()` into `push_str`) as well as text no-ops. `&self.rows.to_string()`
+    // is required; `&name.to_string()` is still a valid `&str` source.
     let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(expr).to_string();
-    if base.ends_with(".to_string()") {
-        base = base.trim_end_matches(".to_string()").to_string();
-    } else if base.ends_with(".to_owned()") {
-        base = base.trim_end_matches(".to_owned()").to_string();
-    }
     crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut base);
     if base.starts_with('&') && !base.starts_with("&mut ") {
         return base;
@@ -634,6 +632,15 @@ mod tests {
             "Borrow must peel stale &x.clone() (non-Clone Connection reuse)"
         );
         assert_eq!(rust_shared_borrow("&conn"), "&conn");
+        assert_eq!(
+            rust_shared_borrow("self.rows.to_string()"),
+            "&self.rows.to_string()",
+            "Borrow must keep Display→String conversion (push_str(&i32) is invalid)"
+        );
+        assert_eq!(
+            rust_shared_borrow("self.max_length.to_string()"),
+            "&self.max_length.to_string()"
+        );
         // Owned String → &str still borrows non-literals.
         let actual = SafetyType::owned(BaseType::String);
         let expected = SafetyType::borrowed(BaseType::String, Region::fresh(0));

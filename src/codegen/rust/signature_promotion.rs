@@ -1325,6 +1325,14 @@ fn owned_user_refresh_beats_stdlib_shared_ref(
     owned: &FunctionSignature,
     shared: &FunctionSignature,
 ) -> bool {
+    // Runtime-qualified stdlib (`strings::contains`) must not lose to a bare
+    // `contains` owned stub — that forced `String::from` on `&str` needles (WDB-144).
+    if signature_is_wj_std_stub_or_runtime_qualified(shared)
+        && shared.name.contains("::")
+        && !owned.name.contains("::")
+    {
+        return false;
+    }
     let same_suffix = sig_simple_name(&shared.name) == sig_simple_name(&owned.name);
     let distinct_api =
         shared.name != owned.name || !signature_param_shapes_compatible(owned, shared);

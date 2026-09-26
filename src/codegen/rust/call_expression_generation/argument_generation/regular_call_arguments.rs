@@ -809,6 +809,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
                             &coerced,
                         );
+                    // WJ `std/*.wj` owned stubs must not keep `String::from("lit")`
+                    // when the runtime formal is `&str` (WDB-144 needle).
+                    gen.peel_owned_literal_when_stdlib_expects_str_ref(
+                        func_name,
+                        i,
+                        arg,
+                        &mut coerced,
+                    );
                     return vec![coerced];
                 }
                 debug_assert!(
