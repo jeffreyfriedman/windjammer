@@ -1327,9 +1327,12 @@ fn owned_user_refresh_beats_stdlib_shared_ref(
 ) -> bool {
     // Runtime-qualified stdlib (`strings::contains`) must not lose to a bare
     // `contains` owned stub — that forced `String::from` on `&str` needles (WDB-144).
+    // Distinct-shape user APIs (`join(string, string)` vs `strings::join(Vec, str)`)
+    // still beat the homonym.
     if signature_is_wj_std_stub_or_runtime_qualified(shared)
         && shared.name.contains("::")
         && !owned.name.contains("::")
+        && signature_param_shapes_compatible(owned, shared)
     {
         return false;
     }

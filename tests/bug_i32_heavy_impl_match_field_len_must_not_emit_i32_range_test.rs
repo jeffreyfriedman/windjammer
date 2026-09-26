@@ -109,12 +109,17 @@ fn bad_i32_field_len_range(rs: &str) -> bool {
 }
 
 fn bad_owned_buf_clone_into_mut(rs: &str) -> bool {
-    let formal_mut = rs.contains("buf: &mut Vec") || rs.contains("buf: &mut ");
-    let bad_call = rs.lines().any(|line| {
-        (line.contains("emit_node_instructions(") || line.contains("emit_instruction("))
-            && line.contains("buf.clone()")
-    });
-    formal_mut && bad_call
+    // Only the demoted `&mut` helper is illegal (`emit_instruction(buf.clone())`).
+    // Recursive `emit_node_instructions(..., buf.clone())` is correct when that
+    // sibling formal stayed owned `Vec<f32>`.
+    let instr_mut = rs.contains("fn emit_instruction")
+        && rs
+            .lines()
+            .any(|l| l.contains("fn emit_instruction") && l.contains("&mut Vec"));
+    instr_mut
+        && rs.lines().any(|line| {
+            line.contains("emit_instruction(") && line.contains("buf.clone()")
+        })
 }
 
 #[test]
