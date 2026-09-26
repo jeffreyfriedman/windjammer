@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.479 (2026-09-26) — Copy field-assign must not re-clone after identifier skip
+
+| Gate | Status |
+|------|--------|
+| WDB-391 MultiFile | ✅ isolate GREEN — `self.screen_width = w` (no `w.clone()`) |
+| WDB-391 tip-out | ❌ RED — stale `gen/rendering/voxel_gpu_buffers.rs` until tip-out regen |
+| WDB-393 MultiFile | ✅ isolate GREEN — `self.cursor_x = x` (no `x.clone()`) |
+| WDB-393 tip-out | ❌ RED — stale voxel_editor / scene_graph until regen |
+| WDB-394 MultiFile | ✅ isolate GREEN — `best_idx = i` (no `i.clone()`) |
+| WDB-394 tip-out | ❌ RED — stale navmesh / astar / reverb / meshing until regen |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** coercion/encoding — assignment auto-clone was a dual oracle. Identifier emit already skipped Copy/reborrow; field assign re-added `.clone()` whenever `needs_clone` fired.
+
+**What became unnecessary:** per-width assignment peels (`u32` vs `i32` vs `usize`); name lists. One `ident_skips_auto_clone_as_copy` shared by identifier + assignment. Also skip when the *target* type is Copy (`self.screen_width: u32`).
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3478`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb391_module_file_ffi_u32_return_must_not_clone_on_assign wdb393_module_file_i32_formal_field_assign_must_not_clone wdb394_module_file_usize_loop_index_assign_must_not_clone` → **3 isolate passed / 3 tip-out failed**
+- spawn + mpsc → **4 passed**
+- Prior full suite (pre-fix tree): **5430 passed / 144 failed** (mostly tip-out + known isolate cluster)
+
 ## P3.478 (2026-09-26) — notes-api product owned→`&str` (isolate GREEN, product RED)
 
 | Gate | Status |
@@ -19,10 +40,10 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-393 MultiFile | ⏳ TDD — i32 formal field-assign then reuse must not `x.clone()` |
-| WDB-393 tip-out | ⏳ TDD — `gen/editor/voxel_editor.rs` `cursor_x = x.clone()` |
-| WDB-394 MultiFile | ⏳ TDD — usize loop index `best_idx = i` must not `i.clone()` |
-| WDB-394 tip-out | ⏳ TDD — navmesh / astar / reverb / meshing / streaming |
+| WDB-393 MultiFile | ✅ isolate GREEN (P3.479) |
+| WDB-393 tip-out | ❌ RED — stale product until regen |
+| WDB-394 MultiFile | ✅ isolate GREEN (P3.479) |
+| WDB-394 tip-out | ❌ RED — stale product until regen |
 
 **Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
 
@@ -39,7 +60,7 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-391 MultiFile | ❌ isolate RED — `self.screen_width = w.clone()` after `let w = get_screen_width()` |
+| WDB-391 MultiFile | ✅ isolate GREEN (P3.479) |
 | WDB-391 tip-out | ❌ RED — tip + `gen/rendering/voxel_gpu_buffers.rs` |
 | WDB-392 MultiFile | ✅ isolate GREEN — bare `Direction::PosX` |
 | WDB-392 tip-out | ❌ RED — tip + `gen/voxel/meshing.rs` `Direction::PosX.clone()` |

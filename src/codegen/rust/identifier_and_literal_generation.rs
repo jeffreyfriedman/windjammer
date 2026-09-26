@@ -10,6 +10,38 @@ use crate::parser::{Expression, Literal, Type};
 use super::{float_type_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Copy / reborrow bindings do not need auto-clone at move+reuse sites.
+    /// Shared by identifier emit and assignment so field-assign cannot re-add `.clone()`.
+    pub(in crate::codegen::rust) fn ident_skips_auto_clone_as_copy(
+        &self,
+        name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        if self.inferred_borrowed_params.contains(name)
+            || self.inferred_mut_borrowed_params.contains(name)
+            || self.usize_variables.contains(name)
+            || self.binding_is_runtime_non_clone(name)
+        {
+            return true;
+        }
+        if self
+            .auto_clone_analysis
+            .as_ref()
+            .is_some_and(|a| a.string_literal_vars.contains(name))
+        {
+            return true;
+        }
+        self.infer_expression_type(expr).as_ref().is_some_and(|t| {
+            if self.is_type_copy(t) {
+                return true;
+            }
+            match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => self.is_type_copy(inner),
+                _ => false,
+            }
+        })
+    }
+
     pub(in crate::codegen::rust) fn generate_identifier(
         &mut self,
         name: &str,
@@ -94,32 +126,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .needs_clone(name, self.current_statement_idx)
                     .is_some()
                 {
-                    // Borrowed/mut-borrowed params don't need cloning:
-                    // &T is Copy (reborrow is free), &mut T can be reborrowed.
-                    let is_ref_param = self.inferred_borrowed_params.contains(name)
-                        || self.inferred_mut_borrowed_params.contains(name);
-
-                    // Skip .clone() for Copy types — they are implicitly copied,
-                    // so .clone() is unnecessary noise.
-                    let is_copy_type = is_ref_param
-                        || analysis.string_literal_vars.contains(name)
-                        || self.usize_variables.contains(name)
-                        || self
-                            .infer_expression_type(expr_to_generate)
-                            .as_ref()
-                            .is_some_and(|t| {
-                                if self.is_type_copy(t) {
-                                    return true;
-                                }
-                                match t {
-                                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                                        self.is_type_copy(inner)
-                                    }
-                                    _ => false,
-                                }
-                            });
-
-                    if !is_copy_type && !self.binding_is_runtime_non_clone(name) {
+                    // Skip .clone() for Copy / reborrow bindings — they are implicitly
+                    // copied. Assignment emit must use the same predicate (WDB-391/393/394).
+                    if !self.ident_skips_auto_clone_as_copy(name, expr_to_generate) {
                         return format!("{}.clone()", base_name);
                     }
                 }
