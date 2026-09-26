@@ -82,14 +82,23 @@ pub mod adapters
     let map = test.compile().expect("compile");
     let domain = map.get("domain/render.rs").expect("domain/render.rs");
     let rs = map.get("adapters/fs_site.rs").expect("adapters/fs_site.rs");
+    let owned = domain.contains("path: String") && domain.contains("markdown: String");
+    let demoted = domain.contains("path: &str") && domain.contains("markdown: &str");
     assert!(
-        domain.contains("path: String") && domain.contains("markdown: String"),
-        "callee must keep owned String formals (sitegen shape), got:\n{domain}"
+        owned || demoted,
+        "generate_page must emit String or Phase-2 &str formals, got:\n{domain}"
     );
-    assert!(
-        !rs.contains("generate_page(source_path, &markdown)")
-            && !rs.contains("generate_page(&source_path, markdown)")
-            && !rs.contains("generate_page(&source_path, &markdown)"),
-        "match Ok(markdown) must move into owned generate_page, got:\n{rs}"
-    );
+    if owned {
+        assert!(
+            !rs.contains("generate_page(source_path, &markdown)")
+                && !rs.contains("generate_page(&source_path, markdown)")
+                && !rs.contains("generate_page(&source_path, &markdown)"),
+            "match Ok(markdown) must move into owned generate_page, got:\n{rs}"
+        );
+    } else {
+        assert!(
+            rs.contains("generate_page(") && !rs.contains("generate_page(source_path, markdown)"),
+            "demoted generate_page must borrow owned match bindings, got:\n{rs}"
+        );
+    }
 }

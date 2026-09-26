@@ -30,9 +30,16 @@ pub fn post_text(url: string, body: string) -> Result<string, string> {
 }
 "#;
     let generated = test_utils::compile_single(source);
+    // Runtime `http::post` is `&str, &str`. Phase-2 may demote the wrapper
+    // formals to `&str` and pass through, or keep `String` and auto-borrow.
+    let owned_borrow = generated.contains("http::post(&url, &body)");
+    let demoted_passthrough = generated.contains("url: &str")
+        && generated.contains("body: &str")
+        && generated.contains("http::post(url, body)")
+        && !generated.contains("http::post(&url");
     assert!(
-        generated.contains("http::post(&url, &body)"),
-        "http::post must borrow owned String url and body, got:\n{generated}"
+        owned_borrow || demoted_passthrough,
+        "http::post must borrow owned String or pass demoted &str, got:\n{generated}"
     );
 }
 
