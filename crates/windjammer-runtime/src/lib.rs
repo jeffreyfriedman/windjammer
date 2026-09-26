@@ -59,6 +59,7 @@ pub mod testing;
 pub mod thread;
 pub mod time;
 pub mod timeout;
+pub mod url;
 pub mod uuid;
 pub mod yaml;
 

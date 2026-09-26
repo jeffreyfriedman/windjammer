@@ -1880,7 +1880,10 @@ impl<'ast> CodeGenerator<'ast> {
         param: &crate::parser::Parameter,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        Self::param_type_is_vec_container(&param.type_)
+        // Vec / HashMap / Set that only forward as call args keep the WJ owned
+        // formal (`config::resolve(defaults, file, env_map)`). Demoting the first
+        // map to `&mut HashMap` then Identity-moving it is E0308.
+        Self::param_type_is_owned_forward_container(&param.type_)
             && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
     }
 
@@ -7942,6 +7945,13 @@ impl<'ast> CodeGenerator<'ast> {
 
     pub(in crate::codegen::rust) fn param_type_is_vec_container(ty: &Type) -> bool {
         crate::type_classification::type_is_vec_container(ty)
+    }
+
+    /// Owned containers that must not demote when they only forward into an owned callee.
+    pub(in crate::codegen::rust) fn param_type_is_owned_forward_container(ty: &Type) -> bool {
+        Self::param_type_is_vec_container(ty)
+            || crate::codegen::rust::stdlib_method_traits::is_map_type(ty)
+            || crate::codegen::rust::stdlib_method_traits::is_set_type(ty)
     }
 
     pub(in crate::codegen::rust) fn param_is_indexed_in_body(

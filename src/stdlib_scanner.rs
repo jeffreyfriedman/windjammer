@@ -386,11 +386,7 @@ fn register_rust_std_boundary_signatures(registry: &mut SignatureRegistry) {
     registry.register_runtime_std_module("thread");
 }
 
-fn register_boundary_signature_alias(
-    registry: &mut SignatureRegistry,
-    dst: &str,
-    src: &str,
-) {
+fn register_boundary_signature_alias(registry: &mut SignatureRegistry, dst: &str, src: &str) {
     if registry.get_signature(dst).is_some() {
         return;
     }
@@ -1338,8 +1334,18 @@ mod tests {
             "rustc std modules without a runtime .rs file stay `use std::fmt`"
         );
         assert!(
-            matches!(classify_wj_std_import("config"), WjStdImportKind::Skip),
-            "WJ-only std/config with no runtime file must not emit windjammer_runtime::config"
+            matches!(
+                classify_wj_std_import("config"),
+                WjStdImportKind::Runtime { rust_stem } if rust_stem == "config"
+            ),
+            "std::config maps to scanned runtime config.rs"
+        );
+        assert!(
+            matches!(
+                classify_wj_std_import("url"),
+                WjStdImportKind::Runtime { rust_stem } if rust_stem == "url"
+            ),
+            "std::url maps to scanned runtime url.rs"
         );
     }
 
@@ -1595,9 +1601,7 @@ mod tests {
     fn scanned_runtime_http_post_is_free_two_str_refs() {
         let mut reg = SignatureRegistry::new();
         populate_runtime_signatures(&mut reg).expect("scan runtime");
-        let sig = reg
-            .get_signature("http::post")
-            .expect("scanned http::post");
+        let sig = reg.get_signature("http::post").expect("scanned http::post");
         assert!(
             !sig.has_self_receiver,
             "Router::post must not clobber free http::post, got {:?}",
@@ -1666,5 +1670,48 @@ mod tests {
             reg.get_signature("std::thread::spawn").is_some(),
             "std::thread::spawn boundary"
         );
+    }
+
+    #[test]
+    fn scanned_runtime_url_parse_format_join_are_registered() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        for name in ["url::parse", "url::format", "url::join"] {
+            let sig = reg
+                .get_signature(name)
+                .unwrap_or_else(|| panic!("missing boundary signature for {name}"));
+            assert!(
+                !sig.has_self_receiver,
+                "{name} is a free fn, got {:?}",
+                sig.param_types
+            );
+            assert!(
+                sig.param_ownership
+                    .iter()
+                    .all(|o| *o == OwnershipMode::Borrowed),
+                "{name} must borrow: {:?}",
+                sig.param_ownership
+            );
+        }
+        assert!(
+            reg.runtime_exported_types_for_module("url")
+                .iter()
+                .any(|t| *t == "Url"),
+            "Url must be a scanned runtime export"
+        );
+    }
+
+    #[test]
+    fn scanned_runtime_encoding_form_helpers_are_registered() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        let parse = reg
+            .get_signature("encoding::form_parse")
+            .expect("encoding::form_parse");
+        assert_eq!(parse.param_ownership, vec![OwnershipMode::Borrowed]);
+        let stringify = reg
+            .get_signature("encoding::form_stringify")
+            .expect("encoding::form_stringify");
+        assert_eq!(stringify.param_ownership, vec![OwnershipMode::Borrowed]);
     }
 }

@@ -158,7 +158,18 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
                     CoercionKind::Clone
                 }
             }
-            OwnedType::MutRef(_) => CoercionKind::StripBorrow,
+            OwnedType::MutRef(_) => {
+                // Same as Ref→Owned: Copy can strip, String to_owned, else clone.
+                // StripBorrow on `&mut HashMap` leaves a mut-ref place (E0308) —
+                // `config::resolve` owned maps, last-use MutRef formals, etc.
+                if is_string_base(&expected.base) || is_string_base(&actual.base) {
+                    CoercionKind::ToOwnedString
+                } else if is_copy_base(&actual.base) || is_copy_base(&expected.base) {
+                    CoercionKind::StripBorrow
+                } else {
+                    CoercionKind::Clone
+                }
+            }
             OwnedType::Inferred => CoercionKind::Identity,
         };
     }
@@ -625,6 +636,23 @@ mod tests {
         let actual = borrowed(BaseType::Custom("Vec".into()));
         let expected = owned(BaseType::Custom("Vec".into()));
         assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Clone);
+    }
+
+    #[test]
+    fn mut_ref_to_owned_hashmap_needs_clone() {
+        let actual = mut_borrowed(BaseType::Custom("HashMap".into()));
+        let expected = owned(BaseType::Custom("HashMap".into()));
+        assert_eq!(compute_coercion(&actual, &expected), CoercionKind::Clone);
+    }
+
+    #[test]
+    fn mut_ref_to_owned_copy_strips() {
+        let actual = mut_borrowed(BaseType::I32);
+        let expected = owned(BaseType::I32);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::StripBorrow
+        );
     }
 
     #[test]

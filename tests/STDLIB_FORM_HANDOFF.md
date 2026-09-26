@@ -1,15 +1,14 @@
 # Tip agent handoff — form-urlencoded + path glob
 
-**Status:** RED gates filed. Tip owns greening; ecosystem stays on `wj-querystring` / `wj-glob` until GREEN.
+**Status:** form + `config.resolve` GREEN (P3.463). Glob still RED. Ecosystem can thin-wrap `encoding.form_*`; stay on `wj-glob` until that gate greens.
 
 ## Ask
 
-1. Green `bug_std_encoding_form_urlencoded_wiring_test` — `std::encoding.form_parse` / `form_stringify`.
+1. ~~Green `bug_std_encoding_form_urlencoded_wiring_test`~~ — done P3.463.
 2. Green `bug_std_path_glob_match_wiring_test` — `std::path.glob_match`.
 
 Also still open:
 
-- `std_config_resolve_must_wire` (owned `HashMap` vs demoted `&mut` — see `STDLIB_CONFIG_HANDOFF.md`)
 - `bug_std_strings_contains_owned_needle_test` — `strings.contains(hay, "\"${key}\"")` must demote owned needle to `&str` (E0308)
 
 ## Form API contract (`std::encoding`)
