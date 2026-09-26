@@ -141,8 +141,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                } else if let Some(cast) = self.resolve_compound_assign_int_rust_type_name(target)
-                {
+                } else if let Some(cast) = self.resolve_compound_assign_int_rust_type_name(target) {
                     let val_width = val_ty
                         .as_ref()
                         .and_then(Self::int_rust_type_name)
@@ -370,13 +369,12 @@ impl<'ast> CodeGenerator<'ast> {
                             .as_ref()
                             .and_then(Self::int_rust_type_name)
                             .unwrap_or("i64");
-                        let already_target_cast = right_str
-                            .ends_with(&format!(" as {cast}"))
+                        let already_target_cast = right_str.ends_with(&format!(" as {cast}"))
                             || right_str.ends_with(&format!(") as {cast}"));
                         // WDB-302: never narrow an explicit `as i64` RHS to i32
                         // (`triangles as i64 as i32`) — emitted i64 width wins.
-                        let rhs_explicit_i64 = right_str.ends_with(" as i64")
-                            || right_str.ends_with(") as i64");
+                        let rhs_explicit_i64 =
+                            right_str.ends_with(" as i64") || right_str.ends_with(") as i64");
                         if val_width != cast
                             && !already_target_cast
                             && !(cast == "i32" && rhs_explicit_i64)
@@ -557,11 +555,15 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(t, Type::String)
                                 || matches!(t, Type::Custom(n) if n == "string" || n == "String")
                         });
-                        if owned_string_field
-                            && self.inferred_borrowed_params.contains(name)
-                        {
+                        let target_is_copy =
+                            target_type.as_ref().is_some_and(|t| self.is_type_copy(t));
+                        // Dual-oracle: identifier emit already skips Copy; do not re-clone
+                        // on field assign (WDB-391 helper u32, WDB-393 i32 formals, WDB-394 usize).
+                        let skip_copy =
+                            target_is_copy || self.ident_skips_auto_clone_as_copy(name, value);
+                        if owned_string_field && self.inferred_borrowed_params.contains(name) {
                             value_str = format!("{}.to_string()", value_str);
-                        } else {
+                        } else if !skip_copy {
                             value_str = format!("{}.clone()", value_str);
                         }
                     }
