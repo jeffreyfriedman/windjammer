@@ -3920,7 +3920,29 @@ impl<'ast> CodeGenerator<'ast> {
         if !(matches!(elem, Type::Custom(_)) && !self.is_type_copy(elem)) {
             return false;
         }
+        // Index-only rebuild (`let rec = nodes[i]` + `out.push`) is a readonly scan.
+        // Analyzer already infers Borrowed; do not keep Owned unless the vec is consumed.
         self.param_is_indexed_in_body(func.body.as_slice(), &param.name)
+            && !self.vec_param_index_is_readonly_scan(func, param)
+    }
+
+    /// `nodes[i]` / `nodes.len()` into a new collection — not a consume of `nodes`.
+    fn vec_param_index_is_readonly_scan(&self, func: &FunctionDecl<'_>, param: &Parameter) -> bool {
+        let body = func.body.as_slice();
+        if !self.param_is_indexed_in_body(body, &param.name) {
+            return false;
+        }
+        if self.param_has_owning_method_use(body, &param.name, func)
+            || self.param_stored_in_owned_payload(body, &param.name)
+        {
+            return false;
+        }
+        if self.param_passed_as_call_argument(body, &param.name, func)
+            && !self.param_call_sites_expect_borrow(body, &param.name, func)
+        {
+            return false;
+        }
+        true
     }
 
     /// `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay owned at
@@ -3938,7 +3960,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry
         // converged to Borrowed from bare-pass caller hints.
         if Self::param_type_is_owned_forward_container(&param.type_) {
-            if self.pub_vec_non_copy_custom_indexed_api(func, param) {
+            let readonly_index_scan = self.vec_param_index_is_readonly_scan(func, param);
+            if !readonly_index_scan && self.pub_vec_non_copy_custom_indexed_api(func, param) {
                 return true;
             }
             // WDB-216/275/276: bare forward into owned FFI / owned siblings must keep Owned
@@ -3970,16 +3993,20 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .position(|p| p.name == param.name)
                 .unwrap_or(0);
-            if self.global_signature_for_function(func).is_some_and(|sig| {
-                matches!(
-                    sig.param_ownership.get(param_idx),
-                    Some(OwnershipMode::Owned)
-                ) && sig
-                    .formal_param_types
-                    .get(param_idx)
-                    .or_else(|| sig.param_types.get(param_idx))
-                    .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
-            }) {
+            if !readonly_index_scan
+                && self.global_signature_for_function(func).is_some_and(|sig| {
+                    matches!(
+                        sig.param_ownership.get(param_idx),
+                        Some(OwnershipMode::Owned)
+                    ) && sig
+                        .formal_param_types
+                        .get(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx))
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        })
+                })
+            {
                 return true;
             }
             return !self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)

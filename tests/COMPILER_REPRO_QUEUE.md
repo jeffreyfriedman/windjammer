@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.481 (2026-09-26) — Vec index-only rebuild demotes (`update_params`)
+
+| Gate | Status |
+|------|--------|
+| `test_multipass_stub_to_converged_does_not_flag_false_collision` | ✅ isolate GREEN — `update_params(&result, …)` |
+| `test_multipass_cross_file_stub_to_converged_does_not_flag_false_collision` | ✅ isolate GREEN |
+| WDB-175 / WDB-190 | ✅ isolate GREEN — consumed pub Vec stay owned |
+| WDB-124 / WDB-125 | ✅ isolate GREEN |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** constraint/formal emit — analyzer already infers Borrowed for readonly `nodes.len()` / `nodes[i]` rebuilds. `pub_vec_non_copy_custom_indexed_api` was a dual oracle that forced Owned for any index of `Vec<NonCopyCustom>`.
+
+**What became unnecessary:** keep-owned on index-only scans; stub Owned lock for those scans. Consumed vecs (owning method / store / owned-callee forward) still stay owned.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3481`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- test_multipass_stub_to_converged_does_not_flag_false_collision test_multipass_cross_file_stub_to_converged_does_not_flag_false_collision bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **6 passed**
+- `… -- wdb175_ wdb190_ wdb124_ wdb125_ wdb099_` → **6 passed / 1 failed** (WDB-099 pre-existing isolate RED, not this change)
+
 ## P3.480 (2026-09-26) — Phase-2 text demotion: http::post + sitegen generate_page
 
 | Gate | Status |
@@ -7,13 +25,13 @@
 | `http_post_borrows_owned_url_and_body` | ✅ isolate GREEN — wrapper demotes to `&str` and pass-through (`http::post(url, body)`) |
 | `http_post_stdlib_sig_body_arg_is_borrowed_str` | ✅ GREEN (signature complete) |
 | `multipass_match_ok_string_into_owned_cross_module_callee` | ✅ isolate GREEN — `generate_page(path: &str, markdown: &str)` + borrow at call site |
-| `test_multipass_stub_to_converged_does_not_flag_false_collision` | ❌ isolate RED — `update_params(nodes: Vec<BtNodeRecord>)` stays owned; `pub_vec_non_copy_custom_indexed_api` keeps index-only rebuilds owned |
+| `test_multipass_stub_to_converged_does_not_flag_false_collision` | ✅ isolate GREEN (P3.481) |
 
 **Root cause layer:** signature / Phase-2 formal demote (already landed). Tests encoded pre-P3.472 “keep pub `string` owned” and failed on correct `&str` emit.
 
 **What became unnecessary:** requiring `http::post(&url, &body)` after the wrapper itself demotes; requiring sitegen `generate_page` to stay `String` when it only forwards to `strings::trim`.
 
-**Still remaining:** Vec\<NonCopyCustom\> index-only rebuild (`update_params`) — narrow `pub_vec_non_copy_custom_indexed_api` to consumed vecs only (do not keep owned for readonly scan → new `out`).
+**Still remaining:** none for this pair — Vec index-only rebuild landed in P3.481.
 
 **Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3478`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- http_post_borrows_owned_url_and_body multipass_match_ok_string_into_owned_cross_module_callee` → **2 passed**
