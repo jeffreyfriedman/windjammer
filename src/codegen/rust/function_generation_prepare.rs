@@ -10925,6 +10925,13 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 };
                 let pidx = sig.arg_param_index(arg_index);
+                if let Some(local) = self.signature_registry.get_signature(callee_name) {
+                    if crate::codegen::rust::signature_promotion::user_owned_slot_beats_stdlib_homonym(
+                        local, sig, arg_index,
+                    ) {
+                        continue;
+                    }
+                }
                 if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
                     return true;
                 }
@@ -10974,6 +10981,22 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn free_call_arg_expects_borrow(&self, callee_name: &str, arg_index: usize) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        if !callee_name.contains("::") {
+            if let Some(local) = self.signature_registry.get_signature(callee_name) {
+                if let Some(g) = self.global_signature_registry.as_ref() {
+                    if let Some(gs) = g
+                        .get_signature(callee_name)
+                        .or_else(|| g.find_unique_signature_ending_with(simple))
+                    {
+                        if crate::codegen::rust::signature_promotion::user_owned_slot_beats_stdlib_homonym(
+                            local, gs, arg_index,
+                        ) {
+                            return self.signature_param_expects_borrow(local, arg_index);
+                        }
+                    }
+                }
+            }
+        }
         let registry_borrow = if let Some(g) = self.global_signature_registry.as_ref() {
             g.get_signature(callee_name)
                 .or_else(|| g.lookup_method(callee_name))
