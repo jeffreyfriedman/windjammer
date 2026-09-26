@@ -4,10 +4,10 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-391 MultiFile | ⏳ TDD — FFI/helper `u32` reuse after field assign must not `w.clone()` |
-| WDB-391 tip-out | ⏳ TDD — `gen/rendering/voxel_gpu_buffers.rs` `screen_width = w.clone()` |
-| WDB-392 MultiFile | ⏳ TDD — `Direction::PosX` must not `.clone()` |
-| WDB-392 tip-out | ⏳ TDD — `gen/voxel/meshing.rs` (WDB-384 path-list miss) |
+| WDB-391 MultiFile | ❌ isolate RED — `self.screen_width = w.clone()` after `let w = get_screen_width()` |
+| WDB-391 tip-out | ❌ RED — tip + `gen/rendering/voxel_gpu_buffers.rs` |
+| WDB-392 MultiFile | ✅ isolate GREEN — bare `Direction::PosX` |
+| WDB-392 tip-out | ❌ RED — tip + `gen/voxel/meshing.rs` `Direction::PosX.clone()` |
 
 **Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
 
@@ -18,7 +18,7 @@
 **What became unnecessary:** do not refile FaceDirection (384) or author-written `(i as u32) as u8`.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb384`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb391_ wdb392_` — results after TDD this session.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb391_ wdb392_` → **1 passed / 3 failed**. **WDB-391 isolate is live RED** (highest priority).
 
 ## P3.475 (2026-09-26) — user `join(string, string)` must not inherit `strings::join` `&relative`
 
@@ -37,7 +37,7 @@
 
 **Gates:** `unset CARGO_TARGET_DIR && cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join pick_prefers_user_join_without_emitted_flags_over_strings_join two_string_join_shape_is_not_strings_join_vec prefer_shared_ref_keeps_local_user_join_over_strings_join prefer_shared_ref_keeps_user_join_owned_slot_over_strings_join_delimiter codegen_user_join_must_not_borrow_owned_relative prefer_shared_ref_picks_runtime_str_over_wj_owned_emission` → **7 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- user_join_two_strings_moves_owned_locals` → **1 passed**.
 
-**Next:** path-dep notes-api product (`log_tagged(level)`, `parse_level(probe)`, `slugify(title)`) — isolate GREEN; `bug_notes_api_product_owned_into_demoted_str_must_auto_borrow_test` files the tip-out.
+**Next:** path-dep notes-api product (`log_tagged(level)`, `parse_level(probe)`, `slugify(title)`) — isolate GREEN with `--metadata`; product `wj build src` (no explicit metadata flags) still emits `log_tagged(level, "notes", message)`. `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_owned_into_demoted_str_must_auto_borrow notes_api_product_src_must_auto_borrow_demoted_str` → **1 passed / 1 failed**.
 
 ## P3.474 (2026-09-26) — P3.444 isolate same-line range + notes `strings.len` borrow
 
