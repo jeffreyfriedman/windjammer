@@ -176,9 +176,21 @@ fn apply_owned_string_literal_coercion<'ast>(
         }
         // Prefer defining-module / scanned-runtime `&str` over multipass WJ stubs
         // (`std/strings.wj` owned `delimiter: string` shadowing runtime `&str`).
+        let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+        let lookup = gen.signature_lookup_callee_name(func_name);
+        if crate::codegen::rust::stdlib_method_traits::runtime_or_str_ref_formal_skips_literal_owned(
+            stdlib
+                .get_signature(func_name)
+                .or_else(|| stdlib.get_signature(lookup.as_ref())),
+            i,
+        ) {
+            continue;
+        }
         let sig = gen.refresh_call_site_signature_for_arg(
             signature.clone().or_else(|| {
                 crate::codegen::rust::signature_promotion::pick_codegen_refreshed_signature([
+                    stdlib.get_signature(func_name).cloned(),
+                    stdlib.get_signature(lookup.as_ref()).cloned(),
                     gen.global_signature_registry
                         .as_ref()
                         .and_then(|g| g.get_signature(func_name).cloned()),

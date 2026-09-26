@@ -113,7 +113,11 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
             OwnedType::MutRef(_) => CoercionKind::Identity,
             OwnedType::Copy => CoercionKind::Borrow,
             OwnedType::Owned => {
-                if is_string_base(&expected.base)
+                // Display/non-text (`i32`) into a text formal must `.to_string()` —
+                // Borrow alone emits `&self.rows` which is not `&str`.
+                if needs_string_owned_coercion(&actual.base, &expected.base) {
+                    CoercionKind::ToOwnedString
+                } else if is_string_base(&expected.base)
                     || is_string_base(&actual.base)
                     || is_vec_base(&expected.base)
                     || is_vec_base(&actual.base)
@@ -453,7 +457,7 @@ fn needs_string_owned_coercion(actual: &BaseType, expected: &BaseType) -> bool {
 }
 
 /// Types that lower to Rust `Display` and may become owned `String` via `.to_string()`.
-fn is_display_coercible_to_string(base: &BaseType) -> bool {
+pub(crate) fn is_display_coercible_to_string(base: &BaseType) -> bool {
     matches!(
         base,
         BaseType::I8
@@ -559,6 +563,17 @@ mod tests {
         assert_eq!(
             compute_coercion(&actual, &expected),
             CoercionKind::ToOwnedString
+        );
+    }
+
+    #[test]
+    fn display_int_into_str_ref_needs_to_owned_string() {
+        let actual = copy(BaseType::I32);
+        let expected = borrowed(BaseType::String);
+        assert_eq!(
+            compute_coercion(&actual, &expected),
+            CoercionKind::ToOwnedString,
+            "i32 → &str must convert (push_str(&i32) is invalid)"
         );
     }
 

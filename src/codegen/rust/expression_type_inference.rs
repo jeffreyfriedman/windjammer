@@ -362,6 +362,12 @@ impl<'ast> CodeGenerator<'ast> {
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
             Expression::MethodCall { object, method, .. } => {
+                // WJ `.string()` / Rust `.to_string()` are language-level owned conversions.
+                // Do not inherit `String::to_string` → `Self` (that types `i32.to_string()`
+                // as i32 and later Borrow-peels to `&self.rows`).
+                if crate::type_classification::is_language_level_owned_string_convert(method) {
+                    return Some(Type::String);
+                }
                 // Runtime-std free functions parsed as MethodCall: `strings.len(s)`.
                 // Registry key is `strings::len` (not `String::len`); resolve before
                 // receiver-typed / consensus usize probes that miss module callees.
