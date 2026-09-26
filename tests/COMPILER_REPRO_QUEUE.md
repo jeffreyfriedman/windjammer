@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.460 (2026-09-26) — `Mutex::lock` types `Ok(g)` so `g.data.get` borrows `&K`
+
+| Gate | Status |
+|------|--------|
+| `mutex_lock_boundary_signature_returns_mutex_guard` | ✅ unit GREEN |
+| `module_file_shared_map_get_must_borrow_key` | ✅ isolate GREEN — `g.data.get(&key)` cargo-check |
+| `hashmap_get_through_mutex_guard_must_cargo_check` | ✅ isolate GREEN |
+| hashmap auto-borrow / remove / get_mut | ✅ GREEN — tests now use `CARGO_BIN_EXE_wj` (not stale `target/release/wj`) |
+| spawn / mpsc | ✅ GREEN — no regression |
+
+**Root cause layer:** signature + constraint. `m.inner.lock()` (`Arc<Mutex<MapCell>>`) had no `Mutex::lock` boundary signature, so `Ok(g)` stayed untyped, `g.data.get` did not resolve to `HashMap::get(&K)`, and the owned `key: String` formal was passed by value (`get(key)` / E0308). Not a method-name ownership list.
+
+**What became unnecessary:** failing closed to a bare `get` homonym (owned key / `.to_string()`). No new `ir_call_site` peel. `Arc`/`Rc`/`Box` peel in `registry_method_return_type` so `Mutex::lock` applies; unique registered field type types `g.data` when the guard binding is still untyped; `substitute_stdlib_generics` now walks `Result` / `Parameterized`.
+
+**Temporary remaining:** unique-field fallback is fail-closed on conflicting `data` types. Delete path: once every `lock`/`read`/`write` match binding is typed from the new signatures, the unique-field scan can go.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3459` `cargo test --release --lib -- mutex_lock_boundary_signature_returns_mutex_guard hashmap_get_expects_borrowed_key_ref` → **2 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_module_file_shared_map_get_must_borrow_key_test bug_hashmap_get_through_mutex_guard_must_borrow_key_test bug_hashmap_get_mut_tuple_match_test codegen_hashmap_auto_borrow_test codegen_hashmap_remove_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **15 passed**.
+
 ## P3.459 (2026-09-25) — user `join(string, string)` owned slot beats `strings::join` homonym
 
 | Gate | Status |
@@ -1416,7 +1434,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 |--------|--------|
 | Ecosystem: `wj-sync` SharedMap get/has | ✅ unblocked on tip (P3.301 GREEN); package blocked on P3.310 |
 | Gate `bug_hashmap_get_through_mutex_guard_must_borrow_key_test` | ✅ tip GREEN via isolate `compile_single` |
-| Gate `bug_module_file_shared_map_get_must_borrow_key_test` | ❌ tip RED (2026-09-15) — `--library --module-file` emits `key.to_string()` |
+| Gate `bug_module_file_shared_map_get_must_borrow_key_test` | ✅ tip GREEN (P3.460) — `g.data.get(&key)` after `Mutex::lock` types `Ok(g)` |
 
 **Compiler agent:** library multipass must keep MutexGuard map-key borrow (same as isolate P3.288) — do not reintroduce `key.to_string()` when insert/len live in the same module.
 

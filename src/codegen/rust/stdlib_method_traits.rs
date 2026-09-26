@@ -607,10 +607,7 @@ pub fn method_is_map_key_qualified_with_project(
         // do not force `&key` into owned Custom formals at delegation sites (dogfood txn).
         if let Some(rt) = receiver_type {
             let base = rt.split('<').next().unwrap_or(rt);
-            for reg in [project_registry, Some(registry)]
-                .into_iter()
-                .flatten()
-            {
+            for reg in [project_registry, Some(registry)].into_iter().flatten() {
                 if let Some(sig) = lookup_sig(method, Some(base), reg) {
                     if sig.has_self_receiver {
                         // User/project self-method wins (Owned Key → not map-key; Borrowed → is).
@@ -632,9 +629,7 @@ pub fn method_is_map_key_qualified_with_project(
         }
         return false;
     }
-    receiver_type.is_some_and(|rt| {
-        borrowed_key_on_type(rt.split('<').next().unwrap_or(rt))
-    })
+    receiver_type.is_some_and(|rt| borrowed_key_on_type(rt.split('<').next().unwrap_or(rt)))
 }
 
 /// Is this an option accessor that may need `.cloned()` on borrowed receivers?
@@ -791,15 +786,10 @@ pub fn module_qualified_method_name(
         // Multipass may resolve `json.is_array` before import tracking is visible to
         // this CodeGenerator. When `{name}::{method}` exists in the runtime/stdlib
         // scanner baseline, prefer that key over a bare method (homonym-safe: full key).
-        if name
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
-        {
+        if name.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
             let key = format!("{name}::{method}");
             let stdlib = SignatureRegistry::stdlib();
-            if stdlib.get_signature(&key).is_some()
-                || stdlib.get_fallback_signature(&key).is_some()
+            if stdlib.get_signature(&key).is_some() || stdlib.get_fallback_signature(&key).is_some()
             {
                 return key;
             }
@@ -1039,10 +1029,7 @@ pub fn runtime_wj_owned_rust_borrowed_param(
         return false;
     }
     // Shared-ref only. MutBorrowed/`&mut T` must stay MutRef at call sites.
-    if !matches!(
-        sig.param_ownership.get(pidx),
-        Some(OwnershipMode::Borrowed)
-    ) {
+    if !matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Borrowed)) {
         return false;
     }
     if sig
@@ -1130,9 +1117,7 @@ fn runtime_std_module_arg_needs_rust_borrow(
         && (crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
             sig, pidx,
         ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx)
-            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
-                sig, pidx,
-            ))
+            || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(sig, pidx))
     {
         return false;
     }
@@ -1229,7 +1214,9 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
             };
             if !callee_name.contains("::")
                 && (signature.is_some_and(user_shape_blocks)
-                    || registry.get_signature(callee_name).is_some_and(user_shape_blocks))
+                    || registry
+                        .get_signature(callee_name)
+                        .is_some_and(user_shape_blocks))
             {
                 return false;
             }
@@ -1311,9 +1298,7 @@ pub fn collection_key_receiver_type(
 
     from_qualified_callee()
         .filter(|base| is_map_type_name(base) || is_set_type_name(base))
-        .or_else(|| {
-            receiver_type_name.map(|rt| rt.split('<').next().unwrap_or(rt).to_string())
-        })
+        .or_else(|| receiver_type_name.map(|rt| rt.split('<').next().unwrap_or(rt).to_string()))
 }
 
 /// Map/set key lookup: first arg must be borrowed when the receiver is a map/set type.
@@ -1339,10 +1324,7 @@ pub fn is_collection_key_lookup_with_project(
     // Without a receiver or `Type::method` qualification, falling through to
     // `method_is_map_key_qualified("get", None)` wrongly forces `&text` into owned
     // user `string` formals. Signature shape decides — not the simple name.
-    if receiver_type.is_none()
-        && !sig.has_self_receiver
-        && !sig.name.contains("::")
-    {
+    if receiver_type.is_none() && !sig.has_self_receiver && !sig.name.contains("::") {
         return false;
     }
     let registry = SignatureRegistry::stdlib();
@@ -1719,6 +1701,33 @@ mod pattern_registry_tests {
     }
 
     #[test]
+    fn mutex_lock_boundary_signature_returns_mutex_guard() {
+        let reg = SignatureRegistry::stdlib();
+        let sig = reg
+            .get_signature("Mutex::lock")
+            .expect("Mutex::lock in stdlib_meta");
+        assert!(
+            matches!(sig.param_ownership.first(), Some(OwnershipMode::Borrowed)),
+            "Mutex::lock is &self"
+        );
+        assert!(
+            matches!(
+                sig.return_type.as_ref(),
+                Some(Type::Result(ok, _))
+                    if matches!(
+                        ok.as_ref(),
+                        Type::Parameterized(n, args)
+                            if n == "MutexGuard" && args.len() == 1
+                    )
+            ),
+            "Mutex::lock must return Result<MutexGuard<T>, _>, got {:?}",
+            sig.return_type
+        );
+        assert!(reg.get_signature("RwLock::read").is_some());
+        assert!(reg.get_signature("RwLock::write").is_some());
+    }
+
+    #[test]
     fn remove_suffix_conflicts_on_first_arg_ownership() {
         let reg = SignatureRegistry::stdlib();
         assert!(
@@ -2007,22 +2016,12 @@ mod pattern_registry_tests {
         );
         let reg = SignatureRegistry::empty();
         assert!(
-            runtime_std_param_needs_auto_borrow_resolved(
-                &reg,
-                "json::is_array",
-                Some(&stub),
-                0
-            ),
+            runtime_std_param_needs_auto_borrow_resolved(&reg, "json::is_array", Some(&stub), 0),
             "stdlib runtime baseline must still auto-borrow despite WJ Owned Custom stub"
         );
         stub.emitted_rust_ref_params = Some(vec![false]);
         assert!(
-            runtime_std_param_needs_auto_borrow_resolved(
-                &reg,
-                "json::is_array",
-                Some(&stub),
-                0
-            ),
+            runtime_std_param_needs_auto_borrow_resolved(&reg, "json::is_array", Some(&stub), 0),
             "codegen-confirmed WJ stub owned emission must not beat runtime &Value baseline"
         );
         for key in ["json::len", "json::get", "json::get_index"] {
@@ -2060,7 +2059,8 @@ mod pattern_registry_tests {
 
     #[test]
     fn format_runtime_std_use_never_aliases_async_keyword() {
-        let item = format_runtime_std_use("async_runtime::sleep_ms_blocking", "async_runtime", None);
+        let item =
+            format_runtime_std_use("async_runtime::sleep_ms_blocking", "async_runtime", None);
         assert_eq!(
             item,
             "use windjammer_runtime::async_runtime::sleep_ms_blocking;\n"
