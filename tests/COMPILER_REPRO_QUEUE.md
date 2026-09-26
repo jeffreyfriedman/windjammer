@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.473 (2026-09-26) — TDD WDB-389/390 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-389 MultiFile | ⏳ TDD — impl+match `0..node.params.len()` must not `0_i32..` / `buf.clone()` |
+| WDB-389 tip-out | ⏳ TDD — `gen/csg/scene.rs` + tip `csg/scene.rs` |
+| WDB-390 MultiFile | ⏳ TDD — `self.levels[i].mesh_id()` must not `].clone().mesh_id()` |
+| WDB-390 tip-out | ⏳ TDD — `gen/lod_config.rs` (WDB-362 path-list miss) |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why these are new classes:**
+- WDB-345 free-fn isolate is GREEN; product CSG is still `0_i32..node.params.len()` + `buf.clone()` inside **impl + match**. P3.444 described the smell but never numbered a test.
+- WDB-362 tip list checks `gen/lod/lod_config.rs`; product lives at `gen/lod_config.rs` (`return Some(self.levels[i].clone().mesh_id())`).
+
+**What became unnecessary:** do not refile `Vec3::new(&` (WDB-388 tip GREEN). Do not refile WDB-345 free-fn range.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb384`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb389_ wdb390_` — results after TDD this session.
+
 ## P3.472 (2026-09-26) — keep `strings::*` Borrowed through multipass + demote `parse_body`
 
 | Gate | Status |
