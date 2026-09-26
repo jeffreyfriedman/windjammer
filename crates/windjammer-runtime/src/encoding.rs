@@ -65,6 +65,21 @@ pub fn url_decode_component(data: impl AsRef<str>) -> Result<String, String> {
     url_decode(data)
 }
 
+/// Parse `application/x-www-form-urlencoded` into ordered `(key, value)` pairs.
+/// Repeated keys are preserved (unlike `http::parse_query_string`'s last-wins map).
+pub fn form_parse(text: &str) -> Vec<(String, String)> {
+    url::form_urlencoded::parse(text.as_bytes())
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect()
+}
+
+/// Serialize ordered pairs as `application/x-www-form-urlencoded`.
+pub fn form_stringify(pairs: &[(String, String)]) -> String {
+    url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(pairs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+        .finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -84,5 +99,28 @@ mod tests {
         assert_eq!(encoded, "74657374");
         let decoded = hex_decode(&encoded).unwrap();
         assert_eq!(decoded, data);
+    }
+
+    #[test]
+    fn form_parse_preserves_repeated_keys() {
+        let pairs = form_parse("a=1&a=2&b=3");
+        assert_eq!(
+            pairs,
+            vec![
+                ("a".to_string(), "1".to_string()),
+                ("a".to_string(), "2".to_string()),
+                ("b".to_string(), "3".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn form_stringify_roundtrip() {
+        let pairs = vec![
+            ("q".to_string(), "hello world".to_string()),
+            ("n".to_string(), "1".to_string()),
+        ];
+        let text = form_stringify(&pairs);
+        assert_eq!(form_parse(&text), pairs);
     }
 }

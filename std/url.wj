@@ -1,0 +1,25 @@
+// std::url — URL parse / format / join (implementation: windjammer_runtime::url)
+
+/// Parsed URL parts (`windjammer_runtime::url::Url`).
+pub struct Url {
+    pub scheme: string,
+    pub host: string,
+    pub path: string,
+    pub query: Option<string>,
+    pub fragment: Option<string>,
+}
+
+/// Parse a URL string into parts.
+fn parse(text: string) -> Result<Url, string> {
+    Err("import std::url — maps to windjammer_runtime::url")
+}
+
+/// Reconstruct a URL string from parsed parts.
+fn format(u: Url) -> string {
+    "" + ""
+}
+
+/// Resolve `rel` against `base`.
+fn join(base: string, rel: string) -> Result<string, string> {
+    Err("import std::url — maps to windjammer_runtime::url")
+}

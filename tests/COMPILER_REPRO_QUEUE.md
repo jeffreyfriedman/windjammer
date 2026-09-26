@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.463 (2026-09-26) — `std::url` / `encoding::form_*` signatures + owned HashMap forward
+
+| Gate | Status |
+|------|--------|
+| `bug_std_url_parse_wiring_test` | ✅ isolate GREEN — `url::parse` / `format` / `join` scanned from `url.rs` |
+| `bug_std_encoding_form_urlencoded_wiring_test` | ✅ isolate GREEN — `encoding::form_parse` / `form_stringify` |
+| `std_config_resolve_must_wire` | ✅ isolate GREEN — owned HashMap formals forward into `config::resolve` |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** signature + constraint + coercion.
+
+1. **Signature:** missing runtime/`std` stubs so fail-closed `compile_error!("missing boundary signature for url::…")` / missing `encoding::form_*` symbols. Scanner now registers `url::parse|format|join` (`&str`/`&Url`) and `encoding::form_parse`/`form_stringify`.
+2. **Constraint:** `is_public_owned_non_copy_formal_api` / `vec_formal_only_forwards` only treated `Vec`. HashMap-only-forward formals demoted to `&mut HashMap` then Identity-moved into owned `config::resolve` (E0308). Same owned-forward container predicate now covers HashMap/Set.
+3. **Coercion:** `MutRef→Owned` was always `StripBorrow` (wrong for non-Copy). Now matches `Ref→Owned` (Clone / ToOwnedString / Copy strip).
+
+**What became unnecessary:** treating missing `url`/`form_*` as a peel problem; HashMap-only `&mut` demote + StripBorrow. No new `ir_call_site` peel or method-name list.
+
+**Temporary remaining:** MutRef→Owned Clone is the safety net when a HashMap formal is still wrongly demoted. Delete path: once every only-forward map/set formal stays owned from the expanded predicate, Clone on those sites should not fire.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3462` `cargo test --release --lib -- mut_ref_to_owned_hashmap_needs_clone mut_ref_to_owned_copy_strips scanned_runtime_url_parse_format_join_are_registered scanned_runtime_encoding_form_helpers_are_registered rust_std_mpsc_and_thread_spawn_boundary_signatures_registered` → **5 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_std_url_parse_wiring_test bug_std_encoding_form_urlencoded_wiring_test bug_std_config_module_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **url/form/spawn/mpsc/config 11+4 GREEN**.
+
 ## P3.462 (2026-09-26) — borrowed loop elem clone gate is non-Copy (P3.303)
 
 | Gate | Status |

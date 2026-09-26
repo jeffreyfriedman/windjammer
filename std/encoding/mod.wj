@@ -101,6 +101,16 @@ pub fn url_decode_component(data: string) -> Result<string, string> {
     // - WASM: decodeURIComponent(data)
 }
 
+/// Parse `application/x-www-form-urlencoded` into ordered `(key, value)` pairs.
+pub fn form_parse(text: string) -> Vec<(string, string)> {
+    // Compiler generates: windjammer_runtime::encoding::form_parse
+}
+
+/// Serialize ordered pairs as `application/x-www-form-urlencoded`.
+pub fn form_stringify(pairs: Vec<(string, string)>) -> string {
+    // Compiler generates: windjammer_runtime::encoding::form_stringify
+}
+
 //===============================================
 // JSON ENCODING (for convenience)
 //===============================================

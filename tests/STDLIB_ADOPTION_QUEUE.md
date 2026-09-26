@@ -65,10 +65,10 @@ Definition of done per row:
 
 | Need | Repro | Gate status (2026-09-19) | Fix hint |
 |---|---|---|---|
-| `std::encoding.form_parse` / `form_stringify` | `bug_std_encoding_form_urlencoded_wiring_test` | ❌ RED | Runtime form-urlencoded; ordered `Vec<(string,string)>`; `+`/`%20` space; thin-wrap `wj-querystring` |
+| `std::encoding.form_parse` / `form_stringify` | `bug_std_encoding_form_urlencoded_wiring_test` | ✅ GREEN (P3.463) | Runtime `form_parse`/`form_stringify`; ordered `Vec<(string,string)>`; thin-wrap `wj-querystring` |
 | `std::path.glob_match` | `bug_std_path_glob_match_wiring_test` | ❌ RED | Shell `*`/`?`/`**` segment rules; thin-wrap `wj-glob` |
 | `strings.contains` owned needle → `&str` | `bug_std_strings_contains_owned_needle_test` | ❌ RED | Codegen demote owned/interpolated needle (E0308) |
-| `std::config.resolve` / `merge` owned HashMap | `bug_std_config_module_test` (`std_config_resolve_must_wire`) | ❌ RED (3/4) | Codegen: owned formals must accept demoted `&mut HashMap` (or infer owned at call site) |
+| `std::config.resolve` / `merge` owned HashMap | `bug_std_config_module_test` (`std_config_resolve_must_wire`) | ✅ GREEN (P3.463) | Owned HashMap-only-forward formals; MutRef→Owned Clone safety net |
 
 
 ## P1 — URL (week-one HTTP)
@@ -76,7 +76,7 @@ Definition of done per row:
 | Need | Repro | Gate status (2026-09-19) | Fix hint |
 |---|---|---|---|
 | Loop `j = end` unify int/usize | `bug_int_loop_assign_end_bound_must_unify_test` | ❌ RED | Index assign from peer bound (`wj-url` authority scan) |
-| `std::url.parse` / `format` / `join` | `bug_std_url_parse_wiring_test` | ❌ RED | Runtime URL helpers; thin-wrap `wj-url` |
+| `std::url.parse` / `format` / `join` | `bug_std_url_parse_wiring_test` | ✅ GREEN (P3.463) | Runtime `url.rs` + `std/url.wj`; scanner registers `url::parse|format|join` |
 | Owned struct arg must not auto-ref `&T` | `bug_owned_struct_arg_must_not_auto_ref_test` | ❌ RED | Cross-crate `parse(MultipartBody)` must not emit `parse(&MultipartBody)` |
 
 ## Run
@@ -87,4 +87,4 @@ unset CARGO_TARGET_DIR
 cargo test --release --test all --features skip_fixtures -- bug_std_ -- --test-threads=1
 ```
 
-Expected on tip: prior gates green; **form + glob + config.resolve** still RED until tip greens them.
+Expected on tip: form / url / config.resolve GREEN (P3.463); glob + strings.contains + loop-int unify still RED.

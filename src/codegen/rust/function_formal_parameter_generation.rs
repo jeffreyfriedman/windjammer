@@ -3470,15 +3470,11 @@ impl<'ast> CodeGenerator<'ast> {
             let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
             if !has_self_receiver
                 && func.return_type.as_ref().is_some_and(|t| {
-                    crate::codegen::rust::string_utilities::return_type_expects_owned_string(
-                        &Some(t.clone()),
-                    )
+                    crate::codegen::rust::string_utilities::return_type_expects_owned_string(&Some(
+                        t.clone(),
+                    ))
                 })
-                && self.param_passed_as_call_argument(
-                    func.body.as_slice(),
-                    &param.name,
-                    func,
-                )
+                && self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func)
                 && !Self::param_used_in_binary_comparison(&param.name, &func.body)
                 && !crate::analyzer::field_enum_borrow::param_consumed_by_enum_variant_ctor(
                     &param.name,
@@ -3528,9 +3524,7 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         match ret {
-            Type::String | Type::Int | Type::Float | Type::Bool | Type::Int32 | Type::Uint => {
-                false
-            }
+            Type::String | Type::Int | Type::Float | Type::Bool | Type::Int32 | Type::Uint => false,
             Type::Custom(name) if name == "string" || name == "String" => false,
             Type::Custom(_) => true,
             Type::Parameterized(name, _) if name != "Result" && name != "Option" => true,
@@ -3551,7 +3545,9 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         if !func.return_type.as_ref().is_some_and(|t| {
-            crate::codegen::rust::string_utilities::return_type_expects_owned_string(&Some(t.clone()))
+            crate::codegen::rust::string_utilities::return_type_expects_owned_string(&Some(
+                t.clone(),
+            ))
         }) {
             return false;
         }
@@ -3633,7 +3629,11 @@ impl<'ast> CodeGenerator<'ast> {
         saw: &mut bool,
     ) -> bool {
         match expr {
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 if self.expression_mentions_param(function, param_name) {
                     return false;
                 }
@@ -3672,20 +3672,30 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 self.expression_mentions_param(object, param_name)
             }
-            Expression::Unary { operand, .. } => self.expression_mentions_param(operand, param_name),
+            Expression::Unary { operand, .. } => {
+                self.expression_mentions_param(operand, param_name)
+            }
             Expression::Binary { left, right, .. } => {
                 self.expression_mentions_param(left, param_name)
                     || self.expression_mentions_param(right, param_name)
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.expression_mentions_param(function, param_name)
-                    || arguments.iter().any(|(_, a)| self.expression_mentions_param(a, param_name))
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expression_mentions_param(a, param_name))
             }
             Expression::MethodCall {
                 object, arguments, ..
             } => {
                 self.expression_mentions_param(object, param_name)
-                    || arguments.iter().any(|(_, a)| self.expression_mentions_param(a, param_name))
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| self.expression_mentions_param(a, param_name))
             }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
@@ -3701,7 +3711,9 @@ impl<'ast> CodeGenerator<'ast> {
     fn param_used_in_binary_comparison(param: &str, body: &[&Statement<'_>]) -> bool {
         fn expr_compares(param: &str, expr: &Expression<'_>) -> bool {
             match expr {
-                Expression::Binary { left, op, right, .. } => {
+                Expression::Binary {
+                    left, op, right, ..
+                } => {
                     let is_cmp = matches!(
                         op,
                         BinaryOp::Eq
@@ -3820,10 +3832,7 @@ impl<'ast> CodeGenerator<'ast> {
                     expr_compares(param, value)
                         || arms.iter().any(|arm| {
                             expr_compares(param, arm.body)
-                                || arm
-                                    .guard
-                                    .as_ref()
-                                    .is_some_and(|g| expr_compares(param, g))
+                                || arm.guard.as_ref().is_some_and(|g| expr_compares(param, g))
                         })
                 }
                 Statement::Defer { statement, .. } => stmt_compares(param, statement),
@@ -3888,9 +3897,7 @@ impl<'ast> CodeGenerator<'ast> {
         // to `&Vec<T>` (graph_pr_f64_get / get_line).
         let elem = match &param.type_ {
             Type::Vec(inner) => inner.as_ref(),
-            Type::Parameterized(name, args)
-                if name == "Vec" || name.ends_with("::Vec") =>
-            {
+            Type::Parameterized(name, args) if name == "Vec" || name.ends_with("::Vec") => {
                 match args.first() {
                     Some(t) => t,
                     None => return false,
@@ -3918,36 +3925,30 @@ impl<'ast> CodeGenerator<'ast> {
         // `restore_pub_owned_non_copy_api_formals` locked the registry to Owned.
         // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry
         // converged to Borrowed from bare-pass caller hints.
-        if Self::param_type_is_vec_container(&param.type_) {
+        if Self::param_type_is_owned_forward_container(&param.type_) {
             if self.pub_vec_non_copy_custom_indexed_api(func, param) {
                 return true;
             }
             // WDB-216/275/276: bare forward into owned FFI / owned siblings must keep Owned
             // even when registry stubs are incomplete during library multipass.
-            if self.param_passes_to_wj_owned_sibling_call(
-                func.body.as_slice(),
-                &param.name,
-                func,
-            ) || self.param_only_forwards_to_emitted_owned_callees(
-                func.body.as_slice(),
-                &param.name,
-                func,
-            ) {
-                return true;
-            }
-            if func.is_pub
-                && self.param_only_used_as_call_argument(
+            if self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
+                || self.param_only_forwards_to_emitted_owned_callees(
                     func.body.as_slice(),
                     &param.name,
                     func,
                 )
+            {
+                return true;
+            }
+            if func.is_pub
+                && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
                 && self
                     .preregistered_free_function_emitted_params
                     .values()
                     .any(|formals| {
-                        formals.iter().any(|s| {
-                            s.contains(": Vec<") && !s.contains(": &Vec<")
-                        })
+                        formals
+                            .iter()
+                            .any(|s| s.contains(": Vec<") && !s.contains(": &Vec<"))
                     })
             {
                 return true;
@@ -3958,14 +3959,14 @@ impl<'ast> CodeGenerator<'ast> {
                 .position(|p| p.name == param.name)
                 .unwrap_or(0);
             if self.global_signature_for_function(func).is_some_and(|sig| {
-                matches!(sig.param_ownership.get(param_idx), Some(OwnershipMode::Owned))
-                    && sig
-                        .formal_param_types
-                        .get(param_idx)
-                        .or_else(|| sig.param_types.get(param_idx))
-                        .is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        })
+                matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Owned)
+                ) && sig
+                    .formal_param_types
+                    .get(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
             }) {
                 return true;
             }
@@ -3981,17 +3982,10 @@ impl<'ast> CodeGenerator<'ast> {
         {
             // Readonly field-projection helpers (`keys_equal(a, b) { a.bytes == b.bytes }`)
             // demote to `&Key` even when multipass locked pub Custom formals to Owned.
-            if self.param_only_used_via_field_or_index_projection(
-                func.body.as_slice(),
-                &param.name,
-            ) && !self.param_has_field_or_index_move_binding(
-                func.body.as_slice(),
-                &param.name,
-            ) && !self.param_passed_as_call_argument(
-                func.body.as_slice(),
-                &param.name,
-                func,
-            ) {
+            if self.param_only_used_via_field_or_index_projection(func.body.as_slice(), &param.name)
+                && !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
+                && !self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func)
+            {
                 return false;
             }
             let param_idx = func
@@ -3999,20 +3993,16 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .position(|p| p.name == param.name)
                 .unwrap_or(0);
-            return self
-                .global_signature_for_function(func)
-                .is_some_and(|sig| {
-                    matches!(
-                        sig.param_ownership.get(param_idx),
-                        Some(OwnershipMode::Owned)
-                    ) && sig
-                        .formal_param_types
-                        .get(param_idx)
-                        .or_else(|| sig.param_types.get(param_idx))
-                        .is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        })
-                });
+            return self.global_signature_for_function(func).is_some_and(|sig| {
+                matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Owned)
+                ) && sig
+                    .formal_param_types
+                    .get(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+            });
         }
         // WDB-191: multipass restore keeps pub `string` owned when stored in payload
         // (`pg_wire_parse` name/sql) even if per-file payload walk misses loop assignments.
@@ -4022,21 +4012,19 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .position(|p| p.name == param.name)
                 .unwrap_or(0);
-            return self
-                .global_signature_for_function(func)
-                .is_some_and(|sig| {
-                    matches!(
-                        sig.param_ownership.get(param_idx),
-                        Some(OwnershipMode::Owned)
-                    ) && sig
-                        .formal_param_types
-                        .get(param_idx)
-                        .or_else(|| sig.param_types.get(param_idx))
-                        .is_some_and(|t| {
-                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                && crate::codegen::rust::types::is_windjammer_text_type(t)
-                        })
-                });
+            return self.global_signature_for_function(func).is_some_and(|sig| {
+                matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Owned)
+                ) && sig
+                    .formal_param_types
+                    .get(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && crate::codegen::rust::types::is_windjammer_text_type(t)
+                    })
+            });
         }
         false
     }
@@ -4095,11 +4083,8 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .find(|p| p.name == *param_name)
             {
-                if self.associated_text_identity_return_may_borrow(
-                    &analyzed.decl,
-                    param,
-                    analyzed,
-                ) {
+                if self.associated_text_identity_return_may_borrow(&analyzed.decl, param, analyzed)
+                {
                     return false;
                 }
             }
