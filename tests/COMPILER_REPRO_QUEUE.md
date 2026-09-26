@@ -7,7 +7,7 @@
 | `test_to_string_on_non_string_field_in_push_str` | ✅ isolate GREEN — `push_str(&self.rows.to_string())` |
 | `test_to_string_on_int_preserved_for_push_str` | ✅ isolate GREEN |
 | `wdb144_module_file_demoted_str_formal_must_not_receive_owned_string` | ✅ isolate GREEN — `strings::contains(&label, "lit")` not `String::from` |
-| WDB-152 / HashMap i64 get / spawn / mpsc | ✅ GREEN — restore no longer invents `.to_string()` on non-text formals |
+| WDB-152 / HashMap i64 get / spawn / mpsc / WDB-332 isolate | ✅ GREEN — restore is user-written convert only |
 
 **Root cause layer:** signature + coercion/encoding + narrowed reconcile.
 

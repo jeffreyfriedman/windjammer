@@ -56,31 +56,11 @@ impl<'ast> CodeGenerator<'ast> {
         wants_shared_text: bool,
         wants_owned_text: bool,
     ) {
-        let source = match arg_expr {
-            Expression::MethodCall { object, method, .. }
-                if crate::type_classification::is_language_level_owned_string_convert(method) =>
-            {
-                *object
-            }
-            other => other,
-        };
-        let display_non_text = self.infer_expression_type(source).as_ref().is_some_and(|t| {
-            !crate::codegen::rust::types::is_windjammer_text_type(t)
-                && crate::ir::coercion::is_display_coercible_to_string(
-                    &crate::ir::node::parser_type_to_base_type(t),
-                )
-        });
-        let genuine =
-            crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
-                arg_expr,
-            );
-        if !genuine && !display_non_text {
-            return;
-        }
-        // Unknown / non-text formals (`usize`, `i64`, HashMap<&i64>): never invent
-        // `.to_string()`. User-written conversions (`self.rows.to_string()`) stay
-        // even when the formal signature is incomplete (`push_str`).
-        if !wants_shared_text && !wants_owned_text && !genuine {
+        // User-written conversions only. Never invent `.to_string()` on a bare
+        // Display value (WDB-332 sibling `new(name: string)` vs `new(priority: i32)`).
+        if !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+            arg_expr,
+        ) {
             return;
         }
         let mut base = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
