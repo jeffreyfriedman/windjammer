@@ -1,5 +1,40 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.478 (2026-09-26) — notes-api product owned→`&str` (isolate GREEN, product RED)
+
+| Gate | Status |
+|------|--------|
+| `notes_api_owned_into_demoted_str_must_auto_borrow` | ✅ isolate GREEN — fixture `log_pkg` / `inflect_pkg` |
+| `notes_api_product_src_must_auto_borrow_demoted_str` | ❌ product RED — `log_tagged(level, "notes", message)` (no `&level`) |
+| `same_crate_owned_parse_must_not_over_borrow` | ✅ isolate GREEN |
+| `strings_len_must_borrow_owned_local_for_later_use` | ✅ isolate GREEN (P3.474) |
+
+**Product:** `wj-notes-api` `$WJ test` still E0308 after querystring/url rebuild. Isolate auto-borrow does not cover the full hexagonal graph. Also remaining: `qs_get(…, String::from("pretty"))` expected `&str`; `is_match` mixed owned/`&str`; `error_from_message` `u16` vs `i32`; `json::to_string(&mut payload)` E0596.
+
+**Root cause layer:** signature pick at product scale — Shared≠Lock must use `wj_log::log_tagged` / `wj_inflect::slugify` emission, not a homonym or stale Owned stub. Do not reshape the app.
+
+**Gates:** `cargo test --release --test all -- notes_api_product_src_must_auto_borrow_demoted_str` → **FAILED** (2026-09-26) — `log_tagged(level, "notes", message)`.
+
+## P3.477 (2026-09-26) — TDD WDB-393/394 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-393 MultiFile | ⏳ TDD — i32 formal field-assign then reuse must not `x.clone()` |
+| WDB-393 tip-out | ⏳ TDD — `gen/editor/voxel_editor.rs` `cursor_x = x.clone()` |
+| WDB-394 MultiFile | ⏳ TDD — usize loop index `best_idx = i` must not `i.clone()` |
+| WDB-394 tip-out | ⏳ TDD — navmesh / astar / reverb / meshing / streaming |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why these are new classes:**
+- WDB-343 isolate is GREEN for call-only i32 reuse; product still clones **formals assigned to fields then reused** (`set_cursor`).
+- WDB-391 is u32 helper return; this is **usize loop counter assigned to `best_idx`**.
+
+**What became unnecessary:** do not refile WDB-391 (`w.clone()` after `get_screen_width`).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb384`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb393_ wdb394_` — results after TDD this session.
+
 ## P3.476 (2026-09-26) — TDD WDB-391/392 (DB agent; no compiler src)
 
 | Gate | Status |
