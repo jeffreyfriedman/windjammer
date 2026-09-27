@@ -9241,7 +9241,7 @@ impl<'ast> CodeGenerator<'ast> {
             )
     }
 
-    fn ir_callee_arg_expects_mut_borrow(
+    pub(in crate::codegen::rust) fn ir_callee_arg_expects_mut_borrow(
         &self,
         registry: &SignatureRegistry,
         callee_name: &str,
