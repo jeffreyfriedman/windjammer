@@ -4,10 +4,10 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-412 MultiFile | ⏳ TDD — `contains_name(pb.metas, "w")` must not emit `pb.metas.clone()` |
-| WDB-412 tip-out | ⏳ TDD — `binding_metas_contain_name(pb.binding_metas.clone(), …)` |
+| WDB-412 MultiFile | ❌ isolate RED — `contains_name(pb.metas.clone(), "w")` with `metas: Vec<Meta>` |
+| WDB-412 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/shader_graph_builder.rs` `pb.binding_metas.clone()` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate reproduces field.clone() into a read-only consume-iter Vec formal.
 
 **Why this is a new class:**
 - WDB-410 is **owned-self wither reconstruct**. This is a **read-only `for` Vec formal** that stays owned, forcing **`pb.binding_metas.clone()` at the call site**.
@@ -15,8 +15,8 @@
 
 **What became unnecessary:** refiling WDB-410; reusing P3.508 (notes-api empty lits) / WDB-411.
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb412_` — results after TDD this session.
+**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `36d6f931`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb412_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.06s after ~4m incremental compile)
 
 ## P3.508 (2026-09-27) — demoted method then owned empty lits must own (notes-api handle_request)
 
@@ -50,7 +50,7 @@
 
 | Gate | Status |
 |------|--------|
-| `wdb411_module_file_u32_count_while_must_not_infer_i32` | ⏳ isolate — `pixel_count() -> u32` + f32 luminance + `as i64` index |
+| `wdb411_module_file_u32_count_while_must_not_infer_i32` | ❌ isolate RED — `is_black` stays `0_u32`; `average_brightness` (`-> f32` + `if count == 0`) emits `let mut i: i32 = 0_i32` |
 
 **Root cause layer:** constraint — `function_prefers_i32_coord_locals` / void-builder poisons `let mut i = 0` to i32 even when the compare peer is u32 (`frame.pixel_count()`). P3.348 isolate omitted f32/`as i64` and stayed u32.
 
