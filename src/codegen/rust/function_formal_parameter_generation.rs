@@ -3932,7 +3932,8 @@ impl<'ast> CodeGenerator<'ast> {
         if !self.param_is_indexed_in_body(body, &param.name) {
             return false;
         }
-        if self.param_has_owning_method_use(body, &param.name, func)
+        if self.param_consumed_as_for_loop_iterable(body, &param.name)
+            || self.param_has_owning_method_use(body, &param.name, func)
             || self.param_stored_in_owned_payload(body, &param.name)
         {
             return false;
