@@ -1,11 +1,24 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.507 (2026-09-27) — WDB-411 u32 `while i < count` must not infer i32
+
+| Gate | Status |
+|------|--------|
+| `wdb411_module_file_u32_count_while_must_not_infer_i32` | ⏳ isolate — `pixel_count() -> u32` + f32 luminance + `as i64` index |
+
+**Root cause layer:** constraint — `function_prefers_i32_coord_locals` / void-builder poisons `let mut i = 0` to i32 even when the compare peer is u32 (`frame.pixel_count()`). P3.348 isolate omitted f32/`as i64` and stayed u32.
+
+**What became unnecessary:** recasting product `count` to i32; refiling P3.348.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3507`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb411_module_file_u32_count_while`
+
 ## P3.506 (2026-09-27) — TDD WDB-410 (DB agent; no compiler src)
 
 | Gate | Status |
 |------|--------|
-| WDB-410 MultiFile | ⏳ TDD — owned-self wither must move `self.items` / `self.graph` / `self.label` |
-| WDB-410 tip-out | ⏳ TDD — `PassBuilder` `self.graph.clone()` / `self.bindings.clone()` |
+| WDB-410 MultiFile | ❌ isolate RED — `let mut items = self.items.clone()` + `label: self.label.clone()` |
+| WDB-410 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/shader_graph_builder.rs` |
 
 **Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
 
@@ -15,8 +28,8 @@
 
 **What became unnecessary:** refiling WDB-378/358/407/409; reusing WDB-406/408 (compiler).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` — results after TDD this session.
+**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `4b30b755`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.07s after ~4m incremental compile)
 
 ## P3.505 (2026-09-27) — demoted `&Vec<Note>` must clone on owned return (`truncate_notes`)
 
