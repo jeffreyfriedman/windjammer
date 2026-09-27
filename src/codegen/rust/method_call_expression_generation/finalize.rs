@@ -1340,7 +1340,26 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     });
             if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
-            if expects_pattern || expects_collection_key {
+            // Do not undo IR ToOwnedString on emit-owned `String` slots. `expects_pattern`
+            // can be true from a stale all-`&str` snapshot after a sibling demote
+            // (notes-api `handle(method: &str, origin: String)`).
+            let emit_owned_string = resolved_signature
+                .as_ref()
+                .or(method_signature.as_ref())
+                .is_some_and(|sig| {
+                    crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                        sig, i,
+                    )
+                })
+                || receiver_type_name.as_deref().is_some_and(|rt| {
+                    self.resolve_method_function_signature(rt, method, arguments.len())
+                        .is_some_and(|sig| {
+                            crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                &sig, i,
+                            )
+                        })
+                });
+            if (expects_pattern || expects_collection_key) && !emit_owned_string {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                     arg_expr,
                     arg_str,

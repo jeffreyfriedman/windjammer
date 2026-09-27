@@ -22,19 +22,19 @@
 
 | Gate | Status |
 |------|--------|
-| `demoted_method_then_owned_empty_lits_must_own` | ❌ isolate RED — `parse_method(method)` demotes first slot to `&str`; later owned `String` formals still get bare `""` |
-| `handle_request_empty_lits_hex_app_must_own` | ❌ isolate RED — HashMap `NotesApp` + `parse_method` + `handle_method(..., "")` same bare `path, "", "", ""` |
-| `handle_forward_empty_lits_must_own` | ✅ isolate GREEN / ❌ product RED — P3.499 tiny `App` + `keep(method)` already emits `"".to_string()` |
-| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `app.handle(&method, path, "", "", "", 0_i64, body)` + `&mut query` into owned `query: String` |
+| `demoted_method_then_owned_empty_lits_must_own` | ✅ isolate GREEN — `method: &str` + later `"".to_string()` |
+| `handle_request_empty_lits_hex_app_must_own` | ✅ isolate GREEN — hex `NotesApp` same mixed emit |
+| `handle_forward_empty_lits_must_own` | ✅ isolate GREEN |
+| `notes_api_product_remaining_e0308_must_not_emit` | ⚠️ product — handle empty lits now own; remaining `&mut query` into `query: String` |
 
 **Why this is a new class:**
 - P3.489 / P3.499 empty-lit isolates kept every formal owned (`keep(method)` / interpolation) and already owned `""`.
 - Product `handle_request` calls `parse_method(method)` first. That demotes the first slot; later empty literals into still-owned `String` formals stay `&str`.
 - Hexagonal `NotesApp` + `HashMap` + `handle_method` 8th `""` is the same bug (not a HashMap-only miss).
 
-**Root cause layer:** codegen / call-site ownership — empty lit into owned `String` after a sibling formal demoted. Signature-driven, not method-name lists. Do not edit `windjammer/src/`. Do not reshape notes-api.
+**Root cause layer:** signature — readonly/discard `&str` early-returns omitted `emitted_rust_ref_formals`; refresh now writes `Reference(str)`; owned-string oracle trusts emit flags (does not invent owned from WJ `string` when flags are missing). Coercion: keep `ToOwnedString` only when the flag oracle says owned.
 
-**What became unnecessary:** treating HashMap / `own()` rebinds as the missing trigger; refiling P3.499 `keep(method)` isolate.
+**What became unnecessary:** `has_self + Borrowed WJ string` reconcile/finalize strips; `str_ref_optimized_params` OR onto later owned slots; finalize Pattern peel undoing IR owned empty lits; `ToOwnedString→Identity` when IR expected stayed Owned but flags say not owned.
 
 **Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (15:30). Isolates `$WJ build src --output OUT --no-cargo --module-file` + `cargo check` in OUT.
 - Demote: `app.handle(&method, path, "", "", "", 0_i64, body)` — rustc E0308 (`expected String, found &str` ×3).
@@ -42,9 +42,10 @@
 - Product `wj-notes-api` `$WJ test` (p3505): **2** E0308 — `note_get_reply(..., &mut query)` expected `String`; `handle_request` bare `""`.
 - `wj-retry` tip rebuild: `while now < (deadline as i64)` (P3.500 GREEN). Fetch re-dogfood after cache prune.
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3507`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- demoted_method_then_owned_empty_lits handle_request_empty_lits_hex` → **0 passed / 2 failed** (0.47s after 328s compile; TDD RED).
-- Ecosystem: `apps/wj-fetch` `$WJ test` → **31 passed** (P3.500 retry emit now used). `wj-notes-api` still **2** E0308.
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3508`
+- `cargo test --release --lib -- mixed_demoted_str_then_owned_string_empty_lits_must_own no_emit_flags_borrowed_wj_string_must_not_invent_owned mixed_demoted_method_later_owned_string_is_not_str_ref` → **3 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- string_literal set_bool empty_lits handle_forward handle_request_empty demoted_method spawn_closure mpsc_sync_channel` → **73 passed / 0 failed**
+- Product `notes_api_product_remaining_e0308` still RED on `&mut query` (separate E0308).
 
 ## P3.507 (2026-09-27) — WDB-411 u32 `while i < count` must not infer i32
 

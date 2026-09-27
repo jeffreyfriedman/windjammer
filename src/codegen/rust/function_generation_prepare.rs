@@ -11450,6 +11450,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Inner type for a codegen-confirmed shared-ref formal. WJ `string` demotes
+    /// to Rust `&str` (`Reference(Custom("str"))`), not `Reference(String)`.
+    fn demoted_shared_ref_inner_type(param_ty: &Type) -> Type {
+        if crate::codegen::rust::types::is_windjammer_text_type(param_ty)
+            && !matches!(param_ty, Type::Reference(_) | Type::MutableReference(_))
+        {
+            Type::Custom("str".into())
+        } else {
+            param_ty.clone()
+        }
+    }
+
     /// Align method registry with emitted Rust formals (`&Key`, `&str`, etc.) so later
     /// call sites in the same crate see converged borrow signatures.
     pub(in crate::codegen::rust) fn refresh_method_registry_from_emitted_formals(
@@ -11491,12 +11503,17 @@ impl<'ast> CodeGenerator<'ast> {
                             sig.param_ownership[param_idx] =
                                 crate::analyzer::OwnershipMode::MutBorrowed;
                         }
-                    } else if self.emitted_rust_ref_formals.contains(&param.name)
-                        || self.str_ref_optimized_params.contains(&param.name)
-                    {
-                        if !matches!(sig.param_types[param_idx], Type::Reference(_)) {
-                            sig.param_types[param_idx] =
-                                Type::Reference(Box::new(param.type_.clone()));
+                    } else if self.emitted_rust_ref_formals.contains(&param.name) {
+                        let inner = Self::demoted_shared_ref_inner_type(&param.type_);
+                        if !matches!(&sig.param_types[param_idx], Type::Reference(_))
+                            || (crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+                                && !matches!(
+                                    &sig.param_types[param_idx],
+                                    Type::Reference(inner)
+                                        if matches!(&**inner, Type::Custom(n) if n == "str")
+                                ))
+                        {
+                            sig.param_types[param_idx] = Type::Reference(Box::new(inner));
                         }
                         if param_idx < sig.param_ownership.len() {
                             sig.param_ownership[param_idx] =
@@ -11536,10 +11553,10 @@ impl<'ast> CodeGenerator<'ast> {
                     if user_param_idx < ms_emitted.len() {
                         // Shared `&T` only; `&mut T` is tracked via param_ownership MutBorrowed
                         // and `function_emitted_mut_arg_indices`.
-                        ms_emitted[user_param_idx] =
-                            (self.emitted_rust_ref_formals.contains(&param.name)
-                                || self.str_ref_optimized_params.contains(&param.name))
-                                && !self.inferred_mut_borrowed_params.contains(&param.name);
+                        ms_emitted[user_param_idx] = self
+                            .emitted_rust_ref_formals
+                            .contains(&param.name)
+                            && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;
                 }
@@ -11602,10 +11619,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 let reg_idx = updated.param_types.len();
                 updated.param_types.push(
-                    if self.emitted_rust_ref_formals.contains(&param.name)
-                        || self.str_ref_optimized_params.contains(&param.name)
-                    {
-                        Type::Reference(Box::new(param.type_.clone()))
+                    if self.emitted_rust_ref_formals.contains(&param.name) {
+                        Type::Reference(Box::new(Self::demoted_shared_ref_inner_type(
+                            &param.type_,
+                        )))
                     } else {
                         param.type_.clone()
                     },
@@ -11613,9 +11630,7 @@ impl<'ast> CodeGenerator<'ast> {
                 updated.param_ownership.push(
                     if self.inferred_mut_borrowed_params.contains(&param.name) {
                         crate::analyzer::OwnershipMode::MutBorrowed
-                    } else if self.emitted_rust_ref_formals.contains(&param.name)
-                        || self.str_ref_optimized_params.contains(&param.name)
-                    {
+                    } else if self.emitted_rust_ref_formals.contains(&param.name) {
                         crate::analyzer::OwnershipMode::Borrowed
                     } else {
                         crate::analyzer::OwnershipMode::Owned
@@ -11639,9 +11654,9 @@ impl<'ast> CodeGenerator<'ast> {
             };
             if reg_idx < emitted.len() {
                 // Align with `MethodSignature::emitted_rust_ref_params` (ms_emitted above):
-                // both codegen-confirmed `emitted_rust_ref_formals` and body-converged
-                // `str_ref_optimized_params` mark shared `&str` emission. Either alone
-                // without the other is insufficient for owned `String` formals.
+                // only codegen-confirmed `emitted_rust_ref_formals` mark shared `&str`.
+                // Body-converged `str_ref_optimized_params` without an emitted `&T`
+                // must not poison later owned `String` slots (notes-api `handle`).
                 // Trait-impl bare `string` formals always emit `String` (match the trait);
                 // discard-only analysis must not claim shared-ref (P3.308 → `&_temp0`).
                 let trait_keeps_owned_string = self.in_trait_impl
@@ -11652,8 +11667,7 @@ impl<'ast> CodeGenerator<'ast> {
                             | crate::parser::Type::MutableReference(_)
                     );
                 let emits_shared_ref = !trait_keeps_owned_string
-                    && (self.emitted_rust_ref_formals.contains(&param.name)
-                        || self.str_ref_optimized_params.contains(&param.name))
+                    && self.emitted_rust_ref_formals.contains(&param.name)
                     && !self.inferred_mut_borrowed_params.contains(&param.name);
                 emitted[reg_idx] = emits_shared_ref;
             }

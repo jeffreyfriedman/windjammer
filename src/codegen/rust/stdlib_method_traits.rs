@@ -536,6 +536,23 @@ pub fn method_arg_expects_rust_str_ref_qualified(
 /// Whether a method argument expects `&str` in Rust (from a resolved signature).
 pub fn method_arg_expects_rust_str_ref_from_sig(sig: &FunctionSignature, arg_index: usize) -> bool {
     let idx = sig.arg_param_index(arg_index);
+    // Emit-owned / plain WJ `string` that did not lower to `&str` must not be
+    // treated as Pattern/`&str` just because multipass left `Reference(str)`
+    // (notes-api `handle(method: &str, origin: String)` after sibling demote).
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, idx) {
+        return false;
+    }
+    // Only deny Pattern/`&str` from a bare WJ `string` formal when emit flags
+    // confirm this slot stayed owned. Missing flags must not hide a demoted
+    // `&str` (set_bool / record_section_frame_ms before caller refresh).
+    if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(sig, idx)
+        && sig.emitted_rust_ref_params.is_some()
+        && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx)
+        && !(sig.has_self_receiver
+            && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, arg_index))
+    {
+        return false;
+    }
     sig.param_types.get(idx).is_some_and(is_str_reference)
 }
 
@@ -1580,6 +1597,47 @@ mod pattern_registry_tests {
             &reg
         ));
         assert!(method_returns_iterable_qualified("iter", Some("Vec"), &reg));
+    }
+
+    #[test]
+    fn mixed_demoted_method_later_owned_string_is_not_str_ref() {
+        let sig = FunctionSignature {
+            name: "App::handle".into(),
+            param_types: vec![
+                Type::Custom("App".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![
+                Type::Custom("App".into()),
+                Type::String,
+                Type::String,
+                Type::String,
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+            ],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, true, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert!(
+            method_arg_expects_rust_str_ref_from_sig(&sig, 0),
+            "demoted method slot is &str"
+        );
+        assert!(
+            !method_arg_expects_rust_str_ref_from_sig(&sig, 2),
+            "later owned String must not be Pattern/&str despite stale Reference(str)"
+        );
     }
 
     #[test]

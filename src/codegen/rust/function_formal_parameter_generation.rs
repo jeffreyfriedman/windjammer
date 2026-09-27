@@ -730,6 +730,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.str_ref_optimized_params.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());
                     self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
                     return format!("{}: &str", param.name);
                 }
                 // Associated static helpers (`Self::extract_extension(path)`) that only
@@ -779,6 +780,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.str_ref_optimized_params.insert(param.name.clone());
                     self.inferred_borrowed_params.insert(param.name.clone());
                     self.inferred_mut_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.insert(param.name.clone());
                     return format!("{}: &str", param.name);
                 }
                 // Pub helpers forwarding into owned builder methods (`grid` → `value_html`).

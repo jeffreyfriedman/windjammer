@@ -137,9 +137,10 @@ pub fn handle_request(method: string, path: string, body: string) -> string {
     let api_rs = fs::read_to_string(out.join("domain").join("api.rs")).unwrap_or_default();
     eprintln!("api.rs:\n{api_rs}");
     assert!(
-        !api_rs.contains("path, \"\", \"\", \"\"")
-            && !api_rs.contains("body, \"\"")
-            && !api_rs.contains("body,\"\""),
+        !api_rs.contains("path, \"\", \"\", \"\", 0")
+            && !api_rs.contains("body, \"\")")
+            && !api_rs.contains("body,\"\")")
+            && api_rs.contains("\"\".to_string()"),
         "hex NotesApp handle_request / handle_method must own empty literals:\n{api_rs}"
     );
 
