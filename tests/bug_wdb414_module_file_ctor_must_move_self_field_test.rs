@@ -27,7 +27,7 @@ use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub struct Scene {
-    pub n: i32,
+    pub label: string,
 }
 
 pub struct Vox {
@@ -48,7 +48,7 @@ pub struct Demo {
 impl Demo {
     pub fn initialize(self) {
         let v = Vox::new(self.scene)
-        self.grid = v.scene.n
+        self.grid = 1
     }
 }
 "#;
