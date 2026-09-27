@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.509 (2026-09-27) — TDD WDB-412 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-412 MultiFile | ⏳ TDD — `contains_name(pb.metas, "w")` must not emit `pb.metas.clone()` |
+| WDB-412 tip-out | ⏳ TDD — `binding_metas_contain_name(pb.binding_metas.clone(), …)` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why this is a new class:**
+- WDB-410 is **owned-self wither reconstruct**. This is a **read-only `for` Vec formal** that stays owned, forcing **`pb.binding_metas.clone()` at the call site**.
+- WDB-407 is `Vec` `new`. WDB-378 is indexed `src[i].clone().field`.
+
+**What became unnecessary:** refiling WDB-410; reusing P3.508 (notes-api empty lits) / WDB-411.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb412_` — results after TDD this session.
+
 ## P3.508 (2026-09-27) — demoted method then owned empty lits must own (notes-api handle_request)
 
 | Gate | Status |
@@ -25,7 +43,8 @@
 - `wj-retry` tip rebuild: `while now < (deadline as i64)` (P3.500 GREEN). Fetch re-dogfood after cache prune.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3507`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- demoted_method_then_owned_empty_lits handle_request_empty_lits_hex` — expected **0 passed / 2 failed** (TDD RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- demoted_method_then_owned_empty_lits handle_request_empty_lits_hex` → **0 passed / 2 failed** (0.47s after 328s compile; TDD RED).
+- Ecosystem: `apps/wj-fetch` `$WJ test` → **31 passed** (P3.500 retry emit now used). `wj-notes-api` still **2** E0308.
 
 ## P3.507 (2026-09-27) — WDB-411 u32 `while i < count` must not infer i32
 
@@ -44,10 +63,10 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-410 MultiFile | ⏳ TDD — owned-self wither must move `self.items` / `self.graph` / `self.label` |
-| WDB-410 tip-out | ⏳ TDD — `PassBuilder` `self.graph.clone()` / `self.bindings.clone()` |
+| WDB-410 MultiFile | ❌ isolate RED — `let mut items = self.items.clone()` + `label: self.label.clone()` |
+| WDB-410 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/shader_graph_builder.rs` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate reproduces Vec/string field clones on owned-self wither.
 
 **Why this is a new class:**
 - WDB-378 is **indexed** `src[i].clone().field` per field. This is **owned `self`** `let mut items = self.items` then reconstruct — product clones every Vec/graph field.
@@ -55,8 +74,8 @@
 
 **What became unnecessary:** refiling WDB-378/358/407/409; reusing WDB-406/408 (compiler).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` — results after TDD this session.
+**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `4b30b755`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.07s after ~4m incremental compile)
 
 ## P3.505 (2026-09-27) — demoted `&Vec<Note>` must clone on owned return (`truncate_notes`)
 
