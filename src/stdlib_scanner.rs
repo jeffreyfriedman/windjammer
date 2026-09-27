@@ -399,6 +399,16 @@ pub(crate) fn register_rust_std_boundary_signatures(registry: &mut SignatureRegi
             strings_asref_haystack_str_needle_signature(name),
         );
     }
+    // Runtime `json::{to_string,to_string_pretty}<T: Serialize>(value: T)` is by-value.
+    // A bare `to_string` homonym (`String::to_string`, `path::to_string`, first-hit
+    // method-index) must not last-write MutBorrowed onto the payload (E0596).
+    for name in ["json::to_string", "json::to_string_pretty"] {
+        registry.add_function(
+            name.to_string(),
+            json_serialize_owned_value_boundary_signature(name),
+        );
+    }
+    registry.register_runtime_std_module("json");
 }
 
 fn register_boundary_signature_alias(registry: &mut SignatureRegistry, dst: &str, src: &str) {
@@ -458,6 +468,27 @@ fn thread_spawn_boundary_signature(name: &str) -> FunctionSignature {
         formal_param_types: vec![Type::Custom("FnOnce".into())],
         param_ownership: vec![OwnershipMode::Owned],
         return_type: Some(Type::Custom("JoinHandle".into())),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: Some(vec![false]),
+        string_ref_string_formal_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
+/// Runtime `json::to_string` / `to_string_pretty`: owned `T: Serialize` (not `&mut T`).
+fn json_serialize_owned_value_boundary_signature(name: &str) -> FunctionSignature {
+    FunctionSignature {
+        name: name.to_string(),
+        param_types: vec![Type::Custom("T".into())],
+        formal_param_types: vec![Type::Custom("T".into())],
+        param_ownership: vec![OwnershipMode::Owned],
+        return_type: Some(Type::Result(
+            Box::new(Type::String),
+            Box::new(Type::String),
+        )),
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
@@ -1801,5 +1832,46 @@ mod tests {
             sig.param_ownership,
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed]
         );
+    }
+
+    #[test]
+    fn rust_std_json_to_string_boundary_is_owned_generic() {
+        let reg = SignatureRegistry::stdlib();
+        for name in ["json::to_string", "json::to_string_pretty"] {
+            let sig = reg
+                .get_signature(name)
+                .unwrap_or_else(|| panic!("missing boundary signature for {name}"));
+            assert!(
+                !sig.has_self_receiver,
+                "{name} is a free fn, got {:?}",
+                sig.param_types
+            );
+            assert_eq!(
+                sig.param_ownership,
+                vec![OwnershipMode::Owned],
+                "{name} must take T by value, not &mut T: {:?}",
+                sig.param_ownership
+            );
+            assert!(
+                !matches!(sig.param_types.first(), Some(Type::MutableReference(_))),
+                "{name} must not wrap the value as &mut T: {:?}",
+                sig.param_types
+            );
+            assert_eq!(
+                sig.emitted_rust_ref_params.as_deref(),
+                Some([false].as_slice()),
+                "{name} must record owned emission"
+            );
+            assert!(
+                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, 0),
+                "{name} must be an owned arg contract"
+            );
+            assert!(
+                !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &reg, name, Some(sig), 0
+                ),
+                "{name} must not inherit json::get / &Value auto-borrow"
+            );
+        }
     }
 }

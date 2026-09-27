@@ -787,7 +787,17 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
                 let sig = self
                     .resolve_callee_signature(&qualified, arguments.len(), true)
-                    .or_else(|| self.resolve_callee_signature(method, arguments.len(), true))
+                    .or_else(|| {
+                        // Runtime-std `json::to_string` must not fall back to the first
+                        // `*::to_string` method-index hit (often MutBorrowed self).
+                        if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(
+                            &qualified,
+                        ) {
+                            None
+                        } else {
+                            self.resolve_callee_signature(method, arguments.len(), true)
+                        }
+                    })
                     .cloned();
 
                 let mut_self = sig.as_ref().is_some_and(|s| {
