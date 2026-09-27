@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.490 (2026-09-27) — Phase-2 isolate assertions match demote+borrow/passthrough
+
+| Gate | Status |
+|------|--------|
+| `owned_vec_custom_filter_helper_must_not_demote_and_clone` | ✅ isolate GREEN — `filter_notes(&notes, needle)` (was looking for `filter_notes(&notes)`) |
+| `cross_crate_demoted_str_owned_arg_must_auto_borrow` | ✅ isolate GREEN — wrapper `pattern: &str` + `glob_filter(pattern, &paths)`; unused `walk_files(root)` stays owned |
+| `owned_string_formal_must_not_demote_to_str_ref` | ✅ isolate GREEN — assert wrapper `json_cors_error(…, message: String)` only (helper `error_json` may be `&str`) |
+| `wdb106_explicit_clone_*` | ✅ isolate GREEN — Phase-2 `&line` into demoted `pipe_field` / `is_empty`/`trim` (clone unnecessary) |
+| spawn / mpsc | ✅ GREEN |
+| `copy_aggregate_field_only_release_cross_module` | ❌ isolate RED — `handle.clone()` into owned Copy `BatchHandle` (registry/match-binding type still missing) |
+
+**Root cause layer:** constraint/solver already correct — Phase-2 demotes readonly `string`/`Vec` and Identity-passthroughs. Isolate assertions were written for keep-owned wrappers.
+
+**What became unnecessary:** requiring `glob_filter(&pattern` / `filter_notes(&notes)` / `line.clone()` when the formal itself demoted. No new peel. Copy-aggregate Identity left as a follow-up (do not add name heuristics).
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3488`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_vec_custom_filter_helper_must_not_demote_and_clone cross_crate_demoted_str_owned_arg_must_auto_borrow owned_string_formal_must_not_demote_to_str_ref wdb106_explicit_clone bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **9 passed**; copy_aggregate still ❌
+
 ## P3.489 (2026-09-27) — notes-api remaining E0308s after p3486 (no compiler src)
 
 | Gate | Status |

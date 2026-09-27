@@ -48,9 +48,13 @@ pub fn parse_two_fields(line: string) -> (string, string) {
 "#;
 
     let rs = test_utils::compile_single(source);
+    // Phase-2 may demote `pipe_field(line: string)` to `&str`; then
+    // `pipe_field(&line, …)` twice is Identity (no clone). Otherwise the
+    // explicit clone before the second owned use must survive.
+    let demoted = rs.contains("line: &str");
     assert!(
-        rs.contains("line.clone()"),
-        "WDB-106: explicit clone before second use of owned string must emit. Got:\n{rs}"
+        demoted || rs.contains("line.clone()"),
+        "WDB-106: demote callee to &str or emit explicit clone before second use. Got:\n{rs}"
     );
 }
 
@@ -67,11 +71,13 @@ pub fn use_after_empty_check(line: string) -> bool {
 "#;
 
     let rs = test_utils::compile_single(source);
-    // Read-only path may demote `line: string` → `&str` (no move); otherwise an
-    // explicit clone before the consuming `trim` must survive codegen (WDB-106).
+    // Phase-2: stdlib `is_empty`/`trim` take `&str`. Owned `line: String` plus
+    // `is_empty(&line)` / `trim(&line)` is Identity — no clone. Otherwise demote
+    // the formal or keep the explicit clone.
     let demoted = rs.contains("line: &str");
+    let borrowed = rs.contains("is_empty(&line)") || rs.contains("trim(&line)");
     assert!(
-        demoted || rs.contains("line.clone()"),
-        "WDB-106: demote to &str or emit explicit clone before move. Got:\n{rs}"
+        demoted || borrowed || rs.contains("line.clone()"),
+        "WDB-106: demote, borrow into &str, or emit explicit clone. Got:\n{rs}"
     );
 }
