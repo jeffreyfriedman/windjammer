@@ -47,7 +47,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when `let mut x = …` seeds a numeric counter from an int literal (not collections).
-    pub(in crate::codegen::rust) fn mut_let_rhs_is_return_width_counter(value: &Expression) -> bool {
+    pub(in crate::codegen::rust) fn mut_let_rhs_is_return_width_counter(
+        value: &Expression,
+    ) -> bool {
         match value {
             Expression::Literal {
                 value: crate::parser::Literal::Int(_),
@@ -94,7 +96,8 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int32 => Type::Int32,
             Type::Int => Type::Int,
             Type::Uint => Type::Uint,
-            Type::Bool | Type::String => Type::Int,
+            Type::Bool | Type::String | Type::Float => Type::Int,
+            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64" | "float") => Type::Int,
             Type::Custom(name)
                 if matches!(
                     name.as_str(),
@@ -141,7 +144,8 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int32 => Type::Int32,
             Type::Int => Type::Int,
             Type::Uint => Type::Uint,
-            Type::Bool | Type::String => Type::Int,
+            Type::Bool | Type::String | Type::Float => Type::Int,
+            Type::Custom(name) if matches!(name.as_str(), "f32" | "f64" | "float") => Type::Int,
             Type::Custom(name)
                 if matches!(
                     name.as_str(),
@@ -176,8 +180,7 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         };
         fields.values().any(|t| {
-            matches!(t, Type::Int)
-                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+            matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
         })
     }
 
@@ -189,7 +192,9 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(fields) = self.lookup_struct_field_types(base) else {
             return false;
         };
-        fields.values().any(|t| matches!(t, Type::Vec(_) | Type::Array(_, _)))
+        fields
+            .values()
+            .any(|t| matches!(t, Type::Vec(_) | Type::Array(_, _)))
     }
 
     /// P3.353: void builders / narrow-return fns default coordinate locals to i32/u32 width.
@@ -200,7 +205,8 @@ impl<'ast> CodeGenerator<'ast> {
         match Self::peel_option_result_payload(rt) {
             Type::Int32 | Type::Uint => true,
             Type::Custom(n) if matches!(n.as_str(), "i32" | "u32") => true,
-            Type::Int | Type::Bool | Type::String => false,
+            Type::Int | Type::Bool | Type::String | Type::Float => false,
+            Type::Custom(n) if matches!(n.as_str(), "f32" | "f64" | "float") => false,
             Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "u64" | "usize" | "isize") => {
                 false
             }
@@ -214,9 +220,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // `Vec<int>` / `HashMap<…, int>` channel/pool payloads — keep i64 peers
             // (`pool_run_double` → `v * 2` not `v * 2_i32`).
-            Type::Vec(inner) | Type::Array(inner, _) => {
-                !self.type_contains_wj_int_width(inner)
-            }
+            Type::Vec(inner) | Type::Array(inner, _) => !self.type_contains_wj_int_width(inner),
             Type::Parameterized(name, args)
                 if matches!(
                     name.as_str(),
@@ -234,7 +238,14 @@ impl<'ast> CodeGenerator<'ast> {
     fn type_contains_wj_int_width(&self, t: &Type) -> bool {
         match Self::peel_option_result_payload(t) {
             Type::Int => true,
-            Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "SharedInt" | "Counter" | "AtomicI64") => true,
+            Type::Custom(n)
+                if matches!(
+                    n.as_str(),
+                    "int" | "i64" | "SharedInt" | "Counter" | "AtomicI64"
+                ) =>
+            {
+                true
+            }
             Type::Custom(n) if self.struct_fields_include_wj_int(n) => true,
             Type::Tuple(elems) => elems.iter().any(|e| self.type_contains_wj_int_width(e)),
             Type::Vec(inner) | Type::Array(inner, _) => self.type_contains_wj_int_width(inner),
@@ -245,31 +256,29 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// P3.335: `-> i32` scan loops keep `i32` counters vs `.len()`.
     pub(in crate::codegen::rust) fn function_returns_i32_for_loop_scan(&self) -> bool {
-        self.current_function_return_type.as_ref().is_some_and(|rt| {
-            match Self::peel_option_result_payload(rt) {
+        self.current_function_return_type
+            .as_ref()
+            .is_some_and(|rt| match Self::peel_option_result_payload(rt) {
                 Type::Int32 => true,
                 Type::Custom(n) => n == "i32",
                 _ => false,
-            }
-        })
+            })
     }
 
     /// WDB-308: `-> u32` CLI/parse loops keep `u32` counters vs `.len()` / `args[i]`.
     /// Without this, index analysis marks the counter as usize → `let mut i: u32 = 0_usize`.
     pub(in crate::codegen::rust) fn function_returns_u32_for_loop_scan(&self) -> bool {
-        self.current_function_return_type.as_ref().is_some_and(|rt| {
-            match Self::peel_option_result_payload(rt) {
+        self.current_function_return_type
+            .as_ref()
+            .is_some_and(|rt| match Self::peel_option_result_payload(rt) {
                 Type::Uint => true,
                 Type::Custom(n) => n == "u32",
                 _ => false,
-            }
-        })
+            })
     }
 
     /// Whether `assignment_int_target_type` should drive int literal suffixes on the RHS.
-    pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(
-        ty: &Type,
-    ) -> bool {
+    pub(in crate::codegen::rust) fn assignment_target_needs_int_codegen_context(ty: &Type) -> bool {
         match ty {
             Type::Reference(inner) | Type::MutableReference(inner) => {
                 Self::assignment_target_needs_int_codegen_context(inner)
@@ -372,12 +381,19 @@ impl<'ast> CodeGenerator<'ast> {
         value_str: &str,
     ) -> bool {
         use crate::parser::{Expression, Literal};
-        matches!(value, Expression::Literal { value: Literal::Int(_), .. })
-            && !value_str.contains('_')
+        matches!(
+            value,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ) && !value_str.contains('_')
             && !value_str.contains(" as ")
     }
 
-    pub(in crate::codegen::rust) fn strip_compound_assign_int_literal_suffix(value_str: &str) -> String {
+    pub(in crate::codegen::rust) fn strip_compound_assign_int_literal_suffix(
+        value_str: &str,
+    ) -> String {
         if let Some(stripped) = value_str
             .strip_suffix("_i64")
             .or_else(|| value_str.strip_suffix("_u64"))
@@ -628,9 +644,7 @@ impl<'ast> CodeGenerator<'ast> {
             if matches!(&ty, Type::Custom(n) if n == "f32") {
                 return Some(ty);
             }
-            if matches!(&ty, Type::Float)
-                && self.expr_has_f32_arithmetic_context(expr)
-            {
+            if matches!(&ty, Type::Float) && self.expr_has_f32_arithmetic_context(expr) {
                 return Some(Type::Custom("f32".into()));
             }
             if crate::codegen::rust::type_classification_utilities::is_float_type(&ty) {
@@ -643,7 +657,9 @@ impl<'ast> CodeGenerator<'ast> {
     fn expr_has_f32_arithmetic_context(&self, expr: &Expression<'ast>) -> bool {
         use crate::parser::ast::operators::BinaryOp;
         match expr {
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 if !matches!(
                     op,
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div
@@ -816,9 +832,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let is_string = matches!(elem_type, Some(Type::String))
             || matches!(elem_type, Some(Type::Custom(ref n)) if n == "string");
-        if !is_string
-            && (value_str.ends_with(".clone()") || value_str.ends_with(".to_string()"))
-        {
+        if !is_string && (value_str.ends_with(".clone()") || value_str.ends_with(".to_string()")) {
             return;
         }
 

@@ -2875,9 +2875,16 @@ impl<'ast> CodeGenerator<'ast> {
                 } => {
                     if let Expression::Identifier { name, .. } = iterable {
                         if name == param_name {
-                            // `for i in items { ... *i ... }` is borrowed iteration, not a move.
+                            // `for i in items { ... *i ... }` and field-read scans
+                            // (`for m in metas { m.name == needle }`) are borrowed
+                            // iteration (WDB-412), not a move of the Vec.
                             if let Pattern::Identifier(loop_var) = pattern {
-                                if Self::statements_deref_identifier(loop_var, body.as_slice()) {
+                                if Self::statements_deref_identifier(loop_var, body.as_slice())
+                                    || Self::for_loop_var_only_borrowed_reads(
+                                        loop_var,
+                                        body.as_slice(),
+                                    )
+                                {
                                     // fall through — not consumed
                                 } else {
                                     return true;
@@ -2923,6 +2930,146 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         false
+    }
+
+    /// Loop variable is only borrowed: field/method reads, not moved as a value
+    /// (`for m in metas { if m.name == needle }` — WDB-412).
+    fn for_loop_var_only_borrowed_reads(name: &str, statements: &[&Statement<'ast>]) -> bool {
+        !statements
+            .iter()
+            .any(|stmt| Self::statement_moves_for_loop_var(name, stmt))
+            && statements
+                .iter()
+                .any(|stmt| Self::for_loop_stmt_mentions_var(name, stmt))
+    }
+
+    fn statement_moves_for_loop_var(name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Let { value: expr, .. }
+            | Statement::Assignment { value: expr, .. } => {
+                Self::expr_moves_for_loop_var(name, expr)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::expr_moves_for_loop_var(name, condition)
+                    || then_block
+                        .iter()
+                        .any(|s| Self::statement_moves_for_loop_var(name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| Self::statement_moves_for_loop_var(name, s))
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                Self::expr_moves_for_loop_var(name, condition)
+                    || body
+                        .iter()
+                        .any(|s| Self::statement_moves_for_loop_var(name, s))
+            }
+            Statement::For { iterable, body, .. } => {
+                Self::expr_moves_for_loop_var(name, iterable)
+                    || body
+                        .iter()
+                        .any(|s| Self::statement_moves_for_loop_var(name, s))
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::expr_moves_for_loop_var(name, value)
+                    || arms.iter().any(|arm| match arm.body {
+                        Expression::Block { statements, .. } => statements
+                            .iter()
+                            .any(|s| Self::statement_moves_for_loop_var(name, s)),
+                        other => Self::expr_moves_for_loop_var(name, other),
+                    })
+            }
+            Statement::Return { value: None, .. } => false,
+            _ => false,
+        }
+    }
+
+    fn expr_moves_for_loop_var(name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::FieldAccess { object, .. } | Expression::MethodCall { object, .. } => {
+                Self::expr_moves_for_loop_var_in_object(name, object)
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::expr_moves_for_loop_var(name, left)
+                    || Self::expr_moves_for_loop_var(name, right)
+            }
+            Expression::Unary { operand, .. } => Self::expr_moves_for_loop_var(name, operand),
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| Self::expr_moves_for_loop_var(name, arg)),
+            Expression::Index { object, index, .. } => {
+                Self::expr_moves_for_loop_var(name, object)
+                    || Self::expr_moves_for_loop_var(name, index)
+            }
+            _ => false,
+        }
+    }
+
+    /// Field/method receiver is a borrow, not a move of the loop var.
+    fn expr_moves_for_loop_var_in_object(name: &str, object: &Expression<'ast>) -> bool {
+        match object {
+            Expression::Identifier { .. } => false,
+            other => Self::expr_moves_for_loop_var(name, other),
+        }
+    }
+
+    fn for_loop_stmt_mentions_var(name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Let { value: expr, .. }
+            | Statement::Assignment { value: expr, .. } => {
+                Self::for_loop_expr_mentions_var(name, expr)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::for_loop_expr_mentions_var(name, condition)
+                    || then_block
+                        .iter()
+                        .any(|s| Self::for_loop_stmt_mentions_var(name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter().any(|s| Self::for_loop_stmt_mentions_var(name, s))
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn for_loop_expr_mentions_var(name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { name: id, .. } => id == name,
+            Expression::FieldAccess { object, .. } | Expression::MethodCall { object, .. } => {
+                Self::for_loop_expr_mentions_var(name, object)
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::for_loop_expr_mentions_var(name, left)
+                    || Self::for_loop_expr_mentions_var(name, right)
+            }
+            Expression::Unary { operand, .. } => Self::for_loop_expr_mentions_var(name, operand),
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| Self::for_loop_expr_mentions_var(name, arg)),
+            _ => false,
+        }
     }
 
     fn statements_deref_identifier(name: &str, statements: &[&Statement<'ast>]) -> bool {
@@ -3034,8 +3181,8 @@ impl<'ast> CodeGenerator<'ast> {
                 iterable,
                 ..
             } => {
-                // `for x in items` consumes `items` — not a readonly operand (regression-006)
-                // unless the body derefs the element (`*i` → borrowed `for i in &items`).
+                // `for x in items` consumes `items` unless the body only borrows
+                // elements (`*i` or field/method reads — WDB-412).
                 let iterable_consumes = matches!(
                     iterable,
                     Expression::Identifier { name, .. } if name == param_name
@@ -3043,6 +3190,7 @@ impl<'ast> CodeGenerator<'ast> {
                     pattern,
                     Pattern::Identifier(loop_var)
                         if Self::statements_deref_identifier(loop_var, body.as_slice())
+                            || Self::for_loop_var_only_borrowed_reads(loop_var, body.as_slice())
                 );
                 (!iterable_consumes
                     && self.expression_uses_param_as_read_operand(iterable, param_name))
@@ -11553,10 +11701,9 @@ impl<'ast> CodeGenerator<'ast> {
                     if user_param_idx < ms_emitted.len() {
                         // Shared `&T` only; `&mut T` is tracked via param_ownership MutBorrowed
                         // and `function_emitted_mut_arg_indices`.
-                        ms_emitted[user_param_idx] = self
-                            .emitted_rust_ref_formals
-                            .contains(&param.name)
-                            && !self.inferred_mut_borrowed_params.contains(&param.name);
+                        ms_emitted[user_param_idx] =
+                            self.emitted_rust_ref_formals.contains(&param.name)
+                                && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;
                 }
@@ -11618,15 +11765,13 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 }
                 let reg_idx = updated.param_types.len();
-                updated.param_types.push(
-                    if self.emitted_rust_ref_formals.contains(&param.name) {
-                        Type::Reference(Box::new(Self::demoted_shared_ref_inner_type(
-                            &param.type_,
-                        )))
+                updated
+                    .param_types
+                    .push(if self.emitted_rust_ref_formals.contains(&param.name) {
+                        Type::Reference(Box::new(Self::demoted_shared_ref_inner_type(&param.type_)))
                     } else {
                         param.type_.clone()
-                    },
-                );
+                    });
                 updated.param_ownership.push(
                     if self.inferred_mut_borrowed_params.contains(&param.name) {
                         crate::analyzer::OwnershipMode::MutBorrowed

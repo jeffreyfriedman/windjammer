@@ -261,27 +261,29 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // P3.280: `let cx = VIEWER_GRID / 2` — Binary must prefer module-const /
                     // param width (i32) over default WJ `int` from a Literal sibling.
-                    Expression::Binary { left, right, op, .. }
-                        if matches!(
-                            op,
-                            crate::parser::BinaryOp::Add
-                                | crate::parser::BinaryOp::Sub
-                                | crate::parser::BinaryOp::Mul
-                                | crate::parser::BinaryOp::Div
-                                | crate::parser::BinaryOp::Mod
-                                | crate::parser::BinaryOp::BitAnd
-                                | crate::parser::BinaryOp::BitOr
-                                | crate::parser::BinaryOp::BitXor
-                                | crate::parser::BinaryOp::Shl
-                                | crate::parser::BinaryOp::Shr
-                        ) =>
+                    Expression::Binary {
+                        left, right, op, ..
+                    } if matches!(
+                        op,
+                        crate::parser::BinaryOp::Add
+                            | crate::parser::BinaryOp::Sub
+                            | crate::parser::BinaryOp::Mul
+                            | crate::parser::BinaryOp::Div
+                            | crate::parser::BinaryOp::Mod
+                            | crate::parser::BinaryOp::BitAnd
+                            | crate::parser::BinaryOp::BitOr
+                            | crate::parser::BinaryOp::BitXor
+                            | crate::parser::BinaryOp::Shl
+                            | crate::parser::BinaryOp::Shr
+                    ) =>
                     {
                         let l = self.infer_expression_type(left);
                         let r = self.infer_expression_type(right);
                         match (l, r) {
-                            (Some(a), Some(b)) if a == b
-                                && matches!(a, Type::Int)
-                                && self.function_prefers_i32_coord_locals() =>
+                            (Some(a), Some(b))
+                                if a == b
+                                    && matches!(a, Type::Int)
+                                    && self.function_prefers_i32_coord_locals() =>
                             {
                                 Some(Type::Int32)
                             }
@@ -524,13 +526,10 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
-                } else if mutable
-                    && Self::mut_let_rhs_is_return_width_counter(value)
-                {
+                } else if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
                     // WDB-305: later `x = u32` assign beats return-width i64 for untyped counters.
-                    let later_peer = var_name.and_then(|vn| {
-                        self.mut_int_local_peer_width_from_later_assigns(vn)
-                    });
+                    let later_peer = var_name
+                        .and_then(|vn| self.mut_int_local_peer_width_from_later_assigns(vn));
                     // WDB-308: `-> u32` / later u32 peer wins over `.len()` usize marking.
                     // WDB-361: `.len()` while-counters win over `-> i32` / later i32 peer.
                     let prefer_usize_over_i32 = var_name
@@ -562,10 +561,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 if var_name.is_some_and(|vn| self.usize_variables.contains(vn)) {
                                     output.push_str(": usize");
                                     if let Some(vn) = var_name {
-                                        self.local_var_types.insert(
-                                            vn.to_string(),
-                                            Type::Custom("usize".into()),
-                                        );
+                                        self.local_var_types
+                                            .insert(vn.to_string(), Type::Custom("usize".into()));
                                     }
                                 } else {
                                     output.push_str(": i32");
@@ -588,15 +585,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 // WDB-361: `-> i32` often arrives as Custom("i32"); prefer
                                 // usize for `.len()` while-counters. WDB-308: `-> u32` stays u32.
                                 if n == "i32"
-                                    && var_name
-                                        .is_some_and(|vn| self.usize_variables.contains(vn))
+                                    && var_name.is_some_and(|vn| self.usize_variables.contains(vn))
                                 {
                                     output.push_str(": usize");
                                     if let Some(vn) = var_name {
-                                        self.local_var_types.insert(
-                                            vn.to_string(),
-                                            Type::Custom("usize".into()),
-                                        );
+                                        self.local_var_types
+                                            .insert(vn.to_string(), Type::Custom("usize".into()));
                                     }
                                 } else {
                                     output.push_str(": ");
@@ -631,8 +625,7 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let prev_assign_int = self.assignment_int_target_type.take();
                 if let Some(vn) = var_name {
-                    if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn)
-                    {
+                    if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
                         self.assignment_int_target_type = Some(peer.clone());
                         self.local_var_types.insert(vn.to_string(), peer.clone());
                         if matches!(peer, Type::Int32) {
@@ -668,15 +661,23 @@ impl<'ast> CodeGenerator<'ast> {
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && self.function_returns_i32_for_loop_scan()
                     && !len_while_usize_counter;
+                let u32_while_peer_counter = mutable
+                    && Self::mut_let_rhs_is_return_width_counter(value)
+                    && var_name.is_some_and(|n| {
+                        self.let_binding_int_width_from_later_while_compare(n)
+                            .is_some_and(|t| {
+                                matches!(t, Type::Uint)
+                                    || matches!(t, Type::Custom(ref w) if w == "u32")
+                            })
+                    });
                 let u32_return_scan_counter = mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && (self.function_returns_u32_for_loop_scan()
+                        || u32_while_peer_counter
                         || self.assignment_int_target_type.as_ref().is_some_and(|t| {
-                            matches!(t, Type::Uint)
-                                || matches!(t, Type::Custom(n) if n == "u32")
+                            matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
                         }));
-                if len_while_usize_counter && !u32_return_scan_counter && !i32_return_scan_counter
-                {
+                if len_while_usize_counter && !u32_return_scan_counter && !i32_return_scan_counter {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }
                 if i32_return_scan_counter {
@@ -743,13 +744,11 @@ impl<'ast> CodeGenerator<'ast> {
                             if self.explicit_wj_int_annotated_locals.contains(vn) {
                                 return true;
                             }
-                            matches!(
-                                self.local_var_types.get(vn),
-                                Some(Type::Int)
-                            ) || matches!(
-                                self.local_var_types.get(vn),
-                                Some(Type::Custom(n)) if n == "int" || n == "i64"
-                            )
+                            matches!(self.local_var_types.get(vn), Some(Type::Int))
+                                || matches!(
+                                    self.local_var_types.get(vn),
+                                    Some(Type::Custom(n)) if n == "int" || n == "i64"
+                                )
                         });
                     let peer = if wj_int_slot {
                         Type::Int

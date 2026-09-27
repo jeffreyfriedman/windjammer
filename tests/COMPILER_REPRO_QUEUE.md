@@ -1,22 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.509 (2026-09-27) — TDD WDB-412 (DB agent; no compiler src)
+## P3.509 (2026-09-27) — WDB-412 read-only `for` Vec formal must borrow
 
 | Gate | Status |
 |------|--------|
-| WDB-412 MultiFile | ❌ isolate RED — `contains_name(pb.metas.clone(), "w")` with `metas: Vec<Meta>` |
-| WDB-412 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/shader_graph_builder.rs` `pb.binding_metas.clone()` |
+| WDB-412 MultiFile | ✅ isolate GREEN — `contains_name(&pb.metas, "w")`; `metas: &Vec<Meta>` |
+| WDB-412 tip-out | ⚠️ product — stale `rel_tip_out` / `gen` still has `pb.binding_metas.clone()` (regen, not isolate) |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate reproduces field.clone() into a read-only consume-iter Vec formal.
+**Root cause layer:** signature — `for m in metas { m.name == needle }` was classified as a Vec consume (`param_consumed_as_for_loop_iterable` / For-arm read operand). Field/method-only loop-var reads are borrowed iteration, so the Vec formal demotes to `&Vec` and call sites borrow the field twice without `.clone()`.
 
 **Why this is a new class:**
-- WDB-410 is **owned-self wither reconstruct**. This is a **read-only `for` Vec formal** that stays owned, forcing **`pb.binding_metas.clone()` at the call site**.
+- WDB-410 is **owned-self wither reconstruct**. This is a **read-only `for` Vec formal** that stayed owned, forcing **`pb.binding_metas.clone()` at the call site**.
 - WDB-407 is `Vec` `new`. WDB-378 is indexed `src[i].clone().field`.
+- regression-006 still consumes `for x in items` when the element is moved.
 
-**What became unnecessary:** refiling WDB-410; reusing P3.508 (notes-api empty lits) / WDB-411.
+**What became unnecessary:** treating field-read `for m in metas` as consume; call-site `field.clone()` into an owned Vec formal.
 
-**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `36d6f931`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb412_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.06s after ~4m incremental compile)
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3510`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb411_module_file_u32_count_while wdb412_module_file_readonly_vec_formal` → isolate **2 passed**; tip-out scanner still RED (product)
 
 ## P3.508 (2026-09-27) — demoted method then owned empty lits must own (notes-api handle_request)
 
@@ -51,14 +52,15 @@
 
 | Gate | Status |
 |------|--------|
-| `wdb411_module_file_u32_count_while_must_not_infer_i32` | ❌ isolate RED — `is_black` stays `0_u32`; `average_brightness` (`-> f32` + `if count == 0`) emits `let mut i: i32 = 0_i32` |
+| `wdb411_module_file_u32_count_while_must_not_infer_i32` | ✅ isolate GREEN — `average_brightness` emits `let mut i = 0_u32`; cargo check |
 
-**Root cause layer:** constraint — `function_prefers_i32_coord_locals` / void-builder poisons `let mut i = 0` to i32 even when the compare peer is u32 (`frame.pixel_count()`). P3.348 isolate omitted f32/`as i64` and stayed u32.
+**Root cause layer:** constraint — `function_prefers_i32_coord_locals` / `int_width_hint_*` treated `-> f32` like a void builder (`_ => true` / `_ => Int32`), so `let mut i = 0` became i32 before `while i < count` (u32 `pixel_count`). Float returns now match Bool/Int (not i32-coord). Complementary: later-while u32 peer wins even if a coord default remains (same path as WDB-308 `-> u32` scan). P3.348 isolate omitted `-> f32` / early `count == 0` and stayed u32.
 
-**What became unnecessary:** recasting product `count` to i32; refiling P3.348.
+**What became unnecessary:** recasting product `count` to i32; refiling P3.348; i32 coord default on f32-return luminance loops.
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3507`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb411_module_file_u32_count_while`
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3510` — watched RED `let mut i: i32 = 0_i32`; after fix `0_u32`; `cargo check` **ok**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb411_module_file_u32_count_while` → isolate **GREEN**
+- re-ran `CARGO_TARGET_DIR=…/agent-tdd-p3501` → **1 passed** (8.29s after 3m28s). Engine leftover after 406/408 regen: Isize vs I64 **0**, `max_depth as usize` **0**, **217** rustc errors remain (i32/u32 still 17+13 until 411 product regen).
 
 ## P3.506 (2026-09-27) — TDD WDB-410 (DB agent; no compiler src)
 

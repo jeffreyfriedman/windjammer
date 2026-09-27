@@ -759,6 +759,28 @@ impl<'ast> CodeGenerator<'ast> {
             sig = upgraded;
         }
 
+        // `app.handle(...)` is a bare method name; Type::method refresh above does not
+        // run. After `App::handle` emit, prefer its mixed `&str`+`String` flags so
+        // later empty lits own (notes-api handle_request).
+        if let Some(rt) = receiver_type_name {
+            let arg_count = user_arg_count.unwrap_or(arg_index + 1);
+            if let Some(method_sig) =
+                self.resolve_method_function_signature(rt, method_simple, arg_count)
+            {
+                let take_refresh = method_sig.emitted_rust_ref_params.is_some()
+                    && sig.as_ref().is_none_or(|local| {
+                        local.emitted_rust_ref_params.is_none()
+                            || crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
+                                &method_sig,
+                                local,
+                            )
+                    });
+                if take_refresh {
+                    sig = Some(method_sig);
+                }
+            }
+        }
+
         if let Some((receiver_ty, method)) = callee_name.rsplit_once("::") {
             // Only Type::method (uppercase receiver). Runtime modules (`strings::join`)
             // and lowercase module paths must keep the free-function / prefer-shared sig —
@@ -1839,18 +1861,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Already-owned text / literals into `&str` stay Identity (deref-coerce).
         // User-written Display `.to_string()` must keep ToOwnedString — Identity
         // then Borrow emits `&self.rows` (not `&self.rows.to_string()`).
-        // Do not undo ToOwnedString when this slot is emit-owned `String` — a sibling
-        // `&str` demote / stale shared-borrow oracle must not peel empty lits
-        // (notes-api `handle(method: &str, origin: String)`).
         if matches!(kind, CoercionKind::ToOwnedString)
             && !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
                 arg_expr,
-            )
-            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                &sig, param_idx,
-            )
-            && !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                &sig, arg_index,
             )
             && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
                 || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
@@ -3204,7 +3217,16 @@ impl<'ast> CodeGenerator<'ast> {
                     && matches!(
                         sig.param_ownership.get(param_idx),
                         Some(crate::analyzer::OwnershipMode::Borrowed)
-                    ));
+                    )
+                    && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &sig, param_idx,
+                    )
+                    && sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|f| f.get(param_idx))
+                        .copied()
+                        != Some(false));
         if callee_accepts_str_ref {
             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                 arg_expr,
@@ -3334,9 +3356,6 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             });
         let expects_str_ref = !self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
-            && !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                &sig, arg_index,
-            )
             && callee_wants_shared_ref_formal;
         if expects_str_ref {
             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
@@ -5468,12 +5487,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Pattern / `&str` formals: `"lit".to_string()` / `String::from("lit")` → `"lit"`.
-        // Do not treat stale method `Borrowed` + WJ `string` as `&str` — sibling demote
-        // leaves later owned `String` formals with Borrowed ownership (notes-api handle).
         let expects_str_ref = !self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
-            && !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
-                &text_sig, arg_index,
-            )
             && (crate::codegen::rust::string_utilities::method_call_arg_expects_pattern_str(
             simple,
             arg_index,
@@ -5491,7 +5505,16 @@ impl<'ast> CodeGenerator<'ast> {
         ) || text_sig
             .param_types
             .get(text_param_idx)
-            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref));
+            .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+            // Methods with Borrowed WJ `string` formals lower to Rust `&str`.
+            || (text_sig.has_self_receiver_slot()
+                && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    &text_sig, text_param_idx,
+                )
+                && matches!(
+                    text_sig.param_ownership.get(text_param_idx),
+                    Some(crate::analyzer::OwnershipMode::Borrowed)
+                )));
         if expects_str_ref {
             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                 arg_expr,

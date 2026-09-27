@@ -96,8 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         self.infer_expression_type(expr).is_some_and(|t| {
-            matches!(t, Type::Int)
-                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+            matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
         })
     }
 
@@ -120,15 +119,13 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if self.infer_expression_type(i64_side).is_some_and(|t| {
-            matches!(t, Type::Int)
-                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+            matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
         }) {
             return true;
         }
         if let Expression::Identifier { name, .. } = i64_side {
             if self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                matches!(t, Type::Int)
-                    || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
             }) {
                 return true;
             }
@@ -244,9 +241,11 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         if let Expression::Identifier { name, .. } = i64_side {
-            if self.current_function_params.iter().any(|p| {
-                p.name == *name && matches!(&p.type_, Type::Int)
-            }) {
+            if self
+                .current_function_params
+                .iter()
+                .any(|p| p.name == *name && matches!(&p.type_, Type::Int))
+            {
                 return false;
             }
             if self.explicit_wj_int_annotated_locals.contains(name) {
@@ -269,7 +268,10 @@ impl<'ast> CodeGenerator<'ast> {
         self.int_type_for_mixed_int_codegen(i64_side) == IntType::I32
     }
 
-    pub(in crate::codegen::rust) fn expression_is_codegen_i32(&self, expr: &Expression<'ast>) -> bool {
+    pub(in crate::codegen::rust) fn expression_is_codegen_i32(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
         if let Expression::Identifier { name, .. } = expr {
             if self.current_function_params.iter().any(|p| {
                 p.name == *name
@@ -292,12 +294,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expression_promotes_to_i32_in_compare(&self, expr: &Expression<'ast>) -> bool {
         self.int_type_for_mixed_int_codegen(expr) == IntType::I32
-            || self
-                .infer_expression_type(expr)
-                .as_ref()
-                .is_some_and(|t| {
-                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
-                })
+            || self.infer_expression_type(expr).as_ref().is_some_and(|t| {
+                matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
+            })
     }
 
     /// P3.353: after `let cx = (VIEWER_GRID as i32) / 2_i32`, keep binding width i32 for downstream ops.
@@ -372,7 +371,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // P3.329: Call/MethodCall WJ `int` results must not become usize via later
         // substring formals (`let plus_pos = find_tz_sign(...)`).
-        if matches!(value, Expression::Call { .. } | Expression::MethodCall { .. }) {
+        if matches!(
+            value,
+            Expression::Call { .. } | Expression::MethodCall { .. }
+        ) {
             let ret_ty = self.infer_expression_type(value);
             let signed_ret = ret_ty.as_ref().is_some_and(|t| {
                 matches!(t, Type::Int | Type::Int32)
@@ -447,9 +449,7 @@ impl<'ast> CodeGenerator<'ast> {
             rest = &rest[idx + "_usize".len()..];
         }
         // Bare copy of a usize-named binding: `let x = best_idx_usize`.
-        let trimmed = emitted
-            .trim()
-            .trim_matches(|c| c == '(' || c == ')');
+        let trimmed = emitted.trim().trim_matches(|c| c == '(' || c == ')');
         trimmed.ends_with("_usize") && !trimmed.contains('.') && !trimmed.contains('[')
     }
 
@@ -472,6 +472,109 @@ impl<'ast> CodeGenerator<'ast> {
         peer
     }
 
+    /// WDB-411: `let mut i = 0` later compared to a u32 (`while i < count`) must
+    /// peer u32 even when `function_prefers_i32_coord_locals` (f32 return).
+    pub(in crate::codegen::rust) fn let_binding_int_width_from_later_while_compare(
+        &self,
+        name: &str,
+    ) -> Option<Type> {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        let mut peer = None;
+        self.scan_stmts_for_while_compare_int_peer(&body, name, &mut peer);
+        peer
+    }
+
+    fn scan_stmts_for_while_compare_int_peer(
+        &self,
+        stmts: &[&crate::parser::Statement<'ast>],
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        use crate::parser::Statement;
+        for stmt in stmts {
+            if peer.is_some() {
+                return;
+            }
+            match stmt {
+                Statement::While {
+                    condition, body, ..
+                } => {
+                    self.scan_while_cond_for_compare_int_peer(condition, name, peer);
+                    if peer.is_none() {
+                        self.scan_stmts_for_while_compare_int_peer(body, name, peer);
+                    }
+                }
+                Statement::For { body, .. } => {
+                    self.scan_stmts_for_while_compare_int_peer(body, name, peer);
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    condition,
+                    ..
+                } => {
+                    self.scan_while_cond_for_compare_int_peer(condition, name, peer);
+                    self.scan_stmts_for_while_compare_int_peer(then_block, name, peer);
+                    if let Some(eb) = else_block {
+                        self.scan_stmts_for_while_compare_int_peer(eb, name, peer);
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            self.scan_stmts_for_while_compare_int_peer(statements, name, peer);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn scan_while_cond_for_compare_int_peer(
+        &self,
+        condition: &Expression<'ast>,
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        use crate::parser::BinaryOp;
+        let Expression::Binary {
+            left, right, op, ..
+        } = condition
+        else {
+            return;
+        };
+        if matches!(op, BinaryOp::And | BinaryOp::Or) {
+            self.scan_while_cond_for_compare_int_peer(left, name, peer);
+            if peer.is_none() {
+                self.scan_while_cond_for_compare_int_peer(right, name, peer);
+            }
+            return;
+        }
+        if !matches!(
+            op,
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+        ) {
+            return;
+        }
+        let bound = if matches!(left, Expression::Identifier { name: n, .. } if n == name) {
+            right
+        } else if matches!(right, Expression::Identifier { name: n, .. } if n == name) {
+            left
+        } else {
+            return;
+        };
+        if let Some(t) = self.infer_expression_type(bound) {
+            if matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32") {
+                *peer = Some(Type::Uint);
+            }
+        }
+    }
+
     fn scan_stmts_for_call_arg_int_formal(
         &self,
         stmts: &[&crate::parser::Statement<'ast>],
@@ -481,7 +584,10 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::Statement;
         for stmt in stmts {
             match stmt {
-                Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => {
                     self.scan_expr_for_call_arg_int_formal(expr, name, peer);
                 }
                 Statement::Let { value, .. } | Statement::Assignment { value, .. } => {
@@ -531,7 +637,8 @@ impl<'ast> CodeGenerator<'ast> {
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if matches!(arg, Expression::Identifier { name: n, .. } if n == name) {
-                        if let Some(ty) = self.callee_int_formal_type(function, i, arguments.len()) {
+                        if let Some(ty) = self.callee_int_formal_type(function, i, arguments.len())
+                        {
                             *peer = Some(ty);
                             return;
                         }
@@ -862,9 +969,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.codegen_i32_binding_names.contains(name) {
             return true;
         }
-        if self.local_var_types.get(name).is_some_and(|t| {
-            matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
-        }) {
+        if self
+            .local_var_types
+            .get(name)
+            .is_some_and(|t| matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32"))
+        {
             return true;
         }
         self.current_function_params.iter().any(|p| {
@@ -893,13 +1002,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Expression::MethodCall { .. } | Expression::Call { .. } => {
                 self.int_type_for_mixed_int_codegen(expr) == IntType::U32
-                    || self
-                        .infer_expression_type(expr)
-                        .as_ref()
-                        .is_some_and(|t| {
-                            matches!(t, Type::Uint)
-                                || matches!(t, Type::Custom(n) if n == "u32")
-                        })
+                    || self.infer_expression_type(expr).as_ref().is_some_and(|t| {
+                        matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+                    })
             }
             _ => false,
         }
@@ -910,8 +1015,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => {
                 self.codegen_i32_binding_names.contains(name)
                     || self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                        matches!(t, Type::Int32)
-                            || matches!(t, Type::Custom(n) if n == "i32")
+                        matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
                     })
                     || self.int_type_for_mixed_int_codegen(expr) == IntType::I32
             }
@@ -935,7 +1039,10 @@ impl<'ast> CodeGenerator<'ast> {
         condition: &Expression<'ast>,
     ) {
         use crate::parser::BinaryOp;
-        let Expression::Binary { left, right, op, .. } = condition else {
+        let Expression::Binary {
+            left, right, op, ..
+        } = condition
+        else {
             return;
         };
         if !matches!(
@@ -944,26 +1051,25 @@ impl<'ast> CodeGenerator<'ast> {
         ) {
             return;
         }
-        let ident_name =
-            |expr: &Expression<'ast>, lit: &Expression<'ast>| -> Option<String> {
-                match (expr, lit) {
-                    (
-                        Expression::Identifier { name, .. },
-                        Expression::Literal {
-                            value: Literal::Int(n),
-                            ..
-                        },
-                    ) if (0..=4096).contains(n) => Some(name.to_string()),
-                    (
-                        Expression::Literal {
-                            value: Literal::Int(n),
-                            ..
-                        },
-                        Expression::Identifier { name, .. },
-                    ) if (0..=4096).contains(n) => Some(name.to_string()),
-                    _ => None,
-                }
-            };
+        let ident_name = |expr: &Expression<'ast>, lit: &Expression<'ast>| -> Option<String> {
+            match (expr, lit) {
+                (
+                    Expression::Identifier { name, .. },
+                    Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    },
+                ) if (0..=4096).contains(n) => Some(name.to_string()),
+                (
+                    Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    },
+                    Expression::Identifier { name, .. },
+                ) if (0..=4096).contains(n) => Some(name.to_string()),
+                _ => None,
+            }
+        };
         if let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) {
             if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
                 && self.literal_init_wj_int_loop_counters.contains(&name)
@@ -1005,13 +1111,12 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(Type::Int) | Some(Type::Int32)
                     );
                 // P3.497: `now` from `timestamp_millis` / i64 lets is not an i32 coord counter.
-                let i64_init = matches!(
-                    self.local_var_types.get(name.as_str()),
-                    Some(Type::Int)
-                ) || matches!(
-                    self.local_var_types.get(name.as_str()),
-                    Some(Type::Custom(n)) if n == "int" || n == "i64"
-                ) || self.int_type_for_mixed_int_codegen(left) == IntType::I64;
+                let i64_init = matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+                    || matches!(
+                        self.local_var_types.get(name.as_str()),
+                        Some(Type::Custom(n)) if n == "int" || n == "i64"
+                    )
+                    || self.int_type_for_mixed_int_codegen(left) == IntType::I64;
                 if is_counter && !i64_init {
                     self.local_var_types.insert(name.clone(), Type::Int32);
                     self.codegen_i32_binding_names.insert(name.clone());
@@ -1031,7 +1136,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-
     /// P3.348: u32 loop counter vs u32 bound — do not widen either side to i64.
     pub(in crate::codegen::rust) fn comparison_should_prefer_u32_over_i64(
         &self,
@@ -1042,8 +1146,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } => {
                 self.literal_init_wj_int_loop_counters.contains(name)
                     || self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                        matches!(t, Type::Uint)
-                            || matches!(t, Type::Custom(n) if n == "u32")
+                        matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
                     })
                     || self.int_type_for_mixed_int_codegen(u32_side) == IntType::U32
             }
@@ -1063,9 +1166,12 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.expression_promotes_to_u32_in_compare(i64_side)
             || self.int_type_for_mixed_int_codegen(i64_side) == IntType::U32
-            || self.infer_expression_type(i64_side).as_ref().is_some_and(|t| {
-                matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
-            })
+            || self
+                .infer_expression_type(i64_side)
+                .as_ref()
+                .is_some_and(|t| {
+                    matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+                })
     }
 
     /// P3.324: u32 locals / fields vs untyped int literals — do not widen to u64.
@@ -1100,20 +1206,15 @@ impl<'ast> CodeGenerator<'ast> {
                 .infer_expression_type(u64_side)
                 .as_ref()
                 .is_some_and(|t| {
-                    matches!(t, Type::Uint)
-                        || matches!(t, Type::Custom(n) if n == "u32")
+                    matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
                 })
     }
 
     fn expression_promotes_to_u32_in_compare(&self, expr: &Expression<'ast>) -> bool {
         self.int_type_for_mixed_int_codegen(expr) == IntType::U32
-            || self
-                .infer_expression_type(expr)
-                .as_ref()
-                .is_some_and(|t| {
-                    matches!(t, Type::Uint)
-                        || matches!(t, Type::Custom(n) if n == "u32")
-                })
+            || self.infer_expression_type(expr).as_ref().is_some_and(|t| {
+                matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+            })
     }
 
     /// Operand type for driving int literal suffixes in binary ops (`idx + 1` → `1_usize`).
@@ -1126,8 +1227,7 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(Type::Custom("usize".into()));
         }
         if self.infer_expression_type(expr).is_some_and(|t| {
-            matches!(t, Type::Int)
-                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+            matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
         }) {
             return Some(Type::Int);
         }
@@ -1149,7 +1249,10 @@ impl<'ast> CodeGenerator<'ast> {
                 return Self::parser_type_from_rust_int_name(w);
             }
         }
-        if let Expression::Binary { left, right, op, .. } = expr {
+        if let Expression::Binary {
+            left, right, op, ..
+        } = expr
+        {
             use crate::parser::BinaryOp;
             if matches!(
                 op,
@@ -1191,9 +1294,10 @@ impl<'ast> CodeGenerator<'ast> {
                 return self.peer_type_for_int_literal_operand(object);
             }
         }
-        if self.infer_expression_type(expr).is_some_and(|t| {
-            matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
-        }) {
+        if self
+            .infer_expression_type(expr)
+            .is_some_and(|t| matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32"))
+        {
             return Some(Type::Uint);
         }
         // P3.322: ambiguous WJ `int` locals may emit as i32 while `local_var_types` stays `Int`.
@@ -1265,7 +1369,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(t) = self.local_var_types.get(name.as_str()) {
                     if let Some(a) = Self::parser_type_to_promotion_int_type(t) {
                         if a == IntType::I64 {
-                            if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name)
+                            if let Some(w) =
+                                self.local_int_rust_type_name_excluding_ambiguous_int(name)
                             {
                                 if w == "i32" {
                                     return IntType::I32;
@@ -1273,15 +1378,14 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             if eng == IntType::I32 {
                                 // P3.371: WJ `int` locals stay i64; inference may flip i32 after compares.
-                                let wj_int_local = self.local_var_types.get(name.as_str()).is_some_and(
-                                    |t| {
+                                let wj_int_local =
+                                    self.local_var_types.get(name.as_str()).is_some_and(|t| {
                                         matches!(t, Type::Int)
                                             || matches!(
                                                 t,
                                                 Type::Custom(n) if n == "int" || n == "i64"
                                             )
-                                    },
-                                );
+                                    });
                                 if wj_int_local && !self.codegen_i32_binding_names.contains(name) {
                                     return IntType::I64;
                                 }
@@ -1291,7 +1395,11 @@ impl<'ast> CodeGenerator<'ast> {
                         return a;
                     }
                 }
-                if let Some(p) = self.current_function_params.iter().find(|p| p.name == *name) {
+                if let Some(p) = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                {
                     if let Some(a) = Self::parser_type_to_promotion_int_type(&p.type_) {
                         return a;
                     }
@@ -1346,7 +1454,9 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 eng
             }
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 use crate::parser::BinaryOp;
                 if matches!(
                     op,
