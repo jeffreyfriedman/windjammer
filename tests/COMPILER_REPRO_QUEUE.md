@@ -1,5 +1,39 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.483 (2026-09-27) — `json::to_string` owned `T` (not `&mut T`)
+
+| Gate | Status |
+|------|--------|
+| `rust_std_json_to_string_boundary_is_owned_generic` | ✅ lib GREEN — `json::to_string` / `to_string_pretty` Owned + `emitted false` |
+| `json_to_string_payload_must_not_mut_borrow` | ✅ isolate GREEN — `json::to_string(payload)` not `&mut payload` |
+| `notes_api_product_json_to_string_must_not_mut_borrow` | ✅ product GREEN |
+| spawn / mpsc / WDB-099 | ✅ GREEN |
+| `notes_api_product_src_must_auto_borrow_demoted_str` | ❌ still RED — `log_tagged(level, …)` |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ still RED — `qs_get(…, String::from("limit"))` |
+| `json_get_index_owned_value_multipass_must_cargo_check` | ❌ pre-existing — `get_i.clone()ndex` name mangling |
+
+**Root cause layer:** signature — runtime `json::to_string<T: Serialize>(value: T)` is by-value. A bare `to_string` homonym (`String::to_string` / first-hit method-index) last-wrote MutBorrowed onto the payload.
+
+**What became unnecessary:** MutBorrowed invent from simple-name / `Type::method` lookup on runtime-std free fns; reconcile `&mut` after IR when the exact stdlib key is an owned contract.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3482`
+- `cargo test --release --lib -- rust_std_json_to_string_boundary_is_owned_generic rust_std_mpsc_and_thread_spawn scanned_runtime_http_post` → **3 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- json_to_string_payload_must_not_mut_borrow notes_api_product_json_to_string_must_not_mut_borrow json_to_string_serializes_struct bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test wdb099_` → **json/spawn/mpsc/WDB-099 GREEN** (11 passed / 3 failed: notes log_tagged + qs_get + pre-existing get_index mangling)
+
+## P3.482 (2026-09-27) — for-loop consume is not a Vec readonly scan; WDB-099 Phase-2 pass-through
+
+| Gate | Status |
+|------|--------|
+| WDB-099 `wdb099_owned_struct_and_vec_formals_must_not_borrow_at_call_site` | ✅ isolate GREEN — `&T` wrapper pass-through |
+| WDB-099 `wdb099_owned_claims_struct_must_not_borrow_at_call_site` | ✅ isolate GREEN |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** constraint/formal emit — `for x in nodes` consumes the Vec; readonly-scan demote must not apply. Tests now accept Phase-2 `&T` wrapper pass-through.
+
+**What became unnecessary:** treating for-loop-consumed Vecs as index-only rebuilds.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3482` — WDB-099 + spawn + mpsc **GREEN** (see P3.483).
+
 ## P3.481 (2026-09-26) — Vec index-only rebuild demotes (`update_params`)
 
 | Gate | Status |

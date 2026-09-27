@@ -956,21 +956,29 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Last-write stdlib/runtime boundary (`strings::contains` needle `&str`)
-        // beats WJ `std/*.wj` owned `string` stubs that shadowed pick/challengers.
+        // Last-write stdlib/runtime boundary:
+        // - shared text (`strings::contains` needle `&str`) beats WJ owned stubs
+        // - owned generic (`json::to_string(value: T)`) beats MutBorrowed `to_string` homonyms
         {
             let stdlib = SignatureRegistry::stdlib();
             let std_sig = stdlib
                 .get_signature(callee_name)
                 .or_else(|| stdlib.get_signature(lookup));
             if let Some(std_sig) = std_sig {
-                let pidx = sig
-                    .as_ref()
-                    .map(|s| s.arg_param_index(arg_index))
-                    .unwrap_or(arg_index);
-                sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
-                    sig, Some(std_sig), pidx,
-                );
+                let std_idx = std_sig.arg_param_index(arg_index);
+                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    std_sig, std_idx,
+                ) {
+                    sig = Some(std_sig.clone());
+                } else {
+                    let pidx = sig
+                        .as_ref()
+                        .map(|s| s.arg_param_index(arg_index))
+                        .unwrap_or(arg_index);
+                    sig = crate::codegen::rust::signature_promotion::prefer_shared_text_ref_signature(
+                        sig, Some(std_sig), pidx,
+                    );
+                }
             }
         }
 
@@ -4645,6 +4653,15 @@ impl<'ast> CodeGenerator<'ast> {
         // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over stale
         // importer/collision stubs before any owned-formal peel (WDB-101 map getters).
         let mut sig = self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, sig);
+        // Exact runtime-std owned contract (`json::to_string(value: T)`) beats a
+        // MutBorrowed `to_string` homonym left on `contract_sig` after IR.
+        if let Some(std_sig) = SignatureRegistry::stdlib().get_signature(callee_name) {
+            let pidx = std_sig.arg_param_index(arg_index);
+            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(std_sig, pidx)
+            {
+                sig = std_sig.clone();
+            }
+        }
         // Import aliases: never let bare homonym metadata override the qualified dep fn.
         if self.import_fn_alias_map.contains_key(callee_name) {
             if let Some(global) = self.global_signature_registry.as_ref() {
@@ -9199,6 +9216,11 @@ impl<'ast> CodeGenerator<'ast> {
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        // Runtime-std `module::fn` is a free function. Bare `to_string` / `Type::method`
+        // homonyms must not invent MutBorrowed on the user arg (`json::to_string`).
+        let runtime_std_free_fn =
+            crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(callee_name)
+                && callee_name.contains("::");
         // Field-forward / defining-module owned Custom formals never ask for `&mut`.
         let owned_from = |sig: &crate::analyzer::FunctionSignature| {
             let pidx = sig.arg_param_index(arg_index);
@@ -9263,7 +9285,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if let Some(global) = self.global_signature_registry.as_ref() {
-            for key in [callee_name, simple] {
+            let keys: &[&str] = if runtime_std_free_fn {
+                &[callee_name]
+            } else {
+                &[callee_name, simple]
+            };
+            for key in keys {
                 if let Some(sig) = global.get_signature(key) {
                     if self.ir_sig_arg_expects_mut_borrow(sig, arg_index) {
                         return true;
@@ -9271,11 +9298,13 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        if let Some((rt, method)) = callee_name.rsplit_once("::") {
-            let arg_count = user_arg_count.unwrap_or(arg_index + 1);
-            if let Some(sig) = self.resolve_method_function_signature(rt, method, arg_count) {
-                if self.ir_sig_arg_expects_mut_borrow(&sig, arg_index) {
-                    return true;
+        if !runtime_std_free_fn {
+            if let Some((rt, method)) = callee_name.rsplit_once("::") {
+                let arg_count = user_arg_count.unwrap_or(arg_index + 1);
+                if let Some(sig) = self.resolve_method_function_signature(rt, method, arg_count) {
+                    if self.ir_sig_arg_expects_mut_borrow(&sig, arg_index) {
+                        return true;
+                    }
                 }
             }
         }
