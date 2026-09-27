@@ -3869,6 +3869,15 @@ impl<'ast> CodeGenerator<'ast> {
         if !Self::variable_used_in_statements(body, &param.name) {
             return true;
         }
+        // Pub wrappers that only forward `string` into a sibling and return a
+        // non-text type (`ServerResponse`) keep owned `String`. Cross-module
+        // callers pass owned temps; Phase-2 `&str` refresh on the defining file
+        // is not visible at those call sites in the same multipass.
+        if !self.function_return_is_text(func)
+            && self.param_passed_as_call_argument(body, &param.name, func)
+        {
+            return true;
+        }
         // `body + ""` into owned concat2 must keep owned formals — do not early-return
         // demote on readonly empty-append before checking owned-callee forwards.
         let passed_into_owned = self.param_passed_as_call_argument(body, &param.name, func)

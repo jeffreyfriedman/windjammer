@@ -33,9 +33,16 @@ pub fn put_text(url: string, body: string) -> Result<string, string> {
 }
 "#;
     let generated = test_utils::assert_stdlib_runtime_links(source, &["http::put"]);
+    // Runtime `http::put` is `&str, &str`. Phase-2 may demote the wrapper
+    // formals and pass through, or keep `String` and auto-borrow (same as post).
+    let owned_borrow = generated.contains("http::put(&url, &body)");
+    let demoted_passthrough = generated.contains("url: &str")
+        && generated.contains("body: &str")
+        && generated.contains("http::put(url, body)")
+        && !generated.contains("http::put(&url");
     assert!(
-        generated.contains("http::put(&url, &body)"),
-        "http::put must borrow owned String url and body like post, got:\n{generated}"
+        owned_borrow || demoted_passthrough,
+        "http::put must borrow owned String or pass demoted &str, got:\n{generated}"
     );
 }
 
@@ -52,9 +59,14 @@ pub fn patch_text(url: string, body: string) -> Result<string, string> {
 }
 "#;
     let generated = test_utils::assert_stdlib_runtime_links(source, &["http::patch"]);
+    let owned_borrow = generated.contains("http::patch(&url, &body)");
+    let demoted_passthrough = generated.contains("url: &str")
+        && generated.contains("body: &str")
+        && generated.contains("http::patch(url, body)")
+        && !generated.contains("http::patch(&url");
     assert!(
-        generated.contains("http::patch(&url, &body)"),
-        "http::patch must borrow owned String url and body like post, got:\n{generated}"
+        owned_borrow || demoted_passthrough,
+        "http::patch must borrow owned String or pass demoted &str, got:\n{generated}"
     );
 }
 

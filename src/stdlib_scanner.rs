@@ -1728,6 +1728,32 @@ mod tests {
     }
 
     #[test]
+    fn scanned_runtime_http_put_patch_are_free_two_str_refs() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        for key in ["http::put", "http::patch"] {
+            let sig = reg.get_signature(key).unwrap_or_else(|| panic!("{key}"));
+            assert!(
+                !sig.has_self_receiver,
+                "Router::{key} must not clobber free {key}, got {:?}",
+                sig.param_types
+            );
+            assert_eq!(sig.param_ownership.len(), 2);
+            assert!(
+                crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                    sig, 0
+                ) && crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
+                    sig, 1
+                ),
+                "{key} url/body must be runtime &str: types={:?} own={:?} emitted={:?}",
+                sig.param_types,
+                sig.param_ownership,
+                sig.emitted_rust_ref_params
+            );
+        }
+    }
+
+    #[test]
     fn server_response_error_registers_as_type_method_not_log_homonym() {
         let mut reg = SignatureRegistry::new();
         populate_runtime_signatures(&mut reg).expect("scan runtime");

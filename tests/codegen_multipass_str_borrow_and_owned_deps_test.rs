@@ -67,13 +67,16 @@ pub fn with_msg(msg: string) -> ServerResponse {
     let http = map.get("http.rs").expect("http.rs");
     let routes = map.get("routes.rs").expect("routes.rs");
 
-    // Forwarding to owned `error_json(message)` should keep owned String; otherwise
-    // demote to &str and borrow at every call site (dogfood).
-    let owned_formal = http.contains("message: String");
-    let str_formal = http.contains("message: &str") || http.contains("message: & String");
+    // `error_json` may demote to `&str` (text-return concat). The pub wrapper
+    // `json_cors_error` keeps owned `String` so cross-module callers can pass
+    // owned temps. Do not treat the helper's `message: &str` as the wrapper ABI.
+    let owned_formal = http.contains("json_cors_error(status: i64, message: String)")
+        || http.contains("json_cors_error(status: i64, mut message: String)");
+    let str_formal = http.contains("json_cors_error(status: i64, message: &str)")
+        || http.contains("json_cors_error(status: i64, message: & String)");
     assert!(
         owned_formal || str_formal,
-        "http formal must be &str or String. Got:\n{http}"
+        "json_cors_error formal must be &str or String. Got:\n{http}\nroutes:\n{routes}"
     );
 
     if str_formal {
@@ -83,7 +86,7 @@ pub fn with_msg(msg: string) -> ServerResponse {
                 || (routes.contains("let _temp")
                     && routes.contains("&_temp")
                     && routes.contains("json_cors_error(401,")),
-            "format concat to &str formal must pass &… Got:\n{routes}"
+            "format concat to &str formal must pass &… Got:\n{routes}\nhttp:\n{http}"
         );
         assert!(
             routes.contains("json_cors_error(400, &msg")
@@ -162,11 +165,13 @@ pub fn patch_flags(first: string, rest: string) -> string {
                 || (routes.contains("&_temp") && routes.contains("append_opt_bool(")),
             "append_opt_bool &str formals require borrowed args. Got:\n{routes}"
         );
-        assert!(
-            !routes.contains("append_opt_bool(_temp0,")
-                || routes.contains("append_opt_bool(&_temp0"),
-            "must not pass bare format temp to &str formal. Got:\n{routes}"
-        );
+        if body.contains("body: &str") {
+            assert!(
+                !routes.contains("append_opt_bool(_temp0,")
+                    || routes.contains("append_opt_bool(&_temp0"),
+                "must not pass bare format temp to &str body formal. Got:\n{routes}\nbody:\n{body}"
+            );
+        }
     }
 }
 

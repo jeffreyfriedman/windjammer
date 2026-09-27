@@ -10,7 +10,64 @@ use crate::parser::*;
 use crate::CompilationTarget;
 use std::collections::HashMap;
 
-/// `use dep::fn as alias` / `use dep::fn` → registry key for IR + call-site lookup.
+fn use_path_first_segment_is_lang_root(seg: &str) -> bool {
+    matches!(seg, "std" | "crate" | "super" | "self")
+}
+
+fn is_fn_import_name(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+}
+
+/// Parser stores `use http::{json_cors_error, ServerResponse}` as one segment
+/// (`"http::{json_cors_error, ServerResponse}"`).
+fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
+    let (module, rest) = seg.split_once("::{")?;
+    let inner = rest.strip_suffix('}')?;
+    if module.is_empty() {
+        return None;
+    }
+    let names: Vec<&str> = inner
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    Some((module, names))
+}
+
+/// Same-name function imports: `use http::json_cors_error` and braced
+/// `use http::{json_cors_error, ServerResponse}` → `json_cors_error` maps to
+/// `http::json_cors_error` so defining-module refresh can overwrite importer stubs.
+fn same_name_fn_imports_from_use_path(path: &[String]) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if path.len() == 1 {
+        if let Some((module, names)) = parse_braced_use_segment(&path[0]) {
+            let first = module.split("::").next().unwrap_or(module);
+            if !use_path_first_segment_is_lang_root(first) {
+                for name in names {
+                    if is_fn_import_name(name) {
+                        out.push((name.to_string(), format!("{module}::{name}")));
+                    }
+                }
+            }
+        }
+        return out;
+    }
+    if path.len() >= 2 {
+        if let Some(last) = path.last() {
+            if is_fn_import_name(last)
+                && !path
+                    .first()
+                    .is_some_and(|seg| use_path_first_segment_is_lang_root(seg))
+            {
+                out.push((last.clone(), path.join("::")));
+            }
+        }
+    }
+    out
+}
+
+/// `use dep::fn as alias` / `use dep::fn` / braced sibling `use http::{fn, Type}`
+/// → registry key for IR + call-site lookup.
 pub fn collect_import_fn_alias_map(program: &Program<'_>) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for item in &program.items {
@@ -28,19 +85,8 @@ pub fn collect_import_fn_alias_map(program: &Program<'_>) -> HashMap<String, Str
             alias: None, path, ..
         } = item
         {
-            if path.len() >= 2 {
-                if let Some(last) = path.last() {
-                    if last
-                        .chars()
-                        .next()
-                        .is_some_and(|c| c.is_ascii_lowercase())
-                        && !path.first().is_some_and(|seg| {
-                            matches!(seg.as_str(), "std" | "crate" | "super" | "self")
-                        })
-                    {
-                        map.insert(last.clone(), path.join("::"));
-                    }
-                }
+            for (name, qualified) in same_name_fn_imports_from_use_path(path) {
+                map.insert(name, qualified);
             }
         }
     }
@@ -59,6 +105,18 @@ pub fn install_import_alias_path_dep_signatures(
         let Some(sig) = registry.get_signature(qualified).cloned() else {
             continue;
         };
+        if let Some(existing) = registry.get_signature(alias) {
+            if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(existing, &sig)
+                || crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
+                    existing, &sig,
+                )
+                || crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                    existing, &sig,
+                )
+            {
+                continue;
+            }
+        }
         registry.add_function(alias.clone(), sig);
     }
 }
@@ -1351,5 +1409,50 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod import_fn_alias_map_tests {
+    use super::collect_import_fn_alias_map;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+
+    fn parse_program(source: &'static str) -> crate::parser::Program<'static> {
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        parser.parse().expect("parse")
+    }
+
+    #[test]
+    fn braced_sibling_fn_import_maps_to_module_qualified_key() {
+        let program = parse_program(
+            r#"
+use http::{json_cors_error, ServerResponse}
+
+pub fn missing_auth() {}
+"#,
+        );
+        let map = collect_import_fn_alias_map(&program);
+        assert_eq!(
+            map.get("json_cors_error").map(String::as_str),
+            Some("http::json_cors_error"),
+            "braced sibling fn import must remap for defining-module ABI, got {map:?}"
+        );
+        assert!(
+            !map.contains_key("ServerResponse"),
+            "type imports must not be treated as fn aliases: {map:?}"
+        );
+    }
+
+    #[test]
+    fn unbraced_sibling_fn_import_still_maps() {
+        let program = parse_program("use http::json_cors_error\npub fn f() {}\n");
+        let map = collect_import_fn_alias_map(&program);
+        assert_eq!(
+            map.get("json_cors_error").map(String::as_str),
+            Some("http::json_cors_error")
+        );
     }
 }
