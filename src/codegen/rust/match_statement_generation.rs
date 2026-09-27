@@ -1075,6 +1075,10 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 for entry in &mut match_bound_type_entries {
                     if !matches!(entry.1, Type::Reference(_) | Type::MutableReference(_)) {
+                        // Copy payloads bind by value even when the scrutinee is `&T`.
+                        if self.is_type_copy(&entry.1) {
+                            continue;
+                        }
                         entry.1 = Type::Reference(Box::new(entry.1.clone()));
                     }
                 }

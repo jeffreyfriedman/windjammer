@@ -1,5 +1,22 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.493 (2026-09-27) — crate:: signature lookup + stop post-IR Copy clone undo
+
+| Gate | Status |
+|------|--------|
+| `copy_aggregate_field_only_release_cross_module` | ✅ isolate GREEN — `arrow_batch_release(handle)` Identity |
+| `if_int_status_into_u16_formal_must_coerce` | ✅ isolate GREEN |
+| spawn / mpsc | ✅ GREEN |
+| `wdb347_*` | (reconfirm this commit) |
+
+**Root cause layer:** signature + constraint — `crate::arrow::arrow_batch_release` is same-crate; registry keys are `arrow::arrow_batch_release`. Lookup now strips `crate::mod::` (not bare `crate::fn`). IR already emitted Identity `handle`. A **dual oracle** in `regular_call_arguments` re-cloned because auto_clone saw the same match-binding name in two arms.
+
+**What became unnecessary:** post-IR `append_clone_for_owned_non_copy_binding` on Copy aggregates / `match_arm_bindings`. Unresolved-callee auto-clone skipped when `call_arg_is_copy_identity`. No new peel.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3492`
+- `cargo test --release --test all --features codegen_tests -- copy_aggregate_field_only_release_cross_module` → **1 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- copy_aggregate_field_only_release_cross_module if_int_status_into_u16_formal_must_coerce bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test regression_060 wdb347 owned_vec_custom_filter_helper_must_not_demote cross_crate_demoted_str_owned_arg_must_auto_borrow wdb106_explicit_clone` → **12 passed**
+
 ## P3.492 (2026-09-27) — if-int use-site width + Copy-oracle narrowing
 
 | Gate | Status |
@@ -7,7 +24,7 @@
 | `if_int_status_into_u16_formal_must_coerce` | ✅ isolate GREEN — `404_u16` / `400_u16` from later `status: u16` formal |
 | spawn / mpsc | ✅ GREEN |
 | `wdb347_*` | ✅ GREEN — Copy f32 match bindings still no `.clone()` |
-| `copy_aggregate_field_only_release_cross_module` | ❌ isolate RED — still `handle.clone()` into owned `BatchHandle` |
+| `copy_aggregate_field_only_release_cross_module` | ✅ isolate GREEN (P3.493) |
 
 **Root cause layer:** constraint/solver — `let status = if … { 404 } else { 400 }` was forced i32 (`if_else_binding_should_be_i32`) and ignored the later `error_from_message(status, …)` `u16` formal. Use-site call-formal width now wins and drives `assignment_int_target_type`.
 
@@ -46,7 +63,7 @@
 | `owned_string_formal_must_not_demote_to_str_ref` | ✅ isolate GREEN — assert wrapper `json_cors_error(…, message: String)` only (helper `error_json` may be `&str`) |
 | `wdb106_explicit_clone_*` | ✅ isolate GREEN — Phase-2 `&line` into demoted `pipe_field` / `is_empty`/`trim` (clone unnecessary) |
 | spawn / mpsc | ✅ GREEN |
-| `copy_aggregate_field_only_release_cross_module` | ❌ isolate RED — `handle.clone()` into owned Copy `BatchHandle` (registry/match-binding type still missing) |
+| `copy_aggregate_field_only_release_cross_module` | ✅ isolate GREEN (P3.493) |
 
 **Root cause layer:** constraint/solver already correct — Phase-2 demotes readonly `string`/`Vec` and Identity-passthroughs. Isolate assertions were written for keep-owned wrappers.
 

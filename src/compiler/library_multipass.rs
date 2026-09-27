@@ -601,6 +601,10 @@ pub(crate) fn build_library_multipass(
                         if !module_path.is_empty() {
                             new_registry
                                 .add_function(format!("{}::{}", module_path, name), sig.clone());
+                            new_registry.add_function(
+                                format!("crate::{}::{}", module_path, name),
+                                sig.clone(),
+                            );
                         }
                     }
                 }
@@ -886,6 +890,7 @@ pub(crate) fn build_library_multipass(
                         && !name.starts_with(&format!("{}::", module_path))
                     {
                         keys.push(format!("{}::{}", module_path, name));
+                        keys.push(format!("crate::{}::{}", module_path, name));
                     }
                     for key in keys {
                         reg.signatures.insert(key.clone(), sig.clone());

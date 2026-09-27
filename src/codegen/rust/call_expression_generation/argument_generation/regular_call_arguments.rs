@@ -486,6 +486,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             && !demoted_caller
                             && !gen.callee_arg_expects_borrow_at_call(func_name, i)
                             && gen.local_binding_reused_after_current_statement(name)
+                            && !gen.call_arg_is_copy_identity(arg, None)
+                            && !gen.match_arm_bindings.contains(name)
                             && !coerced.ends_with(".clone()")
                         {
                             let base = if coerced.starts_with('&') && !coerced.starts_with("&mut ") {

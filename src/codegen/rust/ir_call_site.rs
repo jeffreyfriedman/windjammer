@@ -676,16 +676,25 @@ impl<'ast> CodeGenerator<'ast> {
             })
         } else {
             let from_local = local_sig.cloned();
-            let from_reg = registry.get_signature(callee_name).cloned();
+            let from_reg = registry
+                .get_signature(lookup)
+                .cloned()
+                .or_else(|| registry.get_signature(callee_name).cloned());
             let from_global = self
                 .global_signature_registry
                 .as_ref()
-                .and_then(|g| g.get_signature(callee_name).cloned());
-            let from_simple = if self.inline_module_qualified_call(callee_name) {
-                registry.get_signature(simple).cloned().or_else(|| {
+                .and_then(|g| {
+                    g.get_signature(lookup)
+                        .cloned()
+                        .or_else(|| g.get_signature(callee_name).cloned())
+                });
+            let from_simple = if self.inline_module_qualified_call(callee_name)
+                || callee_name.starts_with("crate::")
+            {
+                registry.get_signature(lookup).cloned().or_else(|| {
                     self.global_signature_registry
                         .as_ref()
-                        .and_then(|g| g.get_signature(simple).cloned())
+                        .and_then(|g| g.get_signature(lookup).cloned())
                 })
             } else {
                 None
@@ -1051,12 +1060,17 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             // Unresolved callee still needs multi-use clones (regression-063 seed_write).
-            finished = self.maybe_auto_clone_call_arg(
-                arg_expr,
-                &finished,
-                Some(callee_name),
-                Some(arg_index),
-            );
+            // Copy aggregates (BatchHandle match payloads) are Identity — never clone.
+            if !self.call_arg_is_copy_identity(arg_expr, None) {
+                finished = self.maybe_auto_clone_call_arg(
+                    arg_expr,
+                    &finished,
+                    Some(callee_name),
+                    Some(arg_index),
+                );
+            } else {
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut finished);
+            }
             if matches!(
                 arg_expr,
                 Expression::Literal {
@@ -1682,6 +1696,16 @@ impl<'ast> CodeGenerator<'ast> {
         // WDB-343: Copy cast targets must not receive trailing `.clone()` at call sites.
         if matches!(kind, CoercionKind::Clone)
             && matches!(arg_expr, Expression::Cast { type_, .. } if self.is_type_copy(type_))
+        {
+            kind = CoercionKind::Identity;
+        }
+        // Copy scalars *and* aggregates (BatchHandle): Clone is never required.
+        if matches!(kind, CoercionKind::Clone)
+            && self.call_arg_is_copy_identity(
+                arg_expr,
+                sig.formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx)),
+            )
         {
             kind = CoercionKind::Identity;
         }
@@ -8253,7 +8277,8 @@ impl<'ast> CodeGenerator<'ast> {
                     ));
                 }
             }
-            if self.borrowed_iterator_vars.contains(name) {
+            if self.borrowed_iterator_vars.contains(name) && !self.match_arm_bindings.contains(name)
+            {
                 let base = self
                     .infer_expression_type(arg_expr)
                     .as_ref()
@@ -8472,6 +8497,13 @@ impl<'ast> CodeGenerator<'ast> {
                     || name == "false"
                     || name.ends_with("::None")
                     || crate::type_classification::is_enum_variant_constructor_path(name)
+                {
+                    return arg_str.to_string();
+                }
+                if self.match_arm_bindings.contains(name)
+                    || self.copy_match_payload_binding(name)
+                    || self.expression_is_copy(arg_expr)
+                    || self.binding_name_is_copy(name)
                 {
                     return arg_str.to_string();
                 }

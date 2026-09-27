@@ -499,10 +499,21 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Callee key for registry / IR signature lookup (`use dep::fn as alias` → `dep::fn`).
+    /// Same-crate `crate::mod::fn` registers as `mod::fn` in library multipass.
     pub(in crate::codegen::rust) fn signature_lookup_callee_name<'a>(
         &self,
         callee_name: &'a str,
     ) -> std::borrow::Cow<'a, str> {
+        if let Some(rest) = callee_name.strip_prefix("crate::") {
+            // `crate::mod::fn` registers as `mod::fn`. Do not collapse `crate::fn`
+            // to a bare name — that ORs HashMap::get / log::get homonyms.
+            if rest.contains("::") {
+                if let Some(q) = self.import_fn_alias_map.get(rest) {
+                    return std::borrow::Cow::Owned(q.clone());
+                }
+                return std::borrow::Cow::Owned(rest.to_string());
+            }
+        }
         if callee_name.contains("::") {
             return std::borrow::Cow::Borrowed(callee_name);
         }
@@ -3003,11 +3014,21 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str.to_string();
         }
         if self.binding_is_copy_pass_by_value_scalar(name)
+            || self.binding_name_is_copy(name)
+            || self.match_arm_bindings.contains(name)
+            || self.copy_match_payload_binding(name)
             || self
                 .current_function_params
                 .iter()
                 .find(|p| p.name == name)
                 .is_some_and(|p| self.is_type_copy(&p.type_))
+            || self.local_var_types.get(name).is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(bare)
+            })
             || self.binding_is_runtime_non_clone(name)
         {
             return arg_str.to_string();
