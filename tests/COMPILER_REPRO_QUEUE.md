@@ -1,5 +1,32 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.508 (2026-09-27) — demoted method then owned empty lits must own (notes-api handle_request)
+
+| Gate | Status |
+|------|--------|
+| `demoted_method_then_owned_empty_lits_must_own` | ❌ isolate RED — `parse_method(method)` demotes first slot to `&str`; later owned `String` formals still get bare `""` |
+| `handle_request_empty_lits_hex_app_must_own` | ❌ isolate RED — HashMap `NotesApp` + `parse_method` + `handle_method(..., "")` same bare `path, "", "", ""` |
+| `handle_forward_empty_lits_must_own` | ✅ isolate GREEN / ❌ product RED — P3.499 tiny `App` + `keep(method)` already emits `"".to_string()` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `app.handle(&method, path, "", "", "", 0_i64, body)` + `&mut query` into owned `query: String` |
+
+**Why this is a new class:**
+- P3.489 / P3.499 empty-lit isolates kept every formal owned (`keep(method)` / interpolation) and already owned `""`.
+- Product `handle_request` calls `parse_method(method)` first. That demotes the first slot; later empty literals into still-owned `String` formals stay `&str`.
+- Hexagonal `NotesApp` + `HashMap` + `handle_method` 8th `""` is the same bug (not a HashMap-only miss).
+
+**Root cause layer:** codegen / call-site ownership — empty lit into owned `String` after a sibling formal demoted. Signature-driven, not method-name lists. Do not edit `windjammer/src/`. Do not reshape notes-api.
+
+**What became unnecessary:** treating HashMap / `own()` rebinds as the missing trigger; refiling P3.499 `keep(method)` isolate.
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (15:30). Isolates `$WJ build src --output OUT --no-cargo --module-file` + `cargo check` in OUT.
+- Demote: `app.handle(&method, path, "", "", "", 0_i64, body)` — rustc E0308 (`expected String, found &str` ×3).
+- Hex: `app.handle(method, path, "", "", "", 0_i64, body)` — same E0308 on the three `""`.
+- Product `wj-notes-api` `$WJ test` (p3505): **2** E0308 — `note_get_reply(..., &mut query)` expected `String`; `handle_request` bare `""`.
+- `wj-retry` tip rebuild: `while now < (deadline as i64)` (P3.500 GREEN). Fetch re-dogfood after cache prune.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3507`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- demoted_method_then_owned_empty_lits handle_request_empty_lits_hex` — expected **0 passed / 2 failed** (TDD RED).
+
 ## P3.507 (2026-09-27) — WDB-411 u32 `while i < count` must not infer i32
 
 | Gate | Status |
@@ -17,8 +44,8 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-410 MultiFile | ❌ isolate RED — `let mut items = self.items.clone()` + `label: self.label.clone()` |
-| WDB-410 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/shader_graph_builder.rs` |
+| WDB-410 MultiFile | ⏳ TDD — owned-self wither must move `self.items` / `self.graph` / `self.label` |
+| WDB-410 tip-out | ⏳ TDD — `PassBuilder` `self.graph.clone()` / `self.bindings.clone()` |
 
 **Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
 
@@ -28,8 +55,8 @@
 
 **What became unnecessary:** refiling WDB-378/358/407/409; reusing WDB-406/408 (compiler).
 
-**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `4b30b755`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.07s after ~4m incremental compile)
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` — results after TDD this session.
 
 ## P3.505 (2026-09-27) — demoted `&Vec<Note>` must clone on owned return (`truncate_notes`)
 
