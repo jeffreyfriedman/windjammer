@@ -70,22 +70,45 @@ fn wdb405_module_file_nodetype_unit_variant_must_not_clone() {
     test.cargo_check().expect("WDB-405 cargo-check");
 }
 
+fn wdb405_search_roots() -> Vec<PathBuf> {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut roots = vec![manifest.clone()];
+    let git = manifest.join(".git");
+    if git.is_file() {
+        if let Ok(text) = std::fs::read_to_string(&git) {
+            if let Some(line) = text.lines().find(|l| l.starts_with("gitdir:")) {
+                let gitdir = PathBuf::from(line.trim_start_matches("gitdir:").trim());
+                // `.git/worktrees/<name>` → repo root is 3 ancestors up
+                if let Some(repo) = gitdir.ancestors().nth(3) {
+                    roots.push(repo.to_path_buf());
+                    if let Some(src_wj) = repo.parent() {
+                        roots.push(src_wj.to_path_buf());
+                    }
+                }
+            }
+        }
+    }
+    let mut walked = manifest;
+    for _ in 0..8 {
+        roots.push(walked.clone());
+        if let Some(parent) = walked.parent() {
+            walked = parent.to_path_buf();
+        } else {
+            break;
+        }
+    }
+    roots
+}
+
 fn wdb405_product_graph_test_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
-    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..8 {
-        paths.push(
-            dir.join(".agent-wip/rel_tip_out/visual_scripting/graph_test.rs"),
-        );
+    for dir in wdb405_search_roots() {
+        paths.push(dir.join(".agent-wip/rel_tip_out/visual_scripting/graph_test.rs"));
         paths.push(dir.join(".agent-wip/rel_tip_out/graph_test.rs"));
         paths.push(
             dir.join("windjammer-game/windjammer-game-core/gen/visual_scripting/graph_test.rs"),
         );
-        if let Some(parent) = dir.parent() {
-            dir = parent.to_path_buf();
-        } else {
-            break;
-        }
+        paths.push(dir.join("gen/visual_scripting/graph_test.rs"));
     }
     paths
 }
