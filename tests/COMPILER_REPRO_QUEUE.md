@@ -6,20 +6,20 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 | Gate | Status |
 |------|--------|
-| WDB-415 MultiFile | ⏳ TDD — `materials_to_palette(materials)` inside `if` must not `materials.clone()` |
-| WDB-415 tip-out | ⏳ product `materials_to_palette(materials.clone())` in `unified_renderer.rs` |
+| WDB-415 MultiFile | ✅ isolate GREEN — `materials_to_palette(materials)` inside `if` (no clone) |
+| WDB-415 tip-out | ❌ product RED — `materials_to_palette(materials.clone())` in `gen/rendering/unified_renderer.rs` |
 
-**Root cause layer:** signature — `materials_to_palette(materials: Vec<Mat>)` stays owned; `upload_materials` has a single use inside `if !test_mode` and still emits `materials.clone()`. WJ moves `materials`.
+**Root cause layer:** signature — isolate already moves the owned Vec. Product `upload_materials(&mut self, materials: Vec<MaterialData>)` still clones into `UnifiedRenderer::materials_to_palette` (method + assoc path, not isolate free fn). Regen or match product shape.
 
 **Why this is a new class:**
 - WDB-412 is **field.clone()** into a **for-loop** Vec formal.
 - WDB-414 is **`new(self.scene)`** (constructor field).
-- WDB-407 is **`Vec` `new` demote** (`new(&joints)`).
+- WDB-407 is **`Vec` `new` demote** (`new(&joints)`). Same dual status (isolate GREEN / tip RED).
 
 **What became unnecessary:** `materials.clone()` when WJ passes `materials` once.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb415_` — results recorded after TDD run
+**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `ca9ca3b8`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb415_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513/P3.514 (notes-api), WDB-412–414 / P3.509–P3.512 (filed).
 
