@@ -20,16 +20,34 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
+fn notes_api_app() -> Option<PathBuf> {
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for _ in 0..8 {
+        let sibling = dir.join("windjammer-ecosystem/apps/wj-notes-api");
+        if sibling.join("src").exists() {
+            return Some(sibling);
+        }
+        if let Some(parent) = dir.parent() {
+            let uncle = parent.join("windjammer-ecosystem/apps/wj-notes-api");
+            if uncle.join("src").exists() {
+                return Some(uncle);
+            }
+            dir = parent.to_path_buf();
+        } else {
+            break;
+        }
+    }
+    None
+}
+
 #[test]
 fn notes_api_product_remaining_e0308_must_not_emit() {
-    let app = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("repo parent")
-        .join("windjammer-ecosystem/apps/wj-notes-api");
-    if !app.join("src").exists() {
-        eprintln!("skip: notes-api src not at {}", app.display());
-        return;
-    }
+    let app = notes_api_app().unwrap_or_else(|| {
+        panic!(
+            "notes-api src not found by walking from {}",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    });
 
     let tmp = TempDir::new().expect("tempdir");
     let out = tmp.path().join("out");
