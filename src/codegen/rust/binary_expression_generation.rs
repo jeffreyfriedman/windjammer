@@ -8,11 +8,133 @@
 //! - Type balancing and promotion
 //! - Operator precedence handling
 
-use crate::parser::{BinaryOp, Expression, Literal, Type, UnaryOp};
+use crate::parser::{BinaryOp, Expression, Literal, Pattern, Statement, Type, UnaryOp};
 
 use super::{operators, string_analysis, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    fn type_is_signed_int(ty: &Type) -> bool {
+        matches!(ty, Type::Int | Type::Int32)
+            || matches!(
+                ty,
+                Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "i32" | "isize")
+            )
+    }
+
+    fn expr_is_int_zero_literal(expr: &Expression<'ast>) -> bool {
+        matches!(
+            expr,
+            Expression::Literal {
+                value: Literal::Int(0),
+                ..
+            }
+        )
+    }
+
+    fn signed_init_type_from_current_body(&self, name: &str) -> Option<Type> {
+        fn walk<'a>(
+            this: &CodeGenerator<'a>,
+            stmts: &[&'a Statement<'a>],
+            name: &str,
+        ) -> Option<Type> {
+            for stmt in stmts {
+                match stmt {
+                    Statement::Let {
+                        pattern: Pattern::Identifier(n),
+                        value,
+                        else_block,
+                        ..
+                    } if n == name => {
+                        if let Some(t) = this.infer_expression_type(value) {
+                            if CodeGenerator::type_is_signed_int(&t) {
+                                return Some(t);
+                            }
+                        }
+                        if let Expression::FieldAccess { object, field, .. } = value {
+                            if let Some(obj_ty) = this.infer_expression_type(object) {
+                                if let Some(struct_name) = CodeGenerator::type_to_name(&obj_ty) {
+                                    if let Some(fields) =
+                                        this.lookup_struct_field_types(&struct_name)
+                                    {
+                                        if let Some(ft) = fields.get(field.as_str()) {
+                                            if CodeGenerator::type_is_signed_int(ft) {
+                                                return Some(ft.clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if let Expression::Index { object, .. } = value {
+                            if let Some(Type::Vec(inner)) = this.infer_expression_type(object) {
+                                if CodeGenerator::type_is_signed_int(&inner) {
+                                    return Some((*inner).clone());
+                                }
+                            }
+                        }
+                        if let Some(b) = else_block {
+                            if let Some(t) = walk(this, b.as_slice(), name) {
+                                return Some(t);
+                            }
+                        }
+                    }
+                    Statement::If {
+                        then_block,
+                        else_block,
+                        ..
+                    } => {
+                        if let Some(t) = walk(this, then_block.as_slice(), name) {
+                            return Some(t);
+                        }
+                        if let Some(b) = else_block {
+                            if let Some(t) = walk(this, b.as_slice(), name) {
+                                return Some(t);
+                            }
+                        }
+                    }
+                    Statement::While { body, .. }
+                    | Statement::For { body, .. }
+                    | Statement::Loop { body, .. } => {
+                        if let Some(t) = walk(this, body.as_slice(), name) {
+                            return Some(t);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        walk(self, self.current_function_body.as_slice(), name)
+    }
+
+    /// Peer type for `x < 0` / `x >= 0` sentinels. Function-wide `usize_variables`
+    /// (shadowed loop counters, later `as usize`) must not poison a signed binding.
+    fn signed_peer_for_zero_sentinel(&self, expr: &Expression<'ast>) -> Option<Type> {
+        match expr {
+            Expression::Cast { type_, .. } if Self::type_is_signed_int(type_) => {
+                Some(type_.clone())
+            }
+            Expression::Identifier { name, .. } => {
+                if self.codegen_i32_binding_names.contains(name) {
+                    return Some(Type::Int32);
+                }
+                if let Some(t) = self.local_var_types.get(name.as_str()) {
+                    if Self::type_is_signed_int(t) {
+                        return Some(t.clone());
+                    }
+                }
+                if let Some(t) = self.signed_init_type_from_current_body(name) {
+                    return Some(t);
+                }
+                self.infer_expression_type(expr)
+                    .filter(Self::type_is_signed_int)
+            }
+            _ => self
+                .infer_expression_type(expr)
+                .filter(Self::type_is_signed_int),
+        }
+    }
+
     /// Generate code for a binary expression
     #[allow(clippy::too_many_lines)]
     pub(in crate::codegen::rust) fn generate_binary_expression(
@@ -124,10 +246,25 @@ impl<'ast> CodeGenerator<'ast> {
                         })
             )
         };
-        let left_is_usize =
+        let mut left_is_usize =
             self.expression_produces_usize(left) || ident_in_usize_vars(left);
-        let right_is_usize =
+        let mut right_is_usize =
             self.expression_produces_usize(right) || ident_in_usize_vars(right);
+        let signed_zero_sentinel = if is_comparison {
+            if Self::expr_is_int_zero_literal(right) {
+                self.signed_peer_for_zero_sentinel(left)
+            } else if Self::expr_is_int_zero_literal(left) {
+                self.signed_peer_for_zero_sentinel(right)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if signed_zero_sentinel.is_some() {
+            left_is_usize = false;
+            right_is_usize = false;
+        }
         let right_is_int_literal = matches!(
             right,
             Expression::Literal {
@@ -200,7 +337,9 @@ impl<'ast> CodeGenerator<'ast> {
             matches!(t, Type::Custom(n) if n == "usize")
                 || crate::codegen::rust::type_casting::type_is_usize(t)
         });
-        if is_comparison || is_arithmetic || is_bitwise {
+        if let Some(ref t) = signed_zero_sentinel {
+            self.assignment_int_target_type = Some(t.clone());
+        } else if is_comparison || is_arithmetic || is_bitwise {
             let peer_int_type = |this: &Self, expr: &Expression<'ast>| -> Option<Type> {
                 this.peer_type_for_int_literal_operand(expr).or_else(|| {
                     this.infer_expression_type(expr).filter(|t| {
@@ -1194,5 +1333,68 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         format!("{} {} {}", left_str, op_str, right_str)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::analyzer::Analyzer;
+    use crate::codegen::rust::CodeGenerator;
+    use crate::lexer::Lexer;
+    use crate::parser::Parser;
+    use crate::CompilationTarget;
+
+    #[test]
+    fn signed_sentinel_zero_must_not_emit_usize() {
+        let source = r#"
+pub struct Bone {
+    pub parent: i32,
+}
+
+pub fn remove_bone(parent: i32, n: usize) -> bool {
+    if parent >= 0 {
+        let p = parent as usize
+        let mut ci = 0
+        while ci < n {
+            ci = ci + 1
+        }
+        true
+    } else {
+        false
+    }
+}
+
+pub fn find_index() -> i32 {
+    -1
+}
+
+pub fn set_parent(old_parent: i64) {
+    let ci = find_index()
+    if ci < 0 {
+        return
+    }
+    if old_parent >= 0 {
+        let _ = old_parent as usize
+    }
+    let mut ci = 0
+    while ci < 4 {
+        ci = ci + 1
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !generated.contains("< 0_usize")
+                && !generated.contains(">= 0_usize")
+                && !generated.contains("0_usize as usize"),
+            "signed sentinel 0 must not be usize:\n{generated}"
+        );
     }
 }
