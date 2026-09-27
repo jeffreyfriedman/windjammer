@@ -1,5 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.489 (2026-09-27) — notes-api remaining E0308s after p3486 (no compiler src)
+
+| Gate | Status |
+|------|--------|
+| `if_int_status_into_u16_formal_must_coerce` | ❌ isolate RED — `let status = if msg == "note not found" { 404 } else { 400 }` emits `404_i32` / `400_i32` into `status: u16` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — four live `$WJ test` E0308s on tip p3486 |
+| `owned_string_formal_must_not_receive_mut_query` | ✅ isolate GREEN — `note_get_reply(note, query)`; product still `…, &mut query` |
+| `demoted_vec_early_return_must_clone` | ✅ isolate GREEN — stays `Vec<Note>` + `return notes.clone()`; product `notes: &Vec<Note>` + `return notes` |
+| `owned_string_formals_must_own_empty_literals` | ✅ isolate GREEN — `app.handle("".to_string(), …)` when formals stay `String`; product `app.handle(&method, path, "", "", "", …)` |
+
+**Product:** `apps/wj-notes-api` `$WJ test` on `.agent-wip/cargo-target-tip-p3486/release/wj` (2026-09-27 01:47). Prior cluster greened (P3.483–487: `log_tagged`, `qs_get`, `json::to_string`). Remaining rustc:
+
+1. `note_get_reply(&mut note, if_none_match, &mut query)` — `query: String`
+2. `error_from_message(status, msg)` — `status` is `i32` from if-int lits (literals at other call sites already `400_u16`)
+3. `truncate_notes` — `notes: &Vec<Note>` then `return notes`
+4. `app.handle(&method, path, "", "", "", 0_i64, body)` — owned `origin` / `accept_encoding` / `client_key`
+
+**Root cause layer:** none this session — eco agent files gates only. Do not edit `windjammer/src/`. Do not reshape the app.
+
+**Why these are new classes:**
+- Distinct from `server_response_new_int_literal_must_coerce_to_u16` (call-site lits / `status: int` formal). This is **if-else int lits → `let status` → `u16` slot**.
+- Distinct from P3.478 owned→`&str` under-borrow. This is **over-mut-borrow into owned `String`**, **demoted `&Vec` early-return without clone**, and **empty lits into product-owned `String` formals** (isolate already owns).
+
+**What became unnecessary:** refiling `qs_get` / `log_tagged` / `json::to_string(&mut payload)` (P3.483–487).
+
+**Gates:** tip `wj` = `.agent-wip/cargo-target-tip-p3486/release/wj`
+- isolate fixtures run directly with that `wj` (2026-09-27)
+- `$WJ test` in `apps/wj-notes-api` → **4 E0308**
+
 ## P3.488 (2026-09-27) — TDD WDB-397/398 (DB agent; no compiler src)
 
 | Gate | Status |
