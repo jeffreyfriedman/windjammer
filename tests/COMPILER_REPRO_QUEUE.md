@@ -22,7 +22,7 @@
 - Product emit unchanged: `let mut query` + `&mut query`.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3512-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- interp_query_then_get_must_not_mut_query` — expected **0 passed / 1 failed** (TDD RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- interp_query_then_get_must_not_mut_query` → **0 passed / 1 failed** (0.54s after 1016s compile; TDD RED).
 
 ## P3.512 (2026-09-27) — TDD WDB-414 (DB agent; no compiler src)
 
