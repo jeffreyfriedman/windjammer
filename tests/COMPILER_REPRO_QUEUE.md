@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.488 (2026-09-27) — TDD WDB-397/398 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-397 MultiFile | ⏳ TDD — `TileType::Empty` must not `.clone()` |
+| WDB-397 tip-out | ⏳ TDD — `gen/world/tilemap.rs` (WDB-384 path-list miss) |
+| WDB-398 MultiFile | ⏳ TDD — `Editor::new(palette.copy())` must not `&palette.copy()` |
+| WDB-398 tip-out | ⏳ TDD — `gen/editor/voxel_editor.rs` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why these are new classes:**
+- WDB-384/392 cover FaceDirection / Direction; product still clones **TileType::** in tilemap.
+- WDB-388 is `Vec3::new(&copy_local)`; this is **`new(owned)` receiving `&palette.copy()`**.
+
+**What became unnecessary:** do not reuse WDB-395/396 (compiler agent: i32/i64 zero compare + BT recursive Vec).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb384`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb397_ wdb398_` — results after TDD this session.
+
 ## P3.487 (2026-09-27) — braced sibling `use http::{fn}` is a defining-module alias
 
 | Gate | Status |
