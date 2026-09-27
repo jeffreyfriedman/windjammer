@@ -1682,6 +1682,14 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
     if !formal_is_container {
         return false;
     }
+    // Analyzer MutBorrowed is `&mut Vec` / `&mut Map` at call sites (WDB-396 BT SCC),
+    // not an owned container slot. Same rule as `bare_formal_is_owned_user_type`.
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::MutBorrowed)
+    ) {
+        return false;
+    }
     // Bare WJ `Vec`/`Map` AST formals emit owned containers unless codegen confirmed `&Vec`
     // (WDB-281). Stale analyzer `Reference(Vec)` in `param_types` must not deny the slot —
     // that previously forced call-site `&items` into owned `contains(items: Vec)`.
@@ -2685,14 +2693,8 @@ mod promote_overlapping_tests {
             "wj_querystring::get".into(),
             FunctionSignature {
                 name: "wj_querystring::get".into(),
-                param_types: vec![
-                    Type::String,
-                    Type::Reference(Box::new(Type::String)),
-                ],
-                formal_param_types: vec![
-                    Type::String,
-                    Type::Reference(Box::new(Type::String)),
-                ],
+                param_types: vec![Type::String, Type::Reference(Box::new(Type::String))],
+                formal_param_types: vec![Type::String, Type::Reference(Box::new(Type::String))],
                 param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Borrowed],
                 return_type: Some(Type::Option(Box::new(Type::String))),
                 return_ownership: OwnershipMode::Owned,
@@ -2722,7 +2724,11 @@ mod promote_overlapping_tests {
             },
         );
         let cands = callee_signature_lookup_candidates(&reg, "wj_querystring::get");
-        assert_eq!(cands.len(), 1, "exact crate::get must not OR bare get: {cands:#?}");
+        assert_eq!(
+            cands.len(),
+            1,
+            "exact crate::get must not OR bare get: {cands:#?}"
+        );
         assert_eq!(
             cands[0].emitted_rust_ref_params.as_deref(),
             Some(&[false, true][..])

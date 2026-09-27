@@ -1875,6 +1875,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// WJ AST `Vec<T>` that only forwards as a call argument keeps the owned formal.
     /// The next callee may demote (`median_pair` readonly `&Vec`); reuse sites must still
     /// `.clone()` into this owned slot (WDB-285 / `workload_verdict`).
+    ///
+    /// Exception: forwarding into a MutBorrowed sibling (`tick_seq` → `tick_node`)
+    /// must *not* keep owned — the SCC must emit `&mut Vec` so the mutator can
+    /// Identity-pass the binding (WDB-396). Shared `&Vec` still stays owned.
     pub(in crate::codegen::rust) fn vec_formal_only_forwards_as_call_arg(
         &self,
         param: &crate::parser::Parameter,
@@ -1885,6 +1889,7 @@ impl<'ast> CodeGenerator<'ast> {
         // map to `&mut HashMap` then Identity-moving it is E0308.
         Self::param_type_is_owned_forward_container(&param.type_)
             && self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func)
+            && !self.param_passed_to_mut_borrowing_callee(func.body.as_slice(), &param.name, func)
     }
 
     /// True when every use of `param_name` is passing it as a call/method argument (no field reads).
@@ -11361,16 +11366,13 @@ impl<'ast> CodeGenerator<'ast> {
             })?;
         // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over the
         // importer's analysis stub — never take local-only when global has emission.
-        if let Some(reg) = self
-            .get_signature_with_global(&qualified)
-            .or_else(|| {
-                if base != rt {
-                    self.get_signature_with_global(&base_qualified)
-                } else {
-                    None
-                }
-            })
-        {
+        if let Some(reg) = self.get_signature_with_global(&qualified).or_else(|| {
+            if base != rt {
+                self.get_signature_with_global(&base_qualified)
+            } else {
+                None
+            }
+        }) {
             Self::merge_registry_sig_into_method_sig(&mut sig, reg);
         }
         if let Some(global) = self.global_signature_registry.as_ref() {

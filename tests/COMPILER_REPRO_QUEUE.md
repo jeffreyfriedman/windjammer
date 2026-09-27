@@ -1,5 +1,37 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.495 (2026-09-27) — WDB-396 BT recursive Vec SCC agrees MutBorrowed
+
+| Gate | Status |
+|------|--------|
+| `wdb396_module_file_bt_recursive_vec_must_agree_mut` | ✅ isolate GREEN — `tick_node`/`tick_seq` both `active: &mut Vec<i32>`; Identity pass, no `.clone()` |
+| `wdb396_tip_out_game_core_bt_executor_must_agree_mut` | ✅ tip-out GREEN (this host) |
+| `wdb342_*` | ✅ isolate + tip-out GREEN |
+| spawn / mpsc | ✅ GREEN |
+| `wdb395_module_file_i32_i64_compare_zero_must_not_emit_usize` | ✅ isolate GREEN; ❌ tip-out stale product (`0_usize` in gen/rel_tip_out) |
+| `bug_demoted_vec_param_into_owned_vec_callee_must_clone_test` | ✅ isolate GREEN (WDB-285 keep-owned for owned callees still holds) |
+| WDB-285/286 tip-out | ⚠️ gen-lag (`sysbench_opt_port` / `query_verdict` missing) — not isolate |
+
+**Root cause layer:** signature — WDB-285 `vec_formal_only_forwards_as_call_arg` treated every call-only Vec/Map as owned, including forwards into MutBorrowed siblings. `bare_formal_is_vec_or_map` also claimed MutBorrowed Vec slots as owned emit (unlike `bare_formal_is_owned_user_type`).
+
+**What became unnecessary:** keep-owned on MutBorrowed Vec forwards; `param_only_forwards_to_emitted_owned_callees` lying that `&mut Vec` is an owned slot. No new `ir_call_site` peel / method-name list. IR Identity `tick_seq(id, active, running)` once both formals are `&mut Vec`.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3495`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb396_module_file_bt_recursive_vec_must_agree_mut` → **2 passed**
+- Related spawn/mpsc/wdb342/wdb395/wdb285-isolate/copy_aggregate → **11 passed**; 3 failed = stale tip-out/gen-lag only
+
+## P3.494 (2026-09-27) — WDB-395 signed sentinel + WDB-396 TDD file
+
+| Gate | Status |
+|------|--------|
+| `wdb395_module_file_i32_i64_compare_zero_must_not_emit_usize` | ✅ isolate GREEN — `parent >= 0` / `ci < 0` stay signed |
+| `wdb395_tip_out_*` | ❌ stale product — regen after tip `wj` |
+| `wdb396_*` | ✅ isolate GREEN (P3.495) |
+
+**Root cause layer:** constraint — function-wide `usize_variables` (later `as usize` / shadowed `ci`) poisoned signed `x < 0` / `x >= 0` into `0_usize`. Signed peer type from the binding now wins.
+
+**What became unnecessary:** `0_usize` on signed zero-sentinels. No peel.
+
 ## P3.493 (2026-09-27) — crate:: signature lookup + stop post-IR Copy clone undo
 
 | Gate | Status |
