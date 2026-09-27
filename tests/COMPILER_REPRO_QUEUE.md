@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.515 (2026-09-27) — TDD WDB-415 (DB agent; no compiler src)
+
+Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-415 MultiFile | ⏳ TDD — `materials_to_palette(materials)` inside `if` must not `materials.clone()` |
+| WDB-415 tip-out | ⏳ product `materials_to_palette(materials.clone())` in `unified_renderer.rs` |
+
+**Root cause layer:** signature — `materials_to_palette(materials: Vec<Mat>)` stays owned; `upload_materials` has a single use inside `if !test_mode` and still emits `materials.clone()`. WJ moves `materials`.
+
+**Why this is a new class:**
+- WDB-412 is **field.clone()** into a **for-loop** Vec formal.
+- WDB-414 is **`new(self.scene)`** (constructor field).
+- WDB-407 is **`Vec` `new` demote** (`new(&joints)`).
+
+**What became unnecessary:** `materials.clone()` when WJ passes `materials` once.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb415_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513/P3.514 (notes-api), WDB-412–414 / P3.509–P3.512 (filed).
+
 ## P3.514 (2026-09-27) — `fetch_note(self.store, id)` GET-one must mut-bind note
 
 | Gate | Status |
