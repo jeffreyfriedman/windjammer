@@ -313,29 +313,34 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     Expression::Array { .. } => self.infer_let_value_type(value, var_name),
                     Expression::Block { statements, .. } => {
-                        let if_i32 = statements.last().and_then(|last_stmt| {
-                            let Statement::If {
-                                then_block,
-                                else_block,
-                                ..
-                            } = last_stmt
-                            else {
-                                return None;
-                            };
-                            let then_expr = then_block.last().and_then(|s| match s {
-                                Statement::Expression { expr, .. } => Some(*expr),
-                                _ => None,
-                            })?;
-                            let else_expr = else_block.as_ref().and_then(|b| {
-                                b.last().and_then(|s| match s {
+                        let use_site = self.let_binding_int_width_from_later_call_formals(name);
+                        if use_site.is_some() {
+                            use_site
+                        } else {
+                            let if_i32 = statements.last().and_then(|last_stmt| {
+                                let Statement::If {
+                                    then_block,
+                                    else_block,
+                                    ..
+                                } = last_stmt
+                                else {
+                                    return None;
+                                };
+                                let then_expr = then_block.last().and_then(|s| match s {
                                     Statement::Expression { expr, .. } => Some(*expr),
                                     _ => None,
-                                })
-                            })?;
-                            self.if_else_binding_should_be_i32(then_expr, else_expr)
-                                .then_some(Type::Int32)
-                        });
-                        if_i32.or_else(|| self.infer_expression_type(value))
+                                })?;
+                                let else_expr = else_block.as_ref().and_then(|b| {
+                                    b.last().and_then(|s| match s {
+                                        Statement::Expression { expr, .. } => Some(*expr),
+                                        _ => None,
+                                    })
+                                })?;
+                                self.if_else_binding_should_be_i32(then_expr, else_expr)
+                                    .then_some(Type::Int32)
+                            });
+                            if_i32.or_else(|| self.infer_expression_type(value))
+                        }
                     }
                     _ => {
                         // Fall back to general expression type inference
@@ -625,6 +630,18 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_assign_int = self.assignment_int_target_type.take();
+                if let Some(vn) = var_name {
+                    if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn)
+                    {
+                        self.assignment_int_target_type = Some(peer.clone());
+                        self.local_var_types.insert(vn.to_string(), peer.clone());
+                        if matches!(peer, Type::Int32) {
+                            self.codegen_i32_binding_names.insert(vn.to_string());
+                        } else {
+                            self.codegen_i32_binding_names.remove(vn);
+                        }
+                    }
+                }
                 if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
                     // WDB-305: later u32 assign peer beats return i64 for `let mut x = 0`.
                     if let Some(vn) = var_name {

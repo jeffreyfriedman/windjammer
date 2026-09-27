@@ -1,5 +1,42 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.492 (2026-09-27) — if-int use-site width + Copy-oracle narrowing
+
+| Gate | Status |
+|------|--------|
+| `if_int_status_into_u16_formal_must_coerce` | ✅ isolate GREEN — `404_u16` / `400_u16` from later `status: u16` formal |
+| spawn / mpsc | ✅ GREEN |
+| `wdb347_*` | ✅ GREEN — Copy f32 match bindings still no `.clone()` |
+| `copy_aggregate_field_only_release_cross_module` | ❌ isolate RED — still `handle.clone()` into owned `BatchHandle` |
+
+**Root cause layer:** constraint/solver — `let status = if … { 404 } else { 400 }` was forced i32 (`if_else_binding_should_be_i32`) and ignored the later `error_from_message(status, …)` `u16` formal. Use-site call-formal width now wins and drives `assignment_int_target_type`.
+
+**What became unnecessary:** stamping `_i32` on if-else int lits when a later typed formal is a different int width. Dual-oracle “Copy aggregates always clone” narrowed to `call_arg_is_copy_identity` / registry `is_type_copy` (WDB-347 still GREEN). No new name-list peel.
+
+**Copy-aggregate remain:** match-binding / `enum_variant_types` write-back + Copy `SafetyType` still do not stop `handle.clone()` (likely an earlier keep-`.clone()` path before formal Copy is visible). Next: dump `enum_variant_types` + resolved `arrow_batch_release` formal during `batch.wj` codegen — do not add another peel.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3491`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- if_int_status_into_u16_formal_must_coerce bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test wdb347` → **7 passed**
+
+## P3.491 (2026-09-27) — TDD WDB-401/402 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-401 MultiFile | ⏳ TDD — `StreamState::Loading` must not `.clone()` |
+| WDB-401 tip-out | ⏳ TDD — `gen/vgs/streaming.rs` + `gen/audio/streaming.rs` |
+| WDB-402 MultiFile | ⏳ TDD — `HostType::F32` / `ShaderType::F32` must not `.clone()` |
+| WDB-402 tip-out | ⏳ TDD — `gen/rendering/type_safety_validator.rs` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why these are new classes:**
+- WDB-384/392/397 cover FaceDirection / Direction / TileType; product still clones **StreamState::** (VGS + audio) and **HostType::** / **ShaderType::**.
+
+**What became unnecessary:** refiling FaceDirection (384), Direction (392), TileType (397).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb397`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb401_ wdb402_` — results after TDD this session.
+
 ## P3.490 (2026-09-27) — Phase-2 isolate assertions match demote+borrow/passthrough
 
 | Gate | Status |
@@ -22,7 +59,7 @@
 
 | Gate | Status |
 |------|--------|
-| `if_int_status_into_u16_formal_must_coerce` | ❌ isolate RED — `let status = if msg == "note not found" { 404 } else { 400 }` emits `404_i32` / `400_i32` into `status: u16` |
+| `if_int_status_into_u16_formal_must_coerce` | ✅ isolate GREEN (P3.492) — use-site `u16` formal; was `404_i32` |
 | `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — four live `$WJ test` E0308s on tip p3486 |
 | `owned_string_formal_must_not_receive_mut_query` | ✅ isolate GREEN — `note_get_reply(note, query)`; product still `…, &mut query` |
 | `demoted_vec_early_return_must_clone` | ✅ isolate GREEN — stays `Vec<Note>` + `return notes.clone()`; product `notes: &Vec<Note>` + `return notes` |
@@ -51,12 +88,12 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-397 MultiFile | ⏳ TDD — `TileType::Empty` must not `.clone()` |
-| WDB-397 tip-out | ⏳ TDD — `gen/world/tilemap.rs` (WDB-384 path-list miss) |
-| WDB-398 MultiFile | ⏳ TDD — `Editor::new(palette.copy())` must not `&palette.copy()` |
-| WDB-398 tip-out | ⏳ TDD — `gen/editor/voxel_editor.rs` |
+| WDB-397 MultiFile | ✅ isolate GREEN — `TileType::Empty` / `Solid` no `.clone()` |
+| WDB-397 tip-out | ❌ RED — `rel_tip_out/world/tilemap.rs` + `gen/world/tilemap.rs` still `TileType::*.clone()` |
+| WDB-398 MultiFile | ✅ isolate GREEN — `Editor::new(palette.copy())` no `&` |
+| WDB-398 tip-out | ❌ RED — `rel_tip_out/editor/voxel_editor.rs` + `gen/editor/voxel_editor.rs` still `new(&palette.copy())` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolates already correct (same assign-clone skip class as P3.479); product/tip regen pending.
 
 **Why these are new classes:**
 - WDB-384/392 cover FaceDirection / Direction; product still clones **TileType::** in tilemap.
@@ -64,8 +101,8 @@
 
 **What became unnecessary:** do not reuse WDB-395/396 (compiler agent: i32/i64 zero compare + BT recursive Vec).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb384`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb397_ wdb398_` — results after TDD this session.
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb397`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb397_ wdb398_` → **2 passed / 2 failed** (isolates GREEN, tip-out RED; 19.51s after 18m cold compile)
 
 ## P3.487 (2026-09-27) — braced sibling `use http::{fn}` is a defining-module alias
 

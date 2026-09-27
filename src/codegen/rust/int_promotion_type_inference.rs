@@ -416,6 +416,198 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// WDB-305: untyped `let mut best_count = 0` defaults to return-width i64 while later
     /// `best_count = count` assigns a `u32` (CDLP majority). Prefer the later assign width.
+    /// Int width from a later call that passes `name` into a typed formal
+    /// (`let status = if … { 404 } else { 400 }` then `error_from_message(status, …)`
+    /// where the formal is `u16`).
+    pub(in crate::codegen::rust) fn let_binding_int_width_from_later_call_formals(
+        &self,
+        name: &str,
+    ) -> Option<Type> {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        let mut peer = None;
+        self.scan_stmts_for_call_arg_int_formal(&body, name, &mut peer);
+        peer
+    }
+
+    fn scan_stmts_for_call_arg_int_formal(
+        &self,
+        stmts: &[&crate::parser::Statement<'ast>],
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        use crate::parser::Statement;
+        for stmt in stmts {
+            match stmt {
+                Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+                    self.scan_expr_for_call_arg_int_formal(expr, name, peer);
+                }
+                Statement::Let { value, .. } | Statement::Assignment { value, .. } => {
+                    self.scan_expr_for_call_arg_int_formal(value, name, peer);
+                }
+                Statement::While { body, .. } | Statement::For { body, .. } => {
+                    self.scan_stmts_for_call_arg_int_formal(body, name, peer);
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    condition,
+                    ..
+                } => {
+                    self.scan_expr_for_call_arg_int_formal(condition, name, peer);
+                    self.scan_stmts_for_call_arg_int_formal(then_block, name, peer);
+                    if let Some(eb) = else_block {
+                        self.scan_stmts_for_call_arg_int_formal(eb, name, peer);
+                    }
+                }
+                Statement::Match { arms, value, .. } => {
+                    self.scan_expr_for_call_arg_int_formal(value, name, peer);
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            self.scan_stmts_for_call_arg_int_formal(statements, name, peer);
+                        } else {
+                            self.scan_expr_for_call_arg_int_formal(arm.body, name, peer);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn scan_expr_for_call_arg_int_formal(
+        &self,
+        expr: &Expression<'ast>,
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name: n, .. } if n == name) {
+                        if let Some(ty) = self.callee_int_formal_type(function, i, arguments.len()) {
+                            *peer = Some(ty);
+                            return;
+                        }
+                    }
+                    self.scan_expr_for_call_arg_int_formal(arg, name, peer);
+                    if peer.is_some() {
+                        return;
+                    }
+                }
+                self.scan_expr_for_call_arg_int_formal(function, name, peer);
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                method,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if matches!(arg, Expression::Identifier { name: n, .. } if n == name) {
+                        if let Some(ty) =
+                            self.method_int_formal_type(object, method, i, arguments.len())
+                        {
+                            *peer = Some(ty);
+                            return;
+                        }
+                    }
+                    self.scan_expr_for_call_arg_int_formal(arg, name, peer);
+                    if peer.is_some() {
+                        return;
+                    }
+                }
+                self.scan_expr_for_call_arg_int_formal(object, name, peer);
+            }
+            Expression::Block { statements, .. } => {
+                self.scan_stmts_for_call_arg_int_formal(statements, name, peer);
+            }
+            Expression::Binary { left, right, .. } => {
+                self.scan_expr_for_call_arg_int_formal(left, name, peer);
+                if peer.is_none() {
+                    self.scan_expr_for_call_arg_int_formal(right, name, peer);
+                }
+            }
+            Expression::Unary { operand, .. } => {
+                self.scan_expr_for_call_arg_int_formal(operand, name, peer);
+            }
+            _ => {}
+        }
+    }
+
+    fn callee_int_formal_type(
+        &self,
+        function: &Expression<'ast>,
+        arg_index: usize,
+        arg_count: usize,
+    ) -> Option<Type> {
+        let name = match function {
+            Expression::Identifier { name, .. } => name.clone(),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name, .. } = object {
+                    format!("{name}::{field}")
+                } else {
+                    field.clone()
+                }
+            }
+            _ => return None,
+        };
+        self.int_formal_from_resolved_name(&name, arg_index, arg_count)
+    }
+
+    fn method_int_formal_type(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_index: usize,
+        arg_count: usize,
+    ) -> Option<Type> {
+        let recv = self.infer_expression_type(object)?;
+        let recv_name = match &recv {
+            Type::Custom(n) | Type::Parameterized(n, _) => n.as_str(),
+            Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
+                Type::Custom(n) | Type::Parameterized(n, _) => n.as_str(),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let key = format!("{recv_name}::{method}");
+        self.int_formal_from_resolved_name(&key, arg_index, arg_count)
+            .or_else(|| self.int_formal_from_resolved_name(method, arg_index, arg_count))
+    }
+
+    fn int_formal_from_resolved_name(
+        &self,
+        name: &str,
+        arg_index: usize,
+        _arg_count: usize,
+    ) -> Option<Type> {
+        let sig = self.signature_registry.get_signature(name).or_else(|| {
+            name.rsplit_once("::")
+                .and_then(|(_, leaf)| self.signature_registry.get_signature(leaf))
+        })?;
+        let pidx = sig.arg_param_index(arg_index);
+        let ty = sig
+            .formal_param_type(pidx)
+            .or_else(|| sig.param_types.get(pidx))?;
+        let bare = match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        if Self::assignment_target_needs_int_codegen_context(bare) {
+            Some(bare.clone())
+        } else {
+            None
+        }
+    }
+
     pub(in crate::codegen::rust) fn mut_int_local_peer_width_from_later_assigns(
         &self,
         name: &str,
