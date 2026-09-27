@@ -1,5 +1,21 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.505 (2026-09-27) — demoted `&Vec<Note>` must clone on owned return (`truncate_notes`)
+
+| Gate | Status |
+|------|--------|
+| `string_note_vec_early_return_must_clone` | ✅ isolate GREEN — cross-module private `truncate_notes` demotes to `&Vec<Note>` then `return notes.clone()`; cargo check |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product — empty-lit `handle(..., "", "", "")` and `&mut query` remain after Vec clone |
+
+**Root cause layer:** codegen — private cross-module `Vec<Note>` formals demote to `&Vec` (`emitted_rust_ref_formals` / `inferred_borrowed_params`); `return notes` stayed by-move (E0308). Same-file `pub fn` stays owned (false-GREEN). `returned_parameters` anti-demote does not cover this path. Return-site `.clone()` when the function returns owned `Vec` and the identifier is a demoted Vec formal.
+
+**What became unnecessary:** keeping the formal owned just to avoid a clone; reshaping notes-api `truncate_notes`.
+
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3505`
+- watched RED: `notes: &Vec<Note>` + `return notes;` (`cargo test --test all -- string_note_vec_early_return_must_clone` → 0 passed / 1 failed)
+- tip MultiFile emit `return notes.clone();`; fixture `cargo check` **ok**
+- official isolate after fix — results this session
+
 ## P3.504 (2026-09-27) — TDD WDB-409 (DB agent; no compiler src)
 
 | Gate | Status |
@@ -83,10 +99,10 @@
 
 | Gate | Status |
 |------|--------|
-| `handle_forward_empty_lits_must_own` | ⏳ isolate — `handle` forwards origin/accept/client_key; `handle_request` passes `""` |
-| `string_note_vec_early_return_must_clone` | ⏳ isolate — `Note` with string fields + index scan + `return notes` |
-| `timestamp_millis_loop_must_unify_int` | ✅ P3.500 — no longer `(now as i32) < deadline` |
-| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — 3 E0308s on tip p3495 |
+| `handle_forward_empty_lits_must_own` | ✅ isolate GREEN / ❌ product RED — isolate owns `"".to_string()`; ecosystem `handle_request` still bare `""` |
+| `string_note_vec_early_return_must_clone` | ✅ P3.505 — cross-module private demotes to `&Vec<Note>` then `return notes.clone()` |
+| `timestamp_millis_loop_must_unify_int` | ✅ P3.500 — `while now < (deadline as i64)`; not `(now as i32) < deadline` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — empty-lit + Vec early-return E0308s remain in ecosystem notes-api |
 
 **Why these are new classes:**
 - P3.489 empty-lit isolate used interpolation+`keep` and already owned `""`. Product `handle` **forwards** three owned strings into `inner`/`handle_method`.
@@ -94,7 +110,10 @@
 
 **Root cause layer:** none this session — eco agent files gates only. Do not edit `windjammer/src/`. Do not reshape the app.
 
-**Gates:** tip `wj` = `.agent-wip/cargo-target-tip-p3495/release/wj` — fixtures run this session.
+**Ran (2026-09-27):** tip p3495 binary absent; used `target/release/wj` 0.50.0 — `$WJ build src --output OUT --no-cargo --module-file` + `cargo check` in OUT.
+- Empty-lit forward: `app.handle(method, path, "".to_string(), "".to_string(), "".to_string(), 0_i64, body)` — **not** `path, "", "", ""`; cargo check **ok**.
+- String-Note Vec: `pub fn truncate_notes(notes: &Vec<Note>, …) { return notes; }` — cargo check **fail** E0308.
+- Retry pause_ms isolate: `while now < (deadline as i64)` — **GREEN** (P3.500).
 
 ## P3.498 (2026-09-27) — TDD WDB-405 (DB agent; no compiler src)
 
