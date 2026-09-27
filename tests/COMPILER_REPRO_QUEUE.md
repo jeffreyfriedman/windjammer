@@ -1,5 +1,54 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.517 (2026-09-27) — TDD WDB-416 (DB agent; no compiler src)
+
+Owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-416 MultiFile | ⏳ TDD — `a.as_float() + b.as_float()` must not clone |
+| WDB-416 tip-out | ⏳ product `a.clone().as_float()` in `visual_scripting/runtime.rs` |
+
+**Root cause layer:** signature — `as_float(self) -> f32` consumes once; `evaluate` still emits `a.clone().as_float()`. WJ moves `a`.
+
+**Why this is a new class:**
+- WDB-358 is **`self.clone().method()`**.
+- WDB-362 is **indexed `].clone().method()`**.
+- WDB-409 is **`set(name: &str)`** demote.
+
+**What became unnecessary:** `a.clone()` before a one-shot owned-self method.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb416_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516 (notes-api / wj-glob), WDB-412–415 / P3.509–P3.515 (filed).
+
+## P3.516 (2026-09-27) — `while k <= vec.len()` must unify i64 like `>=`
+
+`wj-glob` `match_segs`: `>= pats.len()` / `ti >= texts.len()` emit `(len() as i64)`, but `while k <= texts.len()` leaves raw `usize`.
+
+| Gate | Status |
+|------|--------|
+| `int_while_le_vec_len_must_unify_i64` | ❌ isolate RED on tip p3505 (18:50) — `while k <= texts.len()` (no cast) |
+| product `wj-glob` `$WJ test` | ❌ same E0308 `expected i64, found usize` |
+
+**Why this is a new class:**
+- `bug_int_index_while_len_must_not_emit_usize_add_test` only asserts `ti >=` lines and treats **transpile-ok** as success (false-GREEN).
+- `>=` already casts. `<=` in `while` does not. Do not edit `windjammer/src/`. Do not reshape `wj-glob`.
+
+**Root cause layer:** encoding / compare — `<=` vs `>=` len unify is not symmetric.
+
+**What became unnecessary:** wrapping `glob.is_match` over `std::path.glob_match` until this package compiles; casting `.len()` in application code.
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (18:50). `$WJ build --library --module-file` + `cargo check`.
+- Emit: `if pi >= (pats.len() as i64)` / `ti >= (texts.len() as i64)` / **`while k <= texts.len()`**.
+- Product `$WJ test`: rustc E0308 on `while k <= texts.len()`.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3516-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- int_while_le_vec_len_must_unify_i64`
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513/P3.514 (notes-api), WDB-412–415 / P3.509–P3.515 (filed).
+
 ## P3.515 (2026-09-27) — TDD WDB-415 (DB agent; no compiler src)
 
 Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
@@ -27,25 +76,24 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 | Gate | Status |
 |------|--------|
-| `fetch_note_store_then_query_must_not_mut` | ❌ isolate RED on tip p3515 (18:31) **after** `6f8031fc` / `35f3b7ab` — still `Some(note)` + `&mut note` (E0596) |
-| `interp_query_then_get_must_not_mut_query` | ❌ P3.513 — `self.store.fetch(id)` same E0596 |
+| `fetch_note_store_then_query_must_not_mut` | ✅ isolate E0596 GREEN on tip p3505 (18:50) — `Some(mut note)` + last-use `query` (move) |
+| `interp_query_then_get_must_not_mut_query` | ✅ P3.513 same mut-bind on p3505 (18:50) |
 | `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `&mut query` into `query: String` (`let mut query`) |
 
 **Why this is a new class:**
 - P3.513 GET-one is **`self.store.fetch(id)`**. Product is **`fetch_note(self.store, id)`** while POST/PUT still call `self.store.create` / `update` / `delete`.
-- Last use is still `query.clone()` (not `&mut query`). Product last use remains `&mut query`.
+- Isolates last-use `query` / `query.clone()`. Product last use remains `&mut query` after `query.clone()` in the list arm.
 
-**Root cause layer:** codegen / match-binding — nested match + store moved into a free fn still emits immutable `Some(note)` + `&mut Note`. Do not edit `windjammer/src/`. Do not reshape notes-api.
+**Root cause layer:** last-use / auto-ref — product `dispatch` still emits `let mut query` + `note_get_reply(&mut note, …, &mut query)` into `query: String`. Mut-bind for `Note` greened. Do not edit `windjammer/src/`. Do not reshape notes-api. Path-dep `qs_get` + nested `/`/`/health` ifs + `wj_url` still last-use move in isolates (not this E0308).
 
-**What became unnecessary:** treating method-call `store.fetch` as the only missing nest.
+**What became unnecessary:** treating method-call `store.fetch` as the only missing nest; filing another E0596 isolate.
 
-**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3510/release/wj` 0.50.0 (18:05). Isolate `$WJ build --module-file` + `cargo check`.
-- Emit: `Some(note) => note_get_reply(&mut note, if_none_match, query.clone())` — E0596.
-- P3.513 recheck on same tip: still `Some(note)` + clone.
-- Recheck tip `.agent-wip/cargo-target-tip-p3515/release/wj` 0.50.0 (18:31) after `6f8031fc` / `35f3b7ab`: **still** `Some(note)` + `&mut note`. Product still `let mut query` + `&mut query`. Path-dep `qs_get` + health prefix still last-use `query.clone()`.
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (18:50). Product `$WJ build --module-file`.
+- Product GET-one: `Some(mut note) => note_get_reply(&mut note, if_none_match, &mut query)`.
+- Isolates with path-dep `qs_get` + nested if + `join_url`: `Some(mut note)` + `query` move.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3511-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- fetch_note_store_then_query_must_not_mut` → **0 passed / 1 failed** (0.55s after 979s compile; TDD RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_product_remaining_e0308_must_not_emit` → still the RED product gate.
 
 ## P3.513 (2026-09-27) — nested route_match GET-one must mut-bind note (not `&mut query` yet)
 
