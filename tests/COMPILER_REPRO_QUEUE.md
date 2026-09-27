@@ -1,5 +1,35 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.502 (2026-09-27) — TDD WDB-407 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-407 MultiFile | ⏳ TDD — `new(joints: Vec<i32>)` must not demote to `&Vec` + clone |
+| WDB-407 tip-out | ⏳ TDD — `FABRIKChain::new(&joints)` / `VoxParser::new(&data)` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why this is a new class:**
+- WDB-398 is `&palette.copy()` into **still-owned** `new`. This is **owned `Vec` formal stored into a field** demoted to `&Vec` + `.clone()` (FABRIK / VoxParser).
+
+**What became unnecessary:** refiling WDB-398; reusing WDB-406 (compiler: i32 field compare vs usize).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb405`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb407_` — results after TDD this session.
+
+## P3.501 (2026-09-27) — WDB-406 i32 field compare must not emit usize
+
+| Gate | Status |
+|------|--------|
+| `wdb406_module_file_i32_field_compare_must_not_emit_usize` | ⏳ isolate RED — `clen > max_leaf && d < max_depth` must stay i32 |
+
+**Root cause layer:** constraint — function-wide `as usize` index / `.len()` still poisons i32 field peers (`max_leaf_objects as usize`) after WDB-395 zero-sentinels.
+
+**What became unnecessary:** `as usize` on i32 field compares in `spatial_index` overflow checks.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3501`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb406_module_file_i32_field_compare`
+
 ## P3.500 (2026-09-27) — timestamp_millis loop must unify i64 (wj-retry pause_ms)
 
 | Gate | Status |
