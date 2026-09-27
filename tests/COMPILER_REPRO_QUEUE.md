@@ -53,10 +53,10 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-414 MultiFile | ⏳ TDD — `Vox::new(self.scene)` must not `self.scene.clone()` |
-| WDB-414 tip-out | ⏳ product `CsgVoxelizer::new(self.scene.clone())` in rifter/cathedral/humanoid |
+| WDB-414 MultiFile | ❌ isolate RED — `initialize(&mut self)` emits `Vox::new(self.scene.clone())` when `Scene.label: string` |
+| WDB-414 tip-out | ❌ product RED — `CsgVoxelizer::new(self.scene.clone())` in `rel_tip_out` + `gen` rifter/cathedral/humanoid |
 
-**Root cause layer:** signature — `CsgVoxelizer::new(scene: CsgScene)` stays owned; `initialize` keeps using `self` after, so codegen clones `self.scene` instead of a partial move. WJ does not use `self.scene` after `new`.
+**Root cause layer:** signature — `new(scene: Scene)` stays owned; `initialize` is `&mut self` and later writes `self.grid`, so codegen clones `self.scene` instead of a partial move. Copy `i32` Scene hid the clone (first isolate). Non-Copy `string` matches product `CsgScene`.
 
 **Why this is a new class:**
 - WDB-360 is **`encode(self.grid.clone())`**. This is **constructor `new(self.scene)`**.
@@ -65,10 +65,10 @@
 
 **What became unnecessary:** `self.scene.clone()` at `CsgVoxelizer::new` when WJ moves `self.scene`.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb414_` — results recorded after TDD run
+**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `464568b8`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb414_` → **0 passed / 2 failed**
 
-**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511 (notes-api), WDB-412–413 / P3.509–P3.510 (filed).
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513 (notes-api), WDB-412–413 / P3.509–P3.510 (filed).
 
 ## P3.511 (2026-09-27) — split query list-then-get must not `&mut note` / `&mut query`
 
