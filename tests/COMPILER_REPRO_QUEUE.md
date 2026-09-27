@@ -1,21 +1,52 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.504 (2026-09-27) — TDD WDB-409 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-409 MultiFile | ⏳ TDD — owned `string`+`Val` formals stored into fields must not demote to `&str`/`&Val` |
+| WDB-409 tip-out | ⏳ TDD — `VariableScope::set(name: &str, value: &Value)` / `set_variable(name: &String, value: &Value)` / `load_gltf(name: &String)` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why this is a new class:**
+- WDB-407 is owned **`Vec` `new`** demoted to `&Vec`. This is owned **`string` + value** formals that **store into fields**, demoted to `&str`/`&String`/`&Value` (then `value` assigned into a `Value` field).
+- WDB-186/173/301 are call-site `&String` into a **still-owned** formal. WDB-107 is intentional read-only `&str`. Product `set` **writes** `name`/`value`.
+
+**What became unnecessary:** refiling WDB-407; reusing WDB-408 (compiler: f32 compare int-width).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb409_` — results after TDD this session.
+
+## P3.503 (2026-09-27) — WDB-408 f32 compare must not require integer width
+
+| Gate | Status |
+|------|--------|
+| `wdb408_module_file_f32_compare_must_not_require_int_width` | ⏳ isolate — `tmax >= tmin && tmax >= 0.0` must library-compile |
+
+**Root cause layer:** constraint — int inference `MustMatch` on every compare, including f32 slab tests. Engine `wj game build` aborted: `Isize vs I64` at `physics/collision.wj:71`.
+
+**What became unnecessary:** treating float compares as integer-width unification.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3508`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb408_module_file_f32_compare`
+
 ## P3.502 (2026-09-27) — TDD WDB-407 (DB agent; no compiler src)
 
 | Gate | Status |
 |------|--------|
-| WDB-407 MultiFile | ⏳ TDD — `new(joints: Vec<i32>)` must not demote to `&Vec` + clone |
-| WDB-407 tip-out | ⏳ TDD — `FABRIKChain::new(&joints)` / `VoxParser::new(&data)` |
+| WDB-407 MultiFile | ✅ isolate GREEN — `new(joints: Vec<i32>)` stays owned; no `&Vec` / `new(&joints)` / field clone |
+| WDB-407 tip-out | ❌ RED — `rel_tip_out` + `gen` `animation/ik.rs` `ik_test.rs` `assets/vox_loader.rs` still `&Vec` / `new(&joints)` / `new(&data)` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate already correct; product/tip regen pending.
 
 **Why this is a new class:**
 - WDB-398 is `&palette.copy()` into **still-owned** `new`. This is **owned `Vec` formal stored into a field** demoted to `&Vec` + `.clone()` (FABRIK / VoxParser).
 
 **What became unnecessary:** refiling WDB-398; reusing WDB-406 (compiler: i32 field compare vs usize).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb405`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb407_` — results after TDD this session.
+**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` (in-tree `all` blocked by untracked WDB-406 helper API). `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb407_` → **1 passed / 1 failed** (isolate GREEN, tip-out RED; 39.43s after 36m compile)
 
 ## P3.501 (2026-09-27) — WDB-406 i32 field compare must not emit usize
 
