@@ -11,7 +11,9 @@
 
 **What became unnecessary:** game-core widget copies; FFI in the playable host tick.
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- hexagonal_playable_host hexagonal_stub_compose`
+**Also filed:** `timestamp_millis_loop_must_unify_int` / `retry_product_pause_ms_must_unify_int` — `wj-retry` `while now < deadline` emits `(now as i32) < deadline` (E0308). `json_tostring_note_must_not_mut_borrow_query` — product `note_get_reply` after `json.to_string(note)`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- hexagonal_playable_host hexagonal_stub_compose timestamp_millis_loop_must_unify_int`
 
 ## P3.495 (2026-09-27) — WDB-396 BT recursive Vec SCC agrees MutBorrowed
 
