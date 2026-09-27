@@ -504,4 +504,74 @@ mod tests {
             Some(&[true, false][..])
         );
     }
+
+    #[test]
+    fn path_dep_generated_rs_without_metadata_recovers_str_formals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dep = tmp.path().join("wj_log_build");
+        std::fs::create_dir_all(&dep).unwrap();
+        std::fs::write(
+            dep.join("lib.rs"),
+            r#"
+#[inline]
+pub fn log_tagged(level: &str, tag: &str, message: &str) {}
+pub fn parse_level(text: &str) -> Option<u8> { None }
+"#,
+        )
+        .unwrap();
+
+        let app = tmp.path().join("app");
+        std::fs::create_dir_all(app.join("src")).unwrap();
+        std::fs::write(
+            app.join("wj.toml"),
+            format!(
+                "[package]\nname = \"notes_app\"\n\n[dependencies.wj_log]\npath = \"{}\"\n",
+                dep.display()
+            ),
+        )
+        .unwrap();
+
+        let mut registry = SignatureRegistry::new();
+        let found = load_path_dep_signatures_into_registry(&app.join("src"), &mut registry, None);
+        assert!(
+            found.contains_key("wj_log"),
+            "expected generated-rs path-dep discovery, got {found:?}"
+        );
+        let sig = registry
+            .get_signature("wj_log::log_tagged")
+            .expect("wj_log::log_tagged from generated lib.rs");
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[true, true, true][..])
+        );
+    }
+
+    #[test]
+    fn notes_api_path_deps_recover_querystring_get_key_shared() {
+        let app = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("repo parent")
+            .join("windjammer-ecosystem/apps/wj-notes-api/src");
+        if !app.exists() {
+            return;
+        }
+        let mut registry = SignatureRegistry::new();
+        let found = load_path_dep_signatures_into_registry(&app, &mut registry, None);
+        assert!(
+            found.contains_key("wj_querystring"),
+            "expected wj_querystring path-dep, got {found:?}"
+        );
+        let sig = registry
+            .get_signature("wj_querystring::get")
+            .expect("wj_querystring::get from build/lib.rs");
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[false, true][..]),
+            "key must be shared &str: {sig:#?}"
+        );
+        assert_eq!(
+            sig.param_ownership.get(1),
+            Some(&OwnershipMode::Borrowed)
+        );
+    }
 }

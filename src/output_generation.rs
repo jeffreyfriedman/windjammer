@@ -199,7 +199,21 @@ pub(crate) fn generate_main_rust_code<'ast>(
         || crate::ir::shadow::shadow_validate_strict();
     if run_ir_pipeline {
         let mut ir_pipeline = crate::ir::IrPipeline::new();
-        let ir_module = ir_pipeline.lower_to_ir(analyzed, signatures, None);
+        // Path-dep ABI (`wj_querystring::get`) lives on `global_signatures`. Per-file
+        // analyzer `signatures` omit them, so IR would invent Owned string literals.
+        // Import aliases (`qs_get`) must resolve to the same keys as codegen.
+        let mut ir_signatures = module_compiler.global_signatures.clone();
+        ir_signatures.merge(signatures);
+        for (alias, qualified) in crate::codegen::rust::program_generation::collect_import_fn_alias_map(program)
+        {
+            if ir_signatures.get_signature(&alias).is_some() {
+                continue;
+            }
+            if let Some(sig) = ir_signatures.get_signature(&qualified).cloned() {
+                ir_signatures.add_function(alias, sig);
+            }
+        }
+        let ir_module = ir_pipeline.lower_to_ir(analyzed, &ir_signatures, None);
 
         // Shadow validation: compare solver results against legacy analyzer.
         let shadow_result = crate::ir::shadow::validate_shadow_module(&ir_module, analyzed);

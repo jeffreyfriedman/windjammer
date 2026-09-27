@@ -2126,6 +2126,12 @@ pub(crate) fn callee_signature_lookup_candidates(
             out.push(sig.clone());
         }
     }
+    // Exact `crate::fn` is present — do not OR every `get`/`parse` homonym
+    // (`wj_querystring::get` vs MutBorrowed `HashMap::get`). Missing qualified
+    // keys still fall back to the bare leaf (`helper::fn` without metadata).
+    if callee_name.contains("::") && !out.is_empty() {
+        return out;
+    }
     if !type_qualified
         && !crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
             callee_name,
@@ -2661,6 +2667,63 @@ mod promote_overlapping_tests {
         assert_eq!(
             promoted.emitted_rust_ref_params.as_deref(),
             Some(&[true, false][..])
+        );
+    }
+
+    #[test]
+    fn exact_qualified_get_does_not_or_bare_mut_borrow_get() {
+        let mut reg = SignatureRegistry::empty();
+        reg.add_function(
+            "wj_querystring::get".into(),
+            FunctionSignature {
+                name: "wj_querystring::get".into(),
+                param_types: vec![
+                    Type::String,
+                    Type::Reference(Box::new(Type::String)),
+                ],
+                formal_param_types: vec![
+                    Type::String,
+                    Type::Reference(Box::new(Type::String)),
+                ],
+                param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Borrowed],
+                return_type: Some(Type::Option(Box::new(Type::String))),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false, true]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        reg.add_function(
+            "get".into(),
+            FunctionSignature {
+                name: "get".into(),
+                param_types: vec![Type::String],
+                formal_param_types: vec![Type::String],
+                param_ownership: vec![OwnershipMode::MutBorrowed],
+                return_type: None,
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![true]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let cands = callee_signature_lookup_candidates(&reg, "wj_querystring::get");
+        assert_eq!(cands.len(), 1, "exact crate::get must not OR bare get: {cands:#?}");
+        assert_eq!(
+            cands[0].emitted_rust_ref_params.as_deref(),
+            Some(&[false, true][..])
+        );
+        assert!(
+            !cands
+                .iter()
+                .any(|s| matches!(s.param_ownership.first(), Some(OwnershipMode::MutBorrowed))),
+            "MutBorrowed HashMap-style get must not steal qs key"
         );
     }
 }

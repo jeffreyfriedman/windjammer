@@ -179,7 +179,8 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
             dep_root.clone(),
             dep_root.join("src"),
         ];
-        for candidate in candidates {
+        let mut found = None;
+        for candidate in &candidates {
             let meta_file = if candidate.is_file()
                 && candidate
                     .file_name()
@@ -193,10 +194,22 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
                 let root = meta_file
                     .parent()
                     .map(Path::to_path_buf)
-                    .unwrap_or(candidate);
-                out.insert(key, root);
+                    .unwrap_or_else(|| candidate.clone());
+                found = Some(root);
                 break;
             }
+        }
+        // Ecosystem `path = "…/build"` often has generated `lib.rs` and no metadata.json.
+        if found.is_none() {
+            for candidate in &candidates {
+                if candidate.join("lib.rs").is_file() {
+                    found = Some(candidate.clone());
+                    break;
+                }
+            }
+        }
+        if let Some(root) = found {
+            out.insert(key, root);
         }
     }
     out
