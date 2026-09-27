@@ -26,26 +26,26 @@
 
 ## P3.510 (2026-09-27) — TDD WDB-413 (DB agent; no compiler src)
 
-Read-only `string_len(line)` after `&line` must not emit `line.clone()`.
+Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `line.clone()`.
 
 | Gate | Status |
 |------|--------|
-| WDB-413 MultiFile | ⏳ TDD running — `start(line, key) < slen(line)` must not `line.clone()` |
-| WDB-413 tip-out | ⏳ product `gpu::string_len(line.clone())` in `agent_playtest_protocol.rs` |
+| WDB-413 MultiFile | ❌ isolate RED — `start(line.clone(), &key) < slen(&line)` (`start` keeps unused `line: String`; `slen` already `&str`) |
+| WDB-413 tip-out | ❌ product RED — `gpu::string_len(line.clone())` in `rel_tip_out` + `gen` `testing/agent_playtest_protocol.rs` |
 
-**Root cause layer:** signature — `gpu::string_len(s: string)` / isolate `slen(s: string)` stay owned `String` even though they only read length. After `key_value_start(&line, key)`, the second use of `line` is emitted as `line.clone()`. WJ is `gpu::string_len(line)` with no `.clone()`.
+**Root cause layer:** signature — unused/unread `line` formal on `start` stays owned `String`, so `present` clones before the second read. Product `gpu::string_len` also stays owned, so tip emits `string_len(line.clone())` after `key_value_start(&line, key)`. WJ is `start(line, key) < slen(line)` / `gpu::string_len(line)` with no `.clone()`.
 
 **Why this is a new class:**
-- WDB-412 is **read-only `for` Vec formal** forcing `field.clone()`. This is a **read-only string-len formal** forcing **`line.clone()` after `&line`**.
+- WDB-412 is **read-only `for` Vec formal** forcing `field.clone()`. This is **string reuse** across two callees forcing **`line.clone()`**.
 - WDB-106 is the opposite: explicit `.clone()` on sequential owned calls **must stay**.
 - WDB-143 is reuse after an owned **consume** that **must** clone to compile.
 
-**What became unnecessary:** treating `string_len` / `slen` as a consume of `String`; call-site `line.clone()` when WJ reuses `line`.
+**What became unnecessary:** treating an unused `line` formal as owned consume; call-site `line.clone()` when WJ reuses `line`.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb413_` — results recorded after TDD run
+**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `0513a4a3`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb413_` → **0 passed / 2 failed**
 
-**Do not steal:** WDB-406/408/411 (compiler), P3.508 (notes-api), WDB-412 / P3.509 (filed).
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511 (notes-api), WDB-412 / P3.509 (filed).
 
 ## P3.509 (2026-09-27) — WDB-412 read-only `for` Vec formal must borrow
 
