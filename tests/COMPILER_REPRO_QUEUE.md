@@ -34,10 +34,10 @@ Owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
 
 | Gate | Status |
 |------|--------|
-| WDB-416 MultiFile | ⏳ TDD — `a.as_float() + b.as_float()` must not clone |
-| WDB-416 tip-out | ⏳ product `a.clone().as_float()` in `visual_scripting/runtime.rs` |
+| WDB-416 MultiFile | ✅ isolate GREEN — `a.as_float() + b.as_float()` (no clone) |
+| WDB-416 tip-out | ❌ product RED — `a.clone().as_float()` in `rel_tip_out` + `gen` `visual_scripting/runtime.rs` |
 
-**Root cause layer:** signature — `as_float(self) -> f32` consumes once; `evaluate` still emits `a.clone().as_float()`. WJ moves `a`.
+**Root cause layer:** signature — isolate already moves. Product `evaluate` match on `BuiltinFn` still clones owned `Value` before `as_float(self)`. Regen or match product match-arms.
 
 **Why this is a new class:**
 - WDB-358 is **`self.clone().method()`**.
@@ -46,10 +46,10 @@ Owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
 
 **What became unnecessary:** `a.clone()` before a one-shot owned-self method.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb416_` — results recorded after TDD run
+**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `6d9dcd2c`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb416_` → **1 passed / 1 failed**
 
-**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516 (notes-api / wj-glob), WDB-412–415 / P3.509–P3.515 (filed).
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518 (notes-api / wj-glob), WDB-412–415 / P3.509–P3.515 (filed).
 
 ## P3.516 (2026-09-27) — `while k <= vec.len()` must unify i64 like `>=`
 
