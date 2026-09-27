@@ -39,18 +39,18 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-405 MultiFile | ⏳ TDD — `NodeType::PureFunction` must not `.clone()` |
-| WDB-405 tip-out | ⏳ TDD — `gen/visual_scripting/graph_test.rs` |
+| WDB-405 MultiFile | ✅ isolate GREEN — `NodeType::PureFunction` / `Event` no `.clone()` |
+| WDB-405 tip-out | ❌ RED — `rel_tip_out` + `gen` `visual_scripting/graph_test.rs` still `NodeType::PureFunction.clone()` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolates already correct (same assign-clone skip class as P3.479 / WDB-397); product/tip regen pending.
 
 **Why this is a new class:**
 - WDB-384/392/397/401–404 cover FaceDirection / Direction / TileType / StreamState / ChunkLifecycleState / EditorMode; product still clones **NodeType::** into `Node::new`.
 
 **What became unnecessary:** refiling FaceDirection (384), Direction (392), TileType (397), StreamState (401), HostType (402), ChunkLifecycle (403), EditorMode (404).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb403`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb405_` — results after TDD this session.
+**Gates:** worktree at committed HEAD (in-tree `src/` had E0592 mid-edit; not touched). `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb405`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb405_` → **1 passed / 1 failed** (isolate GREEN, tip-out RED; 5.66s after 2m52s incremental)
 
 ## P3.497 (2026-09-27) — TDD WDB-403/404 (DB agent; no compiler src)
 
