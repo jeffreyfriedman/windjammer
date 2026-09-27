@@ -1,5 +1,24 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.497 (2026-09-27) — TDD WDB-403/404 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-403 MultiFile | ⏳ TDD — `ChunkLifecycleState::Loading` must not `.clone()` |
+| WDB-403 tip-out | ⏳ TDD — `gen/world/streaming.rs` |
+| WDB-404 MultiFile | ⏳ TDD — `EditorMode::Pause` must not `.clone()` |
+| WDB-404 tip-out | ⏳ TDD — `gen/editor/editor_core.rs` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why these are new classes:**
+- WDB-384/392/397/401 cover FaceDirection / Direction / TileType / StreamState; product still clones **ChunkLifecycleState::** (world streaming) and **EditorMode::** (editor core).
+
+**What became unnecessary:** refiling FaceDirection (384), Direction (392), TileType (397), StreamState (401), HostType (402).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb397`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb403_ wdb404_` — results after TDD this session.
+
 ## P3.496 (2026-09-27) — hexagonal playable host (windjammer-ui HUD contract)
 
 | Gate | Status |
