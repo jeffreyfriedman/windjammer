@@ -16,8 +16,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
     pub(crate) fn generate_block(&mut self, stmts: &[&'ast Statement<'ast>]) -> String {
         self.prepass_mark_loop_counter_usize_variables(stmts);
-        if stmts.len() == 1 {
-        }
+        if stmts.len() == 1 {}
         let mut output = String::new();
         let len = stmts.len();
         let saved_body = self.current_function_body.clone();
@@ -35,9 +34,7 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
 
-            if let Some((folded, skip_idx)) =
-                self.try_fold_mut_string_if_else_assign(stmts, i)
-            {
+            if let Some((folded, skip_idx)) = self.try_fold_mut_string_if_else_assign(stmts, i) {
                 output.push_str(&folded);
                 self.skip_block_indices.insert(skip_idx);
                 continue;
@@ -388,8 +385,7 @@ impl<'ast> CodeGenerator<'ast> {
         if stmts.len() == 1 {
             if let Statement::Match { value, arms, .. } = &stmts[0] {
                 if let Expression::MethodCall { method, .. } = value {
-                    if method == "find" {
-                    }
+                    if method == "find" {}
                 }
                 // Align with auto_clone: `let x = match …` nests Match on the outer
                 // counter (Statement::Let Block branch), so consume one index here and
@@ -437,8 +433,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut value_str = {
                     if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
                         if let Expression::MethodCall { method, .. } = value {
-                            if method == "find" {
-                            }
+                            if method == "find" {}
                         }
                     }
                     self.generate_expression(value)
@@ -487,11 +482,8 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&format!("{}.clone()", value_str));
                     scrutinee_owned_via_clone = true;
                 } else {
-                    value_str = self.apply_match_scrutinee_move_clone_if_needed(
-                        value_str,
-                        value,
-                        arms,
-                    );
+                    value_str =
+                        self.apply_match_scrutinee_move_clone_if_needed(value_str, value, arms);
                     scrutinee_owned_via_clone = value_str.ends_with(".clone()");
                     output.push_str(&value_str);
                 }
@@ -580,7 +572,29 @@ impl<'ast> CodeGenerator<'ast> {
 
                 for (arm, (arm_str, is_string_literal)) in arms.iter().zip(arm_strings.iter()) {
                     output.push_str(&self.indent());
-                    output.push_str(&self.generate_pattern(&arm.pattern));
+                    let mut bound_vars = std::collections::HashSet::new();
+                    self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
+                    let body_stmts: &[&Statement<'ast>] =
+                        if let Expression::Block { statements, .. } = arm.body {
+                            statements.as_slice()
+                        } else {
+                            &[]
+                        };
+                    // Nested match-as-expression skipped `upgrade_pattern_mut_bindings`
+                    // (P3.513 / P3.514): `Some(note) => note_get_reply(&mut note)`.
+                    let upgraded = self.upgrade_pattern_mut_bindings(
+                        &arm.pattern,
+                        body_stmts,
+                        false,
+                        Some(arm.body),
+                        Some(value),
+                    );
+                    let pattern_str = Self::apply_mut_bind_when_body_emits_mut_borrow(
+                        &self.generate_pattern(&upgraded),
+                        arm_str,
+                        &bound_vars,
+                    );
+                    output.push_str(&pattern_str);
 
                     // Add guard if present
                     if let Some(guard) = &arm.guard {
@@ -979,11 +993,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         match block[0] {
             Statement::Assignment {
-                target:
-                    Expression::Identifier {
-                        name,
-                        ..
-                    },
+                target: Expression::Identifier { name, .. },
                 value,
                 compound_op: None,
                 ..
