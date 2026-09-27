@@ -65,6 +65,7 @@
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3508`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- wdb408_module_file_f32_compare`
+- re-ran `CARGO_TARGET_DIR=…/agent-tdd-p3501` with WDB-406 + notes clone → **3 passed** (43.76s after 15m54s compile)
 
 ## P3.502 (2026-09-27) — TDD WDB-407 (DB agent; no compiler src)
 
@@ -89,12 +90,14 @@
 |------|--------|
 | `wdb406_module_file_i32_field_compare_must_not_emit_usize` | ✅ isolate GREEN — i32 field/local compares skip function-wide usize; no `as usize` on `max_leaf`/`max_depth` |
 
-**Root cause layer:** constraint — function-wide `as usize` index / `.len()` still poisons i32 field peers (`max_leaf_objects as usize`) after WDB-395 zero-sentinels.
+**Root cause layer:** codegen — function-wide `as usize` index / `.len()` still poisoned i32 field peers (`max_leaf_objects as usize`) after WDB-395 zero-sentinels. Both-signed compare now clears usize flags (generalizes zero-sentinel).
 
 **What became unnecessary:** `as usize` on i32 field compares in `spatial_index` overflow checks.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3501`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb406_module_file_i32_field_compare`
+- watched RED: `d < (self.max_depth as usize)` (`cargo test --release --test all --features integration_tests,codegen_tests -- wdb406_module_file_i32_field_compare` → 0 passed / 1 failed)
+- tip MultiFile: no `max_leaf_objects as usize` / `max_depth as usize`; `cargo check` **ok**
+- re-ran with WDB-408 + notes clone → **3 passed** (43.76s after 15m54s compile)
 
 ## P3.500 (2026-09-27) — timestamp_millis loop must unify i64 (wj-retry pause_ms)
 
