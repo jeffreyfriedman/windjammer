@@ -22,7 +22,7 @@
 - Eco: `wj-fetch` 31/31; notes-api still blocked.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3511-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- split_query_list_then_get_must_not_mut_query` — expected **0 passed / 1 failed** (TDD RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- split_query_list_then_get_must_not_mut_query` → **0 passed / 1 failed** (2.83s after 829s compile; TDD RED).
 
 ## P3.510 (2026-09-27) — TDD WDB-413 (DB agent; no compiler src)
 
