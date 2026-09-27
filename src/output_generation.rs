@@ -177,6 +177,12 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
     let mut generator_signatures = module_compiler.global_signatures.clone();
     generator_signatures.merge(signatures);
+    let import_aliases =
+        crate::codegen::rust::program_generation::collect_import_fn_alias_map(program);
+    crate::codegen::rust::program_generation::install_import_alias_path_dep_signatures(
+        &mut generator_signatures,
+        &import_aliases,
+    );
     let is_crate_root_main = input_path.file_name().and_then(|n| n.to_str()) == Some("main.wj")
         && input_path.parent() == Some(source_root);
     let mut generator = if is_multi_file_project && !is_crate_root_main {
@@ -189,9 +195,12 @@ pub(crate) fn generate_main_rust_code<'ast>(
     generator.set_analyzed_trait_methods(analyzed_trait_methods);
     generator.set_global_struct_field_types(module_compiler.global_struct_field_types.clone());
     generator.set_copy_types_registry(module_compiler.copy_structs_registry.clone());
-    generator.set_global_signature_registry(std::sync::Arc::new(
-        module_compiler.global_signatures.clone(),
-    ));
+    let mut global_with_aliases = module_compiler.global_signatures.clone();
+    crate::codegen::rust::program_generation::install_import_alias_path_dep_signatures(
+        &mut global_with_aliases,
+        &import_aliases,
+    );
+    generator.set_global_signature_registry(std::sync::Arc::new(global_with_aliases));
 
     // IR cutover: when any cutover flag is enabled, run the IR pipeline and
     // attach the IrModule so codegen can read from SafetyType.
@@ -199,21 +208,9 @@ pub(crate) fn generate_main_rust_code<'ast>(
         || crate::ir::shadow::shadow_validate_strict();
     if run_ir_pipeline {
         let mut ir_pipeline = crate::ir::IrPipeline::new();
-        // Path-dep ABI (`wj_querystring::get`) lives on `global_signatures`. Per-file
-        // analyzer `signatures` omit them, so IR would invent Owned string literals.
-        // Import aliases (`qs_get`) must resolve to the same keys as codegen.
-        let mut ir_signatures = module_compiler.global_signatures.clone();
-        ir_signatures.merge(signatures);
-        for (alias, qualified) in crate::codegen::rust::program_generation::collect_import_fn_alias_map(program)
-        {
-            if ir_signatures.get_signature(&alias).is_some() {
-                continue;
-            }
-            if let Some(sig) = ir_signatures.get_signature(&qualified).cloned() {
-                ir_signatures.add_function(alias, sig);
-            }
-        }
-        let ir_module = ir_pipeline.lower_to_ir(analyzed, &ir_signatures, None);
+        // Same registry as codegen: path-dep ABI + import aliases overwrite
+        // analyzer Owned stubs (`qs_get` → `wj_querystring::get`).
+        let ir_module = ir_pipeline.lower_to_ir(analyzed, &generator.signature_registry, None);
 
         // Shadow validation: compare solver results against legacy analyzer.
         let shadow_result = crate::ir::shadow::validate_shadow_module(&ir_module, analyzed);

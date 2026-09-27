@@ -574,4 +574,95 @@ pub fn parse_level(text: &str) -> Option<u8> { None }
             Some(&OwnershipMode::Borrowed)
         );
     }
+
+    #[test]
+    fn generated_rust_abi_overwrites_stale_owned_emitted_stub() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dep = tmp.path().join("qs_build");
+        std::fs::create_dir_all(&dep).unwrap();
+        std::fs::write(
+            dep.join("lib.rs"),
+            "pub fn get(query: String, key: &str) -> Option<String> { None }\n",
+        )
+        .unwrap();
+        let mut registry = SignatureRegistry::new();
+        registry.add_function(
+            "qs_pkg::get".to_string(),
+            crate::analyzer::FunctionSignature {
+                name: "get".to_string(),
+                param_types: vec![Type::String, Type::String],
+                formal_param_types: vec![Type::String, Type::String],
+                param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                return_type: Some(Type::Option(Box::new(Type::String))),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false, false]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        crate::metadata::merge_external_crate_metadata_with_aliases(
+            &HashMap::from([("qs_pkg".to_string(), dep)]),
+            &mut registry,
+            None,
+        );
+        let sig = registry
+            .get_signature("qs_pkg::get")
+            .expect("generated ABI");
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[false, true][..]),
+            "lib.rs `key: &str` must overwrite stale emitted[false, false]: {sig:#?}"
+        );
+        assert_eq!(sig.param_ownership.get(1), Some(&OwnershipMode::Borrowed));
+    }
+
+    #[test]
+    fn import_alias_path_dep_abi_overwrites_analyzer_owned_stub() {
+        let app = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("repo parent")
+            .join("windjammer-ecosystem/apps/wj-notes-api/src");
+        if !app.exists() {
+            return;
+        }
+        let mut registry = SignatureRegistry::new();
+        load_path_dep_signatures_into_registry(&app, &mut registry, None);
+        let stub = crate::analyzer::FunctionSignature {
+            name: "qs_get".to_string(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Option(Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        registry.add_function("qs_get".to_string(), stub);
+        let mut aliases = HashMap::new();
+        aliases.insert("qs_get".to_string(), "wj_querystring::get".to_string());
+        crate::codegen::rust::program_generation::install_import_alias_path_dep_signatures(
+            &mut registry,
+            &aliases,
+        );
+        let sig = registry
+            .get_signature("qs_get")
+            .expect("alias must keep a signature");
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[false, true][..]),
+            "path-dep ABI must overwrite analyzer Owned stub: {sig:#?}"
+        );
+        assert_eq!(
+            sig.param_ownership.get(1),
+            Some(&OwnershipMode::Borrowed),
+            "key must stay Borrowed after alias overwrite"
+        );
+    }
 }

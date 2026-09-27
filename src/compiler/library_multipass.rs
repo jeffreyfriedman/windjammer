@@ -1104,6 +1104,13 @@ pub(crate) fn build_library_multipass(
         }
     }
 
+    // Path-dep generated Rust ABI is last writer after analysis stubs converge
+    // (`wj_querystring::get` key: &str must beat Owned/Owned importer stubs).
+    {
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        crate::metadata::merge_external_crate_metadata_with_aliases(external_paths, reg, None);
+    }
+
     // Step 4B-a-IR: Lower converged analyses to IR using the merged global registry.
     // Cross-file call constraints resolve against final_global_registry.
     let step4b_ir_start = Instant::now();
@@ -1119,9 +1126,18 @@ pub(crate) fn build_library_multipass(
             if analysis.analyzed_functions.is_empty() {
                 continue;
             }
+            // Per-file import aliases (`qs_get` → `wj_querystring::get`) must
+            // overwrite analyzer Owned stubs before IR expected types are set.
+            let mut ir_reg = SignatureRegistry::layered(std::sync::Arc::clone(
+                &final_global_registry,
+            ));
+            crate::codegen::rust::program_generation::install_program_import_alias_signatures(
+                &mut ir_reg,
+                &parsed_programs[i],
+            );
             let module = pipeline.lower_to_ir(
                 &analysis.analyzed_functions,
-                final_global_registry.as_ref(),
+                &ir_reg,
                 Some(global_struct_fields.as_ref()),
             );
             for diag in &module.diagnostics {
@@ -1332,6 +1348,15 @@ pub(crate) fn build_library_multipass(
             crate::codegen::rust::signature_promotion::promote_overlapping_global_signatures_into_local(
                 &mut full_registry,
                 final_global_registry.as_ref(),
+            );
+            crate::metadata::merge_external_crate_metadata_with_aliases(
+                external_paths,
+                &mut full_registry,
+                None,
+            );
+            crate::codegen::rust::program_generation::install_program_import_alias_signatures(
+                &mut full_registry,
+                program,
             );
             {
                 let mut tmp_analyzer = Analyzer::for_library_pass(

@@ -17,15 +17,14 @@ pub(in crate::metadata) fn merge_generated_rust_dir_with_alias(
         if let Some(alias) = crate_alias {
             if !alias.is_empty() && !name.contains("::") {
                 let qualified = format!("{alias}::{name}");
-                if registry.get_signature(&qualified).is_none() {
-                    registry.add_function(qualified, sig);
-                }
+                // Generated `lib.rs` is the published ABI when `metadata.json` is
+                // missing. Stale `.wj.meta` / analyzer stubs (`emitted [false, false]`)
+                // must not hide `&str` formals.
+                registry.add_function(qualified, sig);
                 continue;
             }
         }
-        if registry.get_signature(&name).is_none() {
-            registry.add_function(name, sig);
-        }
+        registry.add_function(name, sig);
     }
 }
 

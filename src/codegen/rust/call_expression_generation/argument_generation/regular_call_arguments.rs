@@ -530,11 +530,15 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             candidates,
                         )
                         .map(|sig| {
-                            crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
-                                &gen.signature_registry,
-                                func_name,
-                                sig,
-                            )
+                            if gen.is_import_alias_cross_crate_call(func_name) {
+                                sig
+                            } else {
+                                crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
+                                    &gen.signature_registry,
+                                    func_name,
+                                    sig,
+                                )
+                            }
                         });
                         let slot_wants_shared = |sig: &crate::analyzer::FunctionSignature| {
                             let pidx = sig.arg_param_index(i);

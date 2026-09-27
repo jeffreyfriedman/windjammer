@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.486 (2026-09-27) — generated `lib.rs` ABI last-writes over analyzer `qs_get` stubs
+
+| Gate | Status |
+|------|--------|
+| `generated_rust_abi_overwrites_stale_owned_emitted_stub` | ✅ lib GREEN |
+| `import_alias_path_dep_abi_overwrites_analyzer_owned_stub` | ✅ lib GREEN |
+| `path_dep_recovered_alias_beats_analyzer_owned_stub_resolution` | ✅ lib GREEN |
+| isolate `qs_get_literal_from_generated_rs_path_dep_must_not_string_from` | ✅ GREEN |
+| isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ✅ GREEN |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ✅ product GREEN — `qs_get(query, "pretty")` |
+| `notes_api_product_src_must_auto_borrow_demoted_str` | ✅ product GREEN |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** signature — product `wj build src --module-file` is library multipass. Analyzer/`.wj.meta` stubs registered `wj_querystring::get` as Owned/Owned `emitted [false, false]`. Generated-Rust recovery skipped when the key already existed. `local_user_fn_beats_runtime_std_homonym` then kept the stub (`!resolved_shared` early return). IR expected Owned → `"pretty".to_string()` into `key: &str`.
+
+**What became unnecessary:** skip-if-exists on generated `lib.rs` recovery; import-alias Owned stub winning over path-dep ABI. No new peel.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3486`
+- `cargo test --release --lib --features integration_tests,codegen_tests -- generated_rust_abi_overwrites_stale_owned_emitted_stub import_alias_path_dep_abi_overwrites_analyzer_owned_stub path_dep_recovered_alias_beats_analyzer_owned_stub_resolution notes_api_path_deps_recover_querystring_get_key_shared` → **4 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_product_qs_get_literal_must_not_string_from qs_get_literal_from_generated_rs_path_dep_must_not_string_from qs_get_literal_into_demoted_key_must_not_string_from notes_api_product_src_must_auto_borrow_demoted_str bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **8 passed**
+
 ## P3.484 (2026-09-27) — match-scrutinee clone is token-only; skip Copy
 
 | Gate | Status |
@@ -23,14 +44,14 @@
 | `notes_api_path_deps_recover_querystring_get_key_shared` | ✅ lib GREEN — `wj_querystring::get` emitted `[false, true]` |
 | `exact_qualified_get_does_not_or_bare_mut_borrow_get` | ✅ lib GREEN |
 | `notes_api_product_src_must_auto_borrow_demoted_str` | ✅ product GREEN — `log_tagged(&level, "notes", &message)` |
-| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ still RED — `qs_get(query, "pretty".to_string())` |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ✅ product GREEN (P3.486) |
 | isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ✅ GREEN |
 
 **Root cause layer:** signature — `wj.toml` path deps point at `packages/*/build` with generated `log_tagged(level: &str, …)` / `get(query: String, key: &str)` but no `--library` `metadata.json`. Discovery skipped them.
 
 **What became unnecessary:** missing `&` on `log_tagged` / `parse_level` / `slugify` when the published Rust ABI already has `&str`. Exact `crate::get` no longer ORs every bare `get` homonym.
 
-**Remaining:** product `qs_get` still emits `"pretty".to_string()` into `key: &str` even though `wj_querystring::get` is recovered. Isolate with `--metadata` is GREEN. Next: IR/codegen expected type for the import-alias call still Owned (not a new peel).
+**Follow-up:** P3.486 — product `qs_get` GREEN after generated ABI last-write + import-alias overwrite.
 
 **Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3484`
 - lib recover + homonym + notes-api path-dep discovery → **GREEN**
