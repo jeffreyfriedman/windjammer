@@ -300,7 +300,11 @@ impl<'ast> CodeGenerator<'ast> {
             if field_mut {
                 return true;
             }
-            if let (Some(body), Some(ty)) = (body_expr, binding_type_for(name)) {
+            // Nested Option/enum matches may not infer the payload type
+            // (`route_match` → `fetch` → `Some(note)`). Still consult the arm
+            // body: free `note_get_reply(note)` does not need `ty`.
+            if let Some(body) = body_expr {
+                let ty = binding_type_for(name).unwrap_or(Type::Custom(String::new()));
                 if self.binding_receives_mutating_call_with_sig_check(body, name, &ty) {
                     return true;
                 }
