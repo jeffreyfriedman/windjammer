@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.514 (2026-09-27) — `fetch_note(self.store, id)` GET-one must mut-bind note
+
+| Gate | Status |
+|------|--------|
+| `fetch_note_store_then_query_must_not_mut` | ❌ isolate RED — free `fetch_note(self.store, id)` + sibling POST/PUT `self.store` emits `Some(note) => note_get_reply(&mut note, …, query.clone())` (E0596) |
+| `interp_query_then_get_must_not_mut_query` | ❌ P3.513 — `self.store.fetch(id)` same E0596 |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `&mut query` into `query: String` (`let mut query`) |
+
+**Why this is a new class:**
+- P3.513 GET-one is **`self.store.fetch(id)`**. Product is **`fetch_note(self.store, id)`** while POST/PUT still call `self.store.create` / `update` / `delete`.
+- Last use is still `query.clone()` (not `&mut query`). Product last use remains `&mut query`.
+
+**Root cause layer:** codegen / match-binding — nested match + store moved into a free fn still emits immutable `Some(note)` + `&mut Note`. Do not edit `windjammer/src/`. Do not reshape notes-api.
+
+**What became unnecessary:** treating method-call `store.fetch` as the only missing nest.
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3510/release/wj` 0.50.0 (18:05). Isolate `$WJ build --module-file` + `cargo check`.
+- Emit: `Some(note) => note_get_reply(&mut note, if_none_match, query.clone())` — E0596.
+- P3.513 recheck on same tip: still `Some(note)` + clone.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3511-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- fetch_note_store_then_query_must_not_mut` — expected **0 passed / 1 failed** (TDD RED).
+
 ## P3.513 (2026-09-27) — nested route_match GET-one must mut-bind note (not `&mut query` yet)
 
 | Gate | Status |
@@ -156,23 +179,25 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 - `cargo test --release --test all --features integration_tests,codegen_tests -- wdb411_module_file_u32_count_while` → isolate **GREEN**
 - re-ran `CARGO_TARGET_DIR=…/agent-tdd-p3501` → **1 passed** (8.29s after 3m28s). Engine leftover after 406/408 regen: Isize vs I64 **0**, `max_depth as usize` **0**, **217** rustc errors remain (i32/u32 still 17+13 until 411 product regen).
 
-## P3.506 (2026-09-27) — TDD WDB-410 (DB agent; no compiler src)
+## P3.506 (2026-09-27) — WDB-410 owned-self wither must move fields
 
 | Gate | Status |
 |------|--------|
-| WDB-410 MultiFile | ❌ isolate RED — `let mut items = self.items.clone()` + `label: self.label.clone()` |
-| WDB-410 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/shader_graph_builder.rs` |
+| WDB-410 MultiFile | ✅ isolate GREEN — `fn push(self, …)` moves `self.items` / `self.label`; Graph Copy field already moved |
+| WDB-410 tip-out | ⚠️ product — stale `rel_tip_out` / `gen` still clones `self.graph` / bindings (regen, not isolate) |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate reproduces Vec/string field clones on owned-self wither.
+**Root cause layer:** constraint — `detect_partial_moves` always-cloned every `self.field` move as if `self` were `&self` (E0507). Analyzer 2.5 already keeps `self` Owned for `let x = self.field`. One-level field-move lets now skip that always-clone so distinct fields can move (wither reconstruct). Nested `self.start.bytes` and `&self` getters still clone. No ir_call_site peel.
 
 **Why this is a new class:**
-- WDB-378 is **indexed** `src[i].clone().field` per field. This is **owned `self`** `let mut items = self.items` then reconstruct — product clones every Vec/graph field.
-- WDB-358 is `self.clone().method()`. WDB-407 is `Vec` `new` formal demote.
+- WDB-378 is **indexed** `src[i].clone().field` per field. This is **owned `self`** `let mut items = self.items` then reconstruct.
+- WDB-358 is `self.clone().method()`. WDB-414 is constructor `new(self.scene)` without a field-move let.
+- WDB-407 is `Vec` `new` formal demote.
 
-**What became unnecessary:** refiling WDB-378/358/407/409; reusing WDB-406/408 (compiler).
+**What became unnecessary:** unconditional `root == "self"` clone sites on owned-self withers; product `self.items.clone()` / `self.label.clone()`.
 
-**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `4b30b755`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.07s after ~4m incremental compile)
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3510`
+- `cargo test --release --lib -- owned_self_wither_must_not_clone_distinct_fields test_self_field_in_if_expr_inside_while_loop_needs_clone` → **2 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_module_file_owned_self_wither_must_move_fields` → isolate **1 passed**; tip-out scanner product RED
 
 ## P3.505 (2026-09-27) — demoted `&Vec<Note>` must clone on owned return (`truncate_notes`)
 
