@@ -59,13 +59,14 @@ pub fn read_vertex(map: GraphVertexI64Map, vertex: i64) -> i64 {
 }
 
 fn assert_consumer_borrows_map(rs: &str) {
+    let owned_borrow =
+        rs.contains("graph_vertex_i64_get(&map") || rs.contains("graph_vertex_i64_get(& map");
+    let demoted_passthrough = rs.contains("map: &GraphVertexI64Map")
+        && rs.contains("graph_vertex_i64_get(map,")
+        && !rs.contains("graph_vertex_i64_get(&map");
     assert!(
-        rs.contains("graph_vertex_i64_get(&map") || rs.contains("graph_vertex_i64_get(& map"),
-        "WDB-101: borrowed map getter must auto-borrow owned local. Got:\n{rs}"
-    );
-    assert!(
-        !rs.contains("graph_vertex_i64_get(map,"),
-        "WDB-101: must not pass owned GraphVertexI64Map to & formal. Got:\n{rs}"
+        owned_borrow || demoted_passthrough,
+        "WDB-101: borrowed map getter must auto-borrow owned local or pass demoted &T. Got:\n{rs}"
     );
 }
 

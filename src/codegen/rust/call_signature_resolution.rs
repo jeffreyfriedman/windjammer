@@ -96,9 +96,11 @@ pub(crate) fn import_alias_registry_lookup_key<'a>(
     (Cow::Borrowed(callee_name), false)
 }
 
-/// Defining-module codegen-refresh keys. Import aliases use only the remapped
-/// qualified fn (`owned_pkg::get`) — never the alias (`query_get`), which may
-/// collide with a foreign crate's free fn of that name (P3.283 / P3.448).
+/// Defining-module codegen-refresh keys. Renamed import aliases use only the
+/// remapped fn (`qs_get` → `wj_querystring::get`) — never a foreign homonym
+/// (`query_get`, P3.283 / P3.448). Same-name sibling imports
+/// (`json_cors_error` → `http::json_cors_error`) also consult the bare
+/// defining-module key that formal-emit refresh writes.
 pub(crate) fn codegen_refresh_lookup_keys(
     callee_name: &str,
     remapped: &str,
@@ -106,6 +108,10 @@ pub(crate) fn codegen_refresh_lookup_keys(
     skip_bare_homonym: bool,
 ) -> Vec<String> {
     if import_alias {
+        let simple = remapped.rsplit("::").next().unwrap_or(remapped);
+        if simple == callee_name {
+            return vec![remapped.to_string(), simple.to_string()];
+        }
         return vec![remapped.to_string()];
     }
     if skip_bare_homonym {
@@ -1827,6 +1833,29 @@ mod tests {
 
     fn empty_aliases() -> HashMap<String, String> {
         HashMap::new()
+    }
+
+    #[test]
+    fn same_name_sibling_import_refresh_keys_include_bare_defining_fn() {
+        let keys = codegen_refresh_lookup_keys(
+            "json_cors_error",
+            "http::json_cors_error",
+            true,
+            true,
+        );
+        assert_eq!(
+            keys,
+            vec![
+                "http::json_cors_error".to_string(),
+                "json_cors_error".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn renamed_import_alias_refresh_keys_stay_remapped_only() {
+        let keys = codegen_refresh_lookup_keys("qs_get", "wj_querystring::get", true, true);
+        assert_eq!(keys, vec!["wj_querystring::get".to_string()]);
     }
 
     #[test]

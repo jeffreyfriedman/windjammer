@@ -1335,6 +1335,10 @@ pub(crate) fn build_library_multipass(
                 if let Some(existing) = full_registry.get_signature(name) {
                     if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
                         existing, sig,
+                    ) || crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                        existing, sig,
+                    ) || crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
+                        existing, sig,
                     ) {
                         continue;
                     }

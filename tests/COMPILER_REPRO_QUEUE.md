@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.487 (2026-09-27) — braced sibling `use http::{fn}` is a defining-module alias
+
+| Gate | Status |
+|------|--------|
+| `braced_sibling_fn_import_maps_to_module_qualified_key` | ✅ lib GREEN |
+| `unbraced_sibling_fn_import_still_maps` | ✅ lib GREEN |
+| `scanned_runtime_http_put_patch_are_free_two_str_refs` | ✅ lib GREEN |
+| `std_http_put_must_link_and_borrow_like_post` / `patch` | ✅ isolate GREEN — demoted passthrough |
+| `wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site` | ✅ isolate GREEN — Phase-2 `&T` passthrough |
+| `multipass_str_formal_borrows_owned_local_and_format_temp` | ✅ isolate GREEN — wrapper keeps `message: String`; `error_json(&message)` |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** signature + formal emit — (1) braced `use http::{fn, Type}` was not an alias, so defining-module refresh could miss the importer key; same-name sibling lookup now includes the bare refresh key (`qs_get` stays remapped-only). (2) pub wrappers that only forward `string` and return a non-text type (`ServerResponse`) keep owned `String` so cross-module Identity matches emit (`json_cors_error(…, message: String)` + same-file `error_json(&message)`). Analysis overlay no longer clobbers a codegen refresh.
+
+**What became unnecessary:** treating `error_json`'s `message: &str` as the `json_cors_error` ABI; requiring `http::put(&url, &body)` / `graph_vertex_i64_get(&map` after the wrapper itself demotes. No new peel.
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3486`
+- lib: braced alias + scanned http put/patch
+- `cargo test --release --test all --features integration_tests,codegen_tests -- multipass_str_formal_borrows_owned_local_and_format_temp wdb101_ std_http_put std_http_patch bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test`
+
 ## P3.486 (2026-09-27) — generated `lib.rs` ABI last-writes over analyzer `qs_get` stubs
 
 | Gate | Status |
@@ -1198,7 +1218,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`std::db::Row` getters must be `&self` (WJ0007 multi-column)** | `codegen_db_row_getter_must_borrow_self_gate_test` | ✅ std stub `get_*` → `&self` (runtime already); multi-column transpile smoke GREEN |
 | P1 | **`(Row, T)` chain helpers for multi-column reads (no `&Row`, no move-WJ0007)** | `codegen_db_row_col_string_chain_gate_test` | ✅ tip GREEN (`col_string` / `col_int` dogfood in LedgerKit postgres_*); lockstep gate added |
 | P1 | **`method: "GET"` → HttpMethod must auto-import under `--module-file`** | `codegen_http_method_struct_field_str_literal_gate_test`, `codegen_http_method_string_lit_must_auto_import_gate_test`, `codegen_http_method_nested_module_file_auto_import_gate_test`, `codegen_http_method_enum_gate_test` | ✅ tip GREEN — multipass stdlib discovery + FQ `windjammer_runtime::http::HttpMethod::GET` (no sibling import) |
-| P1 | **WDB-101: borrowed map getter call site must auto-`&` owned local** | `wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site` | ✅ tip IR GREEN (qualified registry refresh + pure-forwarder keeps `&`) |
+| P1 | **WDB-101: borrowed map getter call site must auto-`&` owned local** | `wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site` | ✅ tip IR GREEN (P3.487: Phase-2 `&T` wrapper passthrough accepted) |
 | P1 | **WDB-102: `strings.from_chars(chars)` must borrow owned `Vec<char>`** | `wdb102_from_chars_owned_vec_must_borrow_at_call_site` | ✅ tip GREEN (runtime WJ-owned/Rust-borrowed keeps `Vec` formal + call-site `&`) |
 | P1 | **WDB-103: owned struct formal must not receive `&arg` (inverse WDB-099)** | `wdb103_owned_host_formal_must_move_not_borrow` | ✅ |
 | P1 | **WDB-104: field-mutating method must emit `mut self`** | `wdb104_field_mutating_method_must_emit_mut_self` | ✅ |
