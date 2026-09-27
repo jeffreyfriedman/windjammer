@@ -11,10 +11,11 @@
     feature = "integration_tests",
 ))]
 
-//! `Vec<Note>` with string fields + index scan + `return notes` must cargo-check.
+//! Cross-module private `truncate_notes(notes: Vec<Note>) -> Vec<Note>` must
+//! cargo-check when `Note` has string fields.
 //!
-//! P3.489 isolate used `Note { id: int }` (Copy) and stayed owned + `notes.clone()`.
-//! Product `truncate_notes` demotes to `&Vec<Note>` then `return notes` (E0308).
+//! Same-file `pub fn` stays owned. Product `domain/note.wj` + private
+//! `truncate_notes` emits `notes: &Vec<Note>` then `return notes` (E0308).
 
 use std::fs;
 use std::process::Command;
@@ -25,19 +26,32 @@ fn string_note_vec_early_return_must_clone() {
     let tmp = TempDir::new().expect("tempdir");
     let wj = env!("CARGO_BIN_EXE_wj");
 
-    let src = tmp.path().join("t.wj");
-    let out = tmp.path().join("out");
+    let src = tmp.path().join("src");
+    fs::create_dir_all(src.join("domain")).expect("mkdir domain");
+    fs::write(src.join("mod.wj"), "pub mod domain\n").unwrap();
+    fs::write(src.join("domain").join("mod.wj"), "pub mod note\npub mod api\n").unwrap();
     fs::write(
-        &src,
+        src.join("domain").join("note.wj"),
         r#"
-struct Note {
-    id: int,
-    uid: string,
-    title: string,
-    body: string,
+pub struct Note {
+    pub id: int,
+    pub uid: string,
+    pub title: string,
+    pub body: string,
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        src.join("domain").join("api.wj"),
+        r#"
+use crate::domain::note::Note
+
+fn list_notes() -> Vec<Note> {
+    Vec::new()
 }
 
-pub fn truncate_notes(notes: Vec<Note>, limit: int) -> Vec<Note> {
+fn truncate_notes(notes: Vec<Note>, limit: int) -> Vec<Note> {
     if limit <= 0 {
         return notes
     }
@@ -50,13 +64,15 @@ pub fn truncate_notes(notes: Vec<Note>, limit: int) -> Vec<Note> {
     out
 }
 
-pub fn list_limited(notes: Vec<Note>, limit: int) -> Vec<Note> {
+pub fn list_limited(limit: int) -> Vec<Note> {
+    let notes = list_notes()
     truncate_notes(notes, limit)
 }
 "#,
     )
     .unwrap();
 
+    let out = tmp.path().join("out");
     let build = Command::new(wj)
         .args([
             "build",
@@ -74,19 +90,17 @@ pub fn list_limited(notes: Vec<Note>, limit: int) -> Vec<Note> {
         String::from_utf8_lossy(&build.stderr)
     );
 
-    let rs = fs::read_to_string(out.join("t.rs"))
-        .or_else(|_| fs::read_to_string(out.join("lib.rs")))
-        .unwrap_or_else(|_| {
-            let mut acc = String::new();
-            if let Ok(entries) = fs::read_dir(&out) {
-                for e in entries.flatten() {
-                    if e.path().extension().and_then(|s| s.to_str()) == Some("rs") {
-                        acc.push_str(&fs::read_to_string(e.path()).unwrap_or_default());
-                    }
+    let rs = fs::read_to_string(out.join("domain").join("api.rs")).unwrap_or_else(|_| {
+        let mut acc = String::new();
+        if let Ok(entries) = fs::read_dir(out.join("domain")) {
+            for e in entries.flatten() {
+                if e.path().extension().and_then(|s| s.to_str()) == Some("rs") {
+                    acc.push_str(&fs::read_to_string(e.path()).unwrap_or_default());
                 }
             }
-            acc
-        });
+        }
+        acc
+    });
     eprintln!("generated:\n{rs}");
 
     let demoted = rs.contains("notes: &Vec<") || rs.contains("notes: & Vec<");

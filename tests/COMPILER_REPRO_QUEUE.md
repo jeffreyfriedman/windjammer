@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.506 (2026-09-27) — TDD WDB-410 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-410 MultiFile | ⏳ TDD — owned-self wither must move `self.items` / `self.graph` / `self.label` |
+| WDB-410 tip-out | ⏳ TDD — `PassBuilder` `self.graph.clone()` / `self.bindings.clone()` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why this is a new class:**
+- WDB-378 is **indexed** `src[i].clone().field` per field. This is **owned `self`** `let mut items = self.items` then reconstruct — product clones every Vec/graph field.
+- WDB-358 is `self.clone().method()`. WDB-407 is `Vec` `new` formal demote.
+
+**What became unnecessary:** refiling WDB-378/358/407/409; reusing WDB-406/408 (compiler).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb410_` — results after TDD this session.
+
 ## P3.505 (2026-09-27) — demoted `&Vec<Note>` must clone on owned return (`truncate_notes`)
 
 | Gate | Status |
@@ -102,7 +120,7 @@
 | `handle_forward_empty_lits_must_own` | ✅ isolate GREEN / ❌ product RED — isolate owns `"".to_string()`; ecosystem `handle_request` still bare `""` |
 | `string_note_vec_early_return_must_clone` | ✅ P3.505 — cross-module private demotes to `&Vec<Note>` then `return notes.clone()` |
 | `timestamp_millis_loop_must_unify_int` | ✅ P3.500 — `while now < (deadline as i64)`; not `(now as i32) < deadline` |
-| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — empty-lit + Vec early-return E0308s remain in ecosystem notes-api |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `handle_request` bare `""` E0308; truncate_notes early-return **GREEN** on tip (clone) |
 
 **Why these are new classes:**
 - P3.489 empty-lit isolate used interpolation+`keep` and already owned `""`. Product `handle` **forwards** three owned strings into `inner`/`handle_method`.
@@ -110,10 +128,10 @@
 
 **Root cause layer:** none this session — eco agent files gates only. Do not edit `windjammer/src/`. Do not reshape the app.
 
-**Ran (2026-09-27):** tip p3495 binary absent; used `target/release/wj` 0.50.0 — `$WJ build src --output OUT --no-cargo --module-file` + `cargo check` in OUT.
-- Empty-lit forward: `app.handle(method, path, "".to_string(), "".to_string(), "".to_string(), 0_i64, body)` — **not** `path, "", "", ""`; cargo check **ok**.
-- String-Note Vec: `pub fn truncate_notes(notes: &Vec<Note>, …) { return notes; }` — cargo check **fail** E0308.
-- Retry pause_ms isolate: `while now < (deadline as i64)` — **GREEN** (P3.500).
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (p3495 absent) — `$WJ build src --output OUT --no-cargo --module-file` + `cargo check` in OUT; product tip-out `apps/wj-notes-api/src`.
+- Empty-lit forward isolate: `app.handle(method, path, "".to_string(), "".to_string(), "".to_string(), 0_i64, body)` — **not** `path, "", "", ""`; cargo check **ok**. Product `handle_request`: `app.handle(&method, path, "", "", "", 0_i64, body)` — **RED** E0308.
+- String-Note Vec isolate: `truncate_notes(notes: &Vec<Note>, …) { return notes.clone(); }` — cargo check **ok**. Product same emit for `truncate_notes`; remaining product E0308 is empty-lit only.
+- Retry pause_ms isolate: `while now < (deadline as i64)` — **GREEN** (P3.500); not `(now as i32) < deadline`.
 
 ## P3.498 (2026-09-27) — TDD WDB-405 (DB agent; no compiler src)
 
