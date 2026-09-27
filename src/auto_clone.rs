@@ -1326,8 +1326,13 @@ impl AutoCloneAnalysis {
     fn stmts_contain_self_field_move_let(statements: &[&Statement]) -> bool {
         for stmt in statements {
             match stmt {
-                Statement::Let { value, .. } => {
-                    if Self::expr_is_self_field_move(value) {
+                Statement::Let { value, .. }
+                | Statement::Expression { expr: value, .. }
+                | Statement::Return {
+                    value: Some(value), ..
+                }
+                | Statement::Assignment { value, .. } => {
+                    if Self::expr_contains_self_field_move(value) {
                         return true;
                     }
                 }
@@ -1374,6 +1379,28 @@ impl AutoCloneAnalysis {
             Expression::FieldAccess { object, .. }
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
         )
+    }
+
+    /// `Vox::new(self.scene)` is an owned-self field move (WDB-414), same as a let.
+    fn expr_contains_self_field_move(expr: &Expression) -> bool {
+        if Self::expr_is_self_field_move(expr) {
+            return true;
+        }
+        match expr {
+            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+                arguments
+                    .iter()
+                    .any(|(_, arg)| Self::expr_contains_self_field_move(arg))
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::expr_contains_self_field_move(left)
+                    || Self::expr_contains_self_field_move(right)
+            }
+            Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
+                Self::expr_contains_self_field_move(operand)
+            }
+            _ => false,
+        }
     }
 
     /// True when `field_path` is moved and later written back (extract or call-arg).
@@ -3096,6 +3123,86 @@ mod tests {
         assert!(
             !analysis.needs_clone_anywhere("self.label"),
             "owned-self wither must move self.label, sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn owned_self_ctor_arg_must_not_clone_moved_field() {
+        // WDB-414: `let v = Vox::new(self.scene); self.grid = 1`
+        let func = FunctionDecl {
+            name: "initialize".to_string(),
+            is_pub: true,
+            is_extern: false,
+            parameters: vec![Parameter {
+                name: "self".to_string(),
+                pattern: None,
+                type_: Type::Custom("Demo".to_string()),
+                ownership: OwnershipHint::Owned,
+                is_mutable: false,
+                decorators: vec![],
+            }],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: Some("Demo".to_string()),
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("v".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::FieldAccess {
+                            object: test_alloc_expr(Expression::Identifier {
+                                name: "Vox".to_string(),
+                                location: None,
+                            }),
+                            field: "new".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::FieldAccess {
+                                object: test_alloc_expr(Expression::Identifier {
+                                    name: "self".to_string(),
+                                    location: None,
+                                }),
+                                field: "scene".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Assignment {
+                    target: test_alloc_expr(Expression::FieldAccess {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "self".to_string(),
+                            location: None,
+                        }),
+                        field: "grid".to_string(),
+                        location: None,
+                    }),
+                    value: test_alloc_expr(Expression::Literal {
+                        value: Literal::Int(1),
+                        location: None,
+                    }),
+                    compound_op: None,
+                    location: None,
+                }),
+            ],
+        };
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            !analysis.needs_clone_anywhere("self.scene"),
+            "owned-self ctor arg must move self.scene, sites={:?}",
             analysis.clone_sites
         );
     }

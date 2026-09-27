@@ -1093,6 +1093,11 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             if mutated_parameters.contains(&param.name) {
+                // Infer already chose Owned (WDB-414: move `self.scene` into a ctor
+                // then write a remaining field). Do not demote back to MutBorrowed.
+                if inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned) {
+                    continue;
+                }
                 // Explicit `mut x: T` without field writes stays Owned (`mut x: T`):
                 // Owned already satisfies `&mut self` method receivers.
                 // Field mutation (or non-explicit mut) → MutBorrowed (`&mut T`).

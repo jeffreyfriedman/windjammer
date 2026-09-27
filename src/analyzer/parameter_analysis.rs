@@ -119,6 +119,12 @@ impl<'ast> Analyzer<'ast> {
 
         // 2. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
+            // WDB-414: `Vox::new(self.scene)` then `self.grid = 1` is a partial
+            // move of a non-Copy field plus a remaining-field write. Keep Owned
+            // so the ctor can take the field; MutBorrowed would force `.clone()`.
+            if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body) {
+                return Ok(OwnershipMode::Owned);
+            }
             return Ok(OwnershipMode::MutBorrowed);
         }
 
@@ -376,15 +382,18 @@ impl<'ast> Analyzer<'ast> {
                 // (codegen may lower to &str). Owned is for consuming callees resolved above.
                 return Ok(OwnershipMode::Borrowed);
             }
-            // Unused `string` formals keep Owned (API/FFI contract) — same policy as
-            // unused Vec. Demoting unused params to `&str` made multipass call sites
-            // asymmetric (WDB-152: claim_next got `.to_string()`, heartbeat_tick kept
-            // a bare literal into a sibling owned formal).
+            // Unused **pub** `string` formals keep Owned (API/FFI contract) — same
+            // policy as unused Vec / WDB-152 multipass siblings.
+            // Unused **private** helpers (`start(line, key)` that never reads `line`)
+            // demote to Borrowed so callers can reuse `line` without `.clone()` (WDB-413).
             if !body
                 .iter()
                 .any(|stmt| self.statement_uses_identifier(param_name, stmt))
             {
-                return Ok(OwnershipMode::Owned);
+                if func.is_pub {
+                    return Ok(OwnershipMode::Owned);
+                }
+                return Ok(OwnershipMode::Borrowed);
             }
             // Pub free APIs: interpolation-only `string` formals stay Owned
             // (`join(base, relative)` + `Ok("${base}/${relative}")` must not
@@ -751,9 +760,7 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_uses_ident_outside_format(name, left)
                     || self.expr_uses_ident_outside_format(name, right)
             }
-            Expression::Unary { operand, .. } => {
-                self.expr_uses_ident_outside_format(name, operand)
-            }
+            Expression::Unary { operand, .. } => self.expr_uses_ident_outside_format(name, operand),
             Expression::Call { arguments, .. } => arguments
                 .iter()
                 .any(|(_, arg)| self.expr_uses_ident_outside_format(name, arg)),

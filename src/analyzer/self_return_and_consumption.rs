@@ -1084,6 +1084,23 @@ impl<'ast> Analyzer<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_moves_non_copy_self_field(s)),
+            // WDB-414: `Vox::new(self.scene)` moves a non-Copy field through a call arg.
+            // Without this, impl-self inference only saw later `self.grid = 1` and
+            // emitted `&mut self` + `self.scene.clone()`.
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, a)| self.expression_moves_non_copy_self_field(a)),
+            // Method receiver is borrowed (not moved). Walk args only — `self.scene.foo()`
+            // must not count as moving `scene`.
+            Expression::MethodCall { arguments, .. } => arguments
+                .iter()
+                .any(|(_, a)| self.expression_moves_non_copy_self_field(a)),
+            Expression::Binary { left, right, .. } => {
+                self.expression_moves_non_copy_self_field(left)
+                    || self.expression_moves_non_copy_self_field(right)
+            }
+            Expression::Unary { operand, .. } => self.expression_moves_non_copy_self_field(operand),
+            Expression::TryOp { expr, .. } => self.expression_moves_non_copy_self_field(expr),
             _ => false,
         }
     }
