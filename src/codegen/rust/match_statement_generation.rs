@@ -1223,6 +1223,21 @@ impl<'ast> CodeGenerator<'ast> {
                 arm_str = string_utilities::coerce_expr_to_owned_string(&arm_str);
             }
 
+            // P3.513: call-site `&mut note` is the source of truth. Nested
+            // `route_match` graphs often fail `infer_match_bound_types`, so
+            // upgrade_pattern_mut_bindings leaves `Some(note)` immutable.
+            for var in &bound_vars_for_cleanup {
+                if arm_str.contains(&format!("&mut {var}")) {
+                    let imm = format!("Some({var})");
+                    let mutp = format!("Some(mut {var})");
+                    if let Some(pos) = output.rfind(&imm) {
+                        if !output[pos..].starts_with(&mutp) {
+                            output.replace_range(pos..pos + imm.len(), &mutp);
+                        }
+                    }
+                }
+            }
+
             output.push_str(&arm_str);
             output.push_str(",\n");
         }
