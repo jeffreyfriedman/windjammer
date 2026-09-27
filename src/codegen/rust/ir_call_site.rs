@@ -1379,7 +1379,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(&map_qualified),
             );
         }
-        if receiver_type_name.is_none() {
+        if receiver_type_name.is_none() && !self.is_import_alias_cross_crate_call(callee_name) {
             sig =
                 crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(
                     registry,

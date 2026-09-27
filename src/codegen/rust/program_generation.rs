@@ -47,6 +47,31 @@ pub fn collect_import_fn_alias_map(program: &Program<'_>) -> HashMap<String, Str
     map
 }
 
+/// Path-dep recovered ABI (`wj_querystring::get`, `key: &str`) must win under
+/// import aliases (`qs_get`). Analyzer call-site stubs register `qs_get` as
+/// Owned/Owned from the call itself — skipping that overwrite leaves IR
+/// `expected` Owned and emits `"pretty".to_string()`.
+pub fn install_import_alias_path_dep_signatures(
+    registry: &mut SignatureRegistry,
+    aliases: &HashMap<String, String>,
+) {
+    for (alias, qualified) in aliases {
+        let Some(sig) = registry.get_signature(qualified).cloned() else {
+            continue;
+        };
+        registry.add_function(alias.clone(), sig);
+    }
+}
+
+/// Collect `use dep::fn as alias` from `program` and overwrite analyzer stubs.
+pub fn install_program_import_alias_signatures(
+    registry: &mut SignatureRegistry,
+    program: &Program<'_>,
+) {
+    let aliases = collect_import_fn_alias_map(program);
+    install_import_alias_path_dep_signatures(registry, &aliases);
+}
+
 impl<'ast> CodeGenerator<'ast> {
     fn dedupe_rust_import_lines(block: &str) -> String {
         let mut seen_private: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -361,6 +386,10 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        install_import_alias_path_dep_signatures(
+            &mut self.signature_registry,
+            &self.import_fn_alias_map,
+        );
 
         // Check for stdlib modules that need special imports
         for item in &program.items {

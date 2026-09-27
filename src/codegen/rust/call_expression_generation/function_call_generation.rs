@@ -838,7 +838,8 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     }
 
     // Bare same-module user API beats stdlib homonym (`join` vs `strings::join`).
-    if !func_name.contains("::") {
+    // Import aliases (`qs_get` → `wj_querystring::get`) are path-dep ABI, not local APIs.
+    if !func_name.contains("::") && !gen.is_import_alias_cross_crate_call(func_name) {
         if let Some(ref sig) = signature {
             signature = Some(
                 crate::codegen::rust::signature_promotion::local_user_fn_beats_runtime_std_homonym(

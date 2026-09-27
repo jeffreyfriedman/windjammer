@@ -169,3 +169,102 @@ pub fn query_wants_pretty(query: string) -> bool {
         String::from_utf8_lossy(&check.stderr)
     );
 }
+
+/// Product shape: path-dep is a `build/` tree with generated `lib.rs` and no
+/// `metadata.json` / `--metadata` flags. Isolate above is GREEN with `--library`
+/// metadata; notes-api product still emits `"pretty".to_string()`.
+#[test]
+fn qs_get_literal_from_generated_rs_path_dep_must_not_string_from() {
+    let tmp = TempDir::new().expect("tempdir");
+    let wj = env!("CARGO_BIN_EXE_wj");
+
+    let qs_build = tmp.path().join("qs_build");
+    fs::create_dir_all(&qs_build).expect("mkdir qs_build");
+    fs::write(
+        qs_build.join("lib.rs"),
+        r#"
+#[inline]
+pub fn get(query: String, key: &str) -> Option<String> {
+    if key == "pretty" { Some(String::from("1")) } else { None }
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        qs_build.join("Cargo.toml"),
+        "[package]\nname = \"qs_src\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+
+    let muter_build = tmp.path().join("muter_build");
+    fs::create_dir_all(&muter_build).expect("mkdir muter_build");
+    fs::write(
+        muter_build.join("lib.rs"),
+        "pub fn get(slot: &mut String) { let _ = slot; }\n",
+    )
+    .unwrap();
+
+    let app_src = tmp.path().join("app_src");
+    fs::create_dir_all(app_src.join("src").join("domain")).expect("mkdir src/domain");
+    fs::write(
+        app_src.join("wj.toml"),
+        format!(
+            "[package]\nname = \"notes_qs_abi\"\n\n[dependencies]\nqs_pkg = {{ path = \"{}\" }}\nmuter_pkg = {{ path = \"{}\" }}\n",
+            qs_build.display(),
+            muter_build.display()
+        ),
+    )
+    .unwrap();
+    fs::write(app_src.join("src").join("mod.wj"), "pub mod domain\n").unwrap();
+    fs::write(
+        app_src.join("src").join("domain").join("mod.wj"),
+        "pub mod api\n",
+    )
+    .unwrap();
+    fs::write(
+        app_src.join("src").join("domain").join("api.wj"),
+        r#"
+use qs_pkg::get as qs_get
+
+fn own(value: string) -> string {
+    value
+}
+
+pub fn query_wants_pretty(query: string) -> bool {
+    let query = own(query)
+    match qs_get(query, "pretty") {
+        None => false,
+        Some(text) => text == "1" || text == "true",
+    }
+}
+"#,
+    )
+    .unwrap();
+
+    let app_gen = tmp.path().join("app_gen");
+    let app_build = Command::new(wj)
+        .current_dir(&app_src)
+        .args([
+            "build",
+            "src",
+            "--output",
+            app_gen.to_str().unwrap(),
+            "--no-cargo",
+            "--module-file",
+        ])
+        .output()
+        .expect("app build");
+    assert!(
+        app_build.status.success(),
+        "app transpile failed:\n{}",
+        String::from_utf8_lossy(&app_build.stderr)
+    );
+
+    let api_rs = fs::read_to_string(app_gen.join("domain").join("api.rs")).unwrap_or_default();
+    eprintln!("generated-rs path-dep api.rs:\n{api_rs}");
+    assert!(
+        !api_rs.contains("String::from(\"pretty\")")
+            && !api_rs.contains("\"pretty\".to_string()"),
+        "lib.rs-only path-dep qs_get key &str must stay bare:\n{api_rs}"
+    );
+}

@@ -1829,6 +1829,14 @@ pub(crate) fn local_user_fn_beats_runtime_std_homonym(
             .is_some_and(|t| matches!(t, Type::MutableReference(_)))
     });
     if !resolved_shared && !resolved_mut {
+        // Analyzer import-alias stubs (`qs_get: string, string` Owned) must not
+        // replace a path-dep recovered ABI already on the local overlay
+        // (`wj_querystring::get`, `emitted[1]=true`).
+        if shared_ref_emission_beats(local_sig, &resolved)
+            || mut_borrow_emission_beats(local_sig, &resolved)
+        {
+            return local_sig.clone();
+        }
         return resolved;
     }
     if resolved.name != local_sig.name {
@@ -3033,6 +3041,50 @@ mod prefer_shared_runtime_tests {
             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&picked, 1),
             "user join relative slot must stay owned, not strings::join &str; got {:?}",
             picked.emitted_rust_ref_params
+        );
+    }
+
+    #[test]
+    fn path_dep_recovered_alias_beats_analyzer_owned_stub_resolution() {
+        let recovered = FunctionSignature {
+            name: "get".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Borrowed],
+            return_type: Some(Type::Option(Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, true]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let stub = FunctionSignature {
+            name: "qs_get".into(),
+            param_types: vec![Type::String, Type::String],
+            formal_param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Option(Box::new(Type::String))),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let mut local = crate::analyzer::SignatureRegistry::new();
+        local.add_function("qs_get".into(), recovered.clone());
+        let picked = local_user_fn_beats_runtime_std_homonym(&local, "qs_get", stub);
+        assert_eq!(
+            picked.emitted_rust_ref_params.as_deref(),
+            Some(&[false, true][..]),
+            "path-dep ABI must beat analyzer Owned stub: {picked:#?}"
+        );
+        assert_eq!(
+            picked.param_ownership.get(1),
+            Some(&OwnershipMode::Borrowed)
         );
     }
 
