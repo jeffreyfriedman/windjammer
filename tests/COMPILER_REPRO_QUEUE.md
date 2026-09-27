@@ -1,5 +1,22 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.498 (2026-09-27) — TDD WDB-405 (DB agent; no compiler src)
+
+| Gate | Status |
+|------|--------|
+| WDB-405 MultiFile | ⏳ TDD — `NodeType::PureFunction` must not `.clone()` |
+| WDB-405 tip-out | ⏳ TDD — `gen/visual_scripting/graph_test.rs` |
+
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+
+**Why this is a new class:**
+- WDB-384/392/397/401–404 cover FaceDirection / Direction / TileType / StreamState / ChunkLifecycleState / EditorMode; product still clones **NodeType::** into `Node::new`.
+
+**What became unnecessary:** refiling FaceDirection (384), Direction (392), TileType (397), StreamState (401), HostType (402), ChunkLifecycle (403), EditorMode (404).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb403`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb405_` — results after TDD this session.
+
 ## P3.497 (2026-09-27) — TDD WDB-403/404 (DB agent; no compiler src)
 
 | Gate | Status |
