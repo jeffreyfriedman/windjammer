@@ -54,6 +54,20 @@ pub fn is_black(frame: FramePixels) -> bool {
     let avg = total_lum / count as f32
     avg < threshold
 }
+
+/// Product leftover: early `count == 0` return poisons `i` to i32 (average_brightness).
+pub fn average_brightness(frame: FramePixels) -> f32 {
+    let count = frame.pixel_count()
+    if count == 0 { return 0.0 }
+    let mut total = 0.0
+    let mut i = 0
+    while i < count {
+        let idx = (i * 4) as i64
+        total = total + luminance(frame.data[idx], frame.data[idx + 1], frame.data[idx + 2])
+        i = i + 1
+    }
+    total / count as f32
+}
 "#;
 
 #[test]
@@ -64,7 +78,9 @@ fn wdb411_module_file_u32_count_while_must_not_infer_i32() {
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-411 MultiFile lib.rs:\n{rs}");
     assert!(
-        !rs.contains("0_i32") && !rs.contains("let mut i = 0_i32"),
+        !rs.contains("let mut i: i32")
+            && !rs.contains("let mut i = 0_i32")
+            && !rs.contains("0_i32"),
         "WDB-411 RED: u32 count loop inferred i32:\n{rs}"
     );
     assert!(
