@@ -16,16 +16,20 @@ impl<'ast> CodeGenerator<'ast> {
         match body {
             Expression::Block { statements, .. } => statements.iter().any(|s| match s {
                 Statement::Return { value: Some(e), .. }
-                | Statement::Expression { expr: e, .. } => Self::match_arm_body_uses_binding(e, name),
+                | Statement::Expression { expr: e, .. } => {
+                    Self::match_arm_body_uses_binding(e, name)
+                }
                 _ => false,
             }),
             Expression::Identifier { name: id, .. } => id == name,
             Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-                arguments.iter().any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
+                arguments
+                    .iter()
+                    .any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
             }
-            Expression::Tuple { elements, .. } => {
-                elements.iter().any(|e| Self::match_arm_body_uses_binding(e, name))
-            }
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|e| Self::match_arm_body_uses_binding(e, name)),
             _ => false,
         }
     }
@@ -51,9 +55,10 @@ impl<'ast> CodeGenerator<'ast> {
                     let arm_reuses = arms
                         .iter()
                         .any(|arm| Self::match_arm_body_uses_binding(arm.body, name));
-                    let analysis_wants = self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                        a.needs_clone(name, self.current_statement_idx).is_some()
-                    });
+                    let analysis_wants = self
+                        .auto_clone_analysis
+                        .as_ref()
+                        .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
                     let callee_shared = callee.is_some_and(|c| {
                         self.preregistered_free_call_arg_expects_borrow(c, i)
                             || self.callee_arg_expects_borrow_at_call(c, i)
@@ -122,10 +127,8 @@ impl<'ast> CodeGenerator<'ast> {
             if arm0_is_true && arm1_is_false {
                 let value_str = self.generate_expression(value);
                 let scrutinee_ty = self.infer_expression_type(value);
-                let pattern_str = self.generate_pattern_with_scrutinee(
-                    &arms[0].pattern,
-                    scrutinee_ty.as_ref(),
-                );
+                let pattern_str =
+                    self.generate_pattern_with_scrutinee(&arms[0].pattern, scrutinee_ty.as_ref());
                 let mut output = self.indent();
                 output.push_str(&format!("matches!({}, {})\n", value_str, pattern_str));
                 return output;
@@ -134,10 +137,8 @@ impl<'ast> CodeGenerator<'ast> {
             if arm0_is_false && arm1_is_true {
                 let value_str = self.generate_expression(value);
                 let scrutinee_ty = self.infer_expression_type(value);
-                let pattern_str = self.generate_pattern_with_scrutinee(
-                    &arms[0].pattern,
-                    scrutinee_ty.as_ref(),
-                );
+                let pattern_str =
+                    self.generate_pattern_with_scrutinee(&arms[0].pattern, scrutinee_ty.as_ref());
                 let mut output = self.indent();
                 output.push_str(&format!("!matches!({}, {})\n", value_str, pattern_str));
                 return output;
@@ -174,7 +175,8 @@ impl<'ast> CodeGenerator<'ast> {
             let option_reassigns_early = matches!(
                 &arms[0].pattern,
                 Pattern::EnumVariant(name, _) if name == "Some" || name.ends_with("::Some")
-            ) && self.option_arm_reassigns_scrutinee_field(value, arms[0].body);
+            ) && self
+                .option_arm_reassigns_scrutinee_field(value, arms[0].body);
             let needs_borrow_break_check = (self.match_scrutinee_is_self_method_call(value)
                 || self.match_scrutinee_is_self_field(value))
                 && (self.match_arms_mutate_self(arms)
@@ -694,8 +696,7 @@ impl<'ast> CodeGenerator<'ast> {
             value_str
         };
 
-        let value_str =
-            self.apply_match_scrutinee_move_clone_if_needed(value_str, value, arms);
+        let value_str = self.apply_match_scrutinee_move_clone_if_needed(value_str, value, arms);
 
         let needs_borrow_break = !self.match_scrutinee_allows_mut_binding_directly(value)
             && (self.match_scrutinee_is_self_method_call(value)
@@ -759,10 +760,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     format!("{}.copied()", value_str)
                 };
-                output.push_str(&format!(
-                    "let __match_borrow_break = {};\n",
-                    borrowed
-                ));
+                output.push_str(&format!("let __match_borrow_break = {};\n", borrowed));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_cloned_borrow_break {
@@ -771,10 +769,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } else {
                     format!("{}.cloned()", value_str)
                 };
-                output.push_str(&format!(
-                    "let __match_borrow_break = {};\n",
-                    borrowed
-                ));
+                output.push_str(&format!("let __match_borrow_break = {};\n", borrowed));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_owned_copy_borrow_break || use_owned_option_borrow_break {
@@ -930,10 +925,12 @@ impl<'ast> CodeGenerator<'ast> {
             );
 
             output.push_str(&self.indent());
-            output.push_str(&self.generate_pattern_with_scrutinee(
-                &upgraded_pattern,
-                match_scrutinee_ty.as_ref(),
-            ));
+            output.push_str(
+                &self.generate_pattern_with_scrutinee(
+                    &upgraded_pattern,
+                    match_scrutinee_ty.as_ref(),
+                ),
+            );
 
             if let Some(guard) = &arm.guard {
                 output.push_str(" if ");
@@ -945,16 +942,17 @@ impl<'ast> CodeGenerator<'ast> {
             let mut bound_vars = std::collections::HashSet::new();
             self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
 
-            let added_borrowed: Vec<String> =
-                if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
-                    && !owned_bindings_from_copy_deref
-                {
-                    let inferred = self.infer_match_bound_types(value, &arm.pattern);
-                    let struct_enum_fields = matches!(
-                        &arm.pattern,
-                        Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _))
-                    );
-                    bound_vars
+            let added_borrowed: Vec<String> = if (match_binds_refs
+                || scrutinee_type_has_ref
+                || scrutinee_prefix_binds_refs)
+                && !owned_bindings_from_copy_deref
+            {
+                let inferred = self.infer_match_bound_types(value, &arm.pattern);
+                let struct_enum_fields = matches!(
+                    &arm.pattern,
+                    Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _))
+                );
+                bound_vars
                         .iter()
                         .filter(|var| {
                             // Copy payloads bind by value (Identity at owned call sites).
@@ -1021,9 +1019,9 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                         .cloned()
                         .collect()
-                } else {
-                    Vec::new()
-                };
+            } else {
+                Vec::new()
+            };
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.insert(var.clone());
             }
@@ -1043,10 +1041,7 @@ impl<'ast> CodeGenerator<'ast> {
             let mut match_bound_type_entries: Vec<(String, Type)> =
                 if use_owned_clone_borrow_break || use_owned_copy_borrow_break {
                     self.infer_match_bound_types_owned(value, &arm.pattern)
-                } else if use_copied_borrow_break
-                    || use_cloned_borrow_break
-                    || use_copied_option
-                {
+                } else if use_copied_borrow_break || use_cloned_borrow_break || use_copied_option {
                     // HashMap::get + `.copied()` → owned Copy bindings (WDB-134).
                     self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
                 } else {
@@ -1226,17 +1221,11 @@ impl<'ast> CodeGenerator<'ast> {
             // P3.513: call-site `&mut note` is the source of truth. Nested
             // `route_match` graphs often fail `infer_match_bound_types`, so
             // upgrade_pattern_mut_bindings leaves `Some(note)` immutable.
-            for var in &bound_vars_for_cleanup {
-                if arm_str.contains(&format!("&mut {var}")) {
-                    let imm = format!("Some({var})");
-                    let mutp = format!("Some(mut {var})");
-                    if let Some(pos) = output.rfind(&imm) {
-                        if !output[pos..].starts_with(&mutp) {
-                            output.replace_range(pos..pos + imm.len(), &mutp);
-                        }
-                    }
-                }
-            }
+            Self::sync_output_some_mut_from_body(
+                &mut output,
+                &arm_str,
+                bound_vars_for_cleanup.iter(),
+            );
 
             output.push_str(&arm_str);
             output.push_str(",\n");
@@ -1249,6 +1238,47 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(&self.indent());
         output.push_str("}\n");
         output
+    }
+
+    /// When the generated arm body borrows `&mut binding`, the pattern must bind `mut`.
+    /// Nested `route_match` / `generate_block_expr` matches often skip type-inferred upgrade.
+    pub(in crate::codegen::rust) fn apply_mut_bind_when_body_emits_mut_borrow(
+        pattern: &str,
+        body: &str,
+        bound_vars: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> String {
+        let mut out = pattern.to_string();
+        for var in bound_vars {
+            let var = var.as_ref();
+            if !body.contains(&format!("&mut {var}")) {
+                continue;
+            }
+            let imm = format!("Some({var})");
+            let mutp = format!("Some(mut {var})");
+            if out.contains(&imm) && !out.contains(&mutp) {
+                out = out.replace(&imm, &mutp);
+            }
+        }
+        out
+    }
+
+    fn sync_output_some_mut_from_body<'a>(
+        output: &mut String,
+        body: &str,
+        bound_vars: impl IntoIterator<Item = &'a String>,
+    ) {
+        for var in bound_vars {
+            if !body.contains(&format!("&mut {var}")) {
+                continue;
+            }
+            let imm = format!("Some({var})");
+            let mutp = format!("Some(mut {var})");
+            if let Some(pos) = output.rfind(&imm) {
+                if !output[pos..].starts_with(&mutp) {
+                    output.replace_range(pos..pos + imm.len(), &mutp);
+                }
+            }
+        }
     }
 
     /// `Some(x)` (or a block containing only that expression) where `x` is a match binding

@@ -1,5 +1,33 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.518 (2026-09-27) — product GET-one still `&mut query` into `query: String`
+
+P3.513/P3.514 nested `Some(mut note)` is GREEN. Product `dispatch` still last-uses `&mut query`.
+
+| Gate | Status |
+|------|--------|
+| `fetch_note_store_then_query_must_not_mut` | ✅ P3.514 isolate GREEN — `Some(mut note)` + `query.clone()` / move |
+| `interp_query_then_get_must_not_mut_query` | ✅ P3.513 isolate GREEN — same mut-bind |
+| `split_query_list_then_get_must_not_mut_query` | ✅ P3.511 isolate GREEN |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `let mut query` + `note_get_reply(&mut note, …, &mut query)` |
+
+**Why this is a new class:**
+- Mut-bind E0596 is closed. Remaining is last-use / auto-ref of `query: String`.
+- Isolates with nested `/`+`/health` ifs, `HttpReply`, two list-arm `query.clone()`, and `"${query}"` still last-use `query.clone()`. Product-only `&mut query`.
+
+**Root cause layer:** last-use / call-site auto-ref — `query: String` must receive `query` / `query.clone()`, not `&mut query`. Do not reshape notes-api.
+
+**What became unnecessary:** further E0596 `Some(note)` isolates.
+
+**Ran (2026-09-27):** `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 with `generate_block_expr` mut-bind (official cargo):
+- `cargo test --release --test all --features integration_tests,codegen_tests -- interp_query_then_get_must_not_mut_query split_query_list_then_get_must_not_mut_query fetch_note_store_then_query_must_not_mut` → **3 passed / 0 failed** (73.57s).
+- Product emit: `Some(mut note) => note_get_reply(&mut note, if_none_match, &mut query)`.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3518`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_product_remaining_e0308_must_not_emit` — expected RED.
+
+**Do not steal:** WDB-406/408/411/414–416, P3.516 (`<=` len unify).
+
 ## P3.517 (2026-09-27) — TDD WDB-416 (DB agent; no compiler src)
 
 Owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
@@ -99,7 +127,7 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 | Gate | Status |
 |------|--------|
-| `interp_query_then_get_must_not_mut_query` | ❌ isolate RED — nested `route_match` + HashMap `params.get` + method match emits `Some(note) => note_get_reply(&mut note, …, query.clone())` (E0596) |
+| `interp_query_then_get_must_not_mut_query` | ✅ isolate GREEN — `generate_block_expr` now mut-binds `Some(mut note)` (official cargo 18:50+) |
 | `split_query_list_then_get_must_not_mut_query` | ✅ isolate GREEN on tip p3505 (17:47) — shallow `match fetch` now `Some(mut note)` + `query.clone()` |
 | `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `Some(note) => note_get_reply(&mut note, if_none_match, &mut query)` (`let mut query = split.1`) |
 
