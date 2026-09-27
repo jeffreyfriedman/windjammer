@@ -61,6 +61,46 @@ impl<'ast> CodeGenerator<'ast> {
                 })
     }
 
+    /// P3.497: while-slot i32 must not win over an i64 timestamp / WJ `int` identifier.
+    /// P3.309 i32 counters vs int *literals* still keep forced i32.
+    pub(in crate::codegen::rust) fn comparison_should_keep_i64_over_forced_i32(
+        &self,
+        left: &Expression<'ast>,
+        right: &Expression<'ast>,
+        left_ty: IntType,
+        right_ty: IntType,
+    ) -> bool {
+        let (i64_side, _i32_side) = if left_ty == IntType::I64 && right_ty == IntType::I32 {
+            (left, right)
+        } else if right_ty == IntType::I64 && left_ty == IntType::I32 {
+            (right, left)
+        } else if left_ty == IntType::I64 && right_ty == IntType::I64 {
+            return true;
+        } else {
+            return false;
+        };
+        if matches!(
+            i64_side,
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            }
+        ) {
+            return false;
+        }
+        self.expression_is_stable_i64_compare_peer(i64_side)
+    }
+
+    fn expression_is_stable_i64_compare_peer(&self, expr: &Expression<'ast>) -> bool {
+        if self.int_type_for_mixed_int_codegen(expr) == IntType::I64 {
+            return true;
+        }
+        self.infer_expression_type(expr).is_some_and(|t| {
+            matches!(t, Type::Int)
+                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+        })
+    }
+
     /// P3.369: Typed i64 entity ids / WJ `int` vs i32-coord literal (`old_parent >= 0`).
     pub(in crate::codegen::rust) fn comparison_should_prefer_i64_over_i32(
         &self,
@@ -102,7 +142,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         false
     }
-
 
     /// Library/file `const NAME: int` — type-driven, not a const-name list.
     fn identifier_is_wj_int_module_const(&self, name: &str) -> bool {
@@ -965,7 +1004,15 @@ impl<'ast> CodeGenerator<'ast> {
                         self.local_var_types.get(name.as_str()),
                         Some(Type::Int) | Some(Type::Int32)
                     );
-                if is_counter {
+                // P3.497: `now` from `timestamp_millis` / i64 lets is not an i32 coord counter.
+                let i64_init = matches!(
+                    self.local_var_types.get(name.as_str()),
+                    Some(Type::Int)
+                ) || matches!(
+                    self.local_var_types.get(name.as_str()),
+                    Some(Type::Custom(n)) if n == "int" || n == "i64"
+                ) || self.int_type_for_mixed_int_codegen(left) == IntType::I64;
+                if is_counter && !i64_init {
                     self.local_var_types.insert(name.clone(), Type::Int32);
                     self.codegen_i32_binding_names.insert(name.clone());
                     self.usize_variables.remove(name);

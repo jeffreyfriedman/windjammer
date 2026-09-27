@@ -672,7 +672,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 };
                                 if signed(left_ty) && signed(right_ty) {
-                                    promoted = forced;
+                                    // P3.499: while-condition `assignment_int_target_type = i32`
+                                    // must not demote `timestamp_millis` / WJ `int` i64 peers
+                                    // (`(now as i32) < deadline` with `deadline: i64`).
+                                    if is_comparison
+                                        && forced == IntType::I32
+                                        && (left_ty == IntType::I64 || right_ty == IntType::I64)
+                                        && self.comparison_should_keep_i64_over_forced_i32(
+                                            left, right, left_ty, right_ty,
+                                        )
+                                    {
+                                        promoted = IntType::I64;
+                                    } else {
+                                        promoted = forced;
+                                    }
                                 } else if unsigned(left_ty) && unsigned(right_ty) {
                                     promoted = forced;
                                 }
@@ -1395,6 +1408,43 @@ pub fn set_parent(old_parent: i64) {
                 && !generated.contains(">= 0_usize")
                 && !generated.contains("0_usize as usize"),
             "signed sentinel 0 must not be usize:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn timestamp_millis_loop_must_not_cast_now_to_i32() {
+        let source = r#"
+fn timestamp_millis() -> i64 {
+    0
+}
+
+pub fn pause_ms(ms: int) {
+    if ms <= 0 {
+        return
+    }
+    let start = timestamp_millis()
+    let deadline = start + ms
+    let mut now = start
+    while now < deadline {
+        now = timestamp_millis()
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
+        numeric_inference.infer_program(&program);
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_numeric_inference(numeric_inference);
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !generated.contains("(now as i32) < deadline")
+                && !generated.contains("(now as i32)< deadline"),
+            "timestamp_millis loop must not compare i32 now to i64 deadline:\n{generated}"
         );
     }
 }
