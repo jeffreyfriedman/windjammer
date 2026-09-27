@@ -70,18 +70,29 @@ fn wdb405_module_file_nodetype_unit_variant_must_not_clone() {
     test.cargo_check().expect("WDB-405 cargo-check");
 }
 
+fn wdb405_product_graph_test_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for _ in 0..8 {
+        paths.push(
+            dir.join(".agent-wip/rel_tip_out/visual_scripting/graph_test.rs"),
+        );
+        paths.push(dir.join(".agent-wip/rel_tip_out/graph_test.rs"));
+        paths.push(
+            dir.join("windjammer-game/windjammer-game-core/gen/visual_scripting/graph_test.rs"),
+        );
+        if let Some(parent) = dir.parent() {
+            dir = parent.to_path_buf();
+        } else {
+            break;
+        }
+    }
+    paths
+}
+
 #[test]
 fn wdb405_tip_out_game_core_graph_test_must_not_clone_nodetype() {
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/windjammer-game-core");
-    let paths = [
-        tip.join("visual_scripting/graph_test.rs"),
-        tip.join("graph_test.rs"),
-        game.join("gen/visual_scripting/graph_test.rs"),
-    ];
+    let paths = wdb405_product_graph_test_paths();
     let mut saw = false;
     let mut bad_paths = Vec::new();
     for path in &paths {

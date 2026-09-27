@@ -1,5 +1,40 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.500 (2026-09-27) — timestamp_millis loop must unify i64 (wj-retry pause_ms)
+
+| Gate | Status |
+|------|--------|
+| `timestamp_millis_loop_must_not_cast_now_to_i32` | ✅ unit GREEN — numeric inference + void `pause_ms` |
+| `timestamp_millis_loop_must_unify_int` | ✅ isolate GREEN — `while now < (deadline as i64)`; cargo check |
+| `retry_product_pause_ms_must_unify_int` | ✅ product GREEN |
+| `module_file_void_while_i32_seg_counter` / `i32_inferred_loop_counter_and_sentinel` | ✅ no regression |
+
+**Root cause layer:** constraint — void/`function_prefers_i32_coord_locals` while-slots force `assignment_int_target_type = i32`, then mixed-int promotion demotes `timestamp_millis`/`int` i64 `now` to `(now as i32) < deadline` (E0308). Forced i32 no longer wins over a stable i64 peer. Literal `let mut i = 0` i32 counters (P3.323/P3.309) unchanged.
+
+**What became unnecessary:** `as i32` on i64 timestamp loop counters. No peel. No wj-retry reshape.
+
+**Ran:**
+- `cargo test --release --lib --features codegen_tests -- timestamp_millis_loop_must_not_cast_now_to_i32 signed_sentinel_zero_must_not_emit_usize` → **2 passed** (watched RED first: `(now as i32) < deadline`)
+- tip `wj build --module-file` isolate → `while now < (deadline as i64)`; `cargo check` **ok**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- timestamp_millis_loop_must_unify_int retry_product_pause_ms_must_unify_int module_file_void_while_i32_seg_counter i32_inferred_loop_counter_and_sentinel` → **4 passed**
+
+## P3.499 (2026-09-27) — notes-api product-shaped empty-lit + string-Note Vec (no compiler src)
+
+| Gate | Status |
+|------|--------|
+| `handle_forward_empty_lits_must_own` | ⏳ isolate — `handle` forwards origin/accept/client_key; `handle_request` passes `""` |
+| `string_note_vec_early_return_must_clone` | ⏳ isolate — `Note` with string fields + index scan + `return notes` |
+| `timestamp_millis_loop_must_unify_int` | ✅ P3.500 — no longer `(now as i32) < deadline` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — 3 E0308s on tip p3495 |
+
+**Why these are new classes:**
+- P3.489 empty-lit isolate used interpolation+`keep` and already owned `""`. Product `handle` **forwards** three owned strings into `inner`/`handle_method`.
+- P3.489 Vec isolate used `Note { id: int }` (Copy) and stayed owned. Product `Note` has **string fields** and demotes to `&Vec` without cloning the early return.
+
+**Root cause layer:** none this session — eco agent files gates only. Do not edit `windjammer/src/`. Do not reshape the app.
+
+**Gates:** tip `wj` = `.agent-wip/cargo-target-tip-p3495/release/wj` — fixtures run this session.
+
 ## P3.498 (2026-09-27) — TDD WDB-405 (DB agent; no compiler src)
 
 | Gate | Status |
