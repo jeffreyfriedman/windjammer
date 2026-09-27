@@ -4,14 +4,12 @@
 
 | Gate | Status |
 |------|--------|
-| `hexagonal_stub_compose_must_fail_ui_contract` | ✅ stub stays empty (meta-RED) |
-| `hexagonal_playable_host_must_advance_move_and_compose_ui_hud` | ✅ isolate GREEN — `wj-panel` + `wj-progress`, FakeTime += dt, FakeWorld z move, no FFI |
+| `hexagonal_stub_compose_must_fail_ui_contract` | ⏳ stub stays empty (meta-RED) |
+| `hexagonal_playable_host_must_advance_move_and_compose_ui_hud` | ⏳ isolate filed — `wj-panel` + `wj-progress`, FakeTime += dt, FakeWorld z move, no FFI |
 
-**Root cause layer:** none in compiler — application isolate. `application/playable_loop.wj` matches ui `Panel`/`Progress` `render()`.
+**Root cause layer:** none in compiler — application isolate. Implement `application/playable_loop.wj` in Windjammer matching ui `Panel`/`Progress` `render()`.
 
 **What became unnecessary:** game-core widget copies; FFI in the playable host tick.
-
-**Ran:** `cargo test --release --test all --features integration_tests,codegen_tests -- hexagonal_playable_host` → **2 passed**.
 
 **Also filed:** `timestamp_millis_loop_must_unify_int` / `retry_product_pause_ms_must_unify_int` — `wj-retry` `while now < deadline` emits `(now as i32) < deadline` (E0308). `json_tostring_note_must_not_mut_borrow_query` — product `note_get_reply` after `json.to_string(note)`.
 
@@ -88,12 +86,12 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-401 MultiFile | ⏳ TDD — `StreamState::Loading` must not `.clone()` |
-| WDB-401 tip-out | ⏳ TDD — `gen/vgs/streaming.rs` + `gen/audio/streaming.rs` |
-| WDB-402 MultiFile | ⏳ TDD — `HostType::F32` / `ShaderType::F32` must not `.clone()` |
-| WDB-402 tip-out | ⏳ TDD — `gen/rendering/type_safety_validator.rs` |
+| WDB-401 MultiFile | ✅ isolate GREEN — `StreamState::Loading` / `Resident` / `Playing` no `.clone()` |
+| WDB-401 tip-out | ❌ RED — `rel_tip_out` + `gen` `vgs/streaming.rs` + `audio/streaming.rs` still `StreamState::*.clone()` |
+| WDB-402 MultiFile | ✅ isolate GREEN — `HostType::F32` / `ShaderType::F32` no `.clone()` |
+| WDB-402 tip-out | ❌ RED — `rel_tip_out` + `gen` `rendering/type_safety_validator.rs` still `HostType::`/`ShaderType::*.clone()` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolates already correct (same assign-clone skip class as P3.479 / WDB-397); product/tip regen pending.
 
 **Why these are new classes:**
 - WDB-384/392/397 cover FaceDirection / Direction / TileType; product still clones **StreamState::** (VGS + audio) and **HostType::** / **ShaderType::**.
@@ -101,7 +99,7 @@
 **What became unnecessary:** refiling FaceDirection (384), Direction (392), TileType (397).
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb397`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb401_ wdb402_` — results after TDD this session.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb401_ wdb402_` → **2 passed / 2 failed** (isolates GREEN, tip-out RED; 7.20s after 3m04s incremental compile)
 
 ## P3.490 (2026-09-27) — Phase-2 isolate assertions match demote+borrow/passthrough
 
