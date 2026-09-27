@@ -27,7 +27,7 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 | Gate | Status |
 |------|--------|
-| `fetch_note_store_then_query_must_not_mut` | ❌ isolate RED — free `fetch_note(self.store, id)` + sibling POST/PUT `self.store` emits `Some(note) => note_get_reply(&mut note, …, query.clone())` (E0596) |
+| `fetch_note_store_then_query_must_not_mut` | ❌ isolate RED on tip p3515 (18:31) **after** `6f8031fc` / `35f3b7ab` — still `Some(note)` + `&mut note` (E0596) |
 | `interp_query_then_get_must_not_mut_query` | ❌ P3.513 — `self.store.fetch(id)` same E0596 |
 | `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `&mut query` into `query: String` (`let mut query`) |
 
@@ -42,6 +42,7 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 **Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3510/release/wj` 0.50.0 (18:05). Isolate `$WJ build --module-file` + `cargo check`.
 - Emit: `Some(note) => note_get_reply(&mut note, if_none_match, query.clone())` — E0596.
 - P3.513 recheck on same tip: still `Some(note)` + clone.
+- Recheck tip `.agent-wip/cargo-target-tip-p3515/release/wj` 0.50.0 (18:31) after `6f8031fc` / `35f3b7ab`: **still** `Some(note)` + `&mut note`. Product still `let mut query` + `&mut query`. Path-dep `qs_get` + health prefix still last-use `query.clone()`.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3511-eco`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- fetch_note_store_then_query_must_not_mut` → **0 passed / 1 failed** (0.55s after 979s compile; TDD RED).
