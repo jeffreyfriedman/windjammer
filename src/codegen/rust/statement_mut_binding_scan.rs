@@ -179,14 +179,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // P3.511: free `note_get_reply(note)` with a demoted `&mut Note` formal
-                // must upgrade `Some(note)` → `Some(mut note)` (same oracle as MethodCall).
-                if arguments.iter().enumerate().any(|(i, (_, a))| {
-                    matches!(a, Expression::Identifier { name, .. } if name == binding)
-                        && self.free_call_argument_expects_mut_borrow(function, i)
-                }) {
-                    return true;
-                }
                 self.binding_receives_mutating_call_with_sig_check(function, binding, binding_type)
                     || arguments.iter().any(|(_, a)| {
                         self.binding_receives_mutating_call_with_sig_check(a, binding, binding_type)
@@ -252,30 +244,6 @@ impl<'ast> CodeGenerator<'ast> {
                 .unwrap_or(false),
             _ => false,
         }
-    }
-
-    /// Free `callee(binding, …)` — same mut-slot oracle as method args.
-    fn free_call_argument_expects_mut_borrow(
-        &self,
-        function: &Expression<'ast>,
-        arg_idx: usize,
-    ) -> bool {
-        let callee = match function {
-            Expression::Identifier { name, .. } => name.as_str(),
-            Expression::FieldAccess { field, object, .. } => {
-                if let Expression::Identifier { name: module, .. } = &**object {
-                    let qualified = format!("{module}::{field}");
-                    if self.callee_slot_emits_mut_borrow(&qualified, arg_idx)
-                        || self.callee_slot_emits_mut_borrow(field, arg_idx)
-                    {
-                        return true;
-                    }
-                }
-                return self.callee_slot_emits_mut_borrow(field, arg_idx);
-            }
-            _ => return false,
-        };
-        self.callee_slot_emits_mut_borrow(callee, arg_idx)
     }
 
     /// Whether argument `arg_idx` of `receiver.method(...)` expects `&mut` (e.g. `is_available(world, …)`).
