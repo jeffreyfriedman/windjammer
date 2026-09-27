@@ -21,7 +21,7 @@
 - P3.513 recheck on same tip: still `Some(note)` + clone.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3511-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- fetch_note_store_then_query_must_not_mut` — expected **0 passed / 1 failed** (TDD RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- fetch_note_store_then_query_must_not_mut` → **0 passed / 1 failed** (0.55s after 979s compile; TDD RED).
 
 ## P3.513 (2026-09-27) — nested route_match GET-one must mut-bind note (not `&mut query` yet)
 
