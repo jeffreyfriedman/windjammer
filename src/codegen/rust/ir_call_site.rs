@@ -9181,6 +9181,12 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
+        // P3.518: source-level `query: string` emits `query: String`. Stale
+        // analyzer MutBorrowed (dispatch generated before the free fn) must
+        // not force `&mut query` into that owned formal.
+        if crate::ir::formal_predicates::formal_is_plain_windjammer_string(sig, pidx) {
+            return false;
+        }
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return false;
         }
@@ -9250,6 +9256,21 @@ impl<'ast> CodeGenerator<'ast> {
         local_sig: Option<&crate::analyzer::FunctionSignature>,
     ) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let string_owned = |sig: &crate::analyzer::FunctionSignature| {
+            crate::ir::formal_predicates::formal_is_plain_windjammer_string_for_call_arg(
+                sig, arg_index,
+            )
+        };
+        if local_sig.is_some_and(string_owned)
+            || registry.get_signature(callee_name).is_some_and(string_owned)
+            || registry.get_signature(simple).is_some_and(string_owned)
+            || self.global_signature_registry.as_ref().is_some_and(|g| {
+                g.get_signature(callee_name).is_some_and(string_owned)
+                    || g.get_signature(simple).is_some_and(string_owned)
+            })
+        {
+            return false;
+        }
         // Runtime-std `module::fn` is a free function. Bare `to_string` / `Type::method`
         // homonyms must not invent MutBorrowed on the user arg (`json::to_string`).
         let runtime_std_free_fn =
