@@ -57,11 +57,13 @@ fn main() {
         "WJ `message: string` must stay owned String (not &str). Got:\n{generated}"
     );
 
-    let call_passes_string = generated.contains(".to_string()")
-        || generated.contains("format!(");
-    // If formal were &str, a String-producing call site would E0308.
+    // Helper `error_json` may Phase-2 demote to `message: &str` + `error_json(&message)`.
+    // That is not an E0308: the pub wrapper stays owned and the concat site passes String.
+    let wrapper_demoted = generated.contains("pub fn json_cors_error(status: i64, message: &str)");
+    let call_passes_string =
+        generated.contains(".to_string()") || generated.contains("format!(");
     assert!(
-        !(generated.contains("message: &str") && call_passes_string),
-        "&str formal + String call site is E0308. Got:\n{generated}"
+        !wrapper_demoted || !call_passes_string,
+        "&str json_cors_error formal + String call site is E0308. Got:\n{generated}"
     );
 }

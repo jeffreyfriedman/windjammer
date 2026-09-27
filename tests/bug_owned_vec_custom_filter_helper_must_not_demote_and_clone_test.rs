@@ -95,7 +95,10 @@ pub fn apply(notes: Vec<Note>, needle: string) -> Vec<Note> {
     );
 
     assert!(
-        !demoted_formal || generated.contains("filter_notes(notes)") || generated.contains("filter_notes(&notes)"),
+        !demoted_formal
+            || generated.contains("filter_notes(notes)")
+            || generated.contains("filter_notes(&notes)")
+            || generated.contains("filter_notes(&notes,"),
         "RED: if Vec formal demotes to &Vec, call sites must borrow consistently (not notes.clone()).\ngenerated:\n{generated}"
     );
 
