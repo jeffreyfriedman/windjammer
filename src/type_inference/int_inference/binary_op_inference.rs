@@ -69,12 +69,18 @@ impl IntInference {
                 }
 
                 self.propagate_typed_operand_to_literal(left, right, left_id, right_id, left_is_literal, right_is_literal, "comparison");
-                // Unify comparison operands (e.g. untyped `acct_idx` vs `len() as int`).
-                self.constraints.push(IntConstraint::MustMatch(
-                    left_id,
-                    right_id,
-                    "comparison operands must share integer width".to_string(),
-                ));
+                // WDB-408: f32 slab compares (`tmax >= tmin`, `tmax >= 0.0`) are not
+                // integer-width constraints. MustMatch here reported Isize vs I64 and
+                // aborted engine library transpile.
+                if !self.expression_is_float_compare_operand(left)
+                    && !self.expression_is_float_compare_operand(right)
+                {
+                    self.constraints.push(IntConstraint::MustMatch(
+                        left_id,
+                        right_id,
+                        "comparison operands must share integer width".to_string(),
+                    ));
+                }
             }
             _ => {}
         }
@@ -121,5 +127,23 @@ impl IntInference {
     fn resolve_expression_int_type<'ast>(&self, expr: &Expression<'ast>) -> Option<IntType> {
         let ty = self.infer_type_from_expression(expr)?;
         self.extract_nested_int_type(&ty)
+    }
+
+    /// WDB-408: float compares must not enter integer MustMatch.
+    fn expression_is_float_compare_operand<'ast>(&self, expr: &Expression<'ast>) -> bool {
+        use crate::parser::Literal;
+        if matches!(
+            expr,
+            Expression::Literal {
+                value: Literal::Float(_),
+                ..
+            }
+        ) {
+            return true;
+        }
+        self.infer_type_from_expression(expr).is_some_and(|t| {
+            matches!(t, Type::Float)
+                || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
+        })
     }
 }

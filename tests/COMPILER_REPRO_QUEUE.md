@@ -33,6 +33,7 @@
 - watched RED: `notes: &Vec<Note>` + `return notes;` (`cargo test --test all -- string_note_vec_early_return_must_clone` → 0 passed / 1 failed)
 - tip MultiFile emit `return notes.clone();`; fixture `cargo check` **ok**
 - `cargo test --release --test all --features integration_tests,codegen_tests -- string_note_vec_early_return_must_clone wdb408_module_file_f32_compare` → **2 passed** (47.78s after 21m35s compile)
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb406_module_file_i32_field_compare` → **1 passed** (7.83s after incremental rebuild)
 
 ## P3.504 (2026-09-27) — TDD WDB-409 (DB agent; no compiler src)
 
@@ -56,7 +57,7 @@
 
 | Gate | Status |
 |------|--------|
-| `wdb408_module_file_f32_compare_must_not_require_int_width` | ⏳ isolate — `tmax >= tmin && tmax >= 0.0` must library-compile |
+| `wdb408_module_file_f32_compare_must_not_require_int_width` | ✅ isolate GREEN — skip integer MustMatch on f32 slab compares; cargo check |
 
 **Root cause layer:** constraint — int inference `MustMatch` on every compare, including f32 slab tests. Engine `wj game build` aborted: `Isize vs I64` at `physics/collision.wj:71`.
 
@@ -86,7 +87,7 @@
 
 | Gate | Status |
 |------|--------|
-| `wdb406_module_file_i32_field_compare_must_not_emit_usize` | ⏳ isolate RED — `clen > max_leaf && d < max_depth` must stay i32 |
+| `wdb406_module_file_i32_field_compare_must_not_emit_usize` | ✅ isolate GREEN — i32 field/local compares skip function-wide usize; no `as usize` on `max_leaf`/`max_depth` |
 
 **Root cause layer:** constraint — function-wide `as usize` index / `.len()` still poisons i32 field peers (`max_leaf_objects as usize`) after WDB-395 zero-sentinels.
 

@@ -110,6 +110,18 @@ impl<'ast> CodeGenerator<'ast> {
 
             self.coerce_return_ref_to_owned_copy(&mut return_str, e);
 
+            // P3.501: demoted `&Vec<T>` formals (`truncate_notes`) must clone when the
+            // function returns owned `Vec<T>` (`return notes` / E0308).
+            if let Expression::Identifier { name, .. } = e {
+                if self.demoted_vec_formal_needs_owned_return_clone(name)
+                    && !return_str.ends_with(".clone()")
+                    && !return_str.ends_with(".to_vec()")
+                    && !return_str.ends_with(".to_owned()")
+                {
+                    return_str = format!("{}.clone()", return_str);
+                }
+            }
+
             // `return self.field` on borrowed `self` when the return type is owned (not `&T`).
             // After index/`&` fixes above so we emit `( &expr ).clone()` not `&expr.clone()`.
             if super::self_analysis::is_self_field_chain(e)
@@ -149,5 +161,26 @@ impl<'ast> CodeGenerator<'ast> {
         }
         output.push_str(";\n");
         output
+    }
+
+    fn demoted_vec_formal_needs_owned_return_clone(&self, name: &str) -> bool {
+        let returns_owned_vec = match &self.current_function_return_type {
+            Some(Type::Vec(_)) => true,
+            Some(Type::Parameterized(n, _)) if n == "Vec" => true,
+            _ => false,
+        };
+        if !returns_owned_vec {
+            return false;
+        }
+        if !self.emitted_rust_ref_formals.contains(name)
+            && !self.inferred_borrowed_params.contains(name)
+        {
+            return false;
+        }
+        self.current_function_params.iter().any(|p| {
+            p.name == name
+                && (matches!(p.type_, Type::Vec(_))
+                    || matches!(&p.type_, Type::Parameterized(n, _) if n == "Vec"))
+        })
     }
 }

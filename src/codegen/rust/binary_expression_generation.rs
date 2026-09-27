@@ -129,6 +129,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.infer_expression_type(expr)
                     .filter(Self::type_is_signed_int)
             }
+            Expression::FieldAccess { .. } => self
+                .infer_expression_type(expr)
+                .filter(Self::type_is_signed_int),
             _ => self
                 .infer_expression_type(expr)
                 .filter(Self::type_is_signed_int),
@@ -261,7 +264,13 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             None
         };
-        if signed_zero_sentinel.is_some() {
+        // WDB-406: i32 local/field vs i32 field (`d < self.max_depth`) must not
+        // inherit function-wide usize from `as usize` indexing / `.len()`.
+        let signed_i32_field_compare = is_comparison
+            && signed_zero_sentinel.is_none()
+            && self.signed_peer_for_zero_sentinel(left).is_some()
+            && self.signed_peer_for_zero_sentinel(right).is_some();
+        if signed_zero_sentinel.is_some() || signed_i32_field_compare {
             left_is_usize = false;
             right_is_usize = false;
         }
