@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.512 (2026-09-27) — TDD WDB-414 (DB agent; no compiler src)
+
+`Type::new(self.scene)` must move the field; product emits `CsgVoxelizer::new(self.scene.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-414 MultiFile | ⏳ TDD — `Vox::new(self.scene)` must not `self.scene.clone()` |
+| WDB-414 tip-out | ⏳ product `CsgVoxelizer::new(self.scene.clone())` in rifter/cathedral/humanoid |
+
+**Root cause layer:** signature — `CsgVoxelizer::new(scene: CsgScene)` stays owned; `initialize` keeps using `self` after, so codegen clones `self.scene` instead of a partial move. WJ does not use `self.scene` after `new`.
+
+**Why this is a new class:**
+- WDB-360 is **`encode(self.grid.clone())`**. This is **constructor `new(self.scene)`**.
+- WDB-410 is **owned-self wither reconstruct** of every field.
+- WDB-407 is **`Vec` `new` demote** (`new(&joints)`).
+
+**What became unnecessary:** `self.scene.clone()` at `CsgVoxelizer::new` when WJ moves `self.scene`.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb414_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511 (notes-api), WDB-412–413 / P3.509–P3.510 (filed).
+
 ## P3.511 (2026-09-27) — split query list-then-get must not `&mut note` / `&mut query`
 
 | Gate | Status |
