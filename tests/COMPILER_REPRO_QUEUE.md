@@ -14,16 +14,16 @@
 **Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3505`
 - watched RED: `notes: &Vec<Note>` + `return notes;` (`cargo test --test all -- string_note_vec_early_return_must_clone` → 0 passed / 1 failed)
 - tip MultiFile emit `return notes.clone();`; fixture `cargo check` **ok**
-- official isolate after fix — results this session
+- `cargo test --release --test all --features integration_tests,codegen_tests -- string_note_vec_early_return_must_clone wdb408_module_file_f32_compare` → **2 passed** (47.78s after 21m35s compile)
 
 ## P3.504 (2026-09-27) — TDD WDB-409 (DB agent; no compiler src)
 
 | Gate | Status |
 |------|--------|
-| WDB-409 MultiFile | ⏳ TDD — owned `string`+`Val` formals stored into fields must not demote to `&str`/`&Val` |
-| WDB-409 tip-out | ⏳ TDD — `VariableScope::set(name: &str, value: &Value)` / `set_variable(name: &String, value: &Value)` / `load_gltf(name: &String)` |
+| WDB-409 MultiFile | ❌ isolate RED — `set(name: &str, value: Val)` + `set_variable(name: &String, value: Val)` then `name.to_string()` |
+| WDB-409 tip-out | ❌ RED — `rel_tip_out` + `gen` `visual_scripting/runtime.rs` + `rendering/unified_renderer.rs` |
 
-**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`.
+**Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate reproduces name demotion (`&str` / `&String`); product also demotes non-Copy `Value` to `&Value`.
 
 **Why this is a new class:**
 - WDB-407 is owned **`Vec` `new`** demoted to `&Vec`. This is owned **`string` + value** formals that **store into fields**, demoted to `&str`/`&String`/`&Value` (then `value` assigned into a `Value` field).
@@ -31,8 +31,8 @@
 
 **What became unnecessary:** refiling WDB-407; reusing WDB-408 (compiler: f32 compare int-width).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb409_` — results after TDD this session.
+**Gates:** clean HEAD worktree `…/worktrees/wdb407-tdd` @ `32ca2d18`. `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb409_` → **0 passed / 2 failed** (isolate RED + tip-out RED; 0.99s after incremental compile)
 
 ## P3.503 (2026-09-27) — WDB-408 f32 compare must not require integer width
 
