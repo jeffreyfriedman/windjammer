@@ -1,5 +1,18 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.496 (2026-09-27) — hexagonal playable host (windjammer-ui HUD contract)
+
+| Gate | Status |
+|------|--------|
+| `hexagonal_stub_compose_must_fail_ui_contract` | ⏳ stub stays empty (meta-RED) |
+| `hexagonal_playable_host_must_advance_move_and_compose_ui_hud` | ⏳ isolate filed — `wj-panel` + `wj-progress`, FakeTime += dt, FakeWorld z move, no FFI |
+
+**Root cause layer:** none in compiler — application isolate. Implement `application/playable_loop.wj` in Windjammer matching ui `Panel`/`Progress` `render()`.
+
+**What became unnecessary:** game-core widget copies; FFI in the playable host tick.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- hexagonal_playable_host hexagonal_stub_compose`
+
 ## P3.495 (2026-09-27) — WDB-396 BT recursive Vec SCC agrees MutBorrowed
 
 | Gate | Status |
