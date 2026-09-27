@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.511 (2026-09-27) — split query list-then-get must not `&mut note` / `&mut query`
+
+| Gate | Status |
+|------|--------|
+| `split_query_list_then_get_must_not_mut_query` | ❌ isolate RED — hexagonal `NotesApp` + store + `split_path_query`; GET-one emits `note_get_reply(&mut note, …, query.clone())` on immutable `Some(note)` (E0596) |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `note_get_reply(&mut note, if_none_match, &mut query)` into `query: String` (E0308) |
+
+**Why this is a new class:**
+- Two-arg / if-return query isolates emit `query.clone()` and cargo-check (P3.489 / P3.499).
+- This hexagonal dispatch matches product: store `list` + `fetch`, `query` from `split_path_query`, list arm clones query, GET-one still demotes `note` to `&mut Note` without a `mut` binding.
+- Product still uses `&mut query` (not reproduced by the isolate clone). Separate remaining E0308.
+
+**Root cause layer:** codegen / match-binding — `json.to_string(note)` demotes the formal to `&mut Note`; `Some(note)` stays immutable. Do not edit `windjammer/src/`. Do not reshape notes-api.
+
+**What became unnecessary:** treating HashMap/`&mut self` as required to reproduce `&mut note`; refiling empty-lit P3.508 (tip GREEN).
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3510/release/wj` 0.50.0 (17:28). Isolate `$WJ build --module-file` + `cargo check`.
+- Emit: `Some(note) => note_get_reply(&mut note, if_none_match, query.clone())` — E0596 cannot borrow `note` as mutable.
+- Not `&mut query` (clone). Product `$WJ test`: **1** E0308 `&mut query`.
+- Eco: `wj-fetch` 31/31; notes-api still blocked.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3511-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- split_query_list_then_get_must_not_mut_query` — expected **0 passed / 1 failed** (TDD RED).
+
 ## P3.510 (2026-09-27) — TDD WDB-413 (DB agent; no compiler src)
 
 Read-only `string_len(line)` after `&line` must not emit `line.clone()`.
