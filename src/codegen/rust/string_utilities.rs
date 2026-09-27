@@ -1296,6 +1296,38 @@ pub fn rewrite_demoted_text_param_str_clones_in_rust_expr(
     }
 }
 
+/// Rewrite `name` only as a full identifier token.
+///
+/// Substring `replace("i", "i.clone()")` mangles `get_index` → `get_i.clone()ndex`.
+pub fn replace_ident_token(haystack: &str, name: &str, replacement: &str) -> String {
+    if name.is_empty() || haystack.is_empty() {
+        return haystack.to_string();
+    }
+    let chars: Vec<char> = haystack.chars().collect();
+    let needle: Vec<char> = name.chars().collect();
+    let n = needle.len();
+    let mut out = String::with_capacity(haystack.len().saturating_add(replacement.len()));
+    let mut i = 0;
+    while i < chars.len() {
+        if i + n <= chars.len() && chars[i..i + n] == needle[..] {
+            let before_ok = i == 0 || !is_rust_ident_continue(chars[i - 1]);
+            let after_ok = i + n == chars.len() || !is_rust_ident_continue(chars[i + n]);
+            if before_ok && after_ok {
+                out.push_str(replacement);
+                i += n;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+fn is_rust_ident_continue(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
 /// Strip a trailing auto-inserted `.clone()` when the source call is itself an explicit
 /// language-level `.clone()` (avoids `x.clone().clone()`).
 pub fn strip_redundant_auto_clone_before_explicit_clone(obj_str: &mut String, method: &str) {
@@ -1477,6 +1509,19 @@ pub fn maybe_append_as_str_for_match(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn replace_ident_token_does_not_split_get_index() {
+        let hay = "json::get_index(&root, i)";
+        assert_eq!(
+            replace_ident_token(hay, "i", "i.clone()"),
+            "json::get_index(&root, i.clone())"
+        );
+        assert_eq!(
+            replace_ident_token(hay, "root", "root.clone()"),
+            "json::get_index(&root.clone(), i)"
+        );
+    }
 
     #[test]
     fn runtime_std_module_skips_literal_owned_coercion() {

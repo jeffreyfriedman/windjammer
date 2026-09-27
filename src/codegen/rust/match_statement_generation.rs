@@ -61,14 +61,19 @@ impl<'ast> CodeGenerator<'ast> {
                     if (arm_reuses || analysis_wants)
                         && !value_str.contains(&format!("{name}.clone()"))
                         && !self.binding_is_runtime_non_clone(name)
+                        && !self.ident_skips_auto_clone_as_copy(name, arg)
                         && !callee_shared
                         && !value_str.contains(&format!("&{name}"))
                         && !value_str.contains(&format!("&mut {name}"))
                     {
-                        // Shared-ref / already-borrowed args do not move. String-replacing
-                        // `conn` inside `&conn` produced `&conn.clone()` (Connection has no
-                        // Clone). Runtime non-Clone types must never grow `.clone()`.
-                        value_str = value_str.replace(name, &format!("{name}.clone()"));
+                        // Shared-ref / already-borrowed args do not move. Token-replace
+                        // only: substring `i` → `i.clone()` split `get_index`. Copy
+                        // bindings (loop `i`) skip — Identity, no clone.
+                        value_str = string_utilities::replace_ident_token(
+                            &value_str,
+                            name,
+                            &format!("{name}.clone()"),
+                        );
                     }
                 }
             }

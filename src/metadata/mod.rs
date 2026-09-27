@@ -8,6 +8,7 @@ use std::path::Path;
 
 mod crate_metadata;
 mod function_metadata;
+mod generated_rust_signatures;
 mod signature_filters;
 mod type_metadata;
 
@@ -159,14 +160,21 @@ pub fn merge_external_crate_metadata_with_aliases(
     let mut copy_structs = Vec::new();
     let mut all_struct_fields: HashMap<String, Vec<Vec<String>>> = HashMap::new();
     for (crate_key, path) in external_paths {
-        let Some(meta_path) = crate_metadata::resolve_metadata_json_path(path) else {
+        if let Some(meta_path) = crate_metadata::resolve_metadata_json_path(path) {
+            crate_metadata::merge_crate_metadata_file_with_alias(
+                &meta_path,
+                registry,
+                &mut copy_structs,
+                &mut all_struct_fields,
+                Some(crate_key.as_str()),
+            );
             continue;
-        };
-        crate_metadata::merge_crate_metadata_file_with_alias(
-            &meta_path,
+        }
+        // Path-dep `build/` trees often have generated `lib.rs` without `--library`
+        // metadata.json. Recover `emitted_rust_ref_params` from the published ABI.
+        generated_rust_signatures::merge_generated_rust_dir_with_alias(
+            path,
             registry,
-            &mut copy_structs,
-            &mut all_struct_fields,
             Some(crate_key.as_str()),
         );
     }

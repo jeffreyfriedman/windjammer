@@ -1,5 +1,42 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.484 (2026-09-27) — match-scrutinee clone is token-only; skip Copy
+
+| Gate | Status |
+|------|--------|
+| `replace_ident_token_does_not_split_get_index` | ✅ lib GREEN |
+| `json_get_index_owned_value_multipass_must_cargo_check` | ✅ GREEN — `get_index` no longer `get_i.clone()ndex` |
+| spawn / mpsc | ✅ GREEN |
+
+**Root cause layer:** coercion/encoding + narrowed reconcile — Copy loop `i` is Identity (shared `ident_skips_auto_clone_as_copy`). Substring `replace("i", "i.clone()")` on the whole call string was a dual-oracle peel.
+
+**What became unnecessary:** raw substring clone insert on match-scrutinee Call args (now token-only; Copy skipped).
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3484`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- json_get_index_owned_value_multipass_must_cargo_check bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → **get_index + spawn + mpsc GREEN**
+
+## P3.485 (2026-09-27) — path-dep `build/lib.rs` ABI when `metadata.json` missing
+
+| Gate | Status |
+|------|--------|
+| `path_dep_generated_rs_without_metadata_recovers_str_formals` | ✅ lib GREEN |
+| `notes_api_path_deps_recover_querystring_get_key_shared` | ✅ lib GREEN — `wj_querystring::get` emitted `[false, true]` |
+| `exact_qualified_get_does_not_or_bare_mut_borrow_get` | ✅ lib GREEN |
+| `notes_api_product_src_must_auto_borrow_demoted_str` | ✅ product GREEN — `log_tagged(&level, "notes", &message)` |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ still RED — `qs_get(query, "pretty".to_string())` |
+| isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ✅ GREEN |
+
+**Root cause layer:** signature — `wj.toml` path deps point at `packages/*/build` with generated `log_tagged(level: &str, …)` / `get(query: String, key: &str)` but no `--library` `metadata.json`. Discovery skipped them.
+
+**What became unnecessary:** missing `&` on `log_tagged` / `parse_level` / `slugify` when the published Rust ABI already has `&str`. Exact `crate::get` no longer ORs every bare `get` homonym.
+
+**Remaining:** product `qs_get` still emits `"pretty".to_string()` into `key: &str` even though `wj_querystring::get` is recovered. Isolate with `--metadata` is GREEN. Next: IR/codegen expected type for the import-alias call still Owned (not a new peel).
+
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3484`
+- lib recover + homonym + notes-api path-dep discovery → **GREEN**
+- `notes_api_product_src_must_auto_borrow_demoted_str` → **GREEN**
+- `notes_api_product_qs_get_literal_must_not_string_from` → **FAILED**
+
 ## P3.483 (2026-09-27) — `json::to_string` owned `T` (not `&mut T`)
 
 | Gate | Status |

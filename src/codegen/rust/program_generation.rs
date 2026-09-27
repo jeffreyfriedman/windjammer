@@ -8,6 +8,44 @@ use crate::codegen::rust::expression_helpers;
 use crate::codegen::rust::generator::CodeGenerator;
 use crate::parser::*;
 use crate::CompilationTarget;
+use std::collections::HashMap;
+
+/// `use dep::fn as alias` / `use dep::fn` → registry key for IR + call-site lookup.
+pub fn collect_import_fn_alias_map(program: &Program<'_>) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for item in &program.items {
+        if let Item::Use {
+            alias: Some(alias_name),
+            path,
+            ..
+        } = item
+        {
+            if !path.is_empty() {
+                map.insert(alias_name.clone(), path.join("::"));
+            }
+        }
+        if let Item::Use {
+            alias: None, path, ..
+        } = item
+        {
+            if path.len() >= 2 {
+                if let Some(last) = path.last() {
+                    if last
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_lowercase())
+                        && !path.first().is_some_and(|seg| {
+                            matches!(seg.as_str(), "std" | "crate" | "super" | "self")
+                        })
+                    {
+                        map.insert(last.clone(), path.join("::"));
+                    }
+                }
+            }
+        }
+    }
+    map
+}
 
 impl<'ast> CodeGenerator<'ast> {
     fn dedupe_rust_import_lines(block: &str) -> String {
