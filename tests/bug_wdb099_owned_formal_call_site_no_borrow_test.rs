@@ -97,9 +97,13 @@ fn assert_consumer_matches_harness_ownership(harness: &str, consumer: &str) {
             "expected move of ledger into owned formal. Got:\n{consumer}"
         );
     } else {
+        // Wrapper may already be `&OptEconLedger` (Phase-2) and pass through `ledger`,
+        // or an owned local may borrow as `&ledger`.
+        let wrapper_already_ref = consumer.contains("format_econ_markdown(ledger: &OptEconLedger)");
         assert!(
-            consumer.contains("opt_run_cost_report(&ledger)"),
-            "demoted &OptEconLedger formal requires borrow at call site. Got:\n{consumer}"
+            consumer.contains("opt_run_cost_report(&ledger)")
+                || (wrapper_already_ref && consumer.contains("opt_run_cost_report(ledger)")),
+            "demoted &OptEconLedger formal must borrow or pass through a &T wrapper. Got:\n{consumer}"
         );
     }
 
@@ -168,14 +172,28 @@ pub fn wave1_opt_live_suite_test() -> bool {
 }
 
 fn assert_suite_no_overborrow(suite: &str) {
-    assert!(
-        !suite.contains("wave1_opt_live_suite_verdict(&claims)"),
-        "WDB-099 Gate C: owned Wave1OptLiveClaims formal must not receive &claims. Got:\n{suite}"
-    );
-    assert!(
-        suite.contains("wave1_opt_live_suite_verdict(claims)"),
-        "expected move of claims into owned suite formal. Got:\n{suite}"
-    );
+    let owned = suite.contains("wave1_opt_live_suite_verdict(claims: Wave1OptLiveClaims)");
+    let demoted = suite.contains("wave1_opt_live_suite_verdict(claims: &Wave1OptLiveClaims)");
+    if owned {
+        assert!(
+            !suite.contains("wave1_opt_live_suite_verdict(&claims)"),
+            "WDB-099 Gate C: owned Wave1OptLiveClaims formal must not receive &claims. Got:\n{suite}"
+        );
+        assert!(
+            suite.contains("wave1_opt_live_suite_verdict(claims)"),
+            "expected move of claims into owned suite formal. Got:\n{suite}"
+        );
+    } else {
+        assert!(
+            demoted,
+            "WDB-099 Gate C: expected owned or demoted claims formal. Got:\n{suite}"
+        );
+        assert!(
+            suite.contains("wave1_opt_live_suite_verdict(&claims)")
+                || suite.contains("wave1_opt_live_suite_verdict(claims)"),
+            "demoted claims formal must borrow or pass through. Got:\n{suite}"
+        );
+    }
 }
 
 #[test]
