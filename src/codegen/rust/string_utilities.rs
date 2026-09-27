@@ -1665,6 +1665,71 @@ mod tests {
     }
 
     #[test]
+    fn mixed_demoted_str_then_owned_string_empty_lits_must_own() {
+        use crate::analyzer::{FunctionSignature, OwnershipMode};
+        use crate::parser::Expression;
+        use crate::test_utils::test_alloc_expr;
+
+        // notes-api `handle`: method demotes to `&str`; origin stays emitted `String`
+        // with stale Borrowed ownership. Empty lits must still `.to_string()`.
+        let sig = FunctionSignature {
+            name: "App::handle".into(),
+            param_types: vec![
+                Type::Custom("App".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+                Type::String,
+                Type::String,
+            ],
+            formal_param_types: vec![
+                Type::Custom("App".into()),
+                Type::String,
+                Type::String,
+                Type::String,
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+            ],
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, true, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        assert!(
+            !call_site_param_expects_owned_string(&sig, 0),
+            "demoted method: &str must stay bare"
+        );
+        assert!(
+            call_site_param_expects_owned_string(&sig, 2),
+            "emitted String origin must own empty lits even with stale Borrowed"
+        );
+        let arg = test_alloc_expr(Expression::Literal {
+            value: Literal::String(String::new()),
+            location: None,
+        });
+        let mut arg_str = "\"\"".to_string();
+        finalize_string_literal_call_site_arg(
+            Some(&sig),
+            2,
+            Some("handle"),
+            arg,
+            &mut arg_str,
+            Some("App"),
+            None,
+        );
+        assert!(
+            already_owned_string_expr(&arg_str),
+            "empty lit into emitted String must own, got {arg_str}"
+        );
+    }
+
+    #[test]
     fn finalize_borrowed_text_strips_clone_from_field_access_without_trailing_dot() {
         use crate::analyzer::{FunctionSignature, OwnershipMode};
         use crate::parser::Expression;
