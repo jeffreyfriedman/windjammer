@@ -351,4 +351,56 @@ impl Demo {
             "WDB-414: initialize must own self to move scene; got {mode:?}"
         );
     }
+
+    #[test]
+    fn stored_string_and_value_set_formals_stay_owned() {
+        // WDB-409: `set(name, value)` stores both into Binding / field assign.
+        let src = r#"
+pub enum Val {
+    N(i32),
+}
+
+pub struct Binding {
+    pub name: string,
+    pub value: Val,
+}
+
+pub struct Scope {
+    pub bindings: Vec<Binding>,
+}
+
+impl Scope {
+    pub fn set(self, name: string, value: Val) {
+        let mut i: usize = 0
+        while i < self.bindings.len() {
+            if self.bindings[i].name == name {
+                self.bindings[i].value = value
+                return
+            }
+            i = i + 1
+        }
+        self.bindings.push(Binding { name: name, value: value })
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
+        let func = analyzed
+            .iter()
+            .find(|f| f.decl.name == "set")
+            .expect("set");
+        assert_eq!(
+            func.inferred_ownership.get("name").copied(),
+            Some(OwnershipMode::Owned),
+            "WDB-409: stored name must stay Owned; got {:?}",
+            func.inferred_ownership.get("name")
+        );
+        assert_eq!(
+            func.inferred_ownership.get("value").copied(),
+            Some(OwnershipMode::Owned),
+            "WDB-409: stored value must stay Owned; got {:?}",
+            func.inferred_ownership.get("value")
+        );
+    }
 }

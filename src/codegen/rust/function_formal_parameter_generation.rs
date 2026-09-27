@@ -443,6 +443,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(OwnershipMode::MutBorrowed)
                     )
                     && !analyzed.mutated_parameters.contains(&param.name)
+                    && !payload_forces_owned
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && Self::param_is_used_inside_loop_body(func.body.as_slice(), &param.name)
                     && !self.is_type_copy(&param.type_)
