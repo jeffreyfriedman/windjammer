@@ -147,6 +147,10 @@ impl IntInference {
                 self.extract_vec_element_type(&object_type)
             }
             Expression::Cast { type_, .. } => Some(type_.clone()),
+            Expression::Literal {
+                value: crate::parser::Literal::Float(_),
+                ..
+            } => Some(Type::Float),
             Expression::Binary { left, op, .. } => {
                 // TDD FIX: Binary operations return the type of their operands
                 // For arithmetic (Add, Sub, Mul, Div, Mod): result type = operand type
