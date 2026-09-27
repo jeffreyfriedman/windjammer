@@ -67,11 +67,23 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
     }
 
     // Copy types: pass by value; strip spurious borrows when callee expects owned/copy.
+    // `OwnedType::Copy` is set from the Copy registry (aggregates like BatchHandle),
+    // not only primitive `is_copy_base`.
+    if matches!(expected_own, OwnedType::Copy)
+        && matches!(actual_own, OwnedType::Ref(_))
+    {
+        return CoercionKind::StripBorrow;
+    }
     if matches!(expected_own, OwnedType::Copy | OwnedType::Owned)
         && matches!(actual_own, OwnedType::Ref(_))
         && is_copy_base(&expected.base)
     {
         return CoercionKind::StripBorrow;
+    }
+    if matches!(actual_own, OwnedType::Copy)
+        && matches!(expected_own, OwnedType::Owned | OwnedType::Copy)
+    {
+        return CoercionKind::Identity;
     }
 
     if matches!(expected_own, OwnedType::Copy) && actual_own == OwnedType::Owned {

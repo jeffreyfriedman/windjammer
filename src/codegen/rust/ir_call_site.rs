@@ -2681,25 +2681,12 @@ impl<'ast> CodeGenerator<'ast> {
                         CoercionKind::Clone
                     ) && !coerced.ends_with(".to_string()")
                         && !coerced.ends_with(".to_owned()")
-                        && !match arg_expr {
-                            // Only scalar Copy (i64/bool/…) skips clone; Copy aggregates/enums
-                            // still need `.clone()` on multi-use owned moves (regression-063 Value).
-                            Expression::Identifier { name, .. } => {
-                                self.binding_is_copy_pass_by_value_scalar(name)
-                            }
-                            Expression::Index { .. } => {
-                                self.index_expression_is_copy_scalar(arg_expr)
-                            }
-                            _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
-                                let bare = match &t {
-                                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                                        inner.as_ref()
-                                    }
-                                    other => other,
-                                };
-                                crate::type_classification::is_copy_pass_by_value_formal(bare)
-                            }),
-                        }
+                        && !self.call_arg_is_copy_identity(
+                            arg_expr,
+                            callee_sig
+                                .formal_param_type(callee_pidx)
+                                .or_else(|| callee_sig.param_types.get(callee_pidx)),
+                        )
                     {
                         if matches!(
                             arg_expr,
@@ -2725,33 +2712,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         let _ = pidx;
-        // Strip redundant `.clone()` only for scalar Copy formals (i64/bool/…).
-        // Copy aggregates/enums (Value, Lsn) still need multi-use clones (regression-063).
+        // Strip redundant `.clone()` on Copy formals/bindings (scalars *and* aggregates).
         if coerced.ends_with(".clone()") {
             let formal_ty = sig
                 .formal_param_type(param_idx)
                 .or_else(|| sig.param_types.get(param_idx));
-            let formal_is_scalar_copy = formal_ty.is_some_and(|t| {
-                let bare = match t {
-                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                    other => other,
-                };
-                crate::type_classification::is_copy_pass_by_value_formal(bare)
-            });
-            let binding_is_scalar_copy = match arg_expr {
-                Expression::Identifier { name, .. } => {
-                    self.binding_is_copy_pass_by_value_scalar(name)
-                }
-                Expression::Index { .. } => self.index_expression_is_copy_scalar(arg_expr),
-                _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
-                    let bare = match &t {
-                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                        other => other,
-                    };
-                    crate::type_classification::is_copy_pass_by_value_formal(bare)
-                }),
-            };
-            if formal_is_scalar_copy || binding_is_scalar_copy {
+            if self.call_arg_is_copy_identity(arg_expr, formal_ty) {
                 crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut coerced);
             }
         }
@@ -4500,7 +4466,11 @@ impl<'ast> CodeGenerator<'ast> {
             // Scalar Copy formals (i64/bool/…) need no clone; Copy aggregates/enums still do.
             let skip_clone = match arg_expr {
                 Expression::Identifier { name, .. } => {
-                    self.binding_is_copy_pass_by_value_scalar(name)
+                    self.call_arg_is_copy_identity(
+                        arg_expr,
+                        sig.formal_param_type(param_idx)
+                            .or_else(|| sig.param_types.get(param_idx)),
+                    ) || self.binding_is_copy_pass_by_value_scalar(name)
                         || self
                             .current_function_params
                             .iter()
@@ -8299,16 +8269,17 @@ impl<'ast> CodeGenerator<'ast> {
             // Match-arm bindings are owned enum/struct payloads even when
             // `local_var_types` temporarily marks them as references.
             if self.match_arm_bindings.contains(name.as_str()) {
-                let base = self
-                    .infer_expression_type(arg_expr)
-                    .as_ref()
-                    .map(|ty| match ty {
-                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                            crate::ir::node::parser_type_to_base_type(inner)
-                        }
-                        other => crate::ir::node::parser_type_to_base_type(other),
-                    })
+                let ty = self.infer_expression_type(arg_expr);
+                let bare = ty.as_ref().map(|ty| match ty {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                });
+                let base = bare
+                    .map(crate::ir::node::parser_type_to_base_type)
                     .unwrap_or(BaseType::Inferred);
+                if bare.is_some_and(|t| self.is_type_copy(t)) || self.binding_name_is_copy(name) {
+                    return SafetyType::copy(base);
+                }
                 return SafetyType::owned(base);
             }
             if self.identifier_already_mut_ref(name) {

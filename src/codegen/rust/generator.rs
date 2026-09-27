@@ -4207,7 +4207,8 @@ impl<'ast> CodeGenerator<'ast> {
         // must not get `.clone()` — IR deref (`*post`) owns the value; `*post.clone()`
         // is E0614 because `&T::clone` autoderefs to owned T.
         if self.borrowed_iterator_vars.contains(name)
-            && self.binding_is_copy_pass_by_value_scalar(name)
+            && (self.binding_is_copy_pass_by_value_scalar(name)
+                || self.binding_name_is_copy(name))
         {
             return arg_str.to_string();
         }
@@ -4232,13 +4233,17 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .find(|p| p.name == name)
             .is_some_and(|p| self.is_type_copy(&p.type_))
-            || self
-                .local_var_types
-                .get(name)
-                .is_some_and(|t| self.is_type_copy(t))
+            || self.local_var_types.get(name).is_some_and(|t| {
+                let bare = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(bare)
+            })
             || self
                 .module_const_type_for_binding(name)
                 .is_some_and(|t| self.is_type_copy(t))
+            || self.binding_name_is_copy(name)
         {
             return arg_str.to_string();
         }
@@ -4260,6 +4265,39 @@ impl<'ast> CodeGenerator<'ast> {
     /// True when `arg_str` is a numeric/`bool` cast whose result is always Copy.
     pub(crate) fn arg_str_is_copy_scalar_numeric_cast(arg_str: &str) -> bool {
         crate::codegen::rust::expression_utilities::is_copy_scalar_numeric_cast(arg_str)
+    }
+
+    /// True when this call argument is a Copy value (scalar *or* aggregate).
+    /// Registry/`is_type_copy` is the source of truth — never clone Copy types.
+    pub(crate) fn call_arg_is_copy_identity(
+        &self,
+        arg_expr: &Expression<'ast>,
+        formal: Option<&Type>,
+    ) -> bool {
+        if formal.is_some_and(|t| {
+            let bare = match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            self.is_type_copy(bare)
+        }) {
+            return true;
+        }
+        if let Some(ty) = self.infer_expression_type(arg_expr) {
+            let bare = match &ty {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            if self.is_type_copy(bare) {
+                return true;
+            }
+        }
+        if let Expression::Identifier { name, .. } = arg_expr {
+            if self.binding_name_is_copy(name) || self.copy_match_payload_binding(name) {
+                return true;
+            }
+        }
+        false
     }
 
     /// True when `name` is a scalar Copy pass-by-value binding (`i64`, `bool`, …),

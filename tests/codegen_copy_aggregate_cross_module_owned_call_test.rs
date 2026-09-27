@@ -85,7 +85,9 @@ pub fn batch_release(data: Data) {
         "batch_release must pass owned handle, not &handle (types-crate dogfood). Got:\n{batch}"
     );
     assert!(
-        batch.contains("arrow_batch_release(handle)"),
-        "expected owned call site. Got:\n{batch}"
+        batch.contains("arrow_batch_release(handle)")
+            && !batch.contains("arrow_batch_release(handle.clone())")
+            && !batch.contains("pure_batch_release(handle.clone())"),
+        "expected owned Copy call site (Identity, not clone). Got:\n{batch}"
     );
 }

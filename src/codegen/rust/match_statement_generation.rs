@@ -957,6 +957,22 @@ impl<'ast> CodeGenerator<'ast> {
                     bound_vars
                         .iter()
                         .filter(|var| {
+                            // Copy payloads bind by value (Identity at owned call sites).
+                            // Must win over `scrutinee_prefix_binds_refs` — otherwise
+                            // `BatchHandle` match bindings are treated as `&T` and later
+                            // dual-oracles re-add `.clone()`.
+                            if inferred.iter().any(|(name, ty)| {
+                                name == *var && {
+                                    let inner = match ty {
+                                        Type::Reference(inner)
+                                        | Type::MutableReference(inner) => inner.as_ref(),
+                                        other => other,
+                                    };
+                                    self.is_type_copy(inner)
+                                }
+                            }) {
+                                return false;
+                            }
                             if struct_enum_fields {
                                 return true;
                             }

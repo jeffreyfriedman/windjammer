@@ -73,7 +73,12 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> Vec<(String, Type)> {
         let scrutinee_type = match self.infer_expression_type(scrutinee) {
             Some(t) => t,
-            None => return Vec::new(),
+            None => {
+                // Cross-module `use crate::handle::Data` may not have converged
+                // the scrutinee type; `Data::Arrow(handle)` still keys the
+                // global enum-variant registry.
+                return self.infer_match_bound_types_from_pattern_key(pattern, yields_refs);
+            }
         };
 
         let inner_type = match &scrutinee_type {
@@ -146,10 +151,14 @@ impl<'ast> CodeGenerator<'ast> {
             // Single-field tuple variants use EnumPatternBinding::Single (e.g. Cost::Gold(amount)).
             // Tuple(..) is only used when the inner pattern is not a plain identifier.
             Pattern::EnumVariant(variant_name, EnumPatternBinding::Single(var_name)) => {
-                let Some(key) = self.enum_pattern_registry_key(variant_name, &inner_type) else {
-                    return out;
-                };
-                let Some(types) = self.enum_variant_types.get(&key) else {
+                let types = self
+                    .enum_pattern_registry_key(variant_name, &inner_type)
+                    .and_then(|key| self.lookup_enum_variant_payload_types(&key).cloned())
+                    .or_else(|| {
+                        self.lookup_enum_variant_payload_types(variant_name)
+                            .cloned()
+                    });
+                let Some(types) = types else {
                     return out;
                 };
                 if types.len() == 1 {
@@ -167,7 +176,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let Some(key) = self.enum_pattern_registry_key(variant_name, &inner_type) else {
                     return out;
                 };
-                let Some(types) = self.enum_variant_types.get(&key) else {
+                let Some(types) = self.lookup_enum_variant_payload_types(&key) else {
                     return out;
                 };
 
@@ -187,6 +196,56 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         out
+    }
+
+    /// `Data::Arrow(handle)` → payload types from the global enum registry,
+    /// including when the container is stored as `crate::handle::Data`.
+    fn infer_match_bound_types_from_pattern_key(
+        &self,
+        pattern: &Pattern,
+        yields_refs: bool,
+    ) -> Vec<(String, Type)> {
+        let (variant_name, var_name) = match pattern {
+            Pattern::EnumVariant(variant_name, EnumPatternBinding::Single(var_name)) => {
+                (variant_name.as_str(), var_name.as_str())
+            }
+            _ => return Vec::new(),
+        };
+        let Some(types) = self.lookup_enum_variant_payload_types(variant_name) else {
+            return Vec::new();
+        };
+        if types.len() != 1 {
+            return Vec::new();
+        }
+        let ty = types[0].clone();
+        if yields_refs {
+            vec![(var_name.to_string(), Type::Reference(Box::new(ty)))]
+        } else {
+            vec![(var_name.to_string(), ty)]
+        }
+    }
+
+    fn lookup_enum_variant_payload_types(&self, variant_name: &str) -> Option<&Vec<Type>> {
+        if let Some(types) = self.enum_variant_types.get(variant_name) {
+            return Some(types);
+        }
+        let parts: Vec<&str> = variant_name.rsplit("::").take(2).collect();
+        if parts.len() == 2 {
+            let key = format!("{}::{}", parts[1], parts[0]);
+            if let Some(types) = self.enum_variant_types.get(&key) {
+                return Some(types);
+            }
+        }
+        // `crate::handle::Data::Arrow` vs registry `Data::Arrow` (and the reverse).
+        let suffix = format!("::{variant_name}");
+        self.enum_variant_types.iter().find_map(|(k, types)| {
+            if k == variant_name || k.ends_with(&suffix) || variant_name.ends_with(&format!("::{k}"))
+            {
+                Some(types)
+            } else {
+                None
+            }
+        })
     }
 
     /// After `.copied()` on `Option<&T>` (Copy `T`), match bindings are owned `T`.
