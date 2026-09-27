@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.510 (2026-09-27) — TDD WDB-413 (DB agent; no compiler src)
+
+Read-only `string_len(line)` after `&line` must not emit `line.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-413 MultiFile | ⏳ TDD running — `start(line, key) < slen(line)` must not `line.clone()` |
+| WDB-413 tip-out | ⏳ product `gpu::string_len(line.clone())` in `agent_playtest_protocol.rs` |
+
+**Root cause layer:** signature — `gpu::string_len(s: string)` / isolate `slen(s: string)` stay owned `String` even though they only read length. After `key_value_start(&line, key)`, the second use of `line` is emitted as `line.clone()`. WJ is `gpu::string_len(line)` with no `.clone()`.
+
+**Why this is a new class:**
+- WDB-412 is **read-only `for` Vec formal** forcing `field.clone()`. This is a **read-only string-len formal** forcing **`line.clone()` after `&line`**.
+- WDB-106 is the opposite: explicit `.clone()` on sequential owned calls **must stay**.
+- WDB-143 is reuse after an owned **consume** that **must** clone to compile.
+
+**What became unnecessary:** treating `string_len` / `slen` as a consume of `String`; call-site `line.clone()` when WJ reuses `line`.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb413_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508 (notes-api), WDB-412 / P3.509 (filed).
+
 ## P3.509 (2026-09-27) — WDB-412 read-only `for` Vec formal must borrow
 
 | Gate | Status |
