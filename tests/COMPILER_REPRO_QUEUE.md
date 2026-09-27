@@ -4,12 +4,14 @@
 
 | Gate | Status |
 |------|--------|
-| `hexagonal_stub_compose_must_fail_ui_contract` | ⏳ stub stays empty (meta-RED) |
-| `hexagonal_playable_host_must_advance_move_and_compose_ui_hud` | ⏳ isolate filed — `wj-panel` + `wj-progress`, FakeTime += dt, FakeWorld z move, no FFI |
+| `hexagonal_stub_compose_must_fail_ui_contract` | ✅ stub stays empty (meta-RED) |
+| `hexagonal_playable_host_must_advance_move_and_compose_ui_hud` | ✅ isolate GREEN — `wj-panel` + `wj-progress`, FakeTime += dt, FakeWorld z move, no FFI |
 
-**Root cause layer:** none in compiler — application isolate. Implement `application/playable_loop.wj` in Windjammer matching ui `Panel`/`Progress` `render()`.
+**Root cause layer:** none in compiler — application isolate. `application/playable_loop.wj` matches ui `Panel`/`Progress` `render()`.
 
 **What became unnecessary:** game-core widget copies; FFI in the playable host tick.
+
+**Ran:** `cargo test --release --test all --features integration_tests,codegen_tests -- hexagonal_playable_host` → **2 passed**.
 
 **Also filed:** `timestamp_millis_loop_must_unify_int` / `retry_product_pause_ms_must_unify_int` — `wj-retry` `while now < deadline` emits `(now as i32) < deadline` (E0308). `json_tostring_note_must_not_mut_borrow_query` — product `note_get_reply` after `json.to_string(note)`.
 
