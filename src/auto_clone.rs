@@ -86,7 +86,7 @@ impl AutoCloneAnalysis {
                         is_move: false,
                         in_loop: false,
                         is_projection_parent: false,
-                    in_exclusive_match_arm: false,
+                        in_exclusive_match_arm: false,
                     },
                 );
             }
@@ -161,19 +161,35 @@ impl AutoCloneAnalysis {
                 Self::register_pattern_definitions(pattern, idx, in_loop, map);
             }
             Statement::Assignment { target, value, .. } => {
-                Self::collect_usages_from_expression(target, idx, UsageKind::Write, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    target,
+                    idx,
+                    UsageKind::Write,
+                    in_loop,
+                    map,
+                    registry,
+                );
                 // Owned identifiers move on assignment; loop bodies may assign the same
                 // param on every iteration (E0382 without `.clone()` at the use site).
                 let value_kind = match value {
                     Expression::Identifier { .. } => UsageKind::Move,
                     _ => UsageKind::Read,
                 };
-                Self::collect_usages_from_expression(value, idx, value_kind, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    value, idx, value_kind, in_loop, map, registry,
+                );
             }
             Statement::Return {
                 value: Some(expr), ..
             } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Move, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    expr,
+                    idx,
+                    UsageKind::Move,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Statement::Expression { expr, .. } => {
                 // A bare FieldAccess or Identifier in expression-statement position is a
@@ -193,7 +209,14 @@ impl AutoCloneAnalysis {
                 else_block,
                 ..
             } => {
-                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    condition,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
                 for stmt in then_block.iter() {
                     Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                 }
@@ -206,7 +229,14 @@ impl AutoCloneAnalysis {
             Statement::While {
                 condition, body, ..
             } => {
-                Self::collect_usages_from_expression(condition, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    condition,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
                 for stmt in body.iter() {
                     Self::collect_usages_from_statement(stmt, counter, true, map, registry);
                 }
@@ -217,7 +247,14 @@ impl AutoCloneAnalysis {
                 body,
                 ..
             } => {
-                Self::collect_usages_from_expression(iterable, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    iterable,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
                 Self::register_pattern_definitions(pattern, idx, true, map);
                 for stmt in body.iter() {
                     Self::collect_usages_from_statement(stmt, counter, true, map, registry);
@@ -229,7 +266,14 @@ impl AutoCloneAnalysis {
                 }
             }
             Statement::Match { value, arms, .. } => {
-                Self::collect_usages_from_expression(value, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    value,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
                 for arm in arms {
                     // Process arm body blocks using the parent counter (like
                     // Statement::If does for then_block/else_block) so that
@@ -237,13 +281,13 @@ impl AutoCloneAnalysis {
                     // auto_clone_counter which is global.
                     if let Expression::Block { statements, .. } = arm.body {
                         for stmt in statements {
-                            Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
+                            Self::collect_usages_from_statement(
+                                stmt, counter, in_loop, map, registry,
+                            );
                         }
                     } else {
-                        let lens_before: HashMap<String, usize> = map
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.len()))
-                            .collect();
+                        let lens_before: HashMap<String, usize> =
+                            map.iter().map(|(k, v)| (k.clone(), v.len())).collect();
                         Self::collect_usages_from_expression(
                             arm.body,
                             idx,
@@ -499,9 +543,9 @@ impl AutoCloneAnalysis {
 
     fn match_arm_reuses_binding(arm_body: &Expression, name: &str) -> bool {
         match arm_body {
-            Expression::Block { statements, .. } => statements.iter().any(|s| {
-                Self::statement_uses_binding(s, name)
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| Self::statement_uses_binding(s, name)),
             other => Self::expression_uses_binding(other, name),
         }
     }
@@ -519,16 +563,17 @@ impl AutoCloneAnalysis {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
             Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-                arguments.iter().any(|(_, a)| Self::expression_uses_binding(a, name))
+                arguments
+                    .iter()
+                    .any(|(_, a)| Self::expression_uses_binding(a, name))
             }
-            Expression::Tuple { elements, .. } => {
-                elements.iter().any(|e| Self::expression_uses_binding(e, name))
-            }
+            Expression::Tuple { elements, .. } => elements
+                .iter()
+                .any(|e| Self::expression_uses_binding(e, name)),
             Expression::FieldAccess { object, .. } => Self::expression_uses_binding(object, name),
             _ => false,
         }
     }
-
 
     fn detect_match_scrutinee_reuse(statements: &[&Statement], analysis: &mut AutoCloneAnalysis) {
         let mut counter: usize = 0;
@@ -537,13 +582,14 @@ impl AutoCloneAnalysis {
             counter += 1;
             if let Statement::Match { value, arms, .. } = stmt {
                 if let Expression::Identifier { name, .. } = value {
-                        let reused = arms.iter().any(|arm| Self::match_arm_reuses_binding(arm.body, name));
-                        if reused {
-                            analysis.clone_sites.insert(
-                                (name.clone(), idx),
-                                CloneReason::MovedButUsedLater,
-                            );
-                        }
+                    let reused = arms
+                        .iter()
+                        .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
+                    if reused {
+                        analysis
+                            .clone_sites
+                            .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
+                    }
                 } else if let Expression::Call { arguments, .. } = value {
                     for (_label, arg) in arguments {
                         if let Expression::Identifier { name, .. } = arg {
@@ -551,10 +597,9 @@ impl AutoCloneAnalysis {
                                 .iter()
                                 .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
                             if reused {
-                                analysis.clone_sites.insert(
-                                    (name.clone(), idx),
-                                    CloneReason::MovedButUsedLater,
-                                );
+                                analysis
+                                    .clone_sites
+                                    .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
                             }
                         }
                     }
@@ -566,13 +611,29 @@ impl AutoCloneAnalysis {
 
     fn walk_stmt_for_counter(stmt: &Statement, counter: &mut usize) {
         match stmt {
-            Statement::If { then_block, else_block, .. } => {
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
                 for s in then_block {
-                    Self::collect_usages_from_statement(s, counter, false, &mut HashMap::new(), None);
+                    Self::collect_usages_from_statement(
+                        s,
+                        counter,
+                        false,
+                        &mut HashMap::new(),
+                        None,
+                    );
                 }
                 if let Some(e) = else_block {
                     for s in e {
-                        Self::collect_usages_from_statement(s, counter, false, &mut HashMap::new(), None);
+                        Self::collect_usages_from_statement(
+                            s,
+                            counter,
+                            false,
+                            &mut HashMap::new(),
+                            None,
+                        );
                     }
                 }
             }
@@ -580,7 +641,13 @@ impl AutoCloneAnalysis {
             | Statement::For { body, .. }
             | Statement::Loop { body, .. } => {
                 for s in body {
-                    Self::collect_usages_from_statement(s, counter, false, &mut HashMap::new(), None);
+                    Self::collect_usages_from_statement(
+                        s,
+                        counter,
+                        false,
+                        &mut HashMap::new(),
+                        None,
+                    );
                 }
             }
             Statement::Match { arms, .. } => {
@@ -588,7 +655,11 @@ impl AutoCloneAnalysis {
                     if let Expression::Block { statements, .. } = arm.body {
                         for s in statements {
                             Self::collect_usages_from_statement(
-                                s, counter, false, &mut HashMap::new(), None,
+                                s,
+                                counter,
+                                false,
+                                &mut HashMap::new(),
+                                None,
                             );
                         }
                     }
@@ -615,7 +686,7 @@ impl AutoCloneAnalysis {
                     is_move: false,
                     in_loop,
                     is_projection_parent: true,
-                in_exclusive_match_arm: false,
+                    in_exclusive_match_arm: false,
                 });
             }
             Expression::FieldAccess { object, .. } => {
@@ -626,7 +697,7 @@ impl AutoCloneAnalysis {
                         is_move: false,
                         in_loop,
                         is_projection_parent: true,
-                    in_exclusive_match_arm: false,
+                        in_exclusive_match_arm: false,
                     });
                 }
                 Self::collect_field_projection_parent_usages(object, idx, in_loop, map, registry);
@@ -660,9 +731,9 @@ impl AutoCloneAnalysis {
                     kind,
                     is_move: kind == UsageKind::Move,
                     in_loop,
-                        is_projection_parent: false,
+                    is_projection_parent: false,
                     in_exclusive_match_arm: false,
-                    });
+                });
             }
             Expression::FieldAccess { object, .. } => {
                 if let Some(path) = Self::extract_expression_path(expr) {
@@ -672,13 +743,11 @@ impl AutoCloneAnalysis {
                         is_move: kind == UsageKind::Move,
                         in_loop,
                         is_projection_parent: false,
-                    in_exclusive_match_arm: false,
+                        in_exclusive_match_arm: false,
                     });
                 }
                 // Parent binding uses from `root.field` are not whole-root reuse.
-                Self::collect_field_projection_parent_usages(
-                    object, idx, in_loop, map, registry,
-                );
+                Self::collect_field_projection_parent_usages(object, idx, in_loop, map, registry);
             }
             Expression::Call {
                 function,
@@ -701,7 +770,7 @@ impl AutoCloneAnalysis {
                             is_move: kind == UsageKind::Move,
                             in_loop,
                             is_projection_parent: false,
-                        in_exclusive_match_arm: false,
+                            in_exclusive_match_arm: false,
                         });
                     }
                     Self::collect_usages_from_expression(
@@ -713,19 +782,20 @@ impl AutoCloneAnalysis {
                         registry,
                     );
                     for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
-                        let arg_kind = Self::method_call_arg_usage_kind(
-                            method,
-                            i,
-                            arguments.len(),
-                            registry,
-                        );
+                        let arg_kind =
+                            Self::method_call_arg_usage_kind(method, i, arguments.len(), registry);
                         Self::collect_usages_from_expression(
                             arg_expr, idx, arg_kind, in_loop, map, registry,
                         );
                     }
                 } else {
                     Self::collect_usages_from_expression(
-                        function, idx, UsageKind::Read, in_loop, map, registry,
+                        function,
+                        idx,
+                        UsageKind::Read,
+                        in_loop,
+                        map,
+                        registry,
                     );
                     for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
                         let arg_kind = if registry
@@ -733,12 +803,7 @@ impl AutoCloneAnalysis {
                         {
                             UsageKind::Read
                         } else {
-                            Self::free_call_arg_usage_kind(
-                                function,
-                                i,
-                                arguments.len(),
-                                registry,
-                            )
+                            Self::free_call_arg_usage_kind(function, i, arguments.len(), registry)
                         };
                         Self::collect_usages_from_expression(
                             arg_expr, idx, arg_kind, in_loop, map, registry,
@@ -775,29 +840,55 @@ impl AutoCloneAnalysis {
                         is_move: kind == UsageKind::Move,
                         in_loop,
                         is_projection_parent: false,
-                    in_exclusive_match_arm: false,
+                        in_exclusive_match_arm: false,
                     });
                 }
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    object,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
                 for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
                     // Signature-driven: owned formals move (need `.clone()` on reuse).
                     // Do NOT treat every method named `get`/`remove` as a HashMap key borrow —
                     // trait methods like `StorageEngine::get(txn: Txn, key)` take owned args.
-                    let arg_kind = Self::method_call_arg_usage_kind(
-                        method,
-                        i,
-                        arguments.len(),
-                        registry,
+                    let arg_kind =
+                        Self::method_call_arg_usage_kind(method, i, arguments.len(), registry);
+                    Self::collect_usages_from_expression(
+                        arg_expr, idx, arg_kind, in_loop, map, registry,
                     );
-                    Self::collect_usages_from_expression(arg_expr, idx, arg_kind, in_loop, map, registry);
                 }
             }
             Expression::Binary { left, right, .. } => {
-                Self::collect_usages_from_expression(left, idx, UsageKind::Read, in_loop, map, registry);
-                Self::collect_usages_from_expression(right, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    left,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
+                Self::collect_usages_from_expression(
+                    right,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::Unary { operand, .. } => {
-                Self::collect_usages_from_expression(operand, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    operand,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::Index { object, index, .. } => {
                 if let Some(path) = Self::extract_expression_path(expr) {
@@ -807,11 +898,25 @@ impl AutoCloneAnalysis {
                         is_move: kind == UsageKind::Move,
                         in_loop,
                         is_projection_parent: false,
-                    in_exclusive_match_arm: false,
+                        in_exclusive_match_arm: false,
                     });
                 }
-                Self::collect_usages_from_expression(object, idx, UsageKind::Read, in_loop, map, registry);
-                Self::collect_usages_from_expression(index, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    object,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
+                Self::collect_usages_from_expression(
+                    index,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::Tuple { elements, .. } => {
                 for elem in elements {
@@ -821,12 +926,21 @@ impl AutoCloneAnalysis {
                         }
                         _ => UsageKind::Read,
                     };
-                    Self::collect_usages_from_expression(elem, idx, elem_kind, in_loop, map, registry);
+                    Self::collect_usages_from_expression(
+                        elem, idx, elem_kind, in_loop, map, registry,
+                    );
                 }
             }
             Expression::Array { elements, .. } => {
                 for elem in elements {
-                    Self::collect_usages_from_expression(elem, idx, UsageKind::Move, in_loop, map, registry);
+                    Self::collect_usages_from_expression(
+                        elem,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                        registry,
+                    );
                 }
             }
             Expression::StructLiteral { fields, .. } => {
@@ -844,38 +958,121 @@ impl AutoCloneAnalysis {
             Expression::Block { statements, .. } => {
                 let mut block_counter = idx + 1;
                 for stmt in statements {
-                    Self::collect_usages_from_statement(stmt, &mut block_counter, in_loop, map, registry);
+                    Self::collect_usages_from_statement(
+                        stmt,
+                        &mut block_counter,
+                        in_loop,
+                        map,
+                        registry,
+                    );
                 }
             }
             Expression::Cast { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    expr,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::Range { start, end, .. } => {
-                Self::collect_usages_from_expression(start, idx, UsageKind::Read, in_loop, map, registry);
-                Self::collect_usages_from_expression(end, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    start,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
+                Self::collect_usages_from_expression(
+                    end,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::TryOp { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    expr,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::Await { expr, .. } => {
-                Self::collect_usages_from_expression(expr, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    expr,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::ChannelSend { channel, value, .. } => {
-                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map, registry);
-                Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    channel,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
+                Self::collect_usages_from_expression(
+                    value,
+                    idx,
+                    UsageKind::Move,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::ChannelRecv { channel, .. } => {
-                Self::collect_usages_from_expression(channel, idx, UsageKind::Read, in_loop, map, registry);
+                Self::collect_usages_from_expression(
+                    channel,
+                    idx,
+                    UsageKind::Read,
+                    in_loop,
+                    map,
+                    registry,
+                );
             }
             Expression::MacroInvocation { args, .. } => {
                 for arg in args {
-                    Self::collect_usages_from_expression(arg, idx, UsageKind::Read, in_loop, map, registry);
+                    Self::collect_usages_from_expression(
+                        arg,
+                        idx,
+                        UsageKind::Read,
+                        in_loop,
+                        map,
+                        registry,
+                    );
                 }
             }
             Expression::MapLiteral { pairs, .. } => {
                 for (key, value) in pairs {
-                    Self::collect_usages_from_expression(key, idx, UsageKind::Move, in_loop, map, registry);
-                    Self::collect_usages_from_expression(value, idx, UsageKind::Move, in_loop, map, registry);
+                    Self::collect_usages_from_expression(
+                        key,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                        registry,
+                    );
+                    Self::collect_usages_from_expression(
+                        value,
+                        idx,
+                        UsageKind::Move,
+                        in_loop,
+                        map,
+                        registry,
+                    );
                 }
             }
             _ => {}
@@ -896,9 +1093,9 @@ impl AutoCloneAnalysis {
                     kind: UsageKind::Definition,
                     is_move: false,
                     in_loop,
-                        is_projection_parent: false,
+                    is_projection_parent: false,
                     in_exclusive_match_arm: false,
-                    });
+                });
             }
             crate::parser::Pattern::Tuple(patterns) => {
                 for p in patterns {
@@ -967,8 +1164,8 @@ impl AutoCloneAnalysis {
                     })
                     .count();
                 // Exclusive Match arms each move `rx` once — not a multi-move conflict (P3.332).
-                let multi_move_conflict = same_stmt_moves > 1
-                    && same_stmt_exclusive_arm_moves != same_stmt_moves;
+                let multi_move_conflict =
+                    same_stmt_moves > 1 && same_stmt_exclusive_arm_moves != same_stmt_moves;
                 if has_later_use
                     || same_stmt_read_after_move
                     || multi_move_conflict
@@ -1028,12 +1225,10 @@ impl AutoCloneAnalysis {
                 .count();
             let same_stmt_exclusive_arm_moves = moves
                 .iter()
-                .filter(|m| {
-                    m.statement_idx == move_usage.statement_idx && m.in_exclusive_match_arm
-                })
+                .filter(|m| m.statement_idx == move_usage.statement_idx && m.in_exclusive_match_arm)
                 .count();
-            let multi_move_conflict = same_stmt_moves > 1
-                && same_stmt_exclusive_arm_moves != same_stmt_moves;
+            let multi_move_conflict =
+                same_stmt_moves > 1 && same_stmt_exclusive_arm_moves != same_stmt_moves;
 
             // Moves inside loops need clone when the variable is captured from
             // an outer scope (each iteration re-uses the same binding). But
@@ -1106,12 +1301,17 @@ impl AutoCloneAnalysis {
                 // Exception: writeback patterns (codegen emits `mem::take` / bare move):
                 // - extract-assign: `let mut x = self.f; …; self.f = x` (regression-042)
                 // - call-arg writeback: `let r = f(self.f); …; self.f = r.remaining`
+                // Exception: owned-self wither (`let mut items = self.items` then
+                // reconstruct `Builder { graph: self.graph, … }`) — analyzer 2.5
+                // keeps `self` Owned; distinct fields may move (WDB-410).
                 if root == "self"
                     && Self::self_field_has_writeback(statements, path, field_move.statement_idx)
                 {
                     continue;
                 }
-                if root == "self" || root_used_later || field_used_later {
+                let self_always_clone =
+                    root == "self" && !Self::stmts_contain_self_field_move_let(statements);
+                if self_always_clone || root_used_later || field_used_later {
                     self.clone_sites.insert(
                         (path.clone(), field_move.statement_idx),
                         CloneReason::MovedButUsedLater,
@@ -1119,6 +1319,61 @@ impl AutoCloneAnalysis {
                 }
             }
         }
+    }
+
+    /// `let x = self.field` (one-level) is an owned-self field move (analyzer 2.5).
+    /// Nested `self.start.bytes` stays a `&self` extract and still always-clones.
+    fn stmts_contain_self_field_move_let(statements: &[&Statement]) -> bool {
+        for stmt in statements {
+            match stmt {
+                Statement::Let { value, .. } => {
+                    if Self::expr_is_self_field_move(value) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if Self::stmts_contain_self_field_move_let(then_block) {
+                        return true;
+                    }
+                    if else_block
+                        .as_ref()
+                        .is_some_and(|b| Self::stmts_contain_self_field_move_let(b))
+                    {
+                        return true;
+                    }
+                }
+                Statement::While { body, .. }
+                | Statement::For { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if Self::stmts_contain_self_field_move_let(body) {
+                        return true;
+                    }
+                }
+                Statement::Match { arms, .. } => {
+                    for arm in arms {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            if Self::stmts_contain_self_field_move_let(statements) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_is_self_field_move(expr: &Expression) -> bool {
+        matches!(
+            expr,
+            Expression::FieldAccess { object, .. }
+                if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+        )
     }
 
     /// True when `field_path` is moved and later written back (extract or call-arg).
@@ -1147,7 +1402,12 @@ impl AutoCloneAnalysis {
     ) -> HashSet<usize> {
         let mut out = HashSet::new();
         let mut counter: usize = 0;
-        Self::collect_direct_writeback_indices_in_stmts(statements, binding, &mut counter, &mut out);
+        Self::collect_direct_writeback_indices_in_stmts(
+            statements,
+            binding,
+            &mut counter,
+            &mut out,
+        );
         out
     }
 
@@ -1163,9 +1423,10 @@ impl AutoCloneAnalysis {
 
     fn pattern_binds_identifier(pattern: &Pattern, name: &str) -> bool {
         match pattern {
-            Pattern::Identifier(n) | Pattern::MutBinding(n) | Pattern::Ref(n) | Pattern::RefMut(n) => {
-                n == name
-            }
+            Pattern::Identifier(n)
+            | Pattern::MutBinding(n)
+            | Pattern::Ref(n)
+            | Pattern::RefMut(n) => n == name,
             Pattern::Tuple(patterns) | Pattern::Or(patterns) => patterns
                 .iter()
                 .any(|p| Self::pattern_binds_identifier(p, name)),
@@ -2339,7 +2600,12 @@ mod tests {
     #[test]
     fn test_multi_use_owned_string_param_with_global_registry_still_needs_clone() {
         let mut registry = crate::analyzer::SignatureRegistry::new();
-        for name in ["escape_html", "html::escape_html", "crumbs_for", "html::crumbs_for"] {
+        for name in [
+            "escape_html",
+            "html::escape_html",
+            "crumbs_for",
+            "html::crumbs_for",
+        ] {
             registry.add_function(
                 name.to_string(),
                 crate::analyzer::FunctionSignature {
@@ -2706,4 +2972,131 @@ mod tests {
         );
     }
 
+    #[test]
+    fn owned_self_wither_must_not_clone_distinct_fields() {
+        // WDB-410: `let mut items = self.items; items.push(x); Builder { graph, items, label }`
+        // Owned self may move distinct fields. `&self` getters still always-clone.
+        let func = FunctionDecl {
+            name: "push".to_string(),
+            is_pub: true,
+            is_extern: false,
+            parameters: vec![
+                Parameter {
+                    name: "self".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Builder".to_string()),
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+                Parameter {
+                    name: "x".to_string(),
+                    pattern: None,
+                    type_: Type::Int32,
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+            ],
+            return_type: Some(Type::Custom("Builder".to_string())),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: Some("Builder".to_string()),
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("items".to_string()),
+                    mutable: true,
+                    type_: None,
+                    value: test_alloc_expr(Expression::FieldAccess {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "self".to_string(),
+                            location: None,
+                        }),
+                        field: "items".to_string(),
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "items".to_string(),
+                            location: None,
+                        }),
+                        method: "push".to_string(),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "x".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        type_args: None,
+                        location: None,
+                    }),
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Return {
+                    value: Some(test_alloc_expr(Expression::StructLiteral {
+                        name: "Builder".to_string(),
+                        fields: vec![
+                            (
+                                "graph".to_string(),
+                                test_alloc_expr(Expression::FieldAccess {
+                                    object: test_alloc_expr(Expression::Identifier {
+                                        name: "self".to_string(),
+                                        location: None,
+                                    }),
+                                    field: "graph".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                "items".to_string(),
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "items".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                "label".to_string(),
+                                test_alloc_expr(Expression::FieldAccess {
+                                    object: test_alloc_expr(Expression::Identifier {
+                                        name: "self".to_string(),
+                                        location: None,
+                                    }),
+                                    field: "label".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                        ],
+                        location: None,
+                    })),
+                    location: None,
+                }),
+            ],
+        };
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("self.items", 0).is_none(),
+            "owned-self wither must move self.items, sites={:?}",
+            analysis.clone_sites
+        );
+        assert!(
+            !analysis.needs_clone_anywhere("self.graph"),
+            "owned-self wither must move self.graph, sites={:?}",
+            analysis.clone_sites
+        );
+        assert!(
+            !analysis.needs_clone_anywhere("self.label"),
+            "owned-self wither must move self.label, sites={:?}",
+            analysis.clone_sites
+        );
+    }
 }

@@ -536,10 +536,21 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_some_and(|vn| self.usize_variables.contains(vn))
                         && !matches!(later_peer.as_ref(), Some(Type::Uint))
                         && !self.function_returns_u32_for_loop_scan();
-                    if let Some(Type::Uint) = later_peer.as_ref() {
+                    // WDB-411: `while i < count` (u32) must win over later `i = i + 1`
+                    // inferred as i32 and over `-> Histogram` / `-> f32` i32-coord ascription
+                    // (`let mut i: i32 = 0_u32`).
+                    let while_u32_peer = var_name.is_some_and(|n| {
+                        self.let_binding_int_width_from_later_while_compare(n)
+                            .is_some_and(|t| {
+                                matches!(t, Type::Uint)
+                                    || matches!(t, Type::Custom(ref w) if w == "u32")
+                            })
+                    });
+                    if matches!(later_peer.as_ref(), Some(Type::Uint)) || while_u32_peer {
                         output.push_str(": u32");
                         if let Some(vn) = var_name {
                             self.local_var_types.insert(vn.to_string(), Type::Uint);
+                            self.codegen_i32_binding_names.remove(vn);
                         }
                     } else if prefer_usize_over_i32 {
                         output.push_str(": usize");

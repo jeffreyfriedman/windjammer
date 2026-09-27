@@ -68,6 +68,38 @@ pub fn average_brightness(frame: FramePixels) -> f32 {
     }
     total / count as f32
 }
+
+pub struct Histogram {
+    pub bins: Vec<u32>,
+    pub bin_count: u32,
+    pub mean: f32,
+}
+
+/// Product leftover after WDB-411 average_brightness: histogram still emits
+/// `let mut i: i32 = 0_u32` / `let mut b: i32 = 0_i32`.
+pub fn histogram(frame: FramePixels) -> Histogram {
+    let bin_count = 256u32
+    let mut bins = Vec::new()
+    let mut b = 0
+    while b < bin_count {
+        bins.push(0u32)
+        b = b + 1
+    }
+    let count = frame.pixel_count()
+    let mut sum = 0.0
+    let mut i = 0
+    while i < count {
+        let idx = (i * 4) as i64
+        let lum = luminance(frame.data[idx], frame.data[idx + 1], frame.data[idx + 2])
+        sum = sum + lum
+        let bin_idx = (lum * 255.0) as u32
+        let clamped = if bin_idx >= bin_count { bin_count - 1 } else { bin_idx }
+        bins[clamped as i64] = bins[clamped as i64] + 1
+        i = i + 1
+    }
+    let mean = if count > 0 { sum / count as f32 } else { 0.0 }
+    Histogram { bins: bins, bin_count: bin_count, mean: mean }
+}
 "#;
 
 #[test]
@@ -79,6 +111,7 @@ fn wdb411_module_file_u32_count_while_must_not_infer_i32() {
     eprintln!("WDB-411 MultiFile lib.rs:\n{rs}");
     assert!(
         !rs.contains("let mut i: i32")
+            && !rs.contains("let mut b: i32")
             && !rs.contains("let mut i = 0_i32")
             && !rs.contains("0_i32"),
         "WDB-411 RED: u32 count loop inferred i32:\n{rs}"
