@@ -149,6 +149,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Variables assigned from .len() or typed as usize
             Expression::Identifier { name, .. } => {
+                // P3.516: WJ `int` / i64 bindings stay i64 even if a while-prepass
+                // stuffed them into `usize_variables` (`let mut k = ti; while k <= texts.len()`).
+                // The old usize-first check made the later "binding width beats usize"
+                // branch unreachable and left `k <= texts.len()` uncast (E0308).
+                if self.identifier_is_wj_int_i64_binding(name) {
+                    return false;
+                }
                 // P3.373: `let v2 = i2 * 3` (usize) in i32-param files may still have return-width
                 // `Int32` on `local_var_types` — trust `usize_variables` unless this is an explicit
                 // i32 loop counter (P3.335 / P3.299).

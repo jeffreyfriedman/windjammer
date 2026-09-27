@@ -1816,13 +1816,15 @@ impl<'ast> CodeGenerator<'ast> {
             expected.ownership = OwnedType::Owned;
         }
         // `rows[i]` / `self.field` into owned non-Copy formals: clone when the root cannot
-        // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Always cloning
-        // `self.field` into Owned is correct for `&self` (E0507) and harmless for owned-self.
-        let field_from_self = matches!(
+        // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Owned/`mut self`
+        // can move the field (WDB-414) — do not invent Clone from the name `self`.
+        let field_from_borrowed_self = matches!(
             arg_expr,
             Expression::FieldAccess { object, .. }
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-        );
+        ) && (self.inferred_borrowed_params.contains("self")
+            || self.inferred_mut_borrowed_params.contains("self")
+            || self.emitted_rust_ref_formals.contains("self"));
         // Shared-ref at emit only — analyzer `Borrowed` alone must not demote Clone→Borrow
         // for bare owned Vec formals (WDB-281: `contains(items.clone())`, not `&items`).
         let callee_wants_shared =
@@ -1834,7 +1836,8 @@ impl<'ast> CodeGenerator<'ast> {
             && !callee_wants_shared
             && (matches!(arg_expr, Expression::Index { .. })
                 || (matches!(arg_expr, Expression::FieldAccess { .. })
-                    && (self.field_access_root_is_behind_reference(arg_expr) || field_from_self)))
+                    && (self.field_access_root_is_behind_reference(arg_expr)
+                        || field_from_borrowed_self)))
         {
             let elem_needs_clone = self.infer_expression_type(arg_expr).map_or_else(
                 || matches!(expected.base, BaseType::Custom(_) | BaseType::String),

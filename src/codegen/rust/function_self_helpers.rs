@@ -110,6 +110,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         if body_modifies && returns_impl_struct {
             "mut self"
+        } else if body_modifies && super::self_analysis::function_consumes_self(func) {
+            // WDB-414: move `self.scene` into a ctor, then write a remaining field.
+            // Analyzer Owned + field write must stay `mut self`, not `&mut self`.
+            "mut self"
         } else if body_modifies {
             "&mut self"
         } else if super::self_analysis::function_matches_on_self(func)

@@ -4597,8 +4597,18 @@ impl<'ast> CodeGenerator<'ast> {
                 let is_inferred_borrowed = self.inferred_borrowed_params.contains(name)
                     || self.emitted_rust_ref_formals.contains(name);
                 let root_behind_ref = self.field_access_root_is_behind_reference(arg);
+                // WDB-414: owned/`mut self` can move a non-Copy field into a ctor.
+                // Treating every `self.field` as a borrowed root forced `.clone()`.
+                let self_field_from_borrowed_receiver = is_self_field
+                    && (self.inferred_borrowed_params.contains("self")
+                        || self.inferred_mut_borrowed_params.contains("self")
+                        || self.emitted_rust_ref_formals.contains("self")
+                        || self.current_function_params.iter().any(|p| {
+                            p.name == "self"
+                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                        }));
 
-                if (is_self_field
+                if (self_field_from_borrowed_receiver
                     || is_borrowed_iter
                     || is_explicit_ref
                     || is_inferred_borrowed

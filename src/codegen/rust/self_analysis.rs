@@ -502,6 +502,16 @@ fn expression_consumes_self(expr: &Expression) -> bool {
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_consumes_self(s))
         }
+        // WDB-414: `Vox::new(self.scene)` moves a field through a call arg.
+        Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => arguments
+            .iter()
+            .any(|(_, a)| expression_is_bare_self(a) || expression_moves_self_field_value(a) || expression_consumes_self(a)),
+        Expression::Binary { left, right, .. } => {
+            expression_consumes_self(left) || expression_consumes_self(right)
+        }
+        Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
+            expression_consumes_self(operand) || expression_moves_self_field_value(operand)
+        }
         _ => false,
     }
 }

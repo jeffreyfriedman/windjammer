@@ -574,6 +574,19 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(t) = type_ {
                         self.local_var_types.insert(name.clone(), t.clone());
                     }
+                    // P3.516: `let mut k = ti` (ti: int) must record i64 before the
+                    // following `while k <= texts.len()` prepass, or `k` is stuffed
+                    // into usize_variables and `.len()` stays uncast.
+                    if type_.is_none() {
+                        if let Expression::Identifier {
+                            name: src_name, ..
+                        } = value
+                        {
+                            if self.identifier_is_wj_int_i64_binding(src_name) {
+                                self.local_var_types.insert(name.clone(), Type::Int);
+                            }
+                        }
+                    }
                     // Negative sentinels stay WJ `int` (`colon_at = -1`).
                     // Untyped `let mut idx = 0` is recorded as a literal-init counter so
                     // index sites still emit `as usize` after `.len()` usize promotion.

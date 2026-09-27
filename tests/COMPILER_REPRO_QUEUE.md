@@ -57,23 +57,19 @@ Owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
 
 | Gate | Status |
 |------|--------|
-| `int_while_le_vec_len_must_unify_i64` | ❌ isolate RED on tip p3505 (18:50) — `while k <= texts.len()` (no cast) |
-| product `wj-glob` `$WJ test` | ❌ same E0308 `expected i64, found usize` |
+| `int_while_le_vec_len_must_unify_i64` | ✅ isolate GREEN — WJ `int` `k = ti` stays i64; `texts.len()` casts (`as i64` / `as usize`) |
+| product `wj-glob` `$WJ test` | ⚠️ regen after tip `wj` — isolate was the compiler hole |
 
 **Why this is a new class:**
 - `bug_int_index_while_len_must_not_emit_usize_add_test` only asserts `ti >=` lines and treats **transpile-ok** as success (false-GREEN).
 - `>=` already casts. `<=` in `while` does not. Do not edit `windjammer/src/`. Do not reshape `wj-glob`.
 
-**Root cause layer:** encoding / compare — `<=` vs `>=` len unify is not symmetric.
+**Root cause layer:** constraint — while-prepass stuffed `let mut k = ti` (ti: int) into `usize_variables` before the let type was known; `expression_produces_usize` trusted that mark over binding width, so `k <= texts.len()` skipped the i64/len unify.
 
-**What became unnecessary:** wrapping `glob.is_match` over `std::path.glob_match` until this package compiles; casting `.len()` in application code.
+**What became unnecessary:** treating `<=` as a missing compare encoding; WJ `int` copies of int params now stay i64 like `>=` peers.
 
-**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (18:50). `$WJ build --library --module-file` + `cargo check`.
-- Emit: `if pi >= (pats.len() as i64)` / `ti >= (texts.len() as i64)` / **`while k <= texts.len()`**.
-- Product `$WJ test`: rustc E0308 on `while k <= texts.len()`.
-
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3516-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- int_while_le_vec_len_must_unify_i64`
+**Ran (2026-09-27):** `.agent-wip/cargo-target-tip-p3515`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- int_while_le_vec_len_must_unify_i64` → **isolate GREEN** (tip-out product not a compiler gate).
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513/P3.514 (notes-api), WDB-412–415 / P3.509–P3.515 (filed).
 
@@ -153,10 +149,10 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 | Gate | Status |
 |------|--------|
-| WDB-414 MultiFile | ❌ isolate RED — `initialize(&mut self)` emits `Vox::new(self.scene.clone())` when `Scene.label: string` |
-| WDB-414 tip-out | ❌ product RED — `CsgVoxelizer::new(self.scene.clone())` in `rel_tip_out` + `gen` rifter/cathedral/humanoid |
+| WDB-414 MultiFile | ✅ isolate GREEN — `initialize(mut self)` + `Vox::new(self.scene)` (no clone) |
+| WDB-414 tip-out | ⚠️ product — stale `rel_tip_out` / `gen` still has `CsgVoxelizer::new(self.scene.clone())` (regen) |
 
-**Root cause layer:** signature — `new(scene: Scene)` stays owned; `initialize` is `&mut self` and later writes `self.grid`, so codegen clones `self.scene` instead of a partial move. Copy `i32` Scene hid the clone (first isolate). Non-Copy `string` matches product `CsgScene`.
+**Root cause layer:** constraint — Call-arg `self.scene` is a non-Copy field move (owned `mut self`); IR/codegen no longer invent Clone from the name `self` when the receiver is owned. Reconcile no longer demotes that Owned back to MutBorrowed.
 
 **Why this is a new class:**
 - WDB-360 is **`encode(self.grid.clone())`**. This is **constructor `new(self.scene)`**.
@@ -165,8 +161,8 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 **What became unnecessary:** `self.scene.clone()` at `CsgVoxelizer::new` when WJ moves `self.scene`.
 
-**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `464568b8`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb414_` → **0 passed / 2 failed**
+**Ran (2026-09-27):** `.agent-wip/cargo-target-tip-p3515`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb414_module_file_ctor_must_move_self_field` → **isolate GREEN**; tip-out product scanner still RED (stale gen).
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513 (notes-api), WDB-412–413 / P3.509–P3.510 (filed).
 
@@ -200,10 +196,10 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 
 | Gate | Status |
 |------|--------|
-| WDB-413 MultiFile | ❌ isolate RED — `start(line.clone(), &key) < slen(&line)` (`start` keeps unused `line: String`; `slen` already `&str`) |
-| WDB-413 tip-out | ❌ product RED — `gpu::string_len(line.clone())` in `rel_tip_out` + `gen` `testing/agent_playtest_protocol.rs` |
+| WDB-413 MultiFile | ✅ isolate GREEN — unused private `start(line)` is Borrowed; `present` reuses `line` without `.clone()` |
+| WDB-413 tip-out | ⚠️ product — stale `rel_tip_out` / `gen` still has `gpu::string_len(line.clone())` (regen) |
 
-**Root cause layer:** signature — unused/unread `line` formal on `start` stays owned `String`, so `present` clones before the second read. Product `gpu::string_len` also stays owned, so tip emits `string_len(line.clone())` after `key_value_start(&line, key)`. WJ is `start(line, key) < slen(line)` / `gpu::string_len(line)` with no `.clone()`.
+**Root cause layer:** signature — unused **private** `string` formals demote to Borrowed (pub/FFI unused strings stay Owned per WDB-152).
 
 **Why this is a new class:**
 - WDB-412 is **read-only `for` Vec formal** forcing `field.clone()`. This is **string reuse** across two callees forcing **`line.clone()`**.
@@ -212,8 +208,8 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 
 **What became unnecessary:** treating an unused `line` formal as owned consume; call-site `line.clone()` when WJ reuses `line`.
 
-**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `0513a4a3`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb413_` → **0 passed / 2 failed**
+**Ran (2026-09-27):** `.agent-wip/cargo-target-tip-p3515`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb413_module_file_readonly_string_len_must_not_clone_line` → **isolate GREEN**; tip-out product scanner still RED (stale gen).
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511 (notes-api), WDB-412 / P3.509 (filed).
 

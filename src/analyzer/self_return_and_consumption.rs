@@ -1089,12 +1089,12 @@ impl<'ast> Analyzer<'ast> {
             // emitted `&mut self` + `self.scene.clone()`.
             Expression::Call { arguments, .. } => arguments
                 .iter()
-                .any(|(_, a)| self.expression_moves_non_copy_self_field(a)),
+                .any(|(_, a)| self.call_arg_moves_non_copy_self_field(a)),
             // Method receiver is borrowed (not moved). Walk args only — `self.scene.foo()`
             // must not count as moving `scene`.
             Expression::MethodCall { arguments, .. } => arguments
                 .iter()
-                .any(|(_, a)| self.expression_moves_non_copy_self_field(a)),
+                .any(|(_, a)| self.call_arg_moves_non_copy_self_field(a)),
             Expression::Binary { left, right, .. } => {
                 self.expression_moves_non_copy_self_field(left)
                     || self.expression_moves_non_copy_self_field(right)
@@ -1103,6 +1103,20 @@ impl<'ast> Analyzer<'ast> {
             Expression::TryOp { expr, .. } => self.expression_moves_non_copy_self_field(expr),
             _ => false,
         }
+    }
+
+    /// Call/method arguments pass `self.field` by value. Unknown field types
+    /// are moves (WDB-414) — unlike bare FieldAccess reads, which stay conservative.
+    fn call_arg_moves_non_copy_self_field(&self, expr: &Expression) -> bool {
+        if let Expression::FieldAccess { object, field, .. } = expr {
+            if self.expression_is_self(object) {
+                return match self.lookup_field_type_for_self(field) {
+                    Some(ft) => !self.is_copy_type(&ft),
+                    None => true,
+                };
+            }
+        }
+        self.expression_moves_non_copy_self_field(expr)
     }
 
     pub(crate) fn expression_is_self(&self, expr: &Expression) -> bool {

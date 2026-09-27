@@ -302,4 +302,53 @@ impl MaterialPalette {
             "local Vec::push must not infer &mut self; got {mode:?}"
         );
     }
+
+    #[test]
+    fn ctor_arg_self_field_then_write_other_field_owns_self() {
+        // WDB-414: `Vox::new(self.scene); self.grid = 1` must be owned `self`.
+        let src = r#"
+pub struct Scene {
+    pub label: string,
+}
+
+pub struct Vox {
+    pub scene: Scene,
+}
+
+impl Vox {
+    pub fn new(scene: Scene) -> Vox {
+        Vox { scene: scene }
+    }
+}
+
+pub struct Demo {
+    pub scene: Scene,
+    pub grid: i32,
+}
+
+impl Demo {
+    pub fn initialize(self) {
+        let v = Vox::new(self.scene)
+        self.grid = 1
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
+        let func = analyzed
+            .iter()
+            .find(|f| f.decl.name == "initialize")
+            .expect("initialize");
+        let mode = func
+            .inferred_ownership
+            .get("self")
+            .copied()
+            .expect("self ownership");
+        assert_eq!(
+            mode,
+            OwnershipMode::Owned,
+            "WDB-414: initialize must own self to move scene; got {mode:?}"
+        );
+    }
 }
