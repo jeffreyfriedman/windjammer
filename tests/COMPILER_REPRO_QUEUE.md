@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.513 (2026-09-27) — nested route_match GET-one must mut-bind note (not `&mut query` yet)
+
+| Gate | Status |
+|------|--------|
+| `interp_query_then_get_must_not_mut_query` | ❌ isolate RED — nested `route_match` + HashMap `params.get` + method match emits `Some(note) => note_get_reply(&mut note, …, query.clone())` (E0596) |
+| `split_query_list_then_get_must_not_mut_query` | ✅ isolate GREEN on tip p3505 (17:47) — shallow `match fetch` now `Some(mut note)` + `query.clone()` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `Some(note) => note_get_reply(&mut note, if_none_match, &mut query)` (`let mut query = split.1`) |
+
+**Why this is a new class:**
+- P3.511 shallow `NotesApp` + `store.fetch` greened `Some(mut note)`.
+- Product dispatch is **nested** `route_match` / `params.get` / `parse_positive_int` / `method` / `fetch`. That graph still emits immutable `Some(note)` + `&mut note`.
+- Isolate last use is still `query.clone()`; product last use is `&mut query`. Separate remaining E0308.
+
+**Root cause layer:** codegen / match-binding — mut-bind for `&mut Note` after `json.to_string` does not apply inside nested Option/enum matches. Do not edit `windjammer/src/`. Do not reshape notes-api.
+
+**What became unnecessary:** refiling P3.511 shallow fetch; treating `"${query}"` interpolation as the `&mut query` trigger.
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (17:47). Isolate `$WJ build --module-file` + `cargo check`.
+- Nested emit: `Some(note) => note_get_reply(&mut note, if_none_match, query.clone())` — E0596.
+- Product emit unchanged: `let mut query` + `&mut query`.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3512-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- interp_query_then_get_must_not_mut_query` — expected **0 passed / 1 failed** (TDD RED).
+
 ## P3.512 (2026-09-27) — TDD WDB-414 (DB agent; no compiler src)
 
 `Type::new(self.scene)` must move the field; product emits `CsgVoxelizer::new(self.scene.clone())`.
