@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.529 (2026-09-27) — TDD WDB-421 (DB agent; no compiler src)
+
+Last-use of an owned `Vec` formal into a callee must move; product emits `indices.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-421 MultiFile | ⏳ TDD — `finish(n, indices)` after `indices[i]` must not `indices.clone()` |
+| WDB-421 tip-out | ⏳ product `per_vertex_average_uv(..., indices.clone(), …)` |
+
+**Root cause layer:** last-use — WJ indexes `indices` then passes it once into `per_vertex_average_uv`. That last use must move.
+
+**Why this is a new class:**
+- WDB-418 is **early-return of formal** into `empty_result`.
+- WDB-420 is **return of a local** `result.clone()`.
+- WDB-415 is **if-then move of a formal**.
+
+**What became unnecessary:** `indices.clone()` on last use into the UV average helper.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb421_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528, WDB-412–420 / P3.509–P3.525 (filed).
+
 ## P3.528 (2026-09-27) — `apply_conn` must not move `applied` Vec each loop
 
 Product `wj-migrate` `db_apply.rs` (tip p3520 20:49):
