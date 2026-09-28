@@ -29,22 +29,23 @@ Early-return of an owned `Vec` formal after `.len()` must move; product emits `e
 
 | Gate | Status |
 |------|--------|
-| `check_rate_field_replace_must_not_move_self` | ✅ isolate GREEN — `fn check_rate(&mut self)` after same-field writeback |
-| product `wj-notes-api` `$WJ test` | ⏳ regen — isolate no longer emits owned `mut self` |
+| `check_rate_field_replace_must_not_move_self` | ❌ isolate RED on tip p3505 (20:11) — `fn check_rate(mut self)` then `self.dispatch` (E0507/E0382) |
+| product `wj-notes-api` `$WJ test` | ❌ same move after `check_rate` (`mut self`); query `&mut query` greened |
 
 **Why this is a new class:**
 - P3.518 last-use `&mut query` is **GREEN** (move `query`).
 - Insert into `self.buckets` greened `&mut self`. **Replace** after a consuming helper infers owned `mut self`.
 - Caller continues after `None`. Do not edit `windjammer/src/`. Do not reshape notes-api.
 
-**Root cause layer:** constraint / self-mode — `owned_self_receiver` treated any field-to-call-arg + body write as WDB-414 `mut self`. Same-field writeback is `&mut self`.
+**Root cause layer:** signature / self-mode — field replace + later use of `self` must stay `&mut self`.
 
-**What became unnecessary:** WDB-414 `mut self` for writeback-replace methods (`check_rate`).
+**What became unnecessary:** further `&mut query` isolates.
 
-**Ran (2026-09-27):** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520`
-- `… -- check_rate_field_replace_must_not_move_self wdb414_module_file_ctor_must_move_self_field` → isolates **ok**; WDB-414 tip-out still product RED.
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (20:11). `$WJ build --library --module-file` + `cargo check`.
+- Isolate: `fn check_rate(mut self, …)` + `handle_method(&mut self)` → rustc move.
+- Product GET-one: `note_get_reply(&mut note, if_none_match, query)` (no `&mut query`).
 
-**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520`
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3520-eco`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- check_rate_field_replace_must_not_move_self`
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518 (notes-api / wj-glob), WDB-412–417 / P3.509–P3.519 (filed).
@@ -97,12 +98,12 @@ P3.513/P3.514 nested `Some(mut note)` is GREEN. Product `dispatch` still last-us
 
 **What became unnecessary:** further E0596 `Some(note)` isolates.
 
-**Ran (2026-09-27):** `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 with `generate_block_expr` mut-bind (official cargo):
-- `cargo test --release --test all --features integration_tests,codegen_tests -- interp_query_then_get_must_not_mut_query split_query_list_then_get_must_not_mut_query fetch_note_store_then_query_must_not_mut` → **3 passed / 0 failed** (73.57s).
-- Product emit: `Some(mut note) => note_get_reply(&mut note, if_none_match, &mut query)`.
+**Ran (2026-09-27):** `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 — last-writer `apply_callee_mut_borrow_to_call_args` treats WJ `string` as owned (official cargo):
+- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_product_remaining_e0308_must_not_emit interp_query_then_get_must_not_mut_query split_query_list_then_get_must_not_mut_query fetch_note_store_then_query_must_not_mut` → **4 passed / 0 failed** (14.39s).
+- Product emit: `Some(mut note) => note_get_reply(&mut note, if_none_match, query)` (no `&mut query`).
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3518`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_product_remaining_e0308_must_not_emit` — expected RED.
+- product remaining E0308 query slot **GREEN**. Next rustc: P3.520 `check_rate` owned `mut self`.
 
 **Do not steal:** WDB-406/408/411/414–416, P3.516 (`<=` len unify).
 
