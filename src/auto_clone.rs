@@ -87,6 +87,8 @@ impl AutoCloneAnalysis {
                         in_loop: false,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
+                        in_diverging_early_return: false,
+                        diverging_region_end: 0,
                     },
                 );
             }
@@ -217,12 +219,26 @@ impl AutoCloneAnalysis {
                     map,
                     registry,
                 );
+                // WDB-418: a then/else that always `return`s is exclusive vs. statements
+                // after the `if`. Do not treat those sibling-path uses as "later".
+                let then_lens: HashMap<String, usize> =
+                    map.iter().map(|(k, v)| (k.clone(), v.len())).collect();
                 for stmt in then_block.iter() {
                     Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
                 }
+                if Self::block_unconditionally_returns(then_block) {
+                    let region_end = counter.saturating_sub(1);
+                    Self::mark_diverging_early_return_usages(map, &then_lens, region_end);
+                }
                 if let Some(else_b) = else_block {
+                    let else_lens: HashMap<String, usize> =
+                        map.iter().map(|(k, v)| (k.clone(), v.len())).collect();
                     for stmt in else_b.iter() {
                         Self::collect_usages_from_statement(stmt, counter, in_loop, map, registry);
+                    }
+                    if Self::block_unconditionally_returns(else_b) {
+                        let region_end = counter.saturating_sub(1);
+                        Self::mark_diverging_early_return_usages(map, &else_lens, region_end);
                     }
                 }
             }
@@ -308,6 +324,25 @@ impl AutoCloneAnalysis {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn block_unconditionally_returns(body: &[&Statement]) -> bool {
+        body.last()
+            .is_some_and(|s| matches!(s, Statement::Return { .. }))
+    }
+
+    fn mark_diverging_early_return_usages(
+        map: &mut HashMap<String, Vec<Usage>>,
+        lens_before: &HashMap<String, usize>,
+        region_end: usize,
+    ) {
+        for (key, usages) in map.iter_mut() {
+            let start = lens_before.get(key).copied().unwrap_or(0);
+            for u in usages.iter_mut().skip(start) {
+                u.in_diverging_early_return = true;
+                u.diverging_region_end = region_end;
+            }
         }
     }
 
@@ -687,6 +722,8 @@ impl AutoCloneAnalysis {
                     in_loop,
                     is_projection_parent: true,
                     in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                 });
             }
             Expression::FieldAccess { object, .. } => {
@@ -698,6 +735,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: true,
                         in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                     });
                 }
                 Self::collect_field_projection_parent_usages(object, idx, in_loop, map, registry);
@@ -733,6 +772,8 @@ impl AutoCloneAnalysis {
                     in_loop,
                     is_projection_parent: false,
                     in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                 });
             }
             Expression::FieldAccess { object, .. } => {
@@ -744,6 +785,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                     });
                 }
                 // Parent binding uses from `root.field` are not whole-root reuse.
@@ -771,6 +814,8 @@ impl AutoCloneAnalysis {
                             in_loop,
                             is_projection_parent: false,
                             in_exclusive_match_arm: false,
+                            in_diverging_early_return: false,
+                            diverging_region_end: 0,
                         });
                     }
                     Self::collect_usages_from_expression(
@@ -841,6 +886,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                     });
                 }
                 Self::collect_usages_from_expression(
@@ -899,6 +946,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                     });
                 }
                 Self::collect_usages_from_expression(
@@ -1095,6 +1144,8 @@ impl AutoCloneAnalysis {
                     in_loop,
                     is_projection_parent: false,
                     in_exclusive_match_arm: false,
+                    in_diverging_early_return: false,
+                    diverging_region_end: 0,
                 });
             }
             crate::parser::Pattern::Tuple(patterns) => {
@@ -1146,7 +1197,7 @@ impl AutoCloneAnalysis {
                 }
                 let has_later_use = total_uses
                     .iter()
-                    .any(|u| u.statement_idx > move_usage.statement_idx);
+                    .any(|u| move_usage.has_reachable_later_use(u));
                 let same_stmt_read_after_move = total_uses.iter().any(|u| {
                     u.statement_idx == move_usage.statement_idx
                         && u.kind == UsageKind::Read
@@ -1169,7 +1220,7 @@ impl AutoCloneAnalysis {
                 if has_later_use
                     || same_stmt_read_after_move
                     || multi_move_conflict
-                    || move_usage.in_loop
+                    || (move_usage.in_loop && !move_usage.in_diverging_early_return)
                 {
                     self.clone_sites.insert(
                         (var_name.to_string(), move_usage.statement_idx),
@@ -1208,7 +1259,7 @@ impl AutoCloneAnalysis {
 
             let has_later_use = total_uses
                 .iter()
-                .any(|u| u.statement_idx > move_usage.statement_idx);
+                .any(|u| move_usage.has_reachable_later_use(u));
 
             // Same statement: `visit_cycle(doc, doc.root_id, ...)` moves `doc` then reads
             // `doc.root_id` — clone the move site so the field access still compiles.
@@ -1234,7 +1285,10 @@ impl AutoCloneAnalysis {
             // an outer scope (each iteration re-uses the same binding). But
             // loop-scoped variables (for-loop pattern vars, let bindings inside
             // the body) get fresh bindings each iteration — no clone needed.
-            let loop_capture_needs_clone = move_usage.in_loop && !definition_is_loop_scoped;
+            // Function-exiting `return` inside a loop does not re-enter (WDB-418).
+            let loop_capture_needs_clone = move_usage.in_loop
+                && !definition_is_loop_scoped
+                && !move_usage.in_diverging_early_return;
             let needs_clone = has_later_use
                 || same_stmt_read_after_move
                 || multi_move_conflict
@@ -1810,6 +1864,26 @@ struct Usage {
     /// Multiple moves of the same binding across Ok/Err arms must not force `.clone()`
     /// (P3.332 `recv` returning `rx` from each arm).
     in_exclusive_match_arm: bool,
+    /// True when this use is in an `if` then/else that unconditionally `return`s
+    /// (WDB-418). Later sibling-path uses after the `if` are not reachable.
+    in_diverging_early_return: bool,
+    /// Last statement index belonging to that diverging block (inclusive).
+    diverging_region_end: usize,
+}
+
+impl Usage {
+    /// Later-statement reuse on a complementary path after a diverging `return`
+    /// is not reachable (WDB-418). Same-block uses still conflict.
+    fn has_reachable_later_use(&self, other: &Usage) -> bool {
+        if other.statement_idx <= self.statement_idx {
+            return false;
+        }
+        if self.in_diverging_early_return {
+            other.statement_idx <= self.diverging_region_end
+        } else {
+            true
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
