@@ -202,6 +202,10 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    pub fn set_local(self, x: i32, voxel: Voxel) {
+        self.data.insert(x, voxel)
+    }
+
     pub fn get_local(self, x: i32) -> Voxel {
         if let Some(v) = self.data.get(x) {
             v

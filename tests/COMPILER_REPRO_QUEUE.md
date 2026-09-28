@@ -1,15 +1,66 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.521 (2026-09-27) — TDD WDB-418 (DB agent; no compiler src)
+
+Early-return of an owned `Vec` formal after `.len()` must move; product emits `empty_result(positions.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-418 MultiFile | ⏳ TDD — `return empty_result(positions)` must not `positions.clone()` |
+| WDB-418 tip-out | ⏳ product `empty_result(positions.clone())` in `uv_unwrap_algorithm.rs` / `uv_island_packing.rs` |
+
+**Root cause layer:** last-use / exclusive path — WJ `if positions.len() == 0 { return empty_result(positions) }` while a sibling path still indexes `positions`. Prior `.len()` plus later uses must not force a clone on the early-return path.
+
+**Why this is a new class:**
+- WDB-415 is **if-then** `materials_to_palette(materials)` (no early return + later sibling uses).
+- WDB-417 is **match-arm** `generate_culled_mesh(chunk)`.
+- WDB-407 is **`Vec` `new` demote**.
+
+**What became unnecessary:** `positions.clone()` on exclusive early-return into `empty_result`.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb418_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520 (notes-api / wj-glob), WDB-412–417 / P3.509–P3.519 (filed).
+
+## P3.520 (2026-09-27) — `check_rate` field replace must be `&mut self`
+
+`wj-notes-api` `check_rate` assigns `self.buckets = buckets_from_limit(...)` after a helper takes `self.buckets`. Caller `handle_method` still `self.dispatch(...)`.
+
+| Gate | Status |
+|------|--------|
+| `check_rate_field_replace_must_not_move_self` | ❌ isolate RED on tip p3505 (20:11) — `fn check_rate(mut self)` then `self.dispatch` (E0507/E0382) |
+| product `wj-notes-api` `$WJ test` | ❌ same move after `check_rate` (`mut self`); query `&mut query` greened |
+
+**Why this is a new class:**
+- P3.518 last-use `&mut query` is **GREEN** (move `query`).
+- Insert into `self.buckets` greened `&mut self`. **Replace** after a consuming helper infers owned `mut self`.
+- Caller continues after `None`. Do not edit `windjammer/src/`. Do not reshape notes-api.
+
+**Root cause layer:** signature / self-mode — field replace + later use of `self` must stay `&mut self`.
+
+**What became unnecessary:** further `&mut query` isolates.
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (20:11). `$WJ build --library --module-file` + `cargo check`.
+- Isolate: `fn check_rate(mut self, …)` + `handle_method(&mut self)` → rustc move.
+- Product GET-one: `note_get_reply(&mut note, if_none_match, query)` (no `&mut query`).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3520-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- check_rate_field_replace_must_not_move_self`
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518 (notes-api / wj-glob), WDB-412–417 / P3.509–P3.519 (filed).
+
 ## P3.519 (2026-09-27) — TDD WDB-417 (DB agent; no compiler src)
 
 Exclusive match arms must move an owned formal; product emits `generate_culled_mesh(chunk.clone())`.
 
 | Gate | Status |
 |------|--------|
-| WDB-417 MultiFile | ⏳ TDD — `gen_culled(chunk)` in exclusive arms must not `chunk.clone()` |
-| WDB-417 tip-out | ⏳ product `generate_culled_mesh(chunk.clone())` in `mesh_generator.rs` |
+| WDB-417 MultiFile | ✅ isolate GREEN — exclusive arms move / borrow; no `chunk.clone()` |
+| WDB-417 getter / cross-module | ✅ isolate GREEN — `get_local` + `should_face` emit `&Chunk` workers; `generate(chunk: Chunk)` + `&chunk` |
+| WDB-417 tip-out | ❌ product RED — stale `generate_chunk_mesh(chunk: &mut VoxelChunk)` + `generate_culled_mesh(chunk.clone())` |
 
-**Root cause layer:** signature — WJ `generate_chunk_mesh(chunk: VoxelChunk, strategy)` moves `chunk` into one exclusive arm. Product demotes to `&mut VoxelChunk` and clones for Culled/Greedy.
+**Root cause layer:** signature — WJ `generate_chunk_mesh(chunk: VoxelChunk, strategy)` moves `chunk` into one exclusive arm. Tip isolates already emit owned `generate` + borrowed workers. Product demote/`clone` is stale gen (regen), not a remaining isolate gap.
 
 **Why this is a new class:**
 - WDB-407 is **`Vec` `new` demote** (`new(&joints)`).
@@ -18,8 +69,13 @@ Exclusive match arms must move an owned formal; product emits `generate_culled_m
 
 **What became unnecessary:** `chunk.clone()` in exclusive match arms when WJ moves `chunk`.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb417_` — results recorded after TDD run
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520` (2026-09-27)
+- `… -- wdb417_module_file_match_arm_must_move_owned_chunk` → isolate **ok**; tip-out **FAILED** (stale product)
+- `… -- wdb417_module_file_readonly_getter_must_not_mut_then_clone` → **ok** (`generate(chunk: &Chunk)`, no clone)
+- `… -- wdb417_module_file_cross_module_getter_must_not_mut_then_clone` → **ok** (`generate(chunk: Chunk)` + `gen_*( &chunk )`)
+
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `edfea5ab`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb417_` → **3 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518 (notes-api / wj-glob), WDB-412–416 / P3.509–P3.517 (filed).
 
@@ -32,7 +88,7 @@ P3.513/P3.514 nested `Some(mut note)` is GREEN. Product `dispatch` still last-us
 | `fetch_note_store_then_query_must_not_mut` | ✅ P3.514 isolate GREEN — `Some(mut note)` + `query.clone()` / move |
 | `interp_query_then_get_must_not_mut_query` | ✅ P3.513 isolate GREEN — same mut-bind |
 | `split_query_list_then_get_must_not_mut_query` | ✅ P3.511 isolate GREEN |
-| `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `let mut query` + `note_get_reply(&mut note, …, &mut query)` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ✅ product query GREEN on tip p3505 (20:11) — `note_get_reply(&mut note, …, query)` |
 
 **Why this is a new class:**
 - Mut-bind E0596 is closed. Remaining is last-use / auto-ref of `query: String`.
