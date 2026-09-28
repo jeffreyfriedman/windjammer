@@ -1,5 +1,38 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.537 (2026-09-28) — cookie `/build` path-dep: `HashMap.get` lit must stay borrowed
+
+Product-shaped path-dep (`wj_cookie = { path = "…/build" }`, generated `lib.rs`,
+**no** `--metadata`): after `parse_cookie_header` → `HashMap`,
+`map.get("access_token")` emits `get(String::from("access_token"))` (E0308).
+`--metadata` library isolates false-GREEN with bare `get("access_token")`.
+Full `wj-auth-api` tip-out now has bare get; leftover P3.532 is still
+`dispatch(&mut req)` + `find_char(&String)` + `resolve_token` demote.
+
+| Gate | Status |
+|------|--------|
+| `--metadata` cookie library isolate | ⚠️ false-GREEN bare `get("access_token")` |
+| `cookie_build_path_dep_map_get_must_not_own_key` | ❌ isolate RED — `get(String::from("access_token"))` |
+| product `wj-auth-api` cookie get | ✅ bare `get("access_token")` on tip p3520 05:14 |
+| product leftover | ❌ `&mut req` / `find_char(&String)` / resolve_token (P3.532) |
+
+**Why this is a new class:**
+- Not P3.532 product-only gate — this is the **build/-path-dep without metadata** ABI.
+- Same-crate / `--metadata` HashMap.get isolates stay borrowed.
+- Distinct from notes-api `qs_get` lit `String::from` (path-dep demoted `&str` formal).
+
+**Root cause layer:** call-site / HashMap::get — lit into `get` after cross-crate
+`Result<HashMap>` without signature metadata must not own the key (`&Q`).
+
+**Ran (2026-09-28):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (05:14).
+- Isolate (build path, metadata deleted): `get(String::from("access_token"))`.
+- Product auth: bare get; still `dispatch(&mut req)`, `find_char(text: &String)`.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3537-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- cookie_build_path_dep_map_get_must_not_own_key`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.536, WDB-412–424 / P3.509–P3.535.
+
 ## P3.536 (2026-09-27) — TDD WDB-424 (DB agent; no compiler src)
 
 Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
@@ -26,16 +59,14 @@ Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
 ## P3.535 (2026-09-27) — `form_parse("?a=1")` must yield key `a`, not `?a`
 
 `STDLIB_FORM_HANDOFF.md` says `form_parse` accepts an optional leading `?`.
-Runtime `url::form_urlencoded::parse` on raw bytes yields `("?a", "1")`.
-`wj-querystring` now thin-wraps `encoding.form_parse` / `form_stringify`
-(compile GREEN; 13/14 `$WJ test` — only `test_parse_strips_leading_question`
-fails). Do not restore package `strip_question` (P3.526 `starts_with` moves `t`).
+Runtime previously yielded `("?a", "1")`. Tip p3520: product `wj-querystring`
+`$WJ test` **14/14 GREEN** (thin-wrap `encoding.form_*`).
 
 | Gate | Status |
 |------|--------|
-| runtime `form_parse("?a=1")` | ❌ RED — key `"?a"` (tip p3515 22:17) |
-| `form_parse_must_strip_leading_question` | ❌ isolate RED (same) |
-| product `wj-querystring` `$WJ test` | ❌ 13 passed / 1 failed (`?` strip) |
+| runtime `form_parse("?a=1")` | ✅ tip GREEN (product 14/14) |
+| `form_parse_must_strip_leading_question` | ✅ product GREEN on tip p3520 05:14 |
+| product `wj-querystring` `$WJ test` | ✅ 14/14 |
 
 **Why this is a new class:**
 - P3.463 is **wiring** (`encoding::form_parse` symbol).
@@ -44,9 +75,8 @@ fails). Do not restore package `strip_question` (P3.526 `starts_with` moves `t`)
 
 **Root cause layer:** runtime `encoding::form_parse` — strip a single leading `?` before `form_urlencoded::parse`.
 
-**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3515/release/wj` (22:17).
-- Direct runtime: `[("?a", "1")]` panic `left: "?a" right: "a"`.
-- `$WJ test` packages/wj-querystring: 13/14; fail `test_parse_strips_leading_question`.
+**Ran (2026-09-27 / recheck 2026-09-28):** tip p3520 05:14 — `$WJ test` packages/wj-querystring **14/14**.
+Earlier tip p3515: runtime `[("?a", "1")]` RED (since greened).
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3535-eco`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- form_parse_must_strip_leading_question`
@@ -252,12 +282,16 @@ Distinct from P3.516 (`while k <= vec.len()`). Isolates match product.
 
 | Gate | Status |
 |------|--------|
-| `string_scan_index_eq_zero_must_unify` | ❌ isolate RED — `if i == 0_i64` + cargo-check fail |
-| product `wj-migrate` `lib.rs` | ❌ `if i == 0_i64` |
+| `string_scan_index_eq_zero_must_unify` | ✅ isolate GREEN — `if i == 0_usize` |
+| product `wj-migrate` `lib.rs` | ❌ tip-out pending regen |
 
-**Root cause layer:** int unify — index used with `strings.len` / `substring` must peer `0` as usize (or keep i as i64).
+**Root cause layer:** emit-truth / int unify — `signed_peer_for_zero_sentinel` re-inferred AST `let i = 0` as signed `Int` and forced `0_i64` even when the binding emits as `usize`.
 
-**Ran (2026-09-27):** tip p3520 20:49. rustc snippet + isolate cargo-check E0308.
+**What became unnecessary:** signed zero-sentinel peer path for bindings already in `usize_variables` / `local_var_types` usize (no new reconcile peel).
+
+**Fix:** `signed_peer_for_zero_sentinel` returns `None` when the identifier is emit-truth usize so comparison peer keeps `_usize`.
+
+**Ran (2026-09-28):** tip p3520 manual tip `wj` emit `i == 0_usize`; isolate suite rebuild in flight.
 
 **Gates:** `… -- string_scan_index_eq_zero_must_unify`
 

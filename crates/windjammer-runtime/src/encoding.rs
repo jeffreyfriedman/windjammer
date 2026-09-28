@@ -67,7 +67,12 @@ pub fn url_decode_component(data: impl AsRef<str>) -> Result<String, String> {
 
 /// Parse `application/x-www-form-urlencoded` into ordered `(key, value)` pairs.
 /// Repeated keys are preserved (unlike `http::parse_query_string`'s last-wins map).
+///
+/// An optional leading `?` is stripped (query-string / form body parity —
+/// `STDLIB_FORM_HANDOFF.md` / P3.535). `url::form_urlencoded` alone would treat
+/// `"?a=1"` as key `"?a"`.
 pub fn form_parse(text: &str) -> Vec<(String, String)> {
+    let text = text.strip_prefix('?').unwrap_or(text);
     url::form_urlencoded::parse(text.as_bytes())
         .map(|(k, v)| (k.into_owned(), v.into_owned()))
         .collect()
@@ -111,6 +116,21 @@ mod tests {
                 ("a".to_string(), "2".to_string()),
                 ("b".to_string(), "3".to_string()),
             ]
+        );
+    }
+
+    /// P3.535 / STDLIB_FORM_HANDOFF: optional leading `?` is not part of the key.
+    #[test]
+    fn form_parse_strips_optional_leading_question() {
+        assert_eq!(
+            form_parse("?a=1"),
+            vec![("a".to_string(), "1".to_string())],
+            "form_parse(\"?a=1\") must yield key \"a\", not \"?a\""
+        );
+        assert_eq!(
+            form_parse("a=1"),
+            vec![("a".to_string(), "1".to_string())],
+            "no leading ? must still parse"
         );
     }
 

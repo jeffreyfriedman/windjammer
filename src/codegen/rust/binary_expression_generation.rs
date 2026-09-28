@@ -115,6 +115,16 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(type_.clone())
             }
             Expression::Identifier { name, .. } => {
+                // P3.527: `let mut i = 0` + `while i < strings.len(…)` emits `i: usize`.
+                // `signed_init_type_from_current_body` still sees the AST `0` as WJ `int`
+                // and would force `i == 0_i64`. Emit-truth usize wins over init-literal peer.
+                if self.usize_variables.contains(name)
+                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                        crate::codegen::rust::type_casting::type_is_usize(t)
+                    })
+                {
+                    return None;
+                }
                 if self.codegen_i32_binding_names.contains(name) {
                     return Some(Type::Int32);
                 }
