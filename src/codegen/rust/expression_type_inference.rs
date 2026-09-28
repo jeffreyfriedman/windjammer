@@ -665,6 +665,19 @@ impl<'ast> CodeGenerator<'ast> {
                 .as_ref()
                 .and_then(|ot| Self::peeled_collection_element_type(ot))
                 .cloned(),
+            // WDB-423: `[ (1.0, 0.0, 0.0), … ]` must type as `[ (f32,f32,f32); N ]`
+            // so index destructure is Copy and does not `.clone()`.
+            Expression::Tuple { elements, .. } => {
+                let mut tys = Vec::with_capacity(elements.len());
+                for e in elements {
+                    tys.push(self.infer_expression_type(e)?);
+                }
+                Some(Type::Tuple(tys))
+            }
+            Expression::Array { elements, .. } => {
+                let elem = elements.first().and_then(|e| self.infer_expression_type(e))?;
+                Some(Type::Array(Box::new(elem), elements.len()))
+            }
             // TDD FIX: Macro invocations return known types
             // format!() always returns String
             // vec![] returns Vec<T> (but we don't infer T here)

@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.536 (2026-09-27) — TDD WDB-424 (DB agent; no compiler src)
+
+Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
+`match body.shape.clone()` twice (`ShapeType` includes `ConvexHull(Vec<Vec3>)`).
+
+| Gate | Status |
+|------|--------|
+| WDB-424 MultiFile | ⏳ TDD pending — two `match body.shape` |
+| WDB-424 tip-out | ⏳ TDD pending — `body.shape.clone()` in jolt world |
+
+**Root cause layer:** match / borrow — second (and first) match of a non-Copy field should be `match &field`, not clone.
+
+**Why this is a new class:**
+- WDB-417 is match-arm **owned formal** into a function (`chunk.clone()`).
+- WDB-405 is **unit enum** `.clone()`.
+- WDB-416 is `a.clone().as_float()`.
+
+**What became unnecessary:** `body.shape.clone()` in `add_body` shape dispatch.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.535, WDB-412–423 / P3.509–P3.534 (filed).
+
 ## P3.535 (2026-09-27) — `form_parse("?a=1")` must yield key `a`, not `?a`
 
 `STDLIB_FORM_HANDOFF.md` says `form_parse` accepts an optional leading `?`.
@@ -37,19 +60,21 @@ Copy `(f32, f32, f32)` array index destructure must not `.clone()`; product emit
 
 | Gate | Status |
 |------|--------|
-| WDB-423 MultiFile | ❌ isolate RED — `offsets[(i as usize)].clone()` |
-| WDB-423 tip-out | ❌ product RED — fps/tps camera `offsets[(i) as usize].clone()` |
+| WDB-423 MultiFile | ✅ isolate GREEN — `let (ox, oy, oz) = offsets[(i as usize)]` (no `.clone()`) |
+| WDB-423 tip-out | ❌ product RED — stale `offsets[(i) as usize].clone()` until regen |
 
-**Root cause layer:** copy / index — array of Copy tuples must move/copy on index, not clone.
+**Root cause layer:** constraint / type inference — `[(1.0, 0.0, 0.0), …]` did not infer `[ (f32,f32,f32); N ]`, so index codegen treated the element as unknown and cloned.
 
 **Why this is a new class:**
 - WDB-363 is indexed tuple **field** (`planes[N].clone().normal`).
 - WDB-422 is Copy **f32** index in arithmetic (`view_proj[i].clone()`).
 - WDB-393 is **local i32** `y.clone()`.
 
-**What became unnecessary:** `offsets[(i) as usize].clone()` in camera unstuck scan.
+**What became unnecessary:** `.clone()` on Copy tuple array index destructure.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520` (2026-09-27)
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb423_module_file_copy_tuple_index_must_not_clone wdb422_module_file_copy_f32_index_arith_must_not_clone`
+  → isolates **ok**; tip-out product RED
 
 **Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `7c62e550`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- wdb423_` → **0 passed / 2 failed**
