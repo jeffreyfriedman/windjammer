@@ -76,8 +76,8 @@ Last-use `return` of a local `Vec` must move; product emits `return result.clone
 
 | Gate | Status |
 |------|--------|
-| WDB-420 MultiFile | ⏳ TDD — `return result` after `push` must not `result.clone()` |
-| WDB-420 tip-out | ⏳ product `return result.clone()` in `svo_convert.rs` / `astar_grid.rs` |
+| WDB-420 MultiFile | ✅ isolate GREEN — `return result` after `push` (no `result.clone()`) |
+| WDB-420 tip-out | ❌ product RED — `return result.clone()` / `return path.clone()` in svo + astar |
 
 **Root cause layer:** last-use — WJ `let mut result = Vec::new(); result.push(node); return result`. The local is exclusive last-use.
 
@@ -88,8 +88,10 @@ Last-use `return` of a local `Vec` must move; product emits `return result.clone
 
 **What became unnecessary:** `return result.clone()` / `return path.clone()` of a local Vec.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb420_` — results recorded after TDD run
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `4af83ee2`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb420_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524 (notes-api / wj-glob), WDB-412–419 / P3.509–P3.523 (filed).
 
