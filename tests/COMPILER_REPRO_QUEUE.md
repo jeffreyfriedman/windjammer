@@ -1,5 +1,40 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.524 (2026-09-27) — adapter `find_char` must take `text: &str`, not `&String`
+
+Product `wj-notes-api` `adapters/http_server.rs` (tip p3520 20:49):
+`split_header_line(line: &str)` → `find_char(line, ":")` while
+`find_char(text: &String, needle: &str)` → rustc E0308 expected `&String`, found `&str`.
+
+Domain `find_char` already emits `text: &str`. Isolates that only have
+`split_header_line` + inline `substring == needle` (even with `trim`/`split`)
+false-green `text: &str` + cargo-check. Do not reshape the app.
+
+| Gate | Status |
+|------|--------|
+| isolate `apply_extra_headers` + `split` + `trim` + inline `find_char` | ⚠️ false-GREEN `text: &str` |
+| `product_adapter_find_char_text_must_not_be_string_ref` | ❌ product RED — `fn find_char(text: &String, needle: &str)` |
+| rustc snippet of product emit | ❌ E0308 `find_char(line, ":")` expected `&String`, found `&str` |
+
+**Why this is a new class:**
+- Not P3.522 (`handle_method` owned self).
+- Not P3.518 (`&mut query` into `query: String`).
+- Not `comparison_only_string_formal_demotes_to_str` (simple `==`, no `strings.substring` loop).
+- Domain bind-`ch`-then-`==` greened; adapter inline `substring(...) == needle` stayed `&String`.
+
+**Root cause layer:** signature / demote — `string` formal used with `strings.len` / `substring` + `==` must be `&str` when a demoted `&str` caller exists.
+
+**What became unnecessary:** refiling domain `find_char` (`text: &str` already).
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (20:49).
+- Isolate: `fn find_char(text: &str)` + cargo-check GREEN.
+- Product adapter: `text: &String`; rustc snippet E0308.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3524-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- product_adapter_find_char_text_must_not_be_string_ref`
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522 (notes-api / wj-glob), WDB-412–419 / P3.509–P3.523 (filed).
+
 ## P3.523 (2026-09-27) — TDD WDB-419 (DB agent; no compiler src)
 
 Reused owned `string` into several owned helpers must not `parse_flag(line.clone())` at each callsite.
@@ -30,8 +65,9 @@ P3.520 isolate GREENS `check_rate(&mut self)`. Product still emits `handle_metho
 | Gate | Status |
 |------|--------|
 | `check_rate_field_replace_must_not_move_self` | ✅ P3.520 isolate GREEN on tip p3520 (20:32) — `check_rate(&mut self)` |
-| `handle_method_must_mut_self_for_check_rate` | ❌ product RED — `fn handle_method(self)` / `fn handle_http(self)` |
-| `notes_api_product_remaining_e0308_must_not_emit` | ❌ `&mut query` regressed on tip p3520 after P3.520 fix |
+| `handle_method_must_mut_self_for_check_rate` | ❌ product RED — `fn handle_method(self)` / `fn handle_http(self)` on tip p3520 20:49 |
+| MultiFile handle-above-check_rate isolate | ❌ RED — `handle_method(&self)` + `self.clone().check_rate` (false-GREEN `&mut` if `check_rate` is defined first) |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ `&mut query` still on tip p3520 20:49 |
 
 **Why this is a new class:**
 - P3.520 same-field writeback fixed **check_rate** only. Callers that first read `self.config` stay owned `self`.
