@@ -1,5 +1,35 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.535 (2026-09-27) — `form_parse("?a=1")` must yield key `a`, not `?a`
+
+`STDLIB_FORM_HANDOFF.md` says `form_parse` accepts an optional leading `?`.
+Runtime `url::form_urlencoded::parse` on raw bytes yields `("?a", "1")`.
+`wj-querystring` now thin-wraps `encoding.form_parse` / `form_stringify`
+(compile GREEN; 13/14 `$WJ test` — only `test_parse_strips_leading_question`
+fails). Do not restore package `strip_question` (P3.526 `starts_with` moves `t`).
+
+| Gate | Status |
+|------|--------|
+| runtime `form_parse("?a=1")` | ❌ RED — key `"?a"` (tip p3515 22:17) |
+| `form_parse_must_strip_leading_question` | ❌ isolate RED (same) |
+| product `wj-querystring` `$WJ test` | ❌ 13 passed / 1 failed (`?` strip) |
+
+**Why this is a new class:**
+- P3.463 is **wiring** (`encoding::form_parse` symbol).
+- P3.526 is **`starts_with` move** of a local `t`.
+- This is **semantic parity** of the std form parser vs the handoff/`?` contract.
+
+**Root cause layer:** runtime `encoding::form_parse` — strip a single leading `?` before `form_urlencoded::parse`.
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3515/release/wj` (22:17).
+- Direct runtime: `[("?a", "1")]` panic `left: "?a" right: "a"`.
+- `$WJ test` packages/wj-querystring: 13/14; fail `test_parse_strips_leading_question`.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3535-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- form_parse_must_strip_leading_question`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.534, WDB-412–423 / P3.509–P3.533.
+
 ## P3.534 (2026-09-27) — TDD WDB-423 (DB agent; no compiler src)
 
 Copy `(f32, f32, f32)` array index destructure must not `.clone()`; product emits
@@ -7,8 +37,8 @@ Copy `(f32, f32, f32)` array index destructure must not `.clone()`; product emit
 
 | Gate | Status |
 |------|--------|
-| WDB-423 MultiFile | ⏳ TDD pending — `let (ox, oy, oz) = offsets[i]` |
-| WDB-423 tip-out | ⏳ TDD pending — `offsets[(i) as usize].clone()` in fps/tps camera |
+| WDB-423 MultiFile | ❌ isolate RED — `offsets[(i as usize)].clone()` |
+| WDB-423 tip-out | ❌ product RED — fps/tps camera `offsets[(i) as usize].clone()` |
 
 **Root cause layer:** copy / index — array of Copy tuples must move/copy on index, not clone.
 
@@ -21,7 +51,10 @@ Copy `(f32, f32, f32)` array index destructure must not `.clone()`; product emit
 
 **Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
 
-**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.533, WDB-412–422 / P3.509–P3.531 (filed).
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `7c62e550`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb423_` → **0 passed / 2 failed**
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.533/P3.535, WDB-412–422 / P3.509–P3.531 (filed).
 
 ## P3.533 (2026-09-27) — `use std::url` must not import runtime `Url` over a local `Url`
 
