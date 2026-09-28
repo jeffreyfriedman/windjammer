@@ -1,5 +1,36 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.533 (2026-09-27) — `use std::url` must not import runtime `Url` over a local `Url`
+
+P3.530 literal prefix greened on tip p3515 21:30 (`Url { port: … }` not
+`windjammer_runtime::url::Url {`). Product still emits
+`use windjammer_runtime::url::Url` which shadows the local struct → rustc
+treats `Url { port }` as the runtime type (E0255 / E0560 / E0308). Isolates
+match. Keep `join_url` → `url::join`. Do not rename the package `Url`.
+
+| Gate | Status |
+|------|--------|
+| `local_url_struct_must_not_emit_runtime_url` | ✅ prefix GREEN on tip p3515 21:30 — bare `Url {` |
+| `local_url_must_not_import_runtime_url_type` | ❌ isolate RED — `use windjammer_runtime::url::Url;` |
+| product `wj-url` `$WJ test` | ❌ 26 rustc (same shadow) |
+
+**Why this is a new class:**
+- P3.530 was the **path-prefixed literal**. This is the **use-import shadow**.
+- `use windjammer_runtime::url;` (module) is fine for `url::join`.
+
+**Root cause layer:** name resolution — `use std::url` must not bind `Url` when a local `Url` exists.
+
+**Ran (2026-09-27):**
+- tip `.agent-wip/cargo-target-tip-p3515/release/wj` 0.50.0 (21:30): isolate emits
+  `use windjammer_runtime::url::Url;` + bare `Url { port }` (prefix GREEN, import RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- local_url_must_not_import_runtime_url_type`
+  on clean HEAD worktree `84c3c938`: **FAILED** (import + still-prefixed literal on that commit).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3533-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- local_url_must_not_import_runtime_url_type`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532, WDB-412–422 / P3.509–P3.531.
+
 ## P3.532 (2026-09-27) — `wj-auth-api` leftover: `&mut req`, `get(lit.to_string())`, resolve_token
 
 After building `wj-cookie` / `wj-hash` / `wj-jwt` path deps, `$WJ test` discovers
@@ -65,8 +96,8 @@ the local struct or drop the `join_url` → `url.join` thin-wrap.
 
 | Gate | Status |
 |------|--------|
-| `local_url_struct_must_not_emit_runtime_url` | ❌ isolate RED — `parse_local` emits `windjammer_runtime::url::Url { port: … }` |
-| product `wj-url` `$WJ test` after wrap | ❌ 26 rustc (E0560 port, E0308 Option vs String) |
+| `local_url_struct_must_not_emit_runtime_url` | ✅ prefix GREEN on tip p3515 21:30 — leftover is import shadow (P3.533) |
+| product `wj-url` `$WJ test` after wrap | ❌ 26 rustc via `use …::url::Url` shadow (P3.533) |
 
 **Why this is a new class:**
 - Not P3.526 (`starts_with` move).
