@@ -1,5 +1,36 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.532 (2026-09-27) — `wj-auth-api` leftover: `&mut req`, `get(lit.to_string())`, resolve_token
+
+After building `wj-cookie` / `wj-hash` / `wj-jwt` path deps, `$WJ test` discovers
+48 tests then rustc 4 errors (one is P3.524 `find_char`). Remaining unused:
+
+| Gate | Status |
+|------|--------|
+| serve isolate (`|req| dispatch(req, shared)`) | ⚠️ false-GREEN `dispatch(req, &shared)` |
+| HashMap.get lit after same-crate parse | ⚠️ false-GREEN `get("a")` |
+| resolve_token same-crate | ⚠️ false-GREEN caller also `&str` |
+| `auth_api_product_dispatch_must_not_mut_req` | ❌ product RED |
+
+Product emit (tip p3520 21:17):
+- `move |req| dispatch(&mut req, &shared)` + `dispatch(req: &mut ServerRequest)` → E0596
+- `map.get("access_token".to_string())` after `parse_cookie_header` → E0308
+- `resolve_token(authorization, cookie)` into `authorization: &str` → E0308
+
+**Why this is a new class:**
+- Notes-api serve already emits owned `dispatch(req)`. Auth clones path/body/headers then uses `req.method`.
+- HashMap.get after **cross-crate** `parse_cookie_header` (existing isolates are same-crate).
+- Do not reshape auth-api.
+
+**Root cause layer:** signature / call-site — `ServerRequest` later field use must not `&mut` the serve closure; `HashMap::get` key stays `&Q`; owned String into demoted `&str` must borrow.
+
+**Ran (2026-09-27):** tip p3520 21:17. Isolates transpile as above. `$WJ test` 4 rustc.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3532-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- auth_api_product_dispatch_must_not_mut_req`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530, WDB-412–422 / P3.509–P3.531.
+
 ## P3.531 (2026-09-27) — TDD WDB-422 (DB agent; no compiler src)
 
 Copy `f32` array index in arithmetic must not `.clone()`; product emits `view_proj[3].clone() + view_proj[0]`.
