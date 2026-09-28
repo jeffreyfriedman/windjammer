@@ -1,27 +1,58 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.522 (2026-09-27) — `handle_method` / `handle_http` must be `&mut self`
+
+P3.520 isolate GREENS `check_rate(&mut self)`. Product still emits `handle_method(self)` / `handle_http(self)` then `self.check_rate` (E0596) and `MutexGuard.handle_http` (E0507).
+
+| Gate | Status |
+|------|--------|
+| `check_rate_field_replace_must_not_move_self` | ✅ P3.520 isolate GREEN on tip p3520 (20:32) — `check_rate(&mut self)` |
+| `handle_method_must_mut_self_for_check_rate` | ❌ product RED — `fn handle_method(self)` / `fn handle_http(self)` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ `&mut query` regressed on tip p3520 after P3.520 fix |
+
+**Why this is a new class:**
+- P3.520 same-field writeback fixed **check_rate** only. Callers that first read `self.config` stay owned `self`.
+- Isolates emit `handle_method(&mut self)` or `self.clone().check_rate` (false-GREEN). Product does not clone.
+- Adapter `state.lock()` → `app.handle_http(...)` cannot move `NotesApp`. Do not reshape notes-api. Do not edit `windjammer/src/`.
+
+**Root cause layer:** signature / self-mode propagation — `&mut self` callee must lift the caller.
+
+**What became unnecessary:** refiling P3.520 isolate (check_rate itself).
+
+**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (20:32) after `80f5b53c`.
+- Isolate P3.520: `fn check_rate(&mut self)` + cargo-check GREEN.
+- Product: `check_rate(&mut self)`; `handle_method(self)`; `handle_http(self)`; GET-one `&mut query`.
+- `$WJ test`: E0308 `&mut query`, E0308 `find_char(&str)`, E0507 MutexGuard, E0596 handle_method.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3522-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- handle_method_must_mut_self_for_check_rate`
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520 (notes-api / wj-glob), WDB-412–418 / P3.509–P3.521 (filed).
+
 ## P3.521 (2026-09-27) — TDD WDB-418 (DB agent; no compiler src)
 
 Early-return of an owned `Vec` formal after `.len()` must move; product emits `empty_result(positions.clone())`.
 
 | Gate | Status |
 |------|--------|
-| WDB-418 MultiFile | ❌ isolate RED — `return empty_result(positions.clone())` after `positions.is_empty()` / later sibling uses |
-| WDB-418 tip-out | ❌ product RED — `empty_result(positions.clone())` in `uv_unwrap_algorithm.rs` / `uv_island_packing.rs` |
+| WDB-418 MultiFile | ✅ isolate GREEN — `return empty_result(positions)` (no clone), including loop-internal return |
+| WDB-418 tip-out | ❌ product RED — stale `empty_result(positions.clone())` until regen |
 
-**Root cause layer:** last-use / exclusive path — WJ `if positions.len() == 0 { return empty_result(positions) }` while a sibling path still indexes `positions`. Prior `.len()` plus later uses must not force a clone on the early-return path.
+**Root cause layer:** constraint / reuse — auto_clone treated later sibling-path indexes as reachable after a diverging `if { return }`, and `in_loop` forced clone on function-exiting return. Exclusive early-return is the same class as exclusive match arms (P3.332 / WDB-417).
 
 **Why this is a new class:**
 - WDB-415 is **if-then** `materials_to_palette(materials)` (no early return + later sibling uses).
 - WDB-417 is **match-arm** `generate_culled_mesh(chunk)`.
 - WDB-407 is **`Vec` `new` demote**.
 
-**What became unnecessary:** `positions.clone()` on exclusive early-return into `empty_result`.
+**What became unnecessary:** `positions.clone()` on exclusive early-return into `empty_result` (top-level and `while` inner return).
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520` (2026-09-27)
+- `… -- wdb418_module_file_early_return_must_move_owned_vec` → isolate **ok**; tip-out product RED
+- `… -- wdb415_module_file_owned_vec_formal_inside_if_must_not_clone` → isolate **ok**
 
-**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `9b4ea580`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb418_` → **0 passed / 2 failed**
+**Ran (compiler 2026-09-27):** tip p3520 after exclusive early-return reuse + `in_loop` exempt when `in_diverging_early_return`.
+- Isolate emit: `return empty_result(positions);` (both the top-level empty/short check and the `while` bounds check)
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520 (notes-api / wj-glob), WDB-412–417 / P3.509–P3.519 (filed).
 
@@ -31,8 +62,8 @@ Early-return of an owned `Vec` formal after `.len()` must move; product emits `e
 
 | Gate | Status |
 |------|--------|
-| `check_rate_field_replace_must_not_move_self` | ❌ isolate RED on tip p3505 (20:11) — `fn check_rate(mut self)` then `self.dispatch` (E0507/E0382) |
-| product `wj-notes-api` `$WJ test` | ❌ same move after `check_rate` (`mut self`); query `&mut query` greened |
+| `check_rate_field_replace_must_not_move_self` | ✅ isolate GREEN on tip p3520 (20:32) — `fn check_rate(&mut self)` |
+| product `wj-notes-api` `$WJ test` | ⚠️ check_rate `&mut self`; caller still owned `self` (P3.522) |
 
 **Why this is a new class:**
 - P3.518 last-use `&mut query` is **GREEN** (move `query`).
