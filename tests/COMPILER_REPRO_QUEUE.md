@@ -291,7 +291,7 @@ Distinct from P3.516 (`while k <= vec.len()`). Isolates match product.
 
 **Fix:** `signed_peer_for_zero_sentinel` returns `None` when the identifier is emit-truth usize so comparison peer keeps `_usize`.
 
-**Ran (2026-09-28):** tip p3520 manual tip `wj` emit `i == 0_usize`; isolate suite rebuild in flight.
+**Ran (2026-09-28):** tip p3520 — `cargo test --release --test all --features integration_tests,codegen_tests -- string_scan_index_eq_zero_must_unify` → **1 passed** (`if i == 0_usize`).
 
 **Gates:** `… -- string_scan_index_eq_zero_must_unify`
 
