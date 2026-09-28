@@ -383,6 +383,110 @@ fn method_takes_owned_self(
     false
 }
 
+/// True when every `self.field` moved into a call is later assigned back
+/// (`self.buckets = put(take(self.buckets))`). Same-field replace is `&mut self`
+/// (P3.520). Distinct-field ctor moves stay owned (WDB-414).
+pub fn function_writeback_replaces_moved_self_fields(func: &FunctionDecl) -> bool {
+    let mut moved = std::collections::HashSet::new();
+    let mut assigned = std::collections::HashSet::new();
+    for stmt in &func.body {
+        collect_moved_self_fields_in_stmt(stmt, &mut moved);
+        collect_assigned_self_fields_in_stmt(stmt, &mut assigned);
+    }
+    !moved.is_empty() && moved.iter().all(|field| assigned.contains(field))
+}
+
+fn collect_moved_self_fields_in_stmt(stmt: &Statement, out: &mut std::collections::HashSet<String>) {
+    match stmt {
+        Statement::Let { value, .. }
+        | Statement::Expression { expr: value, .. }
+        | Statement::Return {
+            value: Some(value), ..
+        } => collect_moved_self_fields_in_expr(value, out),
+        Statement::Assignment { value, .. } => collect_moved_self_fields_in_expr(value, out),
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            collect_moved_self_fields_in_expr(condition, out);
+            for s in then_block {
+                collect_moved_self_fields_in_stmt(s, out);
+            }
+            if let Some(eb) = else_block {
+                for s in eb {
+                    collect_moved_self_fields_in_stmt(s, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_moved_self_fields_in_expr(expr: &Expression, out: &mut std::collections::HashSet<String>) {
+    match expr {
+        Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
+            for (_, arg) in arguments {
+                if let Some(field) = self_field_name(arg) {
+                    out.insert(field);
+                } else {
+                    collect_moved_self_fields_in_expr(arg, out);
+                }
+            }
+        }
+        Expression::Binary { left, right, .. } => {
+            collect_moved_self_fields_in_expr(left, out);
+            collect_moved_self_fields_in_expr(right, out);
+        }
+        Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
+            collect_moved_self_fields_in_expr(operand, out);
+        }
+        _ => {}
+    }
+}
+
+fn collect_assigned_self_fields_in_stmt(
+    stmt: &Statement,
+    out: &mut std::collections::HashSet<String>,
+) {
+    match stmt {
+        Statement::Assignment { target, .. } => {
+            if let Some(field) = self_field_name(target) {
+                out.insert(field);
+            }
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            for s in then_block {
+                collect_assigned_self_fields_in_stmt(s, out);
+            }
+            if let Some(eb) = else_block {
+                for s in eb {
+                    collect_assigned_self_fields_in_stmt(s, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn self_field_name(expr: &Expression) -> Option<String> {
+    match expr {
+        Expression::FieldAccess { object, field, .. } => {
+            if matches!(&**object, Expression::Identifier { name, .. } if name == "self") {
+                Some(field.clone())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Check if the body consumes `self` by value — i.e., uses bare `self` (not `self.field`)
 /// as a struct literal field, function argument, or other value position.
 pub fn function_consumes_self(func: &FunctionDecl) -> bool {

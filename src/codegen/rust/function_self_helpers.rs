@@ -111,9 +111,14 @@ impl<'ast> CodeGenerator<'ast> {
         if body_modifies && returns_impl_struct {
             "mut self"
         } else if body_modifies && super::self_analysis::function_consumes_self(func) {
-            // WDB-414: move `self.scene` into a ctor, then write a remaining field.
-            // Analyzer Owned + field write must stay `mut self`, not `&mut self`.
-            "mut self"
+            // P3.520: `self.buckets = put(take(self.buckets))` writes back the moved
+            // field — `&mut self` so callers can continue. WDB-414 moves a *different*
+            // field into a ctor (`Vox::new(self.scene)` then `self.grid = 1`) → owned.
+            if super::self_analysis::function_writeback_replaces_moved_self_fields(func) {
+                "&mut self"
+            } else {
+                "mut self"
+            }
         } else if body_modifies {
             "&mut self"
         } else if super::self_analysis::function_matches_on_self(func)
