@@ -37,8 +37,8 @@ Copy `f32` array index in arithmetic must not `.clone()`; product emits `view_pr
 
 | Gate | Status |
 |------|--------|
-| WDB-422 MultiFile | ⏳ TDD — `view_proj[3] + view_proj[0]` must not `.clone()` |
-| WDB-422 tip-out | ⏳ product `view_proj[i].clone()` in `frustum_culling.rs` |
+| WDB-422 MultiFile | ✅ isolate GREEN — `view_proj[3] + view_proj[0]` (no `.clone()`) |
+| WDB-422 tip-out | ❌ product RED — `view_proj[i].clone()` in `frustum_culling.rs` |
 
 **Root cause layer:** copy / index — `[f32; 16]` elements are Copy; binary `+`/`-` must not auto-clone.
 
@@ -49,8 +49,10 @@ Copy `f32` array index in arithmetic must not `.clone()`; product emits `view_pr
 
 **What became unnecessary:** `view_proj[3].clone()` in frustum plane extract.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb422_` — results recorded after TDD run
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `b04ed61b`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb422_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530, WDB-412–421 / P3.509–P3.529 (filed).
 
