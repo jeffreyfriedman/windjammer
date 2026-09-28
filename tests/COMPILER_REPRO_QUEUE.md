@@ -41,8 +41,8 @@ Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-424 MultiFile | ⏳ TDD pending — two `match body.shape` |
-| WDB-424 tip-out | ⏳ TDD pending — `body.shape.clone()` in jolt world |
+| WDB-424 MultiFile | ❌ isolate RED — `match body.shape.clone()` twice |
+| WDB-424 tip-out | ❌ product RED — `body.shape.clone()` in jolt world |
 
 **Root cause layer:** match / borrow — second (and first) match of a non-Copy field should be `match &field`, not clone.
 
@@ -53,7 +53,10 @@ Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
 
 **What became unnecessary:** `body.shape.clone()` in `add_body` shape dispatch.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-28)
+
+**Ran (DB agent 2026-09-28):** worktree `…/wdb407-tdd` @ `c9403b43`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb424_` → **0 passed / 2 failed**
 
 **Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.535, WDB-412–423 / P3.509–P3.534 (filed).
 
