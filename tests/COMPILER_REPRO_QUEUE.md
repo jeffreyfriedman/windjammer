@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.525 (2026-09-27) — TDD WDB-420 (DB agent; no compiler src)
+
+Last-use `return` of a local `Vec` must move; product emits `return result.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-420 MultiFile | ⏳ TDD — `return result` after `push` must not `result.clone()` |
+| WDB-420 tip-out | ⏳ product `return result.clone()` in `svo_convert.rs` / `astar_grid.rs` |
+
+**Root cause layer:** last-use — WJ `let mut result = Vec::new(); result.push(node); return result`. The local is exclusive last-use.
+
+**Why this is a new class:**
+- WDB-418 is **early-return of an owned formal** into `empty_result`.
+- WDB-415 is **if-then move of a formal**.
+- WDB-407 is **`Vec` `new` demote**.
+
+**What became unnecessary:** `return result.clone()` / `return path.clone()` of a local Vec.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb420_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524 (notes-api / wj-glob), WDB-412–419 / P3.509–P3.523 (filed).
+
 ## P3.524 (2026-09-27) — adapter `find_char` must take `text: &str`, not `&String`
 
 Product `wj-notes-api` `adapters/http_server.rs` (tip p3520 20:49):
