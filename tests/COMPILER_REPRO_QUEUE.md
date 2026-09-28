@@ -31,8 +31,8 @@ Last-use of an owned `Vec` formal into a callee must move; product emits `indice
 
 | Gate | Status |
 |------|--------|
-| WDB-421 MultiFile | ⏳ TDD — `finish(n, indices)` after `indices[i]` must not `indices.clone()` |
-| WDB-421 tip-out | ⏳ product `per_vertex_average_uv(..., indices.clone(), …)` |
+| WDB-421 MultiFile | ✅ isolate GREEN — `finish(n, indices)` after `indices[i]` (no `indices.clone()`) |
+| WDB-421 tip-out | ❌ product RED — `indices.clone()` in `rel_tip_out` `uv_unwrap_algorithm.rs` |
 
 **Root cause layer:** last-use — WJ indexes `indices` then passes it once into `per_vertex_average_uv`. That last use must move.
 
@@ -43,8 +43,10 @@ Last-use of an owned `Vec` formal into a callee must move; product emits `indice
 
 **What became unnecessary:** `indices.clone()` on last use into the UV average helper.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb421_` — results recorded after TDD run
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `0e01f24e`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb421_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528, WDB-412–420 / P3.509–P3.525 (filed).
 
