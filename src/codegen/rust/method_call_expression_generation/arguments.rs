@@ -520,7 +520,17 @@ impl<'ast> CodeGenerator<'ast> {
                                 )
                             })
                             .unwrap_or_else(|| fallback_sig.clone());
-                        if let Some(rt) = receiver_rt.as_deref() {
+                        if object_is_runtime_std_module {
+                            // No receiver type (`strings.starts_with`) — still refresh from
+                            // the qualified runtime key so AsRef/`&str` beats WJ owned stubs.
+                            if let Some(refreshed) = self.refresh_call_site_signature_for_arg(
+                                Some(contract_sig.clone()),
+                                &qualified_callee,
+                                i,
+                            ) {
+                                contract_sig = refreshed;
+                            }
+                        } else if let Some(rt) = receiver_rt.as_deref() {
                             let qualified = format!("{rt}::{method}");
                             let refresh_keys = vec![qualified.clone()];
                             crate::codegen::rust::signature_promotion::merge_registry_codegen_refresh_if_present(

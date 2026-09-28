@@ -2525,6 +2525,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.emitted_rust_ref_formals.contains(name) {
             return true;
         }
+        // Owned `let` bindings stay values in Rust (`let t = trim(...)` → `String`).
+        // Analyzer borrow-flow marks must not make call sites peel `&t` into a move.
+        if self.binding_is_owned_local(name) {
+            return false;
+        }
         if self.str_ref_optimized_params.contains(name)
             && self.current_function_params.iter().any(|p| p.name == name)
         {
@@ -2557,7 +2562,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 return false;
             }
-            return true;
+            // Non-param names in borrow-flow analysis are not automatically emitted `&T`.
+            // Owned `let` bindings (P3.526) and untyped match arms must not peel `&t`.
+            return matches!(
+                self.local_var_types.get(name),
+                Some(Type::Reference(_))
+            ) || self.borrowed_iterator_vars.contains(name);
         }
         // method_param_ownership is keyed by method name — only honor params for the
         // function currently being codegen'd (not sibling methods with the same param name).
@@ -2612,6 +2622,22 @@ impl<'ast> CodeGenerator<'ast> {
         }) && self.current_function_params.iter().any(|p| p.name == name)
     }
 
+    /// Owned `let` binding (including one that shadows a formal). Not an emitted Rust `&T`.
+    ///
+    /// P3.526: `let t = strings::trim(text)` is `String`. Analyzer borrow-flow may still
+    /// put `t` in `inferred_borrowed_params` because later callees take `&str` — that is
+    /// not emit-truth. Call sites must pass `&t` into AsRef/`&str`, not peel to a move.
+    pub(crate) fn binding_is_owned_local(&self, name: &str) -> bool {
+        let owned_local_ty = self.local_var_types.get(name).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+        });
+        if !owned_local_ty {
+            return false;
+        }
+        let is_param = self.current_function_params.iter().any(|p| p.name == name);
+        !is_param || self.local_owned_binding_shadows_formal(name)
+    }
+
     pub(crate) fn binding_emits_as_rust_shared_ref(&self, name: &str) -> bool {
         // `let password = own(password)` shadows an outer formal — the local is owned.
         if self.local_owned_binding_shadows_formal(name) {
@@ -2659,6 +2685,9 @@ impl<'ast> CodeGenerator<'ast> {
     /// Use at call sites when deciding whether to prefix `&` / `&mut`: existing refs
     /// reborrow/coerce (e.g. `&mut DenseCsr` → `&DenseCsr`) and must not get `&` stacked.
     pub(crate) fn identifier_binding_already_rust_ref(&self, name: &str) -> bool {
+        if self.binding_is_owned_local(name) {
+            return false;
+        }
         self.identifier_already_mut_ref(name)
             || self.identifier_already_ref(name)
             || self.emitted_rust_ref_formals.contains(name)
