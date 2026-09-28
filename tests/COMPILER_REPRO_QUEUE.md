@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.534 (2026-09-27) — TDD WDB-423 (DB agent; no compiler src)
+
+Copy `(f32, f32, f32)` array index destructure must not `.clone()`; product emits
+`offsets[(i) as usize].clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-423 MultiFile | ⏳ TDD pending — `let (ox, oy, oz) = offsets[i]` |
+| WDB-423 tip-out | ⏳ TDD pending — `offsets[(i) as usize].clone()` in fps/tps camera |
+
+**Root cause layer:** copy / index — array of Copy tuples must move/copy on index, not clone.
+
+**Why this is a new class:**
+- WDB-363 is indexed tuple **field** (`planes[N].clone().normal`).
+- WDB-422 is Copy **f32** index in arithmetic (`view_proj[i].clone()`).
+- WDB-393 is **local i32** `y.clone()`.
+
+**What became unnecessary:** `offsets[(i) as usize].clone()` in camera unstuck scan.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.533, WDB-412–422 / P3.509–P3.531 (filed).
+
 ## P3.533 (2026-09-27) — `use std::url` must not import runtime `Url` over a local `Url`
 
 P3.530 greened the path-prefixed literal. `use std::url` still imported
