@@ -1238,11 +1238,19 @@ pub fn statement_modifies_self(
             expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades)
         }
         Statement::If {
+            condition,
             then_block,
             else_block,
             ..
         } => {
-            then_block.iter().any(|s| {
+            // P3.522: `if self.check_rate(key)` mutates in the condition, not the arms.
+            expression_modifies_self(
+                condition,
+                registry,
+                struct_name,
+                field_types,
+                receiver_upgrades,
+            ) || then_block.iter().any(|s| {
                 statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
             }) || else_block.as_ref().is_some_and(|block| {
                 block.iter().any(|s| {
@@ -1256,9 +1264,19 @@ pub fn statement_modifies_self(
                 })
             })
         }
-        Statement::While { body, .. } => body.iter().any(|s| {
-            statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
-        }),
+        Statement::While {
+            condition, body, ..
+        } => {
+            expression_modifies_self(
+                condition,
+                registry,
+                struct_name,
+                field_types,
+                receiver_upgrades,
+            ) || body.iter().any(|s| {
+                statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
+            })
+        }
         Statement::For { iterable, body, .. } => {
             expression_modifies_self(
                 iterable,
@@ -1270,15 +1288,19 @@ pub fn statement_modifies_self(
                 statement_modifies_self(s, registry, struct_name, field_types, receiver_upgrades)
             })
         }
-        Statement::Match { arms, .. } => arms.iter().any(|arm| {
-            expression_modifies_self(
-                arm.body,
-                registry,
-                struct_name,
-                field_types,
-                receiver_upgrades,
-            )
-        }),
+        Statement::Match { value, arms, .. } => {
+            // P3.522: product `match self.check_rate(...)` mutates in the scrutinee.
+            expression_modifies_self(value, registry, struct_name, field_types, receiver_upgrades)
+                || arms.iter().any(|arm| {
+                    expression_modifies_self(
+                        arm.body,
+                        registry,
+                        struct_name,
+                        field_types,
+                        receiver_upgrades,
+                    )
+                })
+        }
         Statement::Return {
             value: Some(expr), ..
         } => expression_modifies_self(expr, registry, struct_name, field_types, receiver_upgrades),
