@@ -60,7 +60,7 @@ fn main() {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.534 transpile failed:\n{}",
+        "P3.535 transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -71,7 +71,7 @@ fn main() {
         .expect("cargo run");
     assert!(
         run.status.success(),
-        "P3.534 RED: form_parse(\"?a=1\") must yield key \"a\", not \"?a\".\nstdout:\n{}\nstderr:\n{}",
+        "P3.535 RED: form_parse(\"?a=1\") must yield key \"a\", not \"?a\".\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&run.stdout),
         String::from_utf8_lossy(&run.stderr)
     );
