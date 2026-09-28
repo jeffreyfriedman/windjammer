@@ -2,34 +2,31 @@
 
 ## P3.533 (2026-09-27) — `use std::url` must not import runtime `Url` over a local `Url`
 
-P3.530 literal prefix greened on tip p3515 21:30 (`Url { port: … }` not
-`windjammer_runtime::url::Url {`). Product still emits
-`use windjammer_runtime::url::Url` which shadows the local struct → rustc
-treats `Url { port }` as the runtime type (E0255 / E0560 / E0308). Isolates
-match. Keep `join_url` → `url::join`. Do not rename the package `Url`.
+P3.530 greened the path-prefixed literal. `use std::url` still imported
+`windjammer_runtime::url::Url`, shadowing the local struct (E0255 / E0560 / E0308).
+Keep `join_url` → `url::join`. Do not rename the package `Url`.
 
 | Gate | Status |
 |------|--------|
-| `local_url_struct_must_not_emit_runtime_url` | ✅ prefix GREEN on tip p3515 21:30 — bare `Url {` |
-| `local_url_must_not_import_runtime_url_type` | ❌ isolate RED — `use windjammer_runtime::url::Url;` |
-| product `wj-url` `$WJ test` | ❌ 26 rustc (same shadow) |
+| `local_url_struct_must_not_emit_runtime_url` | ✅ official cargo GREEN on p3505 — bare `Url {`, no runtime type import |
+| `local_url_must_not_import_runtime_url_type` | ✅ official cargo GREEN on p3505 — no `use windjammer_runtime::url::Url;` |
 
 **Why this is a new class:**
 - P3.530 was the **path-prefixed literal**. This is the **use-import shadow**.
 - `use windjammer_runtime::url;` (module) is fine for `url::join`.
 
-**Root cause layer:** name resolution — `use std::url` must not bind `Url` when a local `Url` exists.
+**Root cause layer:** name resolution — collect local struct/enum names before emitting `use std::url` type imports; skip stdlib qualification for those names.
 
-**Ran (2026-09-27):**
-- tip `.agent-wip/cargo-target-tip-p3515/release/wj` 0.50.0 (21:30): isolate emits
-  `use windjammer_runtime::url::Url;` + bare `Url { port }` (prefix GREEN, import RED).
-- `cargo test --release --test all --features integration_tests,codegen_tests -- local_url_must_not_import_runtime_url_type`
-  on clean HEAD worktree `84c3c938`: **FAILED** (import + still-prefixed literal on that commit).
+**What became unnecessary:** `use windjammer_runtime::url::Url` when this unit declares `struct Url`.
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3533-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- local_url_must_not_import_runtime_url_type`
+**Ran (2026-09-27):** `.agent-wip/cargo-target-p3505/release/wj`
+- `… -- local_url_struct_must_not_emit_runtime_url` → **ok**
+- `… -- local_url_must_not_import_runtime_url_type` → **ok**
 
-**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532, WDB-412–422 / P3.509–P3.531.
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3505`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- local_url_must_not_import_runtime_url_type local_url_struct_must_not_emit_runtime_url`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.533, WDB-412–422 / P3.509–P3.531.
 
 ## P3.532 (2026-09-27) — `wj-auth-api` leftover: `&mut req`, `get(lit.to_string())`, resolve_token
 
@@ -96,8 +93,8 @@ the local struct or drop the `join_url` → `url.join` thin-wrap.
 
 | Gate | Status |
 |------|--------|
-| `local_url_struct_must_not_emit_runtime_url` | ✅ prefix GREEN on tip p3515 21:30 — leftover is import shadow (P3.533) |
-| product `wj-url` `$WJ test` after wrap | ❌ 26 rustc via `use …::url::Url` shadow (P3.533) |
+| `local_url_struct_must_not_emit_runtime_url` | ✅ official cargo GREEN on p3505 — leftover import was P3.533 (now GREEN) |
+| product `wj-url` `$WJ test` after wrap | ⚠️ isolate GREEN; product regen pending |
 
 **Why this is a new class:**
 - Not P3.526 (`starts_with` move).

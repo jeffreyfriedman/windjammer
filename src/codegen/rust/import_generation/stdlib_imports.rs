@@ -44,13 +44,13 @@ impl CodeGenerator<'_> {
                 return Some(format!("use std::{};\n", module_name));
             }
             crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime { rust_stem } => {
-                Some(
-                    crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
+                Some(self.skip_user_shadowed_runtime_type_uses(
+                    &crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
                         module_name,
                         &rust_stem,
                         alias,
                     ),
-                )
+                ))
             }
         }
     }

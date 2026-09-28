@@ -236,6 +236,20 @@ impl<'ast> CodeGenerator<'ast> {
         // This enables smart enum derive that only adds PartialEq if all variants support it
         self.collect_partial_eq_types(program);
 
+        // PRE-PASS: local struct/enum names so `use std::url` does not import a
+        // homonym (`Url`) that shadows the WJ type (P3.530).
+        for item in &program.items {
+            match item {
+                Item::Struct { decl: s, .. } => {
+                    self.user_declared_struct_names.insert(s.name.clone());
+                }
+                Item::Enum { decl: e, .. } => {
+                    self.user_declared_struct_names.insert(e.name.clone());
+                }
+                _ => {}
+            }
+        }
+
         // PRE-PASS: Module `const string` names — used for owned-String coercion at returns/match arms.
         for name in Self::stdlib_string_const_names() {
             self.module_string_consts.insert(name);
@@ -1120,8 +1134,10 @@ impl<'ast> CodeGenerator<'ast> {
             ) {
                 crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime {
                     rust_stem,
-                } => crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
-                    module, &rust_stem, None,
+                } => self.skip_user_shadowed_runtime_type_uses(
+                    &crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
+                        module, &rust_stem, None,
+                    ),
                 ),
                 crate::codegen::rust::stdlib_method_traits::WjStdImportKind::RustStd
                 | crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Skip => {
