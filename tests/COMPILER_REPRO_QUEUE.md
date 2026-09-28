@@ -25,8 +25,9 @@ Full `wj-auth-api` tip-out now has bare get; leftover P3.532 is still
 `Result<HashMap>` without signature metadata must not own the key (`&Q`).
 
 **Ran (2026-09-28):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (05:14).
-- Isolate (build path, metadata deleted): `get(String::from("access_token"))`.
+- Isolate (build path, metadata deleted): `get(String::from("access_token"))` — **TDD RED confirmed**.
 - Product auth: bare get; still `dispatch(&mut req)`, `find_char(text: &String)`.
+- Official `cargo test --test all -- cookie_build_path_dep_map_get_must_not_own_key` queued behind other agents' cargo locks; tip isolate matches the assert.
 
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3537-eco`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- cookie_build_path_dep_map_get_must_not_own_key`
