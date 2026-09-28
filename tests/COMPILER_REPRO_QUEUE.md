@@ -41,8 +41,8 @@ Reused owned `string` into several owned helpers must not `parse_flag(line.clone
 
 | Gate | Status |
 |------|--------|
-| WDB-419 MultiFile | ⏳ TDD — `parse_flag(line, "forward")` then `parse_flag(line, "back")` must not `line.clone()` |
-| WDB-419 tip-out | ⏳ product `parse_flag(line.clone(), "forward")` in `agent_playtest_protocol.rs` |
+| WDB-419 MultiFile | ✅ isolate GREEN — sequential `parse_flag(line, …)` emits no `line.clone()` |
+| WDB-419 tip-out | ❌ product RED — `parse_flag(line.clone(), "forward")` in `agent_playtest_protocol.rs` |
 
 **Root cause layer:** signature / last-use — WJ reuses `line` across owned `parse_flag(line, key)` calls. Callees should demote to borrow; callsites must not clone each time.
 
@@ -53,8 +53,10 @@ Reused owned `string` into several owned helpers must not `parse_flag(line.clone
 
 **What became unnecessary:** `parse_flag(line.clone(), "forward")` / `parse_flag(line.clone(), "back")`.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb419_` — results recorded after TDD run
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `0f7b527b`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb419_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522 (notes-api / wj-glob), WDB-412–418 / P3.509–P3.521 (filed).
 
