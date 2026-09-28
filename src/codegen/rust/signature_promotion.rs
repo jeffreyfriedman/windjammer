@@ -3183,6 +3183,98 @@ pub fn exercise(parts: Vec<string>) -> string {
     }
 
     #[test]
+    fn codegen_strings_starts_with_local_must_borrow() {
+        use crate::analyzer::Analyzer;
+        use crate::codegen::rust::CodeGenerator;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        use crate::CompilationTarget;
+
+        // P3.526: runtime `starts_with<S: AsRef<str>>(s, …)` moves an owned `t`
+        // unless the call site passes `&t` so later `substring`/`return` can reuse it.
+        let source = r#"
+use std::strings
+fn strip_question(text: string) -> string {
+    let t = strings.trim(text)
+    if strings.starts_with(t, "?") {
+        return strings.substring(t, 1, strings.len(t))
+    }
+    t
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        codegen.set_global_signature_registry(std::sync::Arc::new(
+            crate::analyzer::SignatureRegistry::stdlib().clone(),
+        ));
+        let generated = codegen.generate_program(&program, &analyzed);
+        let moves_t = generated.contains("starts_with(t,")
+            && !generated.contains("starts_with(&t,")
+            && !generated.contains("starts_with(t.as_str()");
+        assert!(
+            !moves_t,
+            "P3.526 starts_with must borrow t so substring/return can reuse it. Got:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn refresh_starts_with_haystack_uses_stdlib_runtime_over_wj_owned_stub() {
+        let mut local = crate::analyzer::SignatureRegistry::empty();
+        local.add_function(
+            "strings::starts_with".into(),
+            FunctionSignature {
+                name: "strings::starts_with".into(),
+                param_types: vec![Type::String, Type::String],
+                formal_param_types: vec![Type::String, Type::String],
+                param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+                return_type: Some(Type::Bool),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false, false]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let refreshed = refresh_call_site_signature_for_arg(
+            local.get_signature("strings::starts_with").cloned(),
+            "strings::starts_with",
+            0,
+            Some(&local),
+            &local,
+            &HashMap::new(),
+        )
+        .expect("refresh");
+        assert_eq!(
+            refreshed
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|f| f.get(0))
+                .copied(),
+            Some(true),
+            "stdlib runtime AsRef/&str haystack must beat WJ owned stub. Got {:?}",
+            refreshed
+        );
+        assert!(
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&refreshed, 0),
+            "haystack slot must emit shared ref. Got {:?}",
+            refreshed
+        );
+        assert!(
+            !crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                &refreshed, 0
+            ),
+            "haystack must not expect owned String"
+        );
+    }
+
+    #[test]
     fn refresh_split_delimiter_uses_stdlib_runtime_over_wj_owned_stub() {
         let mut local = crate::analyzer::SignatureRegistry::empty();
         // Simulate multipass analyzing std/strings.wj without layering runtime scan.

@@ -485,10 +485,7 @@ fn json_serialize_owned_value_boundary_signature(name: &str) -> FunctionSignatur
         param_types: vec![Type::Custom("T".into())],
         formal_param_types: vec![Type::Custom("T".into())],
         param_ownership: vec![OwnershipMode::Owned],
-        return_type: Some(Type::Result(
-            Box::new(Type::String),
-            Box::new(Type::String),
-        )),
+        return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
@@ -1633,6 +1630,32 @@ mod tests {
         assert_eq!(
             sig.emitted_rust_ref_params.as_deref(),
             Some(&[true, true][..])
+        );
+    }
+
+    #[test]
+    fn stdlib_get_signature_starts_with_haystack_is_str_ref_after_meta() {
+        let sig = crate::analyzer::SignatureRegistry::stdlib()
+            .get_signature("strings::starts_with")
+            .expect("strings::starts_with");
+        assert!(
+            matches!(
+                sig.param_types.get(0),
+                Some(Type::Reference(inner)) if matches!(**inner, Type::Custom(ref n) if n == "str")
+            ),
+            "WJ std/strings.wj must not shadow runtime haystack AsRef/&str, got {:?}",
+            sig.param_types.get(0)
+        );
+        assert_eq!(
+            sig.param_ownership.get(0),
+            Some(&OwnershipMode::Borrowed),
+            "starts_with haystack must stay Borrowed, got {:?}",
+            sig.param_ownership
+        );
+        assert_eq!(
+            sig.emitted_rust_ref_params.as_deref(),
+            Some(&[true, true][..]),
+            "starts_with must emit shared refs for haystack and needle"
         );
     }
 

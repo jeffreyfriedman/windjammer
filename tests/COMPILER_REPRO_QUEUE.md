@@ -271,15 +271,19 @@ Distinct from P3.516 (`while k <= vec.len()`). Isolates match product.
 
 | Gate | Status |
 |------|--------|
-| `starts_with_must_borrow_then_reuse` | ❌ isolate RED — `starts_with(t, "?")` + cargo-check E0382 |
-| product `wj-querystring` `$WJ test` | ❌ same emit |
+| `starts_with_must_borrow_then_reuse` | ✅ isolate GREEN — `starts_with(&t, "?")` + `substring(&t` / `len(&t)` |
+| product `wj-querystring` `$WJ test` | ❌ tip-out pending regen |
 
-**Why this is a new class:**
-- Not P3.518 (`&mut query` into owned String).
-- Not P3.524 (`&String` vs `&str` find_char).
-- Call site must pass `&t` into `AsRef<str>` (do not clone).
+**Root cause layer:** emit-truth — owned `let t = strings::trim(text)` stayed in
+`inferred_borrowed_params`, so call-site reconcile peeled `&t` into a move
+despite runtime `starts_with` already being Borrowed + `emitted_rust_ref_params`.
 
-**Ran (2026-09-27):** tip p3520 20:49. Isolate + product `starts_with(t, "?")`. cargo-check E0382.
+**What became unnecessary:** a `starts_with` name heuristic; WJ stub last-write
+was already restored for needles (WDB-144). Haystack needed owned-local emit-truth
+so IR Borrow is not peeled.
+
+**Ran (2026-09-28):** tip p3520. Isolate GREEN `starts_with(&t, "?")`.
+Product tip-out still stale gen.
 
 **Gates:** `… -- starts_with_must_borrow_then_reuse`
 
