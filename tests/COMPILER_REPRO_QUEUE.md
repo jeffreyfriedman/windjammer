@@ -1,5 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.530 (2026-09-27) — local `Url` must not emit `windjammer_runtime::url::Url`
+
+`wj-url` `use std::url` + package `struct Url { port, query: string }` rewrites
+`Url { … }` to `windjammer_runtime::url::Url` (no `port`; `query: Option<String>`)
+→ E0560 / E0308. Isolates without `use std::url` GREEN (17/17). Do not rename
+the local struct or drop the `join_url` → `url.join` thin-wrap.
+
+| Gate | Status |
+|------|--------|
+| `local_url_struct_must_not_emit_runtime_url` | ❌ isolate RED — `parse_local` emits `windjammer_runtime::url::Url { port: … }` |
+| product `wj-url` `$WJ test` after wrap | ❌ 26 rustc (E0560 port, E0308 Option vs String) |
+
+**Why this is a new class:**
+- Not P3.526 (`starts_with` move).
+- `use std::url` aliases `Url` for literals; local struct must keep identity.
+
+**Root cause layer:** name resolution / codegen — local struct literal after `use std::url`.
+
+**Ran (2026-09-27):** tip p3520 21:03. Isolate emit confirmed. `url.join` alone cargo-checks.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3530-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- local_url_struct_must_not_emit_runtime_url`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528, WDB-412–421 / P3.509–P3.529.
+
 ## P3.529 (2026-09-27) — TDD WDB-421 (DB agent; no compiler src)
 
 Last-use of an owned `Vec` formal into a callee must move; product emits `indices.clone()`.
@@ -185,7 +210,7 @@ P3.520 isolate GREENS `check_rate(&mut self)`. Product still emits `handle_metho
 | Gate | Status |
 |------|--------|
 | `check_rate_field_replace_must_not_move_self` | ✅ P3.520 isolate GREEN on tip p3520 (20:32) — `check_rate(&mut self)` |
-| `handle_method_must_mut_self_for_check_rate` | ❌ product RED — `fn handle_method(self)` / `fn handle_http(self)` on tip p3520 20:49 |
+| `handle_method_must_mut_self_for_check_rate` | ✅ product GREEN on tip p3520 21:03 — `handle_method(&mut self)` / `handle_http(&mut self)` |
 | MultiFile handle-above-check_rate isolate | ❌ RED — `handle_method(&self)` + `self.clone().check_rate` (false-GREEN `&mut` if `check_rate` is defined first) |
 | `notes_api_product_remaining_e0308_must_not_emit` | ❌ `&mut query` still on tip p3520 20:49 |
 
