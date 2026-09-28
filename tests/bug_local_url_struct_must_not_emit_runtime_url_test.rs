@@ -79,6 +79,10 @@ fn local_url_struct_must_not_emit_runtime_url() {
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     eprintln!("P3.530 local Url emit:\n{rs}");
     assert!(
+        !rs.contains("use windjammer_runtime::url::Url;"),
+        "P3.530 RED: local struct Url must not import runtime url::Url:\n{rs}"
+    );
+    assert!(
         !rs.contains("windjammer_runtime::url::Url {"),
         "P3.530 RED: local Url literal must not emit runtime url::Url:\n{rs}"
     );

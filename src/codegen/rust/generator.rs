@@ -290,6 +290,9 @@ pub struct CodeGenerator<'ast> {
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     pub(crate) struct_field_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Type>>,
+    /// WJ `struct` names declared in this compilation unit. Shadows stdlib types
+    /// of the same name (`use std::url` + local `struct Url`) so literals stay local.
+    pub(crate) user_declared_struct_names: std::collections::HashSet<String>,
     // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
     // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
     pub(crate) tuple_struct_names: std::collections::HashSet<String>,
@@ -744,6 +747,7 @@ impl<'ast> CodeGenerator<'ast> {
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
             struct_field_types: std::collections::HashMap::new(),
+            user_declared_struct_names: std::collections::HashSet::new(),
             tuple_struct_names: std::collections::HashSet::new(),
             copy_types_registry: std::collections::HashSet::new(),
             explicit_copy_types_registry: std::collections::HashSet::new(),
@@ -2168,6 +2172,11 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return name.to_string();
         }
+        // P3.530: local `struct Url` after `use std::url` must not become
+        // `windjammer_runtime::url::Url` (different fields).
+        if self.user_declared_struct_names.contains(head) {
+            return name.to_string();
+        }
         let fq = self.fq_path_for_imported_stdlib_type(head).or_else(|| {
             self.stdlib_type_rust_paths.get(head).cloned().filter(|path| {
                 // Runtime `collections` only re-exports Rust std HashMap/HashSet —
@@ -2184,8 +2193,35 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Drop `use windjammer_runtime::…::Url` when this unit declares `struct Url`.
+    pub(crate) fn skip_user_shadowed_runtime_type_uses(&self, uses: &str) -> String {
+        if self.user_declared_struct_names.is_empty() {
+            return uses.to_string();
+        }
+        uses.lines()
+            .filter(|line| {
+                let trimmed = line.trim();
+                let Some(path) = trimmed
+                    .strip_prefix("use ")
+                    .and_then(|s| s.strip_suffix(';'))
+                else {
+                    return true;
+                };
+                let Some(ty) = path.rsplit("::").next() else {
+                    return true;
+                };
+                !(path.starts_with("windjammer_runtime::")
+                    && self.user_declared_struct_names.contains(ty))
+            })
+            .map(|l| format!("{l}\n"))
+            .collect()
+    }
+
     /// Fully-qualified path for a PascalCase type exported by an imported WJ std module.
     pub(crate) fn fq_path_for_imported_stdlib_type(&self, type_name: &str) -> Option<String> {
+        if self.struct_field_types.contains_key(type_name) {
+            return None;
+        }
         if self.runtime_std_module_imports.is_empty() {
             return None;
         }
