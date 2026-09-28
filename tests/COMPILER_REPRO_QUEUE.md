@@ -1,5 +1,75 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.528 (2026-09-27) — `apply_conn` must not move `applied` Vec each loop
+
+Product `wj-migrate` `db_apply.rs` (tip p3520 20:49):
+`if version_applied(applied, item.migration.version)` inside `for item in located`
+→ rustc E0382 move in previous iteration. `version_applied` takes `Vec<int>`.
+
+`pending()` already emits `version_applied(&applied, …)`. Isolates emit
+`applied.clone()` and cargo-check (false-GREEN). Do not reshape the package.
+
+| Gate | Status |
+|------|--------|
+| isolate `pending_count` + `version_applied(applied, v)` in loop | ⚠️ false-GREEN `applied.clone()` + cargo-check |
+| `product_applied_vec_loop_must_not_move` | ❌ product RED — `version_applied(applied, …)` |
+
+**Why this is a new class:**
+- Not WDB-418 / P3.525 (early-return / last-use `return result.clone()`).
+- Not P3.526 / P3.527 (string / usize).
+- Same-crate `pending` already borrows; `apply_conn` does not.
+
+**Root cause layer:** last-use / loop reuse — owned Vec formal reused each iteration must borrow or clone.
+
+**Ran (2026-09-27):** tip p3520 20:49. Isolate cargo-check GREEN. Product `db_apply.rs:156` moves.
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3526-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- product_applied_vec_loop_must_not_move`
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.527, WDB-412–420 / P3.509–P3.525 (filed).
+
+## P3.527 (2026-09-27) — string-scan `i == 0` must not mix usize / `0_i64`
+
+`split_version_name`: `let mut i = 0` + `while i < strings.len(stem)` emits
+`i: usize`, then `if i == 0` → `i == 0_i64` (E0308 / E0277).
+
+Distinct from P3.516 (`while k <= vec.len()`). Isolates match product.
+
+| Gate | Status |
+|------|--------|
+| `string_scan_index_eq_zero_must_unify` | ❌ isolate RED — `if i == 0_i64` + cargo-check fail |
+| product `wj-migrate` `lib.rs` | ❌ `if i == 0_i64` |
+
+**Root cause layer:** int unify — index used with `strings.len` / `substring` must peer `0` as usize (or keep i as i64).
+
+**Ran (2026-09-27):** tip p3520 20:49. rustc snippet + isolate cargo-check E0308.
+
+**Gates:** `… -- string_scan_index_eq_zero_must_unify`
+
+**Do not steal:** WDB-406/408/411, P3.516/P3.518/P3.520/P3.522/P3.524/P3.526, WDB-412–420 / P3.509–P3.525.
+
+## P3.526 (2026-09-27) — `starts_with(t)` must borrow when `t` is reused
+
+`wj-querystring` `strip_question`: `strings.starts_with(t, "?")` then
+`substring(t, …)` / return `t`. Runtime `starts_with<S: AsRef<str>>` takes
+`t` by value → E0382. Isolates match product. Blocks form_* thin-wrap.
+
+| Gate | Status |
+|------|--------|
+| `starts_with_must_borrow_then_reuse` | ❌ isolate RED — `starts_with(t, "?")` + cargo-check E0382 |
+| product `wj-querystring` `$WJ test` | ❌ same emit |
+
+**Why this is a new class:**
+- Not P3.518 (`&mut query` into owned String).
+- Not P3.524 (`&String` vs `&str` find_char).
+- Call site must pass `&t` into `AsRef<str>` (do not clone).
+
+**Ran (2026-09-27):** tip p3520 20:49. Isolate + product `starts_with(t, "?")`. cargo-check E0382.
+
+**Gates:** `… -- starts_with_must_borrow_then_reuse`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.520/P3.522/P3.524, WDB-412–420 / P3.509–P3.525.
+
 ## P3.525 (2026-09-27) — TDD WDB-420 (DB agent; no compiler src)
 
 Last-use `return` of a local `Vec` must move; product emits `return result.clone()`.
