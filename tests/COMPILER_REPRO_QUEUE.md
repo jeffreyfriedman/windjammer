@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.523 (2026-09-27) — TDD WDB-419 (DB agent; no compiler src)
+
+Reused owned `string` into several owned helpers must not `parse_flag(line.clone())` at each callsite.
+
+| Gate | Status |
+|------|--------|
+| WDB-419 MultiFile | ⏳ TDD — `parse_flag(line, "forward")` then `parse_flag(line, "back")` must not `line.clone()` |
+| WDB-419 tip-out | ⏳ product `parse_flag(line.clone(), "forward")` in `agent_playtest_protocol.rs` |
+
+**Root cause layer:** signature / last-use — WJ reuses `line` across owned `parse_flag(line, key)` calls. Callees should demote to borrow; callsites must not clone each time.
+
+**Why this is a new class:**
+- WDB-413 is **`string_len(line.clone())` in one comparison**.
+- WDB-409 is **stored `set(name)` must stay owned**.
+- WDB-418 is **early-return Vec move**.
+
+**What became unnecessary:** `parse_flag(line.clone(), "forward")` / `parse_flag(line.clone(), "back")`.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb419_` — results recorded after TDD run
+
+**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522 (notes-api / wj-glob), WDB-412–418 / P3.509–P3.521 (filed).
+
 ## P3.522 (2026-09-27) — `handle_method` / `handle_http` must be `&mut self`
 
 P3.520 isolate GREENS `check_rate(&mut self)`. Product still emits `handle_method(self)` / `handle_http(self)` then `self.check_rate` (E0596) and `MutexGuard.handle_http` (E0507).
