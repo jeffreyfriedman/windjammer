@@ -114,7 +114,14 @@ impl<'ast> CodeGenerator<'ast> {
             // P3.520: `self.buckets = put(take(self.buckets))` writes back the moved
             // field — `&mut self` so callers can continue. WDB-414 moves a *different*
             // field into a ctor (`Vox::new(self.scene)` then `self.grid = 1`) → owned.
-            if super::self_analysis::function_writeback_replaces_moved_self_fields(func) {
+            // P3.522: thin wrappers (`handle_http` → `handle_method(&mut self)`) are
+            // "consuming" only because the callee's WJ source still says `self`.
+            if super::self_analysis::function_writeback_replaces_moved_self_fields(func)
+                || self.function_calls_self_with_recorded_receiver(
+                    func,
+                    crate::analyzer::OwnershipMode::MutBorrowed,
+                )
+            {
                 "&mut self"
             } else {
                 "mut self"
@@ -237,11 +244,16 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_calls_self_method_with_recorded_receiver(value, struct_name, mode)
             }
             Statement::If {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                then_block.iter().any(|s| {
+                self.expression_calls_self_method_with_recorded_receiver(
+                    condition,
+                    struct_name,
+                    mode,
+                ) || then_block.iter().any(|s| {
                     self.statement_calls_self_method_with_recorded_receiver(s, struct_name, mode)
                 }) || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
@@ -253,26 +265,40 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                 })
             }
-            Statement::For { body, .. } | Statement::While { body, .. } => body.iter().any(|s| {
+            Statement::For { body, .. } => body.iter().any(|s| {
                 self.statement_calls_self_method_with_recorded_receiver(s, struct_name, mode)
             }),
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                if let Expression::Block { statements, .. } = arm.body {
-                    statements.iter().any(|s| {
-                        self.statement_calls_self_method_with_recorded_receiver(
-                            s,
-                            struct_name,
-                            mode,
-                        )
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expression_calls_self_method_with_recorded_receiver(
+                    condition,
+                    struct_name,
+                    mode,
+                ) || body.iter().any(|s| {
+                    self.statement_calls_self_method_with_recorded_receiver(s, struct_name, mode)
+                })
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_calls_self_method_with_recorded_receiver(value, struct_name, mode)
+                    || arms.iter().any(|arm| {
+                        if let Expression::Block { statements, .. } = arm.body {
+                            statements.iter().any(|s| {
+                                self.statement_calls_self_method_with_recorded_receiver(
+                                    s,
+                                    struct_name,
+                                    mode,
+                                )
+                            })
+                        } else {
+                            self.expression_calls_self_method_with_recorded_receiver(
+                                arm.body,
+                                struct_name,
+                                mode,
+                            )
+                        }
                     })
-                } else {
-                    self.expression_calls_self_method_with_recorded_receiver(
-                        arm.body,
-                        struct_name,
-                        mode,
-                    )
-                }
-            }),
+            }
             _ => false,
         }
     }

@@ -970,8 +970,13 @@ impl<'ast> CodeGenerator<'ast> {
                     Some(&self.signature_registry),
                 )
             {
-                consuming_methods.insert(func.name.clone());
-                continue;
+                // P3.520/P3.522: same-field writeback is `&mut self`, not a consuming
+                // move. Keep it out of this set so the pre-pass can upgrade callers
+                // that appear above the callee in source order (no `self.clone()`).
+                if !super::self_analysis::function_writeback_replaces_moved_self_fields(func) {
+                    consuming_methods.insert(func.name.clone());
+                    continue;
+                }
             }
             if let Some(analyzed_func) = analyzed
                 .iter()
@@ -1019,9 +1024,17 @@ impl<'ast> CodeGenerator<'ast> {
             for _ in 0..max_iters {
                 let mut new_upgrades = Vec::new();
                 for func in &impl_block.functions {
+                    // Consuming methods stay owned *unless* they call a sibling that
+                    // this pre-pass already recorded as `&mut self` (P3.522:
+                    // `handle_http` → `handle_method` → `check_rate`). WDB-414
+                    // field-ctor moves do not call a MutBorrowed sibling.
                     if self
                         .current_impl_consuming_self_methods
                         .contains(&func.name)
+                        && !self.function_calls_self_with_recorded_receiver(
+                            func,
+                            OwnershipMode::MutBorrowed,
+                        )
                     {
                         continue;
                     }

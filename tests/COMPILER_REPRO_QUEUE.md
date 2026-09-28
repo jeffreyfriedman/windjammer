@@ -211,27 +211,27 @@ P3.520 isolate GREENS `check_rate(&mut self)`. Product still emits `handle_metho
 
 | Gate | Status |
 |------|--------|
-| `check_rate_field_replace_must_not_move_self` | ✅ P3.520 isolate GREEN on tip p3520 (20:32) — `check_rate(&mut self)` |
-| `handle_method_must_mut_self_for_check_rate` | ✅ product GREEN on tip p3520 21:03 — `handle_method(&mut self)` / `handle_http(&mut self)` |
-| MultiFile handle-above-check_rate isolate | ❌ RED — `handle_method(&self)` + `self.clone().check_rate` (false-GREEN `&mut` if `check_rate` is defined first) |
-| `notes_api_product_remaining_e0308_must_not_emit` | ❌ `&mut query` still on tip p3520 20:49 |
+| `check_rate_field_replace_must_not_move_self` | ✅ P3.520 isolate GREEN — `check_rate(&mut self)` |
+| `handle_method_must_mut_self_for_check_rate` MultiFile | ✅ isolate GREEN — `handle_method(&mut self)` / `handle_http(&mut self)`, no `self.clone().check_rate` |
+| `handle_method_must_mut_self_for_check_rate` product | ✅ product GREEN — `handle_method(&mut self)` / `handle_http(&mut self)` |
+| `notes_api_product_remaining_e0308_must_not_emit` | ❌ `&mut query` still on tip p3520 |
 
 **Why this is a new class:**
-- P3.520 same-field writeback fixed **check_rate** only. Callers that first read `self.config` stay owned `self`.
-- Isolates emit `handle_method(&mut self)` or `self.clone().check_rate` (false-GREEN). Product does not clone.
-- Adapter `state.lock()` → `app.handle_http(...)` cannot move `NotesApp`. Do not reshape notes-api. Do not edit `windjammer/src/`.
+- P3.520 same-field writeback fixed **check_rate** only. Callers defined *above* the writeback callee (and callers that first read `self.config`) stayed `&self` + `self.clone()` or owned `self`.
+- Adapter `state.lock()` → `app.handle_http(...)` cannot move `NotesApp`.
 
-**Root cause layer:** signature / self-mode propagation — `&mut self` callee must lift the caller.
+**Root cause layer:** constraint / self-mode — `if`/`match` conditions were not walked for mut-self; writeback callees were classified as consuming so the impl pre-pass skipped them; Inferred `Owned` + `body_modifies` forced `mut self` instead of `owned_self_receiver`.
 
-**What became unnecessary:** refiling P3.520 isolate (check_rate itself).
+**What became unnecessary:** `self.clone().check_rate` on `&self` callers; owned `mut self` / `self` on handle_http/handle_method.
 
-**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (20:32) after `80f5b53c`.
-- Isolate P3.520: `fn check_rate(&mut self)` + cargo-check GREEN.
-- Product: `check_rate(&mut self)`; `handle_method(self)`; `handle_http(self)`; GET-one `&mut query`.
-- `$WJ test`: E0308 `&mut query`, E0308 `find_char(&str)`, E0507 MutexGuard, E0596 handle_method.
+**Ran (compiler 2026-09-27):** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520`
+- `… -- bug_handle_method_must_mut_self_for_check_rate_test::handle_method_must_mut_self_for_check_rate` → **ok**
+- `… -- bug_check_rate_field_replace_must_not_move_self_test::check_rate_field_replace_must_not_move_self` → **ok**
+- `… -- wdb414_module_file_ctor_must_move_self_field` → isolate **ok** (tip-out product RED)
+- `… -- bug_notes_api_handle_method_must_mut_self_for_check_rate_test::handle_method_must_mut_self_for_check_rate` → **ok**
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3522-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- handle_method_must_mut_self_for_check_rate`
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3520`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- handle_method_must_mut_self_for_check_rate check_rate_field_replace_must_not_move_self`
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520 (notes-api / wj-glob), WDB-412–418 / P3.509–P3.521 (filed).
 

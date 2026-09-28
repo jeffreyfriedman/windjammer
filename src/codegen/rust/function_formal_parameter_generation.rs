@@ -1317,15 +1317,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 match ownership_mode {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
-                                            && (self.method_returns_impl_struct(func) || consumes_self) =>
+                                            && self.method_returns_impl_struct(func)
+                                            && (body_modifies
+                                                || matches!(
+                                                    ownership_mode,
+                                                    OwnershipMode::MutBorrowed
+                                                )) =>
                                     {
-                                        if body_modifies
-                                            || matches!(ownership_mode, OwnershipMode::MutBorrowed)
-                                        {
-                                            "mut self"
-                                        } else {
-                                            "self"
-                                        }
+                                        "mut self"
+                                    }
+                                    OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
+                                        if !self.in_trait_impl
+                                            && consumes_self
+                                            && !matches!(
+                                                ownership_mode,
+                                                OwnershipMode::MutBorrowed
+                                            ) =>
+                                    {
+                                        "self"
                                     }
                                     OwnershipMode::MutBorrowed => "&mut self",
                                     OwnershipMode::Borrowed => {
@@ -1671,9 +1680,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     OwnershipMode::Owned => {
                                         if self.in_trait_impl {
                                             "self"
-                                        } else if body_modifies {
-                                            "mut self"
                                         } else {
+                                            // P3.522: `body_modifies` alone is `&mut self`
+                                            // (delegate to a writeback sibling), not owned `mut self`.
                                             self.owned_self_receiver(&analyzed.decl)
                                         }
                                     }
