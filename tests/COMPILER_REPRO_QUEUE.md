@@ -6,8 +6,8 @@ Early-return of an owned `Vec` formal after `.len()` must move; product emits `e
 
 | Gate | Status |
 |------|--------|
-| WDB-418 MultiFile | ⏳ TDD — `return empty_result(positions)` must not `positions.clone()` |
-| WDB-418 tip-out | ⏳ product `empty_result(positions.clone())` in `uv_unwrap_algorithm.rs` / `uv_island_packing.rs` |
+| WDB-418 MultiFile | ❌ isolate RED — `return empty_result(positions.clone())` after `positions.is_empty()` / later sibling uses |
+| WDB-418 tip-out | ❌ product RED — `empty_result(positions.clone())` in `uv_unwrap_algorithm.rs` / `uv_island_packing.rs` |
 
 **Root cause layer:** last-use / exclusive path — WJ `if positions.len() == 0 { return empty_result(positions) }` while a sibling path still indexes `positions`. Prior `.len()` plus later uses must not force a clone on the early-return path.
 
@@ -18,8 +18,10 @@ Early-return of an owned `Vec` formal after `.len()` must move; product emits `e
 
 **What became unnecessary:** `positions.clone()` on exclusive early-return into `empty_result`.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb418_` — results recorded after TDD run
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-27)
+
+**Ran (DB agent 2026-09-27):** worktree `…/wdb407-tdd` @ `9b4ea580`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb418_` → **0 passed / 2 failed**
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520 (notes-api / wj-glob), WDB-412–417 / P3.509–P3.519 (filed).
 
