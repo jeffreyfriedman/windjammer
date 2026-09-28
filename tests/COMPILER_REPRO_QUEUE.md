@@ -89,7 +89,7 @@ Owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
 
 **Root cause layer:** encoding / compare — `<=` vs `>=` len unify is not symmetric.
 
-**What became unnecessary:** wrapping `glob.is_match` over `std::path.glob_match` until this package compiles; casting `.len()` in application code.
+**What became unnecessary:** casting `.len()` in `wj-glob`; package `is_match` now thin-wraps `std::path.glob_match` (14 tests + `wj-find` 4/4).
 
 **Ran (2026-09-27):** tip `.agent-wip/cargo-target-p3505/release/wj` 0.50.0 (18:50) RED; tip `.agent-wip/cargo-target-tip-p3515/release/wj` 0.50.0 (19:38) after `07e2ec99` GREEN.
 - Product `$WJ test`: **14 passed**.
