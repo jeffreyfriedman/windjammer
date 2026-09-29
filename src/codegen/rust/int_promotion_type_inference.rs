@@ -474,6 +474,10 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// WDB-411: `let mut i = 0` later compared to a u32 (`while i < count`) must
     /// peer u32 even when `function_prefers_i32_coord_locals` (f32 return).
+    ///
+    /// P3.549/P3.329: a small literal while bound (`while month <= 12`) alone would
+    /// peer i32, but when `name` is also passed to a WJ `int`/`i64` formal
+    /// (`days_in_month(year, month)`), keep int width — never `1_i32` + `12_i32 as i32`.
     pub(in crate::codegen::rust) fn let_binding_int_width_from_later_while_compare(
         &self,
         name: &str,
@@ -485,6 +489,20 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let mut peer = None;
         self.scan_stmts_for_while_compare_int_peer(&body, name, &mut peer);
+        if matches!(peer.as_ref(), Some(Type::Int32))
+            || matches!(peer.as_ref(), Some(Type::Custom(n)) if n == "i32")
+        {
+            let mut formal = None;
+            self.scan_stmts_for_call_arg_int_formal(&body, name, &mut formal);
+            if matches!(formal.as_ref(), Some(Type::Int))
+                || matches!(
+                    formal.as_ref(),
+                    Some(Type::Custom(n)) if n == "int" || n == "i64"
+                )
+            {
+                return formal;
+            }
+        }
         peer
     }
 

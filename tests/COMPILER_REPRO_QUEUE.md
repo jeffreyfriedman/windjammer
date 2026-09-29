@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.550 (2026-09-29) — while literal i32 peer yields to WJ int call formals
+
+P3.549's small-literal → i32 while-peer made `from_epoch_secs` emit
+`let mut month = 1_i32; while month <= 12_i32 as i32` despite `days_in_month(year, month: int)`.
+Prefer the later int/i64 call-formal width over a literal-driven i32 peer.
+
+| Gate | Status |
+|------|--------|
+| `module_file_timefmt_product_must_not_mix_i32_month_or_ref_string` | ✅ tip GREEN — `1_i64` / `12_i64` |
+| `i32_while_len_and_literal_bound_must_not_emit_i64` | ✅ tip GREEN (P3.350 retained) |
+| `i32_loop_arith_and_len_compare_must_not_emit_i64` | ✅ tip GREEN |
+| `json_get_index_owned_value_multipass_must_cargo_check` | ✅ tip GREEN (no regress) |
+
+**Root cause layer:** constraint/codegen — signature-driven formal width beats
+literal-bound heuristic for while-peer int width.
+
+**What became unnecessary:** i32 month loop + `12_i32 as i32` / `(month as i64)`
+into `days_in_month` when an int formal already peers the counter.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_timefmt_product i32_while_len_and_literal i32_loop_arith json_get_index_owned_value_multipass` → **4 passed**
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.549, WDB-412–426 (filed).
+
 ## P3.549 (2026-09-29) — `json::len` → usize + i32 while-peer loop width
 
 `std/json.wj` declared `len -> int` while runtime returns `usize`, so
