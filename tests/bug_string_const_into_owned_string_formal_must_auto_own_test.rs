@@ -11,9 +11,10 @@
 ))]
 
 //! Product: `profile_scopes.wj` / `game_loop.wj` pass `SCOPE_*` (`pub const …: string`)
-//! into owned `string` formals and `Vec<string>::push` → E0308 expected `String`, found `&str`.
+//! into `string` formals / `Vec<string>::push`.
 //!
-//! Const `string` must auto-own at owned formals (same as string literals).
+//! When the formal stays owned `String`, const must auto-own (`.to_string()`).
+//! Tip may demote field-store formals to `&str` — then `&SCOPE` / bare SCOPE is OK.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -62,16 +63,25 @@ fn string_const_into_owned_string_formal_must_auto_own() {
     let map = t.compile().expect("compile");
     let rs = map.get("loop_mod.rs").expect("loop_mod.rs");
 
-    assert!(
-        rs.contains("SCOPE_UPDATE.to_string()")
-            || rs.contains("SCOPE_UPDATE.to_owned()")
-            || rs.contains("&SCOPE_UPDATE.to_string()"),
-        "const string into owned string formal must auto-own:\n{rs}"
-    );
-    assert!(
-        !rs.contains("record_scope(SCOPE_UPDATE,"),
-        "bare const &str into owned String is E0308:\n{rs}"
-    );
+    let formal_owned = rs.contains("name: String");
+    let formal_str = rs.contains("name: &str");
+    if formal_owned {
+        assert!(
+            rs.contains("SCOPE_UPDATE.to_string()")
+                || rs.contains("SCOPE_UPDATE.to_owned()")
+                || rs.contains("&SCOPE_UPDATE.to_string()"),
+            "const string into owned string formal must auto-own:\n{rs}"
+        );
+        assert!(
+            !rs.contains("record_scope(SCOPE_UPDATE,"),
+            "bare const &str into owned String is E0308:\n{rs}"
+        );
+    } else {
+        assert!(
+            formal_str,
+            "record_scope name formal should be String or demoted &str:\n{rs}"
+        );
+    }
 
     t.cargo_check()
         .expect("cargo check: const string → owned formal");
@@ -87,6 +97,7 @@ fn string_const_into_vec_string_push_must_auto_own() {
     let map = t.compile().expect("compile");
     let rs = map.get("profile.rs").expect("profile.rs");
 
+    // Vec::push(String) stays owned — const must auto-own (not demote).
     assert!(
         rs.contains("SCOPE_UPDATE.to_string()")
             || rs.contains("SCOPE_UPDATE.to_owned()"),

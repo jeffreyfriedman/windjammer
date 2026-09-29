@@ -88,16 +88,32 @@ pub fn show() -> string {
     );
 
     let view_rs = fs::read_to_string(out.join("view.rs")).unwrap_or_default();
-    assert!(
-        view_rs.contains("message(\"hello\".to_string())")
-            || view_rs.contains("message(String::from(\"hello\"))")
-            || view_rs.contains("message(String::from(\"hello\").to_string())"),
-        "bare literal into owned string method must auto-own in codegen. Got:\n{view_rs}"
-    );
-    assert!(
-        !view_rs.contains(".message(\"hello\")"),
-        "must not pass bare &str literal into owned String formal. Got:\n{view_rs}"
-    );
+    let ui_rs = fs::read_to_string(out.join("ui.rs")).unwrap_or_default();
+    // Method formal ends with `)` before `->`; struct field is `message: String,`.
+    let formal_owned = ui_rs.contains("message: String)");
+    let formal_str = ui_rs.contains("message: &str)");
+    if formal_owned {
+        assert!(
+            view_rs.contains("message(\"hello\".to_string())")
+                || view_rs.contains("message(String::from(\"hello\"))")
+                || view_rs.contains("message(String::from(\"hello\").to_string())"),
+            "bare literal into owned string method must auto-own in codegen. Got:\n{view_rs}\nui=\n{ui_rs}"
+        );
+        assert!(
+            !view_rs.contains(".message(\"hello\")"),
+            "must not pass bare &str literal into owned String formal. Got:\n{view_rs}"
+        );
+    } else {
+        assert!(
+            formal_str,
+            "Banner::message formal should be String or demoted &str. ui=\n{ui_rs}"
+        );
+        assert!(
+            view_rs.contains(".message(\"hello\")")
+                || view_rs.contains("message(\"hello\".to_string())"),
+            "demoted &str formal accepts bare lit (or owned coerce). Got:\n{view_rs}"
+        );
+    }
 
     let crate_dir = tmp.path().join("crate");
     fs::create_dir_all(crate_dir.join("src")).unwrap();
