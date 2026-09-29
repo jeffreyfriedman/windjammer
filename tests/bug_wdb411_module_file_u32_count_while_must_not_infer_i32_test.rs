@@ -75,8 +75,8 @@ pub struct Histogram {
     pub mean: f32,
 }
 
-/// Product leftover after WDB-411 average_brightness: histogram still emits
-/// `let mut i: i32 = 0_u32` / `let mut b: i32 = 0_i32`.
+/// Product leftover after WDB-411 average_brightness: histogram must keep
+/// `b` / `i` as u32 (not i32) when looping against `bin_count` / `count`.
 pub fn histogram(frame: FramePixels) -> Histogram {
     let bin_count = 256u32
     let mut bins = Vec::new()
@@ -113,7 +113,9 @@ fn wdb411_module_file_u32_count_while_must_not_infer_i32() {
         !rs.contains("let mut i: i32")
             && !rs.contains("let mut b: i32")
             && !rs.contains("let mut i = 0_i32")
-            && !rs.contains("0_i32"),
+            && !rs.contains("let mut b = 0_i32")
+            && !rs.contains("let mut i: i32 = 0_u32")
+            && !rs.contains("let mut b: i32 = 0"),
         "WDB-411 RED: u32 count loop inferred i32:\n{rs}"
     );
     assert!(
