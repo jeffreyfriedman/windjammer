@@ -1,5 +1,56 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.539 (2026-09-28) — TDD WDB-425 (DB agent; no compiler src)
+
+Copy `i32` loop var in abs else-branch must not `.clone()`; product emits
+`if dx < 0 { -dx } else { dx.clone() }`.
+
+| Gate | Status |
+|------|--------|
+| WDB-425 MultiFile | ⏳ TDD pending — `else { dx }` |
+| WDB-425 tip-out | ⏳ TDD pending — `dx.clone()` / `dz.clone()` in component_viewer_controls |
+
+**Root cause layer:** copy / if-else — Copy loop `i32` in else of abs must not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is **assignment** `cursor_x = x.clone()`.
+- WDB-422 is Copy **f32** index arith.
+- This is **if/else abs** of a for-loop Copy binding.
+
+**What became unnecessary:** `dx.clone()` / `dz.clone()` in station pillar ribs.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-28)
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.538, WDB-412–424 / P3.509–P3.536 (filed).
+
+## P3.538 (2026-09-28) — migrate `prev = -1` must unify with `version: i64`
+
+Product `wj-migrate` `validate_unique_versions`: `let mut prev = -1` then
+`prev = m.version` emits `prev = -1_i32` + `version: i64` → E0308.
+Compare site casts (`prev as i64`); assignment does not. P3.527 greened
+string-scan `i == 0_usize`; this is **negative sentinel vs struct int field**.
+
+| Gate | Status |
+|------|--------|
+| `migrate_prev_sentinel_must_unify_with_version_i64` | ❌ isolate RED — `prev = -1_i32` + `prev = m.version` |
+| product `wj-migrate` `$WJ test` | ❌ same + P3.528 move `applied` |
+
+**Why this is a new class:**
+- P3.527 is **eq zero** (`i == 0`) with usize loop counter.
+- This is **assign** of `m.version: i64` into a `-1` binding left as `i32`.
+
+**Root cause layer:** int unify / emit-truth — `-1` sentinel assigned from
+`int`/`i64` field must widen `prev` to `i64` (or keep both `i32` if field is).
+
+**Ran (2026-09-28):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (18:43).
+- Isolate: `let mut prev = -1_i32;` + `prev = m.version;` — **TDD RED confirmed**.
+- Product `lib.rs`: same; `db_apply` still `version_applied(applied, …)` (P3.528).
+
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3538-eco`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- migrate_prev_sentinel_must_unify_with_version_i64`
+
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.537, WDB-412–424 / P3.509–P3.536.
+
 ## P3.537 (2026-09-28) — cookie `/build` path-dep: `HashMap.get` lit must stay borrowed
 
 Product-shaped path-dep (`wj_cookie = { path = "…/build" }`, generated `lib.rs`,
@@ -12,8 +63,8 @@ Full `wj-auth-api` tip-out now has bare get; leftover P3.532 is still
 | Gate | Status |
 |------|--------|
 | `--metadata` cookie library isolate | ⚠️ false-GREEN bare `get("access_token")` |
-| `cookie_build_path_dep_map_get_must_not_own_key` | ❌ isolate RED — `get(String::from("access_token"))` |
-| product `wj-auth-api` cookie get | ✅ bare `get("access_token")` on tip p3520 05:14 |
+| `cookie_build_path_dep_map_get_must_not_own_key` | ✅ isolate GREEN — bare `get("access_token")` |
+| product `wj-auth-api` cookie get | ✅ bare `get("access_token")` on tip p3520 |
 | product leftover | ❌ `&mut req` / `find_char(&String)` / resolve_token (P3.532) |
 
 **Why this is a new class:**
@@ -21,15 +72,17 @@ Full `wj-auth-api` tip-out now has bare get; leftover P3.532 is still
 - Same-crate / `--metadata` HashMap.get isolates stay borrowed.
 - Distinct from notes-api `qs_get` lit `String::from` (path-dep demoted `&str` formal).
 
-**Root cause layer:** call-site / HashMap::get — lit into `get` after cross-crate
-`Result<HashMap>` without signature metadata must not own the key (`&Q`).
+**Root cause layer:** signature — generated-`lib.rs` path-dep recovery omitted `->` return types, so `Ok(map)` stayed untyped and unresolved `map.get("lit")` auto-owned the key.
 
-**Ran (2026-09-28):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (05:14).
-- Isolate (build path, metadata deleted): `get(String::from("access_token"))` — **TDD RED confirmed**.
-- Product auth: bare get; still `dispatch(&mut req)`, `find_char(text: &String)`.
-- Official `cargo test --test all -- cookie_build_path_dep_map_get_must_not_own_key` queued behind other agents' cargo locks; tip isolate matches the assert.
+**What became unnecessary:** unresolved-instance auto-own of HashMap.get lits after metadata-less cookie path-deps (no new reconcile peel / no get-name heuristic).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3537-eco`
+**Fix:** recover `return_type` from generated Rust (`-> Result<HashMap<…>, …>`) and parse `HashMap`/`BTreeMap` as `Parameterized` so match bindings type as HashMap and stdlib `HashMap::get` Borrowed `&Q` applies.
+
+**Ran (2026-09-28):** tip p3520 —
+- `cargo test --release -p windjammer --lib recovers_parse_cookie_header` → **1 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- cookie_build_path_dep_map_get_must_not_own_key` → **1 passed**
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3520`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- cookie_build_path_dep_map_get_must_not_own_key`
 
 **Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.536, WDB-412–424 / P3.509–P3.535.

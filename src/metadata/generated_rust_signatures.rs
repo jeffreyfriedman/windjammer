@@ -97,7 +97,9 @@ pub fn recover_signatures_from_generated_rust_source(
             continue;
         };
         let params_src = &rest[1..close];
-        if let Some(sig) = signature_from_rust_params(name, params_src) {
+        let after_params = rest[close + 1..].trim_start();
+        let return_type = parse_rust_return_type(after_params);
+        if let Some(sig) = signature_from_rust_params(name, params_src, return_type) {
             out.push((name.to_string(), sig));
         }
         offset = abs + 3 + name_end + close;
@@ -106,7 +108,26 @@ pub fn recover_signatures_from_generated_rust_source(
     out
 }
 
-fn signature_from_rust_params(name: &str, params_src: &str) -> Option<FunctionSignature> {
+/// Parse `-> T` after formals; stop before `{` / `;` / where-clause noise.
+fn parse_rust_return_type(after_params: &str) -> Option<Type> {
+    let t = after_params.trim_start();
+    let t = t.strip_prefix("->")?;
+    let t = t.trim_start();
+    let end = t
+        .find(|c: char| c == '{' || c == ';' || c == '\n')
+        .unwrap_or(t.len());
+    let ty_src = t[..end].trim();
+    if ty_src.is_empty() {
+        return None;
+    }
+    Some(parse_rust_type(ty_src))
+}
+
+fn signature_from_rust_params(
+    name: &str,
+    params_src: &str,
+    return_type: Option<Type>,
+) -> Option<FunctionSignature> {
     let mut param_types = Vec::new();
     let mut param_ownership = Vec::new();
     let mut emitted = Vec::new();
@@ -138,7 +159,7 @@ fn signature_from_rust_params(name: &str, params_src: &str) -> Option<FunctionSi
         formal_param_types: param_types.clone(),
         param_types,
         param_ownership,
-        return_type: None,
+        return_type,
         return_ownership: OwnershipMode::Owned,
         has_self_receiver: false,
         is_extern: false,
@@ -195,6 +216,19 @@ fn parse_rust_type(raw: &str) -> Type {
     }
     if let Some(inner) = strip_wrapper(t, "Vec") {
         return Type::Vec(Box::new(parse_rust_type(inner)));
+    }
+    // P3.537: path-dep `Result<HashMap<String, String>, …>` must type Ok(map) as
+    // HashMap so `map.get("lit")` resolves to HashMap::get(&Q), not unresolved auto-own.
+    for map_name in ["HashMap", "BTreeMap"] {
+        if let Some(inner) = strip_wrapper(t, map_name) {
+            let parts = split_top_level(inner, ',');
+            if parts.len() == 2 {
+                return Type::Parameterized(
+                    map_name.to_string(),
+                    vec![parse_rust_type(parts[0]), parse_rust_type(parts[1])],
+                );
+            }
+        }
     }
     if t.starts_with('(') && t.ends_with(')') {
         let inner = &t[1..t.len() - 1];
@@ -301,5 +335,38 @@ pub fn log_tagged(level: &str, tag: &str, message: &str) {}
             sig.emitted_rust_ref_params.as_deref(),
             Some(&[false, true][..])
         );
+        assert!(
+            matches!(sig.return_type, Some(Type::Option(_))),
+            "return type must be recovered: {:?}",
+            sig.return_type
+        );
+    }
+
+    #[test]
+    fn recovers_parse_cookie_header_result_hashmap_return() {
+        let src = r#"
+#[inline]
+pub fn parse_cookie_header(header: &str) -> Result<HashMap<String, String>, String> {
+    Ok(HashMap::new())
+}
+"#;
+        let recovered = recover_signatures_from_generated_rust_source(src);
+        let sig = &recovered
+            .iter()
+            .find(|(n, _)| n == "parse_cookie_header")
+            .expect("parse_cookie_header")
+            .1;
+        assert_eq!(sig.param_ownership, vec![OwnershipMode::Borrowed]);
+        match &sig.return_type {
+            Some(Type::Result(ok, err)) => {
+                assert!(
+                    matches!(ok.as_ref(), Type::Parameterized(n, args)
+                        if n == "HashMap" && args.len() == 2),
+                    "Ok payload must be Parameterized HashMap, got {ok:?}"
+                );
+                assert!(matches!(err.as_ref(), Type::String), "Err must be String");
+            }
+            other => panic!("expected Result<HashMap, String>, got {other:?}"),
+        }
     }
 }
