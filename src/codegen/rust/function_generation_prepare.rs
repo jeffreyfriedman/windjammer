@@ -3002,9 +3002,26 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, .. } | Expression::MethodCall { object, .. } => {
                 Self::expr_moves_for_loop_var_in_object(name, object)
             }
-            Expression::Binary { left, right, .. } => {
-                Self::expr_moves_for_loop_var(name, left)
-                    || Self::expr_moves_for_loop_var(name, right)
+            Expression::Binary { left, right, op, .. } => {
+                // P3.528 / WDB-412: `v == version` / ordering compares Copy or use
+                // PartialEq by shared ref — not a move of the loop binding. Treating
+                // compare ids as moves forced `for v in applied` to keep Owned `Vec`
+                // and broke loop call sites (`apply_conn` E0382).
+                if matches!(
+                    op,
+                    crate::parser::BinaryOp::Eq
+                        | crate::parser::BinaryOp::Ne
+                        | crate::parser::BinaryOp::Lt
+                        | crate::parser::BinaryOp::Le
+                        | crate::parser::BinaryOp::Gt
+                        | crate::parser::BinaryOp::Ge
+                ) {
+                    Self::expr_moves_for_loop_var_under_compare(name, left)
+                        || Self::expr_moves_for_loop_var_under_compare(name, right)
+                } else {
+                    Self::expr_moves_for_loop_var(name, left)
+                        || Self::expr_moves_for_loop_var(name, right)
+                }
             }
             Expression::Unary { operand, .. } => Self::expr_moves_for_loop_var(name, operand),
             Expression::Call { arguments, .. } => arguments
@@ -3012,6 +3029,52 @@ impl<'ast> CodeGenerator<'ast> {
                 .any(|(_, arg)| Self::expr_moves_for_loop_var(name, arg)),
             Expression::Index { object, index, .. } => {
                 Self::expr_moves_for_loop_var(name, object)
+                    || Self::expr_moves_for_loop_var(name, index)
+            }
+            _ => false,
+        }
+    }
+
+    /// Under `==` / ordering, bare loop-var ids are not moves; nested calls still are.
+    fn expr_moves_for_loop_var_under_compare(name: &str, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Identifier { .. } => false,
+            Expression::FieldAccess { object, .. } => {
+                Self::expr_moves_for_loop_var_in_object(name, object)
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                Self::expr_moves_for_loop_var_in_object(name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expr_moves_for_loop_var(name, arg))
+            }
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| Self::expr_moves_for_loop_var(name, arg)),
+            Expression::Binary { left, right, op, .. } => {
+                if matches!(
+                    op,
+                    crate::parser::BinaryOp::Eq
+                        | crate::parser::BinaryOp::Ne
+                        | crate::parser::BinaryOp::Lt
+                        | crate::parser::BinaryOp::Le
+                        | crate::parser::BinaryOp::Gt
+                        | crate::parser::BinaryOp::Ge
+                ) {
+                    Self::expr_moves_for_loop_var_under_compare(name, left)
+                        || Self::expr_moves_for_loop_var_under_compare(name, right)
+                } else {
+                    Self::expr_moves_for_loop_var(name, left)
+                        || Self::expr_moves_for_loop_var(name, right)
+                }
+            }
+            Expression::Unary { operand, .. } => {
+                Self::expr_moves_for_loop_var_under_compare(name, operand)
+            }
+            Expression::Index { object, index, .. } => {
+                Self::expr_moves_for_loop_var_under_compare(name, object)
                     || Self::expr_moves_for_loop_var(name, index)
             }
             _ => false,

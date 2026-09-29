@@ -40,4 +40,21 @@ impl<'ast> Analyzer<'ast> {
             _ => false,
         }
     }
+
+    /// `Vec<T>` / `[T; N]` / `Parameterized(Vec, …)` whose element type is Copy.
+    /// For-in over these can share-borrow the collection (P3.528).
+    pub(crate) fn collection_of_copy_elements(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Vec(inner) | Type::Array(inner, _) => self.is_copy_type(inner),
+            Type::Parameterized(name, args)
+                if (name == "Vec" || name.ends_with("::Vec")) && !args.is_empty() =>
+            {
+                self.is_copy_type(&args[0])
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                self.collection_of_copy_elements(inner)
+            }
+            _ => false,
+        }
+    }
 }

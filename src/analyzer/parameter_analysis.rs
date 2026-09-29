@@ -207,11 +207,15 @@ impl<'ast> Analyzer<'ast> {
 
         // 6. For-loop iteration: if the loop dereferences elements (`*i`), the collection is
         // borrowed (`for i in &items`); otherwise consuming iteration uses owned param.
+        // P3.528: Vec/Array of Copy elements — `for v in applied { v == x }` is a shared
+        // scan (`for v in &applied`), not a consume of the Vec.
         if self.is_iterated_over(param_name, body) {
             if self.for_loop_over_param_dereferences_element(param_name, body) {
                 return Ok(OwnershipMode::Borrowed);
             }
-            if !self.is_copy_type(param_type) {
+            if self.collection_of_copy_elements(param_type) {
+                // fall through — prefer Borrowed for Copy-element collection scans
+            } else if !self.is_copy_type(param_type) {
                 return Ok(OwnershipMode::Owned);
             }
         }
