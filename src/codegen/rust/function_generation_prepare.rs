@@ -1425,6 +1425,218 @@ impl<'ast> CodeGenerator<'ast> {
         found
     }
 
+    /// Like field/index projection, but bare `param` as a call argument is ignored here
+    /// (classified separately via `param_call_sites_expect_borrow`). Used so pub Custom
+    /// helpers that both read fields and forward into `&T` callees stay demotable.
+    pub(in crate::codegen::rust) fn param_non_call_uses_are_field_or_index_only(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let mut found = false;
+        for stmt in body {
+            match self.statement_param_projection_usage_skipping_bare_call_args(
+                stmt, param_name, func,
+            ) {
+                ProjectionUsage::None => {}
+                ProjectionUsage::FieldOrIndexOnly => found = true,
+                ProjectionUsage::BareOrOther => return false,
+            }
+        }
+        found
+    }
+
+    fn statement_param_projection_usage_skipping_bare_call_args(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> ProjectionUsage {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_param_projection_usage_skipping_bare_call_args(
+                expr, param_name, func,
+            ),
+            Statement::Return { .. } => ProjectionUsage::None,
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    value, param_name, func,
+                );
+                if let Some(b) = else_block {
+                    for s in b {
+                        usage = usage.merge(
+                            self.statement_param_projection_usage_skipping_bare_call_args(
+                                s, param_name, func,
+                            ),
+                        );
+                    }
+                }
+                usage
+            }
+            Statement::Assignment { target, value, .. } => self
+                .expression_param_projection_usage_skipping_bare_call_args(
+                    target, param_name, func,
+                )
+                .merge(self.expression_param_projection_usage_skipping_bare_call_args(
+                    value, param_name, func,
+                )),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    condition, param_name, func,
+                );
+                for s in then_block {
+                    usage = usage.merge(
+                        self.statement_param_projection_usage_skipping_bare_call_args(
+                            s, param_name, func,
+                        ),
+                    );
+                }
+                if let Some(b) = else_block {
+                    for s in b {
+                        usage = usage.merge(
+                            self.statement_param_projection_usage_skipping_bare_call_args(
+                                s, param_name, func,
+                            ),
+                        );
+                    }
+                }
+                usage
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    condition, param_name, func,
+                );
+                for s in body {
+                    usage = usage.merge(
+                        self.statement_param_projection_usage_skipping_bare_call_args(
+                            s, param_name, func,
+                        ),
+                    );
+                }
+                usage
+            }
+            Statement::For { iterable, body, .. } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    iterable, param_name, func,
+                );
+                for s in body {
+                    usage = usage.merge(
+                        self.statement_param_projection_usage_skipping_bare_call_args(
+                            s, param_name, func,
+                        ),
+                    );
+                }
+                usage
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                let mut usage = ProjectionUsage::None;
+                for s in body {
+                    usage = usage.merge(
+                        self.statement_param_projection_usage_skipping_bare_call_args(
+                            s, param_name, func,
+                        ),
+                    );
+                }
+                usage
+            }
+            Statement::Match { value, arms, .. } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    value, param_name, func,
+                );
+                for arm in arms {
+                    usage = usage.merge(
+                        self.expression_param_projection_usage_skipping_bare_call_args(
+                            &arm.body, param_name, func,
+                        ),
+                    );
+                }
+                usage
+            }
+            Statement::Defer { statement, .. } => self
+                .statement_param_projection_usage_skipping_bare_call_args(
+                    statement, param_name, func,
+                ),
+            _ => {
+                if Self::statement_mentions_identifier(stmt, param_name) {
+                    ProjectionUsage::BareOrOther
+                } else {
+                    ProjectionUsage::None
+                }
+            }
+        }
+    }
+
+    fn expression_param_projection_usage_skipping_bare_call_args(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> ProjectionUsage {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    function, param_name, func,
+                );
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        // Bare call forward — ownership decided by callee signature.
+                        continue;
+                    }
+                    usage = usage.merge(
+                        self.expression_param_projection_usage_skipping_bare_call_args(
+                            arg, param_name, func,
+                        ),
+                    );
+                }
+                usage
+            }
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
+                    object, param_name, func,
+                );
+                for (_, arg) in arguments {
+                    if matches!(arg, Expression::Identifier { name, .. } if name == param_name) {
+                        continue;
+                    }
+                    usage = usage.merge(
+                        self.expression_param_projection_usage_skipping_bare_call_args(
+                            arg, param_name, func,
+                        ),
+                    );
+                }
+                usage
+            }
+            _ => {
+                // Reuse the standard projection walk for non-call nodes; bare Identifier
+                // outside call args is still BareOrOther.
+                let _ = func;
+                self.expression_param_projection_usage(expr, param_name)
+            }
+        }
+    }
+
     /// `param.method()` that returns an owned Custom type consumes the receiver (HTTP
     /// `json_response(resp) { resp.header(...) }`) — not readonly projection demotion.
     pub(in crate::codegen::rust) fn param_only_used_as_owned_custom_method_receiver(
