@@ -79,6 +79,19 @@ fn is_wj_owned_non_text_bare_formal(ty: &Type) -> bool {
 /// When the registry marks a plain `string` param as `Owned`, that contract wins over a
 /// stale `Reference(str)` wrap left from body-inferred borrow analysis.
 pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usize) -> SafetyType {
+    // Bare Copy / usize formals always expect Owned at call sites (`quantity: i32`),
+    // even when analyzer left Borrowed — emitted Rust is pass-by-value.
+    if let Some(formal) = sig
+        .formal_param_type(param_idx)
+        .or_else(|| sig.param_types.get(param_idx))
+    {
+        if !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
+            && (crate::type_classification::is_copy_pass_by_value_formal(formal)
+                || crate::codegen::rust::type_casting::type_is_usize(formal))
+        {
+            return safety_type_from_parser_type(formal, Some(OwnershipMode::Owned));
+        }
+    }
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::MutBorrowed)
@@ -848,25 +861,23 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     {
         return false;
     }
-    // WDB-329: Owned Copy / usize formals (Vec::remove) never need a shared-ref borrow
-    // at emit — stale `emitted_rust_ref_params` / homonym refresh must not force
-    // `&idx as usize`.
+    // WDB-329 / e0308: bare Copy / usize formals (Vec::remove; `quantity: i32`) never
+    // need a shared-ref borrow at emit — even when analyzer left Borrowed while codegen
+    // emitted owned `i32` (`&item.quantity` → E0308).
     let formal = sig
         .formal_param_type(param_idx)
         .or_else(|| sig.param_types.get(param_idx));
-    if matches!(
-        sig.param_ownership.get(param_idx),
-        Some(OwnershipMode::Owned)
-    ) && formal.is_some_and(|t| {
-        let bare = match t {
-            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-            other => other,
-        };
-        crate::codegen::rust::type_casting::type_is_usize(bare)
-            || crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
-            || crate::type_classification::is_copy_pass_by_value_formal(bare)
-    }) && !matches!(formal, Some(Type::Reference(_) | Type::MutableReference(_)))
-    {
+    if formal.is_some_and(|t| {
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && {
+            let bare = t;
+            crate::codegen::rust::type_casting::type_is_usize(bare)
+                || crate::type_classification::is_copy_pass_by_value_formal(bare)
+                || (matches!(
+                    sig.param_ownership.get(param_idx),
+                    Some(OwnershipMode::Owned)
+                ) && crate::codegen::rust::type_analysis_pure::is_copy_type(bare))
+        }
+    }) {
         return false;
     }
     // P3.390: shared emission before bare-Vec owned denial.

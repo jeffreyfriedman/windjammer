@@ -628,6 +628,10 @@ pub fn method_is_map_key_qualified_with_project(
                 if let Some(sig) = lookup_sig(method, Some(base), reg) {
                     if sig.has_self_receiver {
                         // User/project self-method wins (Owned Key → not map-key; Borrowed → is).
+                        // Callers that apply key-normalize must still gate per *arg index*
+                        // (`finalize` / `is_collection_key_lookup`) so later Copy args of
+                        // methods like `has_item(item_id: string, quantity: i32)` are not
+                        // re-borrowed.
                         return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
                     }
                 }

@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.542 (2026-09-29) — e0308 Copy field into owned i32 must not keep `&`
+
+`inv.has_item(item.item_id, item.quantity)` with `quantity: i32` emitted
+`has_item(&item.item_id, &item.quantity)` → E0308 (`expected i32, found &i32`).
+
+| Gate | Status |
+|------|--------|
+| `bug_e0308_borrowed_struct_field_test` | ✅ tip GREEN — `has_item(&item.item_id, item.quantity)` |
+| IR/`apply_ir` for quantity | ✅ already Owned/`item.quantity` before finalize |
+
+**Root cause layer:** signature + finalize gate — method-level `method_is_map_key_qualified`
+is true when the *first* user arg is Borrowed (Phase-2 demoted `&str` on `has_item`),
+so finalize ran string-key normalize on **every** arg and prefixed `&` onto Copy
+FieldAccess. Bridge already treated bare Copy formals as Owned.
+
+**What became unnecessary:** false collection-key re-`&` on later Copy field args;
+no new reconcile peel (IR path was already correct).
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3524`
+- `cargo test --release --test all -- bug_e0308_borrowed_struct_field_test auto_to_string_test` → **9 passed**
+- `library_multipass_owned_string_to_string_method_must_borrow` remains ❌ on clean HEAD (pre-existing; not this fix)
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.541, WDB-412–426 / P3.509–P3.541 (filed).
+
 ## P3.541 (2026-09-28) — TDD WDB-426 (compiler tip fix)
 
 Copy `const` `u32` must not `.clone()` on assign; product emitted
@@ -760,28 +784,20 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 **Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3512-eco`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- interp_query_then_get_must_not_mut_query` → **0 passed / 1 failed** (0.54s after 1016s compile; TDD RED).
 
-## P3.512 (2026-09-27) — TDD WDB-414 (DB agent; no compiler src)
+## P3.512 (2026-09-27) — TDD WDB-414 (isolate GREEN on tip; tip-out regen)
 
-`Type::new(self.scene)` must move the field; product emits `CsgVoxelizer::new(self.scene.clone())`.
+`Type::new(self.scene)` must move the field; product emitted `CsgVoxelizer::new(self.scene.clone())`.
 
 | Gate | Status |
 |------|--------|
-| WDB-414 MultiFile | ❌ isolate RED — `initialize(&mut self)` emits `Vox::new(self.scene.clone())` when `Scene.label: string` |
-| WDB-414 tip-out | ❌ product RED — `CsgVoxelizer::new(self.scene.clone())` in `rel_tip_out` + `gen` rifter/cathedral/humanoid |
+| WDB-414 MultiFile | ✅ isolate GREEN — `initialize(mut self)` moves `self.scene` |
+| WDB-414 tip-out | ❌ tip-out stale — `CsgVoxelizer::new(self.scene.clone())` until product regen |
 
-**Root cause layer:** signature — `new(scene: Scene)` stays owned; `initialize` is `&mut self` and later writes `self.grid`, so codegen clones `self.scene` instead of a partial move. Copy `i32` Scene hid the clone (first isolate). Non-Copy `string` matches product `CsgScene`.
+**Root cause layer:** ownership demotion — tip keeps owned `mut self` for partial field move + later field write (no longer clones).
 
-**Why this is a new class:**
-- WDB-360 is **`encode(self.grid.clone())`**. This is **constructor `new(self.scene)`**.
-- WDB-410 is **owned-self wither reconstruct** of every field.
-- WDB-407 is **`Vec` `new` demote** (`new(&joints)`).
+**What became unnecessary:** `self.scene.clone()` at `Vox::new` / `CsgVoxelizer::new` when WJ moves `self.scene`.
 
-**What became unnecessary:** `self.scene.clone()` at `CsgVoxelizer::new` when WJ moves `self.scene`.
-
-**Ran (2026-09-27):** worktree `…/wdb407-tdd` @ `464568b8`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb414_` → **0 passed / 2 failed**
-
-**Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513 (notes-api), WDB-412–413 / P3.509–P3.510 (filed).
+**Gates (2026-09-29 tip p3524):** `… -- wdb414_module_file_ctor` → isolate **ok**; tip-out product RED (regen).
 
 ## P3.511 (2026-09-27) — split query list-then-get must not `&mut note` / `&mut query`
 

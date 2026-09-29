@@ -2071,13 +2071,21 @@ impl<'ast> CodeGenerator<'ast> {
                     kind = CoercionKind::Identity;
                 }
             }
-            // Copy field access is already a value in Rust (`failure.status` → i64).
+            // Copy field access is already a value in Rust (`item.quantity` → i32).
+            // Never Borrow into an owned Copy formal (`&item.quantity` → E0308).
             if matches!(arg_expr, Expression::FieldAccess { .. })
                 && self.expression_is_copy(arg_expr)
                 && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
             {
                 kind = CoercionKind::Identity;
             }
+        }
+        if matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
+            && matches!(arg_expr, Expression::FieldAccess { .. })
+            && self.expression_is_copy(arg_expr)
+            && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+        {
+            kind = CoercionKind::Identity;
         }
         // Explicit `*binding` / `(*binding).field` on Copy: Rust auto-borrows — no `&*` /
         // `&(binding).field` (auto_ref_deref_copy_test).
@@ -2213,6 +2221,17 @@ impl<'ast> CodeGenerator<'ast> {
                 rust_autoborrows_temp,
                 false,
             );
+        }
+        // Copy field projections (`item.quantity`) are values — strip a stale `&` when the
+        // formal is owned Copy (not a shared-ref slot). Prevents `&i32` into `i32` (E0308).
+        if matches!(arg_expr, Expression::FieldAccess { .. })
+            && self.expression_is_copy(arg_expr)
+            && !self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            coerced =
+                crate::codegen::rust::expression_utilities::borrow_base_expr(&coerced).to_string();
         }
         let arg_binding_already_rust_ref = matches!(
             arg_expr,
@@ -9009,10 +9028,12 @@ impl<'ast> CodeGenerator<'ast> {
                 && !crate::type_classification::is_copy_pass_by_value_formal(bare)
                 && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
             {
-                return crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx);
+                return crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx);
             }
         }
-        crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
+        // Prefer the emit-aware oracle (WDB-329 Owned Copy / usize) over bridge-only
+        // `safety_type` Ref — prevents `&item.quantity` into `quantity: i32`.
+        crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx)
     }
 
     fn ir_callee_arg_expects_shared_borrow(
