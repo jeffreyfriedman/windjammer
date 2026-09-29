@@ -11,9 +11,12 @@
     feature = "integration_tests",
 ))]
 
-//! P3.538: `let mut prev = -1` then `prev = m.version` (field `int`/`i64`) must not
-//! emit `prev = -1_i32` (E0308). Product `wj-migrate` `validate_unique_versions`.
-//! Distinct from P3.527 (`i == 0` usize peer).
+//! P3.538: `let mut prev = -1` then `prev = m.version` when `version: int`
+//! (emits `i64`) must not keep `prev` as `i32` (`prev = -1_i32` → E0308).
+//!
+//! Product `wj-migrate` `validate_unique_versions` (tip p3520 18:43).
+//! P3.527 greened `i == 0_usize` for string-scan; this is **assignment unify**
+//! of a negative sentinel with a struct `int` field. Do not reshape migrate.
 
 use std::fs;
 use std::process::Command;
@@ -25,21 +28,28 @@ struct Migration {
     name: string,
 }
 
-fn validate_unique_versions(items: Vec<Migration>) -> Result<(), string> {
+pub fn validate_unique_versions(items: Vec<Migration>) -> Result<(), string> {
+    let sorted = items
     let mut prev = -1
-    for m in items {
-        if prev >= 0 && m.version <= prev {
-            return Err("duplicate or out-of-order version")
+    let mut first = true
+    for m in sorted {
+        if !first {
+            if m.version == prev {
+                return Err("dup")
+            }
         }
         prev = m.version
+        first = false
     }
     Ok(())
 }
-
-pub fn check(items: Vec<Migration>) -> Result<(), string> {
-    validate_unique_versions(items)
-}
 "#;
+
+fn prev_stays_i32(rs: &str) -> bool {
+    rs.contains("let mut prev = -1_i32")
+        || rs.contains("prev = -1_i32")
+        || (rs.contains("prev: i32") && rs.contains("prev = m.version"))
+}
 
 #[test]
 fn migrate_prev_sentinel_must_unify_with_version_i64() {
@@ -68,13 +78,13 @@ fn migrate_prev_sentinel_must_unify_with_version_i64() {
     );
 
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.538 validate_unique_versions:\n{rs}");
+    eprintln!("P3.538 validate_unique prev emit:\n{rs}");
     assert!(
-        !rs.contains("prev = -1_i32"),
-        "P3.538 RED: -1 sentinel assigned from version:i64 must not stay i32:\n{rs}"
+        !prev_stays_i32(&rs),
+        "P3.538 RED: prev sentinel must unify with Migration.version (i64), not stay i32:\n{rs}"
     );
     assert!(
-        rs.contains("prev = -1_i64") || rs.contains("let mut prev: i64 = -1"),
-        "P3.538: expected prev sentinel as i64 peer of m.version:\n{rs}"
+        rs.contains("prev = m.version"),
+        "P3.538: expected prev = m.version assignment:\n{rs}"
     );
 }
