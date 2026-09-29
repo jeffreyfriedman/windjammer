@@ -635,8 +635,30 @@ impl<'ast> CodeGenerator<'ast> {
             if has_non_option_binding {
                 let root = self.root_identifier_of_field_or_index_chain(value);
                 if let Some(root_name) = root {
-                    let already_owned = value_str.ends_with(".clone()");
-                    if already_owned {
+                    let field_path_reused = matches!(
+                        value,
+                        Expression::FieldAccess { .. } | Expression::Index { .. }
+                    ) && super::ast_utilities::extract_field_access_path(value)
+                        .is_some_and(|path| {
+                            self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                                a.needs_clone(&path, self.current_statement_idx).is_some()
+                                    || a.needs_clone_anywhere(&path)
+                            })
+                        });
+                    let behind_borrow = self.inferred_borrowed_params.contains(root_name)
+                        || self.inferred_mut_borrowed_params.contains(root_name);
+                    // WDB-424: prefer `match &place` over `.clone()` for reused /
+                    // behind-borrow non-Copy field places.
+                    if (behind_borrow || field_path_reused)
+                        && value_str.ends_with(".clone()")
+                        && matches!(
+                            value,
+                            Expression::FieldAccess { .. } | Expression::Index { .. }
+                        )
+                    {
+                        let base = &value_str[..value_str.len() - 8];
+                        format!("&{base}")
+                    } else if value_str.ends_with(".clone()") {
                         value_str
                     } else if self.inferred_mut_borrowed_params.contains(root_name) {
                         format!("&mut {}", value_str)
@@ -682,6 +704,17 @@ impl<'ast> CodeGenerator<'ast> {
                             // Non-Copy type behind shared ref: need & prefix to prevent
                             // moving out of the borrow. Match ergonomics will auto-ref bindings.
                             format!("&{}", value_str)
+                        }
+                    } else if field_path_reused {
+                        // WDB-424: repeated match on a non-Copy owned field — prefer
+                        // `match &place` over move/clone.
+                        let base = value_str
+                            .strip_suffix(".clone()")
+                            .unwrap_or(value_str.as_str());
+                        if base.starts_with('&') {
+                            base.to_string()
+                        } else {
+                            format!("&{base}")
                         }
                     } else {
                         value_str

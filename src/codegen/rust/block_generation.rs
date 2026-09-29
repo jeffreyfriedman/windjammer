@@ -10,7 +10,7 @@
 
 use crate::parser::*;
 
-use super::{codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
+use super::{ast_utilities, codegen_helpers, pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
     /// Generate code for a block of statements
@@ -430,6 +430,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // CRITICAL: Check if matching on self.field to avoid partial move
                 let needs_clone_for_match = self.match_needs_clone_for_self_field(value, arms);
 
+                // WDB-372 / WDB-424: match/if-let scrutinees must not auto-clone field
+                // places (`body.shape.clone()`). Prefer `match &place` (same as
+                // `generate_match_statement`).
+                let prev_suppress_scrutinee = self.suppress_borrowed_clone;
+                self.suppress_borrowed_clone = true;
                 let mut value_str = {
                     if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
                         if let Expression::MethodCall { method, .. } = value {
@@ -438,6 +443,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     self.generate_expression(value)
                 };
+                self.suppress_borrowed_clone = prev_suppress_scrutinee;
 
                 // `Option<&T>` with Copy `T` (HashMap::get) → `.copied()` so arms agree (WDB-134).
                 let use_copied_option = self.match_scrutinee_option_yields_copy(value);
@@ -445,29 +451,38 @@ impl<'ast> CodeGenerator<'ast> {
                     value_str = format!("{value_str}.copied()");
                 }
 
-                // E0507 fix: when matching on a field of a borrowed
-                // parameter, add & prefix to prevent move-out errors.
-                let scrutinee_needs_ref = {
-                    let root = self.root_identifier_of_field_or_index_chain(value);
-                    if let Some(root_name) = root {
-                        let has_enum_binding = arms.iter().any(|arm| {
-                            matches!(
-                                &arm.pattern,
-                                Pattern::EnumVariant(_, binding)
-                                    if !matches!(binding, crate::parser::EnumPatternBinding::None)
-                            )
+                // E0507 / WDB-424: matching a non-Copy field place must use `match &field`
+                // (including wildcard-only arms), never `.clone()` — whether the root is
+                // already borrowed or auto_clone would clone for a later reuse of the place.
+                let is_enum_match = arms
+                    .iter()
+                    .any(|arm| matches!(&arm.pattern, Pattern::EnumVariant(..)));
+                let is_place = matches!(
+                    value,
+                    Expression::FieldAccess { .. } | Expression::Index { .. }
+                );
+                let field_path_reused = ast_utilities::extract_field_access_path(value).is_some_and(
+                    |path| {
+                        self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone(&path, self.current_statement_idx).is_some()
+                                || a.needs_clone_anywhere(&path)
+                        })
+                    },
+                );
+                let scrutinee_needs_ref = if is_enum_match && is_place {
+                    let behind_borrow = self
+                        .root_identifier_of_field_or_index_chain(value)
+                        .is_some_and(|root_name| {
+                            self.inferred_borrowed_params.contains(root_name)
+                                || self.inferred_mut_borrowed_params.contains(root_name)
                         });
-                        has_enum_binding
-                            && (self.inferred_borrowed_params.contains(root_name)
-                                || self.inferred_mut_borrowed_params.contains(root_name))
-                    } else {
-                        false
-                    }
+                    behind_borrow || field_path_reused
+                } else {
+                    false
                 };
 
-                // WDB-347: cloning the scrutinee (`body.shape.clone()`) owns the enum —
-                // arm payloads are owned Copy values, not `&f32` that need `.clone()`.
-                let mut scrutinee_owned_via_clone = value_str.ends_with(".clone()");
+                // Prefer borrow over clone: strip stale `.clone()` if present.
+                let mut scrutinee_owned_via_clone = false;
                 if has_string_literal && !is_tuple_match {
                     let scrutinee = string_utilities::maybe_append_as_str_for_match(
                         &value_str,
@@ -476,8 +491,15 @@ impl<'ast> CodeGenerator<'ast> {
                         self.infer_expression_type(value).as_ref(),
                     );
                     output.push_str(&scrutinee);
-                } else if scrutinee_needs_ref && !value_str.ends_with(".clone()") {
-                    output.push_str(&format!("&{}", value_str));
+                } else if scrutinee_needs_ref {
+                    let base = value_str
+                        .strip_suffix(".clone()")
+                        .unwrap_or(value_str.as_str());
+                    if base.starts_with('&') {
+                        output.push_str(base);
+                    } else {
+                        output.push_str(&format!("&{base}"));
+                    }
                 } else if needs_clone_for_match && !value_str.ends_with(".clone()") {
                     output.push_str(&format!("{}.clone()", value_str));
                     scrutinee_owned_via_clone = true;

@@ -117,29 +117,29 @@ resolve_token demote chain (P3.532). Leftover: adapter `find_char(&String)` (P3.
 
 **Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.536, WDB-412–424 / P3.509–P3.535.
 
-## P3.536 (2026-09-27) — TDD WDB-424 (DB agent; no compiler src)
+## P3.536 (2026-09-27) — TDD WDB-424 (compiler tip fix)
 
-Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
+Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emitted
 `match body.shape.clone()` twice (`ShapeType` includes `ConvexHull(Vec<Vec3>)`).
 
 | Gate | Status |
 |------|--------|
-| WDB-424 MultiFile | ❌ isolate RED — `match body.shape.clone()` twice |
-| WDB-424 tip-out | ❌ product RED — `body.shape.clone()` in jolt world |
+| WDB-424 MultiFile | ✅ isolate GREEN — `match &body.shape` twice; Copy payload `*v` |
+| WDB-424 tip-out | ✅ tip-out GREEN — jolt `world.rs` uses `match &body.shape` |
 
-**Root cause layer:** match / borrow — second (and first) match of a non-Copy field should be `match &field`, not clone.
+**Root cause layer:** match codegen (`let x = match` block path) — `generate_block_expr`
+mirrored `generate_match_statement`: suppress field auto-clone on scrutinees and prefer
+`match &place` when the root is borrowed or auto_clone marks the field path reused.
+Statement `Match` path also strips `.clone()` → `&place` for the same cases.
 
-**Why this is a new class:**
-- WDB-417 is match-arm **owned formal** into a function (`chunk.clone()`).
-- WDB-405 is **unit enum** `.clone()`.
-- WDB-416 is `a.clone().as_float()`.
+**What became unnecessary:** `body.shape.clone()` / leaving clone when `&` was intended
+in the `let … = match` expression path (was skipping `&` once `.clone()` was already
+appended).
 
-**What became unnecessary:** `body.shape.clone()` in `add_body` shape dispatch.
-
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-28)
-
-**Ran (DB agent 2026-09-28):** worktree `…/wdb407-tdd` @ `c9403b43`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb424_` → **0 passed / 2 failed**
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3524` (2026-09-29)
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb424_` → **2 passed**
+- `… -- wdb424_ wdb347_module_file wdb372_module_file_index_enum_match` → isolate GREEN;
+  WDB-372 tip-out still stale product (pre-existing), not regressed by this fix
 
 **Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.535, WDB-412–423 / P3.509–P3.534 (filed).
 
