@@ -222,10 +222,11 @@ fn test_chained_method_calls() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Should convert the string literal in the chained call
+    // Owned String formal needs `"hello".to_string()`; demoted &str accepts `"hello"`.
     assert!(
-        generated.contains("with_value(\"hello\".to_string())"),
-        "Should convert string literal in chained call. Generated:\n{}",
+        generated.contains("with_value(\"hello\".to_string())")
+            || generated.contains("with_value(\"hello\")"),
+        "Should convert string literal in chained call (or pass &str literal). Generated:\n{}",
         generated
     );
 }
