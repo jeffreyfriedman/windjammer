@@ -87,15 +87,15 @@ Product-shaped path-dep (`wj_cookie = { path = "…/build" }`, generated `lib.rs
 **no** `--metadata`): after `parse_cookie_header` → `HashMap`,
 `map.get("access_token")` emits `get(String::from("access_token"))` (E0308).
 `--metadata` library isolates false-GREEN with bare `get("access_token")`.
-Full `wj-auth-api` tip-out now has bare get; leftover P3.532 is still
-`dispatch(&mut req)` + `find_char(&String)` + `resolve_token` demote.
+Full `wj-auth-api` tip-out: bare get (P3.537) + owned `dispatch(req)` /
+resolve_token demote chain (P3.532). Leftover: adapter `find_char(&String)` (P3.524).
 
 | Gate | Status |
 |------|--------|
 | `--metadata` cookie library isolate | ⚠️ false-GREEN bare `get("access_token")` |
 | `cookie_build_path_dep_map_get_must_not_own_key` | ✅ isolate GREEN — bare `get("access_token")` |
 | product `wj-auth-api` cookie get | ✅ bare `get("access_token")` on tip p3520 |
-| product leftover | ❌ `&mut req` / `find_char(&String)` / resolve_token (P3.532) |
+| product leftover | ❌ `find_char(&String)` only (P3.524); P3.532 dispatch/resolve GREEN |
 
 **Why this is a new class:**
 - Not P3.532 product-only gate — this is the **build/-path-dep without metadata** ABI.
