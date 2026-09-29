@@ -1626,6 +1626,9 @@ pub enum MessageType {
 
 pub struct Message {
     message_type: MessageType,
+    // Non-Copy so alias+reuse cannot rely on implicit copy (Copy Message
+    // correctly skips `.clone()`; this gate covers the move/E0382 path).
+    label: string,
 }
 
 pub struct Squad {
@@ -1647,6 +1650,10 @@ impl Squad {
     let map = test.compile().expect("compile");
     let rs = map.get("ai/squad_tactics.rs").expect("squad_tactics.rs");
 
+    assert!(
+        !rs.contains("#[derive(Debug, Clone, Copy, PartialEq)]\n#[repr(C)]\npub struct Message"),
+        "fixture Message must stay non-Copy so auto-clone is required. Got:\n{rs}"
+    );
     assert!(
         rs.contains("let msg_copy = message.clone()")
             || rs.contains("self.messages.push(message.clone())"),

@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.545 (2026-09-29) — let-alias auto-clone gate needs non-Copy Message
+
+`test_let_param_alias_then_reuse_clones_at_alias` was ❌ because `Message`
+auto-derived `Copy` (enum-only fields), so tip correctly skipped `.clone()`.
+Fixture now includes `label: string` so the move/E0382 auto-clone path is tested.
+
+| Gate | Status |
+|------|--------|
+| `test_let_param_alias_then_reuse_clones_at_alias` | ✅ tip GREEN — `let msg_copy = message.clone()` |
+
+**Root cause layer:** none in compiler — false RED from Copy fixture. Auto-clone
+analysis + emit already correct for non-Copy (unit `test_param_let_alias_then_reuse_needs_clone_at_alias`).
+
+**What became unnecessary:** treating Copy Message alias reuse as a missing clone peel.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- test_let_param_alias_then_reuse_clones_at_alias` → **1 passed**
+- spawn/mpsc → **4 passed** (re-verified)
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.544, WDB-412–426 (filed).
+
 ## P3.544 (2026-09-29) — extern `string_to_ffi` must clone String fields
 
 `audio_play_music(self.current_track)` emitted
