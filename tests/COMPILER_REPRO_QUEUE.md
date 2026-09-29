@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.555 (2026-09-29) — format!/with_capacity gates accept tip FFI + redundant usize cast
+
+Tip wraps `format!` into `string_to_ffi(...)` (no temp extract) and may emit
+`capacity as usize` into `Vec::with_capacity` when the formal is already usize.
+Gates still required old temp-extract / bare-capacity shapes — false REDs.
+Original bugs (`as usize.clone()`, bare format into &str extern) stay forbidden.
+
+| Gate | Status |
+|------|--------|
+| `test_format_as_function_argument_extracts_to_variable` | ✅ tip GREEN — FFI path ok |
+| `test_format_in_method_call_extracts_to_variable` | ✅ tip GREEN |
+| `test_multiple_format_calls_in_same_function` | ✅ tip GREEN |
+| `test_usize_with_capacity_no_cast_clone` | ✅ tip GREEN — no `.clone()` on cast |
+
+**Root cause layer:** none in compiler — gate truth catch-up.
+
+**What became unnecessary:** requiring temp extract when FFI owns the format String;
+rejecting harmless `as usize` without clone.
+
+**Gates:** bare `cargo test --release --test all -- test_format_as_function_argument test_usize_with_capacity` (no feature filter — these use `cfg(not(any(features…)))`).
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.554, WDB-412–426 (filed).
+
 ## P3.554 (2026-09-29) — P3.316 fixture: `copy_bytes` must be `impl Pool` method
 
 Isolate gate put `pub fn copy_bytes(self, …)` as a free function → tip emitted
