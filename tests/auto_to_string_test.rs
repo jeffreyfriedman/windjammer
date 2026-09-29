@@ -36,15 +36,18 @@ fn test_vec_push_string_literal() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Should automatically add .to_string() for string literals
+    // Should convert string literal for Vec<String>::push — prefer `.to_string()`,
+    // but `String::from("…")` is an equally correct owned emit.
     assert!(
-        generated.contains("push(\"first\".to_string())"),
+        generated.contains("push(\"first\".to_string())")
+            || generated.contains("push(String::from(\"first\"))"),
         "Should auto-convert first string literal. Generated:\n{}",
         generated
     );
 
     assert!(
-        generated.contains("push(\"second\".to_string())"),
+        generated.contains("push(\"second\".to_string())")
+            || generated.contains("push(String::from(\"second\"))"),
         "Should auto-convert second string literal. Generated:\n{}",
         generated
     );
@@ -244,12 +247,15 @@ fn test_hashmap_insert_string_keys() {
 
     let generated = test_utils::compile_single_result(code).expect("Compilation failed");
 
-    // Should convert string literal keys for HashMap<String, _>
-    // Integer inference may add suffixes like _i32
+    // Should convert string literal keys for HashMap<String, _>.
+    // Integer inference may add suffixes like _i32. `String::from` is also valid.
     assert!(
         generated.contains("insert(\"key1\".to_string(), 1)")
             || generated.contains("insert(\"key1\".to_string(), 1_i32)")
-            || generated.contains("insert(\"key1\".to_string(), 1_i64)"),
+            || generated.contains("insert(\"key1\".to_string(), 1_i64)")
+            || generated.contains("insert(String::from(\"key1\"), 1)")
+            || generated.contains("insert(String::from(\"key1\"), 1_i32)")
+            || generated.contains("insert(String::from(\"key1\"), 1_i64)"),
         "Should convert HashMap string key literals. Generated:\n{}",
         generated
     );
@@ -257,7 +263,10 @@ fn test_hashmap_insert_string_keys() {
     assert!(
         generated.contains("insert(\"key2\".to_string(), 2)")
             || generated.contains("insert(\"key2\".to_string(), 2_i32)")
-            || generated.contains("insert(\"key2\".to_string(), 2_i64)"),
+            || generated.contains("insert(\"key2\".to_string(), 2_i64)")
+            || generated.contains("insert(String::from(\"key2\"), 2)")
+            || generated.contains("insert(String::from(\"key2\"), 2_i32)")
+            || generated.contains("insert(String::from(\"key2\"), 2_i64)"),
         "Should convert HashMap string key literals. Generated:\n{}",
         generated
     );

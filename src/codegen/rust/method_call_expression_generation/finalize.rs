@@ -1359,7 +1359,28 @@ impl<'ast> CodeGenerator<'ast> {
                             )
                         })
                 });
-            if (expects_pattern || expects_collection_key) && !emit_owned_string {
+            // Method-level map-key is true when the *first* user arg is Borrowed (incl.
+            // demoted `&str` on `has_item`). Never run string-key normalize on later
+            // Copy field args (`item.quantity` → `&i32` E0308). Per-arg collection-key
+            // / Pattern slots still normalize.
+            let skip_copy_field_key_norm = expects_collection_key
+                && !expects_pattern
+                && matches!(arg_expr, Expression::FieldAccess { .. } | Expression::Index { .. })
+                && self.expression_is_copy(arg_expr)
+                && !resolved_signature
+                    .as_ref()
+                    .or(method_signature.as_ref())
+                    .is_some_and(|sig| {
+                        self.is_collection_key_lookup_at_site(
+                            sig,
+                            i,
+                            receiver_type_name.as_deref(),
+                        )
+                    });
+            if (expects_pattern || expects_collection_key)
+                && !emit_owned_string
+                && !skip_copy_field_key_norm
+            {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                     arg_expr,
                     arg_str,
