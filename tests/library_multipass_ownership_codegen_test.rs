@@ -824,6 +824,7 @@ fn test_match_borrow_break_ref_binding_clones_non_copy_in_tuple() {
         r#"
 pub enum AssetError {
     NotFound,
+    Io(string),
 }
 
 pub struct LoadedAsset {
@@ -1766,6 +1767,7 @@ fn test_tuple_insert_then_reuse_clones_at_insert() {
         r#"
 pub struct SaveData {
     bytes: i32,
+    label: string,
 }
 
 pub struct SaveMetadata {
