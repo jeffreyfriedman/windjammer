@@ -852,8 +852,8 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 
 | Gate | Status |
 |------|--------|
-| WDB-413 MultiFile | ❌ isolate RED — `start(line.clone(), &key) < slen(&line)` (`start` keeps unused `line: String`; `slen` already `&str`) |
-| WDB-413 tip-out | ❌ product RED — `gpu::string_len(line.clone())` in `rel_tip_out` + `gen` `testing/agent_playtest_protocol.rs` |
+| WDB-413 MultiFile | ✅ isolate GREEN (re-verified 2026-09-29 / P3.543 tip) — no `line.clone()` |
+| WDB-413 tip-out | ❌ product RED — `gpu::string_len(line.clone())` in `rel_tip_out` + `gen` until regen |
 
 **Root cause layer:** signature — unused/unread `line` formal on `start` stays owned `String`, so `present` clones before the second read. Product `gpu::string_len` also stays owned, so tip emits `string_len(line.clone())` after `key_value_start(&line, key)`. WJ is `start(line, key) < slen(line)` / `gpu::string_len(line)` with no `.clone()`.
 
@@ -972,8 +972,8 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 
 | Gate | Status |
 |------|--------|
-| WDB-409 MultiFile | ❌ isolate RED — `set(name: &str, value: Val)` + `set_variable(name: &String, value: Val)` then `name.to_string()` |
-| WDB-409 tip-out | ❌ RED — `rel_tip_out` + `gen` `visual_scripting/runtime.rs` + `rendering/unified_renderer.rs` |
+| WDB-409 MultiFile | ✅ isolate GREEN (re-verified 2026-09-29 / P3.543 tip) |
+| WDB-409 tip-out | ❌ RED — `rel_tip_out` + `gen` until product regen |
 
 **Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolate reproduces name demotion (`&str` / `&String`); product also demotes non-Copy `Value` to `&Value`.
 
