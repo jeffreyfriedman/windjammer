@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.553 (2026-09-29) — accept demotion in owned-Vec / string-formal gates
+
+Tip demotes read-only `Vec` formals to `&Vec` and field-store `string` formals
+to `&str` + `.to_string()` (P3.346/P3.548). Legacy gates still required owned
+formals + `.clone()` / `"lit".to_string()` — false REDs when emit cargo-checks.
+
+| Gate | Status |
+|------|--------|
+| `owned_vec_reuse_into_owned_callee_must_clone_not_reborrow` | ✅ tip GREEN — demoted `&Vec` + `&items` ok |
+| `string_const_into_owned_string_formal_must_auto_own` | ✅ tip GREEN — demoted `&str` ok |
+| `bare_string_literal_into_owned_string_method_must_auto_own` | ✅ tip GREEN — demoted `&str` + bare lit |
+| `domain_push_owned_string_literal_via_signature_not_name` | ✅ tip GREEN — demoted `&str` ok |
+
+**Root cause layer:** none in compiler — gate truth catch-up to formal demotion.
+
+**What became unnecessary:** treating demoted `&Vec` / `&str` formals as missing
+clone / `.to_string()` peels.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_vec_reuse string_const_into_owned bare_string_literal_into_owned domain_push_owned_string`
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.552, WDB-412–426 (filed).
+
 ## P3.552 (2026-09-29) — WDB-328 neg-init loops stay i64 (not i32 literal peers)
 
 P3.549 small-literal while-peer and an inverted WDB-328 block forced

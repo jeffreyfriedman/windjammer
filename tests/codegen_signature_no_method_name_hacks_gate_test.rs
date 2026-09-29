@@ -78,10 +78,26 @@ fn emit() {
 "#,
         "domain_push.wj",
     );
-    assert!(
-        rust.contains("push(\"evt\".to_string())") || rust.contains("push(String::from(\"evt\"))"),
-        "owned string formal on domain push must coerce literal:\n{rust}"
-    );
+    let formal_owned = rust.contains("fn push") && rust.contains("msg: String");
+    let formal_str = rust.contains("fn push") && rust.contains("msg: &str");
+    if formal_owned {
+        assert!(
+            rust.contains("push(\"evt\".to_string())")
+                || rust.contains("push(String::from(\"evt\"))"),
+            "owned string formal on domain push must coerce literal:\n{rust}"
+        );
+    } else {
+        assert!(
+            formal_str,
+            "domain push msg formal should be String or demoted &str:\n{rust}"
+        );
+        assert!(
+            rust.contains("push(\"evt\")")
+                || rust.contains("push(\"evt\".to_string())")
+                || rust.contains("push(String::from(\"evt\"))"),
+            "demoted &str formal accepts bare lit (or owned coerce):\n{rust}"
+        );
+    }
 }
 
 /// Borrowed iterator item calling a consuming method must clone via signature
