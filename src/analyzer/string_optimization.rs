@@ -727,6 +727,9 @@ impl<'ast> Analyzer<'ast> {
                         // Check if this method expects &String or String (owned) for this parameter position.
                         // Static/type calls (`Quest::new`) must use qualified keys — bare `new`
                         // hits unrelated constructors in the registry.
+                        // Module MethodCalls (`strings.substring(text, …)` after `use std::strings`)
+                        // must use `{module}::{method}` — bare `substring` collides with WJ stubs
+                        // that wrap `Reference(String)` and falsely force `&String` formals (P3.524).
                         let method_sig = if let Expression::Identifier { name, .. } = &**object {
                             if name.starts_with(|c: char| c.is_ascii_uppercase()) {
                                 super::stdlib_method_traits::lookup_method_signature(
@@ -734,13 +737,33 @@ impl<'ast> Analyzer<'ast> {
                                     Some(name.as_str()),
                                     registry,
                                 )
+                            } else if registry.has_runtime_std_module(name)
+                                || registry
+                                    .get_signature(&format!("{name}::{method}"))
+                                    .is_some()
+                            {
+                                registry.get_signature(&format!("{name}::{method}"))
                             } else {
                                 None
                             }
                         } else {
                             None
                         }
-                        .or_else(|| registry.lookup_method(method));
+                        .or_else(|| {
+                            // Only fall back to bare/suffix lookup when the receiver is not an
+                            // imported runtime module path (those are free-fn keys).
+                            match &**object {
+                                Expression::Identifier { name, .. }
+                                    if registry.has_runtime_std_module(name)
+                                        || crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
+                                            name,
+                                        ) =>
+                                {
+                                    None
+                                }
+                                _ => registry.lookup_method(method),
+                            }
+                        });
 
                         if let Some(sig) = method_sig {
                             if let Some(param_type) = sig.param_type_for_arg(idx) {

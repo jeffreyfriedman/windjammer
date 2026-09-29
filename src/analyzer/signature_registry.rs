@@ -1422,7 +1422,11 @@ impl SignatureRegistry {
                 if source.is_trait_impl_method_key(name) {
                     self.record_trait_impl_method_key(aliased.clone());
                 }
-                self.add_function(aliased, sig.clone());
+                // WJ `std/strings.wj` declaration stubs must not clobber scanned
+                // runtime AsRef/`&str` under `strings::fn` (P3.524).
+                if !self.runtime_strings_alias_would_clobber(&aliased, sig) {
+                    self.add_function(aliased, sig.clone());
+                }
             }
             if !module_path.is_empty() && !name.starts_with(&format!("{}::", module_path)) {
                 let aliased = format!("{}::{}", module_path, name);
@@ -1432,9 +1436,48 @@ impl SignatureRegistry {
                 if source.is_trait_impl_method_key(name) {
                     self.record_trait_impl_method_key(aliased.clone());
                 }
-                self.add_function(aliased, sig.clone());
+                if !self.runtime_strings_alias_would_clobber(&aliased, sig) {
+                    self.add_function(aliased, sig.clone());
+                }
             }
         }
+    }
+
+    /// True when `aliased` is a `strings::*` key whose existing/fallback contract is
+    /// runtime AsRef/`&str` and `incoming` is a weaker WJ owned / `&String` stub.
+    fn runtime_strings_alias_would_clobber(
+        &self,
+        aliased: &str,
+        incoming: &FunctionSignature,
+    ) -> bool {
+        if !(aliased.starts_with("strings::") || aliased.starts_with("std::strings::")) {
+            return false;
+        }
+        let Some(existing) = self.get_signature(aliased) else {
+            return false;
+        };
+        let existing_is_runtime_str = existing.param_types.iter().any(|t| {
+            crate::ir::formal_predicates::param_is_rust_str_ref(t)
+        }) || existing
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|f| f.iter().any(|&b| b));
+        if !existing_is_runtime_str {
+            return false;
+        }
+        let incoming_weaker = incoming.param_types.iter().any(|t| {
+            crate::ir::formal_predicates::param_is_rust_string_ref(t)
+                || matches!(t, Type::String)
+                || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+        }) || incoming
+            .param_ownership
+            .iter()
+            .any(|o| matches!(o, OwnershipMode::Owned));
+        incoming_weaker
+            && !incoming
+                .param_types
+                .iter()
+                .any(|t| crate::ir::formal_predicates::param_is_rust_str_ref(t))
     }
 
     /// Register `crate_key::fn` aliases for every bare free-function signature.
@@ -1899,6 +1942,11 @@ impl SignatureRegistry {
     /// WJ `std/strings.wj` / stdlib_meta stubs last-write owned `string` over scanned
     /// runtime `AsRef<str>` / `&str` (e.g. `strings::len`). Restore the fallback
     /// borrow contract for `strings::*` keys so wrapper formals can demote.
+    ///
+    /// Also restores when multipass re-wraps the WJ stub as `Reference(String)` +
+    /// Borrowed (P3.524): ownership no longer looks "weaker", but the haystack is
+    /// still not runtime `Reference(str)` / AsRef — that forced adapter `find_char`
+    /// to emit `text: &String` for `strings.substring(text, …)` in nested modules.
     pub fn restore_runtime_borrowed_strings_signatures(&mut self) {
         let Some(fallback) = self.global_fallback.clone() else {
             return;
@@ -1919,15 +1967,54 @@ impl SignatureRegistry {
             if fb.param_ownership.len() != local.param_ownership.len() {
                 continue;
             }
-            let runtime_stronger = fb.param_ownership.iter().zip(&local.param_ownership).any(
-                |(rt, loc)| {
+            let runtime_ownership_stronger = fb
+                .param_ownership
+                .iter()
+                .zip(&local.param_ownership)
+                .any(|(rt, loc)| {
                     matches!(
                         rt,
                         OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                     ) && matches!(loc, OwnershipMode::Owned)
-                },
-            );
-            if !runtime_stronger {
+                });
+            let runtime_str_ref_beats_string_ref = fb
+                .param_types
+                .iter()
+                .zip(local.param_types.iter())
+                .any(|(rt, loc)| {
+                    crate::ir::formal_predicates::param_is_rust_str_ref(rt)
+                        && (crate::ir::formal_predicates::param_is_rust_string_ref(loc)
+                            || matches!(loc, Type::String)
+                            || matches!(loc, Type::Custom(n) if n == "string" || n == "String"))
+                });
+            let runtime_emit_ref_beats_owned_or_string_ref = fb
+                .emitted_rust_ref_params
+                .as_ref()
+                .is_some_and(|flags| {
+                    flags.iter().enumerate().any(|(i, &emits_ref)| {
+                        if !emits_ref {
+                            return false;
+                        }
+                        let loc_ty = local.param_types.get(i);
+                        let loc_owned = matches!(
+                            local.param_ownership.get(i),
+                            Some(OwnershipMode::Owned)
+                        );
+                        loc_owned
+                            || loc_ty.is_some_and(|t| {
+                                crate::ir::formal_predicates::param_is_rust_string_ref(t)
+                                    || matches!(t, Type::String)
+                                    || matches!(
+                                        t,
+                                        Type::Custom(n) if n == "string" || n == "String"
+                                    )
+                            })
+                    })
+                });
+            if !runtime_ownership_stronger
+                && !runtime_str_ref_beats_string_ref
+                && !runtime_emit_ref_beats_owned_or_string_ref
+            {
                 continue;
             }
             let mut sig = fb.clone();
@@ -2324,6 +2411,101 @@ pub fn parse_field(line: string) -> string {
             vec![OwnershipMode::Borrowed],
             "runtime AsRef<str> must win over WJ owned stub, got {:?}",
             sig.param_ownership
+        );
+    }
+
+    #[test]
+    fn restore_runtime_strings_beats_reference_string_haystack() {
+        // P3.524: multipass aliases + analyze wrap WJ stubs as Reference(String)+Borrowed
+        // so Owned→Borrowed restore never fires — still must restore Reference(str).
+        let mut local = SignatureRegistry::layered(std::sync::Arc::new(SignatureRegistry::new()));
+        local.add_function(
+            "strings::substring".into(),
+            FunctionSignature {
+                name: "substring".into(),
+                param_types: vec![
+                    Type::Reference(Box::new(Type::String)),
+                    Type::Custom("usize".into()),
+                    Type::Custom("usize".into()),
+                ],
+                formal_param_types: vec![Type::String, Type::Custom("usize".into()), Type::Custom("usize".into())],
+                param_ownership: vec![
+                    OwnershipMode::Borrowed,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                ],
+                return_type: Some(Type::String),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        local.restore_runtime_borrowed_strings_signatures();
+        let sig = local
+            .get_signature("strings::substring")
+            .expect("strings::substring");
+        assert!(
+            matches!(
+                sig.param_types.first(),
+                Some(Type::Reference(inner)) if matches!(&**inner, Type::Custom(n) if n == "str")
+            ),
+            "restore must reinstate runtime AsRef/&str haystack, got {:?}",
+            sig.param_types.first()
+        );
+    }
+
+    #[test]
+    fn register_module_aliases_does_not_clobber_runtime_strings_asref() {
+        let mut global = SignatureRegistry::layered(std::sync::Arc::new(SignatureRegistry::new()));
+        let mut stubs = SignatureRegistry::empty();
+        stubs.add_function(
+            "substring".into(),
+            FunctionSignature {
+                name: "substring".into(),
+                param_types: vec![
+                    Type::String,
+                    Type::Custom("usize".into()),
+                    Type::Custom("usize".into()),
+                ],
+                formal_param_types: vec![
+                    Type::String,
+                    Type::Custom("usize".into()),
+                    Type::Custom("usize".into()),
+                ],
+                param_ownership: vec![
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                ],
+                return_type: Some(Type::String),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        // Ensure runtime signature is visible before alias merge.
+        let before = global
+            .get_signature("strings::substring")
+            .expect("runtime strings::substring")
+            .param_types
+            .first()
+            .cloned();
+        global.register_module_aliases(&stubs, "strings", "strings");
+        let after = global
+            .get_signature("strings::substring")
+            .expect("strings::substring after alias");
+        assert_eq!(
+            after.param_types.first(),
+            before.as_ref(),
+            "WJ owned stub alias must not clobber runtime AsRef/&str"
         );
     }
 }
