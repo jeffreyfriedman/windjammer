@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.544 (2026-09-29) — extern `string_to_ffi` must clone String fields
+
+`audio_play_music(self.current_track)` emitted
+`string_to_ffi(self.current_track.to_string())` instead of `.clone()`.
+
+| Gate | Status |
+|------|--------|
+| `test_extern_string_to_ffi_clones_self_field_without_move` | ✅ tip GREEN |
+
+**Root cause layer:** temporary reconcile (FFI wrap) — narrowed always-`.to_string()`
+for extern text args so FieldAccess String places use `.clone()`; demoted `&str`
+Identifiers still `.to_string()`.
+
+**What became unnecessary:** blanket `.to_string()` on every non-literal FFI string arg.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- test_extern_string_to_ffi_clones_self_field_without_move library_multipass_owned_string_to_string_method_must_borrow` → **2 passed**
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.543, WDB-412–426 (filed).
+
 ## P3.543 (2026-09-29) — load_twice `path: &mut String` from invent-MutBorrowed
 
 `load_twice(path)` with `loader.load(path)` twice emitted `path: &mut String` +

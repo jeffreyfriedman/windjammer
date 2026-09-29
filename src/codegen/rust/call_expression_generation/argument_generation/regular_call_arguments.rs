@@ -128,18 +128,13 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 format!("{}.as_bytes().len()", arg_str),
                             ];
                         }
-                        // string/String params → FfiString via string_to_ffi
-                        // TDD FIX: Always use .to_string() - infer_expression_type returns
-                        // declared param type (Type::String), not actual Rust type. When
-                        // ownership infers Borrowed, param becomes &str in Rust, but we
-                        // thought it was String and passed directly → E0308.
-                        // .to_string() works for both &str and String (String::to_string = clone).
+                        // string/String params → FfiString via string_to_ffi.
+                        // Literals / &str / Display need `.to_string()`. Already-owned
+                        // String places (FieldAccess / Identifier) use `.clone()` —
+                        // never `.to_string()` (E0507-safe duplicate; WDB-110/111).
                         //
-                        // TDD FIX: Strip redundant .to_string() before wrapping.
-                        // Bug: User writes render_text(label.to_string(), x, y). Expression
-                        // generation produces "label.to_string()", then we added another
-                        // → string_to_ffi(label.to_string().to_string()). Fix: If arg_str
-                        // already ends with .to_string(), don't add another.
+                        // Strip redundant `.to_string()` before wrapping (user wrote
+                        // `label.to_string()` → avoid `.to_string().to_string()`).
                         if crate::codegen::rust::string_utilities::param_is_owned_string_type(param_type)
                             || crate::codegen::rust::string_utilities::param_is_rust_str_ref(param_type)
                             || crate::codegen::rust::types::is_windjammer_text_type(param_type)
@@ -162,6 +157,20 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 ffi_arg.clone()
                             } else if ffi_arg.ends_with(".to_string()") {
                                 ffi_arg.clone()
+                            } else if matches!(arg, Expression::FieldAccess { .. }) {
+                                // `self.field` / `param.field` String places: clone into FFI
+                                // (never Display `.to_string()` — WDB-110/111 / extern replay).
+                                format!("{}.clone()", ffi_arg)
+                            } else if let Expression::Identifier { name, .. } = arg {
+                                // Demoted `&str` formals need `.to_string()`; owned `String`
+                                // locals/params use `.clone()`.
+                                let demoted_str = gen.emitted_rust_ref_formals.contains(name)
+                                    || gen.inferred_borrowed_params.contains(name);
+                                if demoted_str {
+                                    format!("{}.to_string()", ffi_arg)
+                                } else {
+                                    format!("{}.clone()", ffi_arg)
+                                }
                             } else {
                                 format!("{}.to_string()", ffi_arg)
                             };
