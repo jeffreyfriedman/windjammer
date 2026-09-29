@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.547 (2026-09-29) — multipass clone gates need non-Copy payloads
+
+`test_match_borrow_break_ref_binding_clones_non_copy_in_tuple` and
+`test_tuple_insert_then_reuse_clones_at_insert` were ❌ because tip correctly
+skipped `.clone()` for Copy `AssetError` / `SaveData { bytes: i32 }`.
+
+| Gate | Status |
+|------|--------|
+| `test_match_borrow_break_ref_binding_clones_non_copy_in_tuple` | ✅ tip GREEN — `AssetError::Io(string)` non-Copy |
+| `test_tuple_insert_then_reuse_clones_at_insert` | ✅ tip GREEN — `SaveData.label: string` non-Copy |
+
+**Root cause layer:** none in compiler — false RED from Copy fixtures (same class as P3.545).
+
+**What became unnecessary:** treating Copy Err/`SaveData` reuse as a missing clone peel.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- test_match_borrow_break_ref_binding_clones_non_copy_in_tuple test_tuple_insert_then_reuse_clones_at_insert` → **2 passed**
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.546, WDB-412–426 (filed).
+
 ## P3.546 (2026-09-29) — WDB-081 CSR view loop must borrow, not `view.clone()`
 
 `graph_csr_local_out_degree` / `neighbor_at` take pub Custom `GraphAdjacencyView`,
