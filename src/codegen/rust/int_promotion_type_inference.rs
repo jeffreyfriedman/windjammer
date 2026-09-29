@@ -568,9 +568,26 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             return;
         };
+        // P3.323/P3.350: `while i < 512` — small literal bound → i32 counter (not WJ int/i64).
+        if matches!(
+            bound,
+            Expression::Literal {
+                value: Literal::Int(n),
+                ..
+            } if (0..=4096).contains(n)
+        ) {
+            *peer = Some(Type::Int32);
+            return;
+        }
+        if self.expression_has_i32_width_in_tree(bound) {
+            *peer = Some(Type::Int32);
+            return;
+        }
         if let Some(t) = self.infer_expression_type(bound) {
-            if matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32") {
+            if matches!(t, Type::Uint) || matches!(&t, Type::Custom(n) if n == "u32") {
                 *peer = Some(Type::Uint);
+            } else if matches!(t, Type::Int32) || matches!(&t, Type::Custom(n) if n == "i32") {
+                *peer = Some(Type::Int32);
             }
         }
     }
@@ -1131,12 +1148,17 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(Type::Int) | Some(Type::Int32)
                     );
                 // P3.497: `now` from `timestamp_millis` / i64 lets is not an i32 coord counter.
-                let i64_init = matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
-                    || matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Custom(n)) if n == "int" || n == "i64"
-                    )
-                    || self.int_type_for_mixed_int_codegen(left) == IntType::I64;
+                // P3.549: untyped `let mut i = 0` (literal-init loop counter) stays WJ `Int` in
+                // `local_var_types` but must still promote when the while peer is i32-width
+                // (`while i < len - 1` after `let len = …len() as i32`) — otherwise emit
+                // keeps `0_i64` and casts the i32 bound (`(len - 1) as i64`).
+                let i64_init = !self.literal_init_wj_int_loop_counters.contains(name)
+                    && (matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
+                        || matches!(
+                            self.local_var_types.get(name.as_str()),
+                            Some(Type::Custom(n)) if n == "int" || n == "i64"
+                        )
+                        || self.int_type_for_mixed_int_codegen(left) == IntType::I64);
                 if is_counter && !i64_init {
                     self.local_var_types.insert(name.clone(), Type::Int32);
                     self.codegen_i32_binding_names.insert(name.clone());

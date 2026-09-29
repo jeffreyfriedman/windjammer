@@ -50,7 +50,7 @@ fn as_str(value: Value) -> Option<string> { None }
 fn as_i64(value: Value) -> Option<i64> { None }
 fn as_f64(value: Value) -> Option<f64> { None }
 fn as_bool(value: Value) -> Option<bool> { None }
-fn len(value: Value) -> int { 0 }
+fn len(value: Value) -> usize { 0 }
 fn is_empty(value: Value) -> bool { true }
 
 /// Array element by index (objects use `get`).
