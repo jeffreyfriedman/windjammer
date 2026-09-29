@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.543 (2026-09-29) — load_twice `path: &mut String` from invent-MutBorrowed
+
+`load_twice(path)` with `loader.load(path)` twice emitted `path: &mut String` +
+`load(path)` instead of Borrowed/`&str` or owned + `load(&path)`.
+
+| Gate | Status |
+|------|--------|
+| `test_library_multipass_owned_string_to_string_method_must_borrow` | ✅ tip GREEN |
+
+**Root cause layer:** constraint/mutation detection — missing-signature fallback
+invented MutBorrowed for any lowercase Identifier receiver (`loader` treated as a
+module). Also replaced bare `lookup_method(method)` MutBorrowed checks with
+`callable_arg_expects_mut_borrow` (typed/unique only).
+
+**What became unnecessary:** invent-MutBorrowed `else if is_lowercase_module…`
+branch in `arg_passed_to_mut_borrowed_callee`; bare `registry.lookup_method(method)`
+homonym path for method-arg MutBorrowed.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- library_multipass_owned_string_to_string_method_must_borrow` → **1 passed**
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.542, WDB-412–426 / P3.509–P3.542 (filed).
+
 ## P3.542 (2026-09-29) — e0308 Copy field into owned i32 must not keep `&`
 
 `inv.has_item(item.item_id, item.quantity)` with `quantity: i32` emitted
@@ -20,7 +43,7 @@ no new reconcile peel (IR path was already correct).
 
 **Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3524`
 - `cargo test --release --test all -- bug_e0308_borrowed_struct_field_test auto_to_string_test` → **9 passed**
-- `library_multipass_owned_string_to_string_method_must_borrow` remains ❌ on clean HEAD (pre-existing; not this fix)
+- `library_multipass_owned_string_to_string_method_must_borrow` → fixed in P3.543
 
 **Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.541, WDB-412–426 / P3.509–P3.541 (filed).
 

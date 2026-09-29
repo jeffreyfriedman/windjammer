@@ -481,20 +481,6 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    fn is_external_module_call(function: &Expression) -> bool {
-        match function {
-            Expression::FieldAccess { object, .. } => matches!(
-                &**object,
-                Expression::Identifier { name, .. }
-                    if name.chars().next().is_some_and(|c| c.is_lowercase())
-            ),
-            Expression::Identifier { name, .. } => {
-                name.contains("::") && name.chars().next().is_some_and(|c| c.is_lowercase())
-            }
-            _ => false,
-        }
-    }
-
     fn is_lowercase_module_identifier(expr: &Expression) -> bool {
         matches!(
             expr,
@@ -517,24 +503,19 @@ impl<'ast> Analyzer<'ast> {
         &self,
         _name: &str,
         func_name: &str,
-        function: &Expression,
+        _function: &Expression,
         arg_index: usize,
         registry: &SignatureRegistry,
-        param_type_hint: Option<&Type>,
+        _param_type_hint: Option<&Type>,
     ) -> bool {
+        // Fail closed: only MutBorrowed when a real signature says so.
+        // Never invent MutBorrowed for unknown lowercase receivers — locals like
+        // `loader.load(path)` parse as MethodCall on a lowercase Identifier and must
+        // not be treated as `module::load` FFI (that forced `path: &mut String`).
         if let Some(sig) = Self::lookup_call_signature(registry, func_name) {
-            if sig
+            return sig
                 .param_ownership_for_arg(arg_index)
-                .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
-            {
-                return true;
-            }
-        } else if (Self::is_external_module_call(function)
-            || Self::is_lowercase_module_identifier(function))
-            && arg_index == 0
-            && param_type_hint.is_some_and(|ty| !self.is_copy_type(ty))
-        {
-            return true;
+                .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed));
         }
         false
     }
@@ -587,6 +568,20 @@ impl<'ast> Analyzer<'ast> {
         }
         self.resolve_field_chain_type_for_param(param_name, object, param_type_hint)
             .and_then(|ty| type_base_for_registry_lookup(&ty))
+    }
+
+    /// Receiver type for a method call when deciding whether an *argument* is `&mut`.
+    ///
+    /// Only resolves when the receiver expression is rooted at `checked_param`.
+    /// Locals / sibling params without a type map yield `None` — callers must fail
+    /// closed (typed or unique signature), never bare `lookup_method` homonyms.
+    fn method_call_object_type_base(
+        &self,
+        object: &Expression,
+        checked_param: &str,
+        checked_param_type: Option<&Type>,
+    ) -> Option<String> {
+        self.receiver_type_base_for_param_method_call(checked_param, object, checked_param_type)
     }
 
     pub(crate) fn has_mutable_method_call(
@@ -650,9 +645,12 @@ impl<'ast> Analyzer<'ast> {
                 // short-circuit on method-name lists (Vec::remove shares "remove").
                 for (i, (_, arg)) in arguments.iter().enumerate() {
                     if matches!(arg, Expression::Identifier { name: id, .. } if id == name) {
-                        let receiver_type = self.receiver_type_base_for_param_method_call(
-                            name,
+                        // Receiver type for the *object*, not the checked arg name.
+                        // `receiver_type_base_for_param_method_call(arg, …)` is wrong here:
+                        // `loader.load(path)` checks `path` but the receiver is `loader`.
+                        let receiver_type = self.method_call_object_type_base(
                             object,
+                            name,
                             param_type_hint,
                         );
                         // `out.push(item)` stores owned `item` into the receiver — not
@@ -666,13 +664,16 @@ impl<'ast> Analyzer<'ast> {
                         ) {
                             continue;
                         }
-                        if let Some(sig) = registry.lookup_method(method) {
-                            if sig
-                                .param_ownership_for_arg(i)
-                                .is_some_and(|m| matches!(m, OwnershipMode::MutBorrowed))
-                            {
-                                return true;
-                            }
+                        // Fail closed: typed / unique signature only — never bare
+                        // `lookup_method("load")` (first hit among MutBorrowed homonyms).
+                        if super::stdlib_method_traits::callable_arg_expects_mut_borrow(
+                            method,
+                            receiver_type.as_deref(),
+                            i,
+                            false,
+                            registry,
+                        ) {
+                            return true;
                         }
                     }
                 }
