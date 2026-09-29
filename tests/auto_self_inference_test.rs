@@ -57,10 +57,13 @@ impl Avatar {
     println!("Generated Rust code:\n{}", rust_code);
 
     // THE WINDJAMMER WAY: Compiler should auto-detect self usage
-    // For methods that mutate self and return self, infer &mut self
+    // For methods that mutate self and return self, infer &mut self or mut self.
+    // String formals may demote to &str + .to_string() at the field store (P3.548).
     assert!(
         rust_code.contains("fn alt(&mut self, alt: String) -> Avatar")
-            || rust_code.contains("fn alt(mut self, alt: String) -> Avatar"),
+            || rust_code.contains("fn alt(mut self, alt: String) -> Avatar")
+            || rust_code.contains("fn alt(&mut self, alt: &str) -> Avatar")
+            || rust_code.contains("fn alt(mut self, alt: &str) -> Avatar"),
         "Should auto-infer self parameter (either &mut self or mut self).\nGenerated:\n{}",
         rust_code
     );
@@ -142,9 +145,11 @@ impl Builder {
     let rust_code = test_utils::compile_single_result(source).expect("Compilation failed");
     println!("Generated Rust code:\n{}", rust_code);
 
-    // Builder pattern should infer mut self (owned)
+    // Builder pattern should infer mut self (owned). Formal may demote to &str
+    // with .to_string() at the field store (P3.548).
     assert!(
-        rust_code.contains("fn with_value(mut self, value: String) -> Builder"),
+        rust_code.contains("fn with_value(mut self, value: String) -> Builder")
+            || rust_code.contains("fn with_value(mut self, value: &str) -> Builder"),
         "Should auto-infer mut self for builder pattern.\nGenerated:\n{}",
         rust_code
     );

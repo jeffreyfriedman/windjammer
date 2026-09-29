@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.551 (2026-09-29) — accept &str demotion in legacy string/self gates
+
+Tip correctly demotes field-assign `string` formals to `&str` + `.to_string()`
+(P3.346/P3.548). Legacy analyzer/self/`auto_to_string` gates still required
+`String` formal / `"hello".to_string()` at call sites — false REDs.
+
+| Gate | Status |
+|------|--------|
+| `test_string_param_assigned_to_string_field` | ✅ tip GREEN — String or `&str`+`.to_string()` |
+| `test_auto_infer_immutable_self` | ✅ tip GREEN — `mut self` + `&str` ok |
+| `test_auto_infer_owned_self` | ✅ tip GREEN |
+| `test_chained_method_calls` | ✅ tip GREEN — literal ok for `&str` formal |
+
+**Root cause layer:** none in compiler — gate truth catch-up to text demotion.
+
+**What became unnecessary:** treating demoted `&str` field-assign formals as
+regressions vs owned `String`.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- test_string_param_assigned_to_string_field test_auto_infer_immutable_self test_auto_infer_owned_self test_chained_method_calls`
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.550, WDB-412–426 (filed).
+
 ## P3.550 (2026-09-29) — while literal i32 peer yields to WJ int call formals
 
 P3.549's small-literal → i32 while-peer made `from_epoch_secs` emit
