@@ -106,10 +106,18 @@ fn auth_api_product_dispatch_must_not_mut_req() {
         .find(|l| l.contains("fn resolve_token("))
         .unwrap_or("")
         .to_string();
+    let profile_sig = auth_rs
+        .lines()
+        .find(|l| l.contains("fn profile("))
+        .unwrap_or("")
+        .to_string();
+    // Owned `String` method formal into demoted `&str` must borrow. When both
+    // demote to `&str`, bare `authorization` is correct.
     assert!(
         !(resolve_sig.contains("authorization: &str")
+            && profile_sig.contains("authorization: String")
             && resolve_call.contains("resolve_token(authorization,")
             && !resolve_call.contains("resolve_token(&authorization")),
-        "P3.532 RED: owned authorization into demoted &str must borrow:\n{resolve_sig}\n{resolve_call}"
+        "P3.532 RED: owned authorization into demoted &str must borrow:\n{profile_sig}\n{resolve_sig}\n{resolve_call}"
     );
 }

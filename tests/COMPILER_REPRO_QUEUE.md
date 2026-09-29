@@ -233,31 +233,36 @@ Keep `join_url` → `url::join`. Do not rename the package `Url`.
 
 Free `dispatch(req: ServerRequest, …)` was demoted to `&mut` when a same-crate
 method `App::dispatch(&mut self, …)` shared the bare name in the signature
-registry. Cookie get greened via P3.537; find_char is P3.524; resolve_token
-may remain.
+registry. Cookie get greened via P3.537; find_char remains P3.524.
 
 | Gate | Status |
 |------|--------|
-| `free_dispatch_must_not_inherit_method_mut_self` | ✅ isolate GREEN (p3532) |
-| serve / product `dispatch(&mut req)` | ⏳ recheck product after bare-name fix |
+| `free_dispatch_must_not_inherit_method_mut_self` | ✅ isolate GREEN |
+| `owned_method_param_into_demoted_resolve_token_must_borrow` | ✅ isolate GREEN (both demote `&str` after free-fn multipass) |
+| `auth_api_product_dispatch_must_not_mut_req` | ✅ product GREEN — `dispatch(req)`, no `&mut req`; profile/resolve_token both `&str` |
 | HashMap.get path-dep | ✅ P3.537 |
-| resolve_token / find_char | ❌ may remain (P3.524 / demote) |
+| find_char | ❌ P3.524 |
 
 **Why this is a new class:**
 - Notes-api stays green because `NotesApp::dispatch` is owned `mut self` (collided slot Owned).
 - Auth method is MutBorrowed self → free formal inherited `&mut ServerRequest`.
-- Distinct from call-site later-use alone.
+- resolve_token: single-pass free-fn preregister left wrappers Owned while leaf helpers demoted; multipass converges before method bodies emit.
 
-**Root cause layer:** signature registry — do not register inherent methods under
-the bare name; free-fn lookup must ignore method homonyms with self receivers.
+**Root cause layer:** signature registry — (1) do not register inherent methods under
+the bare name; free-fn lookup must ignore method homonyms with self receivers;
+(2) multipass free-function formal preregistration so demotion chains converge;
+(3) AST-owned stubs must not beat preregistered demoted `&str` at call sites.
 
-**Fix:** skip bare-name method registration; filter free-fn signature lookup.
+**What became unnecessary:** post-IR peels for `&mut req` / spawn-name style heuristics — fixed at registry + preregister convergence.
 
-**Ran (2026-09-28):** `.agent-wip/cargo-target-p3532`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- free_dispatch_must_not_inherit_method_mut_self` → **1 passed**
+**Fix:** skip bare-name method registration; filter free-fn signature lookup; 4-pass free-fn formal preregister; `free_function_ast_arg_is_owned_wj_formal` defers to preregistered borrow; enforce_call_site prefers preregistered demotion over stale Owned contract.
 
-**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3532`
+**Ran (2026-09-29):** `.agent-wip/cargo-target-tip-p3532`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- free_dispatch_must_not_inherit_method_mut_self owned_method_param_into_demoted_resolve_token_must_borrow auth_api_product_dispatch_must_not_mut_req`
+
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-tip-p3532`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- free_dispatch_must_not_inherit_method_mut_self`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_method_param_into_demoted_resolve_token_must_borrow`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- auth_api_product_dispatch_must_not_mut_req`
 
 **Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.536–P3.541, WDB-412–426 / P3.509–P3.540.

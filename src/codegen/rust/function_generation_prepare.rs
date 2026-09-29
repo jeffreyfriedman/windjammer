@@ -5519,11 +5519,18 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// True when WJ AST declares a bare owned formal at `arg_index` (owned `string` or bare
     /// non-text Custom). Field-mutated formals return false (emit `&mut`, not owned).
+    ///
+    /// Emit-truth wins: when same-file preregistration demoted the slot to `&str` / `&T`
+    /// (`resolve_token(authorization: &str)`), AST `string` must not force an owned
+    /// call-site pass (P3.532 / auth-api `profile` → `resolve_token`).
     pub(in crate::codegen::rust) fn free_function_ast_arg_is_owned_wj_formal(
         &self,
         callee_name: &str,
         arg_index: usize,
     ) -> bool {
+        if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index) {
+            return false;
+        }
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         for key in [callee_name, simple] {
             if let Some(formals) = self.free_function_ast_formal_param_types.get(key) {

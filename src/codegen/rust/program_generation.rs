@@ -732,11 +732,18 @@ impl<'ast> CodeGenerator<'ast> {
         // `&str` / borrowed contracts instead of stale owned stubs (regression-057/058/060).
         // Include `extern fn` so wrappers that forward into owned FFI see Owned registry
         // slots during the same generate_program pass (WDB-216/275/276).
-        for analyzed_func in analyzed
+        //
+        // Multipass (like impl siblings): `resolve_token` → `bearer_token` demotion chains
+        // need a second (and further) pass so callers see `&str` before any body emits
+        // (P3.532 auth-api `profile` → `resolve_token`).
+        let free_fns: Vec<&AnalyzedFunction<'_>> = analyzed
             .iter()
             .filter(|af| !impl_methods.contains(&af.decl.name))
-        {
-            self.preregister_function_formals_in_registry(analyzed_func);
+            .collect();
+        for _ in 0..4 {
+            for analyzed_func in &free_fns {
+                self.preregister_function_formals_in_registry(analyzed_func);
+            }
         }
 
         // Preregister every impl type before any body emits (cross-type forward refs:

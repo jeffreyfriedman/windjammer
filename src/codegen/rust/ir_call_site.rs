@@ -7220,9 +7220,8 @@ impl<'ast> CodeGenerator<'ast> {
     ) {
         if self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
             && !self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
-            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                sig, param_idx,
-            )
+            // Preregistered demotion (`authorization: &str`) beats stale Owned on the
+            // registry/AST stub so method callers emit `&authorization` (P3.532).
             && !matches!(arg_expr, Expression::Closure { .. })
             && !sig
                 .formal_param_type(param_idx)
@@ -7236,9 +7235,8 @@ impl<'ast> CodeGenerator<'ast> {
                     && !coerced.starts_with('&')
                     && !coerced.starts_with("&mut ")
                 {
-                    if !coerced.ends_with(".clone()") {
-                        *coerced = format!("{coerced}.clone()");
-                    }
+                    // Shared `&str` / `&T`: borrow the owned outer formal (Deref coerces
+                    // `String` → `str`). Do not clone — last-use move into `&` is enough.
                     *coerced = format!("&{coerced}");
                     return;
                 }
