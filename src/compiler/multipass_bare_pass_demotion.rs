@@ -1792,6 +1792,18 @@ fn expr_is_bare_param(expr: &Expression, param_name: &str) -> bool {
     matches!(expr, Expression::Identifier { name, .. } if name == param_name)
 }
 
+fn expr_is_field_or_index_of_param(expr: &Expression, param_name: &str) -> bool {
+    match expr {
+        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+            matches!(
+                object,
+                Expression::Identifier { name, .. } if name == param_name
+            ) || expr_is_field_or_index_of_param(object, param_name)
+        }
+        _ => false,
+    }
+}
+
 /// True when `param` is passed bare into a callee formal that is Owned in the registry
 /// (WDB-216/275/276: `return_f64(buf) { return_f64_ffi(buf) }` with FFI `buf: Vec`).
 fn param_forwarded_bare_into_owned_callee(
@@ -1879,11 +1891,17 @@ fn expr_forwards_bare_into_owned_callee(
         } => {
             if let Some(name) = callee_name_from_expr(function) {
                 for (arg_i, (_, arg)) in arguments.iter().enumerate() {
-                    if expr_is_bare_param(arg, param_name)
-                        && (callee_arg_expects_owned(registry, &name, arg_i)
-                            || callee_arg_expects_owned_in_programs(programs, &name, arg_i))
-                    {
-                        return true;
+                    if expr_is_bare_param(arg, param_name) {
+                        // Registry shared-ref beats AST Custom-as-owned fallback
+                        // (`out_degree` → demoted `vertex_index(&view)`).
+                        if callee_arg_expects_shared_ref(registry, &name, arg_i) {
+                            continue;
+                        }
+                        if callee_arg_expects_owned(registry, &name, arg_i)
+                            || callee_arg_expects_owned_in_programs(programs, &name, arg_i)
+                        {
+                            return true;
+                        }
                     }
                 }
             }
@@ -1899,11 +1917,15 @@ fn expr_forwards_bare_into_owned_callee(
             ..
         } => {
             for (arg_i, (_, arg)) in arguments.iter().enumerate() {
-                if expr_is_bare_param(arg, param_name)
-                    && (callee_arg_expects_owned(registry, method, arg_i)
-                        || callee_arg_expects_owned_in_programs(programs, method, arg_i))
-                {
-                    return true;
+                if expr_is_bare_param(arg, param_name) {
+                    if callee_arg_expects_shared_ref(registry, method, arg_i) {
+                        continue;
+                    }
+                    if callee_arg_expects_owned(registry, method, arg_i)
+                        || callee_arg_expects_owned_in_programs(programs, method, arg_i)
+                    {
+                        return true;
+                    }
                 }
             }
             expr_forwards_bare_into_owned_callee(object, param_name, registry, programs)
@@ -1963,6 +1985,48 @@ fn callee_arg_expects_owned(
             if sig.is_extern {
                 return true;
             }
+        }
+    }
+    false
+}
+
+/// Registry already converged this arg to shared `&T` — do not treat bare forwards as
+/// owned consumption (WDB-081 CSR `vertex_index` after field-projection demotion).
+fn callee_arg_expects_shared_ref(
+    registry: &SignatureRegistry,
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    for key in callee_registry_keys(callee_name, registry) {
+        let Some(sig) = registry.get_signature(&key) else {
+            continue;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
+            return true;
+        }
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(OwnershipMode::Borrowed)
+        ) && sig
+            .param_types
+            .get(pidx)
+            .or_else(|| sig.formal_param_types.get(pidx))
+            .is_some_and(|t| matches!(t, Type::Reference(_)))
+        {
+            return true;
+        }
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(OwnershipMode::Borrowed)
+        ) && sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(true)
+        {
+            return true;
         }
     }
     false
@@ -2272,6 +2336,12 @@ fn callee_pub_owned_formal_skip_bare_pass(
             if param_readonly_field_projection_only(body, param_name) {
                 return false;
             }
+            // WDB-081: field/index reads + bare forward only into demoted shared-ref
+            // siblings (`out_degree` → `vertex_index(&view)`). Positive allowlist —
+            // mutating method receivers / owned peers stay locked Owned.
+            if param_readonly_custom_borrow_passthrough(body, param_name, registry, programs) {
+                return false;
+            }
         }
         // WDB-192/174: pub APIs declare owned Custom formals in source — keep owned
         // even when a single caller bare-passes (`job_store_load_jobs(store, …)`).
@@ -2502,6 +2572,360 @@ pub fn param_forwards_fields_in_call_args_only(body: &[&Statement], param_name: 
 fn param_readonly_field_projection_only(body: &[&Statement], param_name: &str) -> bool {
     param_forwards_fields_in_call_args_only(body, param_name)
         && !param_has_field_or_index_move_binding(body, param_name)
+}
+
+/// WDB-081: pub Custom formal used only via field/index projection and/or bare
+/// forwards into callees that already emit shared `&T` (CSR out_degree → vertex_index).
+fn param_readonly_custom_borrow_passthrough(
+    body: &[&Statement],
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    if param_has_field_or_index_move_binding(body, param_name)
+        || param_stored_in_struct_literal(body, param_name)
+        || param_moved_into_let_binding(body, param_name)
+        || param_whole_binding_returned(body, param_name)
+        || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
+    {
+        return false;
+    }
+    let mut saw_ok = false;
+    for stmt in body {
+        match stmt_readonly_borrow_passthrough_usage(stmt, param_name, registry) {
+            BorrowPassthroughUsage::None => {}
+            BorrowPassthroughUsage::Ok => saw_ok = true,
+            BorrowPassthroughUsage::Disallowed => return false,
+        }
+    }
+    saw_ok
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BorrowPassthroughUsage {
+    None,
+    Ok,
+    Disallowed,
+}
+
+impl BorrowPassthroughUsage {
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (BorrowPassthroughUsage::Disallowed, _)
+            | (_, BorrowPassthroughUsage::Disallowed) => BorrowPassthroughUsage::Disallowed,
+            (BorrowPassthroughUsage::Ok, _) | (_, BorrowPassthroughUsage::Ok) => {
+                BorrowPassthroughUsage::Ok
+            }
+            _ => BorrowPassthroughUsage::None,
+        }
+    }
+}
+
+fn stmt_readonly_borrow_passthrough_usage(
+    stmt: &Statement,
+    param_name: &str,
+    registry: &SignatureRegistry,
+) -> BorrowPassthroughUsage {
+    match stmt {
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        } => expr_readonly_borrow_passthrough_usage(expr, param_name, registry),
+        Statement::Assignment { target, value, .. } => {
+            // Mutating `view.field = …` is not readonly borrow-passthrough.
+            if expr_is_field_or_index_of_param(target, param_name) {
+                BorrowPassthroughUsage::Disallowed
+            } else {
+                expr_readonly_borrow_passthrough_usage(target, param_name, registry).merge(
+                    expr_readonly_borrow_passthrough_usage(value, param_name, registry),
+                )
+            }
+        }
+        Statement::Let { value, else_block, .. } => {
+            let mut u = expr_readonly_borrow_passthrough_usage(value, param_name, registry);
+            if let Some(b) = else_block {
+                for s in b {
+                    u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                }
+            }
+            u
+        }
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            let mut u =
+                expr_readonly_borrow_passthrough_usage(condition, param_name, registry);
+            for s in then_block {
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+            }
+            if let Some(b) = else_block {
+                for s in b {
+                    u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                }
+            }
+            u
+        }
+        Statement::While {
+            condition, body, ..
+        } => {
+            let mut u =
+                expr_readonly_borrow_passthrough_usage(condition, param_name, registry);
+            for s in body {
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+            }
+            u
+        }
+        Statement::For { iterable, body, .. } => {
+            let mut u =
+                expr_readonly_borrow_passthrough_usage(iterable, param_name, registry);
+            for s in body {
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+            }
+            u
+        }
+        Statement::Match { value, arms, .. } => {
+            let mut u = expr_readonly_borrow_passthrough_usage(value, param_name, registry);
+            for arm in arms {
+                u = u.merge(expr_readonly_borrow_passthrough_usage(
+                    &arm.body, param_name, registry,
+                ));
+            }
+            u
+        }
+        _ => {
+            if statement_mentions_param(stmt, param_name) {
+                BorrowPassthroughUsage::Disallowed
+            } else {
+                BorrowPassthroughUsage::None
+            }
+        }
+    }
+}
+
+fn expr_readonly_borrow_passthrough_usage(
+    expr: &Expression,
+    param_name: &str,
+    registry: &SignatureRegistry,
+) -> BorrowPassthroughUsage {
+    match expr {
+        Expression::Identifier { name, .. } if name == param_name => {
+            BorrowPassthroughUsage::Disallowed
+        }
+        Expression::FieldAccess { object, .. } => {
+            if matches!(
+                object,
+                Expression::Identifier { name, .. } if name == param_name
+            ) {
+                BorrowPassthroughUsage::Ok
+            } else {
+                expr_readonly_borrow_passthrough_usage(object, param_name, registry)
+            }
+        }
+        Expression::Index { object, index, .. } => {
+            let obj = if matches!(
+                object,
+                Expression::Identifier { name, .. } if name == param_name
+            ) || expr_is_field_or_index_of_param(object, param_name)
+            {
+                BorrowPassthroughUsage::Ok
+            } else {
+                expr_readonly_borrow_passthrough_usage(object, param_name, registry)
+            };
+            obj.merge(expr_readonly_borrow_passthrough_usage(
+                index, param_name, registry,
+            ))
+        }
+        Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } => {
+            // Direct `param.method(...)` is not a readonly field projection.
+            if matches!(
+                object,
+                Expression::Identifier { name, .. } if name == param_name
+            ) {
+                return BorrowPassthroughUsage::Disallowed;
+            }
+            let mut u = expr_readonly_borrow_passthrough_usage(object, param_name, registry);
+            for (arg_i, (_, arg)) in arguments.iter().enumerate() {
+                if expr_is_bare_param(arg, param_name) {
+                    if callee_arg_expects_shared_ref(registry, method, arg_i) {
+                        u = u.merge(BorrowPassthroughUsage::Ok);
+                    } else {
+                        return BorrowPassthroughUsage::Disallowed;
+                    }
+                } else {
+                    u = u.merge(expr_readonly_borrow_passthrough_usage(
+                        arg, param_name, registry,
+                    ));
+                }
+            }
+            u
+        }
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            let mut u = expr_readonly_borrow_passthrough_usage(function, param_name, registry);
+            let callee = callee_name_from_expr(function);
+            for (arg_i, (_, arg)) in arguments.iter().enumerate() {
+                if expr_is_bare_param(arg, param_name) {
+                    if let Some(ref name) = callee {
+                        if callee_arg_expects_shared_ref(registry, name, arg_i) {
+                            u = u.merge(BorrowPassthroughUsage::Ok);
+                        } else {
+                            return BorrowPassthroughUsage::Disallowed;
+                        }
+                    } else {
+                        return BorrowPassthroughUsage::Disallowed;
+                    }
+                } else {
+                    u = u.merge(expr_readonly_borrow_passthrough_usage(
+                        arg, param_name, registry,
+                    ));
+                }
+            }
+            u
+        }
+        Expression::Binary { left, right, .. } => expr_readonly_borrow_passthrough_usage(
+            left, param_name, registry,
+        )
+        .merge(expr_readonly_borrow_passthrough_usage(
+            right, param_name, registry,
+        )),
+        Expression::Unary { operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. }
+        | Expression::Cast { expr: operand, .. } => {
+            expr_readonly_borrow_passthrough_usage(operand, param_name, registry)
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
+            let mut u = BorrowPassthroughUsage::None;
+            for e in elements {
+                u = u.merge(expr_readonly_borrow_passthrough_usage(e, param_name, registry));
+            }
+            u
+        }
+        Expression::StructLiteral { fields, .. } => {
+            let mut u = BorrowPassthroughUsage::None;
+            for (_, e) in fields {
+                u = u.merge(expr_readonly_borrow_passthrough_usage(e, param_name, registry));
+            }
+            u
+        }
+        Expression::Block { statements, .. } => {
+            let mut u = BorrowPassthroughUsage::None;
+            for s in statements {
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+            }
+            u
+        }
+        _ => {
+            if expr_mentions_param(expr, param_name) {
+                BorrowPassthroughUsage::Disallowed
+            } else {
+                BorrowPassthroughUsage::None
+            }
+        }
+    }
+}
+
+fn statement_mentions_param(stmt: &Statement, param_name: &str) -> bool {
+    match stmt {
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Assignment { value: expr, .. } => expr_mentions_param(expr, param_name),
+        Statement::Let { value, else_block, .. } => {
+            expr_mentions_param(value, param_name)
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| statement_mentions_param(s, param_name)))
+        }
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expr_mentions_param(condition, param_name)
+                || then_block
+                    .iter()
+                    .any(|s| statement_mentions_param(s, param_name))
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| statement_mentions_param(s, param_name)))
+        }
+        Statement::While {
+            condition, body, ..
+        } => {
+            expr_mentions_param(condition, param_name)
+                || body.iter().any(|s| statement_mentions_param(s, param_name))
+        }
+        Statement::For { iterable, body, .. } => {
+            expr_mentions_param(iterable, param_name)
+                || body.iter().any(|s| statement_mentions_param(s, param_name))
+        }
+        Statement::Match { value, arms, .. } => {
+            expr_mentions_param(value, param_name)
+                || arms
+                    .iter()
+                    .any(|arm| expr_mentions_param(&arm.body, param_name))
+        }
+        _ => false,
+    }
+}
+
+fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
+    match expr {
+        Expression::Identifier { name, .. } => name == param_name,
+        Expression::FieldAccess { object, .. }
+        | Expression::Index { object, .. }
+        | Expression::Unary { operand: object, .. }
+        | Expression::TryOp { expr: object, .. }
+        | Expression::Await { expr: object, .. }
+        | Expression::Cast { expr: object, .. } => expr_mentions_param(object, param_name),
+        Expression::Binary { left, right, .. } => {
+            expr_mentions_param(left, param_name) || expr_mentions_param(right, param_name)
+        }
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            expr_mentions_param(function, param_name)
+                || arguments
+                    .iter()
+                    .any(|(_, a)| expr_mentions_param(a, param_name))
+        }
+        Expression::MethodCall {
+            object,
+            arguments,
+            ..
+        } => {
+            expr_mentions_param(object, param_name)
+                || arguments
+                    .iter()
+                    .any(|(_, a)| expr_mentions_param(a, param_name))
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
+            elements.iter().any(|e| expr_mentions_param(e, param_name))
+        }
+        Expression::StructLiteral { fields, .. } => {
+            fields.iter().any(|(_, e)| expr_mentions_param(e, param_name))
+        }
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| statement_mentions_param(s, param_name)),
+        _ => false,
+    }
 }
 
 fn param_has_field_or_index_move_binding(body: &[&Statement], param_name: &str) -> bool {
@@ -2853,57 +3277,6 @@ fn expr_stores_param_in_struct_literal(expr: &Expression, param_name: &str) -> b
             expr_stores_param_in_struct_literal(object, param_name)
                 || expr_stores_param_in_struct_literal(index, param_name)
         }
-        _ => false,
-    }
-}
-
-fn statement_mentions_param(stmt: &Statement, param_name: &str) -> bool {
-    match stmt {
-        Statement::Expression { expr, .. }
-        | Statement::Return {
-            value: Some(expr), ..
-        } => expr_mentions_param(expr, param_name),
-        Statement::Let { value, else_block, .. } => {
-            expr_mentions_param(value, param_name)
-                || else_block
-                    .as_ref()
-                    .is_some_and(|b| b.iter().any(|s| statement_mentions_param(s, param_name)))
-        }
-        _ => false,
-    }
-}
-
-fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
-    match expr {
-        Expression::Identifier { name, .. } => name == param_name,
-        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
-            expr_mentions_param(object, param_name)
-        }
-        Expression::Call { function, arguments, .. } => {
-            expr_mentions_param(function, param_name)
-                || arguments
-                    .iter()
-                    .any(|(_, arg)| expr_mentions_param(arg, param_name))
-        }
-        Expression::MethodCall { object, arguments, .. } => {
-            expr_mentions_param(object, param_name)
-                || arguments
-                    .iter()
-                    .any(|(_, arg)| expr_mentions_param(arg, param_name))
-        }
-        Expression::Binary { left, right, .. } => {
-            expr_mentions_param(left, param_name) || expr_mentions_param(right, param_name)
-        }
-        Expression::Unary { operand, .. } => expr_mentions_param(operand, param_name),
-        Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
-            .iter()
-            .any(|e| expr_mentions_param(e, param_name)),
-        Expression::Block { statements, .. } => statements
-            .iter()
-            .any(|s| statement_mentions_param(s, param_name)),
-        Expression::StructLiteral { fields, .. } => fields
-            .iter()
-            .any(|(_, v)| expr_mentions_param(v, param_name)),
         _ => false,
     }
 }

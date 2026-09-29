@@ -5,7 +5,7 @@ use crate::graph_csr_view_loop::graph_csr_local_out_degree
 pub fn walk_csr_view(view: GraphAdjacencyView) -> u32 {
     let mut total = 0
     let mut v = 0
-    while v < view.vertex_ids.len() {
+    while v < view.vertex_count {
         let vertex = view.vertex_ids[v]
         let degree = graph_csr_local_out_degree(view, vertex)
         total = total + degree

@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.546 (2026-09-29) — WDB-081 CSR view loop must borrow, not `view.clone()`
+
+`graph_csr_local_out_degree` / `neighbor_at` take pub Custom `GraphAdjacencyView`,
+read fields, and bare-forward into demoted `vertex_index(&view)`. Pub-owned lock
+(`is_public_owned_non_copy_formal_api` + `callee_pub_owned_formal_skip_bare_pass`)
+kept them Owned → runners emitted `view.clone()` each loop iteration.
+
+| Gate | Status |
+|------|--------|
+| `test_library_multipass_graph_csr_view_loop_must_borrow_not_clone` | ✅ tip GREEN — `&view` / no `view.clone()` |
+| `test_library_multipass_hashmap_i64_set_contains_key_in_triangle_loop` | ✅ tip GREEN |
+| WDB-174/178/192 pub Custom owned restore | ✅ tip GREEN (no false demotion) |
+
+**Root cause layer:** signature / multipass ownership — allow demotion when call
+sites expect shared-ref and non-call uses are field/index only; registry shared-ref
+beats AST Custom-as-owned forward heuristic.
+
+**What became unnecessary:** call-site `view.clone()` peels for readonly CSR helpers
+that only field-read + borrow-passthrough into demoted siblings.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- library_multipass_wdb_csr` → **2 passed**
+- `cargo test --release --test all -- … wdb174 wdb178 wdb192 … csr …` → **12 passed**
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.545, WDB-412–426 (filed).
+
 ## P3.545 (2026-09-29) — let-alias auto-clone gate needs non-Copy Message
 
 `test_let_param_alias_then_reuse_clones_at_alias` was ❌ because `Message`

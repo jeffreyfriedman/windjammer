@@ -4049,6 +4049,29 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return false;
             }
+            // WDB-081: field/index reads + bare forward into shared-ref callees
+            // (`out_degree(view)` → `vertex_index(&view)`). Signature-driven — not a
+            // method-name heuristic; requires every call site to expect Borrowed.
+            if !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
+                && !self.param_passes_to_wj_owned_sibling_call(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+                && !self.param_only_forwards_to_emitted_owned_callees(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+                && self.param_call_sites_expect_borrow(func.body.as_slice(), &param.name, func)
+                && self.param_non_call_uses_are_field_or_index_only(
+                    func.body.as_slice(),
+                    &param.name,
+                    func,
+                )
+            {
+                return false;
+            }
             let param_idx = func
                 .parameters
                 .iter()
