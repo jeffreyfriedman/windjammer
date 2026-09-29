@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.548 (2026-09-29) — demoted `&str` field assign + fail-closed missing set_if
+
+Bare `self.search_query = query` was counted as owned payload store, locking
+`query: String` + `.clone()` instead of `&str` + `.to_string()` (P3.346 regression).
+Missing cross-crate `set_if` metadata correctly fail-closed; gate updated to expect
+`compile_error!` (no invent-MutBorrowed).
+
+| Gate | Status |
+|------|--------|
+| `module_file_demoted_str_field_assign_must_to_string` | ✅ tip GREEN — `query: &str` + `.to_string()` |
+| `test_cross_crate_set_if_mut_borrow_with_split_voxelgrid_import` | ✅ tip GREEN (signature present) |
+| `test_cross_crate_set_if_mut_borrow_when_callee_missing_from_metadata` | ✅ tip GREEN — fail-closed |
+
+**Root cause layer:** constraint/formal demotion — bare field assign must not alone
+force Owned when the binding is also borrowed; missing registry → fail closed.
+
+**What became unnecessary:** invent-MutBorrowed when `set_if` absent from metadata;
+treating bare field-assign as payload lock for text demotion.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all -- module_file_demoted_str_field_assign_must_to_string test_cross_crate_set_if_mut_borrow` → **3 passed**
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.547, WDB-412–426 (filed).
+
 ## P3.547 (2026-09-29) — multipass clone gates need non-Copy payloads
 
 `test_match_borrow_break_ref_binding_clones_non_copy_in_tuple` and
