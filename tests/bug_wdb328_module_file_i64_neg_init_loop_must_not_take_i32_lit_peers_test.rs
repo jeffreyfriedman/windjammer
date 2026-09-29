@@ -95,7 +95,7 @@ fn wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers() {
     let map = test.compile().expect("WDB-328 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-328 MultiFile lib.rs:\n{rs}");
-    let bad = rs.contains("1_i32") || rs.contains("0_i32") || rs.contains("-1_i32");
+    let bad = bad_neg_init_loop_i32_literal_peers(rs);
     assert!(
         !bad,
         "WDB-328 RED: i64 neg-init loop emitted i32 lit peers:\n{rs}"
@@ -110,10 +110,8 @@ fn wdb328_module_file_search_state_neg_init_must_not_mix_i64_i32_loop_lits() {
     let map = test.compile().expect("WDB-328 SearchState compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-328 SearchState MultiFile lib.rs:\n{rs}");
-    let mixed = (rs.contains("-1_i64") || rs.contains("= -1_i64"))
-        && (rs.contains("1_i32") || rs.contains("0_i32"));
     assert!(
-        !mixed,
+        !bad_neg_init_loop_i32_literal_peers(rs),
         "WDB-328 RED: SearchState neg-init loop mixes i64 binding with i32 lit peers:\n{rs}"
     );
     test.cargo_check().expect("WDB-328 SearchState cargo-check");
