@@ -771,7 +771,14 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     )
-                    && !self.param_used_as_call_argument(
+                    // Borrowing method args (`.contains(query)`) must not block `&str`
+                    // demotion — only owned-callee forwards keep `String` (P3.346).
+                    && !self.param_passes_to_wj_owned_sibling_call(
+                        func.body.as_slice(),
+                        &param.name,
+                        func,
+                    )
+                    && !self.param_only_forwards_to_emitted_owned_callees(
                         func.body.as_slice(),
                         &param.name,
                         func,

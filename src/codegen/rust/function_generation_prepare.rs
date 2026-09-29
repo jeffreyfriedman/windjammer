@@ -6277,7 +6277,19 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Statement::Assignment { value, .. } => {
-                self.expression_moves_param_into_owned_payload(value, param_name)
+                // Bare `self.field = param` / `local = param` coerces at the assign site
+                // (`query.to_string()` into String fields — P3.346). Do not treat that alone
+                // as a payload store that forces Owned and blocks `&str` demotion when the
+                // same binding is also borrowed (`.contains(query)`). Nested constructors
+                // in the RHS still count via `expression_moves_param_into_owned_payload`.
+                if matches!(
+                    value,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    false
+                } else {
+                    self.expression_moves_param_into_owned_payload(value, param_name)
+                }
             }
             Statement::If {
                 then_block,

@@ -141,7 +141,8 @@ fn test_cross_crate_set_if_mut_borrow_with_split_voxelgrid_import() {
 }
 
 /// Real engine metadata omits many module-level helpers like `set_if`. Without registry
-/// entries, cross-crate calls must still infer &mut for the first non-Copy argument.
+/// entries, tip must fail closed (`compile_error!(missing boundary signature…)`) — never
+/// invent `&mut` from callee/method names (Phase 5 / no-hardcoded-method-names).
 #[test]
 fn test_cross_crate_set_if_mut_borrow_when_callee_missing_from_metadata() {
     let tmp = TempDir::new().expect("tempdir");
@@ -155,5 +156,14 @@ fn test_cross_crate_set_if_mut_borrow_when_callee_missing_from_metadata() {
     fs::write(&stripped_meta, meta.to_string()).expect("write stripped metadata");
 
     let rs = compile_scene_builder(&tmp, &stripped_meta);
-    assert_mut_voxelgrid_passthrough(&rs);
+    assert!(
+        rs.contains("compile_error!(")
+            && (rs.contains("missing boundary signature") || rs.contains("set_if")),
+        "missing set_if metadata must fail closed with compile_error, not invent &mut. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("fn fill_hull(grid: &mut VoxelGrid")
+            && !rs.contains("station_builder::set_if(&mut grid,"),
+        "must not invent MutBorrowed when set_if signature is absent. Got:\n{rs}"
+    );
 }
