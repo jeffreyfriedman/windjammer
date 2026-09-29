@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.552 (2026-09-29) — WDB-328 neg-init loops stay i64 (not i32 literal peers)
+
+P3.549 small-literal while-peer and an inverted WDB-328 block forced
+`let mut i = -1` → `_i32` while bounds stayed `_i64` (or mixed `1_i32` peers).
+Negative literal inits must stay WJ `int`; while/compare lits widen to i64.
+
+| Gate | Status |
+|------|--------|
+| `wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers` | ✅ tip GREEN |
+| `wdb328_module_file_search_state_neg_init_must_not_mix_i64_i32_loop_lits` | ✅ tip GREEN |
+| `i32_neg_while_literal_peers_must_not_widen_i64` (MultiFile) | ✅ tip GREEN |
+| `i32_while_len_and_literal_bound_must_not_emit_i64` | ✅ tip GREEN (no regress) |
+| `module_file_timefmt_product_must_not_mix_i32_month_or_ref_string` | ✅ tip GREEN |
+| `wdb328_tip_out_*` / `tip_out_game_core_npc_*` | ❌ stale product gen |
+
+**Root cause layer:** constraint/codegen — neg-init width + while-peer int promotion
+(not signature / not ir_call_site peel).
+
+**What became unnecessary:** forcing `-1` → `_i32` in `function_prefers_i32_coord_locals`
+builders; i32 while-peer on negative-init counters.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb328 i32_while_len module_file_timefmt i32_neg_while_literal` → **5 passed / 2 failed** (tip-out only)
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.551, WDB-412–426 (filed).
+
 ## P3.551 (2026-09-29) — accept &str demotion in legacy string/self gates
 
 Tip correctly demotes field-assign `string` formals to `&str` + `.to_string()`

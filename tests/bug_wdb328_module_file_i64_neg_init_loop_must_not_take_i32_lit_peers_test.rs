@@ -39,6 +39,15 @@ pub fn neighbor_offsets() -> i64 {
 
 /// Product shape: `SearchState::new` returns a struct with i32 fields; tip emits
 /// `let mut i = -1_i64` then `while i <= 1_i32` (mixed width).
+/// Loop/compare i32 literal peers on neg-init counters — not struct fields like `current_point: 0_i32`.
+fn bad_neg_init_loop_i32_literal_peers(rs: &str) -> bool {
+    rs.contains("-1_i32")
+        || rs.contains("<= 1_i32")
+        || rs.contains("!= 0_i32")
+        || rs.contains("while i <= 1_i32")
+        || rs.contains("while j <= 1_i32")
+}
+
 const SRC_SEARCH_STATE: &str = r#"
 pub struct Vec3 {
     pub x: f32,

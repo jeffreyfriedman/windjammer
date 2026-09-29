@@ -478,10 +478,27 @@ impl<'ast> CodeGenerator<'ast> {
     /// P3.549/P3.329: a small literal while bound (`while month <= 12`) alone would
     /// peer i32, but when `name` is also passed to a WJ `int`/`i64` formal
     /// (`days_in_month(year, month)`), keep int width — never `1_i32` + `12_i32 as i32`.
+    /// WDB-328 / P3.403: `let mut i = -1` must stay WJ `int` (i64), not i32 while peers.
+    pub(in crate::codegen::rust) fn let_binding_has_negative_int_literal_init(
+        &self,
+        name: &str,
+    ) -> bool {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        Self::find_let_rhs_in_stmts(&body, name)
+            .is_some_and(crate::codegen::rust::type_casting::expression_is_negative_int_init)
+    }
+
     pub(in crate::codegen::rust) fn let_binding_int_width_from_later_while_compare(
         &self,
         name: &str,
     ) -> Option<Type> {
+        if self.let_binding_has_negative_int_literal_init(name) {
+            return Some(Type::Int);
+        }
         let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
             self.full_function_body_snapshot.iter().copied().collect()
         } else {
@@ -587,6 +604,7 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         };
         // P3.323/P3.350: `while i < 512` — small literal bound → i32 counter (not WJ int/i64).
+        // WDB-328: `let mut i = -1` / `while i <= 1` keeps i64 peers (`1_i64`, not `1_i32`).
         if matches!(
             bound,
             Expression::Literal {
@@ -594,7 +612,11 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } if (0..=4096).contains(n)
         ) {
-            *peer = Some(Type::Int32);
+            *peer = Some(if self.let_binding_has_negative_int_literal_init(name) {
+                Type::Int
+            } else {
+                Type::Int32
+            });
             return;
         }
         if self.expression_has_i32_width_in_tree(bound) {
@@ -1126,6 +1148,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         };
         if let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) {
+            if self.let_binding_has_negative_int_literal_init(name.as_str()) {
+                return;
+            }
             if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
                 && self.literal_init_wj_int_loop_counters.contains(&name)
             {
