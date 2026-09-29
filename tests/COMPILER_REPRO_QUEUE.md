@@ -1,5 +1,36 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.549 (2026-09-29) — `json::len` → usize + i32 while-peer loop width
+
+`std/json.wj` declared `len -> int` while runtime returns `usize`, so
+`let n = json.len(root)` typed as WJ int / i64 while `get_index` promoted `i` to
+`usize` → `while ((i as i64)) < n` (E0308). Signature alignment fixes the compare
+without a new reconcile peel. Separately, while-compare peer scan only saw u32, so
+`while i < 512` / `while i < len - 1` after `len as i32` kept `0_i64`.
+
+| Gate | Status |
+|------|--------|
+| `json_get_index_owned_value_multipass_must_cargo_check` | ✅ tip GREEN — `while i < n` (both usize) |
+| `json_is_array_len_owned_value_multipass_must_cargo_check` | ✅ tip GREEN |
+| `json_get_owned_value_multipass_must_cargo_check` | ✅ tip GREEN |
+| `i32_while_len_and_literal_bound_must_not_emit_i64` | ✅ tip GREEN (P3.350) |
+| `i32_loop_arith_and_len_compare_must_not_emit_i64` | ✅ tip GREEN (P3.338) |
+| `i32_while_compare_must_not_cast_rhs_to_i64` | ✅ tip GREEN |
+| `i32_neg_while_literal_peers_must_not_widen_i64` | ✅ tip GREEN (MultiFile) |
+| `tip_out_game_core_npc_behavior_neg_while_must_not_split_i64_i32` | ❌ tip-out stale gen (MultiFile GREEN; regen game-core) |
+
+**Root cause layer:** signature (`std/json.wj` `len -> usize`) + constraint/codegen
+(while-compare i32 peer → `assignment_int_target_type` / literal-init promote).
+
+**What became unnecessary:** `while ((i as i64)) < n` when `n` from `json::len`;
+u32-only while-peer path that blocked i32 loop counters.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- json_get_index_owned_value_multipass json_is_array_len_owned_value json_get_owned_value_multipass` → **4 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- i32_while_len_and_literal_bound i32_loop_arith_and_len_compare i32_while_compare_must_not_cast i32_neg_while_literal` → **5 passed / 1 failed** (tip-out only)
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.548, WDB-412–426 (filed).
+
 ## P3.548 (2026-09-29) — demoted `&str` field assign + fail-closed missing set_if
 
 Bare `self.search_query = query` was counted as owned payload store, locking

@@ -546,6 +546,15 @@ impl<'ast> CodeGenerator<'ast> {
                                     || matches!(t, Type::Custom(ref w) if w == "u32")
                             })
                     });
+                    // P3.549: `while i < len - 1` / `while i < 512` after `len as i32` must
+                    // emit `let mut i: i32 = 0` — while-compare peer was previously u32-only.
+                    let while_i32_peer = var_name.is_some_and(|n| {
+                        self.let_binding_int_width_from_later_while_compare(n)
+                            .is_some_and(|t| {
+                                matches!(t, Type::Int32)
+                                    || matches!(t, Type::Custom(ref w) if w == "i32")
+                            })
+                    });
                     if matches!(later_peer.as_ref(), Some(Type::Uint)) || while_u32_peer {
                         output.push_str(": u32");
                         if let Some(vn) = var_name {
@@ -569,7 +578,7 @@ impl<'ast> CodeGenerator<'ast> {
                             self.local_var_types.insert(vn.to_string(), Type::Int);
                             self.codegen_i32_binding_names.remove(vn);
                         }
-                    } else if let Some(Type::Int32) = later_peer.as_ref() {
+                    } else if matches!(later_peer.as_ref(), Some(Type::Int32)) || while_i32_peer {
                         output.push_str(": i32");
                         if let Some(vn) = var_name {
                             self.local_var_types.insert(vn.to_string(), Type::Int32);
@@ -669,6 +678,22 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.local_var_types.insert(vn.to_string(), Type::Int);
                                 self.codegen_i32_binding_names.remove(vn);
                             }
+                        }
+                    }
+                    // P3.549: while-compare i32 peer (`i < 512` / `i < len - 1` after
+                    // `len as i32`) beats later `i = i + 1` inferred as WJ int.
+                    if var_name.is_some_and(|n| {
+                        self.let_binding_int_width_from_later_while_compare(n)
+                            .is_some_and(|t| {
+                                matches!(t, Type::Int32)
+                                    || matches!(t, Type::Custom(ref w) if w == "i32")
+                            })
+                    }) {
+                        self.assignment_int_target_type = Some(Type::Int32);
+                        if let Some(vn) = var_name {
+                            self.local_var_types.insert(vn.to_string(), Type::Int32);
+                            self.codegen_i32_binding_names.insert(vn.to_string());
+                            self.usize_variables.remove(vn);
                         }
                     }
                     if self.assignment_int_target_type.is_none() {
