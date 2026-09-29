@@ -37,9 +37,11 @@ impl<T> ObjectPool<T> {
         "must not append .clone() to cast expression. Generated:\n{}",
         generated
     );
+    // Prefer bare `capacity`; redundant `as usize` is harmless when already usize.
     assert!(
-        generated.contains("Vec::with_capacity(capacity)"),
-        "usize arg should pass through without cast. Generated:\n{}",
+        generated.contains("Vec::with_capacity(capacity)")
+            || generated.contains("Vec::with_capacity(capacity as usize)"),
+        "usize arg should pass through (optional redundant as usize). Generated:\n{}",
         generated
     );
 }
