@@ -445,38 +445,37 @@ Last-use `return` of a local `Vec` must move; product emits `return result.clone
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524 (notes-api / wj-glob), WDB-412–419 / P3.509–P3.523 (filed).
 
-## P3.524 (2026-09-27) — adapter `find_char` must take `text: &str`, not `&String`
+## P3.524 (2026-09-27) — adapter `find_char` must take `text: &str`, not `&String` ✅
 
-Product `wj-notes-api` `adapters/http_server.rs` (tip p3520 20:49):
-`split_header_line(line: &str)` → `find_char(line, ":")` while
-`find_char(text: &String, needle: &str)` → rustc E0308 expected `&String`, found `&str`.
+Product `wj-notes-api` `adapters/http_server.rs`:
+`find_char(text: &String, …)` while callers held `&str` → rustc E0308.
 
-Domain `find_char` already emits `text: &str`. Isolates that only have
-`split_header_line` + inline `substring == needle` (even with `trim`/`split`)
-false-green `text: &str` + cargo-check. Do not reshape the app.
+**Root cause layer:** signature — WJ `std/strings.wj` declaration stubs aliased
+`substring` → `strings::substring` as owned/`Reference(String)`, clobbering scanned
+runtime AsRef/`&str`. Nested module-file multipass then treated
+`strings.substring(text, …)` as a `&String` formal callee. Analyzer bare
+`lookup_method("substring")` reinforced the false `&String` need.
+
+**Fix:**
+- `restore_runtime_borrowed_strings_signatures` also restores when local is
+  `Reference(String)` / owned string vs runtime `Reference(str)` / AsRef emit flags
+- `register_module_aliases` refuses to clobber runtime `strings::*` AsRef with WJ stubs
+- `param_needs_string_ref` MethodCall path uses `{module}::{method}` for runtime
+  modules (no bare `substring` homonym)
+
+**What became unnecessary:** peels / name heuristics for `substring`; product reshape.
 
 | Gate | Status |
 |------|--------|
-| isolate `apply_extra_headers` + `split` + `trim` + inline `find_char` | ⚠️ false-GREEN `text: &str` |
-| `product_adapter_find_char_text_must_not_be_string_ref` | ❌ product RED — `fn find_char(text: &String, needle: &str)` |
-| rustc snippet of product emit | ❌ E0308 `find_char(line, ":")` expected `&String`, found `&str` |
+| `nested_module_find_char_must_demote_text_to_str_not_string_ref` | ✅ GREEN `text: &str` |
+| `product_adapter_find_char_text_must_not_be_string_ref` | ✅ GREEN `text: &str` |
+| `restore_runtime_strings_beats_reference_string_haystack` | ✅ |
+| `register_module_aliases_does_not_clobber_runtime_strings_asref` | ✅ |
 
-**Why this is a new class:**
-- Not P3.522 (`handle_method` owned self).
-- Not P3.518 (`&mut query` into `query: String`).
-- Not `comparison_only_string_formal_demotes_to_str` (simple `==`, no `strings.substring` loop).
-- Domain bind-`ch`-then-`==` greened; adapter inline `substring(...) == needle` stayed `&String`.
-
-**Root cause layer:** signature / demote — `string` formal used with `strings.len` / `substring` + `==` must be `&str` when a demoted `&str` caller exists.
-
-**What became unnecessary:** refiling domain `find_char` (`text: &str` already).
-
-**Ran (2026-09-27):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (20:49).
-- Isolate: `fn find_char(text: &str)` + cargo-check GREEN.
-- Product adapter: `text: &String`; rustc snippet E0308.
-
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3524-eco`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- product_adapter_find_char_text_must_not_be_string_ref`
+**Ran (2026-09-29):** tip `.agent-wip/cargo-target-tip-p3524/release/wj`
+- `cargo test --release -p windjammer --lib restore_runtime_strings_beats`
+- `cargo test --release -p windjammer --lib register_module_aliases_does_not_clobber`
+- `cargo test --release --test all -- nested_module_find_char_must_demote product_adapter_find_char_text_must_not_be_string_ref`
 
 **Do not steal:** WDB-406/408/411 (compiler), P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522 (notes-api / wj-glob), WDB-412–419 / P3.509–P3.523 (filed).
 

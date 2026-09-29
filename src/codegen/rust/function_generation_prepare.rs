@@ -9869,6 +9869,24 @@ impl<'ast> CodeGenerator<'ast> {
         if self.method_call_callee_emits_owned_arg(object, method, arg_index, func) {
             return false;
         }
+        // Runtime AsRef/`&str` haystacks must not force wrapper formals to `&String`.
+        let is_str_ref = sig
+            .param_types
+            .get(pidx)
+            .is_some_and(crate::ir::formal_predicates::param_is_rust_str_ref);
+        let emits_shared_ref_not_string = sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|f| f.get(pidx))
+            .copied()
+            .unwrap_or(false)
+            && !sig
+                .param_types
+                .get(pidx)
+                .is_some_and(crate::ir::formal_predicates::param_is_rust_string_ref);
+        if is_str_ref || emits_shared_ref_not_string {
+            return false;
+        }
         sig.param_types.get(pidx).is_some_and(|ty| {
             matches!(ty, Type::Reference(inner) if {
                 matches!(&**inner, Type::String)
