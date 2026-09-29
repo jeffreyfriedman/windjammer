@@ -7,8 +7,8 @@ Copy `i32` loop var in abs else-branch must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-425 MultiFile | ⏳ TDD pending — `else { dx }` |
-| WDB-425 tip-out | ⏳ TDD pending — `dx.clone()` / `dz.clone()` in component_viewer_controls |
+| WDB-425 MultiFile | ✅ isolate GREEN — `else { dx }` (no `.clone()`) |
+| WDB-425 tip-out | ❌ product RED — `dx.clone()` / `dz.clone()` in component_viewer_controls |
 
 **Root cause layer:** copy / if-else — Copy loop `i32` in else of abs must not auto-clone.
 
@@ -20,6 +20,9 @@ Copy `i32` loop var in abs else-branch must not `.clone()`; product emits
 **What became unnecessary:** `dx.clone()` / `dz.clone()` in station pillar ribs.
 
 **Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-28)
+
+**Ran (DB agent 2026-09-28):** worktree `…/wdb407-tdd` @ `df61b11a`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb425_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.538, WDB-412–424 / P3.509–P3.536 (filed).
 
