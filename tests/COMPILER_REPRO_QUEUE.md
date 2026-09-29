@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.541 (2026-09-28) — TDD WDB-426 (DB agent; no compiler src)
+
+Copy `const` `u32` must not `.clone()` on assign; product emits
+`nodes[node_index] = LEAF_FLAG.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-426 MultiFile | ⏳ TDD pending — `nodes[idx] = LEAF_FLAG` |
+| WDB-426 tip-out | ⏳ TDD pending — `LEAF_FLAG.clone()` in svo64_convert |
+
+**Root cause layer:** copy / const — Copy const `u32` must copy by value, not clone.
+
+**Why this is a new class:**
+- WDB-385 is `f32::MAX.clone()`.
+- WDB-393 is **local** i32 assign `x.clone()`.
+- WDB-422 is Copy f32 **index** arith.
+- This is a **named const** Copy `u32`.
+
+**What became unnecessary:** `LEAF_FLAG.clone()` in empty-region leaf store.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-28)
+
+**Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.540, WDB-412–425 / P3.509–P3.539 (filed).
+
 ## P3.539 (2026-09-28) — TDD WDB-425 (DB agent; no compiler src)
 
 Copy `i32` loop var in abs else-branch must not `.clone()`; product emits
@@ -122,13 +146,14 @@ Repeated `match` on a non-Copy field must borrow, not `.clone()`; product emits
 ## P3.535 (2026-09-27) — `form_parse("?a=1")` must yield key `a`, not `?a`
 
 `STDLIB_FORM_HANDOFF.md` says `form_parse` accepts an optional leading `?`.
-Runtime previously yielded `("?a", "1")`. Tip p3520: product `wj-querystring`
-`$WJ test` **14/14 GREEN** (thin-wrap `encoding.form_*`).
+Runtime previously called `url::form_urlencoded::parse` on raw bytes → key `"?a"`.
+Fix: `strip_prefix('?')` once in `encoding::form_parse` (ccc610ed). Do not restore
+package `strip_question` (P3.526 `starts_with` moves `t`).
 
 | Gate | Status |
 |------|--------|
-| runtime `form_parse("?a=1")` | ✅ tip GREEN (product 14/14) |
-| `form_parse_must_strip_leading_question` | ✅ product GREEN on tip p3520 05:14 |
+| runtime `form_parse_strips_optional_leading_question` | ✅ GREEN (p3535) |
+| `form_parse_must_strip_leading_question` | ✅ isolate GREEN after rebuild |
 | product `wj-querystring` `$WJ test` | ✅ 14/14 |
 
 **Why this is a new class:**
@@ -138,13 +163,15 @@ Runtime previously yielded `("?a", "1")`. Tip p3520: product `wj-querystring`
 
 **Root cause layer:** runtime `encoding::form_parse` — strip a single leading `?` before `form_urlencoded::parse`.
 
-**Ran (2026-09-27 / recheck 2026-09-28):** tip p3520 05:14 — `$WJ test` packages/wj-querystring **14/14**.
-Earlier tip p3515: runtime `[("?a", "1")]` RED (since greened).
+**Ran (2026-09-28):** `.agent-wip/cargo-target-p3535` — unit RED→GREEN after
+`strip_prefix('?')`; isolate RED on pre-fix tip (22:27), GREEN after rebuild.
+Earlier tip p3515: runtime `[("?a", "1")]` RED.
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3535-eco`
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3535`
+- `cargo test -p windjammer-runtime --lib encoding::tests::form_parse_strips_optional_leading_question -- --exact`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- form_parse_must_strip_leading_question`
 
-**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.534, WDB-412–423 / P3.509–P3.533.
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.534/P3.536–P3.541, WDB-412–426 / P3.509–P3.540.
 
 ## P3.534 (2026-09-27) — TDD WDB-423 (DB agent; no compiler src)
 
@@ -204,34 +231,36 @@ Keep `join_url` → `url::join`. Do not rename the package `Url`.
 
 ## P3.532 (2026-09-27) — `wj-auth-api` leftover: `&mut req`, `get(lit.to_string())`, resolve_token
 
-After building `wj-cookie` / `wj-hash` / `wj-jwt` path deps, `$WJ test` discovers
-48 tests then rustc 4 errors (one is P3.524 `find_char`). Remaining unused:
+Free `dispatch(req: ServerRequest, …)` was demoted to `&mut` when a same-crate
+method `App::dispatch(&mut self, …)` shared the bare name in the signature
+registry. Cookie get greened via P3.537; find_char is P3.524; resolve_token
+may remain.
 
 | Gate | Status |
 |------|--------|
-| serve isolate (`|req| dispatch(req, shared)`) | ⚠️ false-GREEN `dispatch(req, &shared)` |
-| HashMap.get lit after same-crate parse | ⚠️ false-GREEN `get("a")` |
-| resolve_token same-crate | ⚠️ false-GREEN caller also `&str` |
-| `auth_api_product_dispatch_must_not_mut_req` | ❌ product RED |
-
-Product emit (tip p3520 21:17):
-- `move |req| dispatch(&mut req, &shared)` + `dispatch(req: &mut ServerRequest)` → E0596
-- `map.get("access_token".to_string())` after `parse_cookie_header` → E0308
-- `resolve_token(authorization, cookie)` into `authorization: &str` → E0308
+| `free_dispatch_must_not_inherit_method_mut_self` | ✅ isolate GREEN (p3532) |
+| serve / product `dispatch(&mut req)` | ⏳ recheck product after bare-name fix |
+| HashMap.get path-dep | ✅ P3.537 |
+| resolve_token / find_char | ❌ may remain (P3.524 / demote) |
 
 **Why this is a new class:**
-- Notes-api serve already emits owned `dispatch(req)`. Auth clones path/body/headers then uses `req.method`.
-- HashMap.get after **cross-crate** `parse_cookie_header` (existing isolates are same-crate).
-- Do not reshape auth-api.
+- Notes-api stays green because `NotesApp::dispatch` is owned `mut self` (collided slot Owned).
+- Auth method is MutBorrowed self → free formal inherited `&mut ServerRequest`.
+- Distinct from call-site later-use alone.
 
-**Root cause layer:** signature / call-site — `ServerRequest` later field use must not `&mut` the serve closure; `HashMap::get` key stays `&Q`; owned String into demoted `&str` must borrow.
+**Root cause layer:** signature registry — do not register inherent methods under
+the bare name; free-fn lookup must ignore method homonyms with self receivers.
 
-**Ran (2026-09-27):** tip p3520 21:17. Isolates transpile as above. `$WJ test` 4 rustc.
+**Fix:** skip bare-name method registration; filter free-fn signature lookup.
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3532-eco`
+**Ran (2026-09-28):** `.agent-wip/cargo-target-p3532`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- free_dispatch_must_not_inherit_method_mut_self` → **1 passed**
+
+**Gates:** `CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3532`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- free_dispatch_must_not_inherit_method_mut_self`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- auth_api_product_dispatch_must_not_mut_req`
 
-**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530, WDB-412–422 / P3.509–P3.531.
+**Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.536–P3.541, WDB-412–426 / P3.509–P3.540.
 
 ## P3.531 (2026-09-27) — TDD WDB-422 (DB agent; no compiler src)
 
