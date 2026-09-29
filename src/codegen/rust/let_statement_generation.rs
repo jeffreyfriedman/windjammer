@@ -558,6 +558,17 @@ impl<'ast> CodeGenerator<'ast> {
                             self.local_var_types
                                 .insert(vn.to_string(), Type::Custom("usize".into()));
                         }
+                    } else if matches!(later_peer.as_ref(), Some(Type::Int))
+                        || matches!(
+                            later_peer.as_ref(),
+                            Some(Type::Custom(n)) if n == "int" || n == "i64"
+                        )
+                    {
+                        // P3.538: later `prev = m.version` (i64) beats `-1` i32 sentinel.
+                        if let Some(vn) = var_name {
+                            self.local_var_types.insert(vn.to_string(), Type::Int);
+                            self.codegen_i32_binding_names.remove(vn);
+                        }
                     } else if let Some(Type::Int32) = later_peer.as_ref() {
                         output.push_str(": i32");
                         if let Some(vn) = var_name {
@@ -648,9 +659,16 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
                     // WDB-305: later u32 assign peer beats return i64 for `let mut x = 0`.
+                    // P3.538: later `prev = m.version` (WJ int) beats i32 coord sentinel.
                     if let Some(vn) = var_name {
                         if let Some(peer) = self.mut_int_local_peer_width_from_later_assigns(vn) {
-                            self.assignment_int_target_type = Some(peer);
+                            self.assignment_int_target_type = Some(peer.clone());
+                            if matches!(peer, Type::Int)
+                                || matches!(&peer, Type::Custom(n) if n == "int" || n == "i64")
+                            {
+                                self.local_var_types.insert(vn.to_string(), Type::Int);
+                                self.codegen_i32_binding_names.remove(vn);
+                            }
                         }
                     }
                     if self.assignment_int_target_type.is_none() {

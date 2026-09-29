@@ -32,21 +32,24 @@ string-scan `i == 0_usize`; this is **negative sentinel vs struct int field**.
 
 | Gate | Status |
 |------|--------|
-| `migrate_prev_sentinel_must_unify_with_version_i64` | ❌ isolate RED — `prev = -1_i32` + `prev = m.version` |
-| product `wj-migrate` `$WJ test` | ❌ same + P3.528 move `applied` |
+| `migrate_prev_sentinel_must_unify_with_version_i64` | ✅ isolate GREEN — `prev = -1_i64` + `prev = m.version` |
+| product `wj-migrate` `$WJ test` | ❌ tip-out pending regen (+ P3.528 move `applied`) |
 
 **Why this is a new class:**
 - P3.527 is **eq zero** (`i == 0`) with usize loop counter.
 - This is **assign** of `m.version: i64` into a `-1` binding left as `i32`.
 
-**Root cause layer:** int unify / emit-truth — `-1` sentinel assigned from
-`int`/`i64` field must widen `prev` to `i64` (or keep both `i32` if field is).
+**Root cause layer:** int unify / emit-truth — later assign `prev = m.version` (WJ int field) was invisible to mut-local peer scan (u32/i32 only), so `-1` stayed coordinate i32.
 
-**Ran (2026-09-28):** tip `.agent-wip/cargo-target-tip-p3520/release/wj` 0.50.0 (18:43).
-- Isolate: `let mut prev = -1_i32;` + `prev = m.version;` — **TDD RED confirmed**.
-- Product `lib.rs`: same; `db_apply` still `version_applied(applied, …)` (P3.528).
+**What became unnecessary:** i32 sentinel default when a later field assign peers WJ `int`/`i64` (no reconcile peel).
 
-**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/agent-tdd-p3538-eco`
+**Fix:** `mut_int_local_peer_width_from_later_assigns` recognizes WJ int field RHS; let emit uses that peer for `_i64` and clears i32 binding marks.
+
+**Ran (2026-09-28):** tip p3520 —
+- tip emit `prev = -1_i64` / `prev >= 0_i64`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- migrate_prev_sentinel_must_unify_with_version_i64` → **1 passed**
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3520`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- migrate_prev_sentinel_must_unify_with_version_i64`
 
 **Do not steal:** WDB-406/408/411, P3.518/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.537, WDB-412–424 / P3.509–P3.536.

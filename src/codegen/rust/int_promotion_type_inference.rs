@@ -829,6 +829,15 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(ty) = self.concrete_u32_or_i32_width(value) {
             return Some(ty);
         }
+        // P3.538: `prev = m.version` where `version: int`/`i64` must peer WJ int so
+        // `let mut prev = -1` emits `_i64`, not coordinate `_i32`.
+        if let Some(ty) = self
+            .infer_expression_type(value)
+            .as_ref()
+            .and_then(Self::parser_type_as_wj_int_peer)
+        {
+            return Some(ty);
+        }
         if let Expression::Index { object, .. } = value {
             if let Some(ty) = self.vec_index_elem_u32_or_i32(object) {
                 return Some(ty);
@@ -840,11 +849,13 @@ impl<'ast> CodeGenerator<'ast> {
                 return self.int_width_type_from_assign_rhs(rhs, body);
             }
             if let Some(ty) = self.local_var_types.get(name.as_str()) {
-                return Self::parser_type_as_u32_or_i32_peer(ty);
+                return Self::parser_type_as_u32_or_i32_peer(ty)
+                    .or_else(|| Self::parser_type_as_wj_int_peer(ty));
             }
             for p in &self.current_function_params {
                 if p.name == *name {
-                    return Self::parser_type_as_u32_or_i32_peer(&p.type_);
+                    return Self::parser_type_as_u32_or_i32_peer(&p.type_)
+                        .or_else(|| Self::parser_type_as_wj_int_peer(&p.type_));
                 }
             }
         }
@@ -888,6 +899,15 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Int32 => Some(Type::Int32),
             Type::Custom(n) if n == "u32" => Some(Type::Uint),
             Type::Custom(n) if n == "i32" => Some(Type::Int32),
+            _ => None,
+        }
+    }
+
+    /// WJ `int` / Rust `i64` peer for mut-local later-assign width (P3.538).
+    fn parser_type_as_wj_int_peer(ty: &Type) -> Option<Type> {
+        match ty {
+            Type::Int => Some(Type::Int),
+            Type::Custom(n) if n == "int" || n == "i64" => Some(Type::Int),
             _ => None,
         }
     }
