@@ -107,6 +107,77 @@ impl<'ast> CodeGenerator<'ast> {
         walk(self, self.current_function_body.as_slice(), name)
     }
 
+    /// First let-init of `name` that is signed and not a bare int literal.
+    /// Bare `let mut i = 0` loop counters may emit as usize (P3.527); call/field/index
+    /// loads are definitive signed width even when a later shadow marks the name usize
+    /// (WDB-395: `let ci = find_index(...)` then shadowed `let mut ci = 0` + `.len()`).
+    fn signed_definitive_nonliteral_init_type(&self, name: &str) -> Option<Type> {
+        fn walk<'a>(
+            this: &CodeGenerator<'a>,
+            stmts: &[&'a Statement<'a>],
+            name: &str,
+        ) -> Option<Type> {
+            for stmt in stmts {
+                match stmt {
+                    Statement::Let {
+                        pattern: Pattern::Identifier(n),
+                        value,
+                        else_block,
+                        ..
+                    } if n == name => {
+                        if matches!(
+                            value,
+                            Expression::Literal {
+                                value: Literal::Int(_),
+                                ..
+                            }
+                        ) {
+                            // Bare literal init — may be a usize loop counter (P3.527).
+                            if let Some(b) = else_block {
+                                if let Some(t) = walk(this, b.as_slice(), name) {
+                                    return Some(t);
+                                }
+                            }
+                            continue;
+                        }
+                        if let Some(t) = this.infer_expression_type(value) {
+                            if CodeGenerator::type_is_signed_int(&t) {
+                                return Some(t);
+                            }
+                        }
+                        if let Some(t) = this.signed_init_type_from_current_body(name) {
+                            return Some(t);
+                        }
+                    }
+                    Statement::If {
+                        then_block,
+                        else_block,
+                        ..
+                    } => {
+                        if let Some(t) = walk(this, then_block.as_slice(), name) {
+                            return Some(t);
+                        }
+                        if let Some(b) = else_block {
+                            if let Some(t) = walk(this, b.as_slice(), name) {
+                                return Some(t);
+                            }
+                        }
+                    }
+                    Statement::While { body, .. }
+                    | Statement::For { body, .. }
+                    | Statement::Loop { body, .. } => {
+                        if let Some(t) = walk(this, body.as_slice(), name) {
+                            return Some(t);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        walk(self, self.current_function_body.as_slice(), name)
+    }
+
     /// Peer type for `x < 0` / `x >= 0` sentinels. Function-wide `usize_variables`
     /// (shadowed loop counters, later `as usize`) must not poison a signed binding.
     fn signed_peer_for_zero_sentinel(&self, expr: &Expression<'ast>) -> Option<Type> {
@@ -115,6 +186,11 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(type_.clone())
             }
             Expression::Identifier { name, .. } => {
+                // WDB-395: definitive signed init (find_index → i32) beats a later
+                // same-name usize loop counter in function-wide `usize_variables`.
+                if let Some(t) = self.signed_definitive_nonliteral_init_type(name) {
+                    return Some(t);
+                }
                 // P3.527: `let mut i = 0` + `while i < strings.len(…)` emits `i: usize`.
                 // `signed_init_type_from_current_body` still sees the AST `0` as WJ `int`
                 // and would force `i == 0_i64`. Emit-truth usize wins over init-literal peer.

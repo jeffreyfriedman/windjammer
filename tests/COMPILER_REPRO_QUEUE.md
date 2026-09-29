@@ -1,5 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.556 (2026-09-29) — index-cast / shadow-name must not poison signed compares to usize
+
+`let d = self.depths[node_idx as usize]` marked `d` as usize because the emitted
+RHS substring contained ` as usize` (index cast). Function-wide `usize_variables`
+from a later shadowed `let mut ci = 0` + `.len()` also poisoned earlier
+`let ci = find_index(...) -> i32` zero sentinels (`ci < 0_usize`).
+
+| Gate | Status |
+|------|--------|
+| `wdb406_module_file_i32_field_compare_must_not_emit_usize` | ✅ tip GREEN — `d < self.max_depth` |
+| `wdb395_module_file_i32_i64_compare_zero_must_not_emit_usize` | ✅ tip GREEN — `ci < 0_i32` |
+| `wdb327_module_file_*` (isolates) | ✅ tip GREEN (no regress) |
+| `i32_while_len` / `wdb328` isolates / `module_file_timefmt` | ✅ tip GREEN (no regress) |
+| `wdb395_tip_out_*` / `wdb328_tip_out_*` / npc tip-out | ❌ stale product gen |
+
+**Root cause layer:** constraint/codegen — emit-width heuristics (not signature / not ir_call_site peel).
+
+**What became unnecessary:** `max_depth as usize` / `0_usize` sentinels from index-cast
+substring poison and same-name later usize loop shadows; no new reconcile peel.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb406_module_file_i32_field_compare wdb395_module_file_i32_i64_compare_zero wdb327_module_file i32_while_len wdb328_module_file module_file_timefmt` → **10 passed / 3 failed** (tip-out only)
+
+**Do not steal:** WDB-408/411, P3.508–P3.555, WDB-412–426 (filed). Isolate WDB-406/395 tip GREEN here.
+
 ## P3.555 (2026-09-29) — format!/with_capacity gates accept tip FFI + redundant usize cast
 
 Tip wraps `format!` into `string_to_ffi(...)` (no temp extract) and may emit

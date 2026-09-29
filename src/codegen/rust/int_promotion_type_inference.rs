@@ -432,12 +432,16 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Emitted RHS is usize-width from a literal suffix / cast — not from an identifier
     /// that merely contains the substring `_usize` (WDB-327 / `best_idx_usize`).
+    ///
+    /// Index payloads are stripped first: `self.depths[node_idx as usize]` loads an
+    /// element (WDB-406/395); the index cast must not mark the binding as usize.
     fn emitted_rhs_indicates_usize_literal_width(emitted: &str) -> bool {
-        if emitted.contains(" as usize") {
+        let without_indexes = Self::strip_bracket_regions(emitted);
+        if without_indexes.contains(" as usize") {
             return true;
         }
         // `0_usize`, `i + 1_usize`, `(0_usize)` — digit immediately before `_usize`.
-        let mut rest = emitted;
+        let mut rest = without_indexes.as_str();
         while let Some(idx) = rest.find("_usize") {
             if rest[..idx]
                 .chars()
@@ -449,8 +453,23 @@ impl<'ast> CodeGenerator<'ast> {
             rest = &rest[idx + "_usize".len()..];
         }
         // Bare copy of a usize-named binding: `let x = best_idx_usize`.
-        let trimmed = emitted.trim().trim_matches(|c| c == '(' || c == ')');
-        trimmed.ends_with("_usize") && !trimmed.contains('.') && !trimmed.contains('[')
+        let trimmed = without_indexes.trim().trim_matches(|c| c == '(' || c == ')');
+        trimmed.ends_with("_usize") && !trimmed.contains('.')
+    }
+
+    /// Drop `[...]` regions (incl. nested) so index casts are ignored for value-width.
+    fn strip_bracket_regions(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let mut depth = 0usize;
+        for c in s.chars() {
+            match c {
+                '[' => depth = depth.saturating_add(1),
+                ']' => depth = depth.saturating_sub(1),
+                _ if depth == 0 => out.push(c),
+                _ => {}
+            }
+        }
+        out
     }
 
     /// WDB-305: untyped `let mut best_count = 0` defaults to return-width i64 while later
