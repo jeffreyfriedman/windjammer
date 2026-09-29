@@ -1530,13 +1530,23 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
     ) -> Option<&crate::analyzer::FunctionSignature> {
         let global = self.global_signature_registry.as_ref()?;
-        if let Some(sig) = global.get_signature(&func.name) {
+        // Free functions must not inherit a method homonym registered under the bare
+        // name (`AuthApp::dispatch` → bare `dispatch`). MutBorrowed self would demote
+        // the free formal (`req: &mut ServerRequest`) and call site (`dispatch(&mut req)`).
+        let free_fn = !func.parameters.iter().any(|p| p.name == "self");
+        let sig_ok = |sig: &crate::analyzer::FunctionSignature| {
+            !(free_fn && sig.has_self_receiver_slot())
+        };
+        if let Some(sig) = global.get_signature(&func.name).filter(|s| sig_ok(s)) {
             return Some(sig);
         }
         if let Some(stem) = self.current_wj_file.file_stem() {
             let stem = stem.to_string_lossy();
             if !stem.is_empty() {
-                if let Some(sig) = global.get_signature(&format!("{stem}::{}", func.name)) {
+                if let Some(sig) = global
+                    .get_signature(&format!("{stem}::{}", func.name))
+                    .filter(|s| sig_ok(s))
+                {
                     return Some(sig);
                 }
             }
@@ -1546,7 +1556,10 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::analyzer::type_collector::wj_file_to_module_path(root, &self.current_wj_file)
             {
                 let path = module.join("::");
-                if let Some(sig) = global.get_signature(&format!("{path}::{}", func.name)) {
+                if let Some(sig) = global
+                    .get_signature(&format!("{path}::{}", func.name))
+                    .filter(|s| sig_ok(s))
+                {
                     return Some(sig);
                 }
             }

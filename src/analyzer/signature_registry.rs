@@ -733,6 +733,11 @@ impl SignatureRegistry {
             if module_path_key && !existing.has_self_receiver && sig.has_self_receiver {
                 return;
             }
+            // Bare-name free formals must not be overwritten by inherent methods
+            // (`dispatch` vs `AuthApp::dispatch` MutBorrowed self → P3.532).
+            if !name.contains("::") && !existing.has_self_receiver && sig.has_self_receiver {
+                return;
+            }
             if existing.param_types != sig.param_types {
                 // Empty-param runtime/stdlib stubs (e.g. `Config::new()`) are
                 // intentionally shadowed by user-defined constructors — not
@@ -1516,9 +1521,10 @@ impl SignatureRegistry {
                             registry.record_trait_impl_method_key(qualified_name.clone());
                         }
                         registry.add_function(qualified_name, sig.clone());
-                        if module_prefix.is_empty() {
-                            registry.add_function(func.name.clone(), sig);
-                        }
+                        // Never register inherent methods under the bare name — that
+                        // overwrites free-function formals (`dispatch` vs `AuthApp::dispatch`
+                        // MutBorrowed self → free `req: &mut ServerRequest`, P3.532).
+                        // Trait impls may still seed a bare key when none exists (below).
                     }
                 }
                 Item::Trait { decl, .. } => {
