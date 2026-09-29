@@ -31,6 +31,14 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return true;
         }
+        // WDB-343 / WDB-426: module `const` of a Copy type (u32 LEAF_FLAG, MAT_TRIM)
+        // auto-copies — never `LEAF_FLAG.clone()` on assign or reuse.
+        if self
+            .module_const_type_for_binding(name)
+            .is_some_and(|t| self.is_type_copy(t))
+        {
+            return true;
+        }
         self.infer_expression_type(expr).as_ref().is_some_and(|t| {
             if self.is_type_copy(t) {
                 return true;

@@ -1,26 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.541 (2026-09-28) — TDD WDB-426 (DB agent; no compiler src)
+## P3.541 (2026-09-28) — TDD WDB-426 (compiler tip fix)
 
-Copy `const` `u32` must not `.clone()` on assign; product emits
+Copy `const` `u32` must not `.clone()` on assign; product emitted
 `nodes[node_index] = LEAF_FLAG.clone()`.
 
 | Gate | Status |
 |------|--------|
-| WDB-426 MultiFile | ⏳ TDD pending — `nodes[idx] = LEAF_FLAG` |
-| WDB-426 tip-out | ⏳ TDD pending — `LEAF_FLAG.clone()` in svo64_convert |
+| WDB-426 MultiFile | ✅ isolate GREEN — `nodes[idx] = LEAF_FLAG` (no clone) |
+| WDB-426 tip-out | ✅ tip-out GREEN — svo64_convert uses bare `LEAF_FLAG` |
 
-**Root cause layer:** copy / const — Copy const `u32` must copy by value, not clone.
+**Root cause layer:** copy / identity — `ident_skips_auto_clone_as_copy` now consults
+`module_const_type_for_binding` (same WDB-343 path used for call args) so Copy module
+consts never auto-clone on assign/reuse.
 
-**Why this is a new class:**
-- WDB-385 is `f32::MAX.clone()`.
-- WDB-393 is **local** i32 assign `x.clone()`.
-- WDB-422 is Copy f32 **index** arith.
-- This is a **named const** Copy `u32`.
+**What became unnecessary:** `LEAF_FLAG.clone()` when auto_clone marked the const reused.
 
-**What became unnecessary:** `LEAF_FLAG.clone()` in empty-region leaf store.
-
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-28)
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3524` (2026-09-29)
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb426_` → **2 passed**
 
 **Do not steal:** WDB-406/408/411, P3.508/P3.511/P3.513–P3.514/P3.516/P3.518/P3.520/P3.522/P3.524/P3.526–P3.528/P3.530/P3.532–P3.540, WDB-412–425 / P3.509–P3.539 (filed).
 
