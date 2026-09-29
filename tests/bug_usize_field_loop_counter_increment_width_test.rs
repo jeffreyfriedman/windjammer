@@ -29,11 +29,13 @@ pub struct Pool {
     pub dense: Vec<u8>,
 }
 
-pub fn copy_bytes(self, data: Vec<u8>) {
-    let mut i = 0
-    while i < self.component_size {
-        self.dense.push(data[i])
-        i = i + 1
+impl Pool {
+    pub fn copy_bytes(self, data: Vec<u8>) {
+        let mut i = 0
+        while i < self.component_size {
+            self.dense.push(data[i])
+            i = i + 1
+        }
     }
 }
 "#;

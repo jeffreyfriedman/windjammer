@@ -1,5 +1,24 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.554 (2026-09-29) — P3.316 fixture: `copy_bytes` must be `impl Pool` method
+
+Isolate gate put `pub fn copy_bytes(self, …)` as a free function → tip emitted
+`&mut self` outside `impl` (E0424-class cargo-check fail). Product shape is
+`impl Pool { … }`. After wrap: `let mut i: usize` + plain `i += 1` (GREEN).
+
+| Gate | Status |
+|------|--------|
+| `usize_field_loop_counter_increment_width` | ✅ tip GREEN — impl method + usize loop |
+
+**Root cause layer:** none in compiler — fixture missing `impl`; tip int width OK.
+
+**What became unnecessary:** treating free-fn `self` emit as a usize-loop codegen bug.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-load-twice`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- usize_field_loop_counter_increment_width`
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.553, WDB-412–426 (filed).
+
 ## P3.553 (2026-09-29) — accept demotion in owned-Vec / string-formal gates
 
 Tip demotes read-only `Vec` formals to `&Vec` and field-store `string` formals
