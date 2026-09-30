@@ -6277,16 +6277,23 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Statement::Assignment { value, .. } => {
-                // Bare `self.field = param` / `local = param` coerces at the assign site
-                // (`query.to_string()` into String fields — P3.346). Do not treat that alone
-                // as a payload store that forces Owned and blocks `&str` demotion when the
-                // same binding is also borrowed (`.contains(query)`). Nested constructors
-                // in the RHS still count via `expression_moves_param_into_owned_payload`.
+                // Bare `self.field = param` / `local = param`:
+                // - Text (`string`): coerce at assign (`query.to_string()` — P3.346/548).
+                //   Do not treat as payload alone so `&str` demotion can still apply when
+                //   the binding is also borrowed (`.contains(query)`).
+                // - Non-text (`Vec`, custom): bare assign must force Owned — demoting to
+                //   `&Vec` leaves `node.items = items` as E0308 (with_items / P3.557).
+                // Nested constructors in the RHS still count via
+                // `expression_moves_param_into_owned_payload`.
                 if matches!(
                     value,
                     Expression::Identifier { name, .. } if name == param_name
                 ) {
-                    false
+                    let is_text = self.current_function_params.iter().any(|p| {
+                        p.name == param_name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    });
+                    !is_text
                 } else {
                     self.expression_moves_param_into_owned_payload(value, param_name)
                 }

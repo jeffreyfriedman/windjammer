@@ -58,14 +58,18 @@ pub fn link_html(link: Link) -> string {
     let rs = map.get("home.rs").expect("home.rs output");
     let html = map.get("html.rs").expect("html.rs output");
 
+    // Tip may demote read-only replace chain to `&str` (P3.557); `&link.href` is then correct.
+    let demoted = html.contains("s: &str");
     assert!(
-        html.contains("s: String") || html.contains("s: string"),
-        "repro requires owned escape_html formal (not demoted &str). Got:\n{html}"
+        demoted || html.contains("s: String") || html.contains("s: string"),
+        "escape_html formal should be String or demoted &str. Got:\n{html}"
     );
-    assert!(
-        !rs.contains("escape_html(&link.href)"),
-        "owned string formal must not receive &link.href. Got:\n{rs}"
-    );
+    if !demoted {
+        assert!(
+            !rs.contains("escape_html(&link.href)"),
+            "owned string formal must not receive &link.href. Got:\n{rs}"
+        );
+    }
 
     test.cargo_check()
         .expect("field into owned string formal must cargo check");

@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.557 (2026-09-29) — bare Vec field-assign stays owned; text demotion gates catch up
+
+P3.346/548 made bare `field = param` never count as payload so `string` can demote
+to `&str` + `.to_string()`. That also demoted `Vec<String>` (`with_items(items:
+&Vec)` + `node.items = items` → E0308). Non-text bare assigns force Owned again;
+text bare assigns still skip payload.
+
+| Gate | Status |
+|------|--------|
+| `test_vec_param_assigned_to_field_stays_owned` | ✅ tip GREEN — `items: Vec<String>` |
+| `test_owned_param_in_struct_literal_stays_owned` | ✅ tip GREEN |
+| `module_file_demoted_str_field_assign_must_to_string` | ✅ tip GREEN (text demotion retained) |
+| `wdb325_module_file_owned_string_sql_exec_*` isolate | ✅ tip GREEN — concat-only `&str` ok |
+| `struct_field_into_owned_string_formal_must_not_borrow` | ✅ tip GREEN — demoted `&str` ok |
+| `test_param_passed_to_owned_function_stays_owned` | ✅ tip GREEN — wrapper owned or `&Vec` |
+
+**Root cause layer:** constraint/formal demotion — bare assign payload for non-text only.
+
+**What became unnecessary:** `&Vec` demotion on field-store formals that cannot
+`.to_string()`-coerce; treating concat-only `&str` / replace-chain demotion as RED.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- test_vec_param_assigned_to_field test_owned_param_in_struct_literal module_file_demoted_str_field_assign wdb325_module_file_owned_string struct_field_into_owned_string test_param_passed_to_owned_function`
+
+**Do not steal:** WDB-408/411, P3.508–P3.556, WDB-412–426 (filed).
+
 ## P3.556 (2026-09-29) — index-cast / shadow-name must not poison signed compares to usize
 
 `let d = self.depths[node_idx as usize]` marked `d` as usize because the emitted

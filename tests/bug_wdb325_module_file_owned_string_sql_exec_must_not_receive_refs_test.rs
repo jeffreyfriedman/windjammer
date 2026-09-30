@@ -53,19 +53,21 @@ fn wdb325_module_file_owned_string_sql_exec_must_not_receive_refs() {
     let map = test.compile().expect("WDB-325 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-325 MultiFile lib.rs:\n{rs}");
-    let owned = rs.contains("fn sql_exec(host: Host, left_table: String")
+    let owned_left = rs.contains("fn sql_exec(host: Host, left_table: String")
         || rs.contains("fn sql_exec(host: Host, mut left_table: String");
     assert!(
-        owned,
-        "WDB-325: expected owned String formals on sql_exec:\n{rs}"
+        owned_left,
+        "WDB-325: expected owned left_table String on sql_exec:\n{rs}"
     );
-    let bad = rs.contains("&emit.table")
+    // Tip may demote concat-only `right_table` to `&str` (P3.557); `&right_name` is then correct.
+    let right_demoted = rs.contains("right_table: &str");
+    let bad_owned = rs.contains("&emit.table")
         || rs.contains("&emit.sql")
-        || rs.contains("&right_name")
-        || rs.contains("sql_exec(host, &");
+        || (!right_demoted
+            && (rs.contains("&right_name") || rs.contains("sql_exec(host, &")));
     assert!(
-        !bad,
-        "WDB-325 RED: owned sql_exec received &emit.table/&emit.sql/&right_name:\n{rs}"
+        !bad_owned,
+        "WDB-325 RED: owned sql_exec slots received &emit.*/&right_name:\n{rs}"
     );
     test.cargo_check().expect("WDB-325 cargo-check");
 }
