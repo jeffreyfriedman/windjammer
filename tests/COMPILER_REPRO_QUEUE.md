@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.560 (2026-09-29) — explicit-clone keep-owned formals get `mut` for `&mut` peel
+
+WDB-161 multipass: `resolve_column(resolver: &mut T)` + `resolve_select` keeps
+owned `resolver` via explicit `.clone()`, but call sites peel to `&mut resolver`
+(E0596). Explicit-clone keep-owned early-return skipped `auto_needs_mut`;
+`param_explicit_clone_targets_mut_borrow_callee` also missed `while` bodies.
+
+| Gate | Status |
+|------|--------|
+| `wdb161_module_file_clone_method_receiver_must_not_emit_as_ref` | ✅ tip GREEN — `mut resolver` + cargo-check |
+
+**Root cause layer:** constraint/solver write-back — emitted `&mut` slots +
+`variable_needs_mut` / clone→mut-borrow walk (not a call-site peel heuristic).
+
+**What became unnecessary:** relying only on the late `auto_needs_mut` path;
+clone keep-owned early returns now share the same mut decision. Mut-borrow
+clone walk covers While/If/For (aligned with clone detection).
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all -- wdb161_module_file_clone_method_receiver` → 1 passed
+
+**Do not steal:** WDB-408/411, P3.508–P3.559, WDB-412–426 (filed).
+
 ## P3.559 (2026-09-29) — field writeback gate accepts demoted `&Vec` + `&self.queue`
 
 Tip demotes read-only `pop_ready(queue: Vec)` → `&Vec` and passes `&self.queue`

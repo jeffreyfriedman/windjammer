@@ -241,29 +241,48 @@ impl<'ast> CodeGenerator<'ast> {
         if self.has_explicit_ownership_collision_with_global(&func_name) {
             return false;
         }
-        let Some(sig) = self.get_signature_with_global(&func_name) else {
+        let emitted_mut_idxs = self
+            .function_emitted_mut_arg_indices
+            .get(&func_name)
+            .or_else(|| {
+                let simple = func_name.rsplit("::").next().unwrap_or(&func_name);
+                self.function_emitted_mut_arg_indices.get(simple)
+            });
+        let sig = self.get_signature_with_global(&func_name);
+        if sig.is_none() && emitted_mut_idxs.is_none() {
             return false;
-        };
+        }
         for (i, (_label, arg)) in arguments.iter().enumerate() {
-            let pidx = if sig.has_self_receiver {
-                i.saturating_add(1)
-            } else {
-                i
-            };
-            let needs_mut_borrow = sig
-                .param_ownership
-                .get(pidx)
-                .is_some_and(|&o| o == OwnershipMode::MutBorrowed)
-                || sig
-                    .param_types
-                    .get(pidx)
-                    .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)));
+            let emitted_mut_slot = emitted_mut_idxs.is_some_and(|idxs| idxs.contains(&i));
+            let pidx = sig
+                .map(|s| {
+                    if s.has_self_receiver {
+                        i.saturating_add(1)
+                    } else {
+                        i
+                    }
+                })
+                .unwrap_or(i);
+            let needs_mut_borrow = emitted_mut_slot
+                || sig.is_some_and(|s| {
+                    s.param_ownership
+                        .get(pidx)
+                        .is_some_and(|&o| o == OwnershipMode::MutBorrowed)
+                        || s.param_types
+                            .get(pidx)
+                            .is_some_and(|t| matches!(t, crate::parser::Type::MutableReference(_)))
+                });
             if !needs_mut_borrow {
                 continue;
             }
             // Owned emitted formal (`mut deps: AppDeps`) — do not force `let mut` / &mut
-            // at call sites from stale MutBorrowed analyzer metadata.
-            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
+            // at call sites from stale MutBorrowed analyzer metadata. Emitted `&mut`
+            // slots (WDB-161) already set `emitted_mut_slot` and must keep mut bindings.
+            if !emitted_mut_slot
+                && sig.is_some_and(|s| {
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(s, pidx)
+                })
+            {
                 continue;
             }
             let matches_var = |e: &Expression| match e {
@@ -273,6 +292,19 @@ impl<'ast> CodeGenerator<'ast> {
                     operand,
                     ..
                 } => matches!(&**operand, Expression::Identifier { name, .. } if name == var_name),
+                // WJ `f(v.clone())` into a MutBorrowed formal peels to `&mut v` at emit
+                // (WDB-161). Count the clone receiver so the owned binding gets `mut`.
+                Expression::MethodCall {
+                    object,
+                    method,
+                    arguments,
+                    ..
+                } if (method == "clone" || method == "copy") && arguments.is_empty() => {
+                    matches!(
+                        &**object,
+                        Expression::Identifier { name, .. } if name == var_name
+                    )
+                }
                 _ => false,
             };
             if matches_var(arg) {
@@ -312,6 +344,17 @@ impl<'ast> CodeGenerator<'ast> {
                 &**operand,
                 Expression::Identifier { name, .. } if name == var_name
             ),
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } if (method == "clone" || method == "copy") && arguments.is_empty() => {
+                matches!(
+                    &**object,
+                    Expression::Identifier { name, .. } if name == var_name
+                )
+            }
             _ => false,
         };
 

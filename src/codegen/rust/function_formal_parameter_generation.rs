@@ -216,7 +216,21 @@ impl<'ast> CodeGenerator<'ast> {
                         self.inferred_borrowed_params.remove(&param.name);
                         self.inferred_mut_borrowed_params.remove(&param.name);
                         self.str_ref_optimized_params.remove(&param.name);
-                        return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                        // Keep owned (explicit `.clone()`), but still emit `mut` when a
+                        // clone peels to `&mut v` into a MutBorrowed formal (WDB-161).
+                        let type_str = self.type_to_rust(&param.type_);
+                        let mut_prefix = if param.is_mutable
+                            || self.variable_needs_mut(&param.name)
+                            || self.param_explicit_clone_targets_mut_borrow_callee(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) {
+                            "mut "
+                        } else {
+                            ""
+                        };
+                        return format!("{mut_prefix}{}: {type_str}", param.name);
                     }
                     let mut_borrow_formal = (self
                         .global_signature_for_function(func)
@@ -248,6 +262,16 @@ impl<'ast> CodeGenerator<'ast> {
                     if mut_borrow_formal {
                         self.inferred_mut_borrowed_params.insert(param.name.clone());
                         self.inferred_borrowed_params.remove(&param.name);
+                        // Record slot before early return so later callers get `mut`
+                        // bindings when peeling `v.clone()` → `&mut v` (WDB-161).
+                        let user_arg_idx = func
+                            .parameters
+                            .iter()
+                            .filter(|p| p.name != "self")
+                            .position(|p| p.name == param.name)
+                            .unwrap_or(param_idx);
+                        self.current_fn_emitted_mut_arg_indices
+                            .insert(user_arg_idx);
                     } else {
                         self.inferred_borrowed_params.insert(param.name.clone());
                         self.inferred_mut_borrowed_params.remove(&param.name);
