@@ -63,10 +63,12 @@ fn main() {
 }
 "#;
     let rust = test_utils::compile_single(source);
+    let demoted = rust.contains("message: &str");
     assert!(
         rust.contains(r#"error_json("boom".to_string())"#)
-            || rust.contains(r#"error_json(String::from("boom"))"#),
-        "string literal must coerce to owned String for owned formal. Got:\n{rust}"
+            || rust.contains(r#"error_json(String::from("boom"))"#)
+            || (demoted && rust.contains(r#"error_json("boom")"#)),
+        "owned formal: lit → .to_string(); demoted &str: bare lit. Got:\n{rust}"
     );
 }
 

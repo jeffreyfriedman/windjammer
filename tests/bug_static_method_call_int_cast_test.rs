@@ -139,7 +139,10 @@ fn test() {
         }
         if line.contains("TypeB::new") {
             assert!(
-                line.contains("20 as f32") || line.contains("20_f32") || line.contains("20.0"),
+                line.contains("20 as f32")
+                    || line.contains("20_i32 as f32")
+                    || line.contains("20_f32")
+                    || line.contains("20.0"),
                 "TypeB::new(20) SHOULD cast to f32 (param is f32).\nLine: {}",
                 line
             );
