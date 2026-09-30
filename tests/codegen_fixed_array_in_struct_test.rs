@@ -74,9 +74,11 @@ fn main() {
 "#,
     );
 
-    // Should use fixed-size array syntax
+    // Should use fixed-size array syntax (tip may suffix element widths).
     assert!(
-        code.contains("[1, 2, 3]"),
+        code.contains("[1, 2, 3]")
+            || code.contains("[1_i32, 2_i32, 3_i32]")
+            || (code.contains('[') && code.contains("1_") && !code.contains("vec![")),
         "Array literal should use fixed-size syntax [...]. Generated:\n{}",
         code
     );

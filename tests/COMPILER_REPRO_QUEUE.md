@@ -1,5 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.564 (2026-09-30) — tip-truth gates for array / index own / &str setter / if-else
+
+More suite FAILs were tip-correct: `[1_i32, …]`, `(&parts[1]).to_string()`,
+demoted `html: &str` + `.to_string()` in setter, `Some(42_i64)` in if-expr.
+
+| Gate | Status |
+|------|--------|
+| `test_standalone_array_uses_fixed_syntax` | ✅ tip GREEN |
+| `test_vec_string_index_in_struct_init` | ✅ tip GREEN |
+| `string_param_passed_to_owned_method_should_compile` | ✅ tip GREEN |
+| `test_if_else_expression_in_assignment` | ✅ tip GREEN |
+
+**Root cause layer:** none in compiler — gate truth catch-up.
+
+**What became unnecessary:** requiring untyped array lits / `.clone()` only /
+owned `String` formals when tip demotes correctly.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all -- test_standalone_array_uses_fixed_syntax test_vec_string_index_in_struct_init string_param_passed_to_owned_method test_if_else_expression_in_assignment`
+
+**Do not steal:** WDB-406/408/411/427, P3.508–P3.563, WDB-412–426 (filed).
+
 ## P3.563 (2026-09-30) — tip-truth gate catch-up (cast / &str demote / Vec::remove)
 
 Suite FAILs were tip-correct emits rejected by stale asserts:

@@ -54,12 +54,17 @@ fn main() {
     let has_type_err = result.contains("error[E0308]")
         || result.contains("expected `String`, found `&str`")
         || result.contains("expected String, found &str");
+    // Tip may demote read/store formals to `&str` and `.to_string()` inside the
+    // setter — still typechecks (Phase-2 demotion).
     let looks_ok = result.contains("fn render_kpi")
         && !has_type_err
         && (result.contains("cash_html: String")
             || result.contains("value_html(cash_html.to_string())")
             || result.contains("value_html(cash_html.clone())")
-            || (result.contains("value_html(cash_html)") && result.contains("cash_html: String")));
+            || (result.contains("value_html(cash_html)") && result.contains("cash_html: String"))
+            || (result.contains("cash_html: &str")
+                && result.contains("html: &str")
+                && result.contains("html.to_string()")));
 
     assert!(
         looks_ok,
