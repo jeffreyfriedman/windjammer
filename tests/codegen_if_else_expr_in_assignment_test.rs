@@ -83,12 +83,15 @@ impl State {
     //   };
 
     assert!(rust_code.contains("if cond"), "Should have if statement");
-    assert!(rust_code.contains("Some(42)"), "Should have Some(42)");
+    assert!(
+        rust_code.contains("Some(42)") || rust_code.contains("Some(42_i64)"),
+        "Should have Some(42). Got:\n{rust_code}"
+    );
     assert!(rust_code.contains("None"), "Should have None");
 
     // The key check: should NOT have semicolons after the option values
     assert!(
-        !rust_code.contains("Some(42);"),
+        !rust_code.contains("Some(42);") && !rust_code.contains("Some(42_i64);"),
         "Should NOT have semicolon after Some(42)"
     );
 

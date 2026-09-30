@@ -170,8 +170,11 @@ impl Config {
     println!("Generated:\n{}", generated);
 
     assert!(
-        generated.contains("parts[1].clone()") || generated.contains("(&parts[1]).clone()"),
-        "Vec<String> field assignment must .clone(). Got:\n{}",
+        generated.contains("parts[1].clone()")
+            || generated.contains("(&parts[1]).clone()")
+            || generated.contains("(&parts[1]).to_string()")
+            || generated.contains("parts[1].to_string()"),
+        "Vec<String> field assignment must own via clone/to_string. Got:\n{}",
         generated
     );
     assert!(
@@ -200,8 +203,11 @@ pub fn make_entry(parts: Vec<string>) -> Entry {
     println!("Generated:\n{}", generated);
 
     assert!(
-        generated.contains("parts[1].clone()") || generated.contains("(&parts[1]).clone()"),
-        "Vec<String> in struct init must .clone(). Got:\n{}",
+        generated.contains("parts[1].clone()")
+            || generated.contains("(&parts[1]).clone()")
+            || generated.contains("(&parts[1]).to_string()")
+            || generated.contains("parts[1].to_string()"),
+        "Vec<String> in struct init must own via clone/to_string. Got:\n{}",
         generated
     );
     assert!(
