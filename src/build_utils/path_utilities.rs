@@ -23,6 +23,31 @@ pub(crate) fn is_transpile_output_directory(dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// True when `dir` is a process/OS temp root (or similarly named ephemeral folder).
+/// Sibling `*.rs` harvest must not mine `/tmp` (or macOS `…/T`) when `--output` lives there
+/// (P3.561 / wj-migrate E0432 from leftover harness `*.rs`).
+pub(crate) fn is_ephemeral_sibling_rs_source_dir(dir: &Path) -> bool {
+    if let Ok(temp) = std::env::temp_dir().canonicalize() {
+        if let Ok(canon) = dir.canonicalize() {
+            if canon == temp {
+                return true;
+            }
+        }
+    }
+    if dir == std::env::temp_dir() {
+        return true;
+    }
+    matches!(
+        dir.file_name().and_then(|n| n.to_str()),
+        Some("tmp" | "temp" | ".tmp" | "Temp" | "TMP" | "Temporary Items")
+    )
+}
+
+/// Directories that must never be mined for hand-written sibling `*.rs`.
+pub(crate) fn must_not_harvest_sibling_rs(dir: &Path) -> bool {
+    is_transpile_output_directory(dir) || is_ephemeral_sibling_rs_source_dir(dir)
+}
+
 pub(crate) fn source_dir_for_output(
     output_subdir: &Path,
     layout: Option<(&Path, &Path)>,

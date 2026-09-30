@@ -1,5 +1,49 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.561 (2026-09-29) — TDD WDB-427 (DB agent; no compiler src)
+
+Copy `i32` struct field into local must not `.clone()`; product emits
+`let size = chunk.size.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-427 MultiFile | ⏳ TDD pending — `let size = chunk.size` |
+| WDB-427 tip-out | ⏳ TDD pending — `chunk.size.clone()` in mesh_generator |
+
+**Root cause layer:** copy / field — Copy `i32` field must copy by value into `let`.
+
+**Why this is a new class:**
+- WDB-393 is **local** assign `x.clone()`.
+- WDB-346 is nested **color.r** field.
+- WDB-426 is **const** `u32`.
+- WDB-370 is **indexed** Copy field.
+
+**What became unnecessary:** `chunk.size.clone()` in mesh extent loops.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-29)
+
+**Do not steal:** WDB-406/408/411, P3.508–P3.560, WDB-412–426 / P3.509–P3.559 (filed).
+
+## P3.562 (2026-09-29) — module-file must not harvest temp-root sibling `*.rs`
+
+`--output` under the OS temp dir mined `output.parent()` for hand-written `*.rs`
+(leftover harness files → `pub mod p3522-test-copy` / E0432). Refuse harvest from
+ephemeral temp roots (and gen/build/generated).
+
+| Gate | Status |
+|------|--------|
+| `module_file_output_must_not_import_tmp_sibling_rs` | ✅ tip GREEN |
+
+**Root cause layer:** boundary / build layout — sibling FFI copy allowlist.
+
+**What became unnecessary:** treating every non-`gen` parent as an FFI source,
+including `/tmp` / macOS `…/T`.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all -- module_file_output_must_not_import_tmp`
+
+**Do not steal:** WDB-406/408/411/427, P3.508–P3.561, WDB-412–426 (filed).
+
 ## P3.560 (2026-09-29) — explicit-clone keep-owned formals get `mut` for `&mut` peel
 
 WDB-161 multipass: `resolve_column(resolver: &mut T)` + `resolve_select` keeps

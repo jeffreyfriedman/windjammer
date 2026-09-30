@@ -127,7 +127,8 @@ pub(crate) fn copy_sibling_rs_from_parent(
         } else {
             parent.to_path_buf()
         };
-        if super::path_utilities::is_transpile_output_directory(&parent_path) {
+        // Never harvest from gen/build/generated or OS temp roots (`--output /tmp/…`).
+        if super::path_utilities::must_not_harvest_sibling_rs(&parent_path) {
             return Ok(());
         }
         parent_path
@@ -136,54 +137,17 @@ pub(crate) fn copy_sibling_rs_from_parent(
     if !copy_from.is_dir() {
         return Ok(());
     }
-
-    for entry in fs::read_dir(&copy_from)? {
-        let entry = entry?;
-        let p = entry.path();
-        if !p.is_file() {
-            continue;
-        }
-        if p.extension().and_then(|e| e.to_str()) != Some("rs") {
-            continue;
-        }
-        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        // Avoid hijacking Cargo's build script or entrypoints from the parent folder.
-        if matches!(stem, "build" | "main" | "lib") {
-            continue;
-        }
-        // Never copy wj test harness outputs into a library output dir (e.g. player_test.rs
-        // transpiled next to lib/ would otherwise become a spurious lib module).
-        if stem.ends_with("_test")
-            || stem.ends_with("_tests")
-            || stem.starts_with("test_")
-            || stem == "tests"
-        {
-            continue;
-        }
-        // Skip generated/transpiled siblings (only hand-written Rust FFI stubs).
-        let wj_sibling = copy_from.join(format!("{stem}.wj"));
-        if wj_sibling.exists() {
-            continue;
-        }
-        // Skip stale flat `src/query.rs` when the real module is `src/ecs/query.wj`.
-        if super::path_utilities::wj_module_declared_in_subtree(&copy_from, stem) {
-            continue;
-        }
-        // Skip `foo.rs` when `foo/` exists (Rust split module layout: parent file + subfolder).
-        if copy_from.join(stem).is_dir() {
-            continue;
-        }
-        let dest = output_dir.join(p.file_name().unwrap());
-        if !dest.exists() {
-            fs::copy(&p, &dest)?;
-        }
+    // Skip mining ephemeral dirs for stray harness `*.rs` (only WJ sources belong there).
+    // Still allow the out_parent / project_root FFI paths below when those are safe.
+    if !super::path_utilities::is_ephemeral_sibling_rs_source_dir(&copy_from) {
+        copy_sibling_rs_files_from_dir(&copy_from, output_dir)?;
     }
 
     // Hand-written Rust next to the output folder (e.g. components/platform.rs beside
     // components/generated/) is not mirrored under the WJ source dir (components_wj/).
     if let Some(out_parent) = output_dir.parent() {
         if out_parent.is_dir()
-            && !super::path_utilities::is_transpile_output_directory(out_parent)
+            && !super::path_utilities::must_not_harvest_sibling_rs(out_parent)
             && out_parent != copy_from.as_path()
         {
             copy_sibling_rs_files_from_dir(out_parent, output_dir)?;
@@ -197,7 +161,10 @@ pub(crate) fn copy_sibling_rs_from_parent(
             && src_root.file_name().and_then(|n| n.to_str()) == Some("src")
         {
             if let Some(project_root) = src_root.parent() {
-                if project_root.is_dir() && project_root != copy_from.as_path() {
+                if project_root.is_dir()
+                    && project_root != copy_from.as_path()
+                    && !super::path_utilities::must_not_harvest_sibling_rs(project_root)
+                {
                     copy_sibling_rs_files_from_dir(project_root, output_dir)?;
                 }
             }
@@ -209,6 +176,10 @@ pub(crate) fn copy_sibling_rs_from_parent(
 
 fn copy_sibling_rs_files_from_dir(copy_from: &Path, output_dir: &Path) -> std::io::Result<()> {
     use std::fs;
+
+    if super::path_utilities::must_not_harvest_sibling_rs(copy_from) {
+        return Ok(());
+    }
 
     for entry in fs::read_dir(copy_from)? {
         let entry = entry?;
