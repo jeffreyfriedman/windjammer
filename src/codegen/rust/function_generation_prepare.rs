@@ -10802,26 +10802,179 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         let mut saw_clone_site = false;
         let mut all_mut_targets = true;
-        let mut check_expr = |expr: &Expression<'ast>| {
-            self.expression_check_explicit_clone_mut_borrow_forward(
-                expr,
+        for stmt in body {
+            self.statement_check_explicit_clone_mut_borrow_forward(
+                stmt,
                 param_name,
                 func,
                 &mut saw_clone_site,
                 &mut all_mut_targets,
             );
-        };
-        for stmt in body {
-            match stmt {
-                Statement::Expression { expr, .. }
-                | Statement::Return {
-                    value: Some(expr), ..
-                } => check_expr(expr),
-                Statement::Let { value, .. } => check_expr(value),
-                _ => {}
-            }
         }
         saw_clone_site && all_mut_targets
+    }
+
+    fn statement_check_explicit_clone_mut_borrow_forward(
+        &self,
+        stmt: &Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+        saw_clone_site: &mut bool,
+        all_mut_targets: &mut bool,
+    ) {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Assignment { value: expr, .. } => {
+                self.expression_check_explicit_clone_mut_borrow_forward(
+                    expr,
+                    param_name,
+                    func,
+                    saw_clone_site,
+                    all_mut_targets,
+                );
+            }
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expression_check_explicit_clone_mut_borrow_forward(
+                    value,
+                    param_name,
+                    func,
+                    saw_clone_site,
+                    all_mut_targets,
+                );
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.statement_check_explicit_clone_mut_borrow_forward(
+                            s,
+                            param_name,
+                            func,
+                            saw_clone_site,
+                            all_mut_targets,
+                        );
+                    }
+                }
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_check_explicit_clone_mut_borrow_forward(
+                    condition,
+                    param_name,
+                    func,
+                    saw_clone_site,
+                    all_mut_targets,
+                );
+                for s in then_block {
+                    self.statement_check_explicit_clone_mut_borrow_forward(
+                        s,
+                        param_name,
+                        func,
+                        saw_clone_site,
+                        all_mut_targets,
+                    );
+                }
+                if let Some(block) = else_block {
+                    for s in block {
+                        self.statement_check_explicit_clone_mut_borrow_forward(
+                            s,
+                            param_name,
+                            func,
+                            saw_clone_site,
+                            all_mut_targets,
+                        );
+                    }
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expression_check_explicit_clone_mut_borrow_forward(
+                    condition,
+                    param_name,
+                    func,
+                    saw_clone_site,
+                    all_mut_targets,
+                );
+                for s in body {
+                    self.statement_check_explicit_clone_mut_borrow_forward(
+                        s,
+                        param_name,
+                        func,
+                        saw_clone_site,
+                        all_mut_targets,
+                    );
+                }
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expression_check_explicit_clone_mut_borrow_forward(
+                    iterable,
+                    param_name,
+                    func,
+                    saw_clone_site,
+                    all_mut_targets,
+                );
+                for s in body {
+                    self.statement_check_explicit_clone_mut_borrow_forward(
+                        s,
+                        param_name,
+                        func,
+                        saw_clone_site,
+                        all_mut_targets,
+                    );
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_check_explicit_clone_mut_borrow_forward(
+                    value,
+                    param_name,
+                    func,
+                    saw_clone_site,
+                    all_mut_targets,
+                );
+                for arm in arms {
+                    if let Expression::Block { statements, .. } = arm.body {
+                        for s in statements {
+                            self.statement_check_explicit_clone_mut_borrow_forward(
+                                s,
+                                param_name,
+                                func,
+                                saw_clone_site,
+                                all_mut_targets,
+                            );
+                        }
+                    } else {
+                        self.expression_check_explicit_clone_mut_borrow_forward(
+                            arm.body,
+                            param_name,
+                            func,
+                            saw_clone_site,
+                            all_mut_targets,
+                        );
+                    }
+                }
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                for s in body {
+                    self.statement_check_explicit_clone_mut_borrow_forward(
+                        s,
+                        param_name,
+                        func,
+                        saw_clone_site,
+                        all_mut_targets,
+                    );
+                }
+            }
+            _ => {}
+        }
     }
 
     fn callee_arg_is_demoted_mut_borrow_contract(
