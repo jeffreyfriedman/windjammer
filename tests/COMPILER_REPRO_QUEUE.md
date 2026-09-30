@@ -1,5 +1,24 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.559 (2026-09-29) — field writeback gate accepts demoted `&Vec` + `&self.queue`
+
+Tip demotes read-only `pop_ready(queue: Vec)` → `&Vec` and passes `&self.queue`
+(no `.clone()`, no `mem::take`). Gate still required take/bare-owned — false RED.
+Let-extract writeback still emits `mem::take` (no regress).
+
+| Gate | Status |
+|------|--------|
+| `owned_field_call_writeback_must_mem_take_not_clone` | ✅ tip GREEN — demoted borrow ok |
+| `owned_field_let_extract_writeback_still_mem_take` | ✅ tip GREEN — `mem::take` retained |
+
+**Root cause layer:** none in compiler — gate truth catch-up to Vec demotion.
+
+**What became unnecessary:** requiring `mem::take` when the callee formal is demoted.
+
+**Gates:** tip emit verified; suite filter `owned_field_call_writeback` after tip6.
+
+**Do not steal:** WDB-408/411, P3.508–P3.558, WDB-412–426 (filed).
+
 ## P3.558 (2026-09-29) — associated `::new` Copy gate accepts `super::extmetric` import
 
 Tip emits `use super::extmetric::Metric` for path-dep UI crates; the gate only
