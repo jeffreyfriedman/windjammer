@@ -185,9 +185,12 @@ fn owned_field_call_writeback_must_mem_take_not_clone() {
     let bare_owned = rust.contains("pop_ready(self.queue,")
         && !rust.contains("&mut self")
         && !rust.contains("& self");
+    // Tip may demote `pop_ready(queue: Vec)` → `&Vec` and pass `&self.queue` (no take/clone).
+    let demoted_borrow = rust.contains("pop_ready(&self.queue,")
+        || (rust.contains("fn pop_ready(queue: &Vec") && rust.contains("pop_ready(&self.queue"));
     assert!(
-        uses_take || bare_owned,
-        "must emit mem::take(&mut self.queue) behind &mut self, or bare self.queue if owned self:\n{rust}"
+        uses_take || bare_owned || demoted_borrow,
+        "must emit mem::take, bare owned self.queue, or demoted &self.queue (no clone):\n{rust}"
     );
     assert!(
         result.ok,
