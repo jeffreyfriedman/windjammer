@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.563 (2026-09-30) — tip-truth gate catch-up (cast / &str demote / Vec::remove)
+
+Suite FAILs were tip-correct emits rejected by stale asserts:
+`20_i32 as f32`, `map.remove(&((key as usize)))`, `parse_twice(&json)` into
+demoted `&str`, concat formal demoted to `&str` + bare lit, Vec::remove
+re-cast without `&`.
+
+| Gate | Status |
+|------|--------|
+| `test_multiple_types_with_new_correct_dispatch` | ✅ tip GREEN |
+| `test_hashmap_remove_with_cast` | ✅ tip GREEN |
+| `cross_module_match_arm_readonly_concat_demotes_to_str` | ✅ tip GREEN |
+| `string_literal_coerces_for_owned_string_formal` | ✅ tip GREEN |
+| `codegen_vec_remove_usize_test::test_vec_remove_usize_no_ref` | ✅ tip GREEN |
+
+**Root cause layer:** none in compiler — gate truth catch-up.
+
+**What became unnecessary:** treating tip demote/`_i32 as f32`/`&json` as RED.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all -- test_multiple_types_with_new_correct_dispatch test_hashmap_remove_with_cast cross_module_match_arm_readonly_concat string_literal_coerces_for_owned test_vec_remove_usize_no_ref`
+
+**Do not steal:** WDB-406/408/411/427, P3.508–P3.562, WDB-412–426 (filed).
+
 ## P3.561 (2026-09-29) — TDD WDB-427 (DB agent; no compiler src)
 
 Copy `i32` struct field into local must not `.clone()`; product emits

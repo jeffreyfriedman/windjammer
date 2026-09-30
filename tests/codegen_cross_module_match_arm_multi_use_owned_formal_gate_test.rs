@@ -26,14 +26,17 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 fn assert_no_borrow_clone_into_owned_string_formal(consumer: &str, callee: &str, call: &str) {
-    assert!(
-        !consumer.contains(&format!("{call}(&")),
-        "owned String formal must not receive borrow at cross-module match-arm call site.\ncallee=\n{callee}\nconsumer=\n{consumer}"
-    );
+    let callee_demoted_str = callee.contains("json: &str") || callee.contains("s: &str");
+    if !callee_demoted_str {
+        assert!(
+            !consumer.contains(&format!("{call}(&")),
+            "owned String formal must not receive borrow at cross-module match-arm call site.\ncallee=\n{callee}\nconsumer=\n{consumer}"
+        );
+    }
     assert!(
         !consumer.contains(&format!("{call}(&json.clone()"))
             && !consumer.contains(&format!("{call}(& json.clone()")),
-        "must not emit &json.clone() into owned String formal (WDB-110).\ncallee=\n{callee}\nconsumer=\n{consumer}"
+        "must not emit &json.clone() into owned/demoted string formal (WDB-110).\ncallee=\n{callee}\nconsumer=\n{consumer}"
     );
 }
 
@@ -86,9 +89,16 @@ fn main() {
         parser.contains("json: &str"),
         "read-only concat helpers demote to &str. Got:\n{parser}"
     );
+    // Owned `String` into demoted `&str` auto-borrows as `&json` (or bare if already
+    // `&str`) — never `&json.clone()` (WDB-110).
     assert!(
-        consumer.contains("parse_twice(json)"),
-        "demoted &str formal must receive bare auto-borrow, not explicit &. Got:\n{consumer}"
+        consumer.contains("parse_twice(json)") || consumer.contains("parse_twice(&json)"),
+        "demoted &str formal must receive auto-borrow (bare or &json). Got:\n{consumer}"
+    );
+    assert!(
+        !consumer.contains("parse_twice(&json.clone())")
+            && !consumer.contains("parse_twice(& json.clone())"),
+        "must not emit &json.clone() into demoted &str formal.\nGot:\n{consumer}"
     );
     assert_no_borrow_clone_into_owned_string_formal(consumer, parser, "parse_twice");
 

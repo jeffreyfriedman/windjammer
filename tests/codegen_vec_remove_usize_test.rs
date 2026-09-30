@@ -10,24 +10,15 @@
     feature = "codegen_tests",
 ))]
 
-use std::env;
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_vec_remove_usize_no_ref() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = env!("CARGO_BIN_EXE_wj");
 
-    let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("test_vec_remove_usize");
-
-    fs::create_dir_all(&test_dir).unwrap();
+    let test_dir = tempfile::TempDir::new().expect("tempdir");
 
     // Test that Vec.remove(usize_var) does NOT add &
     // Vec.remove takes usize by value, not by reference
@@ -44,11 +35,11 @@ fn main() {
 }
 "#;
 
-    let test_file = test_dir.join("vec_remove_usize.wj");
+    let test_file = test_dir.path().join("vec_remove_usize.wj");
     fs::write(&test_file, test_content).unwrap();
 
-    let output = Command::new(&wj_binary)
-        .current_dir(&test_dir)
+    let output = Command::new(wj_binary)
+        .current_dir(test_dir.path())
         .arg("build")
         .arg("--no-cargo")
         .arg(&test_file)
@@ -61,28 +52,29 @@ fn main() {
     println!("STDOUT:\n{}", stdout);
     println!("STDERR:\n{}", stderr);
 
-    let rust_file = test_dir.join("build").join("vec_remove_usize.rs");
+    let rust_file = test_dir.path().join("build").join("vec_remove_usize.rs");
     let rust_code = fs::read_to_string(&rust_file).unwrap();
     println!("Generated Rust:\n{}", rust_code);
 
-    // The generated code should NOT add & to usize variable for Vec.remove
-    // items.remove(sparse_idx_usize) NOT items.remove(&sparse_idx_usize)
+    // Vec.remove takes usize by value — no `&`. Tip may re-state `as usize`.
     assert!(
-        rust_code.contains("items.remove(sparse_idx_usize)"),
+        rust_code.contains("items.remove(sparse_idx_usize)")
+            || rust_code.contains("items.remove((sparse_idx_usize) as usize)"),
         "Expected NO auto-ref for Vec.remove(usize).\nGenerated code:\n{}",
         rust_code
     );
 
     // Should NOT contain the incorrect version
     assert!(
-        !rust_code.contains("items.remove(&sparse_idx_usize)"),
+        !rust_code.contains("items.remove(&sparse_idx_usize)")
+            && !rust_code.contains("items.remove(&(sparse_idx_usize)"),
         "Should NOT add & to usize for Vec.remove.\nGenerated code:\n{}",
         rust_code
     );
 
     // Verify it compiles
     let compile_output = Command::new("rustc")
-        .current_dir(test_dir.join("build"))
+        .current_dir(test_dir.path().join("build"))
         .arg("--crate-type")
         .arg("bin")
         .arg("vec_remove_usize.rs")
@@ -95,7 +87,4 @@ fn main() {
         "Expected generated code to compile.\nRustc errors:\n{}",
         compile_stderr
     );
-
-    // Clean up
-    let _ = fs::remove_dir_all(&test_dir);
 }

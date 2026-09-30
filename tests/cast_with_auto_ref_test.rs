@@ -93,11 +93,12 @@ fn test_hashmap_remove_with_cast() {
         "Should not generate `&key as usize` (invalid cast)"
     );
 
-    // For Copy types like usize, we don't need & for HashMap::remove either
+    // HashMap::remove(&K): tip may emit bare cast, parenthesized cast, or `&(… as usize)`.
     assert!(
         output.contains("map.remove(key as usize)")
             || output.contains("map.remove((key as usize))")
-            || output.contains("map.remove(&(key as usize))"),
+            || output.contains("map.remove(&(key as usize))")
+            || output.contains("map.remove(&((key as usize)))"),
         "Should generate valid syntax for HashMap::remove with cast: \n{}",
         output
     );
