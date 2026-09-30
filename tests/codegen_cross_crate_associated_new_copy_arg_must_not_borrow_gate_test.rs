@@ -69,19 +69,15 @@ impl Gauge {
 }
 
 fn wj_bin() -> String {
-    std::env::var("WJ_BIN").unwrap_or_else(|_| {
-        let tip = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
-        if tip.is_file() {
-            tip.display().to_string()
-        } else {
-            "wj".to_string()
-        }
-    })
+    std::env::var("WJ_BIN").unwrap_or_else(|_| env!("CARGO_BIN_EXE_wj").to_string())
 }
 
 /// `wj build` may overwrite `Cargo.toml`; rewrite dep + lib after transpile.
 fn cargo_check_view(out: &Path, ext: &Path, crate_name: &str, view_rs: &str) {
-    let rs_check = view_rs.replace("use crate::extmetric::", "use extmetric::");
+    // Tip may emit `crate::extmetric` or `super::extmetric` for path-dep imports.
+    let rs_check = view_rs
+        .replace("use crate::extmetric::", "use extmetric::")
+        .replace("use super::extmetric::", "use extmetric::");
     fs::write(out.join("view.rs"), &rs_check).unwrap();
     fs::write(
         out.join("Cargo.toml"),
