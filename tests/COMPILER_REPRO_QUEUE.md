@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.558 (2026-09-29) — associated `::new` Copy gate accepts `super::extmetric` import
+
+Tip emits `use super::extmetric::Metric` for path-dep UI crates; the gate only
+rewrote `crate::extmetric` → cargo-check E0432 (false RED). Call sites already
+pass Copy by value (`Metric::new(days)` / `Gauge::new(pct as f64)`).
+
+| Gate | Status |
+|------|--------|
+| `cross_crate_associated_new_copy_int_must_not_borrow` | ✅ tip GREEN |
+| `cross_crate_associated_new_copy_float_cast_must_not_borrow` | ✅ tip GREEN |
+
+**Root cause layer:** none in compiler — gate import rewrite catch-up.
+
+**What became unnecessary:** treating `super::` path-dep import as a borrow regression.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-tip-p3557`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- cross_crate_associated_new_copy`
+
+**Do not steal:** WDB-408/411, P3.508–P3.557, WDB-412–426 (filed).
+
 ## P3.557 (2026-09-29) — bare Vec field-assign stays owned; text demotion gates catch up
 
 P3.346/548 made bare `field = param` never count as payload so `string` can demote
