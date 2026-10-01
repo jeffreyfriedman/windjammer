@@ -53,8 +53,8 @@ Copy `i32` struct field into local must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-427 MultiFile | ⏳ TDD pending — `let size = chunk.size` |
-| WDB-427 tip-out | ⏳ TDD pending — `chunk.size.clone()` in mesh_generator |
+| WDB-427 MultiFile | ✅ isolate GREEN — `let size = chunk.size` (no `.clone()`) |
+| WDB-427 tip-out | ❌ product RED — `chunk.size.clone()` in mesh_generator |
 
 **Root cause layer:** copy / field — Copy `i32` field must copy by value into `let`.
 
@@ -66,7 +66,10 @@ Copy `i32` struct field into local must not `.clone()`; product emits
 
 **What became unnecessary:** `chunk.size.clone()` in mesh extent loops.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-09-29)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-01)
+
+**Ran (DB agent 2026-10-01):** worktree `…/wdb407-tdd` @ `cfb54aa4`; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb427_` → **1 passed / 1 failed**
 
 **Do not steal:** WDB-406/408/411, P3.508–P3.560, WDB-412–426 / P3.509–P3.559 (filed).
 
