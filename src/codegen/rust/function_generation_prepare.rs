@@ -10064,6 +10064,18 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // P3.524: `strings.substring` / `strings.len` are AsRef<&str> runtime APIs.
+        // Treating them as `&String` formals forced adapter `find_char(text)` to stay
+        // `&String` when the call appeared in an `if` condition (Let bindings were
+        // not scanned), while `split_header_line(line: &str)` passed `line` (E0308).
+        if let Expression::Identifier { name, .. } = object {
+            if crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name)
+                || crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(name)
+            {
+                let _ = (method, arg_index, func);
+                return false;
+            }
+        }
         let receiver_type = if let Expression::Identifier { name, .. } = object {
             if name == "self" && self.in_impl_block {
                 self.current_struct_name.clone()
