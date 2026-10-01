@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.567 (2026-10-01) — TDD WDB-428 (DB agent; no compiler src)
+
+Copy local `i32` in println/format args must not `.clone()`; product emits
+`println!(..., max_size.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-428 MultiFile | ⏳ TDD pending — `println("…{}", max_size)` |
+| WDB-428 tip-out | ⏳ TDD pending — `max_size.clone()` in svo*_convert |
+
+**Root cause layer:** copy / format — Copy locals in format args must not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is local **assign** `x.clone()`.
+- WDB-427 is **field** `chunk.size.clone()` into `let`.
+- WDB-426 is **const** `u32`.
+
+**What became unnecessary:** `max_size.clone()` in SVO build logs.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-01)
+
+**Do not steal:** WDB-406/408/411/427, P3.508–P3.566, WDB-412–427 / P3.509–P3.561 (filed).
+
 ## P3.564 (2026-09-30) — tip-truth gates for array / index own / &str setter / if-else
 
 More suite FAILs were tip-correct: `[1_i32, …]`, `(&parts[1]).to_string()`,
