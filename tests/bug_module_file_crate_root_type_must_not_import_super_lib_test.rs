@@ -11,13 +11,14 @@
     feature = "integration_tests",
 ))]
 
-//! P3.563: multipass `--module-file` with crate-root `lib.wj` must not auto-inject
+//! P3.566: multipass `--module-file` with crate-root `lib.wj` must not auto-inject
 //! `use super::lib::Type` into sibling modules.
 //!
 //! Product `wj-migrate` `db_status.wj` uses `pending` / `discover_migrations` that
 //! return `Vec<Migration>` without an explicit `use crate::Migration`. Tip injects
 //! `use super::lib::Migration` → rustc E0432 (`lib` is not a submodule; `lib.wj`
 //! is the crate root). Explicit `use crate::Item` greened; inferred auto-import RED.
+//! (P3.563/564 were tip-truth catch-ups; P3.565 was find_char AsRef.)
 
 use std::fs;
 use std::process::Command;
@@ -68,17 +69,17 @@ pub fn report(items: Vec<Item>) -> int {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.563 transpile failed:\n{}",
+        "P3.566 transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
     let status_rs = fs::read_to_string(out.path().join("status.rs")).unwrap_or_default();
     let lib_rs = fs::read_to_string(out.path().join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.563 status.rs:\n{status_rs}\nlib.rs head:\n{}", &lib_rs[..lib_rs.len().min(400)]);
+    eprintln!("P3.566 status.rs:\n{status_rs}\nlib.rs head:\n{}", &lib_rs[..lib_rs.len().min(400)]);
 
     assert!(
         !status_rs.contains("super::lib::"),
-        "P3.563 RED: crate-root types must not auto-import as super::lib::… \
+        "P3.566 RED: crate-root types must not auto-import as super::lib::… \
          (product wj-migrate db_status → E0432). status.rs:\n{status_rs}"
     );
 
@@ -88,13 +89,13 @@ pub fn report(items: Vec<Item>) -> int {
         .arg(out.path().join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3563_cargo_{}", std::process::id())),
+            std::env::temp_dir().join(format!("wj_p3566_cargo_{}", std::process::id())),
         )
         .output()
         .expect("cargo check");
     assert!(
         cargo.status.success(),
-        "P3.563 RED: multipass crate-root type import must cargo-check:\n{}\nstatus.rs:\n{status_rs}",
+        "P3.566 RED: multipass crate-root type import must cargo-check:\n{}\nstatus.rs:\n{status_rs}",
         String::from_utf8_lossy(&cargo.stderr)
     );
 }
