@@ -362,6 +362,15 @@ pub fn rust_use_path_from_module_to_type(
     if defining_module.is_empty() || type_name.is_empty() {
         return None;
     }
+    // P3.566: `lib.wj` / `main.wj` map to module segments `["lib"]` / `["main"]`, but
+    // those files are the crate root (inlined into `lib.rs` / `main.rs`) — not Rust
+    // submodules. Emitting `super::lib::Type` → E0432. Point at the crate root instead.
+    if defining_module.len() == 1
+        && matches!(defining_module[0].as_str(), "lib" | "main")
+        && current_module != defining_module
+    {
+        return Some(format!("crate::{type_name}"));
+    }
     let lcp = longest_common_prefix_len(current_module, defining_module);
     let ups = current_module.len().saturating_sub(lcp);
     let down = &defining_module[lcp..];
@@ -563,6 +572,17 @@ pub struct Manager {
         assert_eq!(
             rust_use_path_from_module_to_type(&cur, &def, "Vec2").as_deref(),
             Some("crate::math::vec2::Vec2")
+        );
+    }
+
+    #[test]
+    pub(crate) fn rust_use_path_sibling_of_crate_root_lib_wj_uses_crate() {
+        // P3.566: status.wj → Item defined in lib.wj must not be `super::lib::Item`.
+        let cur = vec!["status".into()];
+        let def = vec!["lib".into()];
+        assert_eq!(
+            rust_use_path_from_module_to_type(&cur, &def, "Item").as_deref(),
+            Some("crate::Item")
         );
     }
 
