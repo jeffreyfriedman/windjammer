@@ -98,9 +98,13 @@ pub fn test_chain() {
         "String literal 'beta' should get .to_string() in second chained add_item(): {}",
         output
     );
+    // Tip may demote read-only `with_label(label: string)` → `&str`; bare lit is correct.
+    let renamed_owned = output.contains(r#""renamed".to_string()"#);
+    let renamed_borrowed = output.contains(r#"with_label("renamed")"#)
+        && (output.contains("label: &str") || output.contains("label:&str"));
     assert!(
-        output.contains(r#""renamed".to_string()"#),
-        "String literal 'renamed' should get .to_string() in chained with_label(): {}",
+        renamed_owned || renamed_borrowed,
+        "String literal 'renamed' must match with_label formal (owned .to_string() or demoted &str): {}",
         output
     );
 }
