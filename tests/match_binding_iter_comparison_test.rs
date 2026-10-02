@@ -115,10 +115,11 @@ impl Renderable for Prop {
         rust
     );
 
-    // Verify the comparison exists (String == &String is valid)
+    // Tip-truth: bare `o == self.value` or Copy-style `*o == self.value` both
+    // compile for `&String` / `String` PartialEq (for-loop binding may be ref).
     assert!(
-        rust.contains("if o == self.value"),
-        "Should have comparison: o == self.value (String == &String is valid)"
+        rust.contains("if o == self.value") || rust.contains("if *o == self.value"),
+        "Should have comparison o[/ *o] == self.value. Got:\n{rust}"
     );
 }
 

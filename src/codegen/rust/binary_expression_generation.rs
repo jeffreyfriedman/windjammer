@@ -1328,9 +1328,24 @@ impl<'ast> CodeGenerator<'ast> {
                 && !left_is_explicit_str_ref
                 && !right_is_explicit_str_ref
             {
+                // Only auto-deref Copy pointee mismatches (`*amount > 0`). Non-Copy
+                // `&String` vs `String` compares without move (`o == self.value`).
+                let side_is_copy = |expr: &Expression<'_>| {
+                    self.infer_expression_type(expr).is_some_and(|ty| {
+                        let bare = match &ty {
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                inner.as_ref()
+                            }
+                            other => other,
+                        };
+                        self.is_type_copy(bare)
+                    }) || self.expression_is_copy(expr)
+                };
                 if left_is_borrowed {
-                    left_str = format!("*{}", left_str);
-                } else {
+                    if side_is_copy(left) {
+                        left_str = format!("*{}", left_str);
+                    }
+                } else if side_is_copy(right) {
                     right_str = format!("*{}", right_str);
                 }
             }

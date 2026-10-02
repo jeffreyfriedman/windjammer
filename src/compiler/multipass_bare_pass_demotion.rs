@@ -1161,6 +1161,50 @@ pub fn replay(seg: WalSegment) -> int {
     }
 
     #[test]
+    fn bare_pass_field_method_receiver_does_not_restore_owned_p3583b() {
+        // `grid.cells.is_empty()` auto-borrows — must not trigger field-move Owned restore
+        // (unlike `decode_records(seg.bytes)` / returning `csr.neighbors`).
+        let types = parse_program(
+            r#"
+pub struct VoxelGrid {
+    pub cells: Vec<int>,
+}
+"#,
+        );
+        let engine = parse_program(
+            r#"
+use crate::v::types::VoxelGrid
+pub fn collides_aabb(grid: VoxelGrid) -> bool {
+    !grid.cells.is_empty()
+}
+pub fn update(grid: VoxelGrid) -> bool {
+    collides_aabb(grid)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        let mut collides_sig = owned_custom_sig("collides_aabb", "VoxelGrid");
+        collides_sig.param_ownership[0] = OwnershipMode::Borrowed;
+        registry
+            .signatures
+            .insert("collides_aabb".to_string(), collides_sig);
+        registry.signatures.insert(
+            "update".to_string(),
+            owned_custom_sig("update", "VoxelGrid"),
+        );
+        let programs = vec![types, engine];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let collides = registry.signatures.get("collides_aabb").unwrap();
+        assert_eq!(
+            collides.param_ownership[0],
+            OwnershipMode::Borrowed,
+            "P3.583b: field method receiver must not restore Owned; got {:?}",
+            collides.param_ownership
+        );
+    }
+
+    #[test]
     fn bare_pass_skips_custom_field_return_move_p3582() {
         let types = parse_program(
             r#"
@@ -3080,49 +3124,64 @@ fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
 }
 
 fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
+    expr_has_field_move_from_param(param_name, expr, true)
+}
+
+/// `value_position`: field/index is used as a value (return, let, call arg) → move.
+/// Place position (method/index receiver, binary operand) → auto-borrow, not a move.
+fn expr_has_field_move_from_param(param_name: &str, expr: &Expression, value_position: bool) -> bool {
     match expr {
-        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
-            matches!(
-                object,
-                Expression::Identifier { name, .. } if name == param_name
-            ) || expr_is_field_move_from_param(param_name, object)
+        Expression::FieldAccess { object, .. } => {
+            if value_position {
+                matches!(
+                    object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) || expr_has_field_move_from_param(param_name, object, true)
+            } else {
+                false
+            }
+        }
+        Expression::Index { object, index, .. } => {
+            // `vals[i]` / `param.field[i]` borrow the container; index expr is a value.
+            expr_has_field_move_from_param(param_name, object, false)
+                || expr_has_field_move_from_param(param_name, index, true)
         }
         // P3.583: field move into call/struct args (`decode_records(self.bytes)`).
         Expression::Call { arguments, .. } => arguments
             .iter()
-            .any(|(_, arg)| expr_is_field_move_from_param(param_name, arg)),
+            .any(|(_, arg)| expr_has_field_move_from_param(param_name, arg, true)),
         Expression::MethodCall {
             object,
             arguments,
             ..
         } => {
-            expr_is_field_move_from_param(param_name, object)
+            expr_has_field_move_from_param(param_name, object, false)
                 || arguments
                     .iter()
-                    .any(|(_, arg)| expr_is_field_move_from_param(param_name, arg))
+                    .any(|(_, arg)| expr_has_field_move_from_param(param_name, arg, true))
         }
         Expression::StructLiteral { fields, .. } => fields
             .iter()
-            .any(|(_, v)| expr_is_field_move_from_param(param_name, v)),
+            .any(|(_, v)| expr_has_field_move_from_param(param_name, v, true)),
         Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
             .iter()
-            .any(|e| expr_is_field_move_from_param(param_name, e)),
-        Expression::Binary { left, right, .. }
-        | Expression::ChannelSend {
-            channel: left,
-            value: right,
-            ..
-        } => {
-            expr_is_field_move_from_param(param_name, left)
-                || expr_is_field_move_from_param(param_name, right)
+            .any(|e| expr_has_field_move_from_param(param_name, e, true)),
+        Expression::Binary { left, right, .. } => {
+            expr_has_field_move_from_param(param_name, left, false)
+                || expr_has_field_move_from_param(param_name, right, false)
         }
-        Expression::Unary { operand, .. }
-        | Expression::TryOp { expr: operand, .. }
+        Expression::ChannelSend { value, .. } => {
+            expr_has_field_move_from_param(param_name, value, true)
+        }
+        Expression::Unary { operand, .. } => {
+            expr_has_field_move_from_param(param_name, operand, false)
+        }
+        Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. }
         | Expression::Cast { expr: operand, .. }
         | Expression::AsyncCall { expr: operand, .. }
         | Expression::SpawnCall { expr: operand, .. } => {
-            expr_is_field_move_from_param(param_name, operand)
+            expr_has_field_move_from_param(param_name, operand, true)
         }
         _ => false,
     }
