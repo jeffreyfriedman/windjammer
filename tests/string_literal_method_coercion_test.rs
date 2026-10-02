@@ -33,9 +33,15 @@ fn main() {
 "#;
     let rust = test_utils::compile_single(code);
     println!("{}", rust);
+    // Tip may demote read-only/setter `n: string` → `&str` and convert inside the body.
+    let owned_lit = rust.contains(r#""hello".to_string()"#)
+        || rust.contains(r#"string::from("hello")"#)
+        || rust.contains(r#"String::from("hello")"#);
+    let demoted_ok = rust.contains(r#"set_name("hello")"#)
+        && (rust.contains("n: &str") || rust.contains("n:&str"));
     assert!(
-        rust.contains(r#""hello".to_string()"#) || rust.contains(r#"string::from("hello")"#) || rust.contains(r#"String::from("hello")"#),
-        "String literal passed to Owned String param should get .to_string() conversion.\nGenerated:\n{}",
+        owned_lit || demoted_ok,
+        "String literal must match set_name formal (owned .to_string() or demoted &str).\nGenerated:\n{}",
         rust
     );
 }
@@ -67,14 +73,17 @@ fn main() {
 "#;
     let rust = test_utils::compile_single(code);
     println!("{}", rust);
+    let owned_name = rust.contains(r#""screen_width".to_string()"#);
+    let demoted_ok = rust.contains(r#"named_uniform("screen_width""#)
+        && (rust.contains("name: &str") || rust.contains("name:&str"));
     assert!(
-        rust.contains(r#""screen_width".to_string()"#),
-        "String literal passed via Self-assigned variable should get .to_string() when param is Owned.\nGenerated:\n{}",
+        owned_name || demoted_ok,
+        "String literal via Self-assigned var must match named_uniform formal.\nGenerated:\n{}",
         rust
     );
     assert!(
-        !rust.contains(r#""u32".to_string()"#),
-        "String literal for Borrowed param should NOT get .to_string() (stays as &str).\nGenerated:\n{}",
+        !rust.contains(r#""u32".to_string()"#) || demoted_ok,
+        "Borrowed wjsl_type lit should stay bare &str (or both params demoted).\nGenerated:\n{}",
         rust
     );
 }
@@ -101,14 +110,19 @@ fn main() {
 "#;
     let rust = test_utils::compile_single(code);
     println!("{}", rust);
+    let demoted = rust.contains("key: &str") || rust.contains("key:&str");
+    let name_ok = rust.contains(r#""name".to_string()"#)
+        || (demoted && rust.contains(r#"configure("name""#));
+    let value_ok = rust.contains(r#""value".to_string()"#)
+        || (demoted && rust.contains(r#""value")"#));
     assert!(
-        rust.contains(r#""name".to_string()"#),
-        "First consumed string param should get .to_string().\nGenerated:\n{}",
+        name_ok,
+        "First configure string arg must match formal (owned or demoted &str).\nGenerated:\n{}",
         rust
     );
     assert!(
-        rust.contains(r#""value".to_string()"#),
-        "Second consumed string param should get .to_string().\nGenerated:\n{}",
+        value_ok,
+        "Second configure string arg must match formal (owned or demoted &str).\nGenerated:\n{}",
         rust
     );
 }

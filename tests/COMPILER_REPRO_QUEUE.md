@@ -11,13 +11,14 @@ demotes read-only formals with matching call sites.
 | `owned_struct_arg_must_not_emit_ampersand_at_call` | ✅ tip GREEN — allow consistent `&` demote |
 | `test_owned_voxelgrid_param_not_auto_borrowed` | ✅ tip GREEN — allow consistent `&` demote |
 | `test_string_literal_in_chained_method_call` | ✅ tip GREEN — bare lit into demoted `&str` |
+| `string_literal_method_coercion_test` (3) | ✅ tip GREEN — setter demote to `&str` |
 
 **Root cause layer:** none in compiler — gate truth catch-up.
 
 **What became unnecessary:** treating consistent read-only demotion as RED.
 
 **Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3577`
-- `cargo test --release --test all -- owned_struct_arg_must_not_emit_ampersand test_owned_voxelgrid_param_not_auto_borrowed test_string_literal_in_chained_method_call`
+- `cargo test --release --test all -- owned_struct_arg_must_not_emit_ampersand test_owned_voxelgrid_param_not_auto_borrowed test_string_literal_in_chained_method_call string_literal_method_coercion_test`
 
 ## P3.578 (2026-10-02) — u32 `while i < half` after `half = n / 2` (P3.348 paint)
 
