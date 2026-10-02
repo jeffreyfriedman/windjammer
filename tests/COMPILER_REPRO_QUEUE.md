@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.569 (2026-10-01) — TDD WDB-429 (DB agent; no compiler src)
+
+Copy match-arm payloads (`i32`/`f32`/`bool`) must not `.clone()`; product emits
+`Some(StateDataValue::Int(value)) => Some(value.clone())` (Float/Bool too).
+
+| Gate | Status |
+|------|--------|
+| WDB-429 MultiFile | ⏳ TDD pending — `Some(value)` from `Cell::Int(value)` |
+| WDB-429 tip-out | ⏳ TDD pending — `value.clone()` in state_machine/state.rs |
+
+**Root cause layer:** copy / match — Copy enum payloads in match arms must copy/deref, not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is formal **field assign** `x.clone()`.
+- WDB-367/380 is `None.clone()`.
+- WDB-416 is `a.clone().as_float()`.
+- WDB-417 is owned **struct** `chunk.clone()` in match/call.
+
+**What became unnecessary:** `value.clone()` on Int/Float/Bool StateDataValue getters.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-01)
+
+**Do not steal:** WDB-406/408/411/428, P3.508–P3.568, WDB-412–428 / P3.509–P3.567 (filed).
+
 ## P3.568 (2026-10-01) — auth `json_string_field`: `strings.len` must unify with `int` counters
 
 Product `wj-auth-api` `tests/auth_test.wj` emits `i = 0_i64` then compares to
