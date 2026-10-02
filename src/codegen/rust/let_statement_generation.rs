@@ -306,6 +306,19 @@ impl<'ast> CodeGenerator<'ast> {
                         let is_usize_ty = |t: &Type| {
                             crate::codegen::rust::type_casting::type_is_usize(t)
                         };
+                        let is_u32_ty = |t: &Type| {
+                            matches!(t, Type::Uint)
+                                || matches!(t, Type::Custom(n) if n == "u32")
+                        };
+                        let untyped_int_lit = |e: &Expression<'_>| {
+                            matches!(
+                                e,
+                                Expression::Literal {
+                                    value: crate::parser::Literal::Int(_),
+                                    ..
+                                }
+                            )
+                        };
                         match (l, r) {
                             (Some(a), Some(b))
                                 if a == b
@@ -315,11 +328,16 @@ impl<'ast> CodeGenerator<'ast> {
                                 Some(Type::Int32)
                             }
                             (Some(a), Some(b)) if a != b => {
+                                // P3.578: `half = n / 2` with `n: u32` stays u32.
+                                if is_u32_ty(&a) && untyped_int_lit(right) {
+                                    Some(Type::Uint)
+                                } else if is_u32_ty(&b) && untyped_int_lit(left) {
+                                    Some(Type::Uint)
                                 // P3.568 / P3.299: WJ `int` + `strings.len`/`usize` binding
                                 // emits i64 (cast the usize side). Do not let usize win the
                                 // let-binding type or `j = i + marker_len` stays "usize" while
                                 // the emit is i64 (`j < n` / substring E0308).
-                                if (is_wj_int(&a) && is_usize_ty(&b))
+                                } else if (is_wj_int(&a) && is_usize_ty(&b))
                                     || (is_wj_int(&b) && is_usize_ty(&a))
                                 {
                                     Some(Type::Int)
