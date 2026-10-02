@@ -55,22 +55,23 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 
 P3.522 greened `handle_method(&mut self)` / `check_rate(&mut self)`. Product tip
 still emits `dispatch(mut self, …)` then `self.dispatch(...)` → E0507 move out
-of `&mut self`. Minimal check_rate+dispatch+handle isolates false-GREEN
-(`dispatch(&mut self)`).
+of `&mut self`.
 
 | Gate | Status |
 |------|--------|
-| `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ❌ tip RED — product `dispatch(mut self)` |
+| `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ✅ isolate GREEN |
+| product `wj-notes-api` domain `dispatch` | ⚠ tip residual — metadata `params[0]=MutableReference(Self)` but `param_ownership[0]=Owned` / emit still `mut self`; `fetch_note`/`lookup_note` now Borrowed |
 
-**Root cause layer:** constraint / self-mode — callee used after `&mut`
-`check_rate` early-return arm must demote to `&mut self` (or `&self` if
-read-only), not keep collided Owned/`mut self`.
+**Root cause layer:** signature / self-mode —
+(1) returning `param.field` is not a consume (Borrowed + clone, like self getters);
+(2) HashMap for-in scans demote to Borrowed; field projection into Borrowed formals
+does not pin Owned; (3) `self.field` args into Borrowed callees are not body-moves.
 
-**What became unnecessary:** `self.clone().dispatch` or reshaping notes-api
-to inline dispatch into handle_method.
+**What became unnecessary:** `self.clone().dispatch`; product reshape of dispatch.
 
-**Gates:** tip-p3557 (21:23) product `$WJ test` → E0507; product build assert.
-- `cargo test --test all --features integration_tests,codegen_tests -- notes_api_dispatch_from_mut_handle_must_not_be_owned`
+**Gates:**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_dispatch_from_mut_handle_must_not_be_owned` → GREEN
+- Follow-up: sync `NotesApp::dispatch` `param_ownership[0]` with MutBorrowed params (codegen still emits `mut self`).
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.571, WDB-412–428 (filed).
 

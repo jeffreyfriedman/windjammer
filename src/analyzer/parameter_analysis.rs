@@ -111,6 +111,9 @@ impl<'ast> Analyzer<'ast> {
 
         // 1. Returned parameters must stay owned — even when mutated in the body
         // (e.g. `fn sort(items: Vec<T>) -> Vec<T> { items.sort(); items }`).
+        // Returning `param.field` alone is not a consume (P3.570 / self getters) —
+        // `expression_uses_identifier_for_return` no longer treats field projection
+        // as returning the param.
         if self.is_returned(param_name, body)
             && !(Self::is_windjammer_text_param_type(param_type) && func.parent_type.is_some())
         {
@@ -184,7 +187,16 @@ impl<'ast> Analyzer<'ast> {
         // 2.5b Non-Copy field projected into a call/method arg is a partial move of the
         // binding (`return_f64(buf.scores)`). Keep Owned so codegen can move fields
         // without demoting to `&Buf` + `.clone()` (WDB-096).
-        if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body) {
+        // P3.570: `lookup_note(store.notes, id)` into a Borrowed map formal is a reborrow
+        // of the field, not a consume of `store`.
+        if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body)
+            && !self.param_field_projections_only_into_borrowed_formals(
+                param_name,
+                param_type,
+                body,
+                registry,
+            )
+        {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -209,12 +221,16 @@ impl<'ast> Analyzer<'ast> {
         // borrowed (`for i in &items`); otherwise consuming iteration uses owned param.
         // P3.528: Vec/Array of Copy elements — `for v in applied { v == x }` is a shared
         // scan (`for v in &applied`), not a consume of the Vec.
+        // P3.570: HashMap/BTreeMap/`Map` scans (`lookup_note`) match impl `&self.notes`
+        // for-in — borrow the map; codegen clones values on return.
         if self.is_iterated_over(param_name, body) {
             if self.for_loop_over_param_dereferences_element(param_name, body) {
                 return Ok(OwnershipMode::Borrowed);
             }
-            if self.collection_of_copy_elements(param_type) {
-                // fall through — prefer Borrowed for Copy-element collection scans
+            if self.collection_of_copy_elements(param_type)
+                || Self::is_map_collection_param_type(param_type)
+            {
+                // fall through — prefer Borrowed for Copy-element / map scans
             } else if !self.is_copy_type(param_type) {
                 return Ok(OwnershipMode::Owned);
             }
@@ -808,6 +824,23 @@ impl<'ast> Analyzer<'ast> {
             Type::Vec(_) => true,
             Type::Parameterized(name, _) => {
                 crate::type_classification::is_stdlib_collection_type_name(name)
+            }
+            _ => false,
+        }
+    }
+
+    /// HashMap / BTreeMap / WJ `Map` — for-in scans borrow like impl `&self.notes`.
+    fn is_map_collection_param_type(param_type: &Type) -> bool {
+        match param_type {
+            Type::Parameterized(name, _) => {
+                let base = name.split('<').next().unwrap_or(name);
+                let base = base.rsplit("::").next().unwrap_or(base);
+                matches!(base, "HashMap" | "BTreeMap" | "Map")
+            }
+            Type::Custom(name) => {
+                let base = name.split('<').next().unwrap_or(name);
+                let base = base.rsplit("::").next().unwrap_or(base);
+                matches!(base, "HashMap" | "BTreeMap" | "Map")
             }
             _ => false,
         }

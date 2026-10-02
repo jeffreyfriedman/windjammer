@@ -971,25 +971,37 @@ impl<'ast> Analyzer<'ast> {
     ///
     /// Direct `return self.field` / trailing `self.field` as implicit return are excluded: codegen
     /// emits `.clone()` for `&self` receivers (same rule as read-only getters).
-    pub(super) fn function_body_moves_non_copy_self_fields(&self, func: &FunctionDecl) -> bool {
+    pub(super) fn function_body_moves_non_copy_self_fields(
+        &self,
+        func: &FunctionDecl,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> bool {
         for stmt in &func.body {
-            if self.statement_moves_non_copy_self_field(stmt) {
+            if self.statement_moves_non_copy_self_field(stmt, registry) {
                 return true;
             }
         }
         false
     }
 
-    pub(crate) fn statement_moves_non_copy_self_field(&self, stmt: &Statement) -> bool {
+    pub(crate) fn statement_moves_non_copy_self_field(
+        &self,
+        stmt: &Statement,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> bool {
         use crate::parser::Statement;
         match stmt {
-            Statement::Let { value, .. } => self.expression_moves_non_copy_self_field(value),
-            Statement::Assignment { value, .. } => self.expression_moves_non_copy_self_field(value),
+            Statement::Let { value, .. } => {
+                self.expression_moves_non_copy_self_field(value, registry)
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_moves_non_copy_self_field(value, registry)
+            }
             Statement::Expression { expr, .. } => {
                 if self.expression_is_self_field_access(expr) {
                     return false;
                 }
-                self.expression_moves_non_copy_self_field(expr)
+                self.expression_moves_non_copy_self_field(expr, registry)
             }
             Statement::Return {
                 value: Some(expr), ..
@@ -997,7 +1009,7 @@ impl<'ast> Analyzer<'ast> {
                 if self.expression_is_self_field_access(expr) {
                     return false;
                 }
-                self.expression_moves_non_copy_self_field(expr)
+                self.expression_moves_non_copy_self_field(expr, registry)
             }
             Statement::If {
                 then_block,
@@ -1006,27 +1018,31 @@ impl<'ast> Analyzer<'ast> {
             } => {
                 then_block
                     .iter()
-                    .any(|s| self.statement_moves_non_copy_self_field(s))
+                    .any(|s| self.statement_moves_non_copy_self_field(s, registry))
                     || else_block.as_ref().is_some_and(|block| {
                         block
                             .iter()
-                            .any(|s| self.statement_moves_non_copy_self_field(s))
+                            .any(|s| self.statement_moves_non_copy_self_field(s, registry))
                     })
             }
             Statement::For { body, .. } => body
                 .iter()
-                .any(|s| self.statement_moves_non_copy_self_field(s)),
+                .any(|s| self.statement_moves_non_copy_self_field(s, registry)),
             Statement::While { body, .. } => body
                 .iter()
-                .any(|s| self.statement_moves_non_copy_self_field(s)),
+                .any(|s| self.statement_moves_non_copy_self_field(s, registry)),
             Statement::Match { arms, .. } => arms
                 .iter()
-                .any(|arm| self.expression_moves_non_copy_self_field(arm.body)),
+                .any(|arm| self.expression_moves_non_copy_self_field(arm.body, registry)),
             _ => false,
         }
     }
 
-    pub(crate) fn expression_moves_non_copy_self_field(&self, expr: &Expression) -> bool {
+    pub(crate) fn expression_moves_non_copy_self_field(
+        &self,
+        expr: &Expression,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> bool {
         match expr {
             // `self.field` or `self.a.b` used as a value (not in a method call position)
             Expression::FieldAccess { object, field, .. } => {
@@ -1077,37 +1093,63 @@ impl<'ast> Analyzer<'ast> {
                             return false;
                         }
                     }
-                    self.expression_moves_non_copy_self_field(v)
+                    self.expression_moves_non_copy_self_field(v, registry)
                 })
             }
             // Block expression
             Expression::Block { statements, .. } => statements
                 .iter()
-                .any(|s| self.statement_moves_non_copy_self_field(s)),
+                .any(|s| self.statement_moves_non_copy_self_field(s, registry)),
             // WDB-414: `Vox::new(self.scene)` moves a non-Copy field through a call arg.
             // Without this, impl-self inference only saw later `self.grid = 1` and
             // emitted `&mut self` + `self.scene.clone()`.
-            Expression::Call { arguments, .. } => arguments
-                .iter()
-                .any(|(_, a)| self.call_arg_moves_non_copy_self_field(a)),
+            // P3.570: `fetch_note(self.store, …)` with Borrowed formal is a reborrow, not a move.
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => arguments.iter().enumerate().any(|(i, (_, a))| {
+                self.call_arg_moves_non_copy_self_field(a, function, i, registry)
+            }),
             // Method receiver is borrowed (not moved). Walk args only — `self.scene.foo()`
             // must not count as moving `scene`.
-            Expression::MethodCall { arguments, .. } => arguments
-                .iter()
-                .any(|(_, a)| self.call_arg_moves_non_copy_self_field(a)),
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => arguments.iter().enumerate().any(|(i, (_, a))| {
+                self.call_arg_moves_non_copy_self_field_for_method(
+                    a, object, method, i, registry,
+                )
+            }),
             Expression::Binary { left, right, .. } => {
-                self.expression_moves_non_copy_self_field(left)
-                    || self.expression_moves_non_copy_self_field(right)
+                self.expression_moves_non_copy_self_field(left, registry)
+                    || self.expression_moves_non_copy_self_field(right, registry)
             }
-            Expression::Unary { operand, .. } => self.expression_moves_non_copy_self_field(operand),
-            Expression::TryOp { expr, .. } => self.expression_moves_non_copy_self_field(expr),
+            Expression::Unary { operand, .. } => {
+                self.expression_moves_non_copy_self_field(operand, registry)
+            }
+            Expression::TryOp { expr, .. } => {
+                self.expression_moves_non_copy_self_field(expr, registry)
+            }
             _ => false,
         }
     }
 
     /// Call/method arguments pass `self.field` by value. Unknown field types
     /// are moves (WDB-414) — unlike bare FieldAccess reads, which stay conservative.
-    fn call_arg_moves_non_copy_self_field(&self, expr: &Expression) -> bool {
+    /// Skip when the resolved formal is Borrowed/MutBorrowed (P3.570).
+    fn call_arg_moves_non_copy_self_field(
+        &self,
+        expr: &Expression,
+        function: &Expression,
+        arg_index: usize,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> bool {
+        if self.call_formal_borrows_arg(function, arg_index, registry) {
+            return false;
+        }
         if let Expression::FieldAccess { object, field, .. } = expr {
             if self.expression_is_self(object) {
                 return match self.lookup_field_type_for_self(field) {
@@ -1116,7 +1158,88 @@ impl<'ast> Analyzer<'ast> {
                 };
             }
         }
-        self.expression_moves_non_copy_self_field(expr)
+        self.expression_moves_non_copy_self_field(expr, registry)
+    }
+
+    fn call_arg_moves_non_copy_self_field_for_method(
+        &self,
+        expr: &Expression,
+        _object: &Expression,
+        method: &str,
+        arg_index: usize,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> bool {
+        if let Some(reg) = registry {
+            if let Some(sig) = reg.lookup_method(method).or_else(|| reg.get_signature(method))
+            {
+                let param_idx = sig.arg_param_index(arg_index);
+                if sig
+                    .param_ownership
+                    .get(param_idx)
+                    .is_some_and(|m| {
+                        matches!(
+                            m,
+                            crate::analyzer::OwnershipMode::Borrowed
+                                | crate::analyzer::OwnershipMode::MutBorrowed
+                        )
+                    })
+                {
+                    return false;
+                }
+            }
+        }
+        if let Expression::FieldAccess { object, field, .. } = expr {
+            if self.expression_is_self(object) {
+                return match self.lookup_field_type_for_self(field) {
+                    Some(ft) => !self.is_copy_type(&ft),
+                    None => true,
+                };
+            }
+        }
+        self.expression_moves_non_copy_self_field(expr, registry)
+    }
+
+    fn call_formal_borrows_arg(
+        &self,
+        function: &Expression,
+        arg_index: usize,
+        registry: Option<&crate::analyzer::SignatureRegistry>,
+    ) -> bool {
+        let Some(reg) = registry else {
+            return false;
+        };
+        let name = match function {
+            Expression::Identifier { name, .. } => name.as_str(),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name: obj, .. } = &**object {
+                    let key = format!("{obj}::{field}");
+                    if let Some(sig) = reg.get_signature(&key).or_else(|| reg.lookup_method(field))
+                    {
+                        let param_idx = sig.arg_param_index(arg_index);
+                        return sig.param_ownership.get(param_idx).is_some_and(|m| {
+                            matches!(
+                                m,
+                                crate::analyzer::OwnershipMode::Borrowed
+                                    | crate::analyzer::OwnershipMode::MutBorrowed
+                            )
+                        });
+                    }
+                }
+                field.as_str()
+            }
+            _ => return false,
+        };
+        let Some(sig) = reg.get_signature(name).or_else(|| reg.lookup_method(name)) else {
+            return false;
+        };
+        let param_idx = sig.arg_param_index(arg_index);
+        sig.param_ownership.get(param_idx).is_some_and(|m| {
+            matches!(
+                m,
+                crate::analyzer::OwnershipMode::Borrowed
+                    | crate::analyzer::OwnershipMode::MutBorrowed
+            )
+        })
     }
 
     pub(crate) fn expression_is_self(&self, expr: &Expression) -> bool {
