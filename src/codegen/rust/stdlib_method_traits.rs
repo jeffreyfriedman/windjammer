@@ -787,25 +787,76 @@ pub fn is_map_deref_wrapper_type_name(base: &str) -> bool {
     )
 }
 
-/// Stdlib `HashMap::{method}` when the receiver is a map Deref wrapper and consensus
-/// says the method is a borrowed-key lookup (P3.576 / Call(FieldAccess) match scrutinees).
+/// Stdlib `HashMap::{method}` when the receiver is a map / map Deref wrapper, or when
+/// the receiver type is unknown but `method` has conflicting first-arg ownership
+/// (Owned vs Borrowed) across types — multipass `Ok(g)` after `Mutex::lock` often
+/// fails to name `MutexGuard<HashMap<…>>` (P3.576 / wj-sync SharedMapSI).
 pub fn hashmap_key_method_signature_for_wrapper(
     method: &str,
     receiver_type: Option<&str>,
     project_registry: &SignatureRegistry,
 ) -> Option<FunctionSignature> {
-    let base = receiver_type?
-        .split('<')
-        .next()
-        .unwrap_or(receiver_type?);
-    if !is_map_deref_wrapper_type_name(base) {
-        return None;
-    }
     if !is_map_key_method(method) {
         return None;
     }
+    let stdlib = SignatureRegistry::stdlib();
+    match receiver_type {
+        Some(rt) => {
+            let base = rt.split('<').next().unwrap_or(rt);
+            // `SharedMap` / aliases: lock-guard bindings are sometimes inferred as the
+            // outer map handle (wj-sync multipass) rather than `MutexGuard<HashMap<…>>`.
+            let shared_map_handle = base == "SharedMap"
+                || base == "SharedMapSI"
+                || base.ends_with("SharedMap")
+                || base.ends_with("SharedMapSI");
+            if !is_map_deref_wrapper_type_name(base)
+                && !is_map_type_name(base)
+                && !shared_map_handle
+            {
+                return None;
+            }
+        }
+        None => {
+            // Unknown receiver (multipass `Ok(g)` after lock often untyped):
+            // - `get`/`remove`: bridge when Owned vs Borrowed conflict across types
+            // - map-only key methods (`contains_key`): no Vec Owned homonym, so
+            //   `suffix_has_conflicting…` is false — still bridge via HashMap consensus.
+            let conflicting = project_registry
+                .suffix_has_conflicting_first_arg_ownership(method, 1)
+                || stdlib.suffix_has_conflicting_first_arg_ownership(method, 1);
+            if conflicting {
+                // ok
+            } else if method_is_map_key_qualified(method, Some("HashMap"), &stdlib)
+                || method_is_map_key_qualified(method, Some("HashMap"), project_registry)
+            {
+                // Only when no non-map type registers an Owned self-method of this name.
+                let owned_non_map = [project_registry, &stdlib].into_iter().any(|reg| {
+                    reg.signatures.iter().any(|(key, sig)| {
+                        key.ends_with(&format!("::{method}"))
+                            && sig.has_self_receiver
+                            && first_arg_ownership(sig) == Some(OwnershipMode::Owned)
+                            && key.rsplit_once("::").is_some_and(|(ty, _)| {
+                                let base = ty
+                                    .rsplit("::")
+                                    .next()
+                                    .unwrap_or(ty)
+                                    .split('<')
+                                    .next()
+                                    .unwrap_or(ty);
+                                !is_map_type_name(base) && !is_set_type_name(base)
+                            })
+                    })
+                });
+                if owned_non_map {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+    }
     if !method_is_map_key_qualified(method, Some("HashMap"), project_registry)
-        && !method_is_map_key_qualified(method, Some("HashMap"), SignatureRegistry::stdlib())
+        && !method_is_map_key_qualified(method, Some("HashMap"), &stdlib)
     {
         return None;
     }
@@ -813,7 +864,7 @@ pub fn hashmap_key_method_signature_for_wrapper(
     project_registry
         .get_signature(&key)
         .cloned()
-        .or_else(|| SignatureRegistry::stdlib().get_signature(&key).cloned())
+        .or_else(|| stdlib.get_signature(&key).cloned())
 }
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.

@@ -752,10 +752,18 @@ impl<'ast> CodeGenerator<'ast> {
         // uses a local counter scope, matching the analysis behavior in
         // collect_usages_from_expression which creates block_counter = idx + 1.
         let saved_auto_clone = self.auto_clone_counter;
+        // P3.575b / wj-csv: match-arm / expression blocks must scope
+        // `current_function_body` + `current_block_local_idx` like `generate_block`,
+        // or `variable_is_only_field_accessed` only sees the outer `match` and
+        // falsely emits `let headers = &rows[0]` inside `Ok(rows) => { … }`.
+        let saved_body = self.current_function_body.clone();
+        let saved_local_idx = self.current_block_local_idx;
+        self.current_function_body = stmts.to_vec();
 
         let len = stmts.len();
         for (i, stmt) in stmts.iter().enumerate() {
             self.current_statement_idx = self.auto_clone_counter;
+            self.current_block_local_idx = i;
             self.auto_clone_counter += 1;
 
             let is_last = i == len - 1;
@@ -854,6 +862,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         self.auto_clone_counter = saved_auto_clone;
+        self.current_function_body = saved_body;
+        self.current_block_local_idx = saved_local_idx;
 
         self.indent_level -= 1;
         output.push_str(&self.indent());
