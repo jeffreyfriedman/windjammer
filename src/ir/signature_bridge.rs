@@ -79,8 +79,10 @@ fn is_wj_owned_non_text_bare_formal(ty: &Type) -> bool {
 /// When the registry marks a plain `string` param as `Owned`, that contract wins over a
 /// stale `Reference(str)` wrap left from body-inferred borrow analysis.
 pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usize) -> SafetyType {
-    // Bare Copy / usize formals always expect Owned at call sites (`quantity: i32`),
+    // Bare Copy / usize formals usually expect Owned at call sites (`quantity: i32`),
     // even when analyzer left Borrowed — emitted Rust is pass-by-value.
+    // Exception: MutBorrowed Copy scalars still emit `&mut T` (`increment(x: int)` →
+    // `x: &mut i64`). Forcing Owned here makes call sites Deref+MutBorrow → `&mut *x`.
     if let Some(formal) = sig
         .formal_param_type(param_idx)
         .or_else(|| sig.param_types.get(param_idx))
@@ -88,6 +90,10 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         if !matches!(formal, Type::Reference(_) | Type::MutableReference(_))
             && (crate::type_classification::is_copy_pass_by_value_formal(formal)
                 || crate::codegen::rust::type_casting::type_is_usize(formal))
+            && !matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::MutBorrowed)
+            )
         {
             return safety_type_from_parser_type(formal, Some(OwnershipMode::Owned));
         }
@@ -1534,6 +1540,32 @@ mod tests {
         assert!(
             matches!(expected.ownership, OwnedType::MutRef(_)),
             "MutBorrowed bare Vec must be MutRef, got {:?}",
+            expected.ownership
+        );
+    }
+
+    #[test]
+    fn mut_borrowed_bare_copy_int_expects_mut_ref_at_call_site() {
+        // `fn increment(x: int)` with MutBorrowed must not be forced Owned by the
+        // bare-Copy early return — call sites need `&mut counter`, not `&mut *counter`.
+        let sig = FunctionSignature {
+            name: "increment".into(),
+            formal_param_types: vec![Type::Int],
+            param_types: vec![Type::Int],
+            param_ownership: vec![OwnershipMode::MutBorrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let expected = safety_type_from_signature_param(&sig, 0);
+        assert!(
+            matches!(expected.ownership, OwnedType::MutRef(_)),
+            "MutBorrowed bare int must stay MutRef, got {:?}",
             expected.ownership
         );
     }

@@ -78,28 +78,29 @@ root, but siblings that *infer* those types (no explicit `use crate::Item`) get
 
 | Gate | Status |
 |------|--------|
-| `rust_use_path_sibling_of_crate_root_lib_wj_uses_crate` | ✅ unit (WIP fix in tree) |
-| `module_file_crate_root_type_must_not_import_super_lib` | ❌ tip RED until fix lands |
-| product `wj-migrate` `$WJ test` | ❌ E0432 `super::lib::Migration` (tip-p3557 / HEAD tip) |
+| `rust_use_path_sibling_of_crate_root_lib_wj_uses_crate` | ✅ unit GREEN |
+| `module_file_crate_root_type_must_not_import_super_lib` | ✅ isolate GREEN (`e1329d72`) |
+| product `wj-migrate` `$WJ test` | ⏳ tip-out regen after tip `wj` |
 
 **Root cause layer:** boundary / import path — `wj_file_to_module_path` maps
 `lib.wj` → `["lib"]`; `rust_use_path_from_module_to_type` must treat that as
 crate root (`crate::Type`), not a `lib` submodule.
 
-**Fix (other agent WIP — do not steal `type_collector.rs`):** when defining
-module is exactly `lib`/`main`, emit `crate::{Type}`.
+**Fix (`e1329d72`):** when defining module is exactly `lib`/`main`, emit
+`crate::{Type}`.
 
 **What became unnecessary:** adding explicit `use crate::Migration` in
 `db_status.wj` solely to dodge bad auto-import paths.
 
-**Ran (2026-10-01):** tip product + isolate still `use super::lib::…` → E0432
-on published tip binaries; local WIP fix claimed isolate GREEN.
+**Ran (2026-10-01):** tip RED `use super::lib::Item` + E0432; after fix
+`use crate::Item` + cargo-check GREEN; official isolate **1 passed**.
 
-**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3566`
-- `cargo test -p windjammer --lib rust_use_path_sibling_of_crate_root_lib_wj_uses_crate -- --exact`
+**Gates:** `CARGO_TARGET_DIR=/tmp/wj-p3566-target`
+- `cargo test -p windjammer --lib rust_use_path_sibling_of_crate_root_lib_wj_uses_crate`
 - `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_crate_root_type_must_not_import_super_lib`
 
-**Do not steal:** WDB-406/408/411/427–428, P3.508–P3.565/P3.567, WDB-412–427 (filed).
+**Do not steal:** WDB-406/408/411/427–429, P3.508–P3.565/P3.567–P3.569, WDB-412–428 (filed).
+
 
 ## P3.565 (2026-10-01) — runtime std AsRef methods must not force `&String` formals
 

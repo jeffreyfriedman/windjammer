@@ -28,10 +28,13 @@ impl<'ast> CodeGenerator<'ast> {
             let target_str = self.generate_expression(target);
             self.generating_assignment_target = false;
 
-            // TDD FIX: Compound assignments on mutable references need dereference operator
-            // For loop variables bound from &mut iteration are &mut T, so `var += x` must become `*var += x`
+            // Compound assignments on `&mut T` bindings need `*var += x` (E0368).
+            // Covers for-loop `&mut` iteration and MutBorrowed Copy formals
+            // (`increment(x: &mut i64)` → `*x += 1`).
             let needs_deref = if let Expression::Identifier { name, .. } = target {
                 self.mut_borrowed_iterator_vars.contains(name)
+                    || self.inferred_mut_borrowed_params.contains(name)
+                    || self.identifier_already_mut_ref(name)
             } else {
                 false
             };
