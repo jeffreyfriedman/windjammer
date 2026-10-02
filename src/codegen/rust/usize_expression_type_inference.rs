@@ -270,6 +270,29 @@ impl<'ast> CodeGenerator<'ast> {
                 return false;
             }
         }
+        // P3.568: `i + marker_len <= n` — recurse before usize early-outs. Mixed
+        // i64+usize arithmetic is often inferred as usize, which previously skipped
+        // the cast and left the `strings.len` binding bare (E0308).
+        if let Expression::Binary {
+            op,
+            left,
+            right,
+            ..
+        } = expr
+        {
+            if matches!(
+                op,
+                BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Mod
+            ) && (self.comparison_other_side_needs_len_as_i64(left)
+                || self.comparison_other_side_needs_len_as_i64(right))
+            {
+                return true;
+            }
+        }
         if self.infer_expression_type_is_usize(expr) {
             return false;
         }
@@ -1010,6 +1033,58 @@ pub fn count_data_lines(lines: Vec<string>) -> i32 {
         assert!(
             generated.contains("count as i32"),
             "i32 return must cast i64 counter. Got:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn p3568_auth_len_binding_types() {
+        let source = r#"
+use std::strings
+
+pub fn json_string_field(body: string, key: string) -> string {
+    let marker = "\"${key}\":\""
+    let mut i = 0
+    let n = strings.len(body)
+    let marker_len = strings.len(marker)
+    while i + marker_len <= n {
+        if strings.substring(body, i, i + marker_len) == marker {
+            let start = i + marker_len
+            let mut out = ""
+            let mut j = start
+            while j < n {
+                let ch = strings.substring(body, j, j + 1)
+                if ch == "\"" {
+                    return out
+                }
+                out = "${out}${ch}"
+                j = j + 1
+            }
+            return ""
+        }
+        i = i + 1
+    }
+    ""
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new(registry, CompilationTarget::Rust);
+        let generated = codegen.generate_program(&program, &analyzed);
+        eprintln!("GENERATED:\n{generated}");
+        assert!(
+            generated.contains("j < (n as i64)")
+                || generated.contains("j < (n) as i64")
+                || generated.contains("(n as i64)"),
+            "expected n cast near j compare. Got:\n{generated}"
+        );
+        assert!(
+            generated.contains("substring(body, j as usize")
+                || generated.contains("substring(body, (j as usize)"),
+            "expected j cast for substring. Got:\n{generated}"
         );
     }
 }
