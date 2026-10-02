@@ -54,24 +54,30 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 ## P3.570 (2026-10-01) — notes-api `dispatch` must not stay owned when called from `&mut handle_method`
 
 P3.522 greened `handle_method(&mut self)` / `check_rate(&mut self)`. Product tip
-still emits `dispatch(mut self, …)` then `self.dispatch(...)` → E0507 move out
+emitted `dispatch(mut self, …)` then `self.dispatch(...)` → E0507 move out
 of `&mut self`.
 
 | Gate | Status |
 |------|--------|
-| `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ✅ isolate GREEN |
-| product `wj-notes-api` domain `dispatch` | ⚠ tip residual — metadata `params[0]=MutableReference(Self)` but `param_ownership[0]=Owned` / emit still `mut self`; `fetch_note`/`lookup_note` now Borrowed |
+| `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ✅ isolate GREEN (product-shaped: store.create + `public_base_url`) |
+| product `wj-notes-api` domain `dispatch` | ✅ tip GREEN — `dispatch(&mut self)` / `param_ownership[0]=MutBorrowed` + `MutableReference(Self)` |
+| unit `string_field_arg_plus_field_mut_method_keeps_mut_borrowed_self` | ✅ GREEN |
 
-**Root cause layer:** signature / self-mode —
-(1) returning `param.field` is not a consume (Borrowed + clone, like self getters);
-(2) HashMap for-in scans demote to Borrowed; field projection into Borrowed formals
-does not pin Owned; (3) `self.field` args into Borrowed callees are not body-moves.
+**Root cause layer:** constraint/solver (impl-self body-moves) —
+(1) returning `param.field` is not a consume; (2) HashMap for-in / Borrowed formals
+demote; (3) `self.field` into Borrowed callees are not body-moves; (4) Windjammer
+`string` field reads (`self.config.public_base_url`) clone under borrow and must
+not force Owned when the method also mutates via `self.store.create` (WDB-414
+non-string Scene moves still force Owned).
 
-**What became unnecessary:** `self.clone().dispatch`; product reshape of dispatch.
+**What became unnecessary:** `self.clone().dispatch`; product reshape of dispatch;
+Owned/`mut self` from string field → owned formal.
 
 **Gates:**
+- `cargo test --release --lib -- string_field_arg_plus_field_mut_method_keeps_mut_borrowed_self` → GREEN
 - `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_dispatch_from_mut_handle_must_not_be_owned` → GREEN
-- Follow-up: sync `NotesApp::dispatch` `param_ownership[0]` with MutBorrowed params (codegen still emits `mut self`).
+- `wdb414_module_file_ctor_must_move_self_field` → GREEN (tip-out product clone remains filed separately)
+- tip `wj build` notes-api `src/domain` → `dispatch(&mut self)` + domain `cargo check` GREEN
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.571, WDB-412–428 (filed).
 

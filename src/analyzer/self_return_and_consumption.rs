@@ -1049,7 +1049,10 @@ impl<'ast> Analyzer<'ast> {
                 if self.expression_is_self(object) {
                     let field_type = self.lookup_field_type_for_self(field);
                     if let Some(ft) = field_type {
-                        return !self.is_copy_type(&ft);
+                        // P3.570: Windjammer `string` fields clone under `&`/`&mut self`.
+                        // Passing `self.config.public_base_url` to an owned formal must not
+                        // force owned `self` when the method also mutates through fields.
+                        return self.non_copy_field_move_forces_owned_self(&ft);
                     }
                     return false;
                 }
@@ -1057,7 +1060,7 @@ impl<'ast> Analyzer<'ast> {
                 // Resolve the FULL chain type: if the final field is Copy, reading
                 // it through a reference is fine (no move of the intermediate parent).
                 if let Some(chain_type) = self.resolve_self_field_chain_type(expr) {
-                    return !self.is_copy_type(&chain_type);
+                    return self.non_copy_field_move_forces_owned_self(&chain_type);
                 }
                 // P3.424b: failed chain lookup (Quality in a sibling file) used to recurse
                 // into `self.current_quality` and treat the Custom parent as a move.
@@ -1084,7 +1087,7 @@ impl<'ast> Analyzer<'ast> {
                     if let Expression::FieldAccess { object, field, .. } = v {
                         if self.expression_is_self(object) {
                             if let Some(ft) = self.lookup_field_type_for_self(field) {
-                                return !self.is_copy_type(&ft);
+                                return self.non_copy_field_move_forces_owned_self(&ft);
                             }
                             // P3.424b: unknown direct field is not a confirmed move.
                             // Split impls (VoxelGPURenderer in renderer.wj, method in
@@ -1140,6 +1143,7 @@ impl<'ast> Analyzer<'ast> {
     /// Call/method arguments pass `self.field` by value. Unknown field types
     /// are moves (WDB-414) — unlike bare FieldAccess reads, which stay conservative.
     /// Skip when the resolved formal is Borrowed/MutBorrowed (P3.570).
+    /// Windjammer `string` fields clone under borrow and do not force owned `self`.
     fn call_arg_moves_non_copy_self_field(
         &self,
         expr: &Expression,
@@ -1153,7 +1157,7 @@ impl<'ast> Analyzer<'ast> {
         if let Expression::FieldAccess { object, field, .. } = expr {
             if self.expression_is_self(object) {
                 return match self.lookup_field_type_for_self(field) {
-                    Some(ft) => !self.is_copy_type(&ft),
+                    Some(ft) => self.non_copy_field_move_forces_owned_self(&ft),
                     None => true,
                 };
             }
@@ -1191,12 +1195,18 @@ impl<'ast> Analyzer<'ast> {
         if let Expression::FieldAccess { object, field, .. } = expr {
             if self.expression_is_self(object) {
                 return match self.lookup_field_type_for_self(field) {
-                    Some(ft) => !self.is_copy_type(&ft),
+                    Some(ft) => self.non_copy_field_move_forces_owned_self(&ft),
                     None => true,
                 };
             }
         }
         self.expression_moves_non_copy_self_field(expr, registry)
+    }
+
+    /// Non-Copy field value uses force owned `self`, except Windjammer text (`string`)
+    /// which always clones under `&` / `&mut self` (P3.570 notes-api `public_base_url`).
+    fn non_copy_field_move_forces_owned_self(&self, field_type: &Type) -> bool {
+        !self.is_copy_type(field_type) && !Self::is_windjammer_text_param_type(field_type)
     }
 
     fn call_formal_borrows_arg(

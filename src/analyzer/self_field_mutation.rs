@@ -353,6 +353,61 @@ impl Demo {
     }
 
     #[test]
+    fn string_field_arg_plus_field_mut_method_keeps_mut_borrowed_self() {
+        // P3.570: `created_note_reply(..., self.config.public_base_url)` +
+        // `self.store.create(...)` must be `&mut self`, not owned `mut self`.
+        let src = r#"
+struct Config {
+    public_base_url: string,
+}
+
+struct NoteStore {
+    next_id: int,
+}
+
+impl NoteStore {
+    fn create(self, title: string) -> string {
+        self.next_id = self.next_id + 1
+        title
+    }
+}
+
+fn created_note_reply(title: string, base_url: string) -> string {
+    base_url
+}
+
+struct NotesApp {
+    store: NoteStore,
+    config: Config,
+}
+
+impl NotesApp {
+    fn dispatch(self, title: string) -> string {
+        let t = self.store.create(title)
+        created_note_reply(t, self.config.public_base_url)
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
+        let func = analyzed
+            .iter()
+            .find(|f| f.decl.name == "dispatch")
+            .expect("dispatch");
+        let mode = func
+            .inferred_ownership
+            .get("self")
+            .copied()
+            .expect("self ownership");
+        assert_eq!(
+            mode,
+            OwnershipMode::MutBorrowed,
+            "P3.570: string field + store.create must be MutBorrowed; got {mode:?}"
+        );
+    }
+
+    #[test]
     fn stored_string_and_value_set_formals_stay_owned() {
         // WDB-409: `set(name, value)` stores both into Binding / field assign.
         let src = r#"
