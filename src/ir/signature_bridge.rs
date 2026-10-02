@@ -903,6 +903,11 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     // facades) means cross-crate callers borrow even when the formal still emits
     // owned `Vec` / Owned ownership. Must beat `emitted_owned_arg_contract` and
     // bare-Vec owned denial below.
+    //
+    // P3.588 / WDB-110: do **not** apply that to owned WJ `string` formals that
+    // emit `String` (`emitted_rust_ref_params[i] == false`). AsRef-runtime bodies
+    // (`strings::is_empty`) set forwarding_borrow while codegen keeps owned
+    // `String` — callers must pass owned / `.clone()`, not `&String`.
     if sig
         .forwarding_borrow_params
         .as_ref()
@@ -910,7 +915,23 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         .copied()
         .unwrap_or(false)
     {
-        return true;
+        let owned_text_emit = sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(param_idx))
+            .copied()
+            == Some(false)
+            && matches!(
+                sig.param_ownership.get(param_idx),
+                Some(OwnershipMode::Owned)
+            )
+            && sig.formal_param_type(param_idx).is_some_and(|t| {
+                crate::codegen::rust::types::is_windjammer_text_type(t)
+                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            });
+        if !owned_text_emit {
+            return true;
+        }
     }
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         return false;
@@ -1315,6 +1336,31 @@ mod tests {
             "value forwarding_borrow must request shared ref at emit"
         );
         assert!(!call_site_needs_shared_ref_at_emit(&sig, 0));
+    }
+
+    /// P3.588 / WDB-110: AsRef-owned `string` keeps `String` emit + forwarding_borrow;
+    /// call sites must still pass owned (not `&String`).
+    #[test]
+    fn forwarding_borrow_must_not_borrow_owned_string_emit() {
+        let sig = FunctionSignature {
+            name: "run_parquet_load".into(),
+            formal_param_types: vec![Type::String, Type::String],
+            param_types: vec![Type::String, Type::String],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("u64".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: Some(vec![false, false]),
+            field_extract_params: None,
+            forwarding_borrow_params: Some(vec![true, true]),
+        };
+        assert!(
+            !call_site_needs_shared_ref_at_emit(&sig, 0),
+            "owned String emit must not share-ref despite forwarding_borrow"
+        );
+        assert!(!call_site_needs_shared_ref_at_emit(&sig, 1));
     }
 
     #[test]
