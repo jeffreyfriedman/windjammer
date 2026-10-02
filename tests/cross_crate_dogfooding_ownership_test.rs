@@ -3386,6 +3386,9 @@ impl WalWriter {
 }
 
 pub fn replay_all(path: string) -> Vec<WalRecord> {
+    // Product `replay_all` reads path via FFI; readonly use demotes to `&str`
+    // (unused path stays Owned per WDB-152 — P3.586 tip-truth).
+    let _ = path.len()
     decode_records(Vec::new())
 }
 "#,

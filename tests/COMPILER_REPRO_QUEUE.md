@@ -366,6 +366,30 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.570, WDB-412–428 (filed).
 
+## P3.586 (2026-10-02) — WAL cross-crate `forwarding_borrow` + `replay_all` tip-truth
+
+`WalSegment::append_put` metadata sets `forwarding_borrow_params=[false,true,true]`
+with owned Vec emission, but `call_site_needs_shared_ref_at_emit` denied via
+`emitted_owned_arg_contract` / bare-Vec before consulting forwarding flags →
+`append_put(vec![].clone(), …)` cross-crate. Also: MultiFile `replay_all` with
+unused `path` stayed Owned (WDB-152); fixture now matches product readonly use.
+
+| Gate | Status |
+|------|--------|
+| `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal` | ✅ GREEN — `&vec![…]` / borrow helper |
+| `dogfood_wal_writer_replay_all_records_branch_borrows_path` | ✅ GREEN — `replay_all(path: &str)` + `&self.path` |
+| `forwarding_borrow_beats_emitted_owned_vec_contract` | ✅ lib GREEN |
+
+**Root cause layer:** signature bridge — `forwarding_borrow_params` before owned
+emission denial in `call_site_needs_shared_ref_at_emit`.
+
+**What became unnecessary:** cross-crate `.clone()` into append_put Vec facades
+when metadata already marks forwarding borrow; unused-path Owned fixture mismatch.
+
+**Gates:**
+- `cargo test --release -p windjammer --lib forwarding_borrow_beats_emitted_owned`
+- `cargo test --release --test all -- dogfood_wal_segment_cross_crate_append_put dogfood_wal_writer_replay_all_records_branch` → 2 passed
+
 ## P3.585 (2026-10-02) — index bare-pass restore (wdb-layers hang)
 
 `restore_pub_owned_non_copy_api_formals` rescanned every program body for each

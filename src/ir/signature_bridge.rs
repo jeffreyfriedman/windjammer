@@ -899,12 +899,10 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     {
         return true;
     }
-    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
-        return false;
-    }
-    if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx) {
-        return false;
-    }
+    // P3.586: defining-crate `forwarding_borrow_params` (WAL `append_put` Vec
+    // facades) means cross-crate callers borrow even when the formal still emits
+    // owned `Vec` / Owned ownership. Must beat `emitted_owned_arg_contract` and
+    // bare-Vec owned denial below.
     if sig
         .forwarding_borrow_params
         .as_ref()
@@ -913,6 +911,12 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         .unwrap_or(false)
     {
         return true;
+    }
+    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
+        return false;
+    }
+    if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx) {
+        return false;
     }
     call_site_expects_shared_borrow(sig, param_idx)
 }
@@ -1269,6 +1273,47 @@ mod tests {
             expected.ownership
         );
         assert!(call_site_expects_owned_pass(&sig, 0));
+        assert!(!call_site_needs_shared_ref_at_emit(&sig, 0));
+    }
+
+    /// P3.586: WAL `append_put` metadata keeps owned Vec emission but marks
+    /// `forwarding_borrow_params` so cross-crate callers pass `&vec![…]`.
+    #[test]
+    fn forwarding_borrow_beats_emitted_owned_vec_contract() {
+        let sig = FunctionSignature {
+            name: "WalSegment::append_put".into(),
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::Vec(Box::new(Type::Custom("u8".into()))),
+                Type::Vec(Box::new(Type::Custom("u8".into()))),
+            ],
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::Vec(Box::new(Type::Custom("u8".into()))),
+                Type::Vec(Box::new(Type::Custom("u8".into()))),
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: Some(Type::Custom("Lsn".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: Some(vec![false, true, true]),
+        };
+        assert!(
+            call_site_needs_shared_ref_at_emit(&sig, 1),
+            "key forwarding_borrow must request shared ref at emit"
+        );
+        assert!(
+            call_site_needs_shared_ref_at_emit(&sig, 2),
+            "value forwarding_borrow must request shared ref at emit"
+        );
         assert!(!call_site_needs_shared_ref_at_emit(&sig, 0));
     }
 
