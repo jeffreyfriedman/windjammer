@@ -1,7 +1,7 @@
-//! Owned struct args must not be auto-ref'd into `&T` when the formal is owned `T`.
+//! Read-only Custom formals may demote to `&T` with a matching `&` call site.
 //!
-//! Ecosystem `wj-form-parse` → `wj-multipart::parse(MultipartBody{…})` codegen emits
-//! `parse(&MultipartBody{…})` plus field `&str` into `String` (E0308).
+//! Ecosystem `wj-form-parse` → `wj-multipart::parse(MultipartBody{…})` historically
+//! mismatched owned formal + `&` call (E0308). Tip must stay consistent either way.
 
 #![cfg(any(
     not(any(
@@ -45,12 +45,16 @@ pub fn run(boundary: string, body: string) -> int {
     let (generated, ok) = test_utils::compile_single_check(source);
     assert!(
         ok,
-        "owned MultipartBody call must cargo-check, got:\n{generated}"
+        "MultipartBody call must cargo-check, got:\n{generated}"
     );
+    // Tip may demote read-only Custom to `&MultipartBody` — formal + call must agree.
+    let call_borrows = generated.contains("parse(&MultipartBody")
+        || generated.contains("parse(& multipart")
+        || generated.contains("parse( &MultipartBody");
+    let formal_borrows = generated.contains("fn parse(input: &MultipartBody)")
+        || generated.contains("fn parse(input: & MultipartBody)");
     assert!(
-        !generated.contains("parse(&MultipartBody")
-            && !generated.contains("parse(& multipart")
-            && !generated.contains("parse( &MultipartBody"),
-        "must not auto-ref owned struct arg, got:\n{generated}"
+        !call_borrows || formal_borrows,
+        "must not pass `&MultipartBody` into an owned formal:\n{generated}"
     );
 }

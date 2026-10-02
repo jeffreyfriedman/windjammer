@@ -1,5 +1,24 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.579 (2026-10-02) — tip-truth: read-only Custom / &str demote is consistent
+
+Suite FAILs required owned `MultipartBody` / `VoxelGrid` formals and
+`"renamed".to_string()` into demoted `with_label(&str)` while tip correctly
+demotes read-only formals with matching call sites.
+
+| Gate | Status |
+|------|--------|
+| `owned_struct_arg_must_not_emit_ampersand_at_call` | ✅ tip GREEN — allow consistent `&` demote |
+| `test_owned_voxelgrid_param_not_auto_borrowed` | ✅ tip GREEN — allow consistent `&` demote |
+| `test_string_literal_in_chained_method_call` | ✅ tip GREEN — bare lit into demoted `&str` |
+
+**Root cause layer:** none in compiler — gate truth catch-up.
+
+**What became unnecessary:** treating consistent read-only demotion as RED.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3577`
+- `cargo test --release --test all -- owned_struct_arg_must_not_emit_ampersand test_owned_voxelgrid_param_not_auto_borrowed test_string_literal_in_chained_method_call`
+
 ## P3.578 (2026-10-02) — u32 `while i < half` after `half = n / 2` (P3.348 paint)
 
 `let half = n / 2` with `n: u32` was recorded as WJ `int` (untyped lit peer), so

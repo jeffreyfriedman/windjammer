@@ -11,8 +11,8 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Engine metadata may mark `grid: VoxelGrid` as Borrowed, but Rust FFI takes owned `VoxelGrid`.
-/// Call sites must pass `grid.clone()` / owned field access — not `&grid`.
+/// Read-only `VoxelGrid` formals may demote to `&VoxelGrid` with a matching `&`
+/// call site. Forbid owned formal + `&grid` mismatch (historical E0308).
 #[test]
 fn test_owned_voxelgrid_param_not_auto_borrowed() {
     let tmp = TempDir::new().expect("tempdir");
@@ -67,14 +67,23 @@ pub fn svo_convert(grid: VoxelGrid) -> Vec<i32> {
 
     let generated = fs::read_to_string(out.join("test.rs")).expect("test.rs");
 
+    let call_borrows = generated.contains("svo_convert(&self.grid");
+    let formal_borrows = generated.contains("fn svo_convert(grid: &VoxelGrid)")
+        || generated.contains("pub fn svo_convert(grid: &VoxelGrid)");
     assert!(
-        generated.contains("svo_convert(self.grid.clone())")
-            || generated.contains("svo_convert(self.grid)")
-            || generated.contains("svo_convert( self.grid"),
-        "owned VoxelGrid param must not be passed as &grid. Generated:\n{generated}"
+        !call_borrows || formal_borrows,
+        "must not pass `&grid` into an owned VoxelGrid formal. Generated:\n{generated}"
     );
+
+    let check = Command::new("cargo")
+        .args(["check", "--manifest-path"])
+        .arg(out.join("Cargo.toml"))
+        .output()
+        .expect("cargo check");
     assert!(
-        !generated.contains("svo_convert(&self.grid"),
-        "must not auto-borrow owned VoxelGrid param. Generated:\n{generated}"
+        check.status.success(),
+        "cargo check failed:\n{}\n{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
     );
 }
