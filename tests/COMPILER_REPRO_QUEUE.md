@@ -379,6 +379,7 @@ and `pub_module_api` demoted outer formals to `&str` while call sites emitted
 | `handle_forward_empty_lits_must_own` | ✅ isolate GREEN — `origin: String` + `String::new()` |
 | `handle_request_empty_lits_hex_app_must_own` | ✅ isolate GREEN |
 | `demoted_method_then_owned_empty_lits_must_own` | ✅ isolate GREEN |
+| `notes_api_product_remaining_e0308_must_not_emit` | ✅ tip GREEN after P3.587 — empty lits owned; `query.clone()` |
 | `test_add_condition_string_literal_not_to_string_for_str_param` | ✅ no-reg — unused method `&str` demote kept |
 
 **Root cause layer:** signature / emission-contract classification —
@@ -394,6 +395,7 @@ into emitted-owned sibling slots while call sites still own empty lits; free-fn-
 **Gates:**
 - `cargo test --release --test all --features integration_tests,codegen_tests -- handle_forward_empty_lits_must_own handle_request_empty_lits_hex demoted_method_then_owned_empty add_condition_string_literal` → **4 passed**
 - related filter `handle_forward empty_lits demoted_method string_literal spawn_closure mpsc_sync_channel notes_api_product add_condition` → **78 passed / 0 failed**
+- `notes_api_product_remaining_e0308` + WDB-201/203–217 tip cluster + todo_cli validate → **GREEN on tip**
 
 ## P3.586 (2026-10-02) — WAL cross-crate `forwarding_borrow` + `replay_all` tip-truth
 
