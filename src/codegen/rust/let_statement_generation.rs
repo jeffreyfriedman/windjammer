@@ -194,7 +194,27 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // P3.329: `let mut i = clock_end` when binding/RHS is a usize index counter.
                     Expression::Identifier { name: rhs_name, .. } => {
-                        if self.usize_variables.contains(name)
+                        // P3.568: while-prepass may stuff `j` into `usize_variables` from
+                        // `while j < n` before this let is emitted. Prefer a WJ `int`/i64
+                        // RHS (`let mut j = start` where `start = i + marker_len`) so the
+                        // binding stays i64 and `n`/substring sites cast correctly.
+                        if let Some(rhs_ty) = self.local_var_types.get(rhs_name.as_str()) {
+                            if matches!(rhs_ty, Type::Int | Type::Int32)
+                                || matches!(
+                                    rhs_ty,
+                                    Type::Custom(n)
+                                        if matches!(n.as_str(), "int" | "i64" | "i32")
+                                )
+                            {
+                                Some(rhs_ty.clone())
+                            } else if self.usize_variables.contains(name)
+                                || self.usize_variables.contains(rhs_name)
+                            {
+                                Some(Type::Custom("usize".into()))
+                            } else {
+                                Some(rhs_ty.clone())
+                            }
+                        } else if self.usize_variables.contains(name)
                             || self.usize_variables.contains(rhs_name)
                         {
                             Some(Type::Custom("usize".into()))
@@ -279,6 +299,13 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         let l = self.infer_expression_type(left);
                         let r = self.infer_expression_type(right);
+                        let is_wj_int = |t: &Type| {
+                            matches!(t, Type::Int)
+                                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                        };
+                        let is_usize_ty = |t: &Type| {
+                            crate::codegen::rust::type_casting::type_is_usize(t)
+                        };
                         match (l, r) {
                             (Some(a), Some(b))
                                 if a == b
@@ -288,18 +315,28 @@ impl<'ast> CodeGenerator<'ast> {
                                 Some(Type::Int32)
                             }
                             (Some(a), Some(b)) if a != b => {
-                                if self.function_prefers_i32_coord_locals()
+                                // P3.568 / P3.299: WJ `int` + `strings.len`/`usize` binding
+                                // emits i64 (cast the usize side). Do not let usize win the
+                                // let-binding type or `j = i + marker_len` stays "usize" while
+                                // the emit is i64 (`j < n` / substring E0308).
+                                if (is_wj_int(&a) && is_usize_ty(&b))
+                                    || (is_wj_int(&b) && is_usize_ty(&a))
+                                {
+                                    Some(Type::Int)
+                                } else if self.function_prefers_i32_coord_locals()
                                     && (matches!(a, Type::Int) || matches!(b, Type::Int))
                                 {
                                     Some(Type::Int32)
                                 } else if matches!(a, Type::Int)
                                     && Self::assignment_target_needs_int_codegen_context(&b)
                                     && !matches!(b, Type::Int)
+                                    && !is_usize_ty(&b)
                                 {
                                     Some(b)
                                 } else if matches!(b, Type::Int)
                                     && Self::assignment_target_needs_int_codegen_context(&a)
                                     && !matches!(a, Type::Int)
+                                    && !is_usize_ty(&a)
                                 {
                                     Some(a)
                                 } else {
@@ -1133,12 +1170,21 @@ impl<'ast> CodeGenerator<'ast> {
         // OR variables with explicit usize type annotation
         // This enables auto-casting in comparisons with i32
         if let Some(name) = var_name {
-            let is_usize = self.expression_produces_usize(value)
-                || self.infer_expression_type_is_usize(value)
-                || matches!(value, Expression::MethodCall { method, .. } if method == "len")
-                || matches!(type_, Some(Type::Custom(s)) if s == "usize");
-            if is_usize {
-                self.usize_variables.insert(name.to_string());
+            let bound_as_wj_int = self.local_var_types.get(name).is_some_and(|t| {
+                matches!(t, Type::Int | Type::Int32)
+                    || matches!(t, Type::Custom(n) if matches!(n.as_str(), "int" | "i64" | "i32"))
+            });
+            if bound_as_wj_int {
+                // Drop while-prepass usize marks once the let binds as WJ int/i64.
+                self.usize_variables.remove(name);
+            } else {
+                let is_usize = self.expression_produces_usize(value)
+                    || self.infer_expression_type_is_usize(value)
+                    || matches!(value, Expression::MethodCall { method, .. } if method == "len")
+                    || matches!(type_, Some(Type::Custom(s)) if s == "usize");
+                if is_usize {
+                    self.usize_variables.insert(name.to_string());
+                }
             }
         }
 

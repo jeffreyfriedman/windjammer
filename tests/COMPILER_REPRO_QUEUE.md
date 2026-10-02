@@ -1,5 +1,32 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.572 (2026-10-01) — module-file must emit inline types from `mod.wj`
+
+`wj build path/to/mod.wj --module-file` regenerates `mod.rs` as only
+`pub mod` / `pub use` and **drops** inline `pub struct` / `impl` bodies that
+lived in the source `mod.wj`. Product: ports `Host.tick_playable` vanished from
+`gen/ports/mod.rs` after ports-only tip transpile.
+
+Also re-check P3.562: tip still harvested `/tmp/check_json_len_sig.rs` etc. into
+ports-only `--output /tmp/wj_ports_out` (parent `/tmp` siblings).
+
+| Gate | Status |
+|------|--------|
+| `module_file_mod_wj_inline_struct_must_emit` | ❌ tip RED (watch) |
+| `module_file_output_must_not_import_tmp_sibling_rs` | ⚠ re-verify (product still harvested `/tmp/*.rs`) |
+
+**Root cause layer:** multipass module-file — `mod.rs` writer must preserve
+non-module items from the source module file (or emit them to a sibling `.rs`).
+
+**What became unnecessary in product (structural, not a peel):** move Host to
+`ports/host.wj` so composition root is not inline in `mod.wj`.
+
+**Gates:**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_mod_wj_inline_struct_must_emit`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_output_must_not_import_tmp_sibling`
+
+**Do not steal:** WDB-406/408/411/427–429, P3.508–P3.571, WDB-412–428 (filed).
+
 ## P3.571 (2026-10-01) — MutBorrowed Copy: `x = x + 1` rewrite path must `*x += 1`
 
 `5b4ccf51` fixed signature_bridge (bare Copy early-return skipped MutBorrowed)
@@ -69,7 +96,7 @@ Copy match-arm payloads (`i32`/`f32`/`bool`) must not `.clone()`; product emits
 
 **Gates:** TDD ran 2026-10-01 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
-**Do not steal:** WDB-406/408/411/428, P3.508–P3.568, WDB-412–428 / P3.509–P3.567 (filed).
+**Do not steal:** WDB-406/408/411/428, P3.508–P3.567, WDB-412–428 / P3.509–P3.567 (filed).
 
 ## P3.568 (2026-10-01) — auth `json_string_field`: `strings.len` must unify with `int` counters
 
@@ -79,17 +106,23 @@ E0308. Isolate mirrors the helper (no app reshape).
 
 | Gate | Status |
 |------|--------|
-| `auth_json_string_field_int_len_must_unify_i64` | ❌ tip RED — E0308 i64 vs usize |
+| `auth_json_string_field_int_len_must_unify_i64` | ✅ GREEN |
 
-**Root cause layer:** encoding / int unify — `strings.len` peers of `int`
-loop counters must share one width (prefer i64 for WJ `int`), and substring
-indices must cast consistently.
+**Root cause layer:** coercion/encoding + let-binding width sync —
+(1) `comparison_other_side_needs_len_as_i64` recurses into arithmetic Binary
+before usize early-outs so `i + marker_len <= n` casts `n`;
+(2) Binary let-typing prefers WJ `int` over usize peers; Identifier lets prefer
+int RHS over while-prepass usize marks; (3) `reconcile_ambiguous_int_local_after_let`
+keeps i64 when emit has `as i64` / int+usize Binary (was repainting `start`/`j`
+as usize after correct Int registration).
 
-**What became unnecessary:** rewriting auth tests to force `as int` / avoid
-`while i + marker_len <= n`.
+**What became unnecessary:** auth-side `as int` / reshape of
+`while i + marker_len <= n`; no new ir_call_site peel.
 
-**Gates:** tip isolate `wj build` + `cargo check` (2026-10-01) → E0308.
-- `cargo test --release --test all -- auth_json_string_field_int_len_must_unify_i64`
+**Gates:**
+- `cargo test --release --test all -- auth_json_string_field_int_len_must_unify_i64` → GREEN
+- tip emit: `while i + (marker_len as i64) <= (n as i64)` / `j < ((n as i64))` /
+  `substring(..., j as usize, ...)`
 
 **Do not steal:** WDB-406/408/411/427–428, P3.508–P3.567, WDB-412–427 (filed).
 

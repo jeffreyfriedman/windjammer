@@ -361,13 +361,42 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.454: rustc sees the emitted suffix. Mixed-int inference must not
         // paint `let mut colon_at = -1_i64` as usize (then `colon_at = j` skips
         // the i64 cast). Negative sentinels stay WJ `int`.
+        // P3.568: `let start = i + (marker_len as i64)` emits i64 width without a
+        // trailing `_i64` suffix — do not let mixed-int Usize inference repaint the
+        // binding as usize (then `let mut j = start` / `j < n` stay broken).
         if crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
             || emitted_rhs.ends_with("_i64")
+            || emitted_rhs.contains(" as i64")
         {
             self.local_var_types.insert(name.to_string(), Type::Int);
             self.codegen_i32_binding_names.remove(name);
             self.usize_variables.remove(name);
             return;
+        }
+        // P3.568: WJ `int` + `strings.len`/`usize` arithmetic keeps i64 even when
+        // `int_type_for_mixed_int_codegen` reports Usize for the AST mix.
+        if let Expression::Binary {
+            op,
+            left,
+            right,
+            ..
+        } = value
+        {
+            if matches!(
+                op,
+                crate::parser::BinaryOp::Add
+                    | crate::parser::BinaryOp::Sub
+                    | crate::parser::BinaryOp::Mul
+                    | crate::parser::BinaryOp::Div
+                    | crate::parser::BinaryOp::Mod
+            ) && (self.comparison_other_side_needs_len_as_i64(left)
+                || self.comparison_other_side_needs_len_as_i64(right))
+            {
+                self.local_var_types.insert(name.to_string(), Type::Int);
+                self.codegen_i32_binding_names.remove(name);
+                self.usize_variables.remove(name);
+                return;
+            }
         }
         // P3.329: Call/MethodCall WJ `int` results must not become usize via later
         // substring formals (`let plus_pos = find_tz_sign(...)`).
