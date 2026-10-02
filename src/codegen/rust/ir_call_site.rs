@@ -8551,8 +8551,9 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     return arg_str.to_string();
                 }
-                if self.match_arm_bindings.contains(name)
-                    || self.copy_match_payload_binding(name)
+                // P3.574: owned non-Copy match payloads participate in auto-clone;
+                // Copy match payloads (WDB-347) still skip.
+                if self.copy_match_payload_binding(name)
                     || self.expression_is_copy(arg_expr)
                     || self.binding_name_is_copy(name)
                 {

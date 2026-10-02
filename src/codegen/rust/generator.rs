@@ -3093,7 +3093,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if self.binding_is_copy_pass_by_value_scalar(name)
             || self.binding_name_is_copy(name)
-            || self.match_arm_bindings.contains(name)
             || self.copy_match_payload_binding(name)
             || self
                 .current_function_params
@@ -4249,7 +4248,10 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return arg_str.to_string();
         }
-        if self.match_arm_bindings.contains(name) {
+        // P3.574 / WDB-347: owned non-Copy match payloads (`Ok(expr)`) still move at
+        // owned formals and need analysis-driven `.clone()` on reuse. Skip only Copy
+        // payloads (`r: f32`) — blanket skip caused E0382 in wj-cron.
+        if self.copy_match_payload_binding(name) {
             return arg_str.to_string();
         }
         if self.in_user_written_closure && self.user_closure_params.contains(name) {

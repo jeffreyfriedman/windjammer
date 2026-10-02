@@ -1,5 +1,54 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.574 (2026-10-02) — match-arm owned payload reuse must `.clone()` (wj-cron E0382)
+
+`Ok(expr) => { matches_cron(expr); matches_cron(expr) }` moved `CronExpr` twice
+without clone. AutoClone analysis registered `Ok(expr)` and scheduled a site,
+but codegen blanket-skipped `match_arm_bindings` in `maybe_auto_clone` /
+`maybe_auto_clone_call_arg` / `append_clone_for_owned_non_copy_binding`.
+
+| Gate | Status |
+|------|--------|
+| unit `match_ok_binding_reuse_in_arm_block_needs_clone` | ✅ GREEN |
+| `match_arm_owned_binding_reuse_must_clone` | ✅ isolate GREEN (`expr.clone()` + cargo check) |
+| WDB-347 Copy f32 match binding (no noise `.clone()`) | ✅ still GREEN |
+| spawn / mpsc sync_channel | ✅ still GREEN |
+
+**Root cause layer:** constraint/solver write-back path — AutoClone sites for
+pattern defs were correct; codegen honor path was the gap (not a new peel).
+
+**What became unnecessary:** blanket `match_arm_bindings` skip on owned reuse
+clone. Narrowed to `copy_match_payload_binding` only (WDB-347 Copy payloads).
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3574`
+- `cargo test --release --test all -- match_arm_owned_binding_reuse_must_clone` → GREEN
+- `… -- match_arm_owned_binding_reuse_must_clone wdb347 bug_thread_spawn_closure_must_not_be_ref bug_mpsc_sync_channel_boundary` → 7 passed
+
+**Do not steal:** WDB-406/408/411/429–430, P3.508–P3.573, tip-outs (filed).
+
+## P3.573 (2026-10-02) — TDD WDB-430 (DB agent; no compiler src)
+
+Copy unit-enum **field** of a local/loop binding must not `.clone()` into an
+owned formal; product emits `is_storage_write(binding.binding_type.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-430 MultiFile | ⏳ TDD pending — `is_write(binding.binding_type)` |
+| WDB-430 tip-out | ⏳ TDD pending — `binding.binding_type.clone()` in shader_graph_* |
+
+**Root cause layer:** copy / field — Copy enum fields into owned formals must not auto-clone.
+
+**Why this is a new class:**
+- WDB-375 is nested **index clone chain** `].clone().bindings[j].clone().binding_type.clone()`.
+- WDB-402 is unit-variant **path** `HostType::F32.clone()`.
+- WDB-392 is `Direction::PosX.clone()`.
+
+**What became unnecessary:** `binding.binding_type.clone()` in shader graph scheduling.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+
+**Do not steal:** WDB-406/408/411/429, P3.508–P3.572, WDB-412–429 / P3.509–P3.569 (filed).
+
 ## P3.572 (2026-10-01) — module-file must emit inline types from `mod.wj`
 
 `wj build path/to/mod.wj --module-file` regenerates `mod.rs` as only
