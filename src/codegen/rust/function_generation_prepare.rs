@@ -4464,6 +4464,11 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // P3.587: emitted-owned contracts (`App::inner(origin: String)`) beat stale
+        // shared-ref metadata that would otherwise report every site as borrow.
+        if self.param_only_forwards_to_emitted_owned_callees(body, param_name, func) {
+            return false;
+        }
         let mut sites = 0usize;
         let mut borrow_sites = 0usize;
         self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, arg_index| {
@@ -10558,6 +10563,14 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
     ) -> bool {
         if !self.param_only_used_as_call_argument(body, param_name, func) {
+            return false;
+        }
+        // P3.587: emitted-owned String contracts beat stale Borrowed / shared-ref
+        // metadata (`App::handle` → `inner(origin: String)` while registry still
+        // reports `call_site_needs_shared_ref`). Without this, keep-owned + pub
+        // API guards demote outer formals to `&str` while call sites emit
+        // `String::new()` (E0308).
+        if self.param_only_forwards_to_emitted_owned_callees(body, param_name, func) {
             return false;
         }
         let mut saw_site = false;

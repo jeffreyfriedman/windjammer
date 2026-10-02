@@ -3952,26 +3952,30 @@ impl<'ast> CodeGenerator<'ast> {
         body.iter().any(|s| stmt_compares(param, s))
     }
 
-    /// Whether this pub free-fn `string` formal must stay owned `String` (P3.264).
+    /// Whether this pub API `string` formal must stay owned `String` (P3.264 / P3.587).
     ///
     /// Read-only pub APIs (`replay_to_lsn(path)`) still demote to `&str`. Only params
     /// consumed (concat lhs, payload store, owned callee forward) keep owned formals.
+    /// Pub *methods* are included (notes-api `App::handle`): free-fn-only gating left
+    /// `origin: &str` while empty-lit call sites emitted `String::new()` (E0308).
     fn pub_module_api_keeps_owned_string_formal(
         &self,
         func: &FunctionDecl<'_>,
         param: &Parameter,
     ) -> bool {
-        if !(func.is_pub && func.parent_type.is_none()) {
+        if !func.is_pub {
             return false;
         }
         if !crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
             return false;
         }
         let body = func.body.as_slice();
-        // Unused pub `string` formals keep Owned (WDB-152): sibling APIs that
-        // consume the same formal (`claim_next`) must share call-site `.to_string()`.
+        // Unused pub free-fn `string` formals keep Owned (WDB-152): sibling APIs
+        // that consume the same formal (`claim_next`) must share call-site
+        // `.to_string()`. Unused pub *method* formals still demote to `&str`
+        // (BehaviorTree::add_condition literal call sites).
         if !Self::variable_used_in_statements(body, &param.name) {
-            return true;
+            return func.parent_type.is_none();
         }
         // Pub wrappers that only forward `string` into a sibling and return a
         // non-text type (`ServerResponse`) keep owned `String`. Cross-module
@@ -3984,9 +3988,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // `body + ""` into owned concat2 must keep owned formals — do not early-return
         // demote on readonly empty-append before checking owned-callee forwards.
+        // P3.587: emitted-owned sibling forwards (`App::handle` → `inner(origin: String)`)
+        // beat stale Borrowed / shared-ref metadata that would otherwise clear this flag.
         let passed_into_owned = self.param_passed_as_call_argument(body, &param.name, func)
-            && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func)
-            && !self.param_call_sites_expect_borrow(body, &param.name, func);
+            && (self.param_only_forwards_to_emitted_owned_callees(body, &param.name, func)
+                || self.param_passes_to_wj_owned_sibling_call(body, &param.name, func)
+                || (!self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func)
+                    && !self.param_call_sites_expect_borrow(body, &param.name, func)));
         if (self.param_has_readonly_expression_use(body, &param.name)
             || self.param_only_appears_in_formatting_macro(body, &param.name))
             && !self.param_has_owning_method_use(body, &param.name, func)

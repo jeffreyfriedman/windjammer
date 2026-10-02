@@ -366,6 +366,35 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.570, WDB-412–428 (filed).
 
+## P3.587 (2026-10-02) — notes-api `handle` empty-lit owned formals (emitted-owned beats stale borrow)
+
+`App::handle` forwards `origin`/`accept_encoding`/`client_key` into
+`inner(…: String)` while registry metadata still reported shared-ref
+(`only_borrow=true` / `expect_borrow=true` despite `emitted_owned=true`). Keep-owned
+and `pub_module_api` demoted outer formals to `&str` while call sites emitted
+`String::new()` → E0308.
+
+| Gate | Status |
+|------|--------|
+| `handle_forward_empty_lits_must_own` | ✅ isolate GREEN — `origin: String` + `String::new()` |
+| `handle_request_empty_lits_hex_app_must_own` | ✅ isolate GREEN |
+| `demoted_method_then_owned_empty_lits_must_own` | ✅ isolate GREEN |
+| `test_add_condition_string_literal_not_to_string_for_str_param` | ✅ no-reg — unused method `&str` demote kept |
+
+**Root cause layer:** signature / emission-contract classification —
+`param_only_forwards_to_borrowed_text_callees` and `param_call_sites_expect_borrow`
+must defer to `param_only_forwards_to_emitted_owned_callees`; pub method APIs
+participate in `pub_module_api_keeps_owned_string_formal` for *used* forwards
+(unused method formals still demote for literal keys).
+
+**What became unnecessary:** demoting pub method string formals that only forward
+into emitted-owned sibling slots while call sites still own empty lits; free-fn-only
+`pub_module_api` gate that left `handle` formals as `&str`.
+
+**Gates:**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- handle_forward_empty_lits_must_own handle_request_empty_lits_hex demoted_method_then_owned_empty add_condition_string_literal` → **4 passed**
+- related filter `handle_forward empty_lits demoted_method string_literal spawn_closure mpsc_sync_channel notes_api_product add_condition` → **78 passed / 0 failed**
+
 ## P3.586 (2026-10-02) — WAL cross-crate `forwarding_borrow` + `replay_all` tip-truth
 
 `WalSegment::append_put` metadata sets `forwarding_borrow_params=[false,true,true]`
