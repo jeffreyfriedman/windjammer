@@ -268,9 +268,11 @@ impl<'ast> CodeGenerator<'ast> {
                     let target_str = self.generate_expression(target);
                     self.generating_assignment_target = false;
 
-                    // TDD FIX: Compound assignments on mutable references need deref operator
+                    // `&mut T` formals / for-loop mut bindings: `*x += 1` (E0368).
                     let needs_deref = if let Expression::Identifier { name, .. } = target {
                         self.mut_borrowed_iterator_vars.contains(name)
+                            || self.inferred_mut_borrowed_params.contains(name)
+                            || self.identifier_already_mut_ref(name)
                     } else {
                         false
                     };

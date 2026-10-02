@@ -1,5 +1,52 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.571 (2026-10-01) — MutBorrowed Copy: `x = x + 1` rewrite path must `*x += 1`
+
+`5b4ccf51` fixed signature_bridge (bare Copy early-return skipped MutBorrowed)
+and the AST `CompoundOp` emit path. The rewrite of `x = x + 1` → `+=` still
+emitted bare `x += 1` on `&mut i64` → E0368. Same deref set as compound formals.
+
+| Gate | Status |
+|------|--------|
+| `mut_borrowed_bare_copy_int_expects_mut_ref_at_call_site` | ✅ unit GREEN |
+| `test_ownership_inference_mut_borrowed` | ✅ tip GREEN (`increment(&mut counter)` + `*x += 1`) |
+| rustc on fixture emit | ✅ clean |
+
+**Root cause layer:** signature (prior) + encoding (compound rewrite deref).
+
+**What became unnecessary:** post-IR peels inventing `&mut *counter`; gate false
+REDs that accepted broken `&mut *` / missing formal `&mut`.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3569`
+- `cargo test --release -p windjammer --lib mut_borrowed_bare_copy_int` → 1 passed
+- `cargo test --release --test all --features integration_tests,codegen_tests -- test_ownership_inference_mut_borrowed` → 1 passed
+- tip `wj build` mut_borrowed.wj → rustc clean
+
+**Do not steal:** WDB-406/408/411/427–429, P3.508–P3.570, WDB-412–428 (filed).
+
+## P3.570 (2026-10-01) — notes-api `dispatch` must not stay owned when called from `&mut handle_method`
+
+P3.522 greened `handle_method(&mut self)` / `check_rate(&mut self)`. Product tip
+still emits `dispatch(mut self, …)` then `self.dispatch(...)` → E0507 move out
+of `&mut self`. Minimal check_rate+dispatch+handle isolates false-GREEN
+(`dispatch(&mut self)`).
+
+| Gate | Status |
+|------|--------|
+| `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ❌ tip RED — product `dispatch(mut self)` |
+
+**Root cause layer:** constraint / self-mode — callee used after `&mut`
+`check_rate` early-return arm must demote to `&mut self` (or `&self` if
+read-only), not keep collided Owned/`mut self`.
+
+**What became unnecessary:** `self.clone().dispatch` or reshaping notes-api
+to inline dispatch into handle_method.
+
+**Gates:** tip-p3557 (21:23) product `$WJ test` → E0507; product build assert.
+- `cargo test --test all --features integration_tests,codegen_tests -- notes_api_dispatch_from_mut_handle_must_not_be_owned`
+
+**Do not steal:** WDB-406/408/411/427–429, P3.508–P3.571, WDB-412–428 (filed).
+
 ## P3.569 (2026-10-01) — TDD WDB-429 (DB agent; no compiler src)
 
 Copy match-arm payloads (`i32`/`f32`/`bool`) must not `.clone()`; product emits
@@ -80,7 +127,7 @@ root, but siblings that *infer* those types (no explicit `use crate::Item`) get
 |------|--------|
 | `rust_use_path_sibling_of_crate_root_lib_wj_uses_crate` | ✅ unit GREEN |
 | `module_file_crate_root_type_must_not_import_super_lib` | ✅ isolate GREEN (`e1329d72`) |
-| product `wj-migrate` `$WJ test` | ⏳ tip-out regen after tip `wj` |
+| product `wj-migrate` `$WJ test` | ✅ tip GREEN — 18/18 (tip-p3557 21:23) |
 
 **Root cause layer:** boundary / import path — `wj_file_to_module_path` maps
 `lib.wj` → `["lib"]`; `rust_use_path_from_module_to_type` must treat that as
