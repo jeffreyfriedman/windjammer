@@ -366,6 +366,32 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.570, WDB-412–428 (filed).
 
+## P3.588 (2026-10-02) — forwarding_borrow must not force `&String` into owned String emit
+
+P3.586 made `forwarding_borrow_params` beat `emitted_owned_arg_contract` for WAL
+Vec facades. AsRef-owned `string` APIs (`run_parquet_load` → `strings::is_empty`)
+also set `forwarding_borrow=true` while emitting `String` + `emitted_rust_ref=false`
+→ cross-file call sites emitted `&li_path` into `String` (WDB-110/111/112 E0308).
+
+| Gate | Status |
+|------|--------|
+| `wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site` | ✅ GREEN — `li_path.clone()` |
+| `wdb111_multipass_cross_module_owned_string_clone` | ✅ GREEN |
+| `wdb112_full_library_multipass_demoted_str` | ✅ GREEN |
+| `forwarding_borrow_must_not_borrow_owned_string_emit` | ✅ lib GREEN |
+| `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal` | ✅ no-reg — Vec facade still borrows |
+| `handle_forward_empty_lits_must_own` | ✅ no-reg |
+
+**Root cause layer:** signature bridge — `call_site_needs_shared_ref_at_emit`
+skips forwarding_borrow when owned WJ text emits `String`.
+
+**What became unnecessary:** `&li_path` / `&path.clone()` into owned String formals
+when metadata already records Owned + `emitted_rust_ref=false`.
+
+**Gates:**
+- `cargo test --release -p windjammer --lib forwarding_borrow` → **2 passed**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- wdb110_ wdb111_ wdb112_ handle_forward_empty dogfood_wal_segment_cross_crate_append_put` → **6 passed**
+
 ## P3.587 (2026-10-02) — notes-api `handle` empty-lit owned formals (emitted-owned beats stale borrow)
 
 `App::handle` forwards `origin`/`accept_encoding`/`client_key` into
