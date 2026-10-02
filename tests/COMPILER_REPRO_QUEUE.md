@@ -13,7 +13,6 @@ in **value** position (return/let/call arg); receivers and index bases borrow.
 | `test_library_multipass_graph_csr_view_loop_must_borrow_not_clone` | ✅ tip GREEN |
 | `demoted_vec_call_arg_must_not_to_string` | ✅ tip GREEN |
 | `borrowed_dense_csr_*` | ✅ tip GREEN |
-| `bare_pass_field_method_receiver_does_not_restore_owned_p3583b` | ✅ lib GREEN |
 | P3.583 wal / for_loop / owned_custom gates | ✅ still GREEN |
 
 **Root cause layer:** constraint/demotion write-back — place vs value in
