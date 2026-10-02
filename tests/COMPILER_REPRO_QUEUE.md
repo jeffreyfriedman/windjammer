@@ -1,5 +1,32 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.577 (2026-10-02) — `start` before `i`: `start = i + 1` must stay usize (`wj-toml`)
+
+P3.326 gate declared `i` before `start` (GREEN). Eco `split_on_commas` declares
+`start` first → `0_i64` + `start = i + 1_usize as i64` (E0308 / E0277). Prepass
+only back-propagated bare `dst = src` identifier assigns into `usize_variables`.
+
+| Gate | Status |
+|------|--------|
+| `module_file_usize_i_plus_one_assign_must_stay_usize` | ✅ tip GREEN (P3.326) |
+| `module_file_usize_start_before_i_plus_one_assign_must_stay_usize` | ✅ tip GREEN — eco order |
+| eco `wj-toml` `split_on_commas` tip cargo-check | ✅ `let mut start: usize` / `start = i + 1_usize` |
+| `auth_json_string_field_int_len` / `int_while_le_vec_len` / usize eq-zero | ✅ still GREEN |
+
+**Root cause layer:** constraint/type write-back — prepass marks `start = i + 1`
+(usize counter ± non-neg lit) into `usize_variables` regardless of declaration
+order. Encoding: `maybe_cast_usize_to_int_target` parenthesizes non-atomic RHSes
+so a residual cast cannot become `i + 1_usize as i64`.
+
+**What became unnecessary:** declaration-order dependence for index peers;
+unparenthesized `as i64` peel on binary usize assigns.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3577`
+- `cargo test --release --test all -- module_file_usize_i_plus_one_assign module_file_usize_start_before_i` → 2 passed
+- `… -- auth_json_string_field_int_len_must_unify_i64 int_while_le_vec_len module_file_usize_index_eq_zero` → 3 passed
+
+**Do not steal:** WDB tip-outs / WDB-430 / P3.573 TDD.
+
 ## P3.576 (2026-10-02) — MutexGuard HashMap get key borrow (wj-sync SharedMapSI)
 
 `match g.get(key)` after `Mutex::lock` parses as `Call(FieldAccess)`, not
@@ -3590,7 +3617,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **generic `recv` must move `Receiver`, not `rx.clone()`** | `bug_generic_channel_recv_must_move_receiver_not_clone_test` | ✅ tip GREEN (P3.332) |
 | P1 | **`wj-timefmt` product: `month <= 12_i32` / `&parts[1].to_string()`** | `bug_module_file_timefmt_product_must_not_mix_i32_month_or_ref_string_test` | ✅ tip GREEN (P3.329) |
 | P1 | **demoted `&str` + `core = strings.substring(...)` must own (`wj-semver`)** | `bug_module_file_demoted_str_substring_assign_must_own_test` | ✅ tip GREEN (P3.325) — tuple Result return owns demoted bind |
-| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ✅ tip GREEN (P3.326) — reconcile `_usize` emit vs Int local |
+| P1 | **usize `start = i + 1` emits `1_usize as i32/i64` (`wj-toml`)** | `bug_module_file_usize_i_plus_one_assign_must_stay_usize_test` | ✅ tip GREEN (P3.326 + P3.577 start-before-`i`) |
 | P1 | **Local `buf` into MutBorrowed `Vec` method must be `&mut buf`** | `auto_mut_borrow_arg_test` | ✅ tip GREEN (P3.312) |
 | P1 | **`for x in map.values()` then `vec.push(x)` must clone non-Copy** | `bug_vec_push_borrowed_loop_elem_must_clone_test` | ✅ tip GREEN (2026-09-15) — P3.303 |
 | P1 | **`i32` compound `+= 1` must not use `1 as usize`** | `bug_i32_compound_add_must_not_use_usize_literal_test` | ✅ tip GREEN (2026-09-15) — P3.304 |

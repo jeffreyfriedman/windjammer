@@ -541,14 +541,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // WDB-361 / P3.335: `best_idx = i` when `i` is a `.len()` while-counter
                 // must keep `best_idx` as usize (cast at `return best_idx as i32`).
+                // P3.577: `start = i + 1` (usize counter ± non-neg lit) must mark `start`
+                // even when `start` is declared before `i` (`wj-toml` split_on_commas).
                 Statement::Assignment { target, value, .. } => {
-                    if let (
-                        Expression::Identifier { name: dst, .. },
-                        Expression::Identifier { name: src, .. },
-                    ) = (target, value)
-                    {
-                        if self.usize_variables.contains(src)
-                            && !self.identifier_is_wj_int_i64_binding(dst.as_str())
+                    if let Expression::Identifier { name: dst, .. } = target {
+                        if !self.identifier_is_wj_int_i64_binding(dst.as_str())
+                            && self.assign_rhs_is_usize_index_peer(value)
                             && self.usize_variables.insert(dst.clone())
                         {
                             changed = true;
@@ -670,6 +668,36 @@ impl<'ast> CodeGenerator<'ast> {
                 self.mark_identifier_usize_if_bound_is_usize(left, right);
                 self.mark_identifier_usize_if_bound_is_usize(right, left);
             }
+        }
+    }
+
+    /// RHS that peers a destination with a usize index counter: bare `i`, or
+    /// `i + 1` / `1 + i` / `i - 1` with a non-negative int literal.
+    fn assign_rhs_is_usize_index_peer(&self, value: &Expression) -> bool {
+        match value {
+            Expression::Identifier { name: src, .. } => self.usize_variables.contains(src),
+            Expression::Binary {
+                op, left, right, ..
+            } if matches!(op, BinaryOp::Add | BinaryOp::Sub) => {
+                let side_usize = |e: &Expression| match e {
+                    Expression::Identifier { name, .. } => self.usize_variables.contains(name),
+                    _ => false,
+                };
+                let nonneg_lit = |e: &Expression| {
+                    matches!(
+                        e,
+                        Expression::Literal {
+                            value: Literal::Int(n),
+                            ..
+                        } if *n >= 0
+                    )
+                };
+                (side_usize(left) && (side_usize(right) || nonneg_lit(right)))
+                    || (matches!(op, BinaryOp::Add)
+                        && side_usize(right)
+                        && (side_usize(left) || nonneg_lit(left)))
+            }
+            _ => false,
         }
     }
 

@@ -510,7 +510,16 @@ impl<'ast> CodeGenerator<'ast> {
                 .strip_suffix(".clone()")
                 .unwrap_or(expr_str.as_str())
                 .trim();
-            *expr_str = format!("{base}{cast_suffix}");
+            // `as` binds tighter than `+`/`-`: `i + 1_usize as i64` is invalid.
+            // Parenthesize non-atomic RHSes (`(i + 1_usize) as i64`).
+            let needs_parens = base.chars().any(|c| {
+                matches!(c, '+' | '-' | '*' | '/' | '%' | '|' | '&' | '^' | '<' | '>' | ' ')
+            }) && !(base.starts_with('(') && base.ends_with(')'));
+            *expr_str = if needs_parens {
+                format!("({base}){cast_suffix}")
+            } else {
+                format!("{base}{cast_suffix}")
+            };
         }
     }
 
