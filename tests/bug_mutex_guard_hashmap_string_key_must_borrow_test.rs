@@ -14,17 +14,33 @@
 //! P3.576 / ecosystem `wj-sync`: `match m.inner.lock() { Ok(g) => g.get(key) }`
 //! must borrow the String key (`get(&key)` / `contains_key(&key)`), same as
 //! WDB-236 on a bare HashMap. MutexGuard Deref must not drop the key borrow.
+//! Multipass package shape (SharedMap alias + sibling `*_get` helpers) is required.
 
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-const SOURCE: &str = r#"
+const LIB: &str = r#"
+pub mod shared
+pub use shared::SharedMapSI
+pub use shared::shared_map_get
+pub use shared::shared_map_has
+"#;
+
+const SHARED: &str = r#"
 use std::collections::HashMap
 use std::sync::{Arc, Mutex}
 
-pub struct SharedMapSI {
-    pub inner: Arc<Mutex<HashMap<string, int>>>,
+pub struct SharedMap<K, V> {
+    inner: Arc<Mutex<HashMap<K, V>>>,
+}
+
+pub type SharedMapSI = SharedMap<string, int>
+
+/// Sibling free-function `*_get` (like wj-sync `shared_int_get`) must not poison
+/// HashMap key borrow via bare `::get` suffix scramble.
+pub fn shared_int_get(n: int) -> int {
+    n
 }
 
 pub fn shared_map_get(m: SharedMapSI, key: string) -> (SharedMapSI, bool, int) {
@@ -53,7 +69,8 @@ fn mutex_guard_hashmap_string_key_must_borrow() {
     let tmp = TempDir::new().expect("tempdir");
     let src = tmp.path().join("src");
     fs::create_dir_all(&src).unwrap();
-    fs::write(src.join("lib.wj"), SOURCE).unwrap();
+    fs::write(src.join("lib.wj"), LIB).unwrap();
+    fs::write(src.join("shared.wj"), SHARED).unwrap();
     let out = tmp.path().join("gen");
 
     let build = Command::new(env!("CARGO_BIN_EXE_wj"))
@@ -75,8 +92,8 @@ fn mutex_guard_hashmap_string_key_must_borrow() {
         String::from_utf8_lossy(&build.stderr)
     );
 
-    let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.576 lib.rs:\n{rs}");
+    let rs = fs::read_to_string(out.join("shared.rs")).unwrap_or_default();
+    eprintln!("P3.576 shared.rs:\n{rs}");
 
     let get_ok = rs.contains(".get(&key)") || rs.contains(".get(& key)");
     let contains_ok = rs.contains("contains_key(&key)") || rs.contains("contains_key(& key)");

@@ -4,48 +4,51 @@
 
 `match g.get(key)` after `Mutex::lock` parses as `Call(FieldAccess)`, not
 `MethodCall`. Suffix/`*::get` scramble picked an Owned homonym →
-`g.get(key.to_string())`. MethodCall path already had map-key finalize;
-Call path did not.
+`g.get(key.to_string())`. Multipass often leaves `g` untyped so
+`contains_key` (map-only, no Vec conflict) also missed the HashMap bridge.
 
 | Gate | Status |
 |------|--------|
-| `mutex_guard_hashmap_string_key_must_borrow` | ✅ tip GREEN — `g.get(&key)` + `contains_key(&key)` + cargo-check |
-| `hashmap_get_through_mutex_guard_*` / `module_file_shared_map_get_*` | ✅ still GREEN (5 passed) |
-| spawn / mpsc | leave alone (already GREEN) |
+| `mutex_guard_hashmap_string_key_must_borrow` | ✅ tip GREEN — multipass SharedMap + `g.get(&key)` / `contains_key(&key)` |
+| eco `wj-sync` SharedMapSI tip transpile | ✅ `get(&key)` + `contains_key(&key)` |
+| `hashmap_get_through_mutex_guard_*` / `module_file_shared_map_get_*` | ✅ still GREEN |
 
-**Root cause layer:** signature bridge — `MutexGuard` / map Deref wrappers prefer
-stdlib `HashMap::{get,contains_key,…}` (Borrowed `&K`) over poisoned Owned
-`*::get`; shared post-IR collection-key finalize for Call(FieldAccess) + MethodCall.
+**Root cause layer:** signature bridge — prefer stdlib `HashMap::{get,contains_key}`
+(Borrowed `&K`) for MutexGuard / untyped lock guards / SharedMap handles; shared
+post-IR collection-key finalize for Call(FieldAccess) + MethodCall.
 
-**What became unnecessary:** MethodCall-only HashMap fallback + DEBUG peels;
-bare `::get` suffix scramble on map Deref wrappers.
+**What became unnecessary:** MethodCall-only HashMap fallback; bare `::get`
+suffix scramble on map Deref wrappers; Owned `contains_key(key.clone())` on
+untyped guards.
 
 **Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3575`
 - `cargo test --release --test all -- mutex_guard_hashmap_string_key` → GREEN
-- `… -- hashmap_get_through_mutex_guard module_file_shared_map_get` → 5 passed
-- `… -- vec_index_reuse_must_clone match_arm_owned_binding_reuse mutex_guard_hashmap` → 3 passed
+- eco tip `wj-sync` shared.rs → `get(&key)` + `contains_key(&key)`
 
 **Do not steal:** WDB-406/408/411/429–430, P3.573 TDD, tip-outs.
 
 ## P3.575 (2026-10-02) — Vec index reuse into owned let must `.clone()` (wj-csv)
 
 `let headers = rows[0]` then later `rows[i]` / `Ok((headers, data))` emitted
-`let headers: Vec<String> = &rows[0]` (E0308). Tuple/Array uses were not
-classified as `Moved`, so `variable_is_only_field_accessed` falsely kept a
-borrow-only let RHS.
+`let headers: Vec<String> = &rows[0]` (E0308). (1) Tuple/Array uses were not
+`Moved`. (2) Match-arm expression blocks never scoped `current_function_body`
+/ `current_block_local_idx`, so analysis only saw the outer `match`.
 
 | Gate | Status |
 |------|--------|
-| `vec_index_reuse_must_clone_into_owned_let` | ✅ tip GREEN — `rows[0].clone()` + cargo-check |
+| `vec_index_reuse_must_clone_into_owned_let` | ✅ tip GREEN — param shape |
+| `vec_index_reuse_in_match_ok_arm_must_clone_into_owned_let` | ✅ tip GREEN — eco `Ok(rows)` shape |
+| eco `wj-csv` `parse_with_headers` | ✅ `rows[0].clone()` |
 
-**Root cause layer:** constraint/usage classification — walk Tuple/Array elements
-for `Moved` (same as other composite exprs).
+**Root cause layer:** constraint/usage classification + block scoping for
+match-arm bodies (`generate_block_expr` aligned with `generate_block`).
 
 **What became unnecessary:** false “field-only” borrow let for indexed Vec rows
-consumed via tuple returns.
+inside `Ok(rows) => { … }` (wj-csv).
 
 **Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3575`
-- `cargo test --release --test all -- vec_index_reuse_must_clone_into_owned_let` → GREEN
+- `cargo test --release --test all -- vec_index_reuse` → 2 passed
+- eco tip `wj-csv` lib.rs → `let headers: Vec<String> = rows[0].clone()`
 
 ## P3.574 (2026-10-02) — match-arm owned payload reuse must `.clone()` (wj-cron E0382)
 
