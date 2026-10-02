@@ -4667,29 +4667,35 @@ impl<'ast> CodeGenerator<'ast> {
         if arg_str.ends_with("::None") || arg_str == "None" {
             return false;
         }
-        if let crate::parser::Expression::FieldAccess { object, field, .. } = arg {
+        if let crate::parser::Expression::FieldAccess { field, .. } = arg {
             if field == "None" {
                 return false;
             }
             let root_name = self.extract_root_identifier(arg);
             if let Some(ref name) = root_name {
-                let is_self_field = matches!(&**object, crate::parser::Expression::Identifier { name: n, .. } if n == "self");
                 let is_borrowed_iter = self.borrowed_iterator_vars.contains(name);
                 let is_explicit_ref = self.current_function_params.iter().any(|p| {
                     p.name == *name && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
                 });
+                // Include mut-borrowed roots (`&mut self`) — nested
+                // `self.config.public_base_url` is not a direct `self.field`.
                 let is_inferred_borrowed = self.inferred_borrowed_params.contains(name)
+                    || self.inferred_mut_borrowed_params.contains(name)
                     || self.emitted_rust_ref_formals.contains(name);
                 let root_behind_ref = self.field_access_root_is_behind_reference(arg);
                 // WDB-414: owned/`mut self` can move a non-Copy field into a ctor.
                 // Treating every `self.field` as a borrowed root forced `.clone()`.
-                let self_field_from_borrowed_receiver = is_self_field
+                let self_field_from_borrowed_receiver = name == "self"
                     && (self.inferred_borrowed_params.contains("self")
                         || self.inferred_mut_borrowed_params.contains("self")
                         || self.emitted_rust_ref_formals.contains("self")
                         || self.current_function_params.iter().any(|p| {
                             p.name == "self"
-                                && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
+                                && matches!(
+                                    p.ownership,
+                                    crate::parser::OwnershipHint::Ref
+                                        | crate::parser::OwnershipHint::Mut
+                                )
                         }));
 
                 if (self_field_from_borrowed_receiver

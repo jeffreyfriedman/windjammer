@@ -1898,20 +1898,11 @@ impl<'ast> CodeGenerator<'ast> {
         // `rows[i]` / `self.field` into owned non-Copy formals: clone when the root cannot
         // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Owned/`mut self`
         // can move the field (WDB-414) — do not invent Clone from the name `self`.
-        let field_from_borrowed_self = matches!(
-            arg_expr,
-            Expression::FieldAccess { object, .. }
-                if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
-        ) && (self.inferred_borrowed_params.contains("self")
-            || self.inferred_mut_borrowed_params.contains("self")
-            || self.emitted_rust_ref_formals.contains("self")
-            || self.current_function_params.iter().any(|p| {
-                p.name == "self"
-                    && matches!(
-                        p.ownership,
-                        crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
-                    )
-            }));
+        // Nested paths (`self.config.public_base_url`) use root-behind-ref, not only
+        // direct `self.field` (P3.584 / notes-api dispatch).
+        let field_from_borrowed_self = matches!(arg_expr, Expression::FieldAccess { .. })
+            && self.field_access_root_is_behind_reference(arg_expr)
+            && self.extract_root_identifier(arg_expr).as_deref() == Some("self");
         // Shared-ref at emit only — analyzer `Borrowed` alone must not demote Clone→Borrow
         // for bare owned Vec formals (WDB-281: `contains(items.clone())`, not `&items`).
         // Stale `emitted_rust_ref_params` must not block Clone when emission confirms owned
@@ -2044,8 +2035,15 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Identity;
         }
+        // Field-extract callees can move an *owned* arg; never demote Clone when the
+        // arg place is behind `&self` / `&mut self` (P3.584: `fetch_note(self.store)`).
         if matches!(kind, CoercionKind::Clone)
             && self.callee_param_field_extracts_by_name(callee_name, arg_index)
+            && !matches!(
+                arg_expr,
+                Expression::FieldAccess { .. } | Expression::Index { .. }
+            )
+            && !self.field_access_root_is_behind_reference(arg_expr)
         {
             kind = CoercionKind::Identity;
         }

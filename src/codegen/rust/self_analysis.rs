@@ -396,6 +396,23 @@ pub fn function_writeback_replaces_moved_self_fields(func: &FunctionDecl) -> boo
     !moved.is_empty() && moved.iter().all(|field| assigned.contains(field))
 }
 
+/// WDB-414: `Vox::new(self.scene)` then `self.grid = 1` — move one field, assign a
+/// *different* field without writeback of the moved set. Needs owned `self`.
+/// Contrasts with notes-api `dispatch` (field moves into Owned formals + mutate via
+/// field methods) which is `&mut self` + Clone (P3.584 / P3.570).
+pub fn function_partial_moves_self_field_then_assigns_other(func: &FunctionDecl) -> bool {
+    let mut moved = std::collections::HashSet::new();
+    let mut assigned = std::collections::HashSet::new();
+    for stmt in &func.body {
+        collect_moved_self_fields_in_stmt(stmt, &mut moved);
+        collect_assigned_self_fields_in_stmt(stmt, &mut assigned);
+    }
+    !moved.is_empty()
+        && !assigned.is_empty()
+        && !moved.iter().all(|field| assigned.contains(field))
+        && assigned.iter().any(|field| !moved.contains(field))
+}
+
 fn collect_moved_self_fields_in_stmt(stmt: &Statement, out: &mut std::collections::HashSet<String>) {
     match stmt {
         Statement::Let { value, .. }
@@ -1992,3 +2009,4 @@ mod tests {
     // More comprehensive tests will be added later
     // These are just basic smoke tests for the module
 }
+

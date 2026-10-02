@@ -1328,6 +1328,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove("self");
                                 return "mut self".to_string();
                             }
+                            // WDB-414: stale MutBorrowed upgrade must not beat owned
+                            // partial-move receivers.
+                            if super::self_analysis::function_partial_moves_self_field_then_assigns_other(
+                                &analyzed.decl,
+                            ) {
+                                self.inferred_borrowed_params.remove("self");
+                                self.inferred_mut_borrowed_params.remove("self");
+                                return "mut self".to_string();
+                            }
                             self.inferred_mut_borrowed_params.insert("self".to_string());
                             self.inferred_borrowed_params.remove("self");
                             return "&mut self".to_string();
@@ -1367,7 +1376,23 @@ impl<'ast> CodeGenerator<'ast> {
                                     {
                                         "self"
                                     }
-                                    OwnershipMode::MutBorrowed => "&mut self",
+                                    OwnershipMode::MutBorrowed => {
+                                        // P3.584: MutBorrowed upgrade / inference must not
+                                        // force `&mut self` over WDB-414 owned partial moves.
+                                        if !self.in_trait_impl
+                                            && (body_modifies
+                                                && super::self_analysis::function_consumes_self(
+                                                    &analyzed.decl,
+                                                )
+                                                || super::self_analysis::function_partial_moves_self_field_then_assigns_other(
+                                                    &analyzed.decl,
+                                                ))
+                                        {
+                                            self.owned_self_receiver(&analyzed.decl)
+                                        } else {
+                                            "&mut self"
+                                        }
+                                    }
                                     OwnershipMode::Borrowed => {
                                         if !self.in_trait_impl && body_modifies {
                                             "&mut self"
@@ -1689,10 +1714,33 @@ impl<'ast> CodeGenerator<'ast> {
                                 {
                                     "mut self"
                                 } else {
+                                    // P3.584: may be `&mut self` (clone under mut) or
+                                    // owned `mut self` (WDB-414 partial move).
                                     self.owned_self_receiver(&analyzed.decl)
                                 };
-                                self.inferred_borrowed_params.remove("self");
-                                self.inferred_mut_borrowed_params.remove("self");
+                                // Sync borrow tracking with the *emitted* receiver —
+                                // clearing both sets left `&mut self` without Clone
+                                // on field→Owned args (notes-api `dispatch`).
+                                match self_str {
+                                    "&self" => {
+                                        self.inferred_borrowed_params.insert("self".to_string());
+                                        self.inferred_mut_borrowed_params.remove("self");
+                                    }
+                                    "&mut self" => {
+                                        self.inferred_mut_borrowed_params
+                                            .insert("self".to_string());
+                                        self.inferred_borrowed_params.remove("self");
+                                    }
+                                    _ => {
+                                        self.inferred_borrowed_params.remove("self");
+                                        self.inferred_mut_borrowed_params.remove("self");
+                                    }
+                                }
+                                self.record_self_receiver_upgrade(
+                                    &func.name,
+                                    Some(OwnershipMode::Owned),
+                                    self_str,
+                                );
                                 return self_str.to_string();
                             }
                             let body_modifies = body_modifies;
@@ -1720,7 +1768,20 @@ impl<'ast> CodeGenerator<'ast> {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl && (returns_self || consumes_self) =>
                                     {
-                                        if body_modifies { "mut self" } else { "self" }
+                                        // P3.584: mutating + field-move consume → prefer
+                                        // owned_self_receiver (`&mut self` + Clone, or
+                                        // WDB-414 owned partial-move).
+                                        if returns_self {
+                                            if body_modifies {
+                                                "mut self"
+                                            } else {
+                                                "self"
+                                            }
+                                        } else if body_modifies {
+                                            self.owned_self_receiver(&analyzed.decl)
+                                        } else {
+                                            "self"
+                                        }
                                     }
                                     OwnershipMode::MutBorrowed
                                         if consumes_self && !body_modifies =>

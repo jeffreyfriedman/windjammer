@@ -1039,6 +1039,13 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         continue;
                     }
+                    // WDB-414 / P3.584: move field A into a ctor then assign field B
+                    // needs owned `mut self` — do not pre-upgrade to `&mut self`.
+                    if super::self_analysis::function_partial_moves_self_field_then_assigns_other(
+                        func,
+                    ) {
+                        continue;
+                    }
                     let qualified = format!("{}::{}", struct_name, func.name);
                     if snapshot.contains_key(&qualified) {
                         continue;

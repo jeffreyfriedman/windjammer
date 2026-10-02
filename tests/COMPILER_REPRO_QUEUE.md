@@ -366,35 +366,45 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.570, WDB-412–428 (filed).
 
+## P3.584 (2026-10-02) — notes-api `dispatch` `&mut self` + Clone; keep WDB-414 owned move
+
+P3.570 tip-truth was RED again: `dispatch(mut self)` from field→Owned consumes
+while `handle_method(&mut self)` calls it → E0507. Fixing only Clone under
+`&mut self` without a partial-move guard re-broke WDB-414 (`self.scene.clone()`).
+
+| Gate | Status |
+|------|--------|
+| `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ✅ isolate GREEN |
+| `wdb414_module_file_ctor_must_move_self_field` | ✅ isolate GREEN (`initialize(mut self)` moves `self.scene`) |
+| WDB-414 tip-out | ❌ stale tip-out / product gen — regen separately |
+| `check_rate_field_replace_must_not_move_self` | ✅ GREEN |
+
+**Root cause layer:** constraint/solver + receiver emit (not reconcile peel) —
+(1) `function_partial_moves_self_field_then_assigns_other` → owned `mut self`
+(WDB-414); other mutating+field-move methods → `&mut self` + Clone into Owned
+formals; (2) Owned+consumes early return must sync `inferred_mut_borrowed_params`
+when emitting `&mut self`; (3) `record_self_receiver_upgrade("mut self")` must
+be Owned, not MutBorrowed; (4) impl pre-pass must not MutBorrowed-upgrade
+partial-move methods; (5) IR Clone for nested `self.config.public_base_url` /
+field-extract demote must not strip Clone behind `&mut self`.
+
+**What became unnecessary:** forcing owned `dispatch` from field consumes;
+`mut self`↔MutBorrowed collapse in the upgrade table; pre-pass `&mut` on
+WDB-414-shaped methods.
+
+**Gates:**
+- `cargo test --release --test all -- notes_api_dispatch_from_mut_handle wdb414_module_file_ctor_must_move_self_field check_rate_field_replace` → 4 isolate GREEN (tip-out still RED)
+- related: `for_loop_match_self library_multipass_owned_custom path_bytes serve_closure` → GREEN
+
 ## P3.570 (2026-10-01) — notes-api `dispatch` must not stay owned when called from `&mut handle_method`
 
-P3.522 greened `handle_method(&mut self)` / `check_rate(&mut self)`. Product tip
-emitted `dispatch(mut self, …)` then `self.dispatch(...)` → E0507 move out
-of `&mut self`.
+Superseded by **P3.584** (receiver + Clone sync). Isolate remains GREEN.
 
 | Gate | Status |
 |------|--------|
 | `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ✅ isolate GREEN (product-shaped: store.create + `public_base_url`) |
-| product `wj-notes-api` domain `dispatch` | ✅ tip GREEN — `dispatch(&mut self)` / `param_ownership[0]=MutBorrowed` + `MutableReference(Self)` |
-| unit `string_field_arg_plus_field_mut_method_keeps_mut_borrowed_self` | ✅ GREEN |
 
-**Root cause layer:** constraint/solver (impl-self body-moves) —
-(1) returning `param.field` is not a consume; (2) HashMap for-in / Borrowed formals
-demote; (3) `self.field` into Borrowed callees are not body-moves; (4) Windjammer
-`string` field reads (`self.config.public_base_url`) clone under borrow and must
-not force Owned when the method also mutates via `self.store.create` (WDB-414
-non-string Scene moves still force Owned).
-
-**What became unnecessary:** `self.clone().dispatch`; product reshape of dispatch;
-Owned/`mut self` from string field → owned formal.
-
-**Gates:**
-- `cargo test --release --lib -- string_field_arg_plus_field_mut_method_keeps_mut_borrowed_self` → GREEN
-- `cargo test --release --test all --features integration_tests,codegen_tests -- notes_api_dispatch_from_mut_handle_must_not_be_owned` → GREEN
-- `wdb414_module_file_ctor_must_move_self_field` → GREEN (tip-out product clone remains filed separately)
-- tip `wj build` notes-api `src/domain` → `dispatch(&mut self)` + domain `cargo check` GREEN
-
-**Do not steal:** WDB-406/408/411/427–429, P3.508–P3.571, WDB-412–428 (filed).
+**Do not steal:** WDB-406/408/411/427–429, P3.508–P3.583 tip-outs, WDB-412–428 tip-outs (filed).
 
 ## P3.569 (2026-10-01) — TDD WDB-429 (DB agent; no compiler src)
 

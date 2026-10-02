@@ -112,14 +112,23 @@ impl<'ast> CodeGenerator<'ast> {
             "mut self"
         } else if body_modifies && super::self_analysis::function_consumes_self(func) {
             // P3.520: `self.buckets = put(take(self.buckets))` writes back the moved
-            // field — `&mut self` so callers can continue. WDB-414 moves a *different*
-            // field into a ctor (`Vox::new(self.scene)` then `self.grid = 1`) → owned.
+            // field — `&mut self` so callers can continue.
+            // WDB-414: move field A into a ctor then assign field B → owned `mut self`.
+            // P3.584 / P3.570: other field moves into Owned formals under a mutating
+            // method are Clone under `&mut self` (notes-api `dispatch`).
             // P3.522: thin wrappers (`handle_http` → `handle_method(&mut self)`) are
             // "consuming" only because the callee's WJ source still says `self`.
-            if super::self_analysis::function_writeback_replaces_moved_self_fields(func)
+            if super::self_analysis::function_partial_moves_self_field_then_assigns_other(func) {
+                "mut self"
+            } else if super::self_analysis::function_writeback_replaces_moved_self_fields(func)
                 || self.function_calls_self_with_recorded_receiver(
                     func,
                     crate::analyzer::OwnershipMode::MutBorrowed,
+                )
+                || !super::self_analysis::function_calls_owned_self_method(
+                    func,
+                    &self.signature_registry,
+                    self.current_struct_name.as_deref(),
                 )
             {
                 "&mut self"
@@ -200,10 +209,13 @@ impl<'ast> CodeGenerator<'ast> {
         analyzer_ownership: Option<OwnershipMode>,
         actual_receiver: &str,
     ) {
+        // `mut self` is by-value owned (builder / WDB-414 partial move) — not `&mut self`.
+        // Collapsing it into MutBorrowed made the upgrade table force `&mut self` on
+        // re-emit and broke owned field moves (P3.584).
         let actual_mode = match actual_receiver {
-            "&mut self" | "mut self" => OwnershipMode::MutBorrowed,
+            "&mut self" => OwnershipMode::MutBorrowed,
             "&self" => OwnershipMode::Borrowed,
-            "self" => OwnershipMode::Owned,
+            "self" | "mut self" => OwnershipMode::Owned,
             _ => return,
         };
 
