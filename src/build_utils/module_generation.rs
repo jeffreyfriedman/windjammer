@@ -766,6 +766,10 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     }
 
     // Append real code from mod.wj (traits, structs, impls, functions).
+    // P3.572: `--module-file` may call generate_mod_file twice. The first pass
+    // merges `_mod_items.rs` then deletes it; the second must not drop the
+    // already-merged "// Code from mod.wj" section from the existing file.
+    let mut appended_mod_wj_code = false;
     if has_real_code {
         if let Some(ref items_content) = mod_items_content {
             content.push_str("\n// Code from mod.wj (traits, structs, impls)\n");
@@ -789,6 +793,18 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                 content.push_str(line);
                 content.push('\n');
             }
+            appended_mod_wj_code = true;
+        }
+    }
+    if !appended_mod_wj_code {
+        if let Ok(existing) = fs::read_to_string(&existing_mod_rs) {
+            if let Some(preserved) = extract_mod_wj_code_section(&existing) {
+                content.push_str("\n// Code from mod.wj (traits, structs, impls)\n");
+                content.push_str(&preserved);
+                if !preserved.ends_with('\n') {
+                    content.push('\n');
+                }
+            }
         }
     }
 
@@ -807,6 +823,28 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
     );
 
     Ok(())
+}
+
+/// Body after `// Code from mod.wj (traits, structs, impls)` in a prior mod.rs.
+/// Used when `_mod_items.rs` was already consumed by an earlier `--module-file` pass.
+fn extract_mod_wj_code_section(existing_mod_rs: &str) -> Option<String> {
+    const MARKER: &str = "// Code from mod.wj (traits, structs, impls)";
+    let mut lines = existing_mod_rs.lines();
+    while let Some(line) = lines.next() {
+        if line.trim() == MARKER {
+            let mut body = String::new();
+            for rest in lines {
+                body.push_str(rest);
+                body.push('\n');
+            }
+            let has_code = body.lines().any(|l| {
+                let t = l.trim();
+                !t.is_empty() && !t.starts_with("//")
+            });
+            return has_code.then_some(body);
+        }
+    }
+    None
 }
 
 /// Cleanup stale .rs files that conflict with generated directory modules.
@@ -897,6 +935,24 @@ mod cfg_gated_module_tests {
             out.contains("#[cfg(feature = \"desktop\")]\n")
                 && out.contains("pub mod desktop_app;\n"),
             "got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn extract_mod_wj_code_section_keeps_inline_struct() {
+        let existing = r#"// Auto-generated mod.rs by Windjammer CLI
+pub mod host_helpers;
+pub use host_helpers::*;
+
+// Code from mod.wj (traits, structs, impls)
+pub struct Host {
+    pub ticks: i64,
+}
+"#;
+        let body = extract_mod_wj_code_section(existing).expect("section");
+        assert!(
+            body.contains("pub struct Host"),
+            "P3.572: preserved section must include Host; got:\n{body}"
         );
     }
 }
