@@ -121,7 +121,16 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     // Match bindings (`Ok(mut app)` after `Mutex::lock`) often have no inferred
     // receiver type, so `Type::method` resolution above is skipped. Still pick a
     // codegen-refreshed `*::method` (hexagonal `app.handle` → `App::handle` `&str`).
+    // Skip bare `::get` scramble when the receiver is a map Deref wrapper — that
+    // path often picks an Owned homonym (`key.to_string()`); HashMap bridge below.
     let method_signature = method_signature.or_else(|| {
+        let base = type_name
+            .as_deref()
+            .map(|tn| tn.split('<').next().unwrap_or(tn));
+        if base.is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name)
+        {
+            return None;
+        }
         let suffix = format!("::{call_method}");
         let mut candidates: Vec<Option<crate::analyzer::FunctionSignature>> = Vec::new();
         let push_matching = |reg: &crate::analyzer::SignatureRegistry,
@@ -192,6 +201,37 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         }
         call_signature_resolution::finalize_call_site_signature(sig)
     });
+
+    // P3.576 / wj-sync: after refresh overlay, replace poisoned Owned wrapper/`*::get`
+    // with stdlib `HashMap::get` (Borrowed `&K`) for Call(FieldAccess) match scrutinees.
+    let method_signature = {
+        let hashmap_bridge =
+            crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                call_method,
+                type_name.as_deref(),
+                &gen.signature_registry,
+            )
+            .map(call_signature_resolution::finalize_call_site_signature);
+        match (method_signature, hashmap_bridge) {
+            (Some(cur), Some(hashmap)) => {
+                let pidx = cur.arg_param_index(0);
+                let poisoned_owned = matches!(
+                    cur.param_ownership.get(pidx),
+                    Some(OwnershipMode::Owned)
+                ) && !matches!(
+                    cur.param_types.get(pidx),
+                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                );
+                if poisoned_owned {
+                    Some(hashmap)
+                } else {
+                    Some(cur)
+                }
+            }
+            (None, Some(hashmap)) => Some(hashmap),
+            (other, _) => other,
+        }
+    };
 
     let mut args: Vec<String> = {
         let prev_float = gen.push_float_method_argument_context(call_method, call_obj);

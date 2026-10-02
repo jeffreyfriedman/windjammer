@@ -624,15 +624,16 @@ pub fn method_is_map_key_qualified_with_project(
         // do not force `&key` into owned Custom formals at delegation sites (dogfood txn).
         if let Some(rt) = receiver_type {
             let base = rt.split('<').next().unwrap_or(rt);
-            for reg in [project_registry, Some(registry)].into_iter().flatten() {
-                if let Some(sig) = lookup_sig(method, Some(base), reg) {
-                    if sig.has_self_receiver {
-                        // User/project self-method wins (Owned Key → not map-key; Borrowed → is).
-                        // Callers that apply key-normalize must still gate per *arg index*
-                        // (`finalize` / `is_collection_key_lookup`) so later Copy args of
-                        // methods like `has_item(item_id: string, quantity: i32)` are not
-                        // re-borrowed.
-                        return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
+            // P3.576 / wj-sync: `MutexGuard` / `RwLock*Guard` / `MapCell` are Deref wrappers
+            // over maps. A poisoned project `MutexGuard::get(Owned)` must not beat map-key
+            // consensus — fall through so `g.get(key)` emits `get(&key)`.
+            if !is_map_deref_wrapper_type_name(base) {
+                for reg in [project_registry, Some(registry)].into_iter().flatten() {
+                    if let Some(sig) = lookup_sig(method, Some(base), reg) {
+                        if sig.has_self_receiver {
+                            // User/project self-method wins (Owned Key → not map-key; Borrowed → is).
+                            return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
+                        }
                     }
                 }
             }
@@ -767,6 +768,52 @@ pub fn method_mutates_receiver(method: &str) -> bool {
 /// [`method_arg_expects_borrowed_reference_qualified`], or [`is_collection_key_lookup`].
 pub fn is_map_key_method(method: &str) -> bool {
     crate::analyzer::stdlib_method_traits::is_map_key_method(method)
+}
+
+/// Deref wrappers whose methods forward to an inner map/set (`MutexGuard<HashMap<…>>`).
+/// Used for signature bridge + map-key consensus — not an ownership oracle by itself.
+pub fn is_map_deref_wrapper_type_name(base: &str) -> bool {
+    matches!(
+        base,
+        "MutexGuard"
+            | "RwLockReadGuard"
+            | "RwLockWriteGuard"
+            | "MappedMutexGuard"
+            | "MappedRwLockReadGuard"
+            | "MappedRwLockWriteGuard"
+            | "MapCell"
+            | "Ref"
+            | "RefMut"
+    )
+}
+
+/// Stdlib `HashMap::{method}` when the receiver is a map Deref wrapper and consensus
+/// says the method is a borrowed-key lookup (P3.576 / Call(FieldAccess) match scrutinees).
+pub fn hashmap_key_method_signature_for_wrapper(
+    method: &str,
+    receiver_type: Option<&str>,
+    project_registry: &SignatureRegistry,
+) -> Option<FunctionSignature> {
+    let base = receiver_type?
+        .split('<')
+        .next()
+        .unwrap_or(receiver_type?);
+    if !is_map_deref_wrapper_type_name(base) {
+        return None;
+    }
+    if !is_map_key_method(method) {
+        return None;
+    }
+    if !method_is_map_key_qualified(method, Some("HashMap"), project_registry)
+        && !method_is_map_key_qualified(method, Some("HashMap"), SignatureRegistry::stdlib())
+    {
+        return None;
+    }
+    let key = format!("HashMap::{method}");
+    project_registry
+        .get_signature(&key)
+        .cloned()
+        .or_else(|| SignatureRegistry::stdlib().get_signature(&key).cloned())
 }
 
 /// Whether a resolved type name or [`Type`] is a map collection receiver.
@@ -1391,8 +1438,17 @@ pub fn is_collection_key_lookup_with_project(
             );
         }
         // User `NoteStore::get(id: i64)` must not inherit HashMap::get `&K`.
-        // Signature-owned first arg on a non-map receiver is not a key lookup.
-        if !callee_arg_expects_reference_param(sig, arg_index) {
+        // Signature-owned first arg on a non-map receiver is not a key lookup —
+        // unless registry consensus still classifies the receiver as a map-key
+        // wrapper (`MutexGuard` / `MapCell`, P3.576 / wj-sync `g.get(key)`).
+        if !callee_arg_expects_reference_param(sig, arg_index)
+            && !method_is_map_key_qualified_with_project(
+                method,
+                receiver_type,
+                registry,
+                project_registry,
+            )
+        {
             return false;
         }
     }
@@ -2000,6 +2056,10 @@ mod pattern_registry_tests {
             "contains_key through guard wrapper must classify as map key lookup"
         );
         assert!(
+            method_is_map_key_qualified("get", Some("MutexGuard"), &reg),
+            "get through guard wrapper must classify as map key lookup"
+        );
+        assert!(
             !method_is_map_key_qualified("remove", Some("Vec"), &reg),
             "Vec::remove(usize) must not inherit HashMap::remove borrowed-key homonym"
         );
@@ -2009,7 +2069,57 @@ mod pattern_registry_tests {
         );
     }
 
+    
     #[test]
+    
+    #[test]
+    #[test]
+    fn debug_get_suffix_conflict() {
+        let reg = SignatureRegistry::stdlib();
+        eprintln!("conflict get={}", reg.suffix_has_conflicting_first_arg_ownership("get", 1));
+        let mut owned = vec![];
+        let mut borrowed = 0usize;
+        for (name, s) in reg.all_signatures() {
+            if !name.ends_with("::get") && name != "get" {
+                continue;
+            }
+            if !s.has_self_receiver {
+                continue;
+            }
+            match s.param_ownership.get(s.arg_param_index(0)) {
+                Some(OwnershipMode::Owned) => owned.push(name.clone()),
+                Some(OwnershipMode::Borrowed) => borrowed += 1,
+                other => eprintln!("other {} {:?}", name, other),
+            }
+        }
+        eprintln!("OWNED get ({}): {:?}", owned.len(), &owned);
+        eprintln!("BORROWED get count {}", borrowed);
+    }
+
+    #[test]
+    fn mutex_guard_get_is_collection_key_lookup_p3576() {
+        let reg = SignatureRegistry::stdlib();
+        let map_get = reg.get_signature("HashMap::get").expect("HashMap::get");
+        assert!(
+            is_collection_key_lookup(map_get, 0, Some("MutexGuard")),
+            "MutexGuard + HashMap::get sig must be collection key"
+        );
+        assert!(
+            is_collection_key_lookup(map_get, 0, Some("HashMap")),
+            "HashMap::get must be collection key"
+        );
+        let mut bare = FunctionSignature::default();
+        bare.name = "get".into();
+        bare.has_self_receiver = true;
+        bare.param_ownership = vec![OwnershipMode::Owned]; // stale
+        bare.param_types = vec![Type::String];
+        assert!(
+            is_collection_key_lookup(&bare, 0, Some("MutexGuard")),
+            "stale Owned get through MutexGuard must still classify via consensus"
+        );
+    }
+
+#[test]
     fn bare_user_get_free_fn_is_not_collection_key_lookup() {
         use crate::parser::Type;
         // Phase 5 / P3.254: free-fn `get(text: string, …)` must not inherit Map::get
