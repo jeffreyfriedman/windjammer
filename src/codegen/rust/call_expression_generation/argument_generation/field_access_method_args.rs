@@ -104,6 +104,17 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         Some(arguments.len()),
                         false,
                     );
+                    // P3.576: match scrutinees parse as Call(FieldAccess); MethodCall's
+                    // collection-key finalize must run here too (`g.get(&key)`).
+                    gen.finalize_post_ir_collection_key_arg(
+                        &mut coerced,
+                        arg_to_generate,
+                        i,
+                        call_method,
+                        &qualified_name,
+                        type_name.as_deref(),
+                        &effective_sig,
+                    );
                     return vec![coerced];
                 }
                 debug_assert!(
@@ -197,6 +208,29 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             Some(call_obj),
                             Some(arguments.len()),
                             false,
+                        );
+                        gen.finalize_post_ir_collection_key_arg(
+                            &mut coerced,
+                            arg_to_generate,
+                            i,
+                            call_method,
+                            &qualified_name,
+                            type_name.as_deref(),
+                            sig,
+                        );
+                    } else if let Some(std_sig) = crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                        call_method,
+                        type_name.as_deref(),
+                        &gen.signature_registry,
+                    ) {
+                        gen.finalize_post_ir_collection_key_arg(
+                            &mut coerced,
+                            arg_to_generate,
+                            i,
+                            call_method,
+                            &qualified_name,
+                            type_name.as_deref(),
+                            &std_sig,
                         );
                     }
                     return coerced;

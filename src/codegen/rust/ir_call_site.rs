@@ -365,6 +365,64 @@ impl<'ast> CodeGenerator<'ast> {
         would_be_ck
     }
 
+    /// After IR coercion: ensure map/set key args borrow (`&key`), including when the
+    /// resolved contract was a poisoned Owned `get` on a `MutexGuard` / map wrapper.
+    /// Shared by MethodCall and Call(FieldAccess) (match scrutinees parse as the latter).
+    pub(crate) fn finalize_post_ir_collection_key_arg(
+        &self,
+        coerced: &mut String,
+        arg: &Expression<'ast>,
+        arg_index: usize,
+        method: &str,
+        qualified_callee: &str,
+        receiver_rt: Option<&str>,
+        contract_sig: &crate::analyzer::FunctionSignature,
+    ) {
+        let key_receiver =
+            crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
+                qualified_callee,
+                receiver_rt,
+                contract_sig,
+            );
+        let mut key_sig = contract_sig.clone();
+        let mut key_rt = key_receiver;
+        let mut is_ck = self.is_collection_key_lookup_at_site(&key_sig, arg_index, key_rt.as_deref());
+        if !is_ck {
+            if let Some(std_sig) =
+                crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                    method,
+                    receiver_rt.or(key_rt.as_deref()),
+                    &self.signature_registry,
+                )
+            {
+                if self.is_collection_key_lookup_at_site(&std_sig, arg_index, Some("HashMap")) {
+                    key_sig = std_sig;
+                    key_rt = Some("HashMap".into());
+                    is_ck = true;
+                }
+            }
+        }
+        if !is_ck {
+            return;
+        }
+        if coerced.ends_with(".to_string()")
+            && !crate::codegen::rust::string_utilities::is_genuine_non_literal_to_string_conversion(
+                arg,
+            )
+        {
+            *coerced = coerced.trim_end_matches(".to_string()").to_string();
+        }
+        crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
+            Some(&key_sig),
+            arg_index,
+            arg,
+            coerced,
+            false,
+            key_rt.as_deref(),
+            false,
+        );
+    }
+
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
     ///
     /// For known callees this is total: always returns `Some` when `call_sites` is on.
