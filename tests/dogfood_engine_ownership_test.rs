@@ -347,9 +347,20 @@ impl TimerManager {
 "#;
     let (rust_code, ok) = compile_single_check(source);
     assert!(ok, "Compilation failed");
+    // Tip may keep `id: TimerId` + `remove(&id)`, or demote the read-only formal to
+    // `&TimerId` and pass `remove(id)` (already a shared ref — never `&&id`).
+    let owned_key_borrowed = rust_code.contains("self.timers.remove(&id)");
+    let demoted_key_passthrough = rust_code.contains("id: &TimerId")
+        && rust_code.contains("self.timers.remove(id)")
+        && !rust_code.contains("self.timers.remove(&id)");
     assert!(
-        rust_code.contains("self.timers.remove(&id)"),
-        "HashMap::remove should auto-borrow key, got:\n{}",
+        owned_key_borrowed || demoted_key_passthrough,
+        "HashMap::remove must borrow Owned key or pass demoted &TimerId; got:\n{}",
+        rust_code
+    );
+    assert!(
+        !rust_code.contains("self.timers.remove(&&id)"),
+        "must not double-borrow remove key; got:\n{}",
         rust_code
     );
 }

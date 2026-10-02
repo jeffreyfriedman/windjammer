@@ -1,5 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.581 (2026-10-02) — `NoteStore::get(id)` must not inherit HashMap::get `&K`
+
+Multipass `store.get(&id)` into `NoteStore::get(id: i64)` E0308. Field site
+`self.notes.get(&id)` was already correct; consumer files treated unregistered
+`NoteStore` as map-key consensus.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_field_get_i64_key_must_auto_borrow` | ✅ tip GREEN — `&id` in store, bare `id` at lookup |
+| `map_key_lookup_with_non_map_receiver_type_name` | ✅ lib GREEN — NoteStore + MemoryEngine + wrappers |
+
+**Root cause layer:** signature — `method_is_map_key_qualified` no longer falls
+through to HashMap consensus for concrete non-wrapper user types lacking a
+registered `Type::get`.
+
+**What became unnecessary:** borrowing Copy `i64` into Owned user `get` formals.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3580b`
+- `cargo test --release -p windjammer --lib -- map_key_lookup_with_non_map_receiver`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- hashmap_field_get_i64_key_must_auto_borrow`
+- `test_hashmap_remove_auto_borrows_key` → tip-truth: allow demoted `&TimerId` + `remove(id)`
+
 ## P3.580b (2026-10-02) — runtime scan: `F: Fn(...)` → FunctionPointer (`Server::serve`)
 
 Scanner registered `handler: F` as `Custom("F")` and dropped multi-line `where`
