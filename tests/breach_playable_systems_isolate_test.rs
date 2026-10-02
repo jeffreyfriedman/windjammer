@@ -41,7 +41,14 @@ pub fn tick_playable(world: PlayableWorld, hold_forward: bool, fire: bool, dt: f
 }
 "#;
 
-fn isolate(src: &str) -> String {
+fn isolate_compile(src: &str) -> String {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", src);
+    let map = test.compile().expect("bp systems compile");
+    map.get("lib.rs").expect("lib.rs").clone()
+}
+
+fn isolate_check(src: &str) -> String {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", src);
     let map = test.compile().expect("bp systems compile");
@@ -60,14 +67,15 @@ fn product() -> String {
 
 #[test]
 fn breach_playable_systems_stub_stays_red() {
-    let rs = isolate(STUB);
+    // Compile-only: avoid parallel cargo-check lock contention with the green test.
+    let rs = isolate_compile(STUB);
     assert!(!rs.contains("wj-panel"));
     assert!(!rs.contains("ammo -= 1") && !rs.contains("ammo - 1"));
 }
 
 #[test]
 fn breach_playable_systems_must_fire_move_and_ui_hud() {
-    let rs = isolate(&product());
+    let rs = isolate_check(&product());
     assert!(
         !rs.contains("ffi::") && !rs.contains("extern fn"),
         "systems must not call FFI:\n{rs}"
