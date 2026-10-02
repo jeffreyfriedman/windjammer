@@ -103,3 +103,23 @@ pub fn run_server() {
     );
     test.assert_compiles_without_error();
 }
+
+/// P3.580b: runtime scan must register `Server::serve` handler as fn-pointer (`Fn` bound),
+/// not bare `Custom(F)`, so closure sites set `call_arg_expected_type` without fail-open.
+#[test]
+fn server_serve_runtime_signature_handler_is_function_pointer() {
+    let mut reg = windjammer::analyzer::SignatureRegistry::new();
+    windjammer::stdlib_scanner::populate_runtime_signatures(&mut reg)
+        .expect("scan windjammer-runtime");
+    let sig = reg
+        .get_signature("Server::serve")
+        .expect("Server::serve");
+    let handler = sig.param_types.get(1).expect("handler formal");
+    assert!(
+        matches!(
+            handler,
+            windjammer::parser::Type::FunctionPointer { .. }
+        ),
+        "Server::serve handler must be FunctionPointer after Fn-bound scan, got {handler:?}"
+    );
+}

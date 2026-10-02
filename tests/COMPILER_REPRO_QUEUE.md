@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.580b (2026-10-02) — runtime scan: `F: Fn(...)` → FunctionPointer (`Server::serve`)
+
+Scanner registered `handler: F` as `Custom("F")` and dropped multi-line `where`
+clauses, so `call_arg_expected_type` stayed `None` at serve closures (P3.580
+fail-open). Accumulate fn headers through `{` and rewrite Fn/FnMut bounds to
+`FunctionPointer` (`FnOnce` → `Custom("FnOnce")`).
+
+| Gate | Status |
+|------|--------|
+| `parse_serve_fn_bound_handler_as_function_pointer` | ✅ lib GREEN |
+| `scanned_runtime_server_serve_handler_is_fn_pointer` | ✅ lib GREEN |
+| `server_serve_runtime_signature_handler_is_function_pointer` | ✅ tip GREEN |
+| `serve_closure_passes_request_to_handler_without_double_borrow` | ✅ still GREEN |
+
+**Root cause layer:** signature (runtime boundary registry)
+
+**What became unnecessary:** relying solely on P3.580 fail-open when serve's
+enclosing formal type was missing (`Custom(F)`).
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3580b`
+- `cargo test --release -p windjammer --lib -- parse_serve_fn_bound scanned_runtime_server_serve`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- serve_closure server_serve_runtime_signature`
+
 ## P3.580 (2026-10-02) — `Server::serve` Fn closure: clone outer Owned captures
 
 `serve(|request| handle_request(request, deps))` emitted `move |request| handle_request(request, deps)` → E0507 (`Fn` may invoke many times). `thread::spawn` stays FnOnce (move OK).

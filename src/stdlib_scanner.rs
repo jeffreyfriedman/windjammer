@@ -146,15 +146,46 @@ fn scan_rust_file(
     let mut struct_body_depth: Option<i32> = None;
     let mut pending_struct_derives_copy: Option<bool> = None;
     let mut pending_struct_derives_clone: Option<bool> = None;
+    // Accumulate `pub fn … where … {` headers so `F: Fn(...)` bounds are visible.
+    let mut pending_fn_header: Option<String> = None;
 
     for line in content.lines() {
         let trimmed = line.trim();
+        if let Some(mut header) = pending_fn_header.take() {
+            if !trimmed.is_empty() {
+                header.push(' ');
+                header.push_str(trimmed);
+            }
+            let header_done = header.contains('{') || trimmed.ends_with(';');
+            if header_done {
+                if let Some(sig) = parse_function_signature(&header, module_name) {
+                    let mark_sanitizer = pending_sanitizer;
+                    pending_sanitizer = false;
+                    register_scanned_runtime_signature(
+                        registry,
+                        module_name,
+                        sig,
+                        current_impl.as_deref(),
+                        mark_sanitizer,
+                    );
+                }
+            } else {
+                pending_fn_header = Some(header);
+            }
+            // Still track braces / impl / struct state for this physical line below.
+        } else if trimmed.starts_with("pub fn ")
+            && !trimmed.contains('{')
+            && !trimmed.ends_with(';')
+        {
+            pending_fn_header = Some(trimmed.to_string());
+        }
         if is_wj_taint_sanitizer_comment(trimmed) {
             pending_sanitizer = true;
         } else if !trimmed.is_empty()
             && !trimmed.starts_with("//")
             && !trimmed.starts_with("///")
             && !trimmed.starts_with("#[")
+            && pending_fn_header.is_none()
             && parse_function_signature(trimmed, module_name).is_none()
         {
             pending_sanitizer = false;
@@ -219,16 +250,19 @@ fn scan_rust_file(
             }
         }
 
-        if let Some(sig) = parse_function_signature(trimmed, module_name) {
-            let mark_sanitizer = pending_sanitizer;
-            pending_sanitizer = false;
-            register_scanned_runtime_signature(
-                registry,
-                module_name,
-                sig,
-                current_impl.as_deref(),
-                mark_sanitizer,
-            );
+        // Single-line `pub fn … {` (multi-line headers registered via pending_fn_header).
+        if pending_fn_header.is_none() {
+            if let Some(sig) = parse_function_signature(trimmed, module_name) {
+                let mark_sanitizer = pending_sanitizer;
+                pending_sanitizer = false;
+                register_scanned_runtime_signature(
+                    registry,
+                    module_name,
+                    sig,
+                    current_impl.as_deref(),
+                    mark_sanitizer,
+                );
+            }
         }
     }
 
@@ -653,6 +687,14 @@ fn parse_impl_type_name(trimmed: &str) -> Option<String> {
 }
 
 fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignature> {
+    // Collapse multi-line headers (`where F: Fn(...)`) so scanners can pass
+    // accumulated `pub fn … {` spans (P3.580b Server::serve).
+    let line = line
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
     let line = line.trim();
 
     // Must start with "pub fn"
@@ -672,11 +714,13 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
     let param_ownership = parse_parameters(&params_str, &asref_borrow_type_params);
     let emitted_rust_ref_params =
         parse_emitted_rust_ref_flags(&params_str, &asref_borrow_type_params);
-    let param_types = parse_param_types(
+    let mut param_types = parse_param_types(
         &params_str,
         &asref_borrow_type_params,
         &asref_path_type_params,
     );
+    // `F: Fn(A) -> R` (where clause or inline generic bound) → FunctionPointer.
+    apply_fn_trait_bounds_to_param_types(&mut param_types, &generics_str, &after_params);
     let has_self_receiver = first_param_is_self_receiver(&params_str);
 
     // Build full name with module prefix
@@ -696,6 +740,132 @@ fn parse_function_signature(line: &str, module: &str) -> Option<FunctionSignatur
         field_extract_params: None,
         forwarding_borrow_params: None,
     })
+}
+
+/// Rewrite bare generic params (`handler: F`) when `F: Fn(...)` / `FnMut` / `FnOnce`.
+fn apply_fn_trait_bounds_to_param_types(
+    param_types: &mut [Type],
+    generics_str: &str,
+    after_params: &str,
+) {
+    let mut bounds = fn_trait_bounds_from_text(generics_str);
+    bounds.extend(fn_trait_bounds_from_text(after_params));
+    if bounds.is_empty() {
+        return;
+    }
+    for ty in param_types.iter_mut() {
+        if let Type::Custom(name) = ty {
+            if let Some(fp) = bounds.get(name.as_str()) {
+                *ty = fp.clone();
+            }
+        }
+    }
+}
+
+/// Map type-param name → `FunctionPointer` from `F: Fn(A) -> R + Send` clauses.
+fn fn_trait_bounds_from_text(text: &str) -> std::collections::HashMap<String, Type> {
+    let mut out = std::collections::HashMap::new();
+    let mut search = text;
+    while let Some(fn_at) = search.find("Fn") {
+        let trait_name = if search[fn_at..].starts_with("FnOnce") {
+            "FnOnce"
+        } else if search[fn_at..].starts_with("FnMut") {
+            "FnMut"
+        } else if search[fn_at..].starts_with("Fn") {
+            // Reject `FnOnce`/`FnMut` already handled; bare `Fn` must not be a prefix of a longer ident.
+            let rest = &search[fn_at + 2..];
+            if rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_') {
+                search = &search[fn_at + 2..];
+                continue;
+            }
+            "Fn"
+        } else {
+            search = &search[fn_at + 2..];
+            continue;
+        };
+        let after_trait = &search[fn_at + trait_name.len()..];
+        let Some(paren) = after_trait.find('(') else {
+            search = &search[fn_at + trait_name.len()..];
+            continue;
+        };
+        // Walk back from `Fn` for `ParamName: Fn(`
+        let before = &search[..fn_at];
+        let name_end = before.rfind(':').unwrap_or(0);
+        let name_region = before[..name_end].trim_end();
+        let param_name = name_region
+            .rsplit(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+            .next()
+            .unwrap_or("")
+            .trim();
+        if param_name.is_empty() {
+            search = &search[fn_at + trait_name.len()..];
+            continue;
+        }
+        let params_start = paren + 1;
+        let Some(params_end) = matching_paren_end(after_trait, paren) else {
+            search = &search[fn_at + trait_name.len()..];
+            continue;
+        };
+        let params_inner = after_trait[params_start..params_end].trim();
+        let params = if params_inner.is_empty() {
+            Vec::new()
+        } else {
+            split_top_level_commas(params_inner)
+                .into_iter()
+                .map(|p| parse_owned_rust_type_name(p.trim()))
+                .collect()
+        };
+        let after_params = after_trait[params_end + 1..].trim_start();
+        let return_type = if let Some(rest) = after_params.strip_prefix("->") {
+            let ret = rest
+                .split('+')
+                .next()
+                .unwrap_or(rest)
+                .split(',')
+                .next()
+                .unwrap_or(rest)
+                .split('{')
+                .next()
+                .unwrap_or(rest)
+                .trim();
+            if ret.is_empty() || ret == "()" {
+                Some(Box::new(Type::Tuple(vec![])))
+            } else {
+                Some(Box::new(parse_owned_rust_type_name(ret)))
+            }
+        } else {
+            None
+        };
+        // FnOnce stays Custom("FnOnce") so call sites may move captures; Fn/FnMut → fn-ptr.
+        let mapped = if trait_name == "FnOnce" {
+            Type::Custom("FnOnce".into())
+        } else {
+            Type::FunctionPointer {
+                params,
+                return_type,
+            }
+        };
+        out.insert(param_name.to_string(), mapped);
+        search = &search[fn_at + trait_name.len()..];
+    }
+    out
+}
+
+fn matching_paren_end(s: &str, open_idx: usize) -> Option<usize> {
+    let mut depth = 0i32;
+    for (i, c) in s[open_idx..].char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open_idx + i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn first_param_is_self_receiver(params_str: &str) -> bool {
@@ -1723,6 +1893,44 @@ mod tests {
         assert!(
             reg.get_signature("DirEntry::file_name").is_some(),
             "DirEntry::file_name must register from fs.rs impl scan"
+        );
+    }
+
+    #[test]
+    fn parse_serve_fn_bound_handler_as_function_pointer() {
+        let src = r#"
+            pub fn serve<F>(self, handler: F) -> Result<(), String>
+            where
+                F: Fn(ServerRequest) -> ServerResponse + Send + Sync + 'static,
+            {
+        "#;
+        let sig = parse_function_signature(src, "http").expect("parse serve");
+        let handler = &sig.param_types[1];
+        assert!(
+            matches!(handler, Type::FunctionPointer { .. }),
+            "expected FunctionPointer from Fn bound, got {:?}",
+            handler
+        );
+    }
+
+    #[test]
+    fn scanned_runtime_server_serve_handler_is_fn_pointer() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        let sig = reg
+            .get_signature("Server::serve")
+            .expect("Server::serve must register from http.rs");
+        assert!(sig.has_self_receiver);
+        // handler formal: fn(ServerRequest) -> ServerResponse (Fn bound), not bare Custom(F)
+        let handler = sig
+            .param_types
+            .get(1)
+            .expect("serve(self, handler)");
+        assert!(
+            matches!(handler, Type::FunctionPointer { .. })
+                || matches!(handler, Type::Custom(n) if n == "Fn" || n == "FnMut"),
+            "Server::serve handler must be multi-invoke closure formal, got {:?}",
+            handler
         );
     }
 
