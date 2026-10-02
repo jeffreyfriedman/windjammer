@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.580 (2026-10-02) — `Server::serve` Fn closure: clone outer Owned captures
+
+`serve(|request| handle_request(request, deps))` emitted `move |request| handle_request(request, deps)` → E0507 (`Fn` may invoke many times). `thread::spawn` stays FnOnce (move OK).
+
+| Gate | Status |
+|------|--------|
+| `serve_closure_passes_request_to_handler_without_double_borrow` | ✅ tip GREEN — `deps.clone()` |
+| `bug_thread_spawn_closure_must_not_be_ref` / spawn move / mpsc sync_channel | ✅ still GREEN |
+
+**Root cause layer:** coercion/encoding — `compute_coercion` Identity Owned→Owned upgraded to Clone when the enclosing formal is multi-invoke (`Fn`/`FnMut`/fn-ptr). Flag from `call_arg_expected_type` via `formal_is_multi_invoke_closure_trait` (not callee name). When enclosing formal type is missing at the closure site, fail open to multi-invoke if the closure captures outer vars (safer than move into `Fn`); FnOnce sites register FnOnce/fn-ptr.
+
+**What became unnecessary:** bare move of non-Copy outer captures into Owned formals inside `Fn` handlers.
+
+**Follow-up (signature):** `Server::serve` still leaves `call_arg_expected_type=None` at the closure arg in this fixture — wire FunctionPointer from std `http.wj` so the fail-open path is unused.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3580`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- serve_closure_passes_request_to_handler_without_double_borrow bug_thread_spawn_closure_must_not_be_ref bug_mpsc_sync_channel_boundary_signature thread_spawn_move_keyword_must_be_preserved` → **7 passed**
+
+**Do not steal:** WDB tip-outs / WDB-430.
+
 ## P3.579 (2026-10-02) — tip-truth: read-only Custom / &str demote is consistent
 
 Suite FAILs required owned `MultipartBody` / `VoxelGrid` formals and

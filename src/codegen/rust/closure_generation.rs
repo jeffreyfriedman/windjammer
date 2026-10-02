@@ -57,9 +57,20 @@ impl<'ast> CodeGenerator<'ast> {
 
         // For user-written closures, set flag and track params to suppress transformations
         let prev_in_user_closure = self.in_user_written_closure;
+        let prev_multi_invoke = self.closure_multi_invoke_captures;
         let mut prev_closure_params = None;
         if !is_compiler_generated {
             self.in_user_written_closure = true;
+            // Signature-driven: `serve(|req| …)` / `Fn`/`FnMut` may invoke many times;
+            // `spawn(move || …)` is FnOnce and may move captures once.
+            // Missing enclosing formal: fail open to multi-invoke (clone) — safer than a
+            // move into `Fn`. FnOnce sites (`thread::spawn`) register FnOnce/fn-ptr.
+            self.closure_multi_invoke_captures = match self.call_arg_expected_type.as_ref() {
+                Some(ty) => crate::codegen::rust::stdlib_method_traits::formal_is_multi_invoke_closure_trait(
+                    ty,
+                ),
+                None => captures_outer,
+            };
             prev_closure_params = Some(std::mem::take(&mut self.user_closure_params));
             for param in parameters {
                 self.user_closure_params
@@ -71,6 +82,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         if !is_compiler_generated {
             self.in_user_written_closure = prev_in_user_closure;
+            self.closure_multi_invoke_captures = prev_multi_invoke;
             if let Some(prev_params) = prev_closure_params {
                 self.user_closure_params = prev_params;
             }
