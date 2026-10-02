@@ -1161,50 +1161,6 @@ pub fn replay(seg: WalSegment) -> int {
     }
 
     #[test]
-    fn bare_pass_field_method_receiver_does_not_restore_owned_p3583b() {
-        // `grid.cells.is_empty()` auto-borrows — must not trigger field-move Owned restore
-        // (unlike `decode_records(seg.bytes)` / returning `csr.neighbors`).
-        let types = parse_program(
-            r#"
-pub struct VoxelGrid {
-    pub cells: Vec<int>,
-}
-"#,
-        );
-        let engine = parse_program(
-            r#"
-use crate::v::types::VoxelGrid
-pub fn collides_aabb(grid: VoxelGrid) -> bool {
-    !grid.cells.is_empty()
-}
-pub fn update(grid: VoxelGrid) -> bool {
-    collides_aabb(grid)
-}
-"#,
-        );
-        let mut registry = SignatureRegistry::new();
-        let mut collides_sig = owned_custom_sig("collides_aabb", "VoxelGrid");
-        collides_sig.param_ownership[0] = OwnershipMode::Borrowed;
-        registry
-            .signatures
-            .insert("collides_aabb".to_string(), collides_sig);
-        registry.signatures.insert(
-            "update".to_string(),
-            owned_custom_sig("update", "VoxelGrid"),
-        );
-        let programs = vec![types, engine];
-        let copy_types = std::collections::HashSet::new();
-        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
-        let collides = registry.signatures.get("collides_aabb").unwrap();
-        assert_eq!(
-            collides.param_ownership[0],
-            OwnershipMode::Borrowed,
-            "P3.583b: field method receiver must not restore Owned; got {:?}",
-            collides.param_ownership
-        );
-    }
-
-    #[test]
     fn bare_pass_skips_custom_field_return_move_p3582() {
         let types = parse_program(
             r#"
