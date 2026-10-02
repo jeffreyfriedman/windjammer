@@ -291,6 +291,9 @@ impl AutoCloneAnalysis {
                     registry,
                 );
                 for arm in arms {
+                    // P3.574 / wj-cron: `Ok(expr) => { matches_cron(expr); matches_cron(expr) }`
+                    // must see `expr` as a defined binding so sequential moves get `.clone()`.
+                    Self::register_pattern_definitions(&arm.pattern, idx, in_loop, map);
                     // Process arm body blocks using the parent counter (like
                     // Statement::If does for then_block/else_block) so that
                     // statement indices stay synchronized with the codegen's
@@ -1136,7 +1139,10 @@ impl AutoCloneAnalysis {
         map: &mut HashMap<String, Vec<Usage>>,
     ) {
         match pattern {
-            crate::parser::Pattern::Identifier(name) => {
+            crate::parser::Pattern::Identifier(name)
+            | crate::parser::Pattern::MutBinding(name)
+            | crate::parser::Pattern::Ref(name)
+            | crate::parser::Pattern::RefMut(name) => {
                 map.entry(name.clone()).or_default().push(Usage {
                     statement_idx,
                     kind: UsageKind::Definition,
@@ -1153,7 +1159,41 @@ impl AutoCloneAnalysis {
                     Self::register_pattern_definitions(p, statement_idx, in_loop, map);
                 }
             }
-            _ => {}
+            crate::parser::Pattern::Or(patterns) => {
+                for p in patterns {
+                    Self::register_pattern_definitions(p, statement_idx, in_loop, map);
+                }
+            }
+            crate::parser::Pattern::Reference(inner) => {
+                Self::register_pattern_definitions(inner, statement_idx, in_loop, map);
+            }
+            crate::parser::Pattern::EnumVariant(_, binding) => match binding {
+                crate::parser::EnumPatternBinding::Single(name) => {
+                    map.entry(name.clone()).or_default().push(Usage {
+                        statement_idx,
+                        kind: UsageKind::Definition,
+                        is_move: false,
+                        in_loop,
+                        is_projection_parent: false,
+                        in_exclusive_match_arm: false,
+                        in_diverging_early_return: false,
+                        diverging_region_end: 0,
+                    });
+                }
+                crate::parser::EnumPatternBinding::Tuple(patterns) => {
+                    for p in patterns {
+                        Self::register_pattern_definitions(p, statement_idx, in_loop, map);
+                    }
+                }
+                crate::parser::EnumPatternBinding::Struct(fields, _) => {
+                    for (_, p) in fields {
+                        Self::register_pattern_definitions(p, statement_idx, in_loop, map);
+                    }
+                }
+                crate::parser::EnumPatternBinding::None
+                | crate::parser::EnumPatternBinding::Wildcard => {}
+            },
+            crate::parser::Pattern::Wildcard | crate::parser::Pattern::Literal(_) => {}
         }
     }
 
@@ -1984,6 +2024,128 @@ mod tests {
         assert_eq!(
             analysis.needs_clone("x", 1),
             Some(&CloneReason::MovedButUsedLater)
+        );
+    }
+
+    #[test]
+    fn match_ok_binding_reuse_in_arm_block_needs_clone() {
+        // P3.574: Ok(expr) => { takes(expr); takes(expr) } must clone the first move.
+        let arm_block = test_alloc_expr(Expression::Block {
+            statements: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("a".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "takes".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "expr".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("b".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "takes".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![(
+                            None,
+                            test_alloc_expr(Expression::Identifier {
+                                name: "expr".to_string(),
+                                location: None,
+                            }),
+                        )],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Expression {
+                    expr: test_alloc_expr(Expression::Binary {
+                        left: test_alloc_expr(Expression::Identifier {
+                            name: "a".to_string(),
+                            location: None,
+                        }),
+                        op: crate::parser::BinaryOp::And,
+                        right: test_alloc_expr(Expression::Identifier {
+                            name: "b".to_string(),
+                            location: None,
+                        }),
+                        location: None,
+                    }),
+                    location: None,
+                }),
+            ],
+            location: None,
+            is_unsafe: false,
+        });
+        let func = FunctionDecl {
+            name: "test_reuse".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![test_alloc_stmt(Statement::Match {
+                value: test_alloc_expr(Expression::Call {
+                    function: test_alloc_expr(Expression::Identifier {
+                        name: "parse".to_string(),
+                        location: None,
+                    }),
+                    arguments: vec![],
+                    location: None,
+                }),
+                arms: vec![
+                    crate::parser::MatchArm {
+                        pattern: Pattern::EnumVariant(
+                            "Ok".to_string(),
+                            crate::parser::EnumPatternBinding::Single("expr".to_string()),
+                        ),
+                        guard: None,
+                        body: arm_block,
+                    },
+                    crate::parser::MatchArm {
+                        pattern: Pattern::EnumVariant(
+                            "Err".to_string(),
+                            crate::parser::EnumPatternBinding::Wildcard,
+                        ),
+                        guard: None,
+                        body: test_alloc_expr(Expression::Literal {
+                            value: Literal::Bool(false),
+                            location: None,
+                        }),
+                    },
+                ],
+                location: None,
+            })],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone_anywhere("expr"),
+            "P3.574: Ok(expr) arm reuse must schedule clone; sites={:?}",
+            analysis.clone_sites
         );
     }
 
