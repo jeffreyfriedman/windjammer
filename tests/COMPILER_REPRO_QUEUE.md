@@ -1,5 +1,52 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.576 (2026-10-02) — MutexGuard HashMap get key borrow (wj-sync SharedMapSI)
+
+`match g.get(key)` after `Mutex::lock` parses as `Call(FieldAccess)`, not
+`MethodCall`. Suffix/`*::get` scramble picked an Owned homonym →
+`g.get(key.to_string())`. MethodCall path already had map-key finalize;
+Call path did not.
+
+| Gate | Status |
+|------|--------|
+| `mutex_guard_hashmap_string_key_must_borrow` | ✅ tip GREEN — `g.get(&key)` + `contains_key(&key)` + cargo-check |
+| `hashmap_get_through_mutex_guard_*` / `module_file_shared_map_get_*` | ✅ still GREEN (5 passed) |
+| spawn / mpsc | leave alone (already GREEN) |
+
+**Root cause layer:** signature bridge — `MutexGuard` / map Deref wrappers prefer
+stdlib `HashMap::{get,contains_key,…}` (Borrowed `&K`) over poisoned Owned
+`*::get`; shared post-IR collection-key finalize for Call(FieldAccess) + MethodCall.
+
+**What became unnecessary:** MethodCall-only HashMap fallback + DEBUG peels;
+bare `::get` suffix scramble on map Deref wrappers.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3575`
+- `cargo test --release --test all -- mutex_guard_hashmap_string_key` → GREEN
+- `… -- hashmap_get_through_mutex_guard module_file_shared_map_get` → 5 passed
+- `… -- vec_index_reuse_must_clone match_arm_owned_binding_reuse mutex_guard_hashmap` → 3 passed
+
+**Do not steal:** WDB-406/408/411/429–430, P3.573 TDD, tip-outs.
+
+## P3.575 (2026-10-02) — Vec index reuse into owned let must `.clone()` (wj-csv)
+
+`let headers = rows[0]` then later `rows[i]` / `Ok((headers, data))` emitted
+`let headers: Vec<String> = &rows[0]` (E0308). Tuple/Array uses were not
+classified as `Moved`, so `variable_is_only_field_accessed` falsely kept a
+borrow-only let RHS.
+
+| Gate | Status |
+|------|--------|
+| `vec_index_reuse_must_clone_into_owned_let` | ✅ tip GREEN — `rows[0].clone()` + cargo-check |
+
+**Root cause layer:** constraint/usage classification — walk Tuple/Array elements
+for `Moved` (same as other composite exprs).
+
+**What became unnecessary:** false “field-only” borrow let for indexed Vec rows
+consumed via tuple returns.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3575`
+- `cargo test --release --test all -- vec_index_reuse_must_clone_into_owned_let` → GREEN
+
 ## P3.574 (2026-10-02) — match-arm owned payload reuse must `.clone()` (wj-cron E0382)
 
 `Ok(expr) => { matches_cron(expr); matches_cron(expr) }` moved `CronExpr` twice
@@ -1575,7 +1622,7 @@ Owned `Vec` formal moved into a callee inside `if` must not `.clone()`.
 
 | Gate | Status |
 |------|--------|
-| `split_query_list_then_get_must_not_mut_query` | ❌ isolate RED — hexagonal `NotesApp` + store + `split_path_query`; GET-one emits `note_get_reply(&mut note, …, query.clone())` on immutable `Some(note)` (E0596) |
+| `split_query_list_then_get_must_not_mut_query` | ✅ isolate GREEN (re-verified 2026-10-02 tip p3574) |
 | `notes_api_product_remaining_e0308_must_not_emit` | ❌ product RED — `note_get_reply(&mut note, if_none_match, &mut query)` into `query: String` (E0308) |
 
 **Why this is a new class:**

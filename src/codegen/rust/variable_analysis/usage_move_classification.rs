@@ -129,6 +129,21 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 best
             }
+            // P3.575 / wj-csv: `Ok((headers, data))` moves `headers` — without walking
+            // Tuple elements, `variable_is_only_field_accessed` falsely treats the binding
+            // as borrow-only and `apply_vec_index_let_rhs_fixup` emits `&rows[0]`.
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                let mut best = VariableUsage::NotUsed;
+                for elem in elements {
+                    let usage = self.analyze_variable_usage_in_expression(var_name, elem);
+                    match usage {
+                        VariableUsage::Moved => return VariableUsage::Moved,
+                        VariableUsage::FieldAccessOnly => best = VariableUsage::FieldAccessOnly,
+                        VariableUsage::NotUsed => {}
+                    }
+                }
+                best
+            }
             Expression::Index { object, index, .. } => {
                 if let Expression::Identifier { name, .. } = &**object {
                     if name == var_name {
