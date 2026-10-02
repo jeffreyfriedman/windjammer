@@ -674,9 +674,107 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(t) = self.infer_expression_type(bound) {
             if matches!(t, Type::Uint) || matches!(&t, Type::Custom(n) if n == "u32") {
                 *peer = Some(Type::Uint);
+                return;
             } else if matches!(t, Type::Int32) || matches!(&t, Type::Custom(n) if n == "i32") {
                 *peer = Some(Type::Int32);
+                return;
             }
+        }
+        // P3.578: `let half = n / 2` may still be recorded as WJ `int` while emit uses
+        // `2_u32` (u32 peer). Resolve Identifier bounds through their let RHS / params.
+        if let Expression::Identifier { name: bound_name, .. } = bound {
+            let body: Vec<&crate::parser::Statement> =
+                if !self.full_function_body_snapshot.is_empty() {
+                    self.full_function_body_snapshot.iter().copied().collect()
+                } else {
+                    self.current_function_body.iter().copied().collect()
+                };
+            if let Some(rhs) = Self::find_let_rhs_in_stmts(&body, bound_name) {
+                if let Some(t) = self.u32_width_from_expr_for_while_peer(rhs) {
+                    *peer = Some(t);
+                    return;
+                }
+            }
+            if let Some(t) = self.u32_width_from_expr_for_while_peer(bound) {
+                *peer = Some(t);
+            }
+        }
+    }
+
+    /// P3.578 / P3.348: walk an expression for a concrete `u32` width (param, local,
+    /// `pixel_count() -> u32`, or binary with a u32 operand + untyped int lit).
+    fn u32_width_from_expr_for_while_peer(&self, expr: &Expression<'ast>) -> Option<Type> {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
+                }) {
+                    return Some(Type::Uint);
+                }
+                if self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && (matches!(p.type_, Type::Uint)
+                            || matches!(&p.type_, Type::Custom(n) if n == "u32"))
+                }) {
+                    return Some(Type::Uint);
+                }
+                let body: Vec<&crate::parser::Statement> =
+                    if !self.full_function_body_snapshot.is_empty() {
+                        self.full_function_body_snapshot.iter().copied().collect()
+                    } else {
+                        self.current_function_body.iter().copied().collect()
+                    };
+                if let Some(rhs) = Self::find_let_rhs_in_stmts(&body, name) {
+                    return self.u32_width_from_expr_for_while_peer(rhs);
+                }
+                None
+            }
+            Expression::Binary { left, right, .. } => {
+                let l = self.u32_width_from_expr_for_while_peer(left);
+                let r = self.u32_width_from_expr_for_while_peer(right);
+                let untyped_lit = |e: &Expression| {
+                    matches!(
+                        e,
+                        Expression::Literal {
+                            value: Literal::Int(_),
+                            ..
+                        }
+                    )
+                };
+                match (l, r) {
+                    (Some(t), _) | (_, Some(t)) => Some(t),
+                    (None, None)
+                        if (untyped_lit(left) || untyped_lit(right))
+                            && (self.infer_expression_type(left).is_some_and(|t| {
+                                matches!(t, Type::Uint)
+                                    || matches!(t, Type::Custom(n) if n == "u32")
+                            }) || self.infer_expression_type(right).is_some_and(|t| {
+                                matches!(t, Type::Uint)
+                                    || matches!(t, Type::Custom(n) if n == "u32")
+                            })) =>
+                    {
+                        Some(Type::Uint)
+                    }
+                    _ => None,
+                }
+            }
+            Expression::Call { .. } | Expression::MethodCall { .. } => {
+                self.infer_expression_type(expr).and_then(|t| {
+                    if matches!(t, Type::Uint) || matches!(&t, Type::Custom(n) if n == "u32") {
+                        Some(Type::Uint)
+                    } else {
+                        None
+                    }
+                })
+            }
+            Expression::Cast { type_, .. } => {
+                if matches!(type_, Type::Uint) || matches!(type_, Type::Custom(n) if n == "u32") {
+                    Some(Type::Uint)
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 

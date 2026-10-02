@@ -538,7 +538,17 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 match (l, r) {
                     (Some(a), Some(b)) if a != b => {
-                        if matches!(a, Type::Int)
+                        let is_u32 = |t: &Type| {
+                            matches!(t, Type::Uint)
+                                || matches!(t, Type::Custom(n) if n == "u32")
+                        };
+                        // P3.578: `n / 2` with `n: u32` must stay u32 — do not let the
+                        // untyped literal's default WJ `int` widen the binding (paint half).
+                        if is_u32(&a) && untyped_int_lit(right) {
+                            Some(a)
+                        } else if is_u32(&b) && untyped_int_lit(left) {
+                            Some(b)
+                        } else if matches!(a, Type::Int)
                             && Self::assignment_target_needs_int_codegen_context(&b)
                             && !matches!(b, Type::Int)
                             && !untyped_int_lit(right)

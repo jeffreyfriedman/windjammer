@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.578 (2026-10-02) — u32 `while i < half` after `half = n / 2` (P3.348 paint)
+
+`let half = n / 2` with `n: u32` was recorded as WJ `int` (untyped lit peer), so
+`let mut i = 0` stayed `_i64` while `half` emitted `_u32` → E0308. Frame
+`pixel_count() -> u32` peer already worked.
+
+| Gate | Status |
+|------|--------|
+| `u32_while_counter_vs_bound_must_not_cast_bound_as_i64` | ✅ tip GREEN — paint + frame |
+| P3.577 usize start-before-i / auth int_len / int_while_le | ✅ still GREEN |
+
+**Root cause layer:** constraint/type write-back — Binary `u32 / lit` keeps u32
+in let + expression inference; while-compare peer resolves Identifier bounds
+through let RHS / params for u32 width.
+
+**What became unnecessary:** casting `half as i64` / leaving `i` as i64 against
+u32 bounds.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3577`
+- `cargo test --release --test all -- u32_while_counter_vs_bound` → GREEN
+
+**Do not steal:** WDB tip-outs / WDB-430.
+
 ## P3.577 (2026-10-02) — `start` before `i`: `start = i + 1` must stay usize (`wj-toml`)
 
 P3.326 gate declared `i` before `start` (GREEN). Eco `split_on_commas` declares
