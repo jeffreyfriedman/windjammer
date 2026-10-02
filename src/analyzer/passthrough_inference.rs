@@ -824,9 +824,46 @@ impl<'ast> Analyzer<'ast> {
     /// True when `expr` is `param.field` or a nested field chain rooted at `param`.
     fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
         match expr {
-            Expression::FieldAccess { object, .. } => {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
                     || Self::expr_is_field_move_from_param(param_name, object)
+            }
+            // P3.583: field move into call/struct args (`decode_records(self.bytes)`).
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| Self::expr_is_field_move_from_param(param_name, arg)),
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                Self::expr_is_field_move_from_param(param_name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expr_is_field_move_from_param(param_name, arg))
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| Self::expr_is_field_move_from_param(param_name, v)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| Self::expr_is_field_move_from_param(param_name, e)),
+            Expression::Binary { left, right, .. }
+            | Expression::ChannelSend {
+                channel: left,
+                value: right,
+                ..
+            } => {
+                Self::expr_is_field_move_from_param(param_name, left)
+                    || Self::expr_is_field_move_from_param(param_name, right)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. }
+            | Expression::AsyncCall { expr: operand, .. }
+            | Expression::SpawnCall { expr: operand, .. } => {
+                Self::expr_is_field_move_from_param(param_name, operand)
             }
             _ => false,
         }
@@ -1430,6 +1467,13 @@ impl<'ast> Analyzer<'ast> {
     fn stmt_has_field_or_index_move_binding(&self, param_name: &str, stmt: &Statement) -> bool {
         match stmt {
             Statement::Let { value, .. } => Self::expr_is_field_move_from_param(param_name, value),
+            // P3.582/583: bare return/expression field moves + call-arg field moves.
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. } => {
+                Self::expr_is_field_move_from_param(param_name, expr)
+            }
             Statement::If {
                 then_block,
                 else_block,

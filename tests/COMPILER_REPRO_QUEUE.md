@@ -1,6 +1,36 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.582 (2026-10-02) — returning `csr.neighbors` must keep owned DenseCsr
+## P3.583 (2026-10-02) — `&self` + field into Owned Vec/String must `.clone()`
+
+Call-arg field moves (`decode_records(self.bytes)`) blocked bare-pass demotion of
+`self` (keep/restore Owned or emit `&self` + clone). IR Clone upgrade for
+`self.field` into Owned formals failed closed only for `String`/`Custom` when
+field-type inference missed — `Vec<u8>` stayed Identity → E0507 move from `&self`.
+Also: `match self` Copy payloads bind as `&i32` (match ergonomics) → peel `*amount`.
+
+| Gate | Status |
+|------|--------|
+| `path_bytes_wal_layout_rustc_cargo_check` | ✅ tip GREEN — `self.bytes.clone()` into Owned Vec |
+| `path_bytes_segment_replay_borrows_bytes_field` | ✅ tip GREEN |
+| `dogfood_wal_replay_and_recovered_map_rustc_check` | ✅ tip GREEN |
+| `dogfood_wal_replay_to_lsn_call_and_body_copy_lsn` | ✅ tip GREEN — tip-truth: `&str` borrow **or** `String`+`.clone()` |
+| `test_for_loop_match_self_enum_borrows_correctly` | ✅ tip GREEN — `*amount > 0_i32` |
+| `library_multipass_owned_custom_*` | ✅ tip GREEN (P3.582 + call-arg field-move) |
+| `bare_pass_skips_custom_field_call_arg_move_p3583` | ✅ lib GREEN |
+
+**Root cause layer:** coercion/encoding — IR `elem_needs_clone` fail-closed via
+`!is_copy_base(expected)`; owned-emission beats stale shared flags; post-IR
+`maybe_clone_borrowed_field_for_owned_param` for non-extern Owned formals.
+Constraint/demotion: call-arg field-move recursion (multipass + prepare +
+passthrough). Match: Copy arm bindings under `match self` stay borrowed → peel.
+
+**What became unnecessary:** bare `self.bytes` / `self.path` moves from `&self`
+into Owned Vec/String (E0507).
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3583`
+- `cargo test --release --test all -- path_bytes dogfood_wal_replay test_for_loop_match_self library_multipass_owned_custom` → **16 passed**
+
+## P3.582 (2026-10-02) — returning `csr.neighbors` must keep owned DenseCsr`
 
 Bare-pass + readonly field-projection demotion treated `fn consume(csr) { csr.neighbors }`
 as borrow-only, emitting `csr: &DenseCsr` + `.clone()`. Field **moves** (return /

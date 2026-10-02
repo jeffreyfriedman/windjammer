@@ -192,23 +192,51 @@ impl<'ast> CodeGenerator<'ast> {
                 let mut left_str = self.generate_expression_immut(left);
                 let mut right_str = self.generate_expression_immut(right);
 
-                // Auto-deref borrowed bool operands in logical ops (&&, ||).
-                // Rust requires `bool`, not `&bool`, for these operators.
-                if matches!(op, BinaryOp::And | BinaryOp::Or) {
-                    let deref_if_borrowed_bool = |expr: &Expression, s: &str| -> String {
+                // Auto-deref borrowed Copy operands in logical/comparison/arithmetic ops.
+                // Rust match ergonomics on `&self` bind `HasGold(amount)` as `&i32`;
+                // `amount > 0_i32` needs `*amount` (P3.583). Same for `&bool` in &&/||.
+                if matches!(
+                    op,
+                    BinaryOp::And
+                        | BinaryOp::Or
+                        | BinaryOp::Eq
+                        | BinaryOp::Ne
+                        | BinaryOp::Lt
+                        | BinaryOp::Le
+                        | BinaryOp::Gt
+                        | BinaryOp::Ge
+                        | BinaryOp::Add
+                        | BinaryOp::Sub
+                        | BinaryOp::Mul
+                        | BinaryOp::Div
+                        | BinaryOp::Mod
+                ) {
+                    let deref_if_borrowed_copy = |expr: &Expression, s: &str| -> String {
                         if let Expression::Identifier { name, .. } = expr {
-                            if self.inferred_borrowed_params.contains(name.as_str())
-                                || self.borrowed_iterator_vars.contains(name)
-                            {
-                                if !s.starts_with('*') {
+                            let borrowed = self.inferred_borrowed_params.contains(name.as_str())
+                                || self.borrowed_iterator_vars.contains(name);
+                            if borrowed && !s.starts_with('*') {
+                                let is_copy = self
+                                    .local_var_types
+                                    .get(name)
+                                    .map(|ty| {
+                                        let inner = match ty {
+                                            Type::Reference(inner)
+                                            | Type::MutableReference(inner) => inner.as_ref(),
+                                            other => other,
+                                        };
+                                        self.is_type_copy(inner)
+                                    })
+                                    .unwrap_or(true);
+                                if is_copy {
                                     return format!("*{}", s);
                                 }
                             }
                         }
                         s.to_string()
                     };
-                    left_str = deref_if_borrowed_bool(left, &left_str);
-                    right_str = deref_if_borrowed_bool(right, &right_str);
+                    left_str = deref_if_borrowed_copy(left, &left_str);
+                    right_str = deref_if_borrowed_copy(right, &right_str);
                 }
 
                 // Mixed int/float promotion in const/immutable expressions
@@ -647,6 +675,22 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = expr else {
             return generated.to_string();
         };
+        // P3.583: `match self` (&self) Copy bindings are in borrowed_iterator_vars even when
+        // local_var_types keeps the owned pointee (Int32) — still need `*amount > 0`.
+        let borrowed_copy_binding = self.borrowed_iterator_vars.contains(name)
+            && self.local_var_types.get(name).is_some_and(|ty| {
+                let inner = match ty {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                self.is_type_copy(inner)
+            });
+        if borrowed_copy_binding {
+            if generated == *name {
+                return format!("*{generated}");
+            }
+            return format!("*({generated})");
+        }
         let Some(ty) = self.infer_expression_type(expr) else {
             return generated.to_string();
         };

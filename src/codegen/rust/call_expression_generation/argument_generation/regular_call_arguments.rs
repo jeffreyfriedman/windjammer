@@ -819,6 +819,23 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             coerced = name.to_string();
                         }
                     }
+                    // Owned non-Copy formals: clone fields/indexes moved out from behind
+                    // `&self` / `&T` when IR Identity missed Vec/Custom (P3.583 wal_layout).
+                    if let Some(ref sig) = signature {
+                        let expects_owned = matches!(
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_arg(
+                                sig, i,
+                            ),
+                            OwnershipMode::Owned,
+                        ) || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            sig,
+                            sig.arg_param_index(i),
+                        );
+                        if expects_owned {
+                            gen.maybe_clone_borrowed_field_for_owned_param(arg, &mut coerced);
+                            gen.maybe_clone_index_for_owned_param(arg, &mut coerced);
+                        }
+                    }
                     // Absolute terminal: never emit `n as usize.clone()` (WDB-300).
                     coerced =
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(

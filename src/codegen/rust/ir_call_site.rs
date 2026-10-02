@@ -1904,23 +1904,36 @@ impl<'ast> CodeGenerator<'ast> {
                 if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
         ) && (self.inferred_borrowed_params.contains("self")
             || self.inferred_mut_borrowed_params.contains("self")
-            || self.emitted_rust_ref_formals.contains("self"));
+            || self.emitted_rust_ref_formals.contains("self")
+            || self.current_function_params.iter().any(|p| {
+                p.name == "self"
+                    && matches!(
+                        p.ownership,
+                        crate::parser::OwnershipHint::Ref | crate::parser::OwnershipHint::Mut
+                    )
+            }));
         // Shared-ref at emit only — analyzer `Borrowed` alone must not demote Clone→Borrow
         // for bare owned Vec formals (WDB-281: `contains(items.clone())`, not `&items`).
+        // Stale `emitted_rust_ref_params` must not block Clone when emission confirms owned
+        // (P3.583: `decode_records(self.bytes)` under `&self` → `.clone()` into `Vec<u8>`).
         let callee_wants_shared =
             crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
                 || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
                 || crate::ir::signature_bridge::call_site_expects_shared_borrow(&sig, param_idx);
+        let owned_emission_confirmed = Self::sig_arg_confirms_owned_emission(&sig, arg_index);
+        let block_clone_for_shared = callee_wants_shared && !owned_emission_confirmed;
         if matches!(expected.ownership, OwnedType::Owned)
             && !prepared_arg.ends_with(".clone()")
-            && !callee_wants_shared
+            && !block_clone_for_shared
             && (matches!(arg_expr, Expression::Index { .. })
                 || (matches!(arg_expr, Expression::FieldAccess { .. })
                     && (self.field_access_root_is_behind_reference(arg_expr)
                         || field_from_borrowed_self)))
         {
+            // Fail closed when field type inference is missing: owned non-Copy bases
+            // (`Vec`, `Custom`, maps, …) need `.clone()`, not only `String`/`Custom`.
             let elem_needs_clone = self.infer_expression_type(arg_expr).map_or_else(
-                || matches!(expected.base, BaseType::Custom(_) | BaseType::String),
+                || !crate::ir::coercion::is_copy_base(&expected.base),
                 |t| {
                     let bare = match &t {
                         Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -1932,8 +1945,7 @@ impl<'ast> CodeGenerator<'ast> {
             if elem_needs_clone {
                 kind = CoercionKind::Clone;
             }
-        } else if callee_wants_shared
-            && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+        } else if block_clone_for_shared
             && matches!(kind, CoercionKind::Clone)
             && (matches!(arg_expr, Expression::Index { .. })
                 || matches!(arg_expr, Expression::FieldAccess { .. })

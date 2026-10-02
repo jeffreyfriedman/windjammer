@@ -956,7 +956,6 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(arm.body),
                 Some(value),
             );
-
             output.push_str(&self.indent());
             output.push_str(
                 &self.generate_pattern_with_scrutinee(
@@ -985,14 +984,14 @@ impl<'ast> CodeGenerator<'ast> {
                     &arm.pattern,
                     Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _))
                 );
+                let match_self_ref = matches!(
+                    value,
+                    Expression::Identifier { name, .. } if name == "self"
+                ) && match_binds_refs;
                 bound_vars
                         .iter()
                         .filter(|var| {
-                            // Copy payloads bind by value (Identity at owned call sites).
-                            // Must win over `scrutinee_prefix_binds_refs` — otherwise
-                            // `BatchHandle` match bindings are treated as `&T` and later
-                            // dual-oracles re-add `.clone()`.
-                            if inferred.iter().any(|(name, ty)| {
+                            let is_copy_payload = inferred.iter().any(|(name, ty)| {
                                 name == *var && {
                                     let inner = match ty {
                                         Type::Reference(inner)
@@ -1001,7 +1000,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     };
                                     self.is_type_copy(inner)
                                 }
-                            }) {
+                            });
+                            // Copy payloads bind by value on owned scrutinees (BatchHandle).
+                            // P3.583: `match self` with `&self` still binds Copy as `&i32`
+                            // (Rust match ergonomics) — keep borrowed so comparisons emit `*`.
+                            if is_copy_payload && !match_self_ref {
                                 return false;
                             }
                             if struct_enum_fields {
@@ -1011,30 +1014,19 @@ impl<'ast> CodeGenerator<'ast> {
                                 return true;
                             }
                             if match_binds_refs {
-                                // Copy enum payloads (i32, bool, …) bind by value even when the
-                                // scrutinee is matched by reference — never treat as ref bindings.
-                                if inferred.iter().any(|(name, ty)| {
-                                    name == *var && {
-                                        let inner = match ty {
-                                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                                inner.as_ref()
-                                            }
-                                            other => other,
-                                        };
-                                        self.is_type_copy(inner)
-                                    }
-                                }) {
-                                    return false;
-                                }
                                 // Borrowed `match self` on non-Copy enum payloads binds owned
                                 // values (call sites add `&` via IR coercion). Only ref-bind when
-                                // inference says the payload is already a reference type.
-                                if matches!(value, Expression::Identifier { name, .. } if name == "self")
+                                // inference says the payload is already a reference type —
+                                // except Copy payloads under `match_self_ref` (above).
+                                if match_self_ref
                                     && matches!(
                                         &arm.pattern,
                                         Pattern::EnumVariant(_, EnumPatternBinding::Single(_))
                                     )
                                 {
+                                    if is_copy_payload {
+                                        return true;
+                                    }
                                     return inferred.iter().any(|(name, ty)| {
                                         name == *var
                                             && matches!(

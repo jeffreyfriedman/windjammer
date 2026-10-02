@@ -397,7 +397,8 @@ fn is_fn_trait_base(base: &BaseType) -> bool {
     )
 }
 
-fn is_copy_base(base: &BaseType) -> bool {
+/// True for scalar / tuple-of-Copy bases (not `Vec`, `String`, `Custom`, …).
+pub(crate) fn is_copy_base(base: &BaseType) -> bool {
     match base {
         BaseType::Bool
         | BaseType::Char
