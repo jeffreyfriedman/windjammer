@@ -7,8 +7,8 @@ Copy local `i32` in println/format args must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-428 MultiFile | ⏳ TDD pending — `println("…{}", max_size)` |
-| WDB-428 tip-out | ⏳ TDD pending — `max_size.clone()` in svo*_convert |
+| WDB-428 MultiFile | ✅ GREEN @ `1b97798b` — isolate `println(..., max_size)` no `.clone()` |
+| WDB-428 tip-out | ❌ RED @ `1b97798b` — `max_size.clone()` in `.agent-wip/rel_tip_out/voxel/svo64_convert.rs` |
 
 **Root cause layer:** copy / format — Copy locals in format args must not auto-clone.
 
@@ -19,7 +19,7 @@ Copy local `i32` in println/format args must not `.clone()`; product emits
 
 **What became unnecessary:** `max_size.clone()` in SVO build logs.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-01)
+**Gates:** TDD ran 2026-10-01 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/427, P3.508–P3.566, WDB-412–427 / P3.509–P3.561 (filed).
 
