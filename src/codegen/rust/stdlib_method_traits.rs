@@ -82,6 +82,14 @@ pub(crate) fn formal_is_rust_closure_trait(ty: &Type) -> bool {
         || matches!(ty, Type::FunctionPointer { .. })
 }
 
+/// Closures that may run more than once (`Fn` / `FnMut` / bare `fn(...)`).
+/// `FnOnce` (e.g. `thread::spawn`) may move captures; multi-invoke must clone
+/// non-Copy owned captures (P3.580 `Server::serve`).
+pub(crate) fn formal_is_multi_invoke_closure_trait(ty: &Type) -> bool {
+    matches!(ty, Type::Custom(n) if n == "Fn" || n == "FnMut")
+        || matches!(ty, Type::FunctionPointer { .. })
+}
+
 fn is_usize_type(ty: &Type) -> bool {
     matches!(ty, Type::Custom(n) if n == "usize")
 }

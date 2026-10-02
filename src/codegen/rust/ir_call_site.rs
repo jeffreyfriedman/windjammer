@@ -1746,6 +1746,28 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name, .. } if self.into_string_formal_params.contains(name)
         );
         let mut kind = compute_coercion(&actual, &expected);
+        // P3.580: `Fn`/`fn(...)` handlers (Server::serve) may run many times — outer
+        // non-Copy captures passed to Owned formals must `.clone()` (E0507 on move).
+        // Driven by formal trait kind (`Fn`/`FnMut`/fn-ptr vs `FnOnce`), not callee name.
+        if matches!(kind, CoercionKind::Identity | CoercionKind::Borrow)
+            && matches!(expected.ownership, OwnedType::Owned)
+            && matches!(actual.ownership, OwnedType::Owned)
+        {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.closure_multi_invoke_captures
+                    && self.in_user_written_closure
+                    && !self.user_closure_params.contains(name)
+                    && !prepared_arg.contains(".clone()")
+                    && !self.call_arg_is_copy_identity(
+                        arg_expr,
+                        sig.formal_param_type(param_idx)
+                            .or_else(|| sig.param_types.get(param_idx)),
+                    )
+                {
+                    kind = CoercionKind::Clone;
+                }
+            }
+        }
         // Language-level `.to_string()` / `.string()` on a non-text receiver must stay
         // a conversion even when generate_expression dropped the suffix and types
         // already say Owned String (Borrow would emit `&self.rows`).

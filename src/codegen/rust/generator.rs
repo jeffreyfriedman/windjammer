@@ -232,6 +232,9 @@ pub struct CodeGenerator<'ast> {
     pub(crate) in_user_written_closure: bool,
     // USER CLOSURE PARAMS: Track parameters of current user-written closure
     pub(crate) user_closure_params: std::collections::HashSet<String>,
+    /// Outer captures passed to Owned formals inside `Fn`/`FnMut`/`fn(...)` must `.clone()`
+    /// (P3.580). Cleared for `FnOnce` (spawn) where a single move is valid.
+    pub(crate) closure_multi_invoke_captures: bool,
     /// Iterator predicate methods (`filter`, `find`, …): typed closure params become `&T` in Rust.
     pub(crate) closure_predicate_typed_params: bool,
     // ASSIGNMENT TARGET: Flag to suppress auto-clone when generating assignment targets
@@ -718,6 +721,7 @@ impl<'ast> CodeGenerator<'ast> {
             current_func_is_pure_forwarding_delegate: false,
             in_user_written_closure: false,
             user_closure_params: std::collections::HashSet::new(),
+            closure_multi_invoke_captures: false,
             closure_predicate_typed_params: false,
             generating_assignment_target: false,
             assignment_float_target_type: None,

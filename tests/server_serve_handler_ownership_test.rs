@@ -94,5 +94,12 @@ pub fn run_server() {
         !rs.contains("handle_request(&&request") && !rs.contains("handle_request( &&request"),
         "must not double-borrow request in serve closure. Got:\n{rs}"
     );
+    // P3.580: `Fn` handlers may run many times — non-Copy outer captures into Owned
+    // formals must `.clone()` (E0507 on bare `deps` move).
+    assert!(
+        rs.contains("deps.clone()")
+            || rs.contains("deps .clone()"),
+        "serve Fn closure must clone outer Owned capture `deps`. Got:\n{rs}"
+    );
     test.assert_compiles_without_error();
 }
