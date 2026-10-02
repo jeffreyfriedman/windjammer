@@ -3,8 +3,94 @@
 //! (WDB-112 / cross-crate Vec / WDB-113).
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
-use crate::parser::{Expression, Item, Program, Statement, Type};
-use std::collections::HashMap;
+use crate::parser::{Expression, FunctionDecl, Item, Program, Statement, Type};
+use std::collections::{HashMap, HashSet};
+
+/// Precomputed AST indexes for bare-pass restore (P3.585).
+///
+/// Without this, `restore_pub_owned_non_copy_api_formals` rescans every program
+/// body for each of ~O(registry × params) slots — minutes/CPU-bound on
+/// windjammerdb `wdb-layers` (~1k files, ~16k sigs).
+struct ProgramLookup<'a> {
+    /// Free-function simple name → decl (last wins; used for body + pub checks).
+    free_fns: HashMap<String, &'a FunctionDecl<'a>>,
+    /// `(TypeLeaf, method)` → method decl.
+    methods: HashMap<(String, String), &'a FunctionDecl<'a>>,
+    /// Callee simple names that appear in a multi-callee bare-pass probe
+    /// (`buf_len(buf)` + `decode_startup(buf)`).
+    multi_bare_targets: HashSet<String>,
+}
+
+impl<'a> ProgramLookup<'a> {
+    fn build(programs: &'a [&Program<'a>]) -> Self {
+        let mut free_fns = HashMap::new();
+        let mut methods = HashMap::new();
+        let mut multi_bare_targets = HashSet::new();
+        for program in programs {
+            for item in &program.items {
+                match item {
+                    Item::Function { decl, .. } if decl.parent_type.is_none() => {
+                        Self::note_multi_bare(decl, &mut multi_bare_targets);
+                        free_fns.insert(decl.name.clone(), decl);
+                    }
+                    Item::Impl { block, .. } => {
+                        for method in &block.functions {
+                            Self::note_multi_bare(method, &mut multi_bare_targets);
+                            methods.insert(
+                                (block.type_name.clone(), method.name.clone()),
+                                method,
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Self {
+            free_fns,
+            methods,
+            multi_bare_targets,
+        }
+    }
+
+    fn note_multi_bare(decl: &FunctionDecl<'_>, multi_bare_targets: &mut HashSet<String>) {
+        for param in decl.parameters.iter().filter(|p| p.name != "self") {
+            let mut callees = std::collections::BTreeSet::new();
+            collect_bare_callees_for_binding(decl.body.as_slice(), &param.name, &mut callees);
+            if callees.len() >= 2 {
+                multi_bare_targets.extend(callees);
+            }
+        }
+    }
+
+    fn is_pub_free_fn(&self, callee_key: &str) -> bool {
+        let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+        self.free_fns
+            .get(simple)
+            .is_some_and(|decl| decl.is_pub && decl.parent_type.is_none())
+    }
+
+    fn function_body(
+        &self,
+        registry_key: &str,
+        param_idx: usize,
+    ) -> Option<(&'a str, &'a [&'a Statement<'a>])> {
+        let simple = registry_key.rsplit("::").next().unwrap_or(registry_key);
+        let decl = if registry_key_is_type_qualified_method(registry_key) {
+            let parent_leaf = registry_key
+                .rsplit_once("::")
+                .map(|(p, _)| p.rsplit("::").next().unwrap_or(p))
+                .unwrap_or(registry_key);
+            self.methods
+                .get(&(parent_leaf.to_string(), simple.to_string()))
+                .copied()
+        } else {
+            self.free_fns.get(simple).copied()
+        }?;
+        let param = non_self_param(&decl.parameters, param_idx)?;
+        Some((param.name.as_str(), decl.body.as_slice()))
+    }
+}
 
 /// Scan all library programs for bare-identifier call sites and promote callee
 /// `param_ownership` in the merged global registry before per-file codegen.
@@ -422,6 +508,7 @@ pub fn restore_pub_owned_non_copy_api_formals(
     registry: &mut SignatureRegistry,
     programs: &[&Program],
 ) {
+    let lookup = ProgramLookup::build(programs);
     let keys: Vec<String> = registry.signatures.keys().cloned().collect();
     for key in keys {
         let Some(sig) = registry.get_signature(&key).cloned() else {
@@ -442,7 +529,14 @@ pub fn restore_pub_owned_non_copy_api_formals(
             {
                 continue;
             }
-            if !callee_pub_owned_formal_skip_bare_pass(&new_sig, programs, registry, &key, idx) {
+            if !callee_pub_owned_formal_skip_bare_pass(
+                &new_sig,
+                programs,
+                registry,
+                &key,
+                idx,
+                Some(&lookup),
+            ) {
                 continue;
             }
             if matches!(
@@ -1364,6 +1458,95 @@ pub fn col_string(row: Row, name: string) -> (Row, string) {
         );
     }
 
+    fn parse_program_owned(src: String) -> &'static Program<'static> {
+        let src = Box::leak(src.into_boxed_str());
+        let mut lexer = Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        Box::leak(Box::new(parser.parse().expect("parse")))
+    }
+
+    fn borrowed_vec_u8_sig(name: &str, emitted_ref: bool) -> FunctionSignature {
+        FunctionSignature {
+            name: name.to_string(),
+            param_types: vec![Type::Vec(Box::new(Type::Custom("u8".into())))],
+            formal_param_types: vec![Type::Vec(Box::new(Type::Custom("u8".into())))],
+            param_ownership: vec![OwnershipMode::Borrowed],
+            return_type: Some(Type::Int),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![emitted_ref]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    /// P3.585: pub-owned restore must not rescan all program bodies per registry slot.
+    #[test]
+    fn restore_pub_owned_scales_with_program_lookup_index() {
+        use std::time::{Duration, Instant};
+
+        let mut programs = Vec::new();
+        for i in 0..200 {
+            programs.push(parse_program_owned(format!(
+                r#"
+pub fn noise_fn_{i}(buf: Vec<u8>) -> int {{
+    buf.len()
+}}
+fn caller_{i}(buf: Vec<u8>) -> int {{
+    let _ = noise_fn_{i}(buf)
+    buf.len()
+}}
+"#
+            )));
+        }
+        programs.push(parse_program(
+            r#"
+pub fn decode_startup(buf: Vec<u8>) -> int {
+    buf.len()
+}
+pub fn buf_len(buf: Vec<u8>) -> int {
+    buf.len()
+}
+fn on_startup(buf: Vec<u8>) -> int {
+    let _ = buf_len(buf)
+    decode_startup(buf)
+}
+"#,
+        ));
+
+        let mut registry = SignatureRegistry::new();
+        for i in 0..200 {
+            registry.add_function(
+                format!("noise_fn_{i}"),
+                borrowed_vec_u8_sig(&format!("noise_fn_{i}"), true),
+            );
+        }
+        for name in ["decode_startup", "buf_len"] {
+            registry.add_function(name.to_string(), borrowed_vec_u8_sig(name, false));
+        }
+
+        let refs: Vec<&Program> = programs.iter().copied().collect();
+        let start = Instant::now();
+        restore_pub_owned_non_copy_api_formals(&mut registry, &refs);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "P3.585 restore_pub_owned must use ProgramLookup (took {elapsed:?} with 200 noise programs)"
+        );
+        assert!(
+            matches!(
+                registry
+                    .get_signature("decode_startup")
+                    .and_then(|s| s.param_ownership.first()),
+                Some(OwnershipMode::Owned)
+            ),
+            "multi-bare probe should restore owned decode_startup"
+        );
+    }
+
     #[test]
     fn bare_pass_skips_row_col_chain_tuple_return_helper() {
         let domain = parse_program(
@@ -1738,7 +1921,14 @@ fn bare_pass_hint_should_skip(
         return true;
     }
     if matches!(mode, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
-        && callee_pub_owned_formal_skip_bare_pass(&sig, programs, registry, callee_key, param_idx)
+        && callee_pub_owned_formal_skip_bare_pass(
+            &sig,
+            programs,
+            registry,
+            callee_key,
+            param_idx,
+            None,
+        )
     {
         return true;
     }
@@ -2387,6 +2577,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
     registry: &SignatureRegistry,
     callee_key: &str,
     param_idx: usize,
+    lookup: Option<&ProgramLookup<'_>>,
 ) -> bool {
     let formal_ty = sig
         .formal_param_types
@@ -2403,14 +2594,18 @@ fn callee_pub_owned_formal_skip_bare_pass(
     if registry_key_is_type_qualified_method(callee_key) {
         return false;
     }
-    let is_pub_free_fn = programs.iter().any(|program| {
-        program.items.iter().any(|item| {
-            matches!(item, Item::Function { decl, .. }
-                if registry_key_simple_name_is(callee_key, &decl.name)
-                    && decl.is_pub
-                    && decl.parent_type.is_none())
+    let is_pub_free_fn = if let Some(lookup) = lookup {
+        lookup.is_pub_free_fn(callee_key)
+    } else {
+        programs.iter().any(|program| {
+            program.items.iter().any(|item| {
+                matches!(item, Item::Function { decl, .. }
+                    if registry_key_simple_name_is(callee_key, &decl.name)
+                        && decl.is_pub
+                        && decl.parent_type.is_none())
+            })
         })
-    });
+    };
     if !is_pub_free_fn {
         return false;
     }
@@ -2420,9 +2615,12 @@ fn callee_pub_owned_formal_skip_bare_pass(
     if crate::codegen::rust::types::is_windjammer_text_type(formal_ty) {
         return true;
     }
-    if let Some((param_name, body)) =
+    let body_info = if let Some(lookup) = lookup {
+        lookup.function_body(callee_key, param_idx)
+    } else {
         find_function_body_for_registry_key(programs, callee_key, param_idx)
-    {
+    };
+    if let Some((param_name, body)) = body_info {
         // WDB-216/275/276: bare forward into owned FFI / owned peer formals.
         if param_forwarded_bare_into_owned_callee(body, param_name, registry, programs) {
             return true;
@@ -2432,15 +2630,22 @@ fn callee_pub_owned_formal_skip_bare_pass(
         // WDB-175/190: lock owned pub `Vec` only when callers bare-pass the same binding
         // into this callee and at least one other (product `buf_len` + `decode_startup`).
         // Readonly pub helpers (`vertex_lookup_len`) stay demotable for for-in reuse.
-        return programs_have_multi_callee_bare_probe_for_target(programs, simple);
+        return if let Some(lookup) = lookup {
+            lookup.multi_bare_targets.contains(simple)
+        } else {
+            programs_have_multi_callee_bare_probe_for_target(programs, simple)
+        };
     }
     if matches!(formal_ty, Type::Custom(name) if {
         !crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
             && !is_copy_formal_name(name, &std::collections::HashSet::new())
     }) {
-        if let Some((param_name, body)) =
+        let body_info = if let Some(lookup) = lookup {
+            lookup.function_body(callee_key, param_idx)
+        } else {
             find_function_body_for_registry_key(programs, callee_key, param_idx)
-        {
+        };
+        if let Some((param_name, body)) = body_info {
             if param_readonly_field_projection_only(body, param_name) {
                 return false;
             }
@@ -2461,7 +2666,11 @@ fn callee_pub_owned_formal_skip_bare_pass(
         ) {
             return true;
         }
-        return programs_have_multi_callee_bare_probe_for_target(programs, simple);
+        return if let Some(lookup) = lookup {
+            lookup.multi_bare_targets.contains(simple)
+        } else {
+            programs_have_multi_callee_bare_probe_for_target(programs, simple)
+        };
     }
     false
 }
@@ -2472,26 +2681,9 @@ fn programs_have_multi_callee_bare_probe_for_target(
     programs: &[&Program],
     target_callee: &str,
 ) -> bool {
-    for program in programs {
-        for item in &program.items {
-            let Item::Function { decl, .. } = item else {
-                continue;
-            };
-            for param in decl.parameters.iter().filter(|p| p.name != "self") {
-                let mut callees: std::collections::BTreeSet<String> =
-                    std::collections::BTreeSet::new();
-                collect_bare_callees_for_binding(
-                    decl.body.as_slice(),
-                    &param.name,
-                    &mut callees,
-                );
-                if callees.contains(target_callee) && callees.len() >= 2 {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    ProgramLookup::build(programs)
+        .multi_bare_targets
+        .contains(target_callee)
 }
 
 fn collect_bare_callees_for_binding(

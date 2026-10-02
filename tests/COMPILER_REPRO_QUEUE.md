@@ -366,6 +366,29 @@ REDs that accepted broken `&mut *` / missing formal `&mut`.
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.570, WDB-412–428 (filed).
 
+## P3.585 (2026-10-02) — index bare-pass restore (wdb-layers hang)
+
+`restore_pub_owned_non_copy_api_formals` rescanned every program body for each
+registry×param slot → CPU-bound hang on windjammerdb `wdb-layers` (~1k files,
+~16k sigs) during `cargo test --test all` dogfood. Precompute `ProgramLookup`
+(free fns / methods / multi-bare targets) once per restore.
+
+| Gate | Status |
+|------|--------|
+| tip `wj build` wdb-layers `--library --module-file --no-cargo` | ✅ completes ~250s (was hung 40m+ in restore) |
+| `multipass_bare_pass_demotion` lib tests | ✅ 15 passed |
+| `wdb175_` / `wdb190_` / `wdb216_module_file_owned_ffi` | ✅ GREEN |
+
+**Root cause layer:** constraint/demotion write-back performance (algorithmic index).
+
+**What became unnecessary:** O(sigs×params×programs×bodies) rescans in
+`programs_have_multi_callee_bare_probe_for_target` /
+`find_function_body_for_registry_key` inside the pub-owned restore loop.
+
+**Gates:**
+- `cargo test --release -p windjammer --lib multipass_bare_pass` → 15 passed
+- `/usr/bin/time wj build …/wdb-layers/src/mod.wj --library --module-file --no-cargo` → real ~250s
+
 ## P3.584 (2026-10-02) — notes-api `dispatch` `&mut self` + Clone; keep WDB-414 owned move
 
 P3.570 tip-truth was RED again: `dispatch(mut self)` from field→Owned consumes
@@ -2381,8 +2404,8 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 | `json_to_string_payload_must_not_mut_borrow` | ✅ isolate GREEN — `json::to_string(payload)` not `&mut payload` |
 | `notes_api_product_json_to_string_must_not_mut_borrow` | ✅ product GREEN |
 | spawn / mpsc / WDB-099 | ✅ GREEN |
-| `notes_api_product_src_must_auto_borrow_demoted_str` | ❌ still RED — `log_tagged(level, …)` |
-| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ still RED — `qs_get(…, String::from("limit"))` |
+| `notes_api_product_src_must_auto_borrow_demoted_str` | ✅ tip GREEN (reverified 2026-10-02) |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ✅ tip GREEN (reverified 2026-10-02) |
 | `json_get_index_owned_value_multipass_must_cargo_check` | ❌ pre-existing — `get_i.clone()ndex` name mangling |
 
 **Root cause layer:** signature — runtime `json::to_string<T: Serialize>(value: T)` is by-value. A bare `to_string` homonym (`String::to_string` / first-hit method-index) last-wrote MutBorrowed onto the payload.
