@@ -1104,6 +1104,11 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
                     && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
                     && !self.param_multiparam_store_keeps_owned_key_formal(param, func)
+                    // P3.582: returning/moving `param.field` is not readonly projection.
+                    && !self.param_has_field_or_index_move_binding(
+                        func.body.as_slice(),
+                        &param.name,
+                    )
                     && !(analyzed.mutated_parameters.contains(&param.name)
                         && !analyzed.returned_parameters.contains(&param.name))
                     && !matches!(
@@ -9402,6 +9407,13 @@ impl<'ast> CodeGenerator<'ast> {
     fn stmt_has_field_move_binding(&self, stmt: &Statement<'ast>, param_name: &str) -> bool {
         match stmt {
             Statement::Let { value, .. } => Self::expr_is_field_move_from_param(param_name, value),
+            // P3.582: `fn consume(csr) { csr.neighbors }` / `return csr.offsets`.
+            Statement::Return {
+                value: Some(expr), ..
+            }
+            | Statement::Expression { expr, .. } => {
+                Self::expr_is_field_move_from_param(param_name, expr)
+            }
             Statement::If {
                 then_block,
                 else_block,

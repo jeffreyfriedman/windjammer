@@ -586,9 +586,10 @@ pub fn restore_owned_field_forward_formals(
         let mut changed = false;
         let mut new_sig = sig.clone();
         for idx in 0..n {
+            // MutBorrowed field-forwards + Borrowed field-moves (`csr.neighbors`).
             if !matches!(
                 new_sig.param_ownership.get(idx),
-                Some(OwnershipMode::MutBorrowed)
+                Some(OwnershipMode::MutBorrowed | OwnershipMode::Borrowed)
             ) {
                 continue;
             }
@@ -601,7 +602,7 @@ pub fn restore_owned_field_forward_formals(
             };
             let bare = match formal_ty {
                 Type::Custom(name) => name.clone(),
-                Type::MutableReference(inner) => match inner.as_ref() {
+                Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
                     Type::Custom(name) => name.clone(),
                     _ => continue,
                 },
@@ -619,7 +620,8 @@ pub fn restore_owned_field_forward_formals(
                 || param_stored_in_struct_literal(body, param_name)
                 || param_whole_binding_returned(body, param_name)
                 || param_moved_into_let_binding(body, param_name)
-                || param_used_only_as_match_scrutinee(body, param_name))
+                || param_used_only_as_match_scrutinee(body, param_name)
+                || param_has_field_or_index_move_binding(body, param_name))
             {
                 continue;
             }
@@ -632,7 +634,7 @@ pub fn restore_owned_field_forward_formals(
                 // Keep AST formal as the bare Custom when present.
                 if matches!(
                     new_sig.formal_param_types[idx],
-                    Type::MutableReference(_)
+                    Type::Reference(_) | Type::MutableReference(_)
                 ) {
                     new_sig.formal_param_types[idx] = owned_ty;
                 }
@@ -1101,6 +1103,54 @@ fn put_version(store: Store) -> Store {
             OwnershipMode::Owned,
             "WDB-164 restore must undo MutBorrowed let-mut-rebind consume; got {:?}",
             out.param_ownership
+        );
+    }
+
+    #[test]
+    fn bare_pass_skips_custom_field_return_move_p3582() {
+        let types = parse_program(
+            r#"
+pub struct DenseCsr {
+    pub neighbors: Vec<int>,
+}
+"#,
+        );
+        let engine = parse_program(
+            r#"
+use crate::graph::types::DenseCsr
+pub fn consume_neighbors(csr: DenseCsr) -> Vec<int> {
+    csr.neighbors
+}
+pub fn run_dense(csr: DenseCsr) -> Vec<int> {
+    consume_neighbors(csr)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "consume_neighbors".to_string(),
+            owned_custom_sig("consume_neighbors", "DenseCsr"),
+        );
+        registry.signatures.insert(
+            "run_dense".to_string(),
+            owned_custom_sig("run_dense", "DenseCsr"),
+        );
+        let programs = vec![types, engine];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let consume = registry.signatures.get("consume_neighbors").unwrap();
+        assert_eq!(
+            consume.param_ownership[0],
+            OwnershipMode::Owned,
+            "P3.582: returning csr.neighbors must keep owned DenseCsr; got {:?}",
+            consume.param_ownership
+        );
+        let run = registry.signatures.get("run_dense").unwrap();
+        assert_eq!(
+            run.param_ownership[0],
+            OwnershipMode::Owned,
+            "P3.582: wrapper into owned consume must stay owned; got {:?}",
+            run.param_ownership
         );
     }
 
@@ -1656,6 +1706,8 @@ fn bare_pass_hint_should_skip(
                 // (not `&mut Cell` / `&mut Value`).
                 || param_used_only_as_match_scrutinee(body, param_name)
                 || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
+                // P3.582: `csr.neighbors` / `let n = csr.offsets` moves — not `&DenseCsr`.
+                || param_has_field_or_index_move_binding(body, param_name)
         }
         OwnershipMode::Borrowed => {
             param_stored_in_struct_literal(body, param_name)
@@ -1664,6 +1716,8 @@ fn bare_pass_hint_should_skip(
                 || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
                 || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
+                // P3.582: returning/moving `param.field` must keep owned Custom (library multipass).
+                || param_has_field_or_index_move_binding(body, param_name)
         }
         OwnershipMode::Owned => false,
     }
@@ -2942,6 +2996,11 @@ fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
                         .any(|s| stmt_has_field_move_binding(s, param_name))
                 })
         }
+        // P3.582: `fn consume(csr) { csr.neighbors }` / `return csr.offsets` — field move.
+        Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Expression { expr, .. } => expr_is_field_move_from_param(param_name, expr),
         Statement::If {
             then_block,
             else_block,

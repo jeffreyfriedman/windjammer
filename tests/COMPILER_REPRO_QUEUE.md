@@ -1,5 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.582 (2026-10-02) — returning `csr.neighbors` must keep owned DenseCsr
+
+Bare-pass + readonly field-projection demotion treated `fn consume(csr) { csr.neighbors }`
+as borrow-only, emitting `csr: &DenseCsr` + `.clone()`. Field **moves** (return /
+expression / let) must stay Owned through multipass skip/restore and prepare.
+
+| Gate | Status |
+|------|--------|
+| `library_multipass_owned_custom_wrapper_keeps_owned_formal` | ✅ tip GREEN |
+| `library_multipass_owned_custom_forward_with_field_reads_keeps_owned_formal` | ✅ tip GREEN |
+| `library_multipass_owned_custom_self_field_must_clone_not_borrow` | ✅ tip GREEN |
+| `bare_pass_skips_custom_field_return_move_p3582` | ✅ lib GREEN |
+
+**Root cause layer:** constraint/demotion write-back — field-move detection now
+covers Return/Expression (not only Let); bare-pass skip + prepare
+`field_proj_readonly` exclude moves.
+
+**What became unnecessary:** demote+`.clone()` for consuming Custom field returns.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3581`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- library_multipass_owned_custom` → **4 passed**
+
 ## P3.581 (2026-10-02) — `NoteStore::get(id)` must not inherit HashMap::get `&K`
 
 Multipass `store.get(&id)` into `NoteStore::get(id: i64)` E0308. Field site
