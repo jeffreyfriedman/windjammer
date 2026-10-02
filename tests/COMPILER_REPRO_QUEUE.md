@@ -7,8 +7,8 @@ Copy match-arm payloads (`i32`/`f32`/`bool`) must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-429 MultiFile | ⏳ TDD pending — `Some(value)` from `Cell::Int(value)` |
-| WDB-429 tip-out | ⏳ TDD pending — `value.clone()` in state_machine/state.rs |
+| WDB-429 MultiFile | ✅ GREEN @ `9bc7623a` — isolate `Some(value)` no `.clone()` |
+| WDB-429 tip-out | ❌ RED @ `9bc7623a` — `value.clone()` in state_machine/state.rs (+ gen) |
 
 **Root cause layer:** copy / match — Copy enum payloads in match arms must copy/deref, not auto-clone.
 
@@ -20,7 +20,7 @@ Copy match-arm payloads (`i32`/`f32`/`bool`) must not `.clone()`; product emits
 
 **What became unnecessary:** `value.clone()` on Int/Float/Bool StateDataValue getters.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-01)
+**Gates:** TDD ran 2026-10-01 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/428, P3.508–P3.568, WDB-412–428 / P3.509–P3.567 (filed).
 
