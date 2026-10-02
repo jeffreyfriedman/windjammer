@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.583b (2026-10-02) — field-move demotion: value vs place position
+
+P3.583 call-arg field-move recursion treated method/index **places**
+(`grid.cells.is_empty()`, `vals[i]`) as moves, blocking bare-pass demotion and
+forcing `grid.clone()` / `view.clone()` / owned `Vec` formals. Field moves only
+in **value** position (return/let/call arg); receivers and index bases borrow.
+
+| Gate | Status |
+|------|--------|
+| `test_static_readonly_voxelgrid_param_no_clone_*` | ✅ tip GREEN — `grid: &VoxelGrid` |
+| `test_library_multipass_graph_csr_view_loop_must_borrow_not_clone` | ✅ tip GREEN |
+| `demoted_vec_call_arg_must_not_to_string` | ✅ tip GREEN |
+| `borrowed_dense_csr_*` | ✅ tip GREEN |
+| `bare_pass_field_method_receiver_does_not_restore_owned_p3583b` | ✅ lib GREEN |
+| P3.583 wal / for_loop / owned_custom gates | ✅ still GREEN |
+
+**Root cause layer:** constraint/demotion write-back — place vs value in
+`expr_has_field_move_from_param` (multipass + prepare + passthrough).
+
+**What became unnecessary:** Owned restore / `.clone()` for readonly field method
+receivers and index projections.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3583`
+- `cargo test --release --test all --` (voxelgrid, csr view loop, demoted_vec,
+  dense_csr, path_bytes wal, for_loop match_self, owned_custom, match_binding) → **14 passed**
+
 ## P3.583 (2026-10-02) — `&self` + field into Owned Vec/String must `.clone()`
 
 Call-arg field moves (`decode_records(self.bytes)`) blocked bare-pass demotion of
