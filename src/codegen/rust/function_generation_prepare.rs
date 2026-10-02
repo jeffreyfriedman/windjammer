@@ -9441,9 +9441,47 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expr_is_field_move_from_param(param_name: &str, expr: &Expression<'ast>) -> bool {
         match expr {
-            Expression::FieldAccess { object, .. } => {
+            Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                 matches!(**object, Expression::Identifier { ref name, .. } if name == param_name)
                     || Self::expr_is_field_move_from_param(param_name, object)
+            }
+            // P3.583: `decode_records(self.bytes)` / `replay_to_lsn(self.path, …)` —
+            // field move into a call arg (not only bare return/expression).
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| Self::expr_is_field_move_from_param(param_name, arg)),
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                Self::expr_is_field_move_from_param(param_name, object)
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expr_is_field_move_from_param(param_name, arg))
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| Self::expr_is_field_move_from_param(param_name, v)),
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| Self::expr_is_field_move_from_param(param_name, e)),
+            Expression::Binary { left, right, .. }
+            | Expression::ChannelSend {
+                channel: left,
+                value: right,
+                ..
+            } => {
+                Self::expr_is_field_move_from_param(param_name, left)
+                    || Self::expr_is_field_move_from_param(param_name, right)
+            }
+            Expression::Unary { operand, .. }
+            | Expression::TryOp { expr: operand, .. }
+            | Expression::Await { expr: operand, .. }
+            | Expression::Cast { expr: operand, .. }
+            | Expression::AsyncCall { expr: operand, .. }
+            | Expression::SpawnCall { expr: operand, .. } => {
+                Self::expr_is_field_move_from_param(param_name, operand)
             }
             _ => false,
         }

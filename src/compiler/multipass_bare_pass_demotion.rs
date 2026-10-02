@@ -1107,6 +1107,60 @@ fn put_version(store: Store) -> Store {
     }
 
     #[test]
+    fn bare_pass_skips_custom_field_call_arg_move_p3583() {
+        let types = parse_program(
+            r#"
+pub struct WalSegment {
+    pub bytes: Vec<u8>,
+}
+"#,
+        );
+        let engine = parse_program(
+            r#"
+use crate::wal::types::WalSegment
+pub fn decode_records(bytes: Vec<u8>) -> int {
+    bytes.len() as int
+}
+pub fn replay(seg: WalSegment) -> int {
+    decode_records(seg.bytes)
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        registry.signatures.insert(
+            "decode_records".to_string(),
+            FunctionSignature {
+                name: "decode_records".to_string(),
+                param_types: vec![Type::Vec(Box::new(Type::Custom("u8".into())))],
+                formal_param_types: vec![Type::Vec(Box::new(Type::Custom("u8".into())))],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: Some(Type::Int),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: None,
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        registry.signatures.insert(
+            "replay".to_string(),
+            owned_custom_sig("replay", "WalSegment"),
+        );
+        let programs = vec![types, engine];
+        let copy_types = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
+        let replay = registry.signatures.get("replay").unwrap();
+        assert_eq!(
+            replay.param_ownership[0],
+            OwnershipMode::Owned,
+            "P3.583: decode_records(seg.bytes) must keep owned WalSegment; got {:?}",
+            replay.param_ownership
+        );
+    }
+
+    #[test]
     fn bare_pass_skips_custom_field_return_move_p3582() {
         let types = parse_program(
             r#"
@@ -3014,9 +3068,13 @@ fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
                         .any(|s| stmt_has_field_move_binding(s, param_name))
                 })
         }
-        Statement::While { body, .. } | Statement::For { body, .. } => body
+        Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
+            body.iter()
+                .any(|s| stmt_has_field_move_binding(s, param_name))
+        }
+        Statement::Match { arms, .. } => arms
             .iter()
-            .any(|s| stmt_has_field_move_binding(s, param_name)),
+            .any(|arm| expr_is_field_move_from_param(param_name, &arm.body)),
         _ => false,
     }
 }
@@ -3028,6 +3086,43 @@ fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
                 object,
                 Expression::Identifier { name, .. } if name == param_name
             ) || expr_is_field_move_from_param(param_name, object)
+        }
+        // P3.583: field move into call/struct args (`decode_records(self.bytes)`).
+        Expression::Call { arguments, .. } => arguments
+            .iter()
+            .any(|(_, arg)| expr_is_field_move_from_param(param_name, arg)),
+        Expression::MethodCall {
+            object,
+            arguments,
+            ..
+        } => {
+            expr_is_field_move_from_param(param_name, object)
+                || arguments
+                    .iter()
+                    .any(|(_, arg)| expr_is_field_move_from_param(param_name, arg))
+        }
+        Expression::StructLiteral { fields, .. } => fields
+            .iter()
+            .any(|(_, v)| expr_is_field_move_from_param(param_name, v)),
+        Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+            .iter()
+            .any(|e| expr_is_field_move_from_param(param_name, e)),
+        Expression::Binary { left, right, .. }
+        | Expression::ChannelSend {
+            channel: left,
+            value: right,
+            ..
+        } => {
+            expr_is_field_move_from_param(param_name, left)
+                || expr_is_field_move_from_param(param_name, right)
+        }
+        Expression::Unary { operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. }
+        | Expression::Cast { expr: operand, .. }
+        | Expression::AsyncCall { expr: operand, .. }
+        | Expression::SpawnCall { expr: operand, .. } => {
+            expr_is_field_move_from_param(param_name, operand)
         }
         _ => false,
     }

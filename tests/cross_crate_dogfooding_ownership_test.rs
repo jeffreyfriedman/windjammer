@@ -3519,24 +3519,34 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let wal_rs = map.get("wal/wal.rs").expect("wal/wal.rs");
-    // path (string) must borrow as &str. through is Copy (u64 field) — Owned `Lsn`
-    // is the idiomatic Windjammer formal; `&Lsn` remains acceptable if inferred.
+    // Tip-truth (P3.583): prefer demoted `path: &str` + `&self.path`, but owned
+    // `String` + `self.path.clone()` under `&self` is also E0507-safe. Reject a bare
+    // field move from `&self` into Owned String.
+    let demoted_str = wal_rs.contains("pub fn replay_to_lsn(path: &str, through: Lsn)")
+        || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: &Lsn)")
+        || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: & Lsn)");
+    let owned_string = wal_rs.contains("pub fn replay_to_lsn(path: String, through: Lsn)")
+        || wal_rs.contains("pub fn replay_to_lsn(path: String, through: &Lsn)");
     assert!(
-        wal_rs.contains("pub fn replay_to_lsn(path: &str, through: Lsn)")
-            || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: &Lsn)")
-            || wal_rs.contains("pub fn replay_to_lsn(path: &str, through: & Lsn)"),
-        "replay_to_lsn must lower to &str + owned-or-borrowed Lsn. Got:\n{wal_rs}"
+        demoted_str || owned_string,
+        "replay_to_lsn must lower to &str or owned String + owned-or-borrowed Lsn. Got:\n{wal_rs}"
+    );
+    let borrow_path = wal_rs.contains("replay_to_lsn(&self.path, through)")
+        || wal_rs.contains("replay_to_lsn(&self.path, &through)")
+        || wal_rs.contains("replay_to_lsn(self.path.as_str(), &through)")
+        || wal_rs.contains("replay_to_lsn(&self.path, through.clone())");
+    let clone_path = wal_rs.contains("replay_to_lsn(self.path.clone(), through)")
+        || wal_rs.contains("replay_to_lsn(self.path.clone(), &through)");
+    let owned_self_move = (wal_rs.contains("fn replay_through(self)")
+        || wal_rs.contains("fn replay_through(mut self)"))
+        && wal_rs.contains("replay_to_lsn(self.path, through)");
+    assert!(
+        borrow_path || clone_path || owned_self_move,
+        "WalWriter::replay_through must borrow path, clone into owned String, or move from owned self. Got:\n{wal_rs}"
     );
     assert!(
-        wal_rs.contains("replay_to_lsn(&self.path, through)")
-            || wal_rs.contains("replay_to_lsn(&self.path, &through)")
-            || wal_rs.contains("replay_to_lsn(self.path.as_str(), &through)")
-            || wal_rs.contains("replay_to_lsn(&self.path, through.clone())"),
-        "WalWriter::replay_through must borrow path; through may be owned Copy or borrowed. Got:\n{wal_rs}"
-    );
-    assert!(
-        !wal_rs.contains("replay_to_lsn(self.path.clone(), through)"),
-        "must not pass owned String where &str expected. Got:\n{wal_rs}"
+        !wal_rs.contains("fn replay_through(&self)") || borrow_path || clone_path,
+        "must not move self.path from &self into Owned String. Got:\n{wal_rs}"
     );
     if wal_rs.contains("through: &Lsn") {
         assert!(

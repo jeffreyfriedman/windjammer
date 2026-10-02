@@ -405,7 +405,8 @@ pub fn run() {
     );
 }
 
-// ── gate-f: replay borrows self.bytes field at decode_records ────────────────────────
+// ── gate-f: replay keeps owned self and moves self.bytes into owned decode_records ──
+// Tip-truth (P3.583): field move into Owned formal must not demote `replay` to `&self`.
 
 #[test]
 fn path_bytes_segment_replay_borrows_bytes_field() {
@@ -455,10 +456,21 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let rs = map.get("wal/segment.rs").expect("wal/segment.rs");
+    // Tip-truth: MultiFile demotes decode_records to shared ref + `&self.bytes`.
+    // Owned formal + `&self` must clone (`self.bytes.clone()`), never move.
+    let demoted_borrow = rs.contains("decode_records(&self.bytes)")
+        || rs.contains("decode_records(& self.bytes)");
+    let owned_clone = rs.contains("decode_records(self.bytes.clone())");
+    let owned_self_move = (rs.contains("fn replay(self)") || rs.contains("fn replay(mut self)"))
+        && rs.contains("decode_records(self.bytes)")
+        && !rs.contains("decode_records(&self.bytes)");
     assert!(
-        rs.contains("decode_records(&self.bytes)")
-            || rs.contains("decode_records(& self.bytes)"),
-        "gate-f: replay must borrow self.bytes at decode_records(&Vec) call. Got:\n{rs}"
+        demoted_borrow || owned_clone || owned_self_move,
+        "gate-f: borrow demoted formal, clone into owned, or owned-self move. Got:\n{rs}"
+    );
+    assert!(
+        !rs.contains("fn replay(&self)") || demoted_borrow || owned_clone,
+        "gate-f: &self must not move self.bytes into Owned Vec. Got:\n{rs}"
     );
 }
 

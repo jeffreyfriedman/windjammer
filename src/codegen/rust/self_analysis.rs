@@ -1932,6 +1932,63 @@ mod tests {
         assert!(!expression_is_self_field_modification(&field_access));
     }
 
+    #[test]
+    fn call_arg_self_field_move_consumes_self_p3583() {
+        use crate::parser::{Expression, FunctionDecl, Statement, Type};
+        use crate::source_map::Location;
+        use std::path::PathBuf;
+
+        let loc = Location {
+            file: PathBuf::from("test.wj"),
+            line: 1,
+            column: 1,
+        };
+        let self_expr = test_alloc_expr(Expression::Identifier {
+            name: "self".to_string(),
+            location: Some(loc.clone()),
+        });
+        let field = test_alloc_expr(Expression::FieldAccess {
+            object: self_expr,
+            field: "bytes".to_string(),
+            location: Some(loc.clone()),
+        });
+        let callee = test_alloc_expr(Expression::Identifier {
+            name: "decode_records".to_string(),
+            location: Some(loc.clone()),
+        });
+        let call = test_alloc_expr(Expression::Call {
+            function: callee,
+            arguments: vec![(None, field)],
+            location: Some(loc.clone()),
+        });
+        let stmt = Statement::Expression {
+            expr: call,
+            location: Some(loc),
+        };
+        let body: &'static [&'static Statement] =
+            Box::leak(Box::new([Box::leak(Box::new(stmt)) as &Statement]));
+        let func = FunctionDecl {
+            name: "replay".into(),
+            is_pub: true,
+            is_extern: false,
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parameters: vec![],
+            return_type: Some(Type::Int),
+            return_decorators: vec![],
+            body: body.to_vec(),
+            parent_type: Some("WalSegment".into()),
+            impl_trait: None,
+            doc_comment: None,
+        };
+        assert!(
+            function_consumes_self(&func),
+            "P3.583: decode_records(self.bytes) must count as consuming self"
+        );
+    }
+
     // More comprehensive tests will be added later
     // These are just basic smoke tests for the module
 }
