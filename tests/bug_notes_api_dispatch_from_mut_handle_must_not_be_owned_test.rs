@@ -15,9 +15,10 @@
 //! `check_rate(&mut self)` but `dispatch(mut self)` → E0507 at
 //! `self.dispatch(...)`.
 //!
-//! Product shape: dispatch moves `self.store` into a read helper (`fetch_note`)
-//! and also mutates store via create/update — after mut check_rate, dispatch
-//! must be `&mut self` (and the read helper must borrow, not take owned store).
+//! Product shape: dispatch mutates via `self.store.create` / update / delete,
+//! borrows store for `fetch_note`, and passes `self.config.public_base_url`
+//! (string) into an owned formal (`created_note_reply`). String field reads
+//! must not force owned `self` when the method also mutates through fields.
 
 use std::fs;
 use std::process::Command;
@@ -25,6 +26,11 @@ use tempfile::TempDir;
 
 const SOURCE: &str = r#"
 use std::collections::HashMap
+
+struct Config {
+    public_base_url: string,
+    max_title_len: int,
+}
 
 struct NoteStore {
     next_id: int,
@@ -43,8 +49,13 @@ fn fetch_note(store: NoteStore, id: int) -> string {
     store.label
 }
 
+fn created_note_reply(title: string, base_url: string) -> string {
+    base_url
+}
+
 struct NotesApp {
     store: NoteStore,
+    config: Config,
     buckets: HashMap<string, int>,
 }
 
@@ -69,7 +80,8 @@ impl NotesApp {
 
     fn dispatch(self, path: string, create: bool) -> string {
         if create {
-            return self.store.create(path)
+            let title = self.store.create(path)
+            return created_note_reply(title, self.config.public_base_url)
         }
         fetch_note(self.store, 1)
     }
