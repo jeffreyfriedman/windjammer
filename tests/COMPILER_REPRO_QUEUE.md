@@ -1,5 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.568 (2026-10-01) — auth `json_string_field`: `strings.len` must unify with `int` counters
+
+Product `wj-auth-api` `tests/auth_test.wj` emits `i = 0_i64` then compares to
+`n = strings::len(body)` (usize) and passes bare `j: i64` into `substring` →
+E0308. Isolate mirrors the helper (no app reshape).
+
+| Gate | Status |
+|------|--------|
+| `auth_json_string_field_int_len_must_unify_i64` | ❌ tip RED — E0308 i64 vs usize |
+
+**Root cause layer:** encoding / int unify — `strings.len` peers of `int`
+loop counters must share one width (prefer i64 for WJ `int`), and substring
+indices must cast consistently.
+
+**What became unnecessary:** rewriting auth tests to force `as int` / avoid
+`while i + marker_len <= n`.
+
+**Gates:** tip isolate `wj build` + `cargo check` (2026-10-01) → E0308.
+- `cargo test --release --test all -- auth_json_string_field_int_len_must_unify_i64`
+
+**Do not steal:** WDB-406/408/411/427–428, P3.508–P3.567, WDB-412–427 (filed).
+
 ## P3.567 (2026-10-01) — TDD WDB-428 (DB agent; no compiler src)
 
 Copy local `i32` in println/format args must not `.clone()`; product emits
@@ -22,6 +44,59 @@ Copy local `i32` in println/format args must not `.clone()`; product emits
 **Gates:** TDD ran 2026-10-01 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/427, P3.508–P3.566, WDB-412–427 / P3.509–P3.561 (filed).
+
+## P3.566 (2026-10-01) — crate-root `lib.wj` types must not auto-import as `super::lib::`
+
+Multipass `--module-file` with crate-root `lib.wj` inlines types at the crate
+root, but siblings that *infer* those types (no explicit `use crate::Item`) get
+`use super::lib::Item` → E0432. Product: `wj-migrate` `db_status` /
+`Migration`. Explicit `use crate::Item` greened.
+
+| Gate | Status |
+|------|--------|
+| `rust_use_path_sibling_of_crate_root_lib_wj_uses_crate` | ✅ unit (WIP fix in tree) |
+| `module_file_crate_root_type_must_not_import_super_lib` | ❌ tip RED until fix lands |
+| product `wj-migrate` `$WJ test` | ❌ E0432 `super::lib::Migration` (tip-p3557 / HEAD tip) |
+
+**Root cause layer:** boundary / import path — `wj_file_to_module_path` maps
+`lib.wj` → `["lib"]`; `rust_use_path_from_module_to_type` must treat that as
+crate root (`crate::Type`), not a `lib` submodule.
+
+**Fix (other agent WIP — do not steal `type_collector.rs`):** when defining
+module is exactly `lib`/`main`, emit `crate::{Type}`.
+
+**What became unnecessary:** adding explicit `use crate::Migration` in
+`db_status.wj` solely to dodge bad auto-import paths.
+
+**Ran (2026-10-01):** tip product + isolate still `use super::lib::…` → E0432
+on published tip binaries; local WIP fix claimed isolate GREEN.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target-p3566`
+- `cargo test -p windjammer --lib rust_use_path_sibling_of_crate_root_lib_wj_uses_crate -- --exact`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_crate_root_type_must_not_import_super_lib`
+
+**Do not steal:** WDB-406/408/411/427–428, P3.508–P3.565/P3.567, WDB-412–427 (filed).
+
+## P3.565 (2026-10-01) — runtime std AsRef methods must not force `&String` formals
+
+`strings.substring` / `strings.len` are AsRef/`&str`. Treating them as
+`&String` formals blocked adapter `find_char` demotion when the compare was
+inline in an `if` (P3.524 product notes/auth).
+
+| Gate | Status |
+|------|--------|
+| `adapter_inline_substring_eq_find_char_must_be_str` | ✅ tip GREEN (`cfb54aa4`) |
+
+**Root cause layer:** signature — runtime-std AsRef text APIs must not invent
+`&String` ownership for demotion.
+
+**What became unnecessary:** reshaping adapters to bind-then-compare so
+`find_char` demotes.
+
+**Gates:** `CARGO_TARGET_DIR=…/cargo-target` (landed with fix)
+- `cargo test --release --test all -- adapter_inline_substring_eq_find_char_must_be_str`
+
+**Do not steal:** WDB-406/408/411/427, P3.508–P3.564, WDB-412–426 (filed).
 
 ## P3.564 (2026-09-30) — tip-truth gates for array / index own / &str setter / if-else
 
