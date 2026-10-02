@@ -12,18 +12,22 @@ ports-only `--output /tmp/wj_ports_out` (parent `/tmp` siblings).
 
 | Gate | Status |
 |------|--------|
-| `module_file_mod_wj_inline_struct_must_emit` | ❌ tip RED (watch) |
-| `module_file_output_must_not_import_tmp_sibling_rs` | ⚠ re-verify (product still harvested `/tmp/*.rs`) |
+| `module_file_mod_wj_inline_struct_must_emit` | ✅ isolate GREEN |
+| unit `extract_mod_wj_code_section_keeps_inline_struct` | ✅ GREEN |
+| `module_file_output_must_not_import_tmp_sibling_rs` | ✅ tip GREEN (P3.562) |
 
-**Root cause layer:** multipass module-file — `mod.rs` writer must preserve
-non-module items from the source module file (or emit them to a sibling `.rs`).
+**Root cause layer:** multipass module-file — `--module-file` ran
+`generate_mod_file` twice; first pass merged `_mod_items.rs` then deleted it;
+second pass rewrote declarations-only. Preserve `// Code from mod.wj` when
+`_mod_items` is absent.
 
-**What became unnecessary in product (structural, not a peel):** move Host to
-`ports/host.wj` so composition root is not inline in `mod.wj`.
+**What became unnecessary:** product move of Host to `ports/host.wj` solely to
+survive tip transpile (composition may still prefer a sibling file).
 
 **Gates:**
-- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_mod_wj_inline_struct_must_emit`
-- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_output_must_not_import_tmp_sibling`
+- `cargo test --release --lib -- extract_mod_wj_code_section_keeps_inline_struct` → GREEN
+- `cargo test --release --test all --features integration_tests,codegen_tests -- module_file_mod_wj_inline_struct_must_emit` → GREEN
+- `… -- module_file_output_must_not_import_tmp_sibling` → GREEN
 
 **Do not steal:** WDB-406/408/411/427–429, P3.508–P3.571, WDB-412–428 (filed).
 
