@@ -644,14 +644,15 @@ pub fn method_is_map_key_qualified_with_project(
                         }
                     }
                 }
+                // P3.581: concrete non-wrapper user types (`NoteStore`, …) must not inherit
+                // HashMap::get `&K` when `Type::get` is absent from the registry (multipass
+                // consumer files). Wrappers skip this block and fall through below.
+                return false;
             }
-            // No typed self-method for this receiver: do NOT early-return false for
-            // non-map names. Wrappers (`MapCell`, `MutexGuard<…>`) must fall through to
-            // map consensus so `g.data.get(key)` keeps `&K` (P3.288). User types without
-            // a registered `Type::method` also miss consensus unless a map/set defines it.
+            // Wrappers (`MapCell`, `MutexGuard<…>`): fall through to map consensus.
         }
-        // Non-map receiver names (`MapCell`, `MutexGuard<…>`, …): still classify via
-        // stdlib map/set consensus — `g.data.get(key)` must borrow `&K`, not `.to_string()`.
+        // Map Deref wrappers / unknown receivers: stdlib map/set consensus so
+        // `g.data.get(key)` / `g.get(key)` keep `&K` (P3.288 / P3.576).
         for map_ty in crate::type_classification::MAP_TYPE_NAMES {
             if borrowed_key_on_type(map_ty) {
                 return true;
@@ -2084,6 +2085,10 @@ mod pattern_registry_tests {
         assert!(
             method_is_map_key_qualified("get", Some("MapCell"), &reg),
             "g.data.get on MapCell must still classify as map key lookup"
+        );
+        assert!(
+            !method_is_map_key_qualified("get", Some("NoteStore"), &reg),
+            "P3.581: unregistered NoteStore::get must not inherit HashMap::get `&K`"
         );
         let mut project = SignatureRegistry::empty();
         project.add_function(
