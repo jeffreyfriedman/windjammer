@@ -134,7 +134,8 @@ impl<'ast> Analyzer<'ast> {
         let modifies_fields =
             self.function_modifies_self_fields_with_registry(func, Some(registry));
         let returns_self = self.function_returns_self(func);
-        let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
+        let body_moves_fields =
+            self.function_body_moves_non_copy_self_fields(func, Some(registry));
         let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
         let consumes_self = if has_multi_recursive {
@@ -234,7 +235,8 @@ impl<'ast> Analyzer<'ast> {
             let modifies_fields =
                 self.function_modifies_self_fields_with_registry(func, Some(registry));
             let returns_self = self.function_returns_self(func);
-            let body_moves_fields = self.function_body_moves_non_copy_self_fields(func);
+            let body_moves_fields =
+                self.function_body_moves_non_copy_self_fields(func, Some(registry));
             let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
             let consumes_self = body_moves_fields
@@ -355,8 +357,8 @@ impl<'ast> Analyzer<'ast> {
                             let modifies_fields = self
                                 .function_modifies_self_fields_with_registry(func, Some(registry));
                             let returns_self = self.function_returns_self(func);
-                            let body_moves_fields =
-                                self.function_body_moves_non_copy_self_fields(func);
+                            let body_moves_fields = self
+                                .function_body_moves_non_copy_self_fields(func, Some(registry));
                             let snapshot_factory =
                                 self.function_returns_new_instance_from_self_fields(func);
 

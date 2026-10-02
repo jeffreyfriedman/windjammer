@@ -214,22 +214,17 @@ impl<'ast> Analyzer<'ast> {
                 false
             }
 
-            // Returning `param.field` moves the field out of an owned parameter (consumes `param`)
-            // when the field type is non-Copy. Copy fields are read through `&param` with implicit copy.
+            // Returning `param.field` / `self.field` does not consume the binding in
+            // Windjammer — codegen clones non-Copy fields through `&param` / `&self`
+            // (self getters + free helpers like `fetch_note(store) -> store.label`).
+            // Treating field projection as a return-consume forced Owned `store: NoteStore`
+            // and then Owned `dispatch(mut self)` while `handle_method` is `&mut self`
+            // (P3.570 E0507). Same philosophy as Index (container stays borrowable).
             Expression::FieldAccess { object, .. } => {
-                if !self.expression_uses_identifier(name, object) {
+                if self.expression_uses_identifier(name, object) {
                     return false;
                 }
-                if matches!(&**object, Expression::Identifier { name: id, .. } if id == name) {
-                    if name == "self" {
-                        if let Some(chain_type) = self.resolve_self_field_chain_type(expr) {
-                            if self.is_copy_type(&chain_type) {
-                                return false;
-                            }
-                        }
-                    }
-                }
-                self.expression_uses_identifier_for_return(name, object)
+                false
             }
 
             // `container[i]` returns / moves an element — the container itself stays borrowable.

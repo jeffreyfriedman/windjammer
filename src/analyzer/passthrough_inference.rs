@@ -921,6 +921,335 @@ impl<'ast> Analyzer<'ast> {
         })
     }
 
+    /// P3.570: every `param.field` projection into a call targets a Borrowed/MutBorrowed
+    /// formal (`lookup_note(&notes, id)`), so the parent param need not stay Owned.
+    pub(crate) fn param_field_projections_only_into_borrowed_formals(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        body: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) -> bool {
+        let mut saw_projection = false;
+        let mut all_borrowed = true;
+        self.collect_param_field_projection_formal_modes(
+            param_name,
+            param_type,
+            body,
+            registry,
+            &mut saw_projection,
+            &mut all_borrowed,
+        );
+        saw_projection && all_borrowed
+    }
+
+    fn collect_param_field_projection_formal_modes(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        body: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+        saw_projection: &mut bool,
+        all_borrowed: &mut bool,
+    ) {
+        for stmt in body {
+            self.stmt_collect_param_field_projection_formal_modes(
+                param_name,
+                param_type,
+                stmt,
+                registry,
+                saw_projection,
+                all_borrowed,
+            );
+        }
+    }
+
+    fn stmt_collect_param_field_projection_formal_modes(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        stmt: &Statement,
+        registry: &SignatureRegistry,
+        saw_projection: &mut bool,
+        all_borrowed: &mut bool,
+    ) {
+        match stmt {
+            Statement::Let { value, .. }
+            | Statement::Assignment { value, .. }
+            | Statement::Expression { expr: value, .. }
+            | Statement::Return {
+                value: Some(value), ..
+            } => self.expr_collect_param_field_projection_formal_modes(
+                param_name,
+                param_type,
+                value,
+                registry,
+                saw_projection,
+                all_borrowed,
+            ),
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    condition,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+                for s in then_block {
+                    self.stmt_collect_param_field_projection_formal_modes(
+                        param_name,
+                        param_type,
+                        s,
+                        registry,
+                        saw_projection,
+                        all_borrowed,
+                    );
+                }
+                if let Some(b) = else_block {
+                    for s in b {
+                        self.stmt_collect_param_field_projection_formal_modes(
+                            param_name,
+                            param_type,
+                            s,
+                            registry,
+                            saw_projection,
+                            all_borrowed,
+                        );
+                    }
+                }
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    condition,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+                for s in body {
+                    self.stmt_collect_param_field_projection_formal_modes(
+                        param_name,
+                        param_type,
+                        s,
+                        registry,
+                        saw_projection,
+                        all_borrowed,
+                    );
+                }
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    iterable,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+                for s in body {
+                    self.stmt_collect_param_field_projection_formal_modes(
+                        param_name,
+                        param_type,
+                        s,
+                        registry,
+                        saw_projection,
+                        all_borrowed,
+                    );
+                }
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    value,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+                for arm in arms {
+                    if let Some(g) = arm.guard {
+                        self.expr_collect_param_field_projection_formal_modes(
+                            param_name,
+                            param_type,
+                            g,
+                            registry,
+                            saw_projection,
+                            all_borrowed,
+                        );
+                    }
+                    self.expr_collect_param_field_projection_formal_modes(
+                        param_name,
+                        param_type,
+                        arm.body,
+                        registry,
+                        saw_projection,
+                        all_borrowed,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn expr_collect_param_field_projection_formal_modes(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression,
+        registry: &SignatureRegistry,
+        saw_projection: &mut bool,
+        all_borrowed: &mut bool,
+    ) {
+        match expr {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if self.expr_is_non_copy_field_projection_from_param(
+                        param_name, param_type, arg,
+                    ) {
+                        *saw_projection = true;
+                        if !self.call_expr_formal_borrows(function, i, registry) {
+                            *all_borrowed = false;
+                        }
+                    }
+                    self.expr_collect_param_field_projection_formal_modes(
+                        param_name,
+                        param_type,
+                        arg,
+                        registry,
+                        saw_projection,
+                        all_borrowed,
+                    );
+                }
+            }
+            Expression::MethodCall {
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    if self.expr_is_non_copy_field_projection_from_param(
+                        param_name, param_type, arg,
+                    ) {
+                        *saw_projection = true;
+                        let borrowed = registry
+                            .lookup_method(method)
+                            .or_else(|| registry.get_signature(method))
+                            .and_then(|sig| {
+                                let idx = sig.arg_param_index(i);
+                                sig.param_ownership.get(idx).copied()
+                            })
+                            .is_some_and(|m| {
+                                matches!(m, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                            });
+                        if !borrowed {
+                            *all_borrowed = false;
+                        }
+                    }
+                    self.expr_collect_param_field_projection_formal_modes(
+                        param_name,
+                        param_type,
+                        arg,
+                        registry,
+                        saw_projection,
+                        all_borrowed,
+                    );
+                }
+            }
+            Expression::FieldAccess { object, .. }
+            | Expression::Index { object, .. }
+            | Expression::Unary {
+                operand: object, ..
+            }
+            | Expression::TryOp { expr: object, .. } => {
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    object,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    left,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+                self.expr_collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    right,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+            }
+            Expression::Block { statements, .. } => {
+                self.collect_param_field_projection_formal_modes(
+                    param_name,
+                    param_type,
+                    statements,
+                    registry,
+                    saw_projection,
+                    all_borrowed,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    fn call_expr_formal_borrows(
+        &self,
+        function: &Expression,
+        arg_index: usize,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        let name = match function {
+            Expression::Identifier { name, .. } => name.as_str(),
+            Expression::FieldAccess { object, field, .. } => {
+                if let Expression::Identifier { name: obj, .. } = &**object {
+                    let key = format!("{obj}::{field}");
+                    if let Some(sig) = registry
+                        .get_signature(&key)
+                        .or_else(|| registry.lookup_method(field))
+                    {
+                        let idx = sig.arg_param_index(arg_index);
+                        return sig.param_ownership.get(idx).is_some_and(|m| {
+                            matches!(m, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                        });
+                    }
+                }
+                field.as_str()
+            }
+            _ => return false,
+        };
+        registry
+            .get_signature(name)
+            .or_else(|| registry.lookup_method(name))
+            .and_then(|sig| {
+                let idx = sig.arg_param_index(arg_index);
+                sig.param_ownership.get(idx).copied()
+            })
+            .is_some_and(|m| matches!(m, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed))
+    }
+
     fn stmt_projects_non_copy_field_into_call_arg(
         &self,
         param_name: &str,
