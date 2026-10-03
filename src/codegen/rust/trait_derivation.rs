@@ -136,8 +136,9 @@ impl CodeGenerator<'_> {
             | Type::MutableReference(inner) => self.type_precludes_auto_debug_clone(inner),
             Type::Parameterized(base, args) => {
                 if crate::type_classification::is_shared_ownership_wrapper(base) {
-                    // `Arc<Mutex<T>>` / `Arc<T>` are Clone; only the *payload* can block
-                    // Debug (e.g. nested Receiver). Skip the Mutex/RwLock leaf itself.
+                    // `Arc<Mutex<T>>` / `Arc<AtomicI64>` / `Arc<T>` are Clone; only the
+                    // *payload* can block Debug (e.g. nested Receiver). Skip Mutex/RwLock
+                    // and atomic leaves — they are !Clone bare but fine under Arc (P3.594).
                     args.iter().any(|a| match a {
                         Type::Parameterized(inner_base, inner_args)
                             if crate::type_classification::is_std_non_auto_debug_clone_type(
@@ -150,6 +151,16 @@ impl CodeGenerator<'_> {
                             inner_args
                                 .iter()
                                 .any(|t| self.type_precludes_auto_debug_clone(t))
+                        }
+                        Type::Custom(name)
+                            if crate::type_classification::is_atomic_sync_type(name) =>
+                        {
+                            false
+                        }
+                        Type::Parameterized(inner_base, _)
+                            if crate::type_classification::is_atomic_sync_type(inner_base) =>
+                        {
+                            false
                         }
                         _ => self.type_precludes_auto_debug_clone(a),
                     })

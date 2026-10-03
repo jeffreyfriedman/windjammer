@@ -447,9 +447,23 @@ pub fn is_std_non_auto_debug_clone_type(name: &str) -> bool {
 }
 
 /// Shared-ownership wrappers that are always `Clone` (and `Debug` when the
-/// payload is). Inner `Mutex`/`RwLock` must not block auto-derive.
+/// payload is). Inner `Mutex`/`RwLock` / atomics must not block auto-derive.
 pub fn is_shared_ownership_wrapper(name: &str) -> bool {
     matches!(type_name_leaf(name), "Arc" | "Rc" | "Weak")
+}
+
+/// Atomic sync primitives: `Debug` yes, bare `Clone` no — but `Arc<Atomic*>` is Clone.
+pub fn is_atomic_sync_type(name: &str) -> bool {
+    matches!(
+        type_name_leaf(name),
+        "AtomicBool"
+            | "AtomicI32"
+            | "AtomicI64"
+            | "AtomicU32"
+            | "AtomicU64"
+            | "AtomicUsize"
+            | "AtomicIsize"
+    )
 }
 
 /// Language-level owned-text conversion methods (WJ `.string()` / Rust `.to_string()`).
