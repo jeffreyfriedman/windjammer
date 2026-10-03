@@ -342,12 +342,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         // TDD FIX: Track types for ALL bound variables (simple and tuple patterns)
         if let Some(elem_type) = loop_element_type.clone() {
-            let elem_type = if tracks_borrowed_loop_var
-                && !matches!(
-                    elem_type,
-                    Type::Reference(_) | Type::MutableReference(_)
-                ) {
-                Type::Reference(Box::new(elem_type))
+            let elem_type = if tracks_borrowed_loop_var {
+                Self::wrap_for_loop_element_as_borrowed(elem_type)
             } else {
                 elem_type
             };
@@ -374,12 +370,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } else if let Some(iterable_type) = self.infer_expression_type(iterable) {
             if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
-                let elem_type = if tracks_borrowed_loop_var
-                    && !matches!(
-                        elem_type,
-                        Type::Reference(_) | Type::MutableReference(_)
-                    ) {
-                    Type::Reference(Box::new(elem_type))
+                let elem_type = if tracks_borrowed_loop_var {
+                    Self::wrap_for_loop_element_as_borrowed(elem_type)
                 } else {
                     elem_type
                 };
