@@ -1,5 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.608 (2026-10-03) — flaky `codepoints.remove(&pos)` vs `remove(pos)` (homonym)
+
+`let mut codepoints = ….collect::<Vec<char>>()` never recorded a receiver type
+(turbofish ignored in `infer_expression_type`), so `codepoints.remove` took the
+no-receiver `pick_codegen_refreshed` path over HashMap-ordered `*::remove`
+candidates — tip flaked Owned usize vs Borrowed `&K`.
+
+| Gate | Status |
+|------|--------|
+| `test_vec_remove_with_expression_no_ref` | ✅ tip GREEN — stable `remove(pos)` (30/30 tip emits) |
+| `test_vec_remove_usize_no_ref` / `codegen_vec_remove_usize` | ✅ tip GREEN |
+| lib `map_key_lookup_with_non_map_receiver_type_name` | ✅ unknown-receiver `remove` not map-key |
+| P3.599 `int_formal_must_not_upgrade…` | ✅ tip GREEN (`use std::strings` fixture) |
+
+**Root cause layer:** signature / constraint — turbofish → local binding type;
+fail-closed no-receiver pick when first-arg ownership conflicts; map-key
+consensus must not fire for conflicting methods with unknown receiver.
+
+**What became unnecessary:** nondeterministic HashMap scan of `*::remove` for
+call-site ownership; treating tip `remove(&pos)` as intermittent flake.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --test all -- test_vec_remove_with_expression_no_ref \
+  test_vec_remove_usize_no_ref int_formal_must_not_upgrade
+```
+→ 4 GREEN.
+
 ## P3.607 (2026-10-03) — explicit `let ri = &i` → usize must `*ri as usize`
 
 `let ri = &i; compute(v, ri)` emitted `ri as usize` because later usize formals
@@ -28,8 +57,7 @@ cargo test --release --test all -- test_mixed_coercion_multiple_args \
   library_multipass_owned_string_to_string_method_must_borrow \
   test_passthrough_collision_preserves_mut
 ```
-→ 5 GREEN (vec_remove is flaky tip RED/GREEN — `remove(&pos)` vs `remove(pos)`;
-nondeterministic registry/emit order; filed for follow-up).
+→ 5 GREEN (vec_remove flake closed in P3.608).
 
 ## P3.606 (2026-10-03) — pub method string → borrowed-text callee must demote `&str`
 

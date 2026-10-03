@@ -613,17 +613,20 @@ pub fn method_is_map_key_qualified_with_project(
     // `Vec::remove(Owned)` vs `HashMap::remove(Borrowed)` — never map-consensus homonym
     // when the receiver is a known conflicting type. Map/set receivers stay type-specific;
     // wrappers (`MapCell`, `MutexGuard<…>`) fall through to consensus below.
+    // Unknown receiver + conflicting ownership: fail closed (not map-key). Tip flaked
+    // `codepoints.remove(&pos)` when no-receiver resolution picked HashMap::remove.
     if registry.suffix_has_conflicting_first_arg_ownership(method, 1) {
-        if let Some(rt) = receiver_type {
-            let base = rt.split('<').next().unwrap_or(rt);
-            if is_map_type_name(base) || is_set_type_name(base) {
-                return borrowed_key_on_type(base);
-            }
-            if lookup_sig(method, Some(base), registry).is_some_and(|s| {
-                s.has_self_receiver && first_arg_ownership(s) == Some(OwnershipMode::Owned)
-            }) {
-                return false;
-            }
+        let Some(rt) = receiver_type else {
+            return false;
+        };
+        let base = rt.split('<').next().unwrap_or(rt);
+        if is_map_type_name(base) || is_set_type_name(base) {
+            return borrowed_key_on_type(base);
+        }
+        if lookup_sig(method, Some(base), registry).is_some_and(|s| {
+            s.has_self_receiver && first_arg_ownership(s) == Some(OwnershipMode::Owned)
+        }) {
+            return false;
         }
     }
 
@@ -2126,6 +2129,10 @@ mod pattern_registry_tests {
         assert!(
             !method_is_map_key_qualified("remove", Some("Vec"), &reg),
             "Vec::remove(usize) must not inherit HashMap::remove borrowed-key homonym"
+        );
+        assert!(
+            !method_is_map_key_qualified("remove", None, &reg),
+            "unknown-receiver remove must not map-consensus borrow (Vec Owned vs HashMap Borrowed)"
         );
         assert!(
             method_is_map_key_qualified("remove", Some("HashMap"), &reg),

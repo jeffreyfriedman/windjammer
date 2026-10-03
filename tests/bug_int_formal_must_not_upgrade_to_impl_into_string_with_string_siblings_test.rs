@@ -28,7 +28,9 @@ fn int_formal_must_not_upgrade_to_impl_into_string_with_string_siblings() {
     let src = tempfile::TempDir::new().expect("src");
     fs::write(
         src.path().join("lib.wj"),
-        r#"pub fn require_max_len(field: string, value: string, max: int) -> Result<string, string> {
+        r#"use std::strings
+
+pub fn require_max_len(field: string, value: string, max: int) -> Result<string, string> {
     if strings.len(value) > max {
         return Err("too long")
     }
