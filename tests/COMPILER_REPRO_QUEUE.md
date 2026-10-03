@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.609 (2026-10-03) — discard-only `Vec<u8>` formal must stay Owned
+
+`Registry::add(data: Vec<u8>) { let _ = data }` demoted to `data: &Vec<u8>` then
+forced `add(..., &vec![…])` (engine component_storage E0308 when formal stayed Owned).
+
+| Gate | Status |
+|------|--------|
+| `owned_vec_u8_literal_must_not_borrow_at_call_site` | ✅ tip GREEN — `data: Vec<u8>`, bare `vec![…]` |
+
+**Root cause layer:** signature / formal encoding — discard-only Vec stubs are FFI/
+API contracts (same class as unused Vec keep-Owned); do not treat `let _ = data` as
+readonly `.len()` demotion.
+
+**What became unnecessary:** call-site `&vec![…]` peels for Owned Vec formals that only
+suppress unused warnings.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --test all -- owned_vec_u8_literal_must_not_borrow
+```
+→ 1 GREEN.
+
 ## P3.608 (2026-10-03) — flaky `codepoints.remove(&pos)` vs `remove(pos)` (homonym)
 
 `let mut codepoints = ….collect::<Vec<char>>()` never recorded a receiver type

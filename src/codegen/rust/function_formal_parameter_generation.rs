@@ -382,10 +382,15 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     );
+                // P3.609: discard-only stubs (`let _ = data`) keep Owned `Vec`
+                // (engine `add(..., vec![…])` must not become `&vec![…]`).
+                let vec_discard_only_keeps_owned =
+                    self.param_is_vec_discard_only_stub(func, param);
                 if param.name != "self"
                     && Self::param_type_is_vec_container(&param.type_)
                     && !payload_forces_owned
                     && !runtime_wj_owned_keep_owned
+                    && !vec_discard_only_keeps_owned
                     && !self.is_public_owned_non_copy_formal_api(param, func)
                     && !self.param_passes_to_wj_owned_sibling_call(
                         func.body.as_slice(),
@@ -1054,6 +1059,7 @@ impl<'ast> CodeGenerator<'ast> {
                         ));
                 if param.name != "self"
                     && !analyzer_or_ir_owned
+                    && !vec_discard_only_keeps_owned
                     && !self.param_single_arg_owned_self_or_field_forward(param, func)
                     && !self.in_trait_impl
                     // Pub crate API: keep WJ `string` owned even when unused / analyzer Borrowed
@@ -3596,6 +3602,17 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
+                // P3.609: last-line defense — discard-only Vec stubs must emit Owned
+                // even if an earlier Borrowed path set `type_str` to `&Vec<…>`.
+                if vec_discard_only_keeps_owned
+                    && type_str.starts_with('&')
+                    && !type_str.starts_with("&mut ")
+                {
+                    type_str = self.type_to_rust(&param.type_);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
+                }
+
                 // TDD FIX: Auto-infer `mut` for owned parameters
                 // THE WINDJAMMER WAY: Users don't track mutability - the compiler does.
                 // If a parameter has mutating method calls or field mutations,
@@ -4199,6 +4216,54 @@ impl<'ast> CodeGenerator<'ast> {
             || self.param_used_as_owned_string_add_operand(body, &param.name)
             || self.param_used_in_return_struct_string_field(body, &param.name)
             || passed_into_owned
+    }
+
+    /// `let _ = data` / `let _ = (data,)` on an owned `Vec` formal — stub/FFI contract.
+    /// Keep Owned so call sites move `vec![…]` (P3.609 / component_storage add).
+    pub(in crate::codegen::rust) fn param_is_vec_discard_only_stub(
+        &self,
+        func: &FunctionDecl<'_>,
+        param: &Parameter,
+    ) -> bool {
+        if !Self::param_type_is_vec_container(&param.type_) {
+            return false;
+        }
+        let mut saw = false;
+        for stmt in func.body.as_slice() {
+            match stmt {
+                Statement::Let { pattern, value, .. }
+                    if Self::is_discarding_let_pattern(pattern) =>
+                {
+                    if !Self::expression_mentions_identifier(value, &param.name) {
+                        continue;
+                    }
+                    let ok = match value {
+                        Expression::Identifier { name, .. } => name == &param.name,
+                        Expression::Tuple { elements, .. } => {
+                            elements.iter().any(|el| {
+                                matches!(
+                                    el,
+                                    Expression::Identifier { name, .. } if name == &param.name
+                                )
+                            }) && elements.iter().all(|el| {
+                                matches!(
+                                    el,
+                                    Expression::Identifier { name, .. } if name == &param.name
+                                ) || !Self::expression_mentions_identifier(el, &param.name)
+                            })
+                        }
+                        _ => false,
+                    };
+                    if !ok {
+                        return false;
+                    }
+                    saw = true;
+                }
+                _ if Self::statement_mentions_identifier(stmt, &param.name) => return false,
+                _ => {}
+            }
+        }
+        saw
     }
 
     fn pub_vec_non_copy_custom_indexed_api(

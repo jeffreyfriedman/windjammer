@@ -1088,8 +1088,10 @@ impl<'ast> CodeGenerator<'ast> {
                 analyzed.inferred_ownership.get(&param.name),
                 Some(crate::analyzer::OwnershipMode::Owned)
             ) {
+                // P3.609: discard-only Vec stubs stay Owned (`let _ = data` ≠ `.len()` scan).
                 let vec_readonly = Self::param_type_is_vec_container(&param.type_)
                     && !self.is_public_owned_non_copy_formal_api(param, func)
+                    && !self.param_is_vec_discard_only_stub(func, param)
                     && self.param_has_readonly_expression_use(func.body.as_slice(), &param.name)
                     && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func);
                 let field_proj_readonly = self.param_only_used_via_field_or_index_projection(
@@ -6223,7 +6225,7 @@ impl<'ast> CodeGenerator<'ast> {
         found
     }
 
-    fn is_discarding_let_pattern(pattern: &Pattern) -> bool {
+    pub(in crate::codegen::rust) fn is_discarding_let_pattern(pattern: &Pattern) -> bool {
         match pattern {
             Pattern::Wildcard => true,
             Pattern::Identifier(name) if name == "_" => true,
@@ -6232,7 +6234,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn statement_mentions_identifier(stmt: &Statement, name: &str) -> bool {
+    pub(in crate::codegen::rust) fn statement_mentions_identifier(
+        stmt: &Statement,
+        name: &str,
+    ) -> bool {
         match stmt {
             Statement::Expression { expr, .. }
             | Statement::Return {
@@ -6298,7 +6303,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn expression_mentions_identifier(expr: &Expression, name: &str) -> bool {
+    pub(in crate::codegen::rust) fn expression_mentions_identifier(
+        expr: &Expression,
+        name: &str,
+    ) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
             Expression::MethodCall {
