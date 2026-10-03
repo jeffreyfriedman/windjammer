@@ -1369,8 +1369,46 @@ where
         let has_mut_borrow = sig.param_ownership.iter().enumerate().any(|(idx, own)| {
             matches!(own, OwnershipMode::MutBorrowed) && !emitted_owned_arg_contract(&sig, idx)
         });
-        if has_mut_borrow && mut_borrow_refresh.is_none() {
-            mut_borrow_refresh = Some(sig);
+        // `&mut self` alone must not freeze the first MutBorrowed candidate: a later
+        // codegen-refreshed Owned String formal (`Logger::info` emit `[false, false]`)
+        // would otherwise lose to an analysis-only Borrowed + `Reference(str)` leaf
+        // that also carries MutBorrowed self (P3.603 passthrough logger lit).
+        if has_mut_borrow {
+            let better = mut_borrow_refresh.as_ref().is_none_or(|incumbent| {
+                codegen_refreshed_beats_analysis_only(&sig, incumbent)
+                    || emitted_owned_beats_stale_global_borrow(&sig, incumbent)
+                    || owned_emission_slot_count(&sig) > owned_emission_slot_count(incumbent)
+            });
+            if better {
+                mut_borrow_refresh = Some(sig.clone());
+            }
+            // Still record all-false emit refreshes so Owned string slots are not dropped
+            // when this candidate also has MutBorrowed self.
+            if let Some(ref flags) = sig.emitted_rust_ref_params {
+                if !flags.iter().any(|&f| f) {
+                    let owned_better = |candidate: &FunctionSignature, incumbent: &FunctionSignature| {
+                        method_registry_reflects_emitted_owned(candidate)
+                            && !method_registry_reflects_emitted_owned(incumbent)
+                            || candidate
+                                .param_ownership
+                                .iter()
+                                .filter(|o| matches!(o, OwnershipMode::Owned))
+                                .count()
+                                > incumbent
+                                    .param_ownership
+                                    .iter()
+                                    .filter(|o| matches!(o, OwnershipMode::Owned))
+                                    .count()
+                    };
+                    match refresh_without_shared_ref {
+                        None => refresh_without_shared_ref = Some(sig.clone()),
+                        Some(ref incumbent) if owned_better(&sig, incumbent) => {
+                            refresh_without_shared_ref = Some(sig.clone());
+                        }
+                        Some(_) => {}
+                    }
+                }
+            }
             continue;
         }
         if let Some(ref flags) = sig.emitted_rust_ref_params {
@@ -3760,6 +3798,64 @@ pub fn resolve() -> string {
             Some(OwnershipMode::MutBorrowed),
             "live MutBorrowed must beat AST Owned Custom stub"
         );
+    }
+
+    #[test]
+    fn pick_mut_self_codegen_owned_string_beats_analysis_only_borrowed_leaf() {
+        // Analysis-only Logger::info (passthrough demote) arrives first with MutBorrowed
+        // self + Borrowed message. Codegen refresh has Owned String + emit flags.
+        let analysis_only = FunctionSignature {
+            name: "info".into(),
+            param_types: vec![
+                Type::MutableReference(Box::new(Type::Custom("Self".into()))),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
+            formal_param_types: vec![Type::String],
+            param_ownership: vec![OwnershipMode::MutBorrowed, OwnershipMode::Borrowed],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: None,
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let codegen_refresh = FunctionSignature {
+            name: "Logger::info".into(),
+            param_types: vec![
+                Type::MutableReference(Box::new(Type::Custom("Self".into()))),
+                Type::String,
+            ],
+            formal_param_types: vec![Type::String],
+            param_ownership: vec![OwnershipMode::MutBorrowed, OwnershipMode::Owned],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let picked = pick_codegen_refreshed_signature([
+            Some(analysis_only),
+            Some(codegen_refresh.clone()),
+        ])
+        .expect("pick");
+        assert_eq!(
+            picked.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false][..]),
+            "codegen-refreshed Owned String must beat analysis-only Borrowed leaf"
+        );
+        assert_eq!(
+            picked.param_ownership.get(1).copied(),
+            Some(OwnershipMode::Owned)
+        );
+        assert!(matches!(
+            picked.param_types.get(1),
+            Some(Type::String)
+        ));
     }
 
     #[test]

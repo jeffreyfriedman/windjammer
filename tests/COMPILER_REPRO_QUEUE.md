@@ -1,5 +1,41 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.603 (2026-10-03) — MutBorrowed self must not freeze analysis-only leaf
+
+`Logger::info("a")` (passthrough → `log` → `push`) stayed bare `"a"` into
+`message: String` for out-of-tree / fixture `build_project` (TempDir). IR owned
+`String::from("a")`, then reconcile refresh picked analysis-only
+`info` Borrowed + `Reference(str)` because `pick_codegen_refreshed_signature`
+froze the first MutBorrowed-self candidate and skipped later emit-[false,false]
+Owned refresh.
+
+| Gate | Status |
+|------|--------|
+| `regression_logger_owned_passthrough` | ✅ tip GREEN — `"a".to_string()` / `String::from` |
+| out-of-tree passthrough `logger.info("a")` | ✅ tip GREEN |
+| `test_custom_method_string_param` / bare lit / string_param peers | ✅ still GREEN |
+| spawn / mpsc | ✅ still GREEN |
+| lib `pick_mut_self_codegen_owned_string_beats_analysis_only_borrowed_leaf` | ✅ GREEN |
+
+**Root cause layer:** signature — `pick_codegen_refreshed_signature` MutBorrowed
+bucket must upgrade when a later candidate has codegen refresh / owned emission.
+
+**What became unnecessary:** reconcile peels of `String::from("a")` driven by a
+stale analysis-only Borrowed leaf selected over emit-owned `Logger::info`.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --lib -- pick_mut_self_codegen_owned_string_beats_analysis_only_borrowed_leaf
+cargo test --release --test all -- regression_logger_owned_passthrough \
+  test_custom_method_string_param bare_string_literal_into_owned_string_method \
+  string_param_passed_to_owned_method bug_thread_spawn_closure_must_not_be_ref \
+  bug_mpsc_sync_channel_boundary
+```
+→ lib + 8 integration GREEN.
+
+**Do not steal:** WDB tip-outs / notes_api mut-query product tip-outs.
+
 ## P3.602 (2026-10-03) — codegen-refreshed Owned beats analysis-only bare leaf
 
 `Logger::info("a")` / builder string-lit call sites peeled `String::from("a")`
