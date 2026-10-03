@@ -3749,11 +3749,17 @@ impl<'ast> CodeGenerator<'ast> {
     /// (`grid(left)` → `Tile::value_html(left)`) — emit `impl Into<String>` for `&str` callers.
     ///
     /// Not for borrow-only sites (`push_str(&str)`): those must stay `String`/`&str` (WDB-228).
+    /// Not for private helpers (`check_nonempty` → `require_nonempty`): Into is a pub Rust
+    /// boundary encoding; private formals that rebind via `own(field)` must stay `String` so
+    /// call-site `into_string_formal_params` does not paint shadowed locals with `.into()`.
     fn param_pub_free_string_builder_forward(
         &self,
         func: &FunctionDecl<'_>,
         param: &crate::parser::Parameter,
     ) -> bool {
+        if !func.is_pub {
+            return false;
+        }
         if func.parameters.iter().any(|p| p.name == "self") {
             return false;
         }

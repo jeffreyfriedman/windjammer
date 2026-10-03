@@ -1,5 +1,35 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.599 (2026-10-03) — private free-fn must not emit `impl Into<String>` builder forward
+
+Cross-crate `check_nonempty` → `require_nonempty(&field, value)` failed because private
+`check_nonempty(field, value)` emitted `impl Into<String>` via
+`param_pub_free_string_builder_forward` (no `is_pub` gate). Call-site
+`into_string_formal_params` then painted shadowed locals as `value.into()`.
+
+| Gate | Status |
+|------|--------|
+| `todo_cli_cross_crate_validate_field_must_auto_borrow` | ✅ tip GREEN — `require_nonempty(&field, value)` |
+| `ui_builder_string_formal` (3) | ✅ still GREEN (pub builders keep Into) |
+| `handle_forward` / `handle_request` empty-lits | ✅ still GREEN |
+| `wdb228` push_str Into | ✅ still GREEN |
+
+**Root cause layer:** signature / formal encoding — Into builder-forward is a **pub**
+Rust boundary encoding only.
+
+**What became unnecessary:** peels for `value.into()` on private own→validate forwards;
+name-heuristic ownership for `require_nonempty`.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --test all -- todo_cli_cross_crate_validate_field_must_auto_borrow \
+  ui_builder_string_formal handle_forward_empty_lits handle_request_empty_lits wdb228
+```
+→ 8 GREEN.
+
+**Do not steal:** WDB tip-outs / WDB-430–433 / P3.594–595 TDD.
+
 ## P3.598 (2026-10-02) — StatusChip builder `label` must emit `impl Into<String>`
 
 windjammer-ui `StatusChip::new` / `.label` owned `string` formals must accept Rust
