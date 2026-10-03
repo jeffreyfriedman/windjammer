@@ -28,8 +28,8 @@ Indexed Copy element + cast must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-432 MultiFile | ⏳ TDD pending — `children[i] as u64` |
-| WDB-432 tip-out | ⏳ TDD pending — `children_copy[c].clone() as u64` |
+| WDB-432 MultiFile | ✅ GREEN @ `2c7d248c` — isolate `children[i] as u64` no `.clone()` |
+| WDB-432 tip-out | ❌ RED @ `2c7d248c` — `children_copy[c].clone() as u64` in scene_graph_state |
 
 **Root cause layer:** copy / index — indexed Copy before cast must not auto-clone.
 
@@ -40,7 +40,7 @@ Indexed Copy element + cast must not `.clone()`; product emits
 
 **What became unnecessary:** `children_copy[c].clone() as u64` in scene graph walk.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+**Gates:** TDD ran 2026-10-02 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/431, P3.508–P3.592, WDB-412–431 (filed).
 
