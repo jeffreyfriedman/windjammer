@@ -727,7 +727,19 @@ impl<'ast> CodeGenerator<'ast> {
             self.register_free_function_ast_formals(&analyzed_func.decl, Some(analyzed_func));
         }
 
-        // Preregister free-function formals BEFORE impl blocks so methods that call
+        // Seed impl AST method formals before free-fn preregister so wrappers that
+        // forward into builders (`render_grid` → `Tile::value_html`) see owned `string`
+        // contracts during early Into decisions (P3.601). Full sibling preregister still
+        // runs below after free fns so methods that call later free fns converge correctly.
+        for item in &program.items {
+            if let Item::Impl { block, .. } = item {
+                for func in &block.functions {
+                    self.register_impl_ast_method_formals(&block.type_name, func);
+                }
+            }
+        }
+
+        // Preregister free-function formals BEFORE impl *emission* so methods that call
         // later free fns (e.g. WalWriter::replay_all_records → replay_all) see converged
         // `&str` / borrowed contracts instead of stale owned stubs (regression-057/058/060).
         // Include `extern fn` so wrappers that forward into owned FFI see Owned registry

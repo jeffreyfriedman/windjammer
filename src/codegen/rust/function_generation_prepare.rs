@@ -3894,14 +3894,19 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Identifier { name, .. } if name == param_name
                         ) || Self::expr_is_field_or_index_of_param(arg, param_name);
                     if arg_is_param_or_field {
+                        // Owned AST / emitted String formals beat stale borrow flags
+                        // (P3.601: `render_grid(left)` → `Tile::value_html(left)` must
+                        // count as owning so free-fn Into can fire; `expects_borrow` used
+                        // to `continue` first and skip these).
+                        if self.method_call_sibling_ast_expects_owned_arg(object, method, i, func)
+                            || self.method_call_arg_formal_is_owned_non_copy(
+                                object, method, i, func,
+                            )
+                        {
+                            return true;
+                        }
                         if self.method_call_arg_expects_borrow(object, method, i, func) {
                             continue;
-                        }
-                        if self.method_call_sibling_ast_expects_owned_arg(object, method, i, func) {
-                            return true;
-                        }
-                        if self.method_call_arg_formal_is_owned_non_copy(object, method, i, func) {
-                            return true;
                         }
                     }
                 }
@@ -11845,6 +11850,10 @@ impl<'ast> CodeGenerator<'ast> {
             if ast_field_written || emitted_mut {
                 return false;
             }
+            // Owned WJ `string` formals count (P3.601): builder forwards like
+            // `render_grid(left)` → `Tile::value_html(left)` need
+            // `param_has_owning_method_use` so free-fn Into can fire. Text was
+            // previously excluded here and only handled via weaker sig refresh.
             if self
                 .struct_method_ast_formal_param_types
                 .get(rt.as_str())
@@ -11853,7 +11862,6 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|t| {
                     !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                         && !self.is_type_copy(t)
-                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
                 })
             {
                 return true;
@@ -12002,6 +12010,8 @@ impl<'ast> CodeGenerator<'ast> {
         let Some(rt) = rt else {
             return false;
         };
+        // Include text formals (P3.601): same as the early AST path above so builder
+        // forwards into `string` slots count as owning when registry lookup missed.
         self.struct_method_ast_formal_param_types
             .get(&rt)
             .and_then(|methods| methods.get(method))
@@ -12009,7 +12019,6 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(|t| {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && !self.is_type_copy(t)
-                    && !crate::codegen::rust::types::is_windjammer_text_type(t)
             })
             && self
                 .struct_method_ast_param_field_written
