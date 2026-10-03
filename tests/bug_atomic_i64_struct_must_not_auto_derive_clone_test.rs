@@ -11,8 +11,8 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — `AtomicI64` is not `Clone`. Structs that wrap it must not
-//! auto-derive `Clone` (wj-sync bare-Counter hot path).
+//! `AtomicI64` is not `Clone` — bare atomic structs must not auto-derive Clone.
+//! `Arc<AtomicI64>` is Clone (shared handle) — must derive Clone (P3.594 / wj-sync).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -47,6 +47,29 @@ pub fn counter_get(c: Counter) -> int {
 }
 "#;
 
+const ARC_COUNTER: &str = r#"
+use std::sync::atomic::{AtomicI64, Ordering}
+use std::sync::Arc
+
+pub struct Counter {
+    inner: Arc<AtomicI64>,
+}
+
+pub fn counter_new(n: int) -> Counter {
+    Counter {
+        inner: Arc::new(AtomicI64::new(n)),
+    }
+}
+
+pub fn counter_inc(c: Counter) {
+    c.inner.fetch_add(1, Ordering::Relaxed)
+}
+
+pub fn counter_get(c: Counter) -> int {
+    c.inner.load(Ordering::Relaxed)
+}
+"#;
+
 #[test]
 fn atomic_i64_struct_must_not_derive_clone() {
     let output = test_utils::compile_single(COUNTER);
@@ -61,6 +84,23 @@ fn atomic_i64_struct_must_not_derive_clone() {
             "Counter with AtomicI64 must not #[derive(..., Clone, ...)]; found: {attr}\n\n{output}"
         );
     }
+}
+
+#[test]
+fn arc_atomic_i64_struct_must_derive_clone() {
+    let output = test_utils::compile_single(ARC_COUNTER);
+    assert!(!output.is_empty(), "expected generated Rust");
+    let needle = "pub struct Counter";
+    let idx = output
+        .find(needle)
+        .unwrap_or_else(|| panic!("missing {needle}\n{output}"));
+    let attr = last_derive_before(&output, idx).unwrap_or_else(|| {
+        panic!("Arc<AtomicI64> Counter must #[derive(..., Clone, ...)]\n{output}")
+    });
+    assert!(
+        attr.contains("Clone"),
+        "Arc<AtomicI64> Counter must Clone (shared handle); found: {attr}\n\n{output}"
+    );
 }
 
 #[test]

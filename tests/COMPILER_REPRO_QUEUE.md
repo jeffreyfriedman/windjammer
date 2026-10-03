@@ -1,5 +1,33 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.594 (2026-10-03) — `Arc<AtomicI64>` Counter must auto-derive Clone
+
+Product `wj-sync` `Counter { inner: Arc<AtomicI64> }` skipped `#[derive(Clone)]`
+because Arc peel only exempted `Mutex`/`RwLock`, not atomics — bare `AtomicI64`
+correctly blocks Clone, but `Arc<Atomic*>` is always Clone. Product tests reuse
+`c` → codegen `.clone()` → E0599.
+
+| Gate | Status |
+|------|--------|
+| `sync_counter_inc_must_borrow_or_be_clone` | ✅ tip GREEN — `#[derive(Debug, Clone)]` on Counter |
+| `arc_atomic_i64_struct_must_derive_clone` | ✅ tip GREEN |
+| `atomic_i64_struct_must_not_derive_clone` | ✅ still GREEN (bare AtomicI64) |
+
+**Root cause layer:** signature / auto-derive — `type_precludes_auto_debug_clone`
+Arc payload must skip atomic leaves (same class as Mutex under Arc).
+
+**What became unnecessary:** product Arc-handle churn rewrites; Clone-name heuristics.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --test all -- arc_atomic_i64_struct_must_derive_clone \
+  atomic_i64_struct_must_not_derive_clone sync_counter_inc_must_borrow_or_be_clone
+```
+→ 3 GREEN.
+
+**Do not steal:** WDB tip-outs / WDB-430–433 / P3.595 TDD.
+
 ## P3.599 (2026-10-03) — private free-fn must not emit `impl Into<String>` builder forward
 
 Cross-crate `check_nonempty` → `require_nonempty(&field, value)` failed because private
