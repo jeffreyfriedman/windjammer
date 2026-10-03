@@ -293,13 +293,21 @@ impl<'ast> CodeGenerator<'ast> {
                 // `payload_stored` so `.contains(query)` can demote — but that same
                 // assign counts as readonly use and used to `return …: &str` before the
                 // late Into upgrade (windjammer-ui `StatusChip::label`).
-                // Skip only pub *free-fn* APIs that must keep concrete `String` (P3.264).
+                // `keep_concrete` blocks `&str` demotion for owned free-fn formals (P3.264),
+                // but must not block builder-forward Into (`render_grid` → `value_html`) —
+                // Into accepts `&str` at the Rust boundary (P3.601).
                 let keep_concrete_pub_free_string_early = func.parent_type.is_none()
                     && self.pub_module_api_keeps_owned_string_formal(func, param);
+                let builder_into_early =
+                    self.param_pub_free_string_builder_forward(func, param);
                 if param.name != "self"
-                    && !keep_concrete_pub_free_string_early
-                    && (self.param_should_emit_into_string_formal(func, param, payload_stored)
-                        || self.param_pub_free_string_builder_forward(func, param))
+                    && (builder_into_early
+                        || (!keep_concrete_pub_free_string_early
+                            && self.param_should_emit_into_string_formal(
+                                func,
+                                param,
+                                payload_stored,
+                            )))
                 {
                     self.into_string_formal_params.insert(param.name.clone());
                     self.str_ref_optimized_params.remove(&param.name);
@@ -3458,19 +3466,23 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // windjammer-ui / Rust interop: pub builder formals that store owned `string`
                 // into payload fields accept `&str` via `impl Into<String>`.
-                // Skip only for pub *free-fn* APIs that must keep concrete `String` (P3.264).
+                // `keep_concrete` blocks `&str` demotion only — builder-forward Into still
+                // wins so `render_grid("$1", …)` typechecks (P3.601).
                 // P3.589: P3.587 extended `pub_module_api_keeps_owned_string_formal` to
                 // methods (notes-api `handle`); that must not block impl builders
                 // (`StatusChip::new` / `.label`) from emitting `impl Into<String>`.
                 let keep_concrete_pub_free_string = func.parent_type.is_none()
                     && self.pub_module_api_keeps_owned_string_formal(func, param);
-                // Also upgrade demoted `&str` builder slots (`StatusChip::label`) — Into
-                // must win over str_ref demotion so Rust callers pass bare literals.
-                let into_string_eligible = self
-                    .param_should_emit_into_string_formal(func, param, payload_stored)
-                    || self.param_pub_free_string_builder_forward(func, param);
+                let builder_into =
+                    self.param_pub_free_string_builder_forward(func, param);
+                let into_string_eligible = builder_into
+                    || (!keep_concrete_pub_free_string
+                        && self.param_should_emit_into_string_formal(
+                            func,
+                            param,
+                            payload_stored,
+                        ));
                 if param.name != "self"
-                    && !keep_concrete_pub_free_string
                     && into_string_eligible
                     && (type_str == "String"
                         || type_str == "&str"
@@ -3752,12 +3764,18 @@ impl<'ast> CodeGenerator<'ast> {
     /// Not for private helpers (`check_nonempty` → `require_nonempty`): Into is a pub Rust
     /// boundary encoding; private formals that rebind via `own(field)` must stay `String` so
     /// call-site `into_string_formal_params` does not paint shadowed locals with `.into()`.
+    /// Not for non-text params (`dispatch(note: Note)`): Into is string-only (P3.601).
     fn param_pub_free_string_builder_forward(
         &self,
         func: &FunctionDecl<'_>,
         param: &crate::parser::Parameter,
     ) -> bool {
         if !func.is_pub {
+            return false;
+        }
+        if !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_)
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+        {
             return false;
         }
         if func.parameters.iter().any(|p| p.name == "self") {
@@ -3791,6 +3809,8 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Every use of `param_name` is as a direct argument in a `Call` / `MethodCall`.
+    /// Nested blocks that do not mention the param are vacuous (P3.601: `render_grid`
+    /// forwards into `value_html` then branches on `ok` without re-using the strings).
     fn param_all_call_sites_are_method_or_call_args(
         &self,
         body: &[&Statement<'_>],
@@ -3798,18 +3818,30 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'_>,
     ) -> bool {
         let mut saw = false;
+        self.param_call_sites_are_method_or_call_args_walk(
+            body, param_name, func, &mut saw,
+        ) && saw
+    }
+
+    fn param_call_sites_are_method_or_call_args_walk(
+        &self,
+        body: &[&Statement<'_>],
+        param_name: &str,
+        func: &FunctionDecl<'_>,
+        saw: &mut bool,
+    ) -> bool {
         for stmt in body {
             match stmt {
                 Statement::Expression { expr, .. }
                 | Statement::Return {
                     value: Some(expr), ..
                 } => {
-                    if !self.param_expr_only_method_call_arg_uses(expr, param_name, &mut saw) {
+                    if !self.param_expr_only_method_call_arg_uses(expr, param_name, saw) {
                         return false;
                     }
                 }
                 Statement::Let { value, .. } => {
-                    if !self.param_expr_only_method_call_arg_uses(value, param_name, &mut saw) {
+                    if !self.param_expr_only_method_call_arg_uses(value, param_name, saw) {
                         return false;
                     }
                 }
@@ -3818,18 +3850,20 @@ impl<'ast> CodeGenerator<'ast> {
                     else_block,
                     ..
                 } => {
-                    if !self.param_all_call_sites_are_method_or_call_args(
+                    if !self.param_call_sites_are_method_or_call_args_walk(
                         then_block.as_slice(),
                         param_name,
                         func,
+                        saw,
                     ) {
                         return false;
                     }
                     if let Some(b) = else_block {
-                        if !self.param_all_call_sites_are_method_or_call_args(
+                        if !self.param_call_sites_are_method_or_call_args_walk(
                             b.as_slice(),
                             param_name,
                             func,
+                            saw,
                         ) {
                             return false;
                         }
@@ -3838,7 +3872,7 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => {}
             }
         }
-        saw
+        true
     }
 
     fn param_expr_only_method_call_arg_uses(
