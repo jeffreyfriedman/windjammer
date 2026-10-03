@@ -510,16 +510,29 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             },
                         );
-                        let mut contract_sig = receiver_rt
-                            .as_deref()
-                            .and_then(|rt| {
+                        // Start from the IR/mc_resolve signature (`fallback_sig`). Replacing
+                        // it with `resolve_method_function_signature` reintroduced bare leaf
+                        // analysis stubs (`info` Borrowed + `Reference(str)`, no emit flags)
+                        // that peeled `String::from("a")` back to `"a"` (P3.602 Logger).
+                        let mut contract_sig = fallback_sig.clone();
+                        if contract_sig.emitted_rust_ref_params.is_none() {
+                            if let Some(resolved) = receiver_rt.as_deref().and_then(|rt| {
                                 self.resolve_method_function_signature(
                                     rt,
                                     method,
                                     arguments.len(),
                                 )
-                            })
-                            .unwrap_or_else(|| fallback_sig.clone());
+                            }) {
+                                // Only adopt when it is not weaker than the IR sig.
+                                let adopt = crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                                    &resolved,
+                                    &contract_sig,
+                                ) || resolved.emitted_rust_ref_params.is_some();
+                                if adopt {
+                                    contract_sig = resolved;
+                                }
+                            }
+                        }
                         if object_is_runtime_std_module {
                             // No receiver type (`strings.starts_with`) — still refresh from
                             // the qualified runtime key so AsRef/`&str` beats WJ owned stubs.
