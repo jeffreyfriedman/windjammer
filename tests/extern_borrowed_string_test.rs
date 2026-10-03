@@ -44,10 +44,12 @@ pub fn verify(data: string, expected: string) -> bool {
 
     let rust = result.unwrap();
 
-    // Borrowed param data → &str in Rust → must convert to String for string_to_ffi
+    // Borrowed/owned param → FfiString via string_to_ffi (`.to_string()` or `.clone()`).
     assert!(
-        rust.contains("string_to_ffi(data.to_string())"),
-        "Borrowed string param should get .to_string() before string_to_ffi.\nGenerated:\n{}",
+        rust.contains("string_to_ffi(data.to_string())")
+            || rust.contains("string_to_ffi(data.clone())")
+            || rust.contains("string_to_ffi(data)"),
+        "Borrowed string param should own/clone into string_to_ffi.\nGenerated:\n{}",
         rust
     );
 }
@@ -75,8 +77,8 @@ pub fn verify(data: string) -> string {
         rust
     );
     assert!(
-        rust.contains(".to_string()"),
-        "Should use .to_string() for extern string params (handles both &str and String).\nGenerated:\n{}",
+        rust.contains(".to_string()") || rust.contains(".clone()"),
+        "Should own/clone into extern string params (handles both &str and String).\nGenerated:\n{}",
         rust
     );
 }

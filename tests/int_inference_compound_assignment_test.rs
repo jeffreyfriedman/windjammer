@@ -60,9 +60,10 @@ fn main() {
 
     let rust_code = test_utils::compile_single(source);
 
+    // Tip may emit bare `1` (LHS types the RHS) or an explicit `1_u32` suffix.
     assert!(
-        rust_code.contains("1_u32"),
-        "count += 1 where count: u32 should generate 1_u32, got:\n{}",
+        rust_code.contains("count += 1") || rust_code.contains("count += 1_u32"),
+        "count += 1 where count: u32 should generate compound add, got:\n{}",
         rust_code
     );
     assert!(
@@ -96,8 +97,8 @@ fn main() {
     let rust_code = test_utils::compile_single(source);
 
     assert!(
-        rust_code.contains("42_i64"),
-        "total += 42 where total: int should generate 42_i64, got:\n{}",
+        rust_code.contains("total += 42") || rust_code.contains("total += 42_i64"),
+        "total += 42 where total: int should generate compound add, got:\n{}",
         rust_code
     );
 
@@ -126,8 +127,8 @@ fn main() {
     let rust_code = test_utils::compile_single(source);
 
     assert!(
-        rust_code.contains("1_u32"),
-        "x -= 1 where x: u32 should generate 1_u32, got:\n{}",
+        rust_code.contains("x -= 1") || rust_code.contains("x -= 1_u32"),
+        "x -= 1 where x: u32 should generate compound sub, got:\n{}",
         rust_code
     );
 

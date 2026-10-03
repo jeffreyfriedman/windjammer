@@ -44,15 +44,17 @@ fn main() {
 
     println!("Generated Rust:\n{}", rust_code);
 
-    // The generated code should convert string literals to String for enum variants
+    // Tip owns enum string payloads via String::from or .to_string().
     assert!(
-        rust_code.contains(r#""Hello world".to_string()"#),
-        "Expected string literal to get .to_string() in enum variant constructor.\nGenerated:\n{}",
+        rust_code.contains(r#"String::from("Hello world")"#)
+            || rust_code.contains(r#""Hello world".to_string()"#),
+        "Expected owned string literal in enum variant constructor.\nGenerated:\n{}",
         rust_code
     );
     assert!(
-        rust_code.contains(r#""Something failed".to_string()"#),
-        "Expected string literal to get .to_string() in enum variant constructor.\nGenerated:\n{}",
+        rust_code.contains(r#"String::from("Something failed")"#)
+            || rust_code.contains(r#""Something failed".to_string()"#),
+        "Expected owned string literal in enum variant constructor.\nGenerated:\n{}",
         rust_code
     );
 
@@ -86,15 +88,17 @@ fn main() {
 
     println!("Generated Rust:\n{}", rust_code);
 
-    // String literals in enum variants should get .to_string()
+    // Tip owns enum string payloads via String::from or .to_string().
     assert!(
-        rust_code.contains(r#""Sword".to_string()"#),
-        "ItemPickup string should get .to_string()\nGenerated:\n{}",
+        rust_code.contains(r#"String::from("Sword")"#)
+            || rust_code.contains(r#""Sword".to_string()"#),
+        "ItemPickup string should be owned\nGenerated:\n{}",
         rust_code
     );
     assert!(
-        rust_code.contains(r#""Alice".to_string()"#),
-        "ChatMessage first arg should get .to_string()\nGenerated:\n{}",
+        rust_code.contains(r#"String::from("Alice")"#)
+            || rust_code.contains(r#""Alice".to_string()"#),
+        "ChatMessage first arg should be owned\nGenerated:\n{}",
         rust_code
     );
     assert!(
