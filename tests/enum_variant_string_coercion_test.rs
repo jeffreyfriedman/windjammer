@@ -102,8 +102,9 @@ fn main() {
         rust_code
     );
     assert!(
-        rust_code.contains(r#""Hello".to_string()"#),
-        "ChatMessage second arg should get .to_string()\nGenerated:\n{}",
+        rust_code.contains(r#"String::from("Hello")"#)
+            || rust_code.contains(r#""Hello".to_string()"#),
+        "ChatMessage second arg should be owned\nGenerated:\n{}",
         rust_code
     );
 
