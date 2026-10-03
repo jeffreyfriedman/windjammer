@@ -412,6 +412,17 @@ impl<'ast> CodeGenerator<'ast> {
                     self.codegen_i32_binding_names.insert(name.to_string());
                 }
             }
+            if matches!(
+                value,
+                Expression::Unary {
+                    op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
+                    ..
+                }
+            ) {
+                self.explicit_ref_let_bindings.insert(name.to_string());
+            } else {
+                self.explicit_ref_let_bindings.remove(name);
+            }
             if mutable
                 && Self::mut_let_rhs_is_return_width_counter(value)
                 && !crate::codegen::rust::type_casting::expression_is_negative_int_init(value)

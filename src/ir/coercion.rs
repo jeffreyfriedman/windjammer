@@ -66,21 +66,23 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
         };
     }
 
-    // Copy types: pass by value. Ref bindings (`let ri = &i`) need `*ri` into owned
-    // Copy formals — Rust does not auto-copy `&T` at by-value call sites. `apply_coercion`
-    // still strips a leading `&` on `&x` text (same as former StripBorrow).
+    // Copy types: pass by value; strip spurious borrows when callee expects owned/copy.
+    // True `&T` locals (`let ri = &i`) are deref'd at emit when
+    // `identifier_already_ref` (see usize / owned-Copy call-arg paths) — do not
+    // blanket Deref here: for-loop Copy bindings are often typed Ref in IR while
+    // the Rust binding is already a value (`dirty.push(*pos)` regression).
     // `OwnedType::Copy` is set from the Copy registry (aggregates like BatchHandle),
     // not only primitive `is_copy_base`.
     if matches!(expected_own, OwnedType::Copy)
         && matches!(actual_own, OwnedType::Ref(_))
     {
-        return CoercionKind::Deref;
+        return CoercionKind::StripBorrow;
     }
     if matches!(expected_own, OwnedType::Copy | OwnedType::Owned)
         && matches!(actual_own, OwnedType::Ref(_))
         && is_copy_base(&expected.base)
     {
-        return CoercionKind::Deref;
+        return CoercionKind::StripBorrow;
     }
     if matches!(actual_own, OwnedType::Copy)
         && matches!(expected_own, OwnedType::Owned | OwnedType::Copy)
@@ -169,9 +171,10 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
                 if is_string_base(&expected.base) {
                     CoercionKind::ToOwnedString
                 } else if is_copy_base(&actual.base) || is_copy_base(&expected.base) {
-                    // Owned Copy formal: deref ref bindings (`*ri`); encoding strips
-                    // leading `&` on `&x` text so we never emit `*&x`.
-                    CoercionKind::Deref
+                    // Owned Copy formal: strip `&` / pass bare value. True ref locals
+                    // (`let ri = &i`) get `*` from call-arg emit when
+                    // `identifier_already_ref` — not a blanket Deref (for-loop Copy).
+                    CoercionKind::StripBorrow
                 } else {
                     CoercionKind::Clone
                 }
@@ -710,10 +713,11 @@ mod tests {
         let tuple = BaseType::Tuple(vec![BaseType::I32, BaseType::I32]);
         let actual = borrowed(tuple.clone());
         let expected = owned(tuple);
-        // Ref binding → owned Copy: Deref (`*ri`); encoding strips leading `&` on `&x`.
+        // Owned Copy formals: StripBorrow; true `&T` locals deref at emit via
+        // `identifier_already_ref` (not blanket Deref — for-loop Copy bindings).
         assert_eq!(
             compute_coercion(&actual, &expected),
-            CoercionKind::Deref
+            CoercionKind::StripBorrow
         );
     }
 

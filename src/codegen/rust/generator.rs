@@ -289,6 +289,10 @@ pub struct CodeGenerator<'ast> {
     // and match-bound patterns (Some(x) from Option<Foo> → x: Foo).
     // Enables qualified method signature lookup for local variables (e.g., x.method() → Foo::method)
     pub(crate) local_var_types: std::collections::HashMap<String, Type>,
+    /// Locals bound with explicit `let ri = &i` / `&mut i` (not for-loop `&map`
+    /// pattern bindings). Used so `identifier_already_ref` can deref true ref
+    /// lets into owned Copy/usize without `*pos` on iterator Copy keys.
+    pub(crate) explicit_ref_let_bindings: std::collections::HashSet<String>,
     // STRUCT FIELD TYPE TRACKING: Map struct names to their field types
     // Enables type inference for field accesses (e.g., self.transforms → ComponentArray<T>)
     pub(crate) struct_field_types:
@@ -750,6 +754,7 @@ impl<'ast> CodeGenerator<'ast> {
             generating_traits: std::collections::HashSet::new(),
             recursion_depth: 0,
             local_var_types: std::collections::HashMap::new(),
+            explicit_ref_let_bindings: std::collections::HashSet::new(),
             struct_field_types: std::collections::HashMap::new(),
             user_declared_struct_names: std::collections::HashSet::new(),
             tuple_struct_names: std::collections::HashSet::new(),
@@ -2621,13 +2626,10 @@ impl<'ast> CodeGenerator<'ast> {
         if self.current_fn_emitted_formal_is_shared_ref(name) {
             return true;
         }
-        // `let ri = &i` locals are Type::Reference in local_var_types but are not
-        // params / inferred_borrowed_params — still shared-ref bindings at call
-        // sites (`*ri as usize`, not `ri as usize`).
-        if matches!(
-            self.local_var_types.get(name),
-            Some(Type::Reference(_))
-        ) {
+        // Explicit `let ri = &i` only — not for-loop `for (pos, _) in &map`
+        // pattern bindings (those are also Type::Reference but Copy keys must
+        // stay bare `pos` / auto-copy, not `*pos`).
+        if self.explicit_ref_let_bindings.contains(name) {
             return true;
         }
         // Analyzer `Type::Reference` / `OwnershipHint::Ref` is not emit-truth for
