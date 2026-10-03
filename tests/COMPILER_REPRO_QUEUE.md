@@ -1,5 +1,39 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.605 (2026-10-03) — pure-forward MutBorrowed passthrough must emit `&mut T`
+
+`wrapper(grid)` → `do_clear(grid: &mut VoxelGrid)` analyzer-correct MutBorrowed was
+emitted as shared `grid: &VoxelGrid` because the pure-forwarding-delegate formal
+path always used `borrowed_formal_rust_type_for_param` (shared `&T`) whenever the
+callee was any borrow, including MutBorrowed.
+
+| Gate | Status |
+|------|--------|
+| `test_passthrough_collision_preserves_mut` | ✅ tip GREEN — `wrapper(grid: &mut VoxelGrid)` |
+| `test_method_collision_does_not_suppress_mutation_inference` | ✅ still GREEN |
+| `passthrough_qualified_call_*` / `bug_mut_reborrow_*` (related) | ✅ still GREEN |
+
+**Root cause layer:** coercion/encoding (formal emit) — pure-forward borrow emit
+must honor MutBorrowed / mut-borrowing callee signatures, not force shared `&T`.
+
+**What became unnecessary:** shared-`&T` demotion of mut-passthrough wrappers that
+already had analyzer MutBorrowed + MutBorrowed callee formals.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+export WJ_BINARY=$CARGO_TARGET_DIR/release/wj
+cargo test --release --test all -- method_collision_mutation passthrough_qualified bug_mut_reborrow
+```
+→ 6 GREEN.
+
+**Still RED (next):** `library_multipass_owned_string_to_string_method_must_borrow`
+(`load(path: String)` + `path.clone()` despite `strings::len(&path)`),
+`test_fn_arg_string_literal_to_borrowed`, `test_mixed_coercion_multiple_args`
+(`ri as usize` missing deref).
+
+**Do not steal:** WDB tip-outs / notes_api mut-query product tip-outs.
+
 ## P3.604 (2026-10-03) — tip-truth: push lit String::from / contains `&String`
 
 | Gate | Status |
