@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.593 (2026-10-02) — TDD WDB-432 (DB agent; no compiler src)
+
+Indexed Copy element + cast must not `.clone()`; product emits
+`children_copy[c].clone() as u64`.
+
+| Gate | Status |
+|------|--------|
+| WDB-432 MultiFile | ⏳ TDD pending — `children[i] as u64` |
+| WDB-432 tip-out | ⏳ TDD pending — `children_copy[c].clone() as u64` |
+
+**Root cause layer:** copy / index — indexed Copy before cast must not auto-clone.
+
+**Why this is a new class:**
+- WDB-423 is indexed Copy into arith (`offsets[i].clone()`).
+- WDB-370 is indexed then `.field.clone()`.
+- WDB-431 is struct **field** `material_id.clone()`.
+
+**What became unnecessary:** `children_copy[c].clone() as u64` in scene graph walk.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+
+**Do not steal:** WDB-406/408/411/431, P3.508–P3.592, WDB-412–431 (filed).
+
 ## P3.592 (2026-10-02) — TDD WDB-431 (DB agent; no compiler src)
 
 Copy `u64` field into insert/push owned formal must not `.clone()`; product emits
@@ -7,8 +30,8 @@ Copy `u64` field into insert/push owned formal must not `.clone()`; product emit
 
 | Gate | Status |
 |------|--------|
-| WDB-431 MultiFile | ⏳ TDD pending — `ids.push(node.material_id)` |
-| WDB-431 tip-out | ⏳ TDD pending — `material_id.clone()` in scene_graph_state |
+| WDB-431 MultiFile | ✅ GREEN @ `9dcb583b` — isolate `ids.push(node.material_id)` no `.clone()` |
+| WDB-431 tip-out | ❌ RED @ `9dcb583b` — `material_id.clone()` in scene_graph_state |
 
 **Root cause layer:** copy / field — Copy integer fields into owned formals must not auto-clone.
 
@@ -19,7 +42,7 @@ Copy `u64` field into insert/push owned formal must not `.clone()`; product emit
 
 **What became unnecessary:** `node.material_id.clone()` in material collection.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+**Gates:** TDD ran 2026-10-02 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/430, P3.508–P3.591, WDB-412–430 / P3.509–P3.573 (filed).
 
