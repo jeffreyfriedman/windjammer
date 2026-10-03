@@ -356,9 +356,10 @@ impl Request {
 // ServerResponse - Build Responses
 
 impl ServerResponse {
-    fn new(status: u16, body: string) -> ServerResponse {
+    // Match windjammer-runtime: status is Windjammer `int` (i64); field stays u16.
+    fn new(status: int, body: string) -> ServerResponse {
         ServerResponse {
-            status: status,
+            status: status as u16,
             headers: vec![],
             body: body,
             binary_body: None,
@@ -473,18 +474,18 @@ impl ServerResponse {
         }
     }
 
-    fn error(status: u16, message: string) -> ServerResponse {
+    fn error(status: int, message: string) -> ServerResponse {
         ServerResponse {
-            status: status,
+            status: status as u16,
             headers: vec![("Content-Type", "text/plain")],
             body: message,
             binary_body: None,
         }
     }
 
-    fn binary(status: u16, data: Vec<u8>) -> ServerResponse {
+    fn binary(status: int, data: Vec<u8>) -> ServerResponse {
         ServerResponse {
-            status: status,
+            status: status as u16,
             headers: vec![],
             body: "",
             binary_body: Some(data),

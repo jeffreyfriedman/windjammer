@@ -67,21 +67,29 @@ Product `wj-proxy` `base_response(status: u16, …)`: `let code = 404` /
 
 | Gate | Status |
 |------|--------|
-| `u16_ambient_int_lit_into_server_response_new_must_be_i64` | ❌ tip RED — product proxy |
+| `u16_ambient_int_lit_into_server_response_new_must_be_i64` | ✅ tip GREEN — multipass `404_i64` / `500_i64` |
+| `server_response_new_int_literal_must_coerce_to_u16` | ✅ still GREEN (bare int → int formal) |
+| `if_int_status_into_u16_formal_must_coerce` | ✅ still GREEN |
+| `server_response_new_status_is_i64` (lib) | ✅ tip GREEN — runtime registry i64 |
 
-**Root cause layer:** constraint / call-formal — ambient u16 param must not win
-over `ServerResponse::new` i64 status slot for int lits and `as int`.
+**Root cause layer:** signature — WJ `std/http.wj` `ServerResponse::new`/`error`/`binary`
+were `status: u16` while runtime takes `i64`. Multipass preferred the WJ stub, so
+`let_binding_int_width_from_later_call_formals` painted `_u16`. Flat isolate already
+saw runtime i64 (false-GREEN).
 
-**Why this is a new class:**
-- `server_response_new_int_literal_must_coerce_to_u16` targeted old u16 formals.
-- P3.492 if-int→u16 is the reverse paint direction.
+**What became unnecessary:** product proxy status-type rewrites; ambient-u16 peels
+once WJ stubs match runtime `int` formals (`status as u16` into the u16 field).
 
-**What became unnecessary:** dropping `u16` status types or manual `.into()` in proxy.
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --test all -- u16_ambient_int_lit_into_server_response \
+  server_response_new_int_literal_must_coerce if_int_status_into_u16_formal
+cargo test --release -p windjammer --lib server_response_new_status_is_i64
+```
+→ 3+1 GREEN.
 
-**Gates:** tip p3589c `wj-proxy` `$WJ test` RED 2026-10-02; cargo gate must FAIL until fixed.
-- `cargo test --test all --features integration_tests,codegen_tests -- u16_ambient_int_lit_into_server_response_new_must_be_i64`
-
-**Do not steal:** WDB-406/408/411/430–433, P3.508–P3.595, WDB-412–433 (filed).
+**Do not steal:** WDB tip-outs / WDB-430–433 / P3.594–595 TDD.
 
 ## P3.595 (2026-10-02) — TDD WDB-433 (DB agent; no compiler src)
 

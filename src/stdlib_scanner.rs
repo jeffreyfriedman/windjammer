@@ -2011,6 +2011,26 @@ mod tests {
     }
 
     #[test]
+    fn server_response_new_status_is_i64() {
+        let mut reg = SignatureRegistry::new();
+        populate_runtime_signatures(&mut reg).expect("scan runtime");
+        let typed = reg
+            .get_signature("ServerResponse::new")
+            .expect("ServerResponse::new must register");
+        eprintln!("ServerResponse::new params={:?}", typed.param_types);
+        let status = typed
+            .formal_param_type(0)
+            .cloned()
+            .or_else(|| typed.param_types.first().cloned());
+        let ok = match &status {
+            Some(crate::parser::Type::Int) => true,
+            Some(crate::parser::Type::Custom(n)) if n == "i64" || n == "int" => true,
+            _ => false,
+        };
+        assert!(ok, "status must be i64/int, got {:?}", status);
+    }
+
+    #[test]
     fn rust_std_mpsc_and_thread_spawn_boundary_signatures_registered() {
         let reg = SignatureRegistry::stdlib();
         let sync_ch = reg
