@@ -4196,10 +4196,15 @@ impl<'ast> CodeGenerator<'ast> {
         // demote on readonly empty-append before checking owned-callee forwards.
         // P3.587: emitted-owned sibling forwards (`App::handle` → `inner(origin: String)`)
         // beat stale Borrowed / shared-ref metadata that would otherwise clear this flag.
+        // Exclusive forwards into borrowed-text siblings (`set_bool` → `find_index(&str)`)
+        // must not count as owned passthrough via stale same-impl AST Owned formals.
+        let exclusive_borrowed_text =
+            self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func);
         let passed_into_owned = self.param_passed_as_call_argument(body, &param.name, func)
+            && !exclusive_borrowed_text
             && (self.param_only_forwards_to_emitted_owned_callees(body, &param.name, func)
                 || self.param_passes_to_wj_owned_sibling_call(body, &param.name, func)
-                || (!self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func)
+                || (!exclusive_borrowed_text
                     && !self.param_call_sites_expect_borrow(body, &param.name, func)));
         if (self.param_has_readonly_expression_use(body, &param.name)
             || self.param_only_appears_in_formatting_macro(body, &param.name))

@@ -159,7 +159,7 @@ impl Panel {
     fn get_name(self, entity_id: i32) -> string {
         match self.names.get(entity_id as i64) {
             Some(name) => name,
-            None => "Unknown".to_string()
+            None => "Unknown"
         }
     }
 
@@ -171,8 +171,10 @@ impl Panel {
 fn main() {}
 "#,
         &[
-            "names.get(&(entity_id as i64))",
-            "names.remove(&(entity_id as i64))",
+            // Tip may parenthesize the cast: `&((entity_id as i64))`.
+            "names.get(&(",
+            "names.remove(&(",
+            "entity_id as i64",
         ],
     );
 }

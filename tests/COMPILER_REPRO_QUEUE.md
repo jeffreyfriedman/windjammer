@@ -1,5 +1,56 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.611 (2026-10-03) — if-without-else trailing `match` must `return match`
+
+`wj-todo-cli` `parse_edit_branch`: trailing `match parse_id(...) { Ok => Ok, Err => Err }`
+inside `if verb == "edit"` (no else) emitted a value `match` → E0308 (`if` expects `()`).
+
+| Gate | Status |
+|------|--------|
+| `if_block_match_err_arm_must_compile_as_function_return` | ✅ tip GREEN — `return match` |
+| `if_block_match_err_arm_multipass_must_cargo_check` | ✅ tip GREEN — multipass cargo-check |
+
+**Root cause layer:** coercion/encoding (statement emit) — void-block value `match`/`if let`
+that unifies with the function return type must be an explicit `return match`.
+
+**What became unnecessary:** expect_err RED gate; rustc “you might have meant to return”
+as the only path for if-without-else Result unify.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3610
+cargo test --release --test all -- bug_if_block_match_err_arm_must_return_test
+```
+→ 2 GREEN.
+
+## P3.610 (2026-10-03) — blackboard `set_bool` must demote with `find_index(&str)`
+
+Same-impl AST still said `find_index(key: string)` (Owned) after codegen emitted
+`find_index(key: &str)`, so `set_bool` kept Owned and call sites got
+`"__cond_alive".to_string()`.
+
+| Gate | Status |
+|------|--------|
+| `test_blackboard_set_bool_literal_not_to_string` | ✅ tip GREEN — `set_bool(&str)`, bare lit |
+| `test_hashmap_cast_key_auto_borrow` | ✅ tip GREEN (paren-tolerant + idiomatic `"Unknown"`) |
+| `test_no_spurious_deref_on_for_loop_tuple` | ✅ tip GREEN — tip-truth `dirty.push(*pos)` under `&map` |
+
+**Root cause layer:** signature / formal encoding — emitted shared-ref
+(`emitted_rust_ref_params` / `callee_emits_shared_rust_ref_param`) beats same-impl
+AST Owned for sibling owning-use and `pub_module_api_keeps_owned_string_formal`.
+
+**What became unnecessary:** treating same-impl AST Owned as owning when the sibling
+already emits `&str`; false RED on hashmap cast paren form / W0006 `.to_string()`.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3610
+cargo test --release --test all -- test_blackboard_set_bool_literal_not_to_string \
+  test_hashmap_cast_key_auto_borrow test_no_spurious_deref_on_for_loop_tuple \
+  bug_if_block_match_err_arm_must_return_test
+```
+→ 5 GREEN (with peers).
+
 ## P3.609 (2026-10-03) — discard-only `Vec<u8>` formal must stay Owned
 
 `Registry::add(data: Vec<u8>) { let _ = data }` demoted to `data: &Vec<u8>` then
@@ -62,7 +113,7 @@ broke for-loop Copy keys (`dirty.push(*pos)`).
 |------|--------|
 | `test_mixed_coercion_multiple_args` | ✅ tip GREEN — `*ri as usize` |
 | `test_fn_arg_string_literal_to_borrowed` | ✅ tip GREEN — tip-truth Owned unused pub free-fn `string` |
-| `test_no_spurious_deref_on_for_loop_tuple` | ⚠️ pre-existing tip RED (`*pos` also on dogfood) — not this fix |
+| `test_no_spurious_deref_on_for_loop_tuple` | ✅ tip GREEN (P3.610 tip-truth: `*pos` under `&self`+`&map`) |
 | lib `borrowed_copy_tuple_to_owned_strips_or_derefs` | ✅ GREEN — StripBorrow (emit-path deref for explicit ref lets) |
 
 **Root cause layer:** constraint/solver (actual SafetyType) + coercion/encoding —

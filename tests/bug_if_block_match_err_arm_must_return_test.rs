@@ -28,8 +28,8 @@ const PARSE_EDIT: &str = include_str!("fixtures/library_multipass/parse_edit_if_
 fn if_block_match_err_arm_must_compile_as_function_return() {
     let generated = test_utils::compile_single(PARSE_EDIT);
     assert!(
-        generated.contains("return Ok(") || generated.contains("return Err("),
-        "if-block trailing match must emit return; got:\n{generated}"
+        generated.contains("return match"),
+        "if-block trailing match must emit return match; got:\n{generated}"
     );
 }
 
@@ -51,7 +51,7 @@ pub use commands::parse_edit_branch
         .get("commands.rs")
         .expect("commands.rs");
 
-    project.cargo_check().expect_err(
-        "RED: if-block match Err arm multipass must fail cargo-check until return unify is fixed",
-    );
+    project
+        .cargo_check()
+        .expect("if-block trailing match must cargo-check via return match unify");
 }

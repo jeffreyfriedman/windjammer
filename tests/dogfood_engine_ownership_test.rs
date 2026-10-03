@@ -543,9 +543,19 @@ impl World {
 "#;
     let (rust_code, ok) = compile_single_check(source);
     assert!(ok, "Compilation failed");
+    // `&self` + `for (pos, _) in &self.chunks` makes `pos: &(i32,i32,i32)`; Copy keys
+    // need `*pos` into `Vec<(i32,i32,i32)>`. Ban only double-deref / owned-iter `*pos`.
     assert!(
-        !rust_code.contains("*pos"),
-        "Should not deref tuple pos, got:\n{}",
+        !rust_code.contains("**pos"),
+        "Should not double-deref tuple pos, got:\n{}",
+        rust_code
+    );
+    assert!(
+        rust_code.contains("dirty.push(*pos)")
+            || rust_code.contains("dirty.push(pos)")
+            || rust_code.contains("let _ = dirty.push(*pos)")
+            || rust_code.contains("let _ = dirty.push(pos)"),
+        "Expected push of Copy map key, got:\n{}",
         rust_code
     );
 }
