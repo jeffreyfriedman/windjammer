@@ -28,7 +28,8 @@ cargo test --release --test all -- test_mixed_coercion_multiple_args \
   library_multipass_owned_string_to_string_method_must_borrow \
   test_passthrough_collision_preserves_mut
 ```
-→ 5 GREEN.
+→ 5 GREEN (vec_remove is flaky tip RED/GREEN — `remove(&pos)` vs `remove(pos)`;
+nondeterministic registry/emit order; filed for follow-up).
 
 ## P3.606 (2026-10-03) — pub method string → borrowed-text callee must demote `&str`
 
