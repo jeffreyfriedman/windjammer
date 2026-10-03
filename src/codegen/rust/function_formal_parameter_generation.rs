@@ -140,8 +140,10 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.remove(&param.name);
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
-                // Same-file borrow passthrough wrappers (`wrapper` → `process`) must emit
-                // `&T` once the callee's preregistered/emitted formal converged to shared borrow.
+                // Same-file borrow passthrough wrappers (`wrapper` → `process` / `do_clear`)
+                // must emit a Rust ref once the callee's formal converged to borrow.
+                // MutBorrowed callees (`do_clear(grid: &mut VoxelGrid)`) must stay `&mut T`
+                // — shared `&T` breaks mutation passthrough (method_collision_mutation).
                 // Copy scalars stay owned — Rust auto-borrows into Vec::contains (auto_ref_deref_copy).
                 if param.name != "self"
                     && self.func_is_pure_forwarding_delegate(func)
@@ -166,10 +168,46 @@ impl<'ast> CodeGenerator<'ast> {
                         func,
                     )
                 {
-                    let type_str = self.borrowed_formal_rust_type_for_param(param, func, param_idx);
+                    let mut_borrow_formal = self.inferred_mut_borrowed_params.contains(&param.name)
+                        || matches!(
+                            analyzed.inferred_ownership.get(&param.name),
+                            Some(OwnershipMode::MutBorrowed)
+                        )
+                        || self.param_passed_to_mut_borrowing_callee(
+                            func.body.as_slice(),
+                            &param.name,
+                            func,
+                        )
+                        || (self
+                            .global_signature_for_function(func)
+                            .and_then(|sig| sig.param_types.get(param_idx))
+                            .is_some_and(|t| matches!(t, Type::MutableReference(_)))
+                            || matches!(
+                                self.global_signature_for_function(func)
+                                    .and_then(|sig| sig.param_ownership.get(param_idx)),
+                                Some(OwnershipMode::MutBorrowed)
+                            ));
+                    let type_str = if mut_borrow_formal {
+                        format!("&mut {}", self.type_to_rust(&param.type_))
+                    } else {
+                        self.borrowed_formal_rust_type_for_param(param, func, param_idx)
+                    };
                     self.emitted_rust_ref_formals.insert(param.name.clone());
-                    self.inferred_borrowed_params.insert(param.name.clone());
-                    self.inferred_mut_borrowed_params.remove(&param.name);
+                    if mut_borrow_formal {
+                        self.inferred_mut_borrowed_params.insert(param.name.clone());
+                        self.inferred_borrowed_params.remove(&param.name);
+                        let user_arg_idx = func
+                            .parameters
+                            .iter()
+                            .filter(|p| p.name != "self")
+                            .position(|p| p.name == param.name)
+                            .unwrap_or(param_idx);
+                        self.current_fn_emitted_mut_arg_indices
+                            .insert(user_arg_idx);
+                    } else {
+                        self.inferred_borrowed_params.insert(param.name.clone());
+                        self.inferred_mut_borrowed_params.remove(&param.name);
+                    }
                     if type_str == "&str"
                         || type_str.starts_with("&'a str")
                         || type_str.ends_with(" str")
