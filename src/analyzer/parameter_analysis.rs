@@ -482,15 +482,65 @@ impl<'ast> Analyzer<'ast> {
         // to Borrowed solely because the body is `Err("not implemented")` — that made
         // call sites emit `&vec![...]` (E0308). Broader unused non-text stays Borrowed
         // so readonly field/format uses still demote (`object: &SceneObject`).
+        //
+        // P3.609: discard-only stubs (`let _ = data`) are the same contract — demoting
+        // to `&Vec<u8>` forced `add(..., &vec![…])` at call sites (engine component_storage).
         if crate::type_classification::type_is_vec_container(param_type) {
             if !body
                 .iter()
                 .any(|stmt| self.statement_uses_identifier(param_name, stmt))
+                || self.param_only_used_in_discarding_lets(param_name, body)
             {
                 return Ok(OwnershipMode::Owned);
             }
         }
         Ok(OwnershipMode::Borrowed)
+    }
+
+    /// True when every use of `param_name` is a discarding `let _ = …` binding
+    /// (`let _ = data` / `let _ = (data,)`). Not a real read — keep Vec Owned.
+    fn param_only_used_in_discarding_lets(
+        &self,
+        param_name: &str,
+        body: &[&'ast Statement<'ast>],
+    ) -> bool {
+        use crate::parser::{Expression, Pattern, Statement};
+        let mut saw = false;
+        for stmt in body {
+            match stmt {
+                Statement::Let {
+                    pattern: Pattern::Wildcard,
+                    value,
+                    ..
+                } => {
+                    if !self.expression_uses_identifier(param_name, value) {
+                        continue;
+                    }
+                    let discard_ok = match value {
+                        Expression::Identifier { name, .. } => name == param_name,
+                        Expression::Tuple { elements, .. } => elements.iter().all(|el| {
+                            matches!(
+                                el,
+                                Expression::Identifier { name, .. } if name == param_name
+                            ) || !self.expression_uses_identifier(param_name, el)
+                        }) && elements.iter().any(|el| {
+                            matches!(
+                                el,
+                                Expression::Identifier { name, .. } if name == param_name
+                            )
+                        }),
+                        _ => false,
+                    };
+                    if !discard_ok {
+                        return false;
+                    }
+                    saw = true;
+                }
+                _ if self.statement_uses_identifier(param_name, stmt) => return false,
+                _ => {}
+            }
+        }
+        saw
     }
 
     /// True when `param_name` appears as a bare identifier argument in a **function** call
