@@ -3570,7 +3570,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | Gate | Status |
 |------|--------|
 | `pick_prefers_mixed_owned_string_over_all_ref_importer_stub` | ✅ GREEN |
-| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ❌ still RED — `require_nonempty(&field, &value)`; defining metadata is `[&str, String]` but call-site still over-borrows |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ tip GREEN (P3.599) — private Into forward gated on `is_pub` |
 | WDB-372 isolate / demoted-str auto-borrow | ✅ no regression |
 
 **Root cause layer:** signature pick/merge — `pick_codegen_refreshed_signature` kept the first `emitted_rust_ref_params` candidate with any `true` flag, so an importer `[true, true]` stub beat defining-module `[true, false]` mixed formals. Merge now refuses to overwrite a stronger owned-emission contract.
@@ -3587,7 +3587,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 | `bug_mpsc_sync_channel_boundary_signature_test` | ✅ GREEN |
 | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee` | ✅ isolate GREEN — `Text(string)` non-Copy; `match &self.entries[idx].value` |
 | `bug_wdb377` / `bug_wdb378` / `bug_wdb379` isolates | ✅ isolate GREEN (already on tip; tip-out pending regen) |
-| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ❌ still RED — `require_nonempty(&field, &value)` over-borrows owned `value` |
+| `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test` | ✅ tip GREEN (P3.599) — `require_nonempty(&field, value)` |
 
 **Root cause layer:** constraint/type — `generate_field_access` auto-cloned non-Copy index fields (`Val` with `Text(string)`). Match/if-let now set `suppress_borrowed_clone` and prefix `&` for `&self` field/index places instead of `.clone()`. Nested `self.quality.steps` struct-lit consume no longer treats the leaf name as a `self` field (analyzer).
 
