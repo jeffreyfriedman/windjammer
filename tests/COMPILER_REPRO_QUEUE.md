@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.612 (2026-10-03) — TDD WDB-434 (DB agent; no compiler src)
+
+Copy `const i32` into owned call formals must not `.clone()`; product emits
+`VoxelGrid::new(GRID.clone(), GRID.clone(), GRID.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-434 MultiFile | ⏳ TDD pending — `VoxelGrid::new(GRID, GRID, GRID)` |
+| WDB-434 tip-out | ⏳ TDD pending — `GRID.clone()` in station_builder |
+
+**Root cause layer:** copy / const — Copy consts into owned formals must not auto-clone.
+
+**Why this is a new class:**
+- WDB-426 is const on **assign** (`LEAF_FLAG.clone()`).
+- WDB-428 is **local** in println.
+- WDB-385 is `f32::MAX` assoc path.
+
+**What became unnecessary:** `GRID.clone()` in station VoxelGrid construction.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-03)
+
+**Do not steal:** WDB-406/408/411/433, P3.508–P3.611, WDB-412–433 (filed).
+
 ## P3.611 (2026-10-03) — if-without-else trailing `match` must `return match`
 
 `wj-todo-cli` `parse_edit_branch`: trailing `match parse_id(...) { Ok => Ok, Err => Err }`
