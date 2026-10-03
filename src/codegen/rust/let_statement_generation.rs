@@ -739,8 +739,13 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // P3.549: while-compare i32 peer (`i < 512` / `i < len - 1` after
                     // `len as i32`) beats later `i = i + 1` inferred as WJ int.
+                    // P3.591: do not demote `.len()`/`usize_variables` counters — that
+                    // yielded `let mut i: usize = 0_i32` (ascription already chose usize).
                     if var_name.is_some_and(|n| {
-                        !crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
+                        !self.usize_variables.contains(n)
+                            && !crate::codegen::rust::type_casting::expression_is_negative_int_init(
+                                value,
+                            )
                             && self.let_binding_int_width_from_later_while_compare(n)
                                 .is_some_and(|t| {
                                     matches!(t, Type::Int32)
@@ -878,6 +883,11 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                     }) {
                         // P3_ATOMIC_I64_LET_OWNER_PEER: AtomicI64 let RHS keeps i64 constructor peers in void builders.
+                        Type::Int
+                    } else if self.expression_has_concrete_wj_int_i64_peer(value) {
+                        // P3.590: `-> Vec<u8>` prefers_i32 must not paint
+                        // `let clock_hi = clock_seq >> 8 & 0x3F` as i32 when
+                        // `clock_seq: int` / `intervals: i64` are concrete peers.
                         Type::Int
                     } else {
                         self.current_function_return_type

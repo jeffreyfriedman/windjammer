@@ -1,5 +1,111 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.598 (2026-10-02) — StatusChip builder `label` must emit `impl Into<String>`
+
+windjammer-ui `StatusChip::new` / `.label` owned `string` formals must accept Rust
+`&str` via `impl Into<String>`. Tip already Into'd `new` (struct-init payload) but
+`label` early-demoted to `&str` because bare text field assign skips `payload_stored`
+and counts as readonly use — returning before the late Into upgrade.
+
+| Gate | Status |
+|------|--------|
+| `ui_builder_string_formal_must_emit_impl_into_string` | ✅ tip GREEN — `new` + `label` both `impl Into<String>` |
+| `hexagonal_ui_builder_string_formal_must_emit_impl_into_string` | ✅ tip GREEN |
+| `ui_builder_string_formal_rust_str_call_site_must_cargo_check` | ✅ tip GREEN — `.new("paid").label("Paid")` |
+| notes-api `handle_forward` / `handle_request` empty-lits | ✅ tip GREEN (no free-fn Into on `&str` forwards) |
+| WDB-357 MultiFile | ✅ tip GREEN |
+| WDB-357 tip-out/gen | ❌ still tip-out lag (stale product Into in game-core gen) |
+
+**Root cause layer:** formal encoding — Into eligibility for Self-returning builders
+with bare text field assign; emit before early `&str` demotion. Free-fn Into only via
+`param_pub_free_string_builder_forward` (owned forward sites).
+
+**What became unnecessary:** hand-patched `generated/authfetch.rs` Into formals for
+StatusChip-style builders once tip regen lands; broad free-fn “any call-arg → Into”
+branch (would regress `handle_request(method)` → `handle(method: &str)`).
+
+**Also lands (same tip):** P3.590 `expression_has_concrete_wj_int_i64_peer` + P3.591
+usize while-compare demotion guard (product `$WJ test` GREEN on tip p3589c).
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3589c
+cargo test --release --test all -- ui_builder_string_formal i64_bitops_into_u8_push \
+  usize_loop_counter_init_zero wdb357_module_file_owned_string handle_forward_empty_lits \
+  handle_request_empty_lits wdb110_tip_isolate wdb110_same_file add_condition_string_literal \
+  codegen_component_library_regen
+```
+→ ui_builder 3/3, i64/usize, handle_*, wdb110, add_condition, component regen 6/6 GREEN;
+WDB-357 tip-out still RED (pre-existing gen lag).
+
+**Do not steal:** WDB tip-outs / WDB-430–433 / P3.595–597 TDD.
+
+## P3.597 (2026-10-02) — HashMap i64 for-in key `==` owned int must auto-deref
+
+Product `wj-todo-cli`: `for (k, v) in self.items { if k == id }` with
+`HashMap<int, Todo>` → E0277 (`&i64 == i64`). Rust for-in yields `&K`.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_i64_for_in_key_eq_owned_must_auto_deref` | ❌ tip RED — product todo-cli |
+
+**Root cause layer:** codegen / for-in — Copy map keys in `==` must deref or
+compare via `PartialEq` auto-deref.
+
+**What became unnecessary:** rewriting todo complete/remove with `*k` or get-only APIs.
+
+**Gates:** tip p3589c `wj-todo-cli` `$WJ test` RED 2026-10-02; cargo gate must FAIL until fixed.
+- `cargo test --test all --features integration_tests,codegen_tests -- hashmap_i64_for_in_key_eq_owned_must_auto_deref`
+
+**Do not steal:** WDB-406/408/411/430–433, P3.508–P3.596, WDB-412–433 (filed).
+
+## P3.596 (2026-10-02) — ambient `u16` must not paint int into `ServerResponse::new` i64
+
+Product `wj-proxy` `base_response(status: u16, …)`: `let code = 404` /
+`status as int` / `let status = 500` stay `u16` into `ServerResponse::new(…: i64)`
+→ E0308. Runtime formal is `i64` (not u16).
+
+| Gate | Status |
+|------|--------|
+| `u16_ambient_int_lit_into_server_response_new_must_be_i64` | ❌ tip RED — product proxy |
+
+**Root cause layer:** constraint / call-formal — ambient u16 param must not win
+over `ServerResponse::new` i64 status slot for int lits and `as int`.
+
+**Why this is a new class:**
+- `server_response_new_int_literal_must_coerce_to_u16` targeted old u16 formals.
+- P3.492 if-int→u16 is the reverse paint direction.
+
+**What became unnecessary:** dropping `u16` status types or manual `.into()` in proxy.
+
+**Gates:** tip p3589c `wj-proxy` `$WJ test` RED 2026-10-02; cargo gate must FAIL until fixed.
+- `cargo test --test all --features integration_tests,codegen_tests -- u16_ambient_int_lit_into_server_response_new_must_be_i64`
+
+**Do not steal:** WDB-406/408/411/430–433, P3.508–P3.595, WDB-412–433 (filed).
+
+## P3.595 (2026-10-02) — TDD WDB-433 (DB agent; no compiler src)
+
+Copy `u64` **field** before cast/arith must not `.clone()`; product emits
+`total += node.mesh_id.clone() as u64`.
+
+| Gate | Status |
+|------|--------|
+| WDB-433 MultiFile | ⏳ TDD pending — `total + node.mesh_id` |
+| WDB-433 tip-out | ⏳ TDD pending — `mesh_id.clone()` in scene_graph_state |
+
+**Root cause layer:** copy / field — Copy fields in arith/cast must not auto-clone.
+
+**Why this is a new class:**
+- WDB-431 is field into **insert/push**.
+- WDB-432 is **indexed** Copy + cast.
+- WDB-423 is indexed Copy into arith (`offsets[i]`).
+
+**What became unnecessary:** `node.mesh_id.clone() as u64` in mesh instance totals.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+
+**Do not steal:** WDB-406/408/411/432, P3.508–P3.594, WDB-412–432 (filed).
+
 ## P3.594 (2026-10-02) — `counter_inc` must borrow `Counter` (or derive Clone)
 
 Product `wj-sync`: `counter_inc(c: Counter)` stays owned while tests reuse `c`
@@ -74,7 +180,7 @@ Product `wj-find` / `wj-form-parse` emit `let mut i: usize = 0_i32` for
 
 | Gate | Status |
 |------|--------|
-| `usize_loop_counter_init_zero_must_not_be_i32` | ❌ tip RED — product `0_i32` |
+| `usize_loop_counter_init_zero_must_not_be_i32` | ✅ tip GREEN (p3589c product `$WJ test`) — product `0_i32` |
 
 **Root cause layer:** encoding / int unify — usize-bound loop counters must
 emit `0` / `0_usize`, not `0_i32`.
@@ -94,7 +200,7 @@ E0277. Same bitops without the `u8` push false-GREEN (`_i64`).
 
 | Gate | Status |
 |------|--------|
-| `i64_bitops_into_u8_push_must_unify_i64` | ❌ tip RED — `_i32` masks |
+| `i64_bitops_into_u8_push_must_unify_i64` | ✅ tip GREEN (p3589c product `$WJ test`) — `_i32` masks |
 
 **Root cause layer:** encoding / call-arg int context — `Vec<u8>::push` / `as u8`
 must not force bitop peers of WJ `int` to i32.

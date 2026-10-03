@@ -288,6 +288,25 @@ impl<'ast> CodeGenerator<'ast> {
                     func.body.as_slice(),
                     &param.name,
                 );
+                // P3.589: emit `impl Into<String>` before early `&str` demotion.
+                // Bare text field assigns (`self.label = label`) intentionally skip
+                // `payload_stored` so `.contains(query)` can demote — but that same
+                // assign counts as readonly use and used to `return …: &str` before the
+                // late Into upgrade (windjammer-ui `StatusChip::label`).
+                // Skip only pub *free-fn* APIs that must keep concrete `String` (P3.264).
+                let keep_concrete_pub_free_string_early = func.parent_type.is_none()
+                    && self.pub_module_api_keeps_owned_string_formal(func, param);
+                if param.name != "self"
+                    && !keep_concrete_pub_free_string_early
+                    && (self.param_should_emit_into_string_formal(func, param, payload_stored)
+                        || self.param_pub_free_string_builder_forward(func, param))
+                {
+                    self.into_string_formal_params.insert(param.name.clone());
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
+                    return format!("{}: impl Into<String>", param.name);
+                }
                 let moves_via_struct_init = self.param_moves_via_struct_literal_init(
                     func.body.as_slice(),
                     &param.name,
@@ -3439,15 +3458,30 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // windjammer-ui / Rust interop: pub builder formals that store owned `string`
                 // into payload fields accept `&str` via `impl Into<String>`.
-                // Skip when pub free-fn APIs must keep concrete owned `String` (P3.264).
+                // Skip only for pub *free-fn* APIs that must keep concrete `String` (P3.264).
+                // P3.589: P3.587 extended `pub_module_api_keeps_owned_string_formal` to
+                // methods (notes-api `handle`); that must not block impl builders
+                // (`StatusChip::new` / `.label`) from emitting `impl Into<String>`.
+                let keep_concrete_pub_free_string = func.parent_type.is_none()
+                    && self.pub_module_api_keeps_owned_string_formal(func, param);
+                // Also upgrade demoted `&str` builder slots (`StatusChip::label`) — Into
+                // must win over str_ref demotion so Rust callers pass bare literals.
+                let into_string_eligible = self
+                    .param_should_emit_into_string_formal(func, param, payload_stored)
+                    || self.param_pub_free_string_builder_forward(func, param);
                 if param.name != "self"
-                    && type_str == "String"
-                    && !self.pub_module_api_keeps_owned_string_formal(func, param)
-                    && (self.param_should_emit_into_string_formal(func, param, payload_stored)
-                        || self.param_pub_free_string_builder_forward(func, param))
+                    && !keep_concrete_pub_free_string
+                    && into_string_eligible
+                    && (type_str == "String"
+                        || type_str == "&str"
+                        || type_str.starts_with("&'a str")
+                        || type_str.ends_with(" str"))
                 {
                     type_str = "impl Into<String>".to_string();
                     self.into_string_formal_params.insert(param.name.clone());
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
                 }
 
                 // Explicitly Copy types kept as owned (instead of &mut) still need `mut`
@@ -3574,22 +3608,32 @@ impl<'ast> CodeGenerator<'ast> {
         if !crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_) {
             return false;
         }
+        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
         if !payload_stored {
-            // Multipass pub helpers (`grid(left, right)`) forward into builder methods;
-            // `impl Into<String>` keeps external `&str` literal call sites valid.
-            let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
-            if !has_self_receiver
-                && func.return_type.as_ref().is_some_and(|t| {
-                    crate::codegen::rust::string_utilities::return_type_expects_owned_string(&Some(
-                        t.clone(),
-                    ))
-                })
-                && self.param_passed_as_call_argument(func.body.as_slice(), &param.name, func)
-                && !Self::param_used_in_binary_comparison(&param.name, &func.body)
-                && !crate::analyzer::field_enum_borrow::param_consumed_by_enum_variant_ctor(
+            // Free-fn Into without payload is owned via
+            // `param_pub_free_string_builder_forward` at the call site — do not treat
+            // any call-arg forward as Into (notes-api `handle_request(method)` →
+            // `handle(method: &str)` must stay `String`/`&str`, not Into).
+            // P3.589: text `self.field = param` intentionally skips payload_stored so
+            // `&str` demotion can coexist with `.contains(query)`. Pub Self-returning
+            // builders (`StatusChip::label`) still need `impl Into<String>` for Rust
+            // `&str` literal call sites (windjammer-ui).
+            if has_self_receiver
+                && self.in_impl_block
+                && self.param_assigned_bare_to_self_or_local_field(
+                    func.body.as_slice(),
                     &param.name,
-                    &func.body,
                 )
+                && !Self::param_used_in_binary_comparison(&param.name, &func.body)
+                && func.return_type.as_ref().is_some_and(|t| {
+                    matches!(
+                        t,
+                        Type::Custom(name) if self
+                            .current_struct_name
+                            .as_deref()
+                            .is_some_and(|sn| sn == name.as_str())
+                    )
+                })
             {
                 return true;
             }
@@ -3598,7 +3642,6 @@ impl<'ast> CodeGenerator<'ast> {
         // WDB-157: free functions (`pg_wire_parse`, etc.) keep concrete `String`.
         // `impl Into<String>` is for impl builders/constructors so Rust callers can
         // pass `&str` (windjammer-ui StatusChip::new / .label).
-        let has_self_receiver = func.parameters.iter().any(|p| p.name == "self");
         if !has_self_receiver {
             if !self.in_impl_block {
                 return false;
@@ -3640,6 +3683,66 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Parameterized(name, _) if name != "Result" && name != "Option" => true,
             _ => false,
         }
+    }
+
+    /// True when `param_name` appears as the bare RHS of a field assignment
+    /// (`self.label = label` / `chip.status = status`).
+    fn param_assigned_bare_to_self_or_local_field(
+        &self,
+        body: &[&Statement<'_>],
+        param_name: &str,
+    ) -> bool {
+        fn expr_is_field(expr: &Expression<'_>) -> bool {
+            matches!(expr, Expression::FieldAccess { .. })
+        }
+        fn walk(stmts: &[&Statement<'_>], param_name: &str) -> bool {
+            for stmt in stmts {
+                match stmt {
+                    Statement::Assignment { target, value, .. } => {
+                        if expr_is_field(target)
+                            && matches!(
+                                value,
+                                Expression::Identifier { name, .. } if name == param_name
+                            )
+                        {
+                            return true;
+                        }
+                    }
+                    Statement::If {
+                        then_block,
+                        else_block,
+                        ..
+                    } => {
+                        if walk(then_block.as_slice(), param_name)
+                            || else_block
+                                .as_ref()
+                                .is_some_and(|b| walk(b.as_slice(), param_name))
+                        {
+                            return true;
+                        }
+                    }
+                    Statement::While { body, .. }
+                    | Statement::Loop { body, .. }
+                    | Statement::For { body, .. } => {
+                        if walk(body.as_slice(), param_name) {
+                            return true;
+                        }
+                    }
+                    Statement::Match { arms, .. } => {
+                        for arm in arms {
+                            if let Expression::Block { statements, .. } = &arm.body {
+                                if walk(statements.as_slice(), param_name) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        walk(body, param_name)
     }
 
     /// Pub free functions returning `string` that only pass a param into builder/method args
