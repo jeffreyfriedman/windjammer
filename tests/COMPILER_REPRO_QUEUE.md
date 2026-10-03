@@ -1,5 +1,44 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.615 (2026-10-03) — reused `client_key` must not `impl Into` + `.into()` move
+
+Product `wj-proxy` `complete_proxy(…, client_key: string, …)`: tip emits
+`client_key: impl Into<String>` then `own(client_key.into())` /
+`check_rate(client_key.into(), …)` before later `client_key` in `RequestLogEntry`
+→ E0382. Flat isolates false-GREEN (`String` + `&client_key`).
+
+| Gate | Status |
+|------|--------|
+| `reused_owned_string_method_formal_must_not_into_move_before_second_use` | ❌ tip RED — product proxy |
+
+**Root cause layer:** formal encoding — reused owned string method formals must not
+take the pub-builder Into upgrade; consuming `.into()` before second use is illegal.
+
+**What became unnecessary:** manual `client_key.clone()` rewrites in proxy domain.
+
+**Gates:** tip eco-gates product build + cargo gate FAILED (RED) 2026-10-03.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_method_formal_must_not_into_move_before_second_use`
+
+**Do not steal:** WDB-406/408/411/430–435, P3.508–P3.614, WDB-412–435 (filed).
+
+## P3.614 (2026-10-03) — borrowed for-in tuple field must `.clone()` into owned
+
+Product notes-api `headers_meta` / proxy `client_key_from_headers`: `for pair in
+headers` over demoted `&Vec<(String,String)>` then `pair.0` / `return pair.1`
+moves out of borrowed tuple → E0507; product also emits `*pair.0 == "…"` (E0277).
+
+| Gate | Status |
+|------|--------|
+| `borrowed_for_in_tuple_field_must_clone_into_owned` | ❌ tip RED — cargo gate FAILED |
+
+**Root cause layer:** codegen / for-in — borrowed tuple field extract into owned
+slots must `.clone()`; string field `==` lit must not `*pair.0`.
+
+**Gates:** tip eco-gates 2026-10-03 — FAILED (RED).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- borrowed_for_in_tuple_field_must_clone_into_owned`
+
+**Do not steal:** WDB tip-outs / P3.508–P3.613 / WDB-435 (filed).
+
 ## P3.589 (2026-10-03) — owned `Vec<u8>` formal must not `&vec![…]` at call site
 
 Product tip `gen/ecs/component_storage.rs` emitted
@@ -26,8 +65,8 @@ Copy `usize` field return / struct-literal must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-435 MultiFile | ⏳ TDD pending — bare `self.capacity` / `self.in_use` return |
-| WDB-435 tip-out | ⏳ TDD pending — `self.capacity.clone()` in object_pool |
+| WDB-435 MultiFile | ✅ GREEN @ `f45ff380` — isolate bare `self.capacity` / `self.in_use` no `.clone()` |
+| WDB-435 tip-out | ❌ RED @ `f45ff380` — `self.capacity.clone()` in object_pool tip+gen |
 
 **Root cause layer:** copy / field — Copy field return and struct-lit field init must not auto-clone.
 
@@ -38,9 +77,9 @@ Copy `usize` field return / struct-literal must not `.clone()`; product emits
 
 **What became unnecessary:** `self.capacity.clone()` / `self.in_use.clone()` on Copy usize getters.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-03)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb435_` — 1 passed / 1 failed (isolate GREEN, tip RED).
 
-**Do not steal:** WDB-406/408/411/434, P3.508–P3.612, WDB-412–434 (filed).
+**Do not steal:** WDB-406/408/411/434, P3.508–P3.615, WDB-412–435 (filed).
 
 ## P3.612 (2026-10-03) — TDD WDB-434 (DB agent; no compiler src)
 
