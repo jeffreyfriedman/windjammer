@@ -3760,14 +3760,18 @@ impl<'ast> CodeGenerator<'ast> {
                             arg,
                             Expression::Identifier { name, .. } if name == param_name
                         ) || Self::expr_is_field_or_index_of_param(arg, param_name);
-                    if arg_is_param_or_field
-                        && (self.method_call_sibling_ast_expects_owned_arg(
+                    if arg_is_param_or_field {
+                        // Emitted `&str` / shared-ref siblings are not owning uses.
+                        if self.method_call_arg_emits_shared_rust_ref(object, method, i, func) {
+                            continue;
+                        }
+                        if self.method_call_sibling_ast_expects_owned_arg(
                             object, method, i, func,
                         ) || self.method_call_arg_formal_is_owned_non_copy(
                             object, method, i, func,
-                        ))
-                    {
-                        return true;
+                        ) {
+                            return true;
+                        }
                     }
                 }
                 self.expression_has_owning_method_call_arg_use(object, param_name, func)
@@ -4038,6 +4042,11 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Identifier { name, .. } if name == param_name
                         ) || Self::expr_is_field_or_index_of_param(arg, param_name);
                     if arg_is_param_or_field {
+                        // Codegen-confirmed shared-ref (`find_index(&str)`) is not owning —
+                        // must not block outer demotion (`set_bool` → `&str`).
+                        if self.method_call_arg_emits_shared_rust_ref(object, method, i, func) {
+                            continue;
+                        }
                         // Owned AST / emitted String formals beat stale borrow flags
                         // (P3.601: `render_grid(left)` → `Tile::value_html(left)` must
                         // count as owning so free-fn Into can fire; `expects_borrow` used
@@ -6782,10 +6791,40 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // Same-impl AST still says `find_index(key: string)` after codegen demoted to
+        // `&str` — trust emitted shared-ref so wrappers (`set_bool`) demote too.
+        if self.method_call_arg_emits_shared_rust_ref(object, method, arg_index, func) {
+            return false;
+        }
         if self.ast_sibling_method_arg_is_owned_non_copy_formal(method, arg_index) {
             return true;
         }
         self.method_call_callee_emits_owned_arg(object, method, arg_index, func)
+    }
+
+    /// True when codegen already emitted a shared `&T` / `&str` formal for this arg.
+    fn method_call_arg_emits_shared_rust_ref(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_index: usize,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) else {
+            return false;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(true)
+        {
+            return true;
+        }
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx)
+            || self.signature_param_expects_borrow(&sig, arg_index)
     }
 
     /// True when the callee's codegen-emitted (or AST-owned without shared-ref emission)
@@ -6805,8 +6844,12 @@ impl<'ast> CodeGenerator<'ast> {
                 return true;
             }
         }
-        // AST / formal_param_types owned wins over stale emitted_rust_ref_params from an
-        // earlier preregister pass (`Column` → `Table::column(col)` builder gate).
+        // Fresh shared-ref emission (`find_index(key: &str)`) beats same-impl AST Owned.
+        // Only when emission is absent may AST Owned win over a stale preregister flag
+        // (`Column` → `Table::column(col)` builder gate).
+        if self.method_call_arg_emits_shared_rust_ref(object, method, arg_index, func) {
+            return false;
+        }
         if self.method_call_arg_formal_is_owned_non_copy(object, method, arg_index, func) {
             return true;
         }
@@ -6829,21 +6872,11 @@ impl<'ast> CodeGenerator<'ast> {
             if sig
                 .emitted_rust_ref_params
                 .as_ref()
-                .is_some_and(|flags| flags.get(pidx).copied().unwrap_or(false))
-            {
-                return false;
-            }
-            if sig
-                .emitted_rust_ref_params
-                .as_ref()
                 .is_some_and(|flags| flags.get(pidx).copied() == Some(false))
             {
                 return crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &sig, pidx,
                 );
-            }
-            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
-                return false;
             }
         }
         false

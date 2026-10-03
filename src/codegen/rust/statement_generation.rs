@@ -743,7 +743,11 @@ impl<'ast> CodeGenerator<'ast> {
                         if method == "find" {}
                     }
                 }
-                self.generate_match_statement(value, arms)
+                let generated = self.generate_match_statement(value, arms);
+                // if-without-else / loop bodies are void (`()`). A value-producing
+                // `match` that unifies with the function return type must be an
+                // explicit `return match` (E0308 otherwise — wj-todo-cli edit branch).
+                self.maybe_return_value_match_in_void_block(generated, arms)
             }
             Statement::Loop { body, .. } => self.generate_loop_statement(body),
             Statement::While {
@@ -1633,6 +1637,100 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
+    }
+
+    /// Void blocks (`if` without `else`, loop bodies) must evaluate to `()`.
+    /// When a statement `match`/`if let` yields a non-unit value (typically the
+    /// function return type), emit `return match` / `return if let`.
+    fn maybe_return_value_match_in_void_block(
+        &self,
+        generated: String,
+        arms: &[crate::parser::MatchArm<'ast>],
+    ) -> String {
+        if !self.in_void_block || self.in_expression_context {
+            return generated;
+        }
+        let Some(ret_ty) = self.current_function_return_type.as_ref() else {
+            return generated;
+        };
+        // Empty-arm / statement-only matches already produce `()` — leave them alone.
+        let has_void_arm = arms.iter().any(|arm| {
+            matches!(
+                arm.body,
+                Expression::Block { statements, .. } if statements.is_empty()
+            )
+        });
+        if has_void_arm {
+            return generated;
+        }
+        // Only wrap when an arm clearly produces a non-unit value that unifies
+        // with the function return (or is an Ok/Err constructing a Result return).
+        let arms_yield_return = arms.iter().any(|arm| {
+            if let Some(arm_ty) = self.infer_expression_type(arm.body) {
+                return self.types_unify_for_return(&arm_ty, ret_ty);
+            }
+            match (arm.body, ret_ty) {
+                (
+                    Expression::Call {
+                        function: Expression::Identifier { name, .. },
+                        ..
+                    },
+                    Type::Result(_, _),
+                ) if name == "Ok"
+                    || name == "Err"
+                    || name.ends_with("::Ok")
+                    || name.ends_with("::Err") =>
+                {
+                    true
+                }
+                (
+                    Expression::Call {
+                        function: Expression::FieldAccess { field, .. },
+                        ..
+                    },
+                    Type::Result(_, _),
+                ) if field == "Ok" || field == "Err" => true,
+                _ => false,
+            }
+        });
+        if !arms_yield_return {
+            return generated;
+        }
+
+        // Prefix the match / if-let keyword (after any borrow-break `let`).
+        let keyword = if let Some(idx) = generated.find("if let ") {
+            idx
+        } else if let Some(idx) = generated.rfind("match ") {
+            idx
+        } else {
+            return generated;
+        };
+
+        let mut out = String::with_capacity(generated.len() + 8);
+        out.push_str(&generated[..keyword]);
+        out.push_str("return ");
+        out.push_str(&generated[keyword..]);
+        // `return match { ... };` needs a statement terminator.
+        if out.ends_with("}\n") {
+            out.insert(out.len() - 1, ';');
+        } else if out.ends_with('}') {
+            out.push(';');
+        }
+        out
+    }
+
+    fn types_unify_for_return(&self, arm_ty: &Type, ret_ty: &Type) -> bool {
+        if arm_ty == ret_ty {
+            return true;
+        }
+        matches!(
+            (arm_ty, ret_ty),
+            (Type::Result(_, _), Type::Result(_, _))
+                | (Type::Option(_), Type::Option(_))
+                | (Type::String, Type::String)
+                | (Type::Int, Type::Int | Type::Int32)
+                | (Type::Int32, Type::Int | Type::Int32)
+        )
     }
 
     /// `if let Some(x) = map.get_mut(k)` must match directly — borrow-break to owned
