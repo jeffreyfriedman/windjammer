@@ -190,9 +190,12 @@ impl Skeleton {
 }
 "#;
     let rust = parse_and_generate(source);
+    // Mat4 with only `[f32; 16]` is Copy — tip may move into `Some(...)` without
+    // `.clone()` (CLI may still emit a redundant clone). Gate the Some(index.field)
+    // shape; non-Copy indexed fields are covered by other E0507 clone gates.
     assert!(
-        rust.contains(".clone()"),
-        "Field on index passed to Some() needs .clone(): {}",
+        rust.contains("Some(self.bones") && rust.contains("world_transform"),
+        "Field on index passed to Some() must emit indexed field access: {}",
         rust
     );
 }
