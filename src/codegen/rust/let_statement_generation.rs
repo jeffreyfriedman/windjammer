@@ -713,13 +713,30 @@ impl<'ast> CodeGenerator<'ast> {
 
                 let prev_assign_int = self.assignment_int_target_type.take();
                 if let Some(vn) = var_name {
-                    if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
-                        self.assignment_int_target_type = Some(peer.clone());
-                        self.local_var_types.insert(vn.to_string(), peer.clone());
-                        if matches!(peer, Type::Int32) {
-                            self.codegen_i32_binding_names.insert(vn.to_string());
-                        } else {
-                            self.codegen_i32_binding_names.remove(vn);
+                    // Ref locals (`let ri = &i`) must keep Type::Reference — later
+                    // usize/i32 formals must not overwrite the binding (would yield
+                    // `ri as usize` instead of `*ri as usize`).
+                    let rhs_is_ref = matches!(
+                        value,
+                        Expression::Unary {
+                            op: crate::parser::UnaryOp::Ref
+                                | crate::parser::UnaryOp::MutRef,
+                            ..
+                        }
+                    ) || matches!(
+                        self.local_var_types.get(vn),
+                        Some(Type::Reference(_) | Type::MutableReference(_))
+                    );
+                    if !rhs_is_ref {
+                        if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn)
+                        {
+                            self.assignment_int_target_type = Some(peer.clone());
+                            self.local_var_types.insert(vn.to_string(), peer.clone());
+                            if matches!(peer, Type::Int32) {
+                                self.codegen_i32_binding_names.insert(vn.to_string());
+                            } else {
+                                self.codegen_i32_binding_names.remove(vn);
+                            }
                         }
                     }
                 }
