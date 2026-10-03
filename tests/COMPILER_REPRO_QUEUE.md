@@ -47,15 +47,15 @@ Product `wj-todo-cli`: `for (k, v) in self.items { if k == id }` with
 
 | Gate | Status |
 |------|--------|
-| `hashmap_i64_for_in_key_eq_owned_must_auto_deref` | ❌ tip RED — product todo-cli |
+| `hashmap_i64_for_in_key_eq_owned_must_auto_deref` | ✅ tip GREEN — `*k == id` |
 
-**Root cause layer:** codegen / for-in — Copy map keys in `==` must deref or
-compare via `PartialEq` auto-deref.
+**Root cause layer:** codegen / for-in — map `Parameterized` extract yields `(K, V)`;
+borrowed for-in wraps as `(&K, &V)` not `&(K, V)` so XOR Copy-key deref applies.
 
 **What became unnecessary:** rewriting todo complete/remove with `*k` or get-only APIs.
 
-**Gates:** tip p3589c `wj-todo-cli` `$WJ test` RED 2026-10-02; cargo gate must FAIL until fixed.
-- `cargo test --test all --features integration_tests,codegen_tests -- hashmap_i64_for_in_key_eq_owned_must_auto_deref`
+**Gates:** tip emit `for (k, v) in &store.items` + `*k == id`; cargo-check GREEN.
+- `cargo test --test all --features integration_tests,codegen_tests -- hashmap_i64_for_in_key_eq_owned_must_auto_deref` → GREEN
 
 **Do not steal:** WDB-406/408/411/430–433, P3.508–P3.596, WDB-412–433 (filed).
 

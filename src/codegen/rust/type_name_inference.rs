@@ -259,14 +259,36 @@ impl<'ast> CodeGenerator<'ast> {
                 Self::extract_iterator_element_type(inner)
             }
             // `Vec<T>` / `HashSet<T>` may be `Parameterized` depending on parse path.
+            // Maps yield `(K, V)` — `for (k, v) in &map` binds `&K` / `&V` (P3.597).
             Type::Parameterized(name, args) if !args.is_empty() => {
                 if crate::type_classification::is_single_elem_iterable_base(name) {
                     Some(args[0].clone())
+                } else if crate::type_classification::is_map_type_name(name) && args.len() >= 2 {
+                    Some(Type::Tuple(vec![args[0].clone(), args[1].clone()]))
                 } else {
                     None
                 }
             }
             _ => None,
+        }
+    }
+
+    /// Borrowed for-in (`&collection`) wraps each yielded binding as `&T`.
+    /// Map entries are `(&K, &V)`, not `&(K, V)` — wrapping the whole tuple breaks
+    /// XOR Copy-key deref (`k == id` with `k: &i64`, P3.597).
+    pub(in crate::codegen::rust) fn wrap_for_loop_element_as_borrowed(elem_type: Type) -> Type {
+        match elem_type {
+            Type::Reference(_) | Type::MutableReference(_) => elem_type,
+            Type::Tuple(elems) => Type::Tuple(
+                elems
+                    .into_iter()
+                    .map(|t| match t {
+                        Type::Reference(_) | Type::MutableReference(_) => t,
+                        other => Type::Reference(Box::new(other)),
+                    })
+                    .collect(),
+            ),
+            other => Type::Reference(Box::new(other)),
         }
     }
 
