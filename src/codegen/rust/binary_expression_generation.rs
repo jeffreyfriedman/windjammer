@@ -1330,6 +1330,10 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 // Only auto-deref Copy pointee mismatches (`*amount > 0`). Non-Copy
                 // `&String` vs `String` compares without move (`o == self.value`).
+                // Predicate closures (`retain`/`filter`) mark params in
+                // `borrowed_iterator_vars` but often lack a typed local — infer may
+                // miss `&i64`. If the *peer* is Copy, still deref the borrowed side
+                // (`id != entity_id` → `*id != entity_id`, P3.600 / retain E0277).
                 let side_is_copy = |expr: &Expression<'_>| {
                     self.infer_expression_type(expr).is_some_and(|ty| {
                         let bare = match &ty {
@@ -1342,10 +1346,10 @@ impl<'ast> CodeGenerator<'ast> {
                     }) || self.expression_is_copy(expr)
                 };
                 if left_is_borrowed {
-                    if side_is_copy(left) {
+                    if side_is_copy(left) || side_is_copy(right) {
                         left_str = format!("*{}", left_str);
                     }
-                } else if side_is_copy(right) {
+                } else if side_is_copy(right) || side_is_copy(left) {
                     right_str = format!("*{}", right_str);
                 }
             }

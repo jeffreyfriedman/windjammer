@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.600 (2026-10-03) — `retain`/`filter` Copy compare must deref `&T` param
+
+`Vec<i64>::retain(|id| id != entity_id)` emits `id != entity_id` (E0277). Params
+are marked in `borrowed_iterator_vars`, but XOR Copy deref required
+`side_is_copy(left)` and infer often misses untyped closure params.
+
+| Gate | Status |
+|------|--------|
+| `test_retain_closure_deref_i64` | ✅ tip GREEN — `*id != entity_id` |
+| `test_retain_closure_deref_string` | ✅ still GREEN |
+| `hashmap_i64_for_in_key_eq_owned_must_auto_deref` | ✅ still GREEN |
+
+**Root cause layer:** coercion/encoding — comparison XOR also trusts Copy *peer*
+when the borrowed closure param lacks a typed local.
+
+**What became unnecessary:** product `*id` rewrites in hierarchy/scene retain.
+
+**Gates:**
+```bash
+cargo test --release --test all -- test_retain_closure_deref_i64 \
+  test_retain_closure_deref_string hashmap_i64_for_in_key_eq_owned
+```
+→ 3 GREEN.
+
+**Do not steal:** WDB tip-outs / notes_api mut-query / builder `&str` Into REDs.
+
 ## P3.594 (2026-10-03) — `Arc<AtomicI64>` Counter must auto-derive Clone
 
 Product `wj-sync` `Counter { inner: Arc<AtomicI64> }` skipped `#[derive(Clone)]`
