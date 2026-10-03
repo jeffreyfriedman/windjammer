@@ -1,32 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.607 (2026-10-03) — Ref local → owned Copy/usize must Deref (`*ri as usize`)
+## P3.607 (2026-10-03) — explicit `let ri = &i` → usize must `*ri as usize`
 
-`let ri = &i; compute(v, ri)` emitted `ri as usize` because (1) later usize
-formals overwrote `local_var_types["ri"]` with `usize`, hiding `Type::Reference`,
-and (2) `compute_coercion` Ref→Owned Copy returned StripBorrow (no-op on bare
-ref bindings) instead of Deref.
+`let ri = &i; compute(v, ri)` emitted `ri as usize` because later usize formals
+overwrote `local_var_types["ri"]` with `usize`. Blanket Ref→Owned Deref also
+broke for-loop Copy keys (`dirty.push(*pos)`).
 
 | Gate | Status |
 |------|--------|
 | `test_mixed_coercion_multiple_args` | ✅ tip GREEN — `*ri as usize` |
 | `test_fn_arg_string_literal_to_borrowed` | ✅ tip GREEN — tip-truth Owned unused pub free-fn `string` |
-| lib `borrowed_copy_tuple_to_owned_strips_or_derefs` | ✅ GREEN — Deref |
+| `test_no_spurious_deref_on_for_loop_tuple` | ⚠️ pre-existing tip RED (`*pos` also on dogfood) — not this fix |
+| lib `borrowed_copy_tuple_to_owned_strips_or_derefs` | ✅ GREEN — StripBorrow (emit-path deref for explicit ref lets) |
 
 **Root cause layer:** constraint/solver (actual SafetyType) + coercion/encoding —
-protect ref locals from use-site int-width overwrite; Ref→Owned Copy → Deref.
+skip use-site int-width overwrite for ref RHS; track `explicit_ref_let_bindings`;
+usize cast deref only when `identifier_already_ref` (explicit ref lets).
 
-**What became unnecessary:** StripBorrow no-op on bare `&T` binding names into
-owned Copy / post-IR `as usize` casts.
+**What became unnecessary:** `ri as usize` without deref on explicit `&T` lets;
+blanket compute_coercion Deref (reverted — for-loop Copy false positives).
 
 **Gates:**
 ```bash
 export WJ_BINARY=$CARGO_TARGET_DIR/release/wj
-cargo test --release --lib -- borrowed_copy_tuple_to_owned_strips_or_derefs
 cargo test --release --test all -- test_mixed_coercion_multiple_args \
-  test_fn_arg_string_literal_to_borrowed
+  test_fn_arg_string_literal_to_borrowed test_vec_remove_with_expression_no_ref \
+  library_multipass_owned_string_to_string_method_must_borrow \
+  test_passthrough_collision_preserves_mut
 ```
-→ lib + 2 GREEN.
+→ 5 GREEN.
 
 ## P3.606 (2026-10-03) — pub method string → borrowed-text callee must demote `&str`
 

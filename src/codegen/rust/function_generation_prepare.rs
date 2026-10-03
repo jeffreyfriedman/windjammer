@@ -125,6 +125,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Clear local variable types for new function scope
         self.local_var_types.clear();
+        self.explicit_ref_let_bindings.clear();
         self.borrowed_iterator_vars.clear();
 
         // Track function return type for string literal conversion

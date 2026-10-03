@@ -485,17 +485,29 @@ pub fn coerce_arg_str_for_usize_formal(
         } => {
             *arg_str = format!("{val}_usize");
         }
-        Expression::Identifier { .. } => {
+        Expression::Identifier { name, .. } => {
             // Owned `usize` formals take by value — peel stale `&` / `&mut` from
             // reuse / mut-local tracking (`&mut i as usize` is E0606).
             let base = arg_str
                 .strip_prefix("&mut ")
                 .or_else(|| arg_str.strip_prefix('&'))
                 .unwrap_or(arg_str);
+            // True ref locals (`let ri = &i`) need `*ri as usize` — Rust does not
+            // auto-copy `&T` into owned usize. Only when emit-truth says shared ref
+            // (`identifier_already_ref`); for-loop Copy values stay bare.
+            let needs_deref = gen.is_some_and(|g| g.identifier_already_ref(name))
+                && !base.starts_with('*');
             // Auto-clone may already be present (`n.clone()`); cast yields Copy usize —
             // drop the clone (WDB-343). Never `n as usize.clone()` (WDB-300).
             if let Some(inner) = base.strip_suffix(".clone()") {
-                *arg_str = format!("({inner} as usize)");
+                let core = if needs_deref && !inner.starts_with('*') {
+                    format!("*{inner}")
+                } else {
+                    inner.to_string()
+                };
+                *arg_str = format!("({core} as usize)");
+            } else if needs_deref {
+                *arg_str = format!("*{base} as usize");
             } else {
                 *arg_str = format!("{base} as usize");
             }
