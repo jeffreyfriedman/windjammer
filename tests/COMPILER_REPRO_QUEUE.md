@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.592 (2026-10-02) — TDD WDB-431 (DB agent; no compiler src)
+
+Copy `u64` field into insert/push owned formal must not `.clone()`; product emits
+`materials.insert(node.material_id.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-431 MultiFile | ⏳ TDD pending — `ids.push(node.material_id)` |
+| WDB-431 tip-out | ⏳ TDD pending — `material_id.clone()` in scene_graph_state |
+
+**Root cause layer:** copy / field — Copy integer fields into owned formals must not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is formal **assign** `x.clone()`.
+- WDB-423 is **indexed** `offsets[i].clone()`.
+- WDB-430 is Copy **enum** field `binding.binding_type.clone()`.
+
+**What became unnecessary:** `node.material_id.clone()` in material collection.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+
+**Do not steal:** WDB-406/408/411/430, P3.508–P3.591, WDB-412–430 / P3.509–P3.573 (filed).
+
 ## P3.583b (2026-10-02) — field-move demotion: value vs place position
 
 P3.583 call-arg field-move recursion treated method/index **places**
