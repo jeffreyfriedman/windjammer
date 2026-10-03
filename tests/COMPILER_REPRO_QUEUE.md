@@ -1,5 +1,24 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.589 (2026-10-03) — owned `Vec<u8>` formal must not `&vec![…]` at call site
+
+Product tip `gen/ecs/component_storage.rs` emitted
+`registry.add(..., &vec![0_u8; 36])` while `add(..., data: Vec<u8>)` is owned
+→ E0308 (~20 leftovers). `forwarding_borrow` from readonly body use beat
+`emitted_owned_arg_contract` (same class as P3.588 owned String).
+
+| Gate | Status |
+|------|--------|
+| `forwarding_borrow_must_not_borrow_owned_vec_emit` | ✅ unit GREEN |
+| `owned_vec_u8_literal_must_not_borrow_at_call_site` | ✅ tip GREEN |
+
+**Root cause layer:** signature_bridge — exempt owned Vec/Map emit from
+forwarding_borrow share-ref (mirror P3.588 text exemption).
+
+**Gates:** tip `.cargo-target-wj` — unit + MultiFile cargo-check.
+
+**Do not steal:** WDB-406/408/411/328, P3.508–P3.588, WDB-412–429 (filed).
+
 ## P3.612 (2026-10-03) — TDD WDB-434 (DB agent; no compiler src)
 
 Copy `const i32` into owned call formals must not `.clone()`; product emits

@@ -908,6 +908,10 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     // emit `String` (`emitted_rust_ref_params[i] == false`). AsRef-runtime bodies
     // (`strings::is_empty`) set forwarding_borrow while codegen keeps owned
     // `String` — callers must pass owned / `.clone()`, not `&String`.
+    //
+    // P3.589: same for bare owned `Vec`/`Map` formals (`ComponentRegistry::add`
+    // `data: Vec<u8>`). Readonly body use sets forwarding_borrow while codegen
+    // keeps owned `Vec` — callers must pass `vec![…]`, not `&vec![…]`.
     if sig
         .forwarding_borrow_params
         .as_ref()
@@ -915,7 +919,7 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         .copied()
         .unwrap_or(false)
     {
-        let owned_text_emit = sig
+        let owned_emit_not_shared_ref = sig
             .emitted_rust_ref_params
             .as_ref()
             .and_then(|flags| flags.get(param_idx))
@@ -924,12 +928,15 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
             && matches!(
                 sig.param_ownership.get(param_idx),
                 Some(OwnershipMode::Owned)
-            )
+            );
+        let owned_text_emit = owned_emit_not_shared_ref
             && sig.formal_param_type(param_idx).is_some_and(|t| {
                 crate::codegen::rust::types::is_windjammer_text_type(t)
                     && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             });
-        if !owned_text_emit {
+        let owned_vec_emit = owned_emit_not_shared_ref
+            && crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx);
+        if !owned_text_emit && !owned_vec_emit {
             return true;
         }
     }
@@ -1361,6 +1368,45 @@ mod tests {
             "owned String emit must not share-ref despite forwarding_borrow"
         );
         assert!(!call_site_needs_shared_ref_at_emit(&sig, 1));
+    }
+
+    /// P3.589: owned `Vec<u8>` emit + forwarding_borrow must not share-ref
+    /// (`&vec![…]` → E0308 into `data: Vec<u8>`).
+    #[test]
+    fn forwarding_borrow_must_not_borrow_owned_vec_emit() {
+        let sig = FunctionSignature {
+            name: "ComponentRegistry::add".into(),
+            formal_param_types: vec![
+                Type::Custom("ComponentRegistry".into()),
+                Type::Int,
+                Type::Custom("ComponentId".into()),
+                Type::Vec(Box::new(Type::Custom("u8".into()))),
+            ],
+            param_types: vec![
+                Type::Custom("ComponentRegistry".into()),
+                Type::Int,
+                Type::Custom("ComponentId".into()),
+                Type::Vec(Box::new(Type::Custom("u8".into()))),
+            ],
+            param_ownership: vec![
+                OwnershipMode::MutBorrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![true, false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: Some(vec![false, false, false, true]),
+        };
+        assert!(
+            !call_site_needs_shared_ref_at_emit(&sig, 3),
+            "owned Vec emit must not share-ref despite forwarding_borrow"
+        );
     }
 
     #[test]
