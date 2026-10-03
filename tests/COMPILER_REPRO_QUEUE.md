@@ -3,39 +3,43 @@
 ## P3.601 (2026-10-03) — pub free-fn builder forward must emit `impl Into<String>`
 
 `render_grid(left_html, …)` → `Tile::value_html(left_html)` stayed `String` so
-`render_grid("$1", …)` failed cargo-check. Three gaps:
+`render_grid("$1", …)` failed cargo-check. Gaps + scope:
 
 1. Nested `if ok { a + b }` made `param_all_call_sites_are_method_or_call_args`
    return false (unused nested blocks reset `saw`).
 2. Text AST formals were excluded from owned-method detection.
 3. `keep_concrete` blocked Into even when builder-forward applied; non-text
    `dispatch(note: Note)` must not take the Into path.
+4. Builder-forward Into requires owning **MethodCall** args only — free-fn
+   passthrough (`format_body` → `pretty`, `twice` → `consume`) stays `String`.
 
 | Gate | Status |
 |------|--------|
 | `multipass_owned_builder_string_formals_must_not_be_ref_string` | ✅ tip GREEN — `impl Into<String>` + `.into()` |
 | `notes_api_dispatch_from_mut_handle_must_not_be_owned` | ✅ tip GREEN — `note: Note` (not Into) |
-| `todo_cli_cross_crate_validate_field_must_auto_borrow` | ✅ still GREEN (private Into gate) |
+| `cross_crate_pretty_body_without_own` / `json_tostring_note` / `twice` | ✅ tip GREEN — no over-Into |
+| `ui_builder_string_formal` / todo_cli validate | ✅ still GREEN |
 | spawn / mpsc | ✅ still GREEN |
 
 **Root cause layer:** signature / formal encoding — pub free-fn Into forward via
-AST-owned builder slots + vacuous nested-block walk; text gate on builder-forward.
+AST-owned **method** builder slots + vacuous nested-block walk; text gate;
+MethodCall-only owning for builder-forward.
 
-**What became unnecessary:** keep_concrete blocking builder-forward Into; text
-exclusion from owned AST formal detection; false-negative `all_sites` on unused
-`if` arms.
+**What became unnecessary:** keep_concrete blocking true builder-forward Into;
+text exclusion from owned AST formals; false-negative `all_sites` on unused
+`if` arms; free-fn Call ownership driving pub Into.
 
 **Gates:**
 ```bash
 export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
 cargo test --release --test all -- multipass_owned_builder_string_formals_must_not_be_ref_string \
   notes_api_dispatch_from_mut_handle_must_not_be_owned \
+  cross_crate_pretty_body_without_own json_tostring_note_must_not_mut_borrow_query \
+  reused_owned_string_second_callee_must_not_borrow \
   todo_cli_cross_crate_validate_field_must_auto_borrow \
-  bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test
+  ui_builder_string_formal_must_emit_impl_into_string
 ```
-→ 7 GREEN.
-
-**Do not steal:** WDB tip-outs / notes_api mut-query product tip-outs.
+→ 8 GREEN.
 
 ## P3.600 (2026-10-03) — `retain`/`filter` Copy compare must deref `&T` param
 

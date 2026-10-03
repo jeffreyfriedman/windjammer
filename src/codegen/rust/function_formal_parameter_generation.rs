@@ -3800,9 +3800,12 @@ impl<'ast> CodeGenerator<'ast> {
         ) {
             return false;
         }
-        // Signature-driven: at least one forward site must expect owned String / Into.
+        // Signature-driven: at least one *method* forward site must expect owned String /
+        // Into (`Tile::value_html`). Free-fn passthrough (`format_body` → `pretty`,
+        // `twice` → `consume`) must keep concrete `String` so call sites move / clone
+        // without `impl Into` + `.into()` (P3.601).
         // `key.push_str(edge_kind)` alone is Borrowed `&str` — do not emit `impl Into`.
-        if !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func) {
+        if !self.param_has_owning_method_call_arg_use(func.body.as_slice(), &param.name, func) {
             return false;
         }
         self.param_all_call_sites_are_method_or_call_args(func.body.as_slice(), &param.name, func)

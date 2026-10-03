@@ -3662,6 +3662,147 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// Like `param_has_owning_method_use`, but only MethodCall *argument* sites count
+    /// (builder forwards). Free-fn Call ownership alone must not drive pub Into
+    /// (`format_body` → `pretty`, P3.601).
+    pub(in crate::codegen::rust) fn param_has_owning_method_call_arg_use(
+        &self,
+        body: &[&'ast Statement<'ast>],
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        for stmt in body {
+            if self.statement_has_owning_method_call_arg_use(stmt, param_name, func) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn statement_has_owning_method_call_arg_use(
+        &self,
+        stmt: &'ast Statement<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match stmt {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => self.expression_has_owning_method_call_arg_use(expr, param_name, func),
+            Statement::Return { .. } => false,
+            Statement::Let {
+                value, else_block, ..
+            } => {
+                self.expression_has_owning_method_call_arg_use(value, param_name, func)
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_has_owning_method_call_arg_use(b.as_slice(), param_name, func)
+                    })
+            }
+            Statement::Assignment { value, .. } => {
+                self.expression_has_owning_method_call_arg_use(value, param_name, func)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.expression_has_owning_method_call_arg_use(condition, param_name, func)
+                    || self.param_has_owning_method_call_arg_use(
+                        then_block.as_slice(),
+                        param_name,
+                        func,
+                    )
+                    || else_block.as_ref().is_some_and(|b| {
+                        self.param_has_owning_method_call_arg_use(b.as_slice(), param_name, func)
+                    })
+            }
+            Statement::While {
+                condition, body, ..
+            } => {
+                self.expression_has_owning_method_call_arg_use(condition, param_name, func)
+                    || self.param_has_owning_method_call_arg_use(body.as_slice(), param_name, func)
+            }
+            Statement::For { iterable, body, .. } => {
+                self.expression_has_owning_method_call_arg_use(iterable, param_name, func)
+                    || self.param_has_owning_method_call_arg_use(body.as_slice(), param_name, func)
+            }
+            Statement::Match { value, arms, .. } => {
+                self.expression_has_owning_method_call_arg_use(value, param_name, func)
+                    || arms.iter().any(|arm| {
+                        self.expression_has_owning_method_call_arg_use(&arm.body, param_name, func)
+                    })
+            }
+            _ => false,
+        }
+    }
+
+    fn expression_has_owning_method_call_arg_use(
+        &self,
+        expr: &Expression<'ast>,
+        param_name: &str,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                for (i, (_, arg)) in arguments.iter().enumerate() {
+                    let arg_is_param_or_field =
+                        matches!(
+                            arg,
+                            Expression::Identifier { name, .. } if name == param_name
+                        ) || Self::expr_is_field_or_index_of_param(arg, param_name);
+                    if arg_is_param_or_field
+                        && (self.method_call_sibling_ast_expects_owned_arg(
+                            object, method, i, func,
+                        ) || self.method_call_arg_formal_is_owned_non_copy(
+                            object, method, i, func,
+                        ))
+                    {
+                        return true;
+                    }
+                }
+                self.expression_has_owning_method_call_arg_use(object, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_has_owning_method_call_arg_use(arg, param_name, func)
+                    })
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                // Free calls never count for builder-forward Into — recurse only.
+                self.expression_has_owning_method_call_arg_use(function, param_name, func)
+                    || arguments.iter().any(|(_, arg)| {
+                        self.expression_has_owning_method_call_arg_use(arg, param_name, func)
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_owning_method_call_arg_use(left, param_name, func)
+                    || self.expression_has_owning_method_call_arg_use(right, param_name, func)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_has_owning_method_call_arg_use(operand, param_name, func)
+            }
+            Expression::FieldAccess { object, .. } => {
+                self.expression_has_owning_method_call_arg_use(object, param_name, func)
+            }
+            Expression::Index { object, index, .. } => {
+                self.expression_has_owning_method_call_arg_use(object, param_name, func)
+                    || self.expression_has_owning_method_call_arg_use(index, param_name, func)
+            }
+            Expression::Block { statements, .. } => self
+                .param_has_owning_method_call_arg_use(statements.as_slice(), param_name, func),
+            _ => false,
+        }
+    }
+
     fn statement_has_owning_method_use(
         &self,
         stmt: &'ast Statement<'ast>,
