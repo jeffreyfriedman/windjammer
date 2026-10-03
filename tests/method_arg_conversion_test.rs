@@ -62,8 +62,10 @@ fn test_push_string_literal() {
         test_utils::compile_fixture("method_arg_conversion").expect("Compilation failed");
 
     // add_hello uses push("hello"), should convert to String
+    // Tip may emit `.to_string()` or `String::from("…")` (same owned contract).
     assert!(
-        generated.contains("push(\"hello\".to_string())"),
+        generated.contains("push(\"hello\".to_string())")
+            || generated.contains("push(String::from(\"hello\"))"),
         "Should convert string literal for push(): {}",
         generated
     );
