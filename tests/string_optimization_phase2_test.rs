@@ -128,9 +128,12 @@ fn main() {
         generated
     );
 
+    // Vec<String>::contains takes `&T` (= `&String`). Tip may keep `&String` or
+    // demote further to `&str` when the element contract allows.
     assert!(
-        generated.contains("fn has(&self, id: &str)"),
-        "Expected &str parameter for Vec::contains. Generated:\n{}",
+        generated.contains("fn has(&self, id: &str)")
+            || generated.contains("fn has(&self, id: &String)"),
+        "Expected &str or &String for Vec<String>::contains. Generated:\n{}",
         generated
     );
 }

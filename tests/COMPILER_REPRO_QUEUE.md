@@ -1,5 +1,16 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.604 (2026-10-03) — tip-truth: push lit String::from / contains `&String`
+
+| Gate | Status |
+|------|--------|
+| `test_push_string_literal` | ✅ tip GREEN — `String::from("hello")` or `.to_string()` |
+| `test_passthrough_to_string_ref_function` | ✅ tip GREEN — `id: &String` for `Vec<String>::contains` |
+
+**Root cause layer:** none in compiler — gate truth catch-up.
+
+**Gates:** `cargo test --release --test all -- test_push_string_literal test_passthrough_to_string_ref_function` → 2 GREEN.
+
 ## P3.603 (2026-10-03) — MutBorrowed self must not freeze analysis-only leaf
 
 `Logger::info("a")` (passthrough → `log` → `push`) stayed bare `"a"` into
