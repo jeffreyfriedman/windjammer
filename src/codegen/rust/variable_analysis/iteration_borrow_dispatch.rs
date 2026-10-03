@@ -63,10 +63,6 @@ impl<'ast> CodeGenerator<'ast> {
                 false
             }
             Expression::Identifier { name, .. } => {
-                // P3.613: demoted `&Vec`/`&Map` formals (`emitted_rust_ref_formals`)
-                // iterate by shared ref even when the WJ AST still says owned `Vec` —
-                // loop bindings must be tracked as borrowed so `pair.0` clones (E0507)
-                // and compare sites do not star-deref into `str == &str` (E0277).
                 self.current_function_params.iter().any(|p| {
                     &p.name == name
                         && (matches!(p.ownership, crate::parser::OwnershipHint::Ref)
@@ -76,7 +72,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     | crate::parser::Type::MutableReference(_)
                             ))
                 }) || self.inferred_borrowed_params.contains(name)
-                    || self.emitted_rust_ref_formals.contains(name)
                     || self.borrowed_iterator_vars.contains(name)
                     || self.local_var_types.get(name).is_some_and(|t| {
                         matches!(
