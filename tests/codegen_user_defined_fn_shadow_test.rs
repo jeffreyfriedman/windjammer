@@ -64,10 +64,11 @@ fn main() {
         code
     );
 
-    // Calls should be plain assert_approx(...)
+    // Calls should be plain assert_approx(...) (owned name may be String::from / .to_string()).
     assert!(
         code.contains("assert_approx(\"test1\"")
             || code.contains("assert_approx(\"test1\".to_string()")
+            || code.contains("assert_approx(String::from(\"test1\")")
             || code.contains("assert_approx(&\"test1\""),
         "Call to assert_approx should be direct, not qualified. Generated:\n{}",
         code
