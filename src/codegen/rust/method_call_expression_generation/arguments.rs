@@ -114,18 +114,24 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .enumerate()
             .map(|(i, (_label, arg))| {
-                let receiver_type_name_owned = type_name.clone().or_else(|| {
-                    self.mc_infer_method_receiver_type_name(object)
-                }).or_else(|| {
-                    if let Expression::Identifier { name, .. } = object {
-                        self.current_function_params
-                            .iter()
-                            .find(|p| p.name == *name)
-                            .and_then(|p| Self::type_to_name(&p.type_))
-                    } else {
-                        None
-                    }
-                });
+                let receiver_type_name_owned = type_name
+                    .clone()
+                    .or_else(|| self.mc_infer_method_receiver_type_name(object))
+                    .or_else(|| {
+                        receiver_type_inferred
+                            .as_ref()
+                            .and_then(|t| Self::type_to_name(t))
+                    })
+                    .or_else(|| {
+                        if let Expression::Identifier { name, .. } = object {
+                            self.current_function_params
+                                .iter()
+                                .find(|p| p.name == *name)
+                                .and_then(|p| Self::type_to_name(&p.type_))
+                        } else {
+                            None
+                        }
+                    });
                 let receiver_type_name = receiver_type_name_owned.as_deref();
                 let is_external_module_method = match object {
                     Expression::Identifier { name, .. } => {

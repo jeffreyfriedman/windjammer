@@ -496,6 +496,26 @@ impl<'ast> CodeGenerator<'ast> {
                 // Match bindings (`Ok(mut app)` after Mutex::lock) often have no
                 // inferred receiver. Still prefer a codegen-refreshed `Type::method`
                 // so demoted `&str` formals borrow at the call site.
+                //
+                // Fail closed when `*::{method}` disagrees on first-arg ownership
+                // (Vec::remove Owned usize vs HashMap::remove Borrowed &K). Scanning
+                // `reg.signatures` (HashMap) and picking one was nondeterministic —
+                // tip flaked `codepoints.remove(pos)` ↔ `remove(&pos)`.
+                if self
+                    .signature_registry
+                    .suffix_has_conflicting_first_arg_ownership(method, arguments.len())
+                    || self.global_signature_registry().is_some_and(|g| {
+                        g.suffix_has_conflicting_first_arg_ownership(method, arguments.len())
+                    })
+                {
+                    if trace {
+                        eprintln!(
+                            "[wj-sig] call-site {method} arg#{}: no-receiver SKIP conflicting homonyms",
+                            arguments.len(),
+                        );
+                    }
+                    return None;
+                }
                 let suffix = format!("::{method}");
                 let mut candidates: Vec<Option<FunctionSignature>> = Vec::new();
                 let push = |reg: &crate::analyzer::SignatureRegistry,

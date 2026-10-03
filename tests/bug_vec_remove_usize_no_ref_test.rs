@@ -157,4 +157,10 @@ fn main() {
         "Expected codepoints.remove(pos) without &.\nGenerated:\n{}",
         generated
     );
+    assert!(
+        !generated.contains("codepoints.remove(pos as i64)")
+            && !generated.contains("codepoints.remove(pos as usize)"),
+        "Vec::remove index must stay bare usize binding (no post-IR width cast).\nGenerated:\n{}",
+        generated
+    );
 }

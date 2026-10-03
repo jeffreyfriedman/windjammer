@@ -361,7 +361,24 @@ impl<'ast> CodeGenerator<'ast> {
             }),
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
-            Expression::MethodCall { object, method, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                type_args,
+                ..
+            } => {
+                // Explicit turbofish return target: `collect::<Vec<char>>()`, …
+                // Without this, `let codepoints = ….collect::<Vec<_>>()` never
+                // enters `local_var_types`, so `codepoints.remove` had no receiver
+                // and flaked across HashMap/Vec `remove` homonyms.
+                if let Some(args) = type_args.as_ref() {
+                    if args.len() == 1 {
+                        let annotated = &args[0];
+                        if crate::type_classification::type_to_registry_base(annotated).is_some() {
+                            return Some(annotated.clone());
+                        }
+                    }
+                }
                 // WJ `.string()` / Rust `.to_string()` are language-level owned conversions.
                 // Do not inherit `String::to_string` → `Self` (that types `i32.to_string()`
                 // as i32 and later Borrow-peels to `&self.rows`).
