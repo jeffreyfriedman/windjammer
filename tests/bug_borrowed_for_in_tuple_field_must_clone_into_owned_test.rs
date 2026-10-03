@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.613: `for pair in headers` over demoted `&Vec<(String, String)>` yields
+//! P3.614: `for pair in headers` over demoted `&Vec<(String, String)>` yields
 //! `&(String, String)`. `let key = pair.0` / `return pair.1` must `.clone()` —
 //! product notes-api `headers_meta` and proxy `client_key_from_headers` E0507.
 //!
@@ -74,23 +74,23 @@ fn client_key_from_headers(headers: Vec<(string, string)>) -> string {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.613 transpile failed:\n{}",
+        "P3.614 transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.613 emit:\n{rs}");
+    eprintln!("P3.614 emit:\n{rs}");
 
     // Must not move out of borrowed tuple fields.
     assert!(
         !rs.contains("let key = pair.0;")
             && !rs.contains("let value = pair.1;")
             && !rs.contains("return pair.1;"),
-        "P3.613 RED: borrowed for-in tuple fields must clone into owned uses:\n{rs}"
+        "P3.614 RED: borrowed for-in tuple fields must clone into owned uses:\n{rs}"
     );
     assert!(
         rs.contains("pair.0.clone()") || rs.contains("pair.1.clone()"),
-        "P3.613 RED: expected .clone() on borrowed tuple field extract:\n{rs}"
+        "P3.614 RED: expected .clone() on borrowed tuple field extract:\n{rs}"
     );
 
     let ck = Command::new("cargo")
@@ -108,7 +108,7 @@ fn client_key_from_headers(headers: Vec<(string, string)>) -> string {
         .expect("cargo check");
     assert!(
         ck.status.success(),
-        "P3.613 RED: cargo-check failed:\n{}\n{rs}",
+        "P3.614 RED: cargo-check failed:\n{}\n{rs}",
         String::from_utf8_lossy(&ck.stderr)
     );
 }

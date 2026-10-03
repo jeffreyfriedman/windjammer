@@ -42,29 +42,6 @@ Copy `usize` field return / struct-literal must not `.clone()`; product emits
 
 **Do not steal:** WDB-406/408/411/434, P3.508–P3.612, WDB-412–434 (filed).
 
-## P3.613 (2026-10-03) — TDD WDB-435 (DB agent; no compiler src)
-
-Copy `usize` field return / struct-literal must not `.clone()`; product emits
-`self.capacity.clone()` / `self.in_use.clone()` in object_pool getters/stats.
-
-| Gate | Status |
-|------|--------|
-| WDB-435 MultiFile | ⏳ TDD pending — bare `self.capacity` / `self.in_use` return |
-| WDB-435 tip-out | ⏳ TDD pending — `self.capacity.clone()` in object_pool |
-
-**Root cause layer:** copy / field — Copy field return and struct-lit field init must not auto-clone.
-
-**Why this is a new class:**
-- WDB-433 is field `.clone()` before **cast/arith**.
-- WDB-431 is field into **insert/push**.
-- WDB-427 is field into **`let`**.
-
-**What became unnecessary:** `self.capacity.clone()` / `self.in_use.clone()` on Copy usize getters.
-
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-03)
-
-**Do not steal:** WDB-406/408/411/434, P3.508–P3.612, WDB-412–434 (filed).
-
 ## P3.612 (2026-10-03) — TDD WDB-434 (DB agent; no compiler src)
 
 Copy `const i32` into owned call formals must not `.clone()`; product emits
