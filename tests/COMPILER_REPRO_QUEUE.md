@@ -23,6 +23,45 @@ Copy `u64` field into insert/push owned formal must not `.clone()`; product emit
 
 **Do not steal:** WDB-406/408/411/430, P3.508–P3.591, WDB-412–430 / P3.509–P3.573 (filed).
 
+## P3.591 (2026-10-02) — `let mut i` as usize index must not init `0_i32`
+
+Product `wj-find` / `wj-form-parse` emit `let mut i: usize = 0_i32` for
+`let mut i = 0` compared to `.len()` → E0308.
+
+| Gate | Status |
+|------|--------|
+| `usize_loop_counter_init_zero_must_not_be_i32` | ❌ tip RED — product `0_i32` |
+
+**Root cause layer:** encoding / int unify — usize-bound loop counters must
+emit `0` / `0_usize`, not `0_i32`.
+
+**What became unnecessary:** rewriting find/form loops with explicit casts.
+
+**Gates:** tip p3587 product `wj-find` build → `usize = 0_i32`.
+- `cargo test --test all --features integration_tests,codegen_tests -- usize_loop_counter_init_zero_must_not_be_i32`
+
+**Do not steal:** WDB-406/408/411/427–430, P3.508–P3.590, WDB-412–429 (filed).
+
+## P3.590 (2026-10-02) — `int` bitops into `push(… as u8)` must keep i64 masks
+
+Product `wj-uuid` `v1_bytes`: `((clock_seq >> 8) & 0x3F) | 0x80` with later
+`out.push(clock_hi as u8)`. Tip paints masks `_i32` while `clock_seq: i64` →
+E0277. Same bitops without the `u8` push false-GREEN (`_i64`).
+
+| Gate | Status |
+|------|--------|
+| `i64_bitops_into_u8_push_must_unify_i64` | ❌ tip RED — `_i32` masks |
+
+**Root cause layer:** encoding / call-arg int context — `Vec<u8>::push` / `as u8`
+must not force bitop peers of WJ `int` to i32.
+
+**What became unnecessary:** rewriting uuid v1 masks as explicit `as int`.
+
+**Gates:** tip p3587 isolate + product `$WJ test` wj-uuid → E0277.
+- `cargo test --test all --features integration_tests,codegen_tests -- i64_bitops_into_u8_push_must_unify_i64`
+
+**Do not steal:** WDB-406/408/411/427–430, P3.508–P3.589, WDB-412–429 (filed).
+
 ## P3.583b (2026-10-02) — field-move demotion: value vs place position
 
 P3.583 call-arg field-move recursion treated method/index **places**
