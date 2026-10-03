@@ -2621,10 +2621,19 @@ impl<'ast> CodeGenerator<'ast> {
         if self.current_fn_emitted_formal_is_shared_ref(name) {
             return true;
         }
-        // Analyzer `Type::Reference` / `OwnershipHint::Ref` is not emit-truth.
-        // Source `&T` formals are already covered above. Emitted-owned Custom
-        // (`col: CatalogColumnBinding`) must stay owned at call sites — last-use
-        // into `Vec::push` is a move, not `.clone()` (WDB-209).
+        // `let ri = &i` locals are Type::Reference in local_var_types but are not
+        // params / inferred_borrowed_params — still shared-ref bindings at call
+        // sites (`*ri as usize`, not `ri as usize`).
+        if matches!(
+            self.local_var_types.get(name),
+            Some(Type::Reference(_))
+        ) {
+            return true;
+        }
+        // Analyzer `Type::Reference` / `OwnershipHint::Ref` is not emit-truth for
+        // formals. Source `&T` formals are already covered above. Emitted-owned
+        // Custom (`col: CatalogColumnBinding`) must stay owned at call sites —
+        // last-use into `Vec::push` is a move, not `.clone()` (WDB-209).
         false
     }
 

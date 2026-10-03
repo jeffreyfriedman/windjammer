@@ -156,10 +156,15 @@ pub fn caller() {
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    // String literal to &str: takes_ref("hello") or takes_ref(&"hello") both work
+    // Tip truth: unused pub free-fn `string` formals stay Owned (WDB-152 /
+    // pub_module_api_keeps_owned_string_formal) — literal owns via `.to_string()` /
+    // `String::from`. Demotion to `&str` + bare lit requires a borrowing use.
     assert!(
-        result.contains("takes_ref(\"hello\")") || result.contains("takes_ref(&\"hello\")"),
-        "String literal to &str param. Got:\n{}",
+        result.contains("takes_ref(\"hello\")")
+            || result.contains("takes_ref(&\"hello\")")
+            || result.contains("takes_ref(\"hello\".to_string())")
+            || result.contains("takes_ref(String::from(\"hello\"))"),
+        "String literal into owned or &str formal. Got:\n{}",
         result
     );
 }

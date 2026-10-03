@@ -4165,8 +4165,13 @@ impl<'ast> CodeGenerator<'ast> {
         // non-text type (`ServerResponse`) keep owned `String`. Cross-module
         // callers pass owned temps; Phase-2 `&str` refresh on the defining file
         // is not visible at those call sites in the same multipass.
+        // Exclusive forwards into borrowed-text / shared-ref callees
+        // (`strings::len(path)`) must still demote — owned formals force
+        // multipass callers to `.clone()` reused paths (load_twice).
         if !self.function_return_is_text(func)
             && self.param_passed_as_call_argument(body, &param.name, func)
+            && !self.param_only_forwards_to_borrowed_text_callees(body, &param.name, func)
+            && !self.param_call_sites_expect_borrow(body, &param.name, func)
         {
             return true;
         }

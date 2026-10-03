@@ -66,19 +66,21 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
         };
     }
 
-    // Copy types: pass by value; strip spurious borrows when callee expects owned/copy.
+    // Copy types: pass by value. Ref bindings (`let ri = &i`) need `*ri` into owned
+    // Copy formals — Rust does not auto-copy `&T` at by-value call sites. `apply_coercion`
+    // still strips a leading `&` on `&x` text (same as former StripBorrow).
     // `OwnedType::Copy` is set from the Copy registry (aggregates like BatchHandle),
     // not only primitive `is_copy_base`.
     if matches!(expected_own, OwnedType::Copy)
         && matches!(actual_own, OwnedType::Ref(_))
     {
-        return CoercionKind::StripBorrow;
+        return CoercionKind::Deref;
     }
     if matches!(expected_own, OwnedType::Copy | OwnedType::Owned)
         && matches!(actual_own, OwnedType::Ref(_))
         && is_copy_base(&expected.base)
     {
-        return CoercionKind::StripBorrow;
+        return CoercionKind::Deref;
     }
     if matches!(actual_own, OwnedType::Copy)
         && matches!(expected_own, OwnedType::Owned | OwnedType::Copy)
@@ -167,9 +169,9 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
                 if is_string_base(&expected.base) {
                     CoercionKind::ToOwnedString
                 } else if is_copy_base(&actual.base) || is_copy_base(&expected.base) {
-                    // Owned Copy formal: strip `&` / pass bare value (auto-copy). Never
-                    // `*x` when codegen already lowered `&x` to the operand name `x`.
-                    CoercionKind::StripBorrow
+                    // Owned Copy formal: deref ref bindings (`*ri`); encoding strips
+                    // leading `&` on `&x` text so we never emit `*&x`.
+                    CoercionKind::Deref
                 } else {
                     CoercionKind::Clone
                 }
@@ -708,10 +710,10 @@ mod tests {
         let tuple = BaseType::Tuple(vec![BaseType::I32, BaseType::I32]);
         let actual = borrowed(tuple.clone());
         let expected = owned(tuple);
-        // Owned Copy formals: StripBorrow (auto-copy) is preferred over explicit Deref.
+        // Ref binding → owned Copy: Deref (`*ri`); encoding strips leading `&` on `&x`.
         assert_eq!(
             compute_coercion(&actual, &expected),
-            CoercionKind::StripBorrow
+            CoercionKind::Deref
         );
     }
 

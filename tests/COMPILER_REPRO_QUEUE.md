@@ -1,5 +1,52 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.607 (2026-10-03) — Ref local → owned Copy/usize must Deref (`*ri as usize`)
+
+`let ri = &i; compute(v, ri)` emitted `ri as usize` because (1) later usize
+formals overwrote `local_var_types["ri"]` with `usize`, hiding `Type::Reference`,
+and (2) `compute_coercion` Ref→Owned Copy returned StripBorrow (no-op on bare
+ref bindings) instead of Deref.
+
+| Gate | Status |
+|------|--------|
+| `test_mixed_coercion_multiple_args` | ✅ tip GREEN — `*ri as usize` |
+| `test_fn_arg_string_literal_to_borrowed` | ✅ tip GREEN — tip-truth Owned unused pub free-fn `string` |
+| lib `borrowed_copy_tuple_to_owned_strips_or_derefs` | ✅ GREEN — Deref |
+
+**Root cause layer:** constraint/solver (actual SafetyType) + coercion/encoding —
+protect ref locals from use-site int-width overwrite; Ref→Owned Copy → Deref.
+
+**What became unnecessary:** StripBorrow no-op on bare `&T` binding names into
+owned Copy / post-IR `as usize` casts.
+
+**Gates:**
+```bash
+export WJ_BINARY=$CARGO_TARGET_DIR/release/wj
+cargo test --release --lib -- borrowed_copy_tuple_to_owned_strips_or_derefs
+cargo test --release --test all -- test_mixed_coercion_multiple_args \
+  test_fn_arg_string_literal_to_borrowed
+```
+→ lib + 2 GREEN.
+
+## P3.606 (2026-10-03) — pub method string → borrowed-text callee must demote `&str`
+
+`AssetLoader::load(path)` with only `strings::len(path)` kept Owned `String`
+because `pub_module_api_keeps_owned_string_formal` treated any call-arg +
+non-text return as keep-owned. Multipass callers then `.clone()` reused paths.
+
+| Gate | Status |
+|------|--------|
+| `test_library_multipass_owned_string_to_string_method_must_borrow` | ✅ tip GREEN — `path: &str`, no clone |
+| logger / bare lit / custom method string peers | ✅ still GREEN |
+
+**Root cause layer:** signature (pub keep-owned guard) — exclusive forwards into
+borrowed-text / shared-ref callees must demote.
+
+**What became unnecessary:** Owned `load(path: String)` + `path.clone()` when
+the only use is `strings::len(&path)`.
+
+**Gates:** `WJ_BINARY=tip cargo test --release --test all -- library_multipass_owned_string_to_string_method_must_borrow regression_logger_owned_passthrough test_custom_method_string_param bare_string_literal_into_owned_string_method` → 4 GREEN.
+
 ## P3.605 (2026-10-03) — pure-forward MutBorrowed passthrough must emit `&mut T`
 
 `wrapper(grid)` → `do_clear(grid: &mut VoxelGrid)` analyzer-correct MutBorrowed was
@@ -26,11 +73,6 @@ export WJ_BINARY=$CARGO_TARGET_DIR/release/wj
 cargo test --release --test all -- method_collision_mutation passthrough_qualified bug_mut_reborrow
 ```
 → 6 GREEN.
-
-**Still RED (next):** `library_multipass_owned_string_to_string_method_must_borrow`
-(`load(path: String)` + `path.clone()` despite `strings::len(&path)`),
-`test_fn_arg_string_literal_to_borrowed`, `test_mixed_coercion_multiple_args`
-(`ri as usize` missing deref).
 
 **Do not steal:** WDB tip-outs / notes_api mut-query product tip-outs.
 
