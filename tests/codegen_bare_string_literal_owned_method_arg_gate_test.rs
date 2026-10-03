@@ -90,9 +90,18 @@ pub fn show() -> string {
     let view_rs = fs::read_to_string(out.join("view.rs")).unwrap_or_default();
     let ui_rs = fs::read_to_string(out.join("ui.rs")).unwrap_or_default();
     // Method formal ends with `)` before `->`; struct field is `message: String,`.
+    // P3.598/P3.601: Self-returning builders may emit `impl Into<String>` (accepts bare `&str`).
+    let formal_into = ui_rs.contains("message: impl Into<String>)");
     let formal_owned = ui_rs.contains("message: String)");
     let formal_str = ui_rs.contains("message: &str)");
-    if formal_owned {
+    if formal_into {
+        assert!(
+            view_rs.contains(".message(\"hello\")")
+                || view_rs.contains("message(\"hello\".to_string())")
+                || view_rs.contains("message(String::from(\"hello\"))"),
+            "impl Into<String> formal accepts bare lit (or owned coerce). Got:\n{view_rs}\nui=\n{ui_rs}"
+        );
+    } else if formal_owned {
         assert!(
             view_rs.contains("message(\"hello\".to_string())")
                 || view_rs.contains("message(String::from(\"hello\"))")
@@ -106,7 +115,7 @@ pub fn show() -> string {
     } else {
         assert!(
             formal_str,
-            "Banner::message formal should be String or demoted &str. ui=\n{ui_rs}"
+            "Banner::message formal should be String, Into, or demoted &str. ui=\n{ui_rs}"
         );
         assert!(
             view_rs.contains(".message(\"hello\")")

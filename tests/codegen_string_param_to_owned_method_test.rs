@@ -56,11 +56,15 @@ fn main() {
         || result.contains("expected String, found &str");
     // Tip may demote read/store formals to `&str` and `.to_string()` inside the
     // setter — still typechecks (Phase-2 demotion).
+    // P3.598/P3.601/P3.602: Self-returning builders + free-fn builder forwards may
+    // emit `impl Into<String>` + `.into()` (accepts owned or `&str` at Rust call sites).
     let looks_ok = result.contains("fn render_kpi")
         && !has_type_err
         && (result.contains("cash_html: String")
+            || result.contains("cash_html: impl Into<String>")
             || result.contains("value_html(cash_html.to_string())")
             || result.contains("value_html(cash_html.clone())")
+            || result.contains("value_html(cash_html.into())")
             || (result.contains("value_html(cash_html)") && result.contains("cash_html: String"))
             || (result.contains("cash_html: &str")
                 && result.contains("html: &str")

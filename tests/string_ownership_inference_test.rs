@@ -77,9 +77,12 @@ fn test_stored_param_infers_owned() {
         generated
     );
 
+    // Constructors that store into Self may emit concrete `String` or
+    // `impl Into<String>` (P3.598 StatusChip / Rust `&str` call sites).
     assert!(
-        generated.contains("fn new(name: String)"),
-        "Stored string parameter should use owned String at API, got:\n{}",
+        generated.contains("fn new(name: String)")
+            || generated.contains("fn new(name: impl Into<String>)"),
+        "Stored string parameter should use owned String or impl Into<String> at API, got:\n{}",
         generated
     );
 

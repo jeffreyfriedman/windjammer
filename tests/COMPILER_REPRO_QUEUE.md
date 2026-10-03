@@ -1,5 +1,45 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.602 (2026-10-03) — codegen-refreshed Owned beats analysis-only bare leaf
+
+`Logger::info("a")` / builder string-lit call sites peeled `String::from("a")`
+back to bare `"a"` when `mc_select` / `contract_sig` preferred an analysis-only
+bare leaf (`info` Borrowed + `Reference(str)`, no emit flags) over the
+codegen-refreshed `Logger::info` Owned String formal.
+
+| Gate | Status |
+|------|--------|
+| multipass `Logger::info("a")` → `"a".to_string()` | ✅ tip GREEN |
+| `test_custom_method_string_param` | ✅ tip GREEN |
+| `bare_string_literal_into_owned_string_method_must_auto_own` | ✅ tip GREEN — Into or owned |
+| `string_param_passed_to_owned_method_should_compile` | ✅ tip GREEN — Into + `.into()` |
+| `test_stored_param_infers_owned` | ✅ tip GREEN — String or Into |
+| builder / pretty / dispatch / spawn / mpsc peers | ✅ still GREEN |
+
+**Root cause layer:** signature — prefer codegen-refreshed method registry /
+`fallback_sig` over analysis-only bare-leaf stubs; `mc_select` must not let
+`prefer_converged_over_stub` / `converged_has_reference_params_over_bare` pick
+stale Borrowed `Reference(str)` when local has emit flags + Owned.
+
+**What became unnecessary:** dual-oracle `contract_sig` rebuild that overwrote
+IR/`mc_resolve` with bare `resolve_method_function_signature`; global upgrade
+paths that ignored `codegen_refreshed_beats_analysis_only` /
+`emitted_owned_beats_stale_global_borrow`.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR=…/.agent-wip/cargo-target-p3597
+cargo test --release --test all -- bare_string_literal_into_owned_string_method \
+  test_stored_param_infers_owned test_custom_method_string_param \
+  string_param_passed_to_owned_method multipass_owned_builder_string_formals \
+  cross_crate_pretty_body_without_own reused_owned_string_second_callee \
+  notes_api_dispatch_from_mut_handle json_tostring_note_must_not_mut_borrow \
+  ui_builder_string_formal
+```
+→ 12 GREEN.
+
+**Do not steal:** WDB tip-outs / notes_api mut-query product tip-outs.
+
 ## P3.601 (2026-10-03) — pub free-fn builder forward must emit `impl Into<String>`
 
 `render_grid(left_html, …)` → `Tile::value_html(left_html)` stayed `String` so

@@ -167,45 +167,47 @@ impl<'ast> CodeGenerator<'ast> {
                 self.current_caller_module_path().as_deref(),
             );
 
-            // Unified registry resolution (local + global, emitted-formal refresh) wins over
-            // bare MethodSignature stubs that drop `emitted_rust_ref_params`.
-            if let Some(resolved) = from_registry {
-                let mut sig = resolved.sig;
-                crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
-                    &self.signature_registry,
-                    method,
-                    &mut sig,
-                );
-                if let Some(global) = self.global_signature_registry() {
-                    crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
-                        global,
-                        method,
-                        &mut sig,
+            // Prefer registry resolution, but never let an analysis-only bare leaf
+            // (`info` Borrowed + `Reference(str)`, no emit flags) beat a
+            // codegen-refreshed `Logger::info` Owned String formal (P3.602 logger
+            // string-lit → owned method arg). Unified registry still wins when it
+            // already carries emit flags / owned emission.
+            let mut chosen = match (from_registry, from_method_registry) {
+                (Some(reg), Some(method_reg)) => {
+                    let prefer_method = crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                        &method_reg.sig,
+                        &reg.sig,
+                    ) || crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
+                        &method_reg.sig,
+                        &reg.sig,
                     );
+                    if prefer_method {
+                        method_reg
+                    } else {
+                        reg
+                    }
                 }
-                return Some(finalize_call_site_signature(sig));
-            }
-
-            if let Some(resolved) = from_method_registry {
-                let mut sig = resolved.sig;
+                (Some(reg), None) => reg,
+                (None, Some(method_reg)) => method_reg,
+                (None, None) => {
+                    return self
+                        .lookup_method_signature_on_receiver_type(tn, method, arguments.len())
+                        .map(finalize_call_site_signature);
+                }
+            };
+            crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
+                &self.signature_registry,
+                method,
+                &mut chosen.sig,
+            );
+            if let Some(global) = self.global_signature_registry() {
                 crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
-                    &self.signature_registry,
+                    global,
                     method,
-                    &mut sig,
+                    &mut chosen.sig,
                 );
-                if let Some(global) = self.global_signature_registry() {
-                    crate::codegen::rust::call_signature_resolution::apply_trait_owned_string_call_site_contracts(
-                        global,
-                        method,
-                        &mut sig,
-                    );
-                }
-                return Some(finalize_call_site_signature(sig));
             }
-
-            return self
-                .lookup_method_signature_on_receiver_type(tn, method, arguments.len())
-                .map(finalize_call_site_signature);
+            return Some(finalize_call_site_signature(chosen.sig));
         }
 
         // Runtime std modules (`strings::join`): resolve `module::method` only when the
@@ -349,6 +351,17 @@ impl<'ast> CodeGenerator<'ast> {
 
         let prefer_global_over =
             |local: &FunctionSignature, better: &FunctionSignature| -> bool {
+                use crate::codegen::rust::signature_promotion::{
+                    codegen_refreshed_beats_analysis_only, emitted_owned_beats_stale_global_borrow,
+                };
+                // Codegen-refreshed Owned String (`Logger::info`) must not lose to an
+                // analysis-only Borrowed + `Reference(str)` leaf (`info`) — that peeled
+                // `String::from("a")` back to bare `"a"` (P3.602).
+                if codegen_refreshed_beats_analysis_only(local, better)
+                    || emitted_owned_beats_stale_global_borrow(local, better)
+                {
+                    return false;
+                }
                 prefer_converged_over_stub(local, better)
                     || converged_has_reference_params_over_bare(local, better)
             };
@@ -371,9 +384,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(sig) = resolved_from_mc {
             if is_usable(sig) {
                 if let Some(ref better) = global_upgraded {
-                    if prefer_converged_over_stub(sig, better)
-                        || converged_has_reference_params_over_bare(sig, better)
-                    {
+                    if prefer_global_over(sig, better) {
                         if trace {
                             eprintln!(
                                 "[wj-sig] call-site {method} arg#{}: global UPGRADED ({:?})",
@@ -385,9 +396,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if let Some(ref mc_sig) = mc_resolved {
-                    if prefer_converged_over_stub(sig, mc_sig)
-                        || converged_has_reference_params_over_bare(sig, mc_sig)
-                    {
+                    if prefer_global_over(sig, mc_sig) {
                         if trace {
                             eprintln!(
                                 "[wj-sig] call-site {method} arg#{}: mc_resolve UPGRADED ({:?})",
