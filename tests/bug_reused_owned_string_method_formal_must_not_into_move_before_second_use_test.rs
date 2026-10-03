@@ -11,14 +11,14 @@
     feature = "integration_tests",
 ))]
 
-//! P3.614: product `wj-proxy` `complete_proxy` — reused `client_key: string`
+//! P3.615: product `wj-proxy` `complete_proxy` — reused `client_key: string`
 //! must not emit `impl Into<String>` then `check_rate(client_key.into())`
 //! before a later `client_key` use (E0382).
 //!
 //! Flat isolates false-GREEN (`client_key: String` + `check_rate(&client_key)`).
 //! Gate the hexagonal product package. Do not reshape proxy with manual clones.
 //! Distinct from P3.599 (private free-fn Into) / P3.598 (builder Into) /
-//! P3.613 (borrowed for-in tuple field clone).
+//! P3.614 (borrowed for-in tuple field clone).
 
 use std::fs;
 use std::path::PathBuf;
@@ -71,7 +71,7 @@ fn reused_owned_string_method_formal_must_not_into_move_before_second_use() {
         .expect("wj build wj-proxy");
     assert!(
         build.status.success(),
-        "P3.614 wj-proxy transpile failed:\n{}",
+        "P3.615 wj-proxy transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -81,14 +81,14 @@ fn reused_owned_string_method_formal_must_not_into_move_before_second_use() {
         .find(|l| l.contains("fn complete_proxy("))
         .unwrap_or("")
         .to_string();
-    eprintln!("P3.614 complete_proxy: {complete}");
+    eprintln!("P3.615 complete_proxy: {complete}");
 
     assert!(
         !complete.contains("client_key: impl Into<String>"),
-        "P3.614 RED: reused client_key formal must not be impl Into<String>:\n{complete}"
+        "P3.615 RED: reused client_key formal must not be impl Into<String>:\n{complete}"
     );
     assert!(
         !proxy_rs.contains("check_rate(client_key.into()"),
-        "P3.614 RED: must not move client_key via .into() into check_rate before later use:\n{proxy_rs}"
+        "P3.615 RED: must not move client_key via .into() into check_rate before later use:\n{proxy_rs}"
     );
 }
