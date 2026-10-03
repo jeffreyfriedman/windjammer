@@ -26,8 +26,8 @@ Copy `const i32` into owned call formals must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-434 MultiFile | ⏳ TDD pending — `VoxelGrid::new(GRID, GRID, GRID)` |
-| WDB-434 tip-out | ⏳ TDD pending — `GRID.clone()` in station_builder |
+| WDB-434 MultiFile | ✅ GREEN @ `61b36a54` — isolate `VoxelGrid::new(GRID, GRID, GRID)` no `.clone()` |
+| WDB-434 tip-out | ❌ RED @ `61b36a54` — `GRID.clone()` in `rel_tip_out/scene/station_builder.rs` |
 
 **Root cause layer:** copy / const — Copy consts into owned formals must not auto-clone.
 
@@ -38,9 +38,9 @@ Copy `const i32` into owned call formals must not `.clone()`; product emits
 
 **What became unnecessary:** `GRID.clone()` in station VoxelGrid construction.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-03)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` → `wdb434_` — 1 passed / 1 failed (isolate GREEN, tip RED).
 
-**Do not steal:** WDB-406/408/411/433, P3.508–P3.611, WDB-412–433 (filed).
+**Do not steal:** WDB-406/408/411/433, P3.508–P3.612, WDB-412–434 (filed).
 
 ## P3.611 (2026-10-03) — if-without-else trailing `match` must `return match`
 
