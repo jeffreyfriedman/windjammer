@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.594 (2026-10-02) — `counter_inc` must borrow `Counter` (or derive Clone)
+
+Product `wj-sync`: `counter_inc(c: Counter)` stays owned while tests reuse `c`
+(codegen inserts `.clone()`). `Counter { Arc<AtomicI64> }` lacks `Clone` →
+E0599. Flat Arc-Counter isolates false-GREEN (`&Counter`).
+
+| Gate | Status |
+|------|--------|
+| `sync_counter_inc_must_borrow_or_be_clone` | ❌ tip RED — product owned `Counter` |
+
+**Root cause layer:** signature / demotion — Arc interior mutability must demote
+to `&Counter`, or auto-derive `Clone` for Arc-only structs.
+
+**What became unnecessary:** rewriting sync tests with manual handle churn.
+
+**Gates:** tip p3589b product build → `fn counter_inc(c: Counter)`; cargo gate
+FAILED (RED) 2026-10-02.
+- `cargo test --test all --features integration_tests,codegen_tests -- sync_counter_inc_must_borrow_or_be_clone`
+
+**Do not steal:** WDB-406/408/411/430–432, P3.508–P3.593, WDB-412–431 (filed).
+
 ## P3.593 (2026-10-02) — TDD WDB-432 (DB agent; no compiler src)
 
 Indexed Copy element + cast must not `.clone()`; product emits

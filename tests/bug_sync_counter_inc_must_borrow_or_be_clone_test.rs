@@ -11,12 +11,13 @@
     feature = "integration_tests",
 ))]
 
-//! P3.593: `counter_inc` / `counter_get` are documented borrow hot paths but
+//! P3.594: `counter_inc` / `counter_get` are documented borrow hot paths but
 //! product `wj-sync` keeps owned `c: Counter` while tests reuse `c` (codegen
 //! inserts `.clone()`). `Counter { Arc<AtomicI64> }` is not `Clone` → E0599.
 //!
 //! Flat Arc-Counter isolates false-GREEN (`counter_inc(&Counter)`). Gate the
 //! product package. Do not reshape wj-sync tests to manual Arc clones.
+//! (P3.593 was WDB-432 indexed Copy cast.)
 
 use std::fs;
 use std::path::PathBuf;
@@ -69,7 +70,7 @@ fn sync_counter_inc_must_borrow_or_be_clone() {
         .expect("wj build wj-sync");
     assert!(
         build.status.success(),
-        "P3.593 wj-sync transpile failed:\n{}",
+        "P3.594 wj-sync transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -81,7 +82,7 @@ fn sync_counter_inc_must_borrow_or_be_clone() {
         .find(|l| l.contains("fn counter_inc("))
         .unwrap_or("")
         .to_string();
-    eprintln!("P3.593 counter_inc: {inc}");
+    eprintln!("P3.594 counter_inc: {inc}");
 
     let borrows = inc.contains("&Counter") || inc.contains("c: &");
     let counter_block = {
@@ -92,7 +93,7 @@ fn sync_counter_inc_must_borrow_or_be_clone() {
 
     assert!(
         borrows || has_clone,
-        "P3.593 RED: counter_inc must borrow Counter (or Counter must Clone) — \
+        "P3.594 RED: counter_inc must borrow Counter (or Counter must Clone) — \
          product tests reuse c → E0599:\n{inc}\n{counter_block}"
     );
 }
