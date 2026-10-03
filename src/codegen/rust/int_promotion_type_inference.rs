@@ -1256,6 +1256,42 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Concrete WJ `int`/`i64` formal or binding in `expr` (not bare literals).
+    /// Beats `function_prefers_i32_coord_locals` for bitop lets under `-> Vec<u8>`
+    /// (`let clock_hi = clock_seq >> 8 & …`, P3.590 / wj-uuid).
+    pub(in crate::codegen::rust) fn expression_has_concrete_wj_int_i64_peer(
+        &self,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } => {
+                self.explicit_wj_int_annotated_locals.contains(name)
+                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                        matches!(t, Type::Int)
+                            || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                    })
+                    || self.current_function_params.iter().any(|p| {
+                        p.name == name.as_str()
+                            && (matches!(p.type_, Type::Int)
+                                || matches!(&p.type_, Type::Custom(n) if n == "int" || n == "i64"))
+                    })
+            }
+            Expression::Binary { left, right, .. } => {
+                self.expression_has_concrete_wj_int_i64_peer(left)
+                    || self.expression_has_concrete_wj_int_i64_peer(right)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expression_has_concrete_wj_int_i64_peer(operand)
+            }
+            Expression::Cast { expr, type_, .. } => {
+                matches!(type_, Type::Int)
+                    || matches!(type_, Type::Custom(n) if n == "int" || n == "i64")
+                    || self.expression_has_concrete_wj_int_i64_peer(expr)
+            }
+            _ => false,
+        }
+    }
+
     /// P3.323: untyped `let mut i = 0` + `while i < 4` — treat counter as i32, not WJ `int`/i64.
     pub(in crate::codegen::rust) fn promote_ambiguous_int_loop_counter_in_while_condition(
         &mut self,

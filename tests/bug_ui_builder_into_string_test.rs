@@ -32,6 +32,16 @@ fn assert_into_string_formals(rs: &str) {
         rs.contains("impl Into<String>"),
         "RED: owned string builder formals must emit impl Into<String> (windjammer-ui). Got:\n{rs}"
     );
+    // Both constructor and setter must accept Rust `&str` (P3.589: `label` used to
+    // early-demote to `&str` before the Into upgrade, while `new` already emitted Into).
+    assert!(
+        rs.contains("fn new") && rs.contains("status: impl Into<String>"),
+        "RED: StatusChip::new must take impl Into<String>. Got:\n{rs}"
+    );
+    assert!(
+        rs.contains("fn label") && rs.contains("label: impl Into<String>"),
+        "RED: StatusChip::label must take impl Into<String>. Got:\n{rs}"
+    );
     assert!(
         rs.contains(".into()"),
         "RED: Into formals must call .into() when storing. Got:\n{rs}"
