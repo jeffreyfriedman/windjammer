@@ -295,8 +295,8 @@ owned formal; product emits `is_storage_write(binding.binding_type.clone())`.
 
 | Gate | Status |
 |------|--------|
-| WDB-430 MultiFile | ⏳ TDD pending — `is_write(binding.binding_type)` |
-| WDB-430 tip-out | ⏳ TDD pending — `binding.binding_type.clone()` in shader_graph_* |
+| WDB-430 MultiFile | ✅ GREEN @ `80c86faf` — isolate `is_write(binding.binding_type)` no `.clone()` |
+| WDB-430 tip-out | ❌ RED @ `80c86faf` — `binding.binding_type.clone()` in shader_graph_builder/compiler |
 
 **Root cause layer:** copy / field — Copy enum fields into owned formals must not auto-clone.
 
@@ -307,7 +307,7 @@ owned formal; product emits `is_storage_write(binding.binding_type.clone())`.
 
 **What became unnecessary:** `binding.binding_type.clone()` in shader graph scheduling.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+**Gates:** TDD ran 2026-10-02 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/429, P3.508–P3.572, WDB-412–429 / P3.509–P3.569 (filed).
 
