@@ -90,8 +90,8 @@ Copy `u64` **field** before cast/arith must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-433 MultiFile | ⏳ TDD pending — `total + node.mesh_id` |
-| WDB-433 tip-out | ⏳ TDD pending — `mesh_id.clone()` in scene_graph_state |
+| WDB-433 MultiFile | ✅ GREEN @ `6b295089` — isolate `total + node.mesh_id` no `.clone()` |
+| WDB-433 tip-out | ❌ RED @ `6b295089` — `mesh_id.clone()` in scene_graph_state |
 
 **Root cause layer:** copy / field — Copy fields in arith/cast must not auto-clone.
 
@@ -102,7 +102,7 @@ Copy `u64` **field** before cast/arith must not `.clone()`; product emits
 
 **What became unnecessary:** `node.mesh_id.clone() as u64` in mesh instance totals.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb407` (2026-10-02)
+**Gates:** TDD ran 2026-10-02 — MultiFile GREEN / tip RED; `CARGO_TARGET_DIR=…/agent-tdd-wdb407`
 
 **Do not steal:** WDB-406/408/411/432, P3.508–P3.594, WDB-412–432 (filed).
 
