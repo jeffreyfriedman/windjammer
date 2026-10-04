@@ -110,7 +110,7 @@ owned `String` + single borrow.
 
 | Gate | Status |
 |------|--------|
-| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ✅ tip GREEN — product wj-toml 17 (2026-10-04 tip 17:41) |
+| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ✅ tip GREEN — product 17 + cargo 1/1 (2026-10-04 tip 17:41) |
 
 **Root cause layer:** map-key borrow + demotion — do not add `&` when the key
 formal/local is already `&str`.
