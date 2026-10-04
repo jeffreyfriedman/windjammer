@@ -2800,6 +2800,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
                                     && !analyzed.returned_parameters.contains(&param.name))
+                                // P3.614: `for pair in headers { let key = pair.0 }` moves
+                                // non-Copy fields — keep Owned Vec (force-borrow would E0507).
+                                && !self.param_consumed_as_for_loop_iterable(
+                                    func.body.as_slice(),
+                                    &param.name,
+                                )
                             {
                                 // `for v in vertices { f(vertices, v) }` — demote to `&Vec`
                                 // so the loop body can reuse the collection (E0382).
@@ -3295,8 +3301,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     {
                                         // Public API keeps owned `string` even when body analysis
                                         // / IR marked Borrowed (unused path → &str races callers).
+                                        // P3.590: clear emitted_rust_ref_formals too — otherwise
+                                        // metadata keeps emitted_rust_ref_params=true while the
+                                        // formal is `String`, and callers emit `&path` → E0308.
                                         self.str_ref_optimized_params.remove(&param.name);
                                         self.inferred_borrowed_params.remove(&param.name);
+                                        self.emitted_rust_ref_formals.remove(&param.name);
                                         self.type_to_rust(&param.type_)
                                     } else if is_string && !trait_impl_owned_string {
                                         // Only force owned `String` when explicitly marked
@@ -3318,6 +3328,9 @@ impl<'ast> CodeGenerator<'ast> {
                                                 func,
                                             )
                                         {
+                                            self.emitted_rust_ref_formals.remove(&param.name);
+                                            self.str_ref_optimized_params.remove(&param.name);
+                                            self.inferred_borrowed_params.remove(&param.name);
                                             self.type_to_rust(formal_type)
                                         } else if param
                                             .decorators
