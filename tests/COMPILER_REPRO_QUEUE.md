@@ -33,7 +33,7 @@ owned `String` + single borrow.
 
 | Gate | Status |
 |------|--------|
-| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ❌ tip RED — product wj-toml |
+| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
 
 **Root cause layer:** map-key borrow + demotion — do not add `&` when the key
 formal/local is already `&str`.
@@ -57,7 +57,7 @@ already demote.
 
 | Gate | Status |
 |------|--------|
-| `mime_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-mime |
+| `mime_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
 
 **Root cause layer:** call-site coercion — owned String into demoted mime `&str`
 formals must auto-borrow (signature-driven).
@@ -205,10 +205,14 @@ Product `wj-notes-api` `store.get(99)`: tip emits `get(&99_i64)` while formal is
 
 | Gate | Status |
 |------|--------|
-| `owned_i64_method_formal_must_not_receive_ref_literal` | ❌ tip RED — cargo 0/3 (2026-10-04) |
+| `owned_i64_method_formal_must_not_receive_ref_literal` | ✅ tip GREEN — `get(99_i64)` |
 
 **Root cause layer:** call-site ownership — Copy integer literals into owned
-integer formals must not auto-borrow.
+integer formals must not auto-borrow. P3.635 map-key belt treated every `get`
+as `HashMap::get` (`&K`), including user `Store::get(id: i64)`.
+
+**Fix:** Do not replace owned-Copy `get` formals / non-map receivers with
+`HashMap::get`; peel `&N` into owned Copy slots on Call(FieldAccess).
 
 **Why this is a new class:**
 - P3.649/650 are `&usize` into slice get / Vec::remove.
@@ -216,7 +220,7 @@ integer formals must not auto-borrow.
 
 **What became unnecessary:** reshaping notes `store.get(99)` tests.
 
-**Gates:** tip dogfood notes-api RED; cargo verified **0 passed / 3 failed** (P3.649–651 filter).
+**Gates:** tip dogfood GREEN; WDB-134 still `get(&label)`.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- owned_i64_method_formal_must_not_receive_ref_literal`
 
 **Do not steal:** P3.646–650 (filed).
@@ -228,10 +232,13 @@ Isolate named-local remove gate can false-GREEN.
 
 | Gate | Status |
 |------|--------|
-| `vec_remove_usize_literal_must_not_borrow` | ❌ tip RED — cargo 0/3 (2026-10-04) |
+| `vec_remove_usize_literal_must_not_borrow` | ✅ tip GREEN — `remove(0_usize)` |
 
 **Root cause layer:** call-site ownership — `Vec::remove` takes owned `usize`;
-integer literals must not be borrowed.
+integer literals must not be borrowed. Same P3.635 over-broad map-key belt.
+
+**Fix:** Gate map-key borrow / HashMap::get bridge on map/set/wrapper receivers;
+peel `&0_usize` on non-map `remove`.
 
 **Why this is a new class:**
 - `bug_vec_remove_usize_no_ref` is named local `pos`.
@@ -239,7 +246,7 @@ integer literals must not be borrowed.
 
 **What became unnecessary:** casting / reshape ring-buffer trim in proxy.
 
-**Gates:** tip 13:39 dogfood proxy RED.
+**Gates:** tip dogfood proxy GREEN (`remove(0_usize)`).
 - `cargo test --release --test all --features integration_tests,codegen_tests -- vec_remove_usize_literal_must_not_borrow`
 
 **Do not steal:** P3.646–649 (filed).
@@ -251,10 +258,14 @@ Blocks scheduler (path-dep). Distinct from P3.644 (variable `idx as usize` in sy
 
 | Gate | Status |
 |------|--------|
-| `slice_get_usize_literal_must_not_borrow` | ❌ tip RED — cargo 0/3 (2026-10-04) |
+| `slice_get_usize_literal_must_not_borrow` | ✅ tip GREEN — `parts.get(0_usize)` |
 
 **Root cause layer:** call-site ownership — `slice::get` takes owned `usize`;
-integer literals must not be borrowed as `&N_usize`.
+Call(FieldAccess) match scrutinees hit P3.635 map-key belt that forced `&K`
+via `HashMap::get` for every `get` spelling.
+
+**Fix:** Narrow Call(FieldAccess)/MethodCall map-key borrow to map/set/wrapper
+receivers; peel `&N_usize` into owned Copy formals; keep WDB-134 `get(&label)`.
 
 **Why this is a new class:**
 - P3.644 is variable cast index `&(idx as usize)` (sync pool).
@@ -262,7 +273,7 @@ integer literals must not be borrowed as `&N_usize`.
 
 **What became unnecessary:** reshaping cron field splits / scheduler deps.
 
-**Gates:** tip 13:39 dogfood cron/scheduler RED.
+**Gates:** tip dogfood cron GREEN (`get(0_usize)` …); WDB-134 no-reg.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- slice_get_usize_literal_must_not_borrow`
 
 **Do not steal:** P3.646–648 (filed).
