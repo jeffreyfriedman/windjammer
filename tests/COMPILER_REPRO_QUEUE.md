@@ -164,7 +164,7 @@ Also blocked behind P3.614 E0507 on headers for-in.
 
 | Gate | Status |
 |------|--------|
-| `reused_owned_string_must_not_emit_into_clone` | ❌ tip RED — product auth-api |
+| `reused_owned_string_must_not_emit_into_clone` | ✅ tip GREEN (verified 2026-10-04) |
 
 **Root cause layer:** formal encoding — reused owned locals/formals must clone as
 `String` (or borrow), never `.into().clone()` after ambiguous Into paint.
@@ -175,8 +175,8 @@ Also blocked behind P3.614 E0507 on headers for-in.
 
 **What became unnecessary:** dropping path reuse in auth access-log calls.
 
-**Gates:** tip p3610 `$WJ test` auth-api RED 2026-10-03; cargo gate must FAIL.
-- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_must_not_emit_into_clone`
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3616` — GREEN (2026-10-04).
+- `cargo test --release --test all -- reused_owned_string_must_not_emit_into_clone`
 
 **Do not steal:** WDB-406/408/411/430–435, P3.508–P3.615, WDB-412–435 (filed).
 
