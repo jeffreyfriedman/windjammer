@@ -43,19 +43,22 @@ Product `wj-webhook` adapter: `app.handle(method_label(req.method), …)` where
 
 | Gate | Status |
 |------|--------|
-| `owned_string_return_into_demoted_str_method_formal_must_auto_borrow` | ❌ tip RED — product webhook |
+| `owned_string_return_into_demoted_str_method_formal_must_auto_borrow` | ✅ tip GREEN |
+| `multipass_http_hexagonal_method_label_into_demoted_str_must_auto_borrow` | ✅ tip GREEN |
 
-**Root cause layer:** call-site coercion — owned `String` expr into demoted `&str`
-method formal must borrow (signature-driven).
+**Root cause layer:** constraint/solver (match binding types) + signature resolution
+(MutexGuard peel → defining `WebhookApp::handle` demoted `&str`) + coercion
+(`owned_text_into_str_ref` keeps Borrow for `String` → `&str`).
 
-**Why this is a new class:**
-- P3.620 is `&mut` into **owned** cross-crate formal (EventBus).
-- P3.621 is owned return into **demoted** `&str` method formal.
+**Why this stayed RED:** `Ok(mut app)` parsed as `Tuple([MutBinding])`, so match
+binding inference never typed `app` → IR used bare `handle` Owned stub
+(`emitted=None`) instead of demoted `&str`.
 
-**What became unnecessary:** `.as_str()` / reshaping `handle` / adapter in webhook.
+**What became unnecessary:** webhook `.as_str()` / reshape `handle`; reconcile peel
+was never the right fix once expected ownership is Ref.
 
-**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619` — 0 passed / 3 failed with P3.619–620 (2026-10-04).
-- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_string_return_into_demoted_str_method_formal_must_auto_borrow`
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619-debug` — GREEN (2026-10-04).
+- `cargo test --release --test all -- owned_string_return_into_demoted_str_method_formal multipass_http_hexagonal_method_label owned_helper_into_demoted_str`
 
 **Do not steal:** WDB-406/408/411/436–437, P3.508–P3.620, WDB-412–437 (filed).
 
@@ -66,19 +69,20 @@ Product `wj-webhook` `queue_via_event_bus`: `let bus = emit(bus, …)` where
 
 | Gate | Status |
 |------|--------|
-| `cross_crate_owned_bus_formal_must_not_receive_mut_ref` | ❌ tip RED — product webhook |
+| `cross_crate_owned_bus_formal_must_not_receive_mut_ref` | ✅ tip GREEN |
 
-**Root cause layer:** call-site ownership — reassignment into owned cross-crate
-formal must **move**, not prefix `&mut`.
+**Root cause layer:** signature boundary — path-dep Owned + `emitted_rust_ref_params=false`
+must not bare-pass-demote to MutBorrowed; pick prefers owned Custom over stale MutBorrowed.
 
 **Why this is a new class:**
 - P3.619 is `&mut CronExpr` into owned CronExpr (match `Ok` binding).
 - P3.620 is `&mut EventBus` into owned EventBus (reassign `let bus = emit(bus, …)`).
 
-**What became unnecessary:** `.clone()` / reshaping emit calls in webhook.
+**What became unnecessary:** `.clone()` / reshaping emit calls in webhook; importer
+MutBorrowed demotion for path-dep owned Custom emission slots.
 
-**Gates:** same cargo run as P3.619 — RED.
-- `cargo test --release --test all --features integration_tests,codegen_tests -- cross_crate_owned_bus_formal_must_not_receive_mut_ref`
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619-debug` — GREEN (2026-10-04).
+- `cargo test --release --test all -- cross_crate_owned_bus_formal_must_not_receive_mut_ref`
 
 **Do not steal:** WDB-406/408/411/436–437, P3.508–P3.619, WDB-412–437 (filed).
 
@@ -90,10 +94,10 @@ Product `wj-scheduler` → `wj_cron::matches_cron(expr: CronExpr, …)` /
 
 | Gate | Status |
 |------|--------|
-| `cross_crate_owned_struct_formal_must_not_receive_mut_ref` | ❌ tip RED — product scheduler |
+| `cross_crate_owned_struct_formal_must_not_receive_mut_ref` | ✅ tip GREEN |
 
-**Root cause layer:** call-site ownership — owned cross-crate Custom formal must
-receive move (or `&T` if demoted), never `&mut T`.
+**Root cause layer:** signature boundary — path-dep Owned + emit-false skips
+Borrowed **and** MutBorrowed bare-pass demotion; signature pick prefers owned Custom.
 
 **Why this is a new class:**
 - P3.574 is package formal should demote to `&CronExpr` (field reads / multi-call).
@@ -101,8 +105,8 @@ receive move (or `&T` if demoted), never `&mut T`.
 
 **What became unnecessary:** `.clone()` / reshaping scheduler cron calls.
 
-**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619` — 0 passed / 3 failed (2026-10-04).
-- `cargo test --release --test all --features integration_tests,codegen_tests -- cross_crate_owned_struct_formal_must_not_receive_mut_ref`
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619-debug` — GREEN (2026-10-04).
+- `cargo test --release --test all -- cross_crate_owned_struct_formal_must_not_receive_mut_ref`
 
 **Do not steal:** WDB-406/408/411/436–437, P3.508–P3.618, WDB-412–437 (filed).
 

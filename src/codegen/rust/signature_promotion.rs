@@ -1519,6 +1519,14 @@ where
             return Some(user.clone());
         }
     }
+    // P3.619/620: codegen Owned Custom (`emitted=false`) beats stale MutBorrowed
+    // that would otherwise win via `mut_borrow_refresh` and emit `&mut` into owned
+    // cross-crate formals. Live `&mut T` (MutableReference) still wins above.
+    if let (Some(mut_b), Some(owned)) = (&mut_borrow_refresh, &refresh_without_shared_ref) {
+        if owned_custom_beats_stale_mut_borrow(owned, mut_b) {
+            return Some(owned.clone());
+        }
+    }
     shared_ref_refresh
         .or(mut_borrow_refresh)
         .or(refresh_without_shared_ref)
@@ -1595,6 +1603,15 @@ pub(crate) fn mut_borrow_emission_beats(
 
 /// Prefer restored/AST-owned `Custom(T)` over stale `MutBorrowed` analysis that
 /// misread field moves (`reply.body`) as `&mut` mutation (HTTP adapter class).
+///
+/// P3.619 / P3.620: path-dep Owned + `emitted_rust_ref_params[i]=false` must also
+/// beat importer/analyzer `MutBorrowed` on bare Custom (`matches_cron(cron)` /
+/// `emit(bus)`), which otherwise wins via `pick_codegen_refreshed_signature`'s
+/// `mut_borrow_refresh` preference and forces `&mut` into owned formals.
+///
+/// Requires **explicit** `emitted_rust_ref_params[i] == false` so analysis-only
+/// AST Owned stubs (no emission flags) cannot erase live `MutBorrowed` before
+/// formal refresh wraps `&mut Transform` (`apply_rotation` / `fill_grid`).
 pub(crate) fn owned_custom_beats_stale_mut_borrow(
     owned_side: &FunctionSignature,
     mut_side: &FunctionSignature,
@@ -1622,9 +1639,20 @@ pub(crate) fn owned_custom_beats_stale_mut_borrow(
         ) {
             continue;
         }
+        // Explicit codegen owned emission — not analysis-only AST Owned stubs.
+        if owned_side
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(idx))
+            .copied()
+            != Some(false)
+        {
+            continue;
+        }
         if owned_side
             .formal_param_type(idx)
             .is_some_and(|t| matches!(t, Type::Custom(_)))
+            && emitted_owned_arg_contract(owned_side, idx)
         {
             return true;
         }
@@ -3762,9 +3790,14 @@ pub fn resolve() -> string {
 
     #[test]
     fn pick_prefers_mut_borrowed_over_ast_owned_custom_stub() {
+        // Post-formal-refresh live `&mut T` (MutableReference). Pre-wrap bare
+        // MutBorrowed + emitted=false is indistinguishable from stale importer
+        // MutBorrowed that P3.619 must lose to path-dep Owned.
         let mut_borrowed = FunctionSignature {
             name: "apply_rotation".into(),
-            param_types: vec![Type::Custom("Transform".into())],
+            param_types: vec![Type::MutableReference(Box::new(Type::Custom(
+                "Transform".into(),
+            )))],
             formal_param_types: vec![Type::Custom("Transform".into())],
             param_ownership: vec![OwnershipMode::MutBorrowed],
             return_type: None,
@@ -3796,7 +3829,49 @@ pub fn resolve() -> string {
         assert_eq!(
             picked.param_ownership.first().copied(),
             Some(OwnershipMode::MutBorrowed),
-            "live MutBorrowed must beat AST Owned Custom stub"
+            "live MutBorrowed (&mut T) must beat AST Owned Custom stub"
+        );
+    }
+
+    #[test]
+    fn pick_path_dep_owned_custom_beats_stale_mut_borrowed_without_mut_ref() {
+        // P3.619: wj_cron::matches_cron package meta (Owned + emitted=false) must
+        // beat importer/analyzer MutBorrowed on bare CronExpr (no MutableReference).
+        let package_owned = FunctionSignature {
+            name: "matches_cron".into(),
+            param_types: vec![Type::Custom("CronExpr".into()), Type::Int],
+            formal_param_types: vec![Type::Custom("CronExpr".into()), Type::Int],
+            param_ownership: vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            return_type: Some(Type::Bool),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let stale_mut = FunctionSignature {
+            name: "matches_cron".into(),
+            param_types: vec![Type::Custom("CronExpr".into()), Type::Int],
+            formal_param_types: vec![Type::Custom("CronExpr".into()), Type::Int],
+            param_ownership: vec![OwnershipMode::MutBorrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Bool),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        let picked =
+            pick_codegen_refreshed_signature([Some(stale_mut), Some(package_owned.clone())])
+                .expect("pick");
+        assert_eq!(
+            picked.param_ownership.first().copied(),
+            Some(OwnershipMode::Owned),
+            "path-dep Owned CronExpr must beat stale MutBorrowed (no MutableReference)"
         );
     }
 

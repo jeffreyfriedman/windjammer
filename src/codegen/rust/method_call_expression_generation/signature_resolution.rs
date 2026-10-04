@@ -1,12 +1,37 @@
 //! Method call signature resolution — delegates to unified resolver.
 
 use crate::analyzer::FunctionSignature;
-use crate::parser::Expression;
+use crate::parser::{Expression, Type};
 
 use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module;
 use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Type name used for method registry lookup, peeling stdlib Deref guards.
+    fn method_receiver_type_name_peeling_guards(ty: &Type) -> Option<String> {
+        let peeled = match ty {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        };
+        if let Type::Parameterized(name, args) = peeled {
+            let leaf = crate::type_classification::type_name_leaf(name);
+            if matches!(
+                leaf,
+                "MutexGuard"
+                    | "RwLockReadGuard"
+                    | "RwLockWriteGuard"
+                    | "MappedMutexGuard"
+                    | "MappedRwLockReadGuard"
+                    | "MappedRwLockWriteGuard"
+            ) && args.len() == 1
+            {
+                return Self::method_receiver_type_name_peeling_guards(&args[0])
+                    .or_else(|| Self::type_to_name(&args[0]));
+            }
+        }
+        Self::type_to_name(ty)
+    }
+
     /// Registry type name for `self.field` from struct field maps (multipass-safe).
     pub(in crate::codegen::rust) fn self_field_access_receiver_type_name(
         &self,
@@ -43,7 +68,9 @@ impl<'ast> CodeGenerator<'ast> {
                 return self.current_struct_name.clone();
             }
             if let Some(t) = self.local_var_types.get(name) {
-                if let Some(tn) = Self::type_to_name(t) {
+                // MutexGuard/RwLock*Guard Deref to the inner payload for method
+                // resolution (`Ok(mut app) => app.handle` after Mutex::lock).
+                if let Some(tn) = Self::method_receiver_type_name_peeling_guards(t) {
                     return Some(tn);
                 }
             }
