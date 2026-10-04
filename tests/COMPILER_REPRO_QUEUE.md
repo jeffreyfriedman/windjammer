@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.590c (2026-10-04) — stale metadata must not `&source_dir` into owned validate
+
+Product `BuildFingerprint::validate(source_dir: String)` — tip without metadata
+moves; with stale `metadata.json` (`emitted_rust_ref_params[1]=true`,
+`Reference(str)`) call sites emit `validate(&source_dir)` → E0308.
+
+| Gate | Status |
+|------|--------|
+| `owned_string_param_must_move_into_owned_method_arg` | ✅ MultiFile GREEN |
+| `tip_out_build_fingerprint_must_not_borrow_source_dir` | ✅ tip-out GREEN (metadata patched) |
+| `stale_metadata_emitted_ref_must_not_borrow_owned_string_formal` | ✅ unit GREEN |
+
+**Root cause layer:** stale engine metadata.json poisoned call-site borrow;
+patched `BuildFingerprint::validate`/`generate` entries. Systemic: codegen
+refresh must beat stale emitted_ref=true on owned String (follow-up if recurrence).
+
+**Do not steal:** P3.590b, full engine transpile hang, remaining E0308 clusters.
+
 ## P3.590b (2026-10-04) — `load_batch` moves owned path (tip-out GREEN)
 
 Product `AssetLoader::load_batch` reuses `name` in Err → `name.clone()`, but

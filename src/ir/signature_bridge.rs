@@ -1370,6 +1370,41 @@ mod tests {
         assert!(!call_site_needs_shared_ref_at_emit(&sig, 1));
     }
 
+    /// P3.590c: stale engine metadata may record `emitted_rust_ref_params[i]=true`
+    /// + Borrowed for a WJ `string` that codegen emits as owned `String` (product
+    /// `BuildFingerprint::validate`). Call sites must still move, not `&source_dir`.
+    #[test]
+    fn stale_metadata_emitted_ref_must_not_borrow_owned_string_formal() {
+        let sig = FunctionSignature {
+            name: "BuildFingerprint::validate".into(),
+            formal_param_types: vec![
+                Type::Custom("Self".into()),
+                Type::String,
+            ],
+            param_types: vec![
+                Type::Reference(Box::new(Type::Custom("Self".into()))),
+                Type::String, // codegen emit — not Reference(str)
+            ],
+            param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+            return_type: Some(Type::Custom("ValidationResult".into())),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            // Stale metadata claimed shared-ref; defining-module emit is owned.
+            emitted_rust_ref_params: Some(vec![false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: Some(vec![false, true]),
+        };
+        assert!(
+            !call_site_needs_shared_ref_at_emit(&sig, 1),
+            "owned String emit must beat stale forwarding_borrow / metadata ref"
+        );
+        assert!(call_site_expects_owned_pass(&sig, 1));
+    }
+
+
+
     /// P3.589: owned `Vec<u8>` emit + forwarding_borrow must not share-ref
     /// (`&vec![…]` → E0308 into `data: Vec<u8>`).
     #[test]
