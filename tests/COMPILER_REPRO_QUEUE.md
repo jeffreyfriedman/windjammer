@@ -102,8 +102,9 @@ Copy `i32` formal into tuple literal must not `.clone()`; product emits
 | WDB-438 MultiFile | ✅ isolate GREEN — product-shaped `CostGrid::get_neighbors` emits bare `push((x, y + 1, self.get_cost(…)))` |
 | WDB-438 tip-out | ❌ tip RED — `x.clone()` / `y.clone()` in `rel_tip_out/ai/astar_grid.rs` neighbor pushes |
 
-**Root cause layer:** copy / tuple — Copy formals as tuple elements must not auto-clone
-(product tip-out lag / multipass path; isolate already correct).
+**Root cause layer:** codegen identifier auto-clone — `ident_skips_auto_clone_as_copy` missed Copy pass-by-value formals when inference was thin; tuple literals set `in_owned_value_context`, so analysis `.clone()` stuck before tuple slot cleanup.
+
+**Fix:** `binding_is_copy_pass_by_value_scalar` early in `ident_skips_auto_clone_as_copy` (type-classification; not method heuristics).
 
 **Why this is a new class:**
 - WDB-437 is formal into **let**.

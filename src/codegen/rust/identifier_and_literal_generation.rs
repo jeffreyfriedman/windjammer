@@ -17,6 +17,12 @@ impl<'ast> CodeGenerator<'ast> {
         name: &str,
         expr: &Expression<'ast>,
     ) -> bool {
+        // WDB-438 / WDB-437: Copy scalar formals (`i32`, `bool`, …) auto-copy at
+        // move+reuse sites — never `x.clone()` in tuple literals or let inits.
+        // Signature/type-classification driven (not method-name heuristics).
+        if self.binding_is_copy_pass_by_value_scalar(name) {
+            return true;
+        }
         if self.inferred_borrowed_params.contains(name)
             || self.inferred_mut_borrowed_params.contains(name)
             || self.usize_variables.contains(name)
