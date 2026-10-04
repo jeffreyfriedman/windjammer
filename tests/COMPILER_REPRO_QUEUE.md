@@ -1,5 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.642 (2026-10-04) — reused owned String into owned formal must clone first use
+
+Product `wj-todo-cli` `stats` / `export`: `let snapshot = encode_store(store)` then
+`decode_store(snapshot)` (move) and later `decode_store(snapshot.clone())` → E0382.
+Tip clones only the second call; first move invalidates reuse.
+
+| Gate | Status |
+|------|--------|
+| `reused_owned_string_into_owned_formal_must_clone_first_use` | ❌ tip RED — product todo-cli |
+
+**Root cause layer:** reuse analysis — when an owned String local is passed into an
+owned formal more than once, the **first** call must clone (or demote the formal).
+
+**Why this is a new class:**
+- P3.615 is `.into()` move before second use (proxy).
+- P3.616 is `.into().clone()` inference failure (auth).
+- P3.642 is bare move on first use + late `.clone()` on second (todo-cli snapshot).
+
+**What became unnecessary:** reshaping export/stats with manual first-use clones.
+
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3641` — 0 passed / 1 failed (2026-10-04).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_into_owned_formal_must_clone_first_use`
+
+**Do not steal:** WDB-439/440, P3.508–P3.641 (filed).
+
 ## P3.641 (2026-10-04) — TDD WDB-440 (DB agent; no compiler src)
 
 Copy `f32` local into struct literal field must not `.clone()`; product emits
@@ -7,10 +32,11 @@ Copy `f32` local into struct literal field must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-440 MultiFile | ⏳ TDD pending — `mse: mse` |
-| WDB-440 tip-out | ⏳ TDD pending — `mse: mse.clone()` in frame_analysis |
+| WDB-440 MultiFile | ✅ isolate GREEN — `ComparisonResult { … mse, … }` (no `mse.clone()`) |
+| WDB-440 tip-out | ❌ tip RED — `mse: mse.clone()` in `rel_tip_out/frame_analysis.rs` |
 
-**Root cause layer:** copy / struct-lit — Copy `f32` locals as struct fields must not auto-clone.
+**Root cause layer:** copy / struct-lit — Copy `f32` locals as struct fields must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-437 is formal into **let**.
@@ -19,9 +45,10 @@ Copy `f32` local into struct literal field must not `.clone()`; product emits
 
 **What became unnecessary:** `mse.clone()` in SSIM comparison result construction.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb440_` — isolate codegen GREEN / tip RED
+(cargo-check timed out under contention; emit has bare `mse`; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/439–440, P3.508–P3.640, WDB-412–440 (filed).
+**Do not steal:** WDB-406/408/411/439–440, P3.508–P3.641, WDB-412–440 (filed).
 
 ## P3.640 (2026-10-04) — TDD WDB-439 (DB agent; no compiler src)
 
