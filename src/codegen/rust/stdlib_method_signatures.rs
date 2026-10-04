@@ -224,6 +224,37 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
             true,
         ),
     );
+    // P3.646: values()/keys() yield `&V` / `&K` — not map entry `(K, V)`.
+    hashmap_methods.insert(
+        "values".to_string(),
+        MethodSignature::with_self_ownership(
+            "HashMap",
+            "values",
+            vec![],
+            vec![],
+            Some(Type::Parameterized(
+                "Iterator".to_string(),
+                vec![Type::Reference(Box::new(Type::Custom("V".to_string())))],
+            )),
+            true,
+            OwnershipMode::Borrowed,
+        ),
+    );
+    hashmap_methods.insert(
+        "keys".to_string(),
+        MethodSignature::with_self_ownership(
+            "HashMap",
+            "keys",
+            vec![],
+            vec![],
+            Some(Type::Parameterized(
+                "Iterator".to_string(),
+                vec![Type::Reference(Box::new(Type::Custom("K".to_string())))],
+            )),
+            true,
+            OwnershipMode::Borrowed,
+        ),
+    );
     map.insert("Map".to_string(), hashmap_methods.clone());
     map.insert("OrderedMap".to_string(), hashmap_methods.clone());
     map.insert("SlotMap".to_string(), hashmap_methods.clone());

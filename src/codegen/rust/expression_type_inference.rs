@@ -461,9 +461,10 @@ impl<'ast> CodeGenerator<'ast> {
                         _ => {}
                     }
                 }
-                // Iterator methods: return the collection type so
-                // extract_iterator_element_type can extract the element type.
-                // Driven by registry return metadata (`Iterator` / `Iterator<item>`).
+                // Iterator methods: prefer signature `Iterator<item>` (substituted),
+                // else collapse to the collection so extract_iterator_element_type
+                // can peel Vec/map entry types. Collapsing a map for `.values()`/
+                // `.keys()` wrongly yields `(K, V)` (P3.646 `count as usize`).
                 //
                 // IMPORTANT: reuse `obj_ty_early` — do NOT re-infer `object`.
                 // Re-walking the receiver at each MethodCall link is ~3^depth on
@@ -475,6 +476,28 @@ impl<'ast> CodeGenerator<'ast> {
                         receiver.as_deref(),
                         &self.signature_registry,
                     ) {
+                        let specialized = self
+                            .registry_method_return_type(obj_type, method)
+                            .or_else(|| {
+                                let base = receiver.as_deref().map(|r| {
+                                    r.split('<').next().unwrap_or(r)
+                                })?;
+                                let leaf = base.rsplit("::").next().unwrap_or(base);
+                                self.lookup_method_signature(leaf, method)
+                                    .and_then(|ms| ms.return_type.as_ref())
+                                    .map(|ret| Self::substitute_stdlib_generics(ret, obj_type))
+                            });
+                        if let Some(ret) = specialized {
+                            if let Type::Parameterized(base, params) = &ret {
+                                if base == "Iterator" && params.len() == 1 {
+                                    // Synthetic Vec<item> → extract_iterator_element_type.
+                                    return Some(Type::Vec(Box::new(params[0].clone())));
+                                }
+                            }
+                            if !matches!(&ret, Type::Custom(n) if n == "Iterator") {
+                                return Some(ret);
+                            }
+                        }
                         return Some(obj_type.clone());
                     }
                 }
@@ -746,10 +769,17 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             };
             let base = type_name.split('<').next().unwrap_or(type_name.as_str());
-            for candidate in [type_name.as_str(), base] {
+            let leaf = base.rsplit("::").next().unwrap_or(base);
+            for candidate in [type_name.as_str(), base, leaf] {
                 let qualified = format!("{candidate}::{method}");
                 if let Some(sig) = self.get_signature_with_global(&qualified) {
                     if let Some(ret) = &sig.return_type {
+                        return Some(Self::substitute_stdlib_generics(ret, &recv));
+                    }
+                }
+                // Stdlib MethodSignature table (HashMap::values → Iterator<&V>, P3.646).
+                if let Some(ms) = self.lookup_method_signature(candidate, method) {
+                    if let Some(ret) = &ms.return_type {
                         return Some(Self::substitute_stdlib_generics(ret, &recv));
                     }
                 }
