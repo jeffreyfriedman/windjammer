@@ -7,10 +7,11 @@ Copy `u32` **formal** into indexed assign must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-447 MultiFile | ⏳ TDD pending — bare `tile_id` |
-| WDB-447 tip-out | ⏳ TDD pending — `tile_id.clone()` in ffi_tilemap |
+| WDB-447 MultiFile | ✅ isolate GREEN — `self.tiles[…] = tile_id` (no `.clone()`) |
+| WDB-447 tip-out | ❌ tip RED — `tile_id.clone()` in `rel_tip_out/ffi_tilemap/tilemap.rs` |
 
-**Root cause layer:** copy / u32-formal-index-assign — Copy `u32` formals assigned into Vec slots must not auto-clone.
+**Root cause layer:** copy / u32-formal-index-assign — Copy `u32` formals assigned into Vec slots must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-441 is i64 **local** into index assign.
@@ -19,9 +20,11 @@ Copy `u32` **formal** into indexed assign must not `.clone()`; product emits
 
 **What became unnecessary:** `tile_id.clone()` in tilemap clear loops.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb447_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/446–447, P3.508–P3.662, WDB-412–447 (filed).
+**Do not steal:** WDB-406/408/411/446–447, P3.508–P3.663, WDB-412–447 (filed).
+
 
 ## P3.662 (2026-10-04) — TDD WDB-446 (DB agent; no compiler src)
 
