@@ -1,5 +1,53 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.658 (2026-10-04) — demoted `&str` HashMap key must not `get(&key)`
+
+Product `wj-toml` `get`: tip demotes `key` to `&str` then emits `map.get(&key)`
+→ E0277 (`String: Borrow<&str>`). Need `get(key)` when already `&str`, or keep
+owned `String` + single borrow.
+
+| Gate | Status |
+|------|--------|
+| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ❌ tip RED — product wj-toml |
+
+**Root cause layer:** map-key borrow + demotion — do not add `&` when the key
+formal/local is already `&str`.
+
+**Why this is a new class:**
+- P3.654–657 are owned String into demoted `&str` stdlib formals (missing borrow).
+- P3.658 is demoted `&str` key into HashMap::get with an *extra* borrow.
+
+**What became unnecessary:** reshaping toml `get` / avoiding demotion.
+
+**Gates:** tip dogfood wj-toml RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- toml_hashmap_get_demoted_str_key_must_not_double_borrow_product`
+
+**Do not steal:** P3.654–657 (filed).
+
+## P3.657 (2026-10-04) — product wj-mime owned args into mime must auto-borrow
+
+Product `wj-mime` `is_text`/`is_image`/`is_audio`/`is_video`: tip keeps owned
+`String` formals and emits bare `mime::is_*(mime_type)` → E0308. `from_*` may
+already demote.
+
+| Gate | Status |
+|------|--------|
+| `mime_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-mime |
+
+**Root cause layer:** call-site coercion — owned String into demoted mime `&str`
+formals must auto-borrow (signature-driven).
+
+**Why this is a new class:**
+- P3.654 crypto / P3.655 regex — same layer, different runtime modules.
+- P3.657 is mime predicate thin-wraps (product).
+
+**What became unnecessary:** `.as_str()` / reshape mime package.
+
+**Gates:** tip dogfood wj-mime RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- mime_stdlib_owned_args_must_auto_borrow_product`
+
+**Do not steal:** P3.654–656 (filed).
+
 ## P3.656 (2026-10-04) — TDD WDB-444 (DB agent; no compiler src)
 
 Copy unit-enum formals into field assign / struct lit must not `.clone()`;
@@ -7,10 +55,11 @@ product emits `weather.clone()` / `intensity.clone()` in weather_system.
 
 | Gate | Status |
 |------|--------|
-| WDB-444 MultiFile | ⏳ TDD pending — bare `weather` / `intensity` |
-| WDB-444 tip-out | ⏳ TDD pending — `weather.clone()` in weather_system |
+| WDB-444 MultiFile | ✅ isolate GREEN — bare `weather` / `intensity` (no `.clone()`) |
+| WDB-444 tip-out | ❌ tip RED — `weather.clone()` / `intensity.clone()` in weather_system |
 
-**Root cause layer:** copy / unit-enum — Copy unit enums as formals/locals must not auto-clone into assigns.
+**Root cause layer:** copy / unit-enum — Copy unit enums as formals/locals must not auto-clone into assigns
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-384/392 are `Direction::Variant.clone()` **path** exprs.
@@ -19,9 +68,10 @@ product emits `weather.clone()` / `intensity.clone()` in weather_system.
 
 **What became unnecessary:** `weather.clone()` / `intensity.clone()` in WeatherSystem.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb444_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/443–444, P3.508–P3.655, WDB-412–444 (filed).
+**Do not steal:** WDB-406/408/411/443–444, P3.508–P3.658, WDB-412–444 (filed).
 
 ## P3.655 (2026-10-04) — product wj-regex owned args into regex must auto-borrow
 
