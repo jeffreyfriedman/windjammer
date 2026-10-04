@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.661 (2026-10-04) — product wj-json-util owned Value into json::get must auto-borrow
+
+Product `wj-json-util` `take_field` / `child_at`: tip emits `json::get(value, &key)`
+while runtime wants `&Value` → E0308. `json::get_index(&value, …)` already borrows;
+path_set sites emit `json::get(&out, &head)`.
+
+| Gate | Status |
+|------|--------|
+| `json_get_owned_value_must_auto_borrow_product` | ❌ tip RED — product wj-json-util |
+
+**Root cause layer:** call-site coercion — owned `Value` into demoted `&Value`
+stdlib formals must auto-borrow (signature-driven), including free-fn `json::get`.
+
+**Why this is a new class:**
+- `json_get_index_owned_value_multipass` covers `get_index`.
+- P3.661 is `json::get` on product helpers (inconsistent with get_index / path_set).
+
+**What became unnecessary:** manual `&value` / reshape json-util.
+
+**Gates:** tip dogfood wj-json-util RED (shared tip 16:41).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- json_get_owned_value_must_auto_borrow_product`
+
+**Do not steal:** P3.654–660 (filed).
+
 ## P3.660 (2026-10-04) — MutexGuard HashMap String key must still borrow after P3.649–651
 
 Regression: tip `e6aeefa3` fixed Copy-index over-borrow (P3.649–651 GREEN) but
@@ -313,7 +337,7 @@ tip emitted `total += count as usize` → E0606 (`&usize` as `usize`). Correct i
 | Gate | Status |
 |------|--------|
 | unit `p3646_hashmap_values_usize_sum_must_deref` | ✅ GREEN (`total += *count`) |
-| MultiFile `hashmap_values_copy_elem_must_deref_into_usize_add` | ✅/see cargo |
+| MultiFile `hashmap_values_copy_elem_must_deref_into_usize_add` | ✅ GREEN |
 | tip product `event/bus` listener_count | ⏳ tip rebuild |
 
 **Root cause layer:** `values()`/`keys()` were collapsed to the map receiver so
@@ -547,7 +571,7 @@ P3.621 (`&method_label(…)` call-expr borrow).
 
 | Gate | Status |
 |------|--------|
-| `owned_string_into_demoted_str_method_formal_must_auto_borrow` | ✅ tip GREEN — `&username` / `&password` |
+| `owned_string_into_demoted_str_method_formal_must_auto_borrow` | ✅ tip GREEN — auth-api 48 (2026-10-04 shared tip 16:41) |
 | product auth-api cargo-check | ✅ GREEN |
 
 **Root cause layer:** call-site coercion — owned String **locals** into demoted
