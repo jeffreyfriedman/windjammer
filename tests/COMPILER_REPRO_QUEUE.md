@@ -7,10 +7,11 @@ product emits `return self.nodes[index as usize].0.clone()`.
 
 | Gate | Status |
 |------|--------|
-| WDB-439 MultiFile | ⏳ TDD pending — `return self.nodes[i].0` |
-| WDB-439 tip-out | ⏳ TDD pending — `.0.clone()` / `.1.clone()` on nodes[i] |
+| WDB-439 MultiFile | ✅ isolate GREEN — `return self.nodes[index as usize].0` (no `.clone()`) |
+| WDB-439 tip-out | ❌ tip RED — `.0.clone()` / `.1.clone()` in `rel_tip_out/ai/astar_grid.rs` |
 
-**Root cause layer:** copy / index-tuple-field — Copy `i32` via `nodes[i].0` must not auto-clone.
+**Root cause layer:** copy / index-tuple-field — Copy `i32` via `nodes[i].0` must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-363 is `].clone().field` (clone element then field).
@@ -19,9 +20,10 @@ product emits `return self.nodes[index as usize].0.clone()`.
 
 **What became unnecessary:** `.0.clone()` / `.1.clone()` on astar node accessors.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb439_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/438–439, P3.508–P3.639, WDB-412–439 (filed).
+**Do not steal:** WDB-406/408/411/438–439, P3.508–P3.640, WDB-412–439 (filed).
 
 ## P3.639 (2026-10-04) — owned String formal must not receive `&String` at adapter
 
