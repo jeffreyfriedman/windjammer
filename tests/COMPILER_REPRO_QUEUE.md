@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.660 (2026-10-04) — MutexGuard HashMap String key must still borrow after P3.649–651
+
+Regression: tip `e6aeefa3` fixed Copy-index over-borrow (P3.649–651 GREEN) but
+stopped borrowing owned `String` keys into `HashMap::get` through `MutexGuard`.
+Product `wj-sync` `shared_map_get` emits `g.get(key)` → E0308. Isolate
+`mutex_guard_hashmap_string_key_must_borrow` (P3.576) tip RED.
+
+| Gate | Status |
+|------|--------|
+| `mutex_guard_hashmap_string_key_must_borrow` | ❌ tip RED — regression vs prior GREEN |
+| product `wj-sync` shared_map_get | ❌ tip RED — `g.get(key)` |
+
+**Root cause layer:** map-key borrow belt must not be disabled for String keys /
+MutexGuard Deref when fixing Vec/slice Copy-index over-borrow.
+
+**Why this is a new class:**
+- P3.649–651 are Copy `usize`/`i64` indices that must NOT borrow.
+- P3.660 is owned `String` HashMap keys that must STILL borrow (`get(&key)`).
+
+**What became unnecessary:** reshaping sync SharedMap helpers.
+
+**Gates:** tip e6aeefa3 dogfood sync RED; cargo mutex_guard gate RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- mutex_guard_hashmap_string_key_must_borrow`
+
+**Do not steal:** P3.576/P3.288, P3.649–659 (filed).
+
 ## P3.659 (2026-10-04) — TDD WDB-445 (DB agent; no compiler src)
 
 Copy `f32` formal into `let` must not `.clone()`; product emits
@@ -205,7 +231,7 @@ Product `wj-notes-api` `store.get(99)`: tip emits `get(&99_i64)` while formal is
 
 | Gate | Status |
 |------|--------|
-| `owned_i64_method_formal_must_not_receive_ref_literal` | ✅ tip GREEN — `get(99_i64)` |
+| `owned_i64_method_formal_must_not_receive_ref_literal` | ✅ tip GREEN — cargo 3/3 with P3.649–650 (2026-10-04 tip e6aeefa3) |
 
 **Root cause layer:** call-site ownership — Copy integer literals into owned
 integer formals must not auto-borrow. P3.635 map-key belt treated every `get`
@@ -232,7 +258,7 @@ Isolate named-local remove gate can false-GREEN.
 
 | Gate | Status |
 |------|--------|
-| `vec_remove_usize_literal_must_not_borrow` | ✅ tip GREEN — `remove(0_usize)` |
+| `vec_remove_usize_literal_must_not_borrow` | ✅ tip GREEN — cargo + product proxy 25 (2026-10-04 tip e6aeefa3) |
 
 **Root cause layer:** call-site ownership — `Vec::remove` takes owned `usize`;
 integer literals must not be borrowed. Same P3.635 over-broad map-key belt.
@@ -258,7 +284,7 @@ Blocks scheduler (path-dep). Distinct from P3.644 (variable `idx as usize` in sy
 
 | Gate | Status |
 |------|--------|
-| `slice_get_usize_literal_must_not_borrow` | ✅ tip GREEN — `parts.get(0_usize)` |
+| `slice_get_usize_literal_must_not_borrow` | ✅ tip GREEN — cargo + product cron 30 (2026-10-04 tip e6aeefa3) |
 
 **Root cause layer:** call-site ownership — `slice::get` takes owned `usize`;
 Call(FieldAccess) match scrutinees hit P3.635 map-key belt that forced `&K`
@@ -281,15 +307,19 @@ receivers; peel `&N_usize` into owned Copy formals; keep WDB-134 `get(&label)`.
 ## P3.646 (2026-10-04) — HashMap::values() `&Copy` into owned add / cast
 
 Product `EventBus::listener_count`: `for count in self.subscriber_counts.values()`
-tip emits `total += count as usize` → E0606 (`&usize` as `usize`). Correct is
-`*count` (or auto-deref in `+`). Engine surgically restored `*count`.
+tip emitted `total += count as usize` → E0606 (`&usize` as `usize`). Correct is
+`*count`.
 
 | Gate | Status |
 |------|--------|
-| tip product `event/bus` listener_count | ❌ RED (`count as usize`) |
+| unit `p3646_hashmap_values_usize_sum_must_deref` | ✅ GREEN (`total += *count`) |
+| MultiFile `hashmap_values_copy_elem_must_deref_into_usize_add` | ✅/see cargo |
+| tip product `event/bus` listener_count | ⏳ tip rebuild |
 
-**Root cause layer:** borrowed-iter Copy elem — `&usize` must deref into owned
-usize context (not `as usize`).
+**Root cause layer:** `values()`/`keys()` were collapsed to the map receiver so
+`extract_iterator_element_type` yielded `(K, V)`; bare registry `Iterator` beat
+stdlib `Iterator<&V>`. Fix: stdlib `values`/`keys` signatures + prefer
+parameterized `Iterator<item>` over bare `Iterator`.
 
 **Do not steal:** P3.638 Map::get shared-ref (GREEN).
 
@@ -337,7 +367,7 @@ Product `wj-sync` `pool.wj`: `job_txs.get(idx)` tip emits
 
 | Gate | Status |
 |------|--------|
-| `slice_get_usize_index_must_not_borrow` | ❌ tip RED — product wj-sync |
+| `slice_get_usize_index_must_not_borrow` | ✅ tip GREEN — sync pool get(idx as usize) (2026-10-04 tip e6aeefa3) |
 
 **Root cause layer:** call-site ownership — `slice::get` / `Vec::get` takes owned
 `usize` (Copy), must not prefix `&` on the cast index.
