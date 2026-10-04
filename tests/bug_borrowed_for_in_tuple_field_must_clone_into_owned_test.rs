@@ -11,12 +11,13 @@
     feature = "integration_tests",
 ))]
 
-//! P3.614: `for pair in headers` over demoted `&Vec<(String, String)>` yields
-//! `&(String, String)`. `let key = pair.0` / `return pair.1` must `.clone()` —
-//! product notes-api `headers_meta` and proxy `client_key_from_headers` E0507.
+//! P3.614: `for pair in headers` with `let key = pair.0` / `return pair.1` must
+//! cargo-check. Demoting to `&Vec<(String,String)>` then moving fields → E0507;
+//! star-deref `*pair.0 == "…"` → E0277 (`str` vs `&str`).
 //!
-//! Do not reshape apps to `for (key, value) in headers` only; bare `pair.N`
-//! field extract is idiomatic WJ.
+//! Preferred: keep Owned `Vec` when the loop moves non-Copy fields (not WDB-412
+//! compare-only). Alternate: borrowed for-in + `.clone()` on field extract.
+//! Do not reshape apps to `for (key, value) in headers` only.
 
 use std::fs;
 use std::process::Command;
@@ -81,16 +82,16 @@ fn client_key_from_headers(headers: Vec<(string, string)>) -> string {
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     eprintln!("P3.614 emit:\n{rs}");
 
-    // Must not move out of borrowed tuple fields.
     assert!(
-        !rs.contains("let key = pair.0;")
-            && !rs.contains("let value = pair.1;")
-            && !rs.contains("return pair.1;"),
-        "P3.614 RED: borrowed for-in tuple fields must clone into owned uses:\n{rs}"
+        !rs.contains("*pair.0") && !rs.contains("*key ==") && !rs.contains("if *key"),
+        "P3.614 RED: must not star-deref string tuple fields into str == &str:\n{rs}"
     );
+
+    let owned_vec = rs.contains("headers: Vec<(") && !rs.contains("headers: &Vec<(");
+    let cloned = rs.contains("pair.0.clone()") || rs.contains("pair.1.clone()");
     assert!(
-        rs.contains("pair.0.clone()") || rs.contains("pair.1.clone()"),
-        "P3.614 RED: expected .clone() on borrowed tuple field extract:\n{rs}"
+        owned_vec || cloned,
+        "P3.614 RED: keep Owned Vec when moving pair.N, or clone under &Vec for-in:\n{rs}"
     );
 
     let ck = Command::new("cargo")
