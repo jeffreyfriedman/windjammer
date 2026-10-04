@@ -1,5 +1,97 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.639 (2026-10-04) — owned String formal must not receive `&String` at adapter
+
+Product `wj-auth-api` adapter: `handle_http(…, authorization: String, …)` but tip
+emits `handle_http(…, &meta.2, …)` → E0308. Sibling `meta.0`/`meta.1` move.
+
+| Gate | Status |
+|------|--------|
+| `owned_string_formal_must_not_receive_ref_at_adapter_call` | ❌ tip RED — product auth-api |
+
+**Root cause layer:** call-site ownership — owned String method formal must move
+tuple field, not over-borrow one slot among several.
+
+**Why this is a new class:**
+- P3.637 is owned locals into demoted `&str` sibling methods.
+- P3.638 is HashMap get `&String` payload into `Option<String>`.
+- P3.639 is adapter over-borrow of one owned formal among mixed args.
+
+**What became unnecessary:** `.clone()` / reshaping `meta.2` in auth adapter.
+
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3635` — 0 passed / 3 failed with P3.636–637 (2026-10-04).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_string_formal_must_not_receive_ref_at_adapter_call`
+
+**Do not steal:** WDB-134/438, P3.508–P3.638 (filed).
+
+## P3.638 (2026-10-04) — HashMap get `&String` payload into owned `Option<String>`
+
+Product-shaped `Event::get_data_string`: match `HashMap::get` →
+`Some(EventDataValue::String(value)) => Some(value)` emits `&String` into
+`Option<String>` without `.clone()` → E0308.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_get_match_string_payload_must_clone_into_owned` | ❌ tip RED |
+
+**Root cause layer:** match binding — borrowed enum payload into owned Option
+must clone (signature-driven).
+
+**What became unnecessary:** reshaping Event get helpers with manual clones in apps.
+
+**Gates:** filed with P3.635–638 cluster commit `249f4c83`.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- hashmap_get_match_string_payload_must_clone_into_owned`
+
+**Do not steal:** WDB-134/438, P3.508–P3.637 (filed).
+
+## P3.637 (2026-10-04) — owned String locals into demoted `&str` method formals
+
+Product `wj-auth-api`: `find_user(username: &str)` / `verify_user(…: &str, …: &str)`
+but call sites pass owned `username` / `password` → E0308. Distinct from greened
+P3.621 (`&method_label(…)` call-expr borrow).
+
+| Gate | Status |
+|------|--------|
+| `owned_string_into_demoted_str_method_formal_must_auto_borrow` | ❌ tip RED — product auth-api |
+
+**Root cause layer:** call-site coercion — owned String **locals** into demoted
+`&str` method formals must auto-borrow (signature-driven).
+
+**Why this is a new class:**
+- P3.621 is owned **call-expr return** into `&str` (webhook, tip GREEN).
+- P3.637 is owned **locals** into sibling demoted `&str` methods (auth).
+
+**What became unnecessary:** `.as_str()` / reshaping find_user/verify_user in auth.
+
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3635` — RED with P3.636/639.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_string_into_demoted_str_method_formal_must_auto_borrow`
+
+**Do not steal:** WDB-134/438, P3.508–P3.636 (filed).
+
+## P3.636 (2026-10-04) — `&mut self` field into owned `json::to_string` must clone
+
+Product `wj-webhook` `list_events`: tip demotes to `&mut self` then emits
+`json::to_string(self.events)` → E0507. P3.619–621 greened on tip 07:32; this is
+the remaining webhook blocker.
+
+| Gate | Status |
+|------|--------|
+| `mut_self_field_into_owned_json_formal_must_clone` | ❌ tip RED — product webhook |
+
+**Root cause layer:** field access — non-Copy field behind `&mut self` into owned
+formal must clone or demote callee to borrow.
+
+**Why this is a new class:**
+- P3.620 was `&mut EventBus` into owned emit (tip GREEN).
+- P3.636 is `&mut self.events` move into owned `json::to_string`.
+
+**What became unnecessary:** manual `.clone()` reshape in webhook `list_events`.
+
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3635` — 0 passed / 3 failed (2026-10-04).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- mut_self_field_into_owned_json_formal_must_clone`
+
+**Do not steal:** WDB-134/438, P3.508–P3.635 (filed).
+
 ## P3.634 (2026-10-04) — TDD WDB-438 (DB agent; no compiler src)
 
 Copy `i32` formal into tuple literal must not `.clone()`; product emits
