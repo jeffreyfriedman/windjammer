@@ -248,7 +248,21 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                     Some(Type::Reference(_)) | Some(Type::MutableReference(_))
                 ) && !owned_copy
                     && !receiver_is_non_map;
-                if poisoned_owned {
+                // P3.576: `Ok(g) => g.get(key)` often has `rt=None` and suffix-resolves to
+                // `Vec::get` (Owned usize). That is not a map-key site for a real `Vec`, but
+                // for unknown/wrapper receivers it must not beat `HashMap::get` (`&K`).
+                let vec_index_homonym = owned_copy
+                    && matches!(call_method, "get" | "remove")
+                    && !receiver_is_non_map
+                    && (receiver_base.is_none()
+                        || receiver_base.is_some_and(|base| {
+                            crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                                base,
+                            )
+                        })
+                        || cur.name.contains("Vec::")
+                        || cur.name.contains("slice::"));
+                if poisoned_owned || vec_index_homonym {
                     Some(hashmap)
                 } else {
                     Some(cur)
