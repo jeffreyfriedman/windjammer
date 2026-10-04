@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.617 (2026-10-03) — TDD WDB-436 (DB agent; no compiler src)
+
+`usize` loop counter assigned to `i32` with cast must not `.clone()`; product emits
+`before_idx = i.clone() as i32` in animation/clip.
+
+| Gate | Status |
+|------|--------|
+| WDB-436 MultiFile | ⏳ TDD pending — `before_idx = i` (cast without clone) |
+| WDB-436 tip-out | ⏳ TDD pending — `i.clone() as i32` in clip.rs |
+
+**Root cause layer:** copy / loop — usize counter cast-assign to i32 must not auto-clone.
+
+**Why this is a new class:**
+- WDB-394 is assign **without** cast (`best_idx = i.clone()`).
+- WDB-432 is **indexed** element `.clone() as`.
+- WDB-433 is struct **field** `.clone() as`.
+
+**What became unnecessary:** `i.clone()` when assigning loop counter across int widths.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-03)
+
+**Do not steal:** WDB-406/408/411/435, P3.508–P3.616, WDB-412–435 (filed).
+
 ## P3.616 (2026-10-03) — reused owned string must not emit `.into().clone()`
 
 Product `wj-auth-api` `handle`: after `own(path)` / sibling Into paint, tip emits
