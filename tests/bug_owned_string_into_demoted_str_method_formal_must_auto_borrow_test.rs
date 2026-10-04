@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.636: owned `String` locals into demoted `&str` method formals must auto-borrow.
+//! P3.637: owned `String` locals into demoted `&str` method formals must auto-borrow.
 //!
 //! Product `wj-auth-api`:
 //! ```ignore
@@ -73,7 +73,7 @@ fn owned_string_into_demoted_str_method_formal_must_auto_borrow() {
         .expect("wj build wj-auth-api");
     assert!(
         build.status.success(),
-        "P3.636 wj-auth-api transpile failed:\n{}",
+        "P3.637 wj-auth-api transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -98,10 +98,10 @@ fn owned_string_into_demoted_str_method_formal_must_auto_borrow() {
         .find(|l| l.contains("self.verify_user("))
         .unwrap_or("")
         .to_string();
-    eprintln!("P3.636 find_user: {find_sig}");
-    eprintln!("P3.636 find call: {find_call}");
-    eprintln!("P3.636 verify_user: {verify_sig}");
-    eprintln!("P3.636 verify call: {verify_call}");
+    eprintln!("P3.637 find_user: {find_sig}");
+    eprintln!("P3.637 find call: {find_call}");
+    eprintln!("P3.637 verify_user: {verify_sig}");
+    eprintln!("P3.637 verify call: {verify_call}");
 
     let find_wants_str = find_sig.contains("username: &str");
     let verify_wants_str = verify_sig.contains("username: &str");
@@ -112,6 +112,6 @@ fn owned_string_into_demoted_str_method_formal_must_auto_borrow() {
 
     assert!(
         !bad_find && !bad_verify,
-        "P3.636 RED: owned String locals into demoted &str method formals must auto-borrow:\n  {find_call}\n  {verify_call}"
+        "P3.637 RED: owned String locals into demoted &str method formals must auto-borrow:\n  {find_call}\n  {verify_call}"
     );
 }

@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.635: `&mut self` field into owned `json::to_string` formal must clone (or borrow).
+//! P3.636: `&mut self` field into owned `json::to_string` formal must clone (or borrow).
 //!
 //! Product `wj-webhook` `list_events` (source `fn list_events(self)`):
 //! ```ignore
@@ -72,7 +72,7 @@ fn mut_self_field_into_owned_json_formal_must_clone() {
         .expect("wj build wj-webhook");
     assert!(
         build.status.success(),
-        "P3.635 wj-webhook transpile failed:\n{}",
+        "P3.636 wj-webhook transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -81,7 +81,7 @@ fn mut_self_field_into_owned_json_formal_must_clone() {
         let start = webhook.find("fn list_events").unwrap_or(0);
         &webhook[start..webhook.len().min(start + 500)]
     };
-    eprintln!("P3.635 list_events region:\n{list_fn}");
+    eprintln!("P3.636 list_events region:\n{list_fn}");
 
     let bad_move = list_fn.contains("json::to_string(self.events)")
         || (list_fn.contains("to_string(self.events)") && !list_fn.contains("self.events.clone()"));
@@ -89,6 +89,6 @@ fn mut_self_field_into_owned_json_formal_must_clone() {
 
     assert!(
         ok || !bad_move,
-        "P3.635 RED: &mut self.events into owned json::to_string must clone or borrow:\n{list_fn}"
+        "P3.636 RED: &mut self.events into owned json::to_string must clone or borrow:\n{list_fn}"
     );
 }
