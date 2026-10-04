@@ -3931,7 +3931,15 @@ impl<'ast> CodeGenerator<'ast> {
                         resolved.param_ownership.get(ridx),
                         Some(crate::analyzer::OwnershipMode::Owned)
                     );
+                let forwarding_borrow = self.ir_forwarding_borrow_param_at_call_site(
+                    &resolved,
+                    ridx,
+                    arg_index,
+                    receiver_type_name,
+                    method_simple,
+                );
                 if owned_user_slot
+                    && !forwarding_borrow
                     && !resolved
                         .param_types
                         .get(ridx)
@@ -6085,7 +6093,11 @@ impl<'ast> CodeGenerator<'ast> {
                     sig, param_idx,
                 )
                 || Self::sig_arg_confirms_owned_emission(sig, arg_index));
-        if callee_emits_owned {
+        let forwarding_borrow =
+            crate::ir::signature_bridge::forwarding_borrow_metadata_requests_call_site_borrow(
+                sig, param_idx,
+            );
+        if callee_emits_owned && !forwarding_borrow {
             if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                 *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
                     coerced,
@@ -6097,6 +6109,7 @@ impl<'ast> CodeGenerator<'ast> {
         let wants_shared = global_confirms_shared_ref(param_idx)
             || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
             || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx)
+            || forwarding_borrow
             || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index);
         if wants_shared
             && !coerced.starts_with("&mut ")
@@ -7685,6 +7698,39 @@ impl<'ast> CodeGenerator<'ast> {
         );
     }
 
+    fn ir_forwarding_borrow_param_at_call_site(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        param_idx: usize,
+        arg_index: usize,
+        receiver_type_name: Option<&str>,
+        method: &str,
+    ) -> bool {
+        if crate::ir::signature_bridge::forwarding_borrow_metadata_requests_call_site_borrow(
+            sig, param_idx,
+        ) {
+            return true;
+        }
+        if let (Some(global), Some(rt)) = (
+            self.global_signature_registry.as_ref(),
+            receiver_type_name,
+        ) {
+            let qualified = format!("{rt}::{method}");
+            if let Some(gs) = global
+                .get_signature(&qualified)
+                .or_else(|| global.lookup_method(&qualified))
+            {
+                let gpidx = gs.arg_param_index(arg_index);
+                if crate::ir::signature_bridge::forwarding_borrow_metadata_requests_call_site_borrow(
+                    gs, gpidx,
+                ) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Cross-crate metadata (`WalSegment::append_put`) — borrow `vec![…]` and helper returns.
     fn maybe_borrow_vec_or_helper_from_global_metadata(
         &self,
@@ -7793,6 +7839,13 @@ impl<'ast> CodeGenerator<'ast> {
             let pidx = sig.arg_param_index(arg_index);
             if let Some(resolved) = self.resolve_method_function_signature(rt, method, arg_count) {
                 let ridx = resolved.arg_param_index(arg_index);
+                let forwarding_borrow = self.ir_forwarding_borrow_param_at_call_site(
+                    &resolved,
+                    ridx,
+                    arg_index,
+                    Some(*rt),
+                    method,
+                );
                 if (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &resolved, ridx,
                 ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
@@ -7800,7 +7853,8 @@ impl<'ast> CodeGenerator<'ast> {
                 ) || matches!(
                     resolved.param_ownership.get(ridx),
                     Some(crate::analyzer::OwnershipMode::Owned)
-                )) && !resolved
+                )) && !forwarding_borrow
+                    && !resolved
                     .param_types
                     .get(ridx)
                     .is_some_and(|t| matches!(t, Type::MutableReference(_)))
@@ -7846,7 +7900,10 @@ impl<'ast> CodeGenerator<'ast> {
                 .get(pidx)
                 .is_some_and(|t| matches!(t, Type::MutableReference(_)))
                 || matches!(effective_own, crate::analyzer::OwnershipMode::MutBorrowed);
+            let forwarding_borrow =
+                self.ir_forwarding_borrow_param_at_call_site(&sig, pidx, arg_index, Some(*rt), method);
             if !slot_expects_mut
+                && !forwarding_borrow
                 && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                     &sig, pidx,
                 ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
