@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.624 (2026-10-04) — WDB-435 generic `ObjectPool<T>` Copy usize field return
+
+Product `object_pool` emitted `self.capacity.clone()` / `self.in_use.clone()` on
+`&self` getters while non-generic isolate was GREEN.
+
+| Gate | Status |
+|------|--------|
+| WDB-435 MultiFile (`ObjectPool<T>` + private `Vec<T>` fields) | ✅ GREEN |
+| WDB-435 tip-out (`rel_tip_out` + `gen/object_pool/…/object_pool.rs`) | ✅ GREEN after tip regen |
+
+**Root cause layer:** struct field registry / impl context — `impl ObjectPool<T>`
+left `current_struct_fields` empty (map keyed `ObjectPool`, impl type
+`ObjectPool<T>`), so Copy field type was unknown and borrowed-`self` lowering
+added `.clone()`. `lookup_struct_field_types` now strips type args; explicit
+`return self.field` skips clone when field type is Copy.
+
+**What became unnecessary:** `.clone()` on Copy `usize` field returns / struct-lit
+fields for generic impl parents; redundant return-statement clone when Copy is
+known from inference.
+
+**Gates:** `cargo test --release --test all -- wdb435_`; related
+`wdb427_`/`wdb433_`/`wdb436_`/`wdb437_` isolates GREEN (tip-outs for 427/433
+still stale product); `cargo test --release -p windjammer --lib struct_decl_base_name`.
+
 ## P3.623 (2026-10-04) — cross-file Borrowed bare Vec must `&walls`
 
 `test_cross_file_borrowed_param_gets_ampersand`: analyzer Borrowed `walls: Vec`
@@ -36,7 +60,8 @@ Two stacked patho scans:
 |------|--------|
 | `restore_pub_owned_scales_with_program_lookup_index` | ✅ GREEN |
 | `restore_pub_owned_custom_formals_uses_program_lookup` | ✅ GREEN |
-| Full suite through wdb-layers dogfood | 🔧 tip fix — trait keys + ProgramLookup for Custom formals |
+| tip `wj build` wdb-layers `--library --module-file --no-cargo` | ✅ completes ~275s (EXIT:0; was hung in Custom-formal restore) |
+| Full suite through wdb-layers dogfood | 🔧 tip fix landed — suite re-running on `bdd8148e` |
 
 **Root cause layer:** signature resolution + bare-pass restore performance
 (index completeness — not ownership heuristics).
@@ -296,24 +321,8 @@ forwarding_borrow share-ref (mirror P3.588 text exemption).
 
 ## P3.613 (2026-10-03) — TDD WDB-435 (DB agent; no compiler src)
 
-Copy `usize` field return / struct-literal must not `.clone()`; product emits
-`self.capacity.clone()` / `self.in_use.clone()` in object_pool getters/stats.
-
-| Gate | Status |
-|------|--------|
-| WDB-435 MultiFile | ✅ GREEN @ `f45ff380` — isolate bare `self.capacity` / `self.in_use` no `.clone()` |
-| WDB-435 tip-out | ❌ RED @ `f45ff380` — `self.capacity.clone()` in object_pool tip+gen |
-
-**Root cause layer:** copy / field — Copy field return and struct-lit field init must not auto-clone.
-
-**Why this is a new class:**
-- WDB-433 is field `.clone()` before **cast/arith**.
-- WDB-431 is field into **insert/push**.
-- WDB-427 is field into **`let`**.
-
-**What became unnecessary:** `self.capacity.clone()` / `self.in_use.clone()` on Copy usize getters.
-
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb435_` — 1 passed / 1 failed (isolate GREEN, tip RED).
+Superseded by **P3.624** (generic `ObjectPool<T>` repro + struct-field-map fix).
+Original non-generic isolate was GREEN; product/tip stayed RED until P3.624.
 
 **Do not steal:** WDB-406/408/411/434, P3.508–P3.615, WDB-412–435 (filed).
 

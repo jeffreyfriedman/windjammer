@@ -113,6 +113,11 @@ fn is_simple_rust_type_parameter_name(p: &str) -> bool {
         && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// Declared struct name for field-map lookup (`ObjectPool<T>` → `ObjectPool`).
+pub fn struct_decl_base_name(type_name: &str) -> &str {
+    type_name.split('<').next().unwrap_or(type_name)
+}
+
 /// Type parameters declared on an `impl` block (explicit `impl<T>` or inferred `impl ComponentArray<T>`).
 pub fn impl_block_type_param_names(impl_block: &ImplBlock<'_>) -> Vec<String> {
     if !impl_block.type_params.is_empty() {
@@ -395,6 +400,13 @@ mod codegen_helpers_tests {
             infer_impl_header_type_params_from_type_name("Uniform<T>"),
             Some(vec!["T".to_string()])
         );
+    }
+
+    #[test]
+    fn struct_decl_base_name_strips_type_args() {
+        assert_eq!(struct_decl_base_name("ObjectPool<T>"), "ObjectPool");
+        assert_eq!(struct_decl_base_name("Vec<i32>"), "Vec");
+        assert_eq!(struct_decl_base_name("Foo"), "Foo");
     }
 
     #[test]

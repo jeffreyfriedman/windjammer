@@ -768,7 +768,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         for (type_name, trait_name) in impl_type_keys {
-            if let Some(fields) = struct_fields.get(&type_name) {
+            let field_key = super::codegen_helpers::struct_decl_base_name(&type_name);
+            if let Some(fields) = struct_fields
+                .get(&type_name)
+                .or_else(|| struct_fields.get(field_key))
+            {
                 self.current_struct_fields = fields.iter().cloned().collect();
             } else {
                 self.current_struct_fields.clear();
@@ -811,7 +815,12 @@ impl<'ast> CodeGenerator<'ast> {
                 } => {
                     // Set the struct name, fields, and method names for implicit self support
                     self.current_struct_name = Some(impl_block.type_name.clone());
-                    if let Some(fields) = struct_fields.get(&impl_block.type_name) {
+                    let impl_field_key =
+                        super::codegen_helpers::struct_decl_base_name(&impl_block.type_name);
+                    if let Some(fields) = struct_fields
+                        .get(&impl_block.type_name)
+                        .or_else(|| struct_fields.get(impl_field_key))
+                    {
                         self.current_struct_fields = fields.iter().cloned().collect();
                     } else {
                         self.current_struct_fields.clear();

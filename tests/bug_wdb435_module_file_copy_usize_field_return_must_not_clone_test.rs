@@ -34,13 +34,14 @@ pub struct PoolStats {
     pub peak_usage: usize,
 }
 
-pub struct ObjectPool {
-    pub capacity: usize,
-    pub in_use: usize,
-    pub peak_usage: usize,
+pub struct ObjectPool<T> {
+    available: Vec<T>,
+    capacity: usize,
+    in_use: usize,
+    peak_usage: usize,
 }
 
-impl ObjectPool {
+impl ObjectPool<T> {
     pub fn capacity(self) -> usize {
         self.capacity
     }
@@ -112,6 +113,11 @@ fn wdb435_tip_out_game_core_object_pool_copy_field_return_must_not_clone() {
         paths.push(dir.join(".agent-wip/rel_tip_out/object_pool/object_pool.rs"));
         paths.push(
             dir.join("windjammer-game/windjammer-game-core/gen/object_pool/object_pool.rs"),
+        );
+        paths.push(
+            dir.join(
+                "windjammer-game/windjammer-game-core/gen/object_pool/object_pool/object_pool.rs",
+            ),
         );
     }
     let mut saw = false;

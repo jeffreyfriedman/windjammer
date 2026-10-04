@@ -27,9 +27,23 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(fields) = self.struct_field_types.get(struct_name) {
             return Some(fields);
         }
+        // WDB-435: impl `ObjectPool<T>` uses parent_type `ObjectPool<T>` but struct
+        // field maps are keyed by the declared name `ObjectPool`.
+        let base_without_generics = struct_name.split('<').next().unwrap_or(struct_name);
+        if base_without_generics != struct_name {
+            if let Some(fields) = self.struct_field_types.get(base_without_generics) {
+                return Some(fields);
+            }
+        }
         if let Some(short) = struct_name.rsplit("::").next() {
+            let short_base = short.split('<').next().unwrap_or(short);
             if short != struct_name {
                 if let Some(fields) = self.struct_field_types.get(short) {
+                    return Some(fields);
+                }
+            }
+            if short_base != short {
+                if let Some(fields) = self.struct_field_types.get(short_base) {
                     return Some(fields);
                 }
             }

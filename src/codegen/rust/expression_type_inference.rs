@@ -152,7 +152,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // e.g., `mouse_x` in `impl Game` → `self.mouse_x` → type is Game.mouse_x's type
                 if self.in_impl_block && self.current_struct_fields.contains(name) {
                     if let Some(struct_name) = &self.current_struct_name {
-                        if let Some(fields) = self.struct_field_types.get(struct_name.as_str()) {
+                        if let Some(fields) = self.lookup_struct_field_types(struct_name) {
                             if let Some(field_type) = fields.get(name.as_str()) {
                                 return Some(field_type.clone());
                             }

@@ -132,7 +132,11 @@ impl<'ast> CodeGenerator<'ast> {
                     &self.current_function_return_type,
                     Some(Type::Reference(_)) | Some(Type::MutableReference(_))
                 );
-                if !returns_ref && !return_str.ends_with(".clone()") {
+                let is_copy = self
+                    .infer_expression_type(e)
+                    .as_ref()
+                    .is_some_and(|t| self.is_type_copy(t));
+                if !returns_ref && !is_copy && !return_str.ends_with(".clone()") {
                     if return_str.starts_with('&') && !return_str.starts_with("&mut") {
                         return_str = format!("({}).clone()", return_str);
                     } else {
