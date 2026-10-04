@@ -34,7 +34,7 @@ path_set sites emit `json::get(&out, &head)`.
 
 | Gate | Status |
 |------|--------|
-| `json_get_owned_value_must_auto_borrow_product` | ❌ tip RED — product wj-json-util |
+| `json_get_owned_value_must_auto_borrow_product` | ❌ tip RED — product wj-json-util; cargo 0/1 |
 
 **Root cause layer:** call-site coercion — owned `Value` into demoted `&Value`
 stdlib formals must auto-borrow (signature-driven), including free-fn `json::get`.
@@ -45,7 +45,7 @@ stdlib formals must auto-borrow (signature-driven), including free-fn `json::get
 
 **What became unnecessary:** manual `&value` / reshape json-util.
 
-**Gates:** tip dogfood wj-json-util RED (shared tip 16:41).
+**Gates:** tip dogfood wj-json-util RED (shared tip 16:41); cargo **0/1** (2026-10-04).
 - `cargo test --release --test all --features integration_tests,codegen_tests -- json_get_owned_value_must_auto_borrow_product`
 
 **Do not steal:** P3.654–660 (filed).
