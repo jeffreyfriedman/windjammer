@@ -829,6 +829,25 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         }
+                        // P3.654–657 terminal: runtime-std `&str` must survive peel/strip
+                        // when layered WJ stubs keep owned `string` formals.
+                        if !coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                            && crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                &self.signature_registry,
+                                &qualified_callee,
+                                Some(&contract_sig),
+                                i,
+                            )
+                            && matches!(
+                                arg_to_generate,
+                                Expression::Identifier { name, .. }
+                                    if !self.emitted_rust_ref_formals.contains(name.as_str())
+                                        && !self.str_ref_optimized_params.contains(name.as_str())
+                            )
+                        {
+                            coerced = format!("&{coerced}");
+                        }
                         return coerced;
                     }
                     debug_assert!(

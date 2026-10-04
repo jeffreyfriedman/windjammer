@@ -392,6 +392,7 @@ impl<'ast> CodeGenerator<'ast> {
         receiver_rt: Option<&str>,
         contract_sig: &crate::analyzer::FunctionSignature,
     ) {
+
         let key_receiver =
             crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
                 qualified_callee,
@@ -513,17 +514,48 @@ impl<'ast> CodeGenerator<'ast> {
         {
             *coerced = coerced.trim_end_matches(".to_string()").to_string();
         }
+        // P3.658: demoted `&str` / emitted shared-ref formals are already `&Q` for
+        // HashMap::get — emit-truth only (not inferred_borrowed on owned `String`).
+        let (arg_already_rust_ref, arg_binding_already_shared_ref) = match arg {
+            Expression::Identifier { name, .. } => {
+                let emit_shared = self.emitted_rust_ref_formals.contains(name.as_str())
+                    || self.str_ref_optimized_params.contains(name.as_str())
+                    || self.caller_formal_emitted_shared_ref(name);
+                (
+                    emit_shared,
+                    emit_shared || self.inferred_borrowed_params.contains(name.as_str()),
+                )
+            }
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref,
+                ..
+            } => (true, true),
+            _ => (false, false),
+        };
+        // Peel only on emit-truth demoted refs (`key: &str`). Owned `String` +
+        // inferred_borrowed must keep/restore `&key` (P3.576).
+        if arg_already_rust_ref
+            && coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+        {
+            *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                .to_string();
+        }
         crate::codegen::rust::call_site_borrow::finalize_collection_key_call_site_arg(
             Some(&key_sig),
             arg_index,
             arg,
             coerced,
-            false,
+            arg_already_rust_ref,
             key_rt.as_deref(),
-            false,
+            arg_binding_already_shared_ref,
         );
-        // Belt: Copy scalar keys into HashMap::get must keep `&` even when
-        // finalize_collection_key early-returned on stale Owned key formals.
+        // Belt: map-key sites need `&key` when finalize_collection_key early-returned
+        // (stale Owned formals / String keys). Never re-borrow demoted `&str` (P3.658).
+        // Owned `key: String` still needs this belt (P3.576).
+        if arg_already_rust_ref {
+            return;
+        }
         if !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
             crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(coerced);
         }
@@ -7497,10 +7529,8 @@ impl<'ast> CodeGenerator<'ast> {
             self.maybe_pure_forwarding_strip_call_arg(
                 coerced,
                 arg_expr,
-                None,
-                None,
+                Some(callee_name),
                 Some(arg_index),
-                None,
                 Some(sig),
             );
         }

@@ -92,6 +92,7 @@ pub fn shared_map_has(m: SharedMap, key: string) -> (SharedMap, bool) {
 #[test]
 fn hashmap_get_through_mutex_guard_must_not_emit_key_to_string() {
     let generated = test_utils::compile_single(SHARED_MAP_GET);
+    eprintln!("P3.658 emit dump:\n{generated}");
     assert!(
         !generated.contains("get(key.to_string())")
             && !generated.contains(".get(key.to_string())"),

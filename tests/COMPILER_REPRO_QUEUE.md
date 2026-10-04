@@ -68,7 +68,7 @@ stdlib formals must auto-borrow (signature-driven), including free-fn `json::get
 
 **What became unnecessary:** manual `&value` / reshape json-util.
 
-**Gates:** tip dogfood wj-json-util RED (shared tip 16:41); cargo **0/1** (2026-10-04).
+**Gates:** tip dogfood wj-json-util GREEN.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- json_get_owned_value_must_auto_borrow_product`
 
 **Do not steal:** P3.654–660 (filed).
@@ -143,7 +143,7 @@ formal/local is already `&str`.
 
 **What became unnecessary:** reshaping toml `get` / avoiding demotion.
 
-**Gates:** tip dogfood wj-toml RED.
+**Gates:** tip dogfood wj-toml GREEN.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- toml_hashmap_get_demoted_str_key_must_not_double_borrow_product`
 
 **Do not steal:** P3.654–657 (filed).
@@ -167,7 +167,7 @@ formals must auto-borrow (signature-driven).
 
 **What became unnecessary:** `.as_str()` / reshape mime package.
 
-**Gates:** tip dogfood wj-mime RED.
+**Gates:** tip dogfood wj-mime GREEN.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- mime_stdlib_owned_args_must_auto_borrow_product`
 
 **Do not steal:** P3.654–656 (filed).
@@ -217,7 +217,7 @@ stdlib/runtime `&str` formals must auto-borrow (signature-driven).
 
 **What became unnecessary:** `.as_str()` / reshape regex package.
 
-**Gates:** tip dogfood wj-regex RED.
+**Gates:** tip dogfood wj-regex GREEN.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- regex_stdlib_owned_args_must_auto_borrow_product`
 
 **Do not steal:** P3.645–654 (filed).
@@ -230,10 +230,14 @@ Product `wj-hash` `verify_password`: tip keeps owned `String` formals and emits
 
 | Gate | Status |
 |------|--------|
-| `hash_crypto_owned_args_must_auto_borrow_product` | ✅ tip GREEN — product 4 + cargo 1/1 (2026-10-04 tip 18:24) |
+| `hash_crypto_owned_args_must_auto_borrow_product` | ✅ tip GREEN — `crypto::verify_password(&password, &hash)` (2026-10-04) |
+| `crypto_verify_password_module_method_must_auto_borrow` | ✅ isolate GREEN |
 
 **Root cause layer:** call-site coercion — owned String into demoted crypto
-`&str` formals must auto-borrow (signature-driven).
+`&str` formals must auto-borrow (signature-driven). IR `call_sites` skips finalize
+ownership match; layered WJ owned `string` stubs + peel/strip dropped `&`.
+Terminal module `::` re-apply after strip restores runtime-std borrows; do not
+treat inferred-borrowed owned `String` as `identifier_already_ref`.
 
 **Why this is a new class:**
 - P3.645 is csv stdlib.
@@ -241,8 +245,9 @@ Product `wj-hash` `verify_password`: tip keeps owned `String` formals and emits
 
 **What became unnecessary:** `.as_str()` / reshape hash package.
 
-**Gates:** tip dogfood wj-hash RED.
+**Gates:** tip dogfood wj-hash GREEN.
 - `cargo test --release --test all --features integration_tests,codegen_tests -- hash_crypto_owned_args_must_auto_borrow_product`
+- `cargo test --release --test all --features integration_tests,codegen_tests -- crypto_verify_password_module_method`
 
 **Do not steal:** P3.645–653 (filed).
 

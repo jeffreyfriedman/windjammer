@@ -566,12 +566,22 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
 
     for (i, arg_str) in args.iter_mut().enumerate() {
         if let Some((_, arg_expr)) = arguments.get(i) {
-            let arg_already_rust_ref = matches!(
+            // P3.658: only *emitted* shared-ref formals (`key: &str`) skip the map-key
+            // `&` belt. Owned `key: String` + inferred_borrowed still needs `get(&key)`
+            // (P3.576). Do not use `identifier_already_ref` here — it treats all
+            // inferred-borrowed WJ `string` params as already-ref.
+            let arg_emit_shared_ref = matches!(
                 arg_expr,
                 Expression::Identifier { name, .. }
-                    if gen.identifier_already_ref(name)
+                    if gen.emitted_rust_ref_formals.contains(name.as_str())
                         || gen.str_ref_optimized_params.contains(name.as_str())
-                        || gen.inferred_borrowed_params.contains(name)
+                        || gen.caller_formal_emitted_shared_ref(name)
+            );
+            let arg_already_rust_ref = arg_emit_shared_ref;
+            let arg_binding_already_shared_ref = matches!(
+                arg_expr,
+                Expression::Identifier { name, .. }
+                    if arg_emit_shared_ref || gen.inferred_borrowed_params.contains(name)
             );
             let coll_sig = type_name.as_deref().and_then(|tn| {
                 gen.resolve_method_function_signature(tn, call_method, arguments.len())
@@ -595,7 +605,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 arg_str,
                 arg_already_rust_ref,
                 type_name.as_deref(),
-                false,
+                arg_binding_already_shared_ref,
             );
             let map_key_arg = i == 0
                 && crate::codegen::rust::stdlib_method_traits::method_is_map_key_qualified(
@@ -603,7 +613,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                     type_name.as_deref(),
                     &gen.signature_registry,
                 );
-            if !map_key_arg {
+            if !map_key_arg || arg_emit_shared_ref {
                 gen.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
             } else if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                 crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);

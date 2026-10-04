@@ -2529,7 +2529,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return;
         }
-        let text_borrowed_formal = self.inferred_borrowed_params.contains(name.as_str())
+        let text_borrowed_formal = (self.emitted_rust_ref_formals.contains(name.as_str())
+            || self.str_ref_optimized_params.contains(name.as_str()))
+            && self.inferred_borrowed_params.contains(name.as_str())
             && self.current_function_params.iter().any(|p| {
                 p.name == *name && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
             });
@@ -2586,7 +2588,12 @@ impl<'ast> CodeGenerator<'ast> {
                     if self.inferred_mut_borrowed_params.contains(name) {
                         return false;
                     }
-                    return true;
+                    // P3.654–657: borrow-flow inference alone does not demote the
+                    // emitted formal (`password: String` forwarding into crypto
+                    // `&str`). Those call sites must still auto-borrow. Emit-truth
+                    // demotions (`&str` / `emitted_rust_ref_formals`) already
+                    // returned true above — do not treat bare WJ `string` as ref.
+                    return false;
                 }
                 return false;
             }
@@ -3664,14 +3671,16 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Pure-forwarding strip, but keep callee-required borrows (asymmetric facade calls).
+    ///
+    /// P3.654–657: layered WJ stubs may still report owned `string` for runtime
+    /// `crypto`/`regex`/`mime` formals while the scanner baseline is `&str`. Do not
+    /// peel a call-site `&` that `runtime_std_param_needs_auto_borrow_resolved` requires.
     pub(crate) fn maybe_pure_forwarding_strip_call_arg(
         &self,
         coerced: &mut String,
         arg_expr: &Expression<'ast>,
-        _receiver_type: Option<&str>,
-        _method: Option<&str>,
+        callee_name: Option<&str>,
         arg_index: Option<usize>,
-        _user_arg_count: Option<usize>,
         callee_sig: Option<&crate::analyzer::FunctionSignature>,
     ) {
         if !self.current_func_is_pure_forwarding_delegate {
@@ -3679,12 +3688,24 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let (Some(sig), Some(arg_idx)) = (callee_sig, arg_index) {
             let pidx = sig.arg_param_index(arg_idx);
+            let runtime_std_needs_borrow = [callee_name, Some(sig.name.as_str())]
+                .into_iter()
+                .flatten()
+                .any(|key| {
+                    crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                        &self.signature_registry,
+                        key,
+                        Some(sig),
+                        arg_idx,
+                    )
+                });
             let callee_needs_borrow = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                 sig, pidx,
             ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, pidx)
                 || crate::codegen::rust::stdlib_method_traits::runtime_wj_owned_rust_borrowed_param(
                     sig, arg_idx,
-                );
+                )
+                || runtime_std_needs_borrow;
             if callee_needs_borrow {
                 return;
             }

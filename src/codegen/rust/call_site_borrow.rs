@@ -740,9 +740,19 @@ pub fn finalize_collection_key_call_site_arg(
     if arg_binding_already_shared_ref || arg_already_rust_ref {
         // Already `&str` / `&T` — HashMap::get wants `&Q`. Never `.clone()` into the key.
         expression_utilities::strip_trailing_clone(arg_str);
+        // P3.658: emit-truth shared refs (`key: &str`) must not become `get(&key)`.
+        if arg_already_rust_ref {
+            if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                if let Some(rest) = arg_str.strip_prefix('&') {
+                    *arg_str = rest.to_string();
+                }
+            }
+            return;
+        }
         // P3.635 / WDB-134: owned Copy formals (`label: i64`) may still sit in
         // `inferred_borrowed_params` from stale map-key body inference — emit explicit
         // `&label` for collection-key callees (tip truth + product grep gates).
+        // Only when the binding is *not* an emitted Rust shared ref (demoted `&str`).
         if is_ck
             && !arg_str.starts_with('&')
             && key_formal_is_copy
