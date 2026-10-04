@@ -1,5 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.631 (2026-10-04) — notes-api mixed demoted `&str` + owned `String` call args
+
+Product `handle_request` → `App::handle`: after `method` demotes to `&str`, owned
+`path`/`body` must move (not `&path` / `&body.into()`). Empty lits already
+`"".to_string()`; sibling demotion must not re-borrow other owned String slots.
+Forwarder `handle` → `inner` must pass `origin`/`accept_encoding`/`client_key` by
+move into emitted `String` formals.
+
+| Gate | Status |
+|------|--------|
+| `demoted_method_then_owned_empty_lits_must_own` | ✅ tip GREEN |
+| `handle_forward_empty_lits_must_own` | ✅ tip GREEN |
+| `handle_request_empty_lits_hex_app_must_own` | ✅ tip GREEN |
+| `owned_string_for_loop_load_must_not_borrow_path` / `path_bytes_wal_layout` / spawn / mpsc | ✅ no-reg |
+
+**Root cause layer:** coerce/reconcile — `local_should_move_into_owned_text_formal`
+returned `false` for caller outer formals (only locals/`local_var_types` counted),
+so shared-borrow reapply and forwarder IR paths prefixed `&` on owned `path`/`body`
+and on mixed-forward `origin` despite callee owned `String` emission.
+
+**Fix:** When callee slot is owned WJ text, caller **outer** formals use
+`caller_keeps_owned_outer_formal` (move); demoted outer formals stay on borrow path.
+
+**What became unnecessary:** Extra peels on path/body without signature+move gate;
+method-name heuristics unchanged (still banned).
+
+**Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
+`cargo test --release --test all -- demoted_method_then_owned_empty_lits_must_own handle_forward_empty_lits_must_own handle_request_empty_lits_hex_app_must_own owned_string_for_loop_load_must_not_borrow_path path_bytes_wal_layout spawn mpsc`.
+
 ## P3.629 (2026-10-04) — trait impl owned formal `mut` (E0053 + E0596)
 
 | Gate | Status |
@@ -42,7 +71,8 @@ Log `/tmp/wj-full-suite-p3628.log`; fails `/tmp/wj-suite-fails-p3628.txt`.
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
 - ~~`path_and_bytes_borrow_tests::path_bytes_wal_layout_rustc_cargo_check`~~ ✅ P3.630 (FFI owned FfiString move)
 - ~~`trait_impl_owned_param_no_reborrow_test::…`~~ ✅ P3.629
-- notes_api empty-lit owned gates; ~~`owned_string_for_loop_load_must_not_borrow_path`~~ ✅ P3.590b (AST-owned text move)
+- ~~notes_api empty-lit owned gates (demoted method + forwarder)~~ ✅ P3.631
+- ~~`owned_string_for_loop_load_must_not_borrow_path`~~ ✅ P3.590b (AST-owned text move)
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
 

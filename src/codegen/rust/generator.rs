@@ -3017,10 +3017,13 @@ impl<'ast> CodeGenerator<'ast> {
         if !callee_owned_text {
             return false;
         }
+        if is_caller_formal {
+            return self.caller_keeps_owned_outer_formal(binding);
+        }
         if binding_is_text {
             return true;
         }
-        !is_caller_formal
+        true
     }
 
     /// Loop/match locals that are WJ text (possibly mis-tagged as `&string` in `local_var_types`).
