@@ -11,9 +11,8 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.590: owned `String` path formal must not receive `&path` / `&_temp` at call
-//! sites. Product `gen/assets/loader.rs`: `load(..., path: String, ...)` but
-//! `self.load(name.clone(), &path, size)` / `loader.load(_temp0, &_temp1, …)`.
+//! P3.590: owned `String` path formal must not receive `&path` / `&_temp` at
+//! `load(` call sites. `detect_format(&path)` into `&str` is fine.
 
 use std::path::PathBuf;
 
@@ -24,16 +23,24 @@ fn tip_out_loader_owned_string_path_must_not_borrow() {
         .unwrap()
         .join("windjammer-game/windjammer-game-core/gen/assets/loader.rs");
     let rs = std::fs::read_to_string(&game).unwrap_or_default();
+    assert!(!rs.is_empty(), "missing {}", game.display());
     assert!(
-        !rs.is_empty(),
-        "P3.590: missing gen/assets/loader.rs (run engine tip transpile)"
+        rs.contains("path: String") && rs.contains("pub fn load("),
+        "expected owned path: String formal"
     );
-    let owned_formal = rs.contains("path: String") && rs.contains("pub fn load(");
-    assert!(owned_formal, "expected owned path: String formal:\n{}", &rs[..rs.len().min(500)]);
-    let bad = rs.contains("&path") || rs.contains("&_temp1") || rs.contains("&_temp");
+    let mut bad = Vec::new();
+    for (i, line) in rs.lines().enumerate() {
+        let l = line.trim();
+        if !l.contains("load(") || l.contains("pub fn load") || l.contains("fn load") {
+            continue;
+        }
+        if l.contains("&_temp") || l.contains(", &path,") || l.contains("(name.clone(), &path") {
+            bad.push(format!("{}:{}", i + 1, l));
+        }
+    }
     assert!(
-        !bad,
-        "P3.590 RED: owned String path formal borrowed at call site in {}",
-        game.display()
+        bad.is_empty(),
+        "P3.590 RED: owned String path borrowed at load() sites:\n  {}",
+        bad.join("\n  ")
     );
 }
