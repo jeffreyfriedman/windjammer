@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.643: `slice`/`Vec::get(usize)` must pass the index by value, not `&usize`.
+//! P3.644: `slice`/`Vec::get(usize)` must pass the index by value, not `&usize`.
 //!
 //! Product `wj-sync` `pool.wj`:
 //! ```ignore
@@ -74,7 +74,7 @@ fn slice_get_usize_index_must_not_borrow() {
         .expect("wj build wj-sync");
     assert!(
         build.status.success(),
-        "P3.643 wj-sync transpile failed:\n{}",
+        "P3.644 wj-sync transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -83,7 +83,7 @@ fn slice_get_usize_index_must_not_borrow() {
         .lines()
         .filter(|l| l.contains(".get(") && (l.contains("idx") || l.contains("w2") || l.contains("usize")))
         .collect();
-    eprintln!("P3.643 pool get sites:\n{}", get_sites.join("\n"));
+    eprintln!("P3.644 pool get sites:\n{}", get_sites.join("\n"));
 
     let bad = pool.contains(".get(&(idx as usize))")
         || pool.contains(".get(&(w2 as usize))")
@@ -93,7 +93,7 @@ fn slice_get_usize_index_must_not_borrow() {
 
     assert!(
         !bad,
-        "P3.643 RED: Vec/slice .get must take owned usize, not &usize:\n{}",
+        "P3.644 RED: Vec/slice .get must take owned usize, not &usize:\n{}",
         get_sites.join("\n")
     );
 }

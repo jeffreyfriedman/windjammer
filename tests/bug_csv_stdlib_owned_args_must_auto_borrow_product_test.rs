@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.644: product `wj-csv` thin wrappers must auto-borrow into stdlib formals.
+//! P3.645: product `wj-csv` thin wrappers must auto-borrow into stdlib formals.
 //!
 //! ```ignore
 //! pub fn parse(text: string) -> … { csv.parse(text) }   // formal: &str
@@ -72,12 +72,12 @@ fn csv_stdlib_owned_args_must_auto_borrow_product() {
         .expect("wj build wj-csv");
     assert!(
         build.status.success(),
-        "P3.644 wj-csv transpile failed:\n{}",
+        "P3.645 wj-csv transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
     let lib = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.644 wj-csv lib.rs:\n{lib}");
+    eprintln!("P3.645 wj-csv lib.rs:\n{lib}");
 
     let bad_parse = lib
         .lines()
@@ -93,6 +93,6 @@ fn csv_stdlib_owned_args_must_auto_borrow_product() {
 
     assert!(
         !thin_parse_bare && !bad_write,
-        "P3.644 RED: csv::parse/write must auto-borrow owned args:\n  parse region: {parse_fn}\n  bad_parse={bad_parse} thin_bare={thin_parse_bare} bad_write={bad_write}\n{lib}"
+        "P3.645 RED: csv::parse/write must auto-borrow owned args:\n  parse region: {parse_fn}\n  bad_parse={bad_parse} thin_bare={thin_parse_bare} bad_write={bad_write}\n{lib}"
     );
 }
