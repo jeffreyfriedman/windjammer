@@ -772,6 +772,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         && !coerced.starts_with("&mut ")
                         && coerced.ends_with(".clone()");
                     if !already_rust_ref
+                        && !coerced.contains("string_to_ffi(")
                         && (gen.preregistered_free_call_arg_expects_borrow(func_name, i)
                             || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
                             || stale_shared_clone)

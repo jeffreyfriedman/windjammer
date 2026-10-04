@@ -40,9 +40,9 @@ Log `/tmp/wj-full-suite-p3628.log`; fails `/tmp/wj-suite-fails-p3628.txt`.
 **Tip-live still open (priority):**
 - `module_qualified_signature_test::test_multipass_module_qualified_autoborrow` (likely stale expect: owned FFI forward → move)
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
-- `path_and_bytes_borrow_tests::path_bytes_wal_layout_rustc_cargo_check`
+- ~~`path_and_bytes_borrow_tests::path_bytes_wal_layout_rustc_cargo_check`~~ ✅ P3.630 (FFI owned FfiString move)
 - ~~`trait_impl_owned_param_no_reborrow_test::…`~~ ✅ P3.629
-- notes_api empty-lit owned gates; `owned_string_for_loop_load_must_not_borrow_path`
+- notes_api empty-lit owned gates; ~~`owned_string_for_loop_load_must_not_borrow_path`~~ ✅ P3.590b (AST-owned text move)
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
 
@@ -211,22 +211,38 @@ refresh must beat stale emitted_ref=true on owned String (follow-up if recurrenc
 
 **Do not steal:** P3.590b, full engine transpile hang, remaining E0308 clusters.
 
-## P3.590b (2026-10-04) — `load_batch` moves owned path (tip-out GREEN)
+## P3.590b (2026-10-04) — `load_batch` moves owned path
 
 Product `AssetLoader::load_batch` reuses `name` in Err → `name.clone()`, but
-`path` must move into owned `String` formal. Tip assets transpile emits
-`self.load(name.clone(), path, size)`. Stale gen had `&path` (false tip-out RED).
+`path` must move into owned `String` formal (`self.load(..., path, size)`).
 
 | Gate | Status |
 |------|--------|
 | `owned_string_for_loop_load_must_not_borrow_path` | ✅ tip GREEN |
-| `tip_out_loader_load_batch_must_not_borrow_path` | ✅ tip-out GREEN |
-| `tip_out_loader_owned_string_path_must_not_borrow` | ✅ tip-out GREEN |
+| `tip_out_loader_load_batch_must_not_borrow_path` | ✅ tip-out (regen when product picks up tip) |
+| spawn / mpsc no-reg | ✅ GREEN |
 
-**Root cause layer:** tip call-site already correct after P3.588/590; sync
-`gen/assets/loader.rs` via tip `wj build src/assets`.
+**Root cause layer:** signature/solver — stale converged `&str` metadata on
+owned WJ `string` formals re-applied `&` in `enforce_call_site_ownership_contract`,
+`reconcile_post_ir_*`, and method-arg reuse-after. **Fix:** `local_should_move_into_owned_text_formal`
+( AST `struct_method_ast_formal_param_types` + call arg index ) gates shared-borrow
+reapply; terminal peel in method `arguments.rs`.
+
+**Became unnecessary:** method-name / temporary-only peels without signature+AST formal.
 
 **Do not steal:** remaining engine E0308 clusters (mesh_renderer, blend_tree, …).
+
+## P3.630 (2026-10-04) — WAL FFI owned `FfiString` (no `&string_to_ffi`)
+
+| Gate | Status |
+|------|--------|
+| `path_bytes_wal_layout_rustc_cargo_check` | ✅ tip GREEN |
+| spawn / mpsc no-reg | ✅ GREEN |
+
+**Root cause layer:** coerce/terminal — `rust_shared_borrow` must not prefix args
+already wrapped in `string_to_ffi(...)` (owned extern formal).
+
+**Do not steal:** P3.590b follow-ups, engine E0308 clusters.
 
 ## P3.621 (2026-10-04) — owned String return into demoted `&str` method formal
 

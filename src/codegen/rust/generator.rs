@@ -2967,6 +2967,76 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// Owned local into an owned WJ text formal must move (P3.590b `path`), even when
+    /// stale registry metadata still marks the callee slot Borrowed / shared-ref.
+    pub(in crate::codegen::rust) fn local_should_move_into_owned_text_formal(
+        &self,
+        binding: &str,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_index: usize,
+    ) -> bool {
+        let param_idx = sig.arg_param_index(arg_index);
+        let binding_is_text = self.local_var_types.get(binding).is_some_and(|t| {
+            let bare = match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            crate::codegen::rust::types::is_windjammer_text_type(bare)
+        });
+        let is_caller_formal = self
+            .current_function_params
+            .iter()
+            .any(|p| p.name == binding);
+        let ast_plain_text = self.current_struct_name.as_ref().is_some_and(|sn| {
+            let simple = sig.name.rsplit("::").next().unwrap_or(sig.name.as_str());
+            self.struct_method_ast_formal_param_types
+                .get(sn.as_str())
+                .and_then(|methods| methods.get(simple))
+                .and_then(|formals| formals.get(arg_index))
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::codegen::rust::types::is_windjammer_text_type(t)
+                })
+        });
+        let bare_wj_text_formal = ast_plain_text
+            || crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
+                sig, arg_index,
+            )
+            || sig.formal_param_type(param_idx).is_some_and(|t| {
+                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    && crate::codegen::rust::types::is_windjammer_text_type(t)
+            });
+        let callee_owned_text = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+            sig, param_idx,
+        )
+            || (bare_wj_text_formal
+                && (!is_caller_formal
+                    || !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                        sig, param_idx,
+                    )));
+        if !callee_owned_text {
+            return false;
+        }
+        if binding_is_text {
+            return true;
+        }
+        !is_caller_formal
+    }
+
+    /// Loop/match locals that are WJ text (possibly mis-tagged as `&string` in `local_var_types`).
+    pub(in crate::codegen::rust) fn local_binding_is_windjammer_text(
+        &self,
+        binding: &str,
+    ) -> bool {
+        self.local_var_types.get(binding).is_some_and(|t| {
+            let bare = match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            crate::codegen::rust::types::is_windjammer_text_type(bare)
+        })
+    }
+
     /// True when `stmt` passes `param_name` to a callee formal that emits owned (not `&T`).
     pub(in crate::codegen::rust) fn statement_passes_param_to_owned_formal_callee(
         &self,

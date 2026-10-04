@@ -647,7 +647,12 @@ impl<'ast> CodeGenerator<'ast> {
                                 .collect();
                             let reuse_after = !later.is_empty()
                                 && Self::variable_used_in_statements(&later, name);
-                            if reuse_after && callee_shared {
+                            if reuse_after
+                                && callee_shared
+                                && !self.local_should_move_into_owned_text_formal(
+                                    name, &contract_sig, i,
+                                )
+                            {
                                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
                                     &coerced,
                                 )
@@ -659,6 +664,15 @@ impl<'ast> CodeGenerator<'ast> {
                                 } else {
                                     coerced = base;
                                 }
+                            }
+                            if self.local_should_move_into_owned_text_formal(name, &contract_sig, i)
+                                && coerced.starts_with('&')
+                                && !coerced.starts_with("&mut ")
+                            {
+                                coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &coerced,
+                                )
+                                .to_string();
                             }
                         }
                         let pidx = contract_sig.arg_param_index(i);
