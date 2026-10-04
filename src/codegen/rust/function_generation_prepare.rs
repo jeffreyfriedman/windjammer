@@ -2779,6 +2779,20 @@ impl<'ast> CodeGenerator<'ast> {
                         .unwrap_or(crate::analyzer::OwnershipMode::Owned)
                 };
 
+                // AST Copy pass-by-value scalars (`i64`, `bool`, …) emit and register as Owned
+                // even when stale body inference borrowed them for inner map-key calls (WDB-134).
+                if !matches!(
+                    param.type_,
+                    Type::Reference(_) | Type::MutableReference(_)
+                ) && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                {
+                    ownership = crate::analyzer::OwnershipMode::Owned;
+                    p_type = param.type_.clone();
+                    self.inferred_borrowed_params.remove(&param.name);
+                    self.str_ref_optimized_params.remove(&param.name);
+                    self.emitted_rust_ref_formals.remove(&param.name);
+                }
+
                 // Module-level `string` formals stay owned unless discard/unused converges to `&str`.
                 if ast_owned_string && is_module_level {
                     let discard_or_unused =

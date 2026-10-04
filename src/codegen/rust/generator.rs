@@ -1769,6 +1769,12 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
             return false;
         }
+        if sig.formal_param_type(pidx).is_some_and(|t| {
+            !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_))
+                && crate::type_classification::is_copy_pass_by_value_formal(t)
+        }) {
+            return false;
+        }
         crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx)
     }
 

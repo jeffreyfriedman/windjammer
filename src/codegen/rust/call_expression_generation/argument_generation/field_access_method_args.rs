@@ -115,13 +115,39 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         type_name.as_deref(),
                         &effective_sig,
                     );
+                    crate::codegen::rust::call_site_borrow::reconcile_method_call_owned_copy_scalar_identifier_arg(
+                        gen,
+                        &mut coerced,
+                        arg_to_generate,
+                        &effective_sig,
+                        i,
+                        type_name.as_deref(),
+                    );
                     return vec![coerced];
                 }
                 debug_assert!(
                     false,
                     "IR call-site coercion must be total when call_sites is on ({qualified_name})"
                 );
-                return vec![arg_str];
+                // P3.635 / WDB-134: IR miss must not skip HashMap key borrow on match
+                // scrutinees (`self.inner.get(label)`).
+                let effective_sig = type_name
+                    .as_ref()
+                    .and_then(|tn| {
+                        gen.resolve_method_function_signature(tn, call_method, arguments.len())
+                    })
+                    .unwrap_or_else(|| sig.clone());
+                let mut out = arg_str;
+                gen.finalize_post_ir_collection_key_arg(
+                    &mut out,
+                    arg_to_generate,
+                    i,
+                    call_method,
+                    &qualified_name,
+                    type_name.as_deref(),
+                    &effective_sig,
+                );
+                return vec![out];
             }
 
             vec![arg_str]
@@ -217,6 +243,14 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             &qualified_name,
                             type_name.as_deref(),
                             sig,
+                        );
+                        crate::codegen::rust::call_site_borrow::reconcile_method_call_owned_copy_scalar_identifier_arg(
+                            gen,
+                            &mut coerced,
+                            arg_to_generate,
+                            sig,
+                            i,
+                            type_name.as_deref(),
                         );
                     } else if let Some(std_sig) = crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
                         call_method,

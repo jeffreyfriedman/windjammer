@@ -79,7 +79,65 @@ impl<'ast> CodeGenerator<'ast> {
         // ownership rewrite here is a third legacy layer (add/strip/re-add ping-pong).
         // Keep this path only for isolated unit tests that disable `call_sites`.
         let args = if self.ir_cutover.call_sites {
-            args
+            args.into_iter()
+                .enumerate()
+                .map(|(i, mut arg_str)| {
+                    let Some((_, arg_expr)) = arguments.get(i) else {
+                        return arg_str;
+                    };
+                    let Expression::Identifier { name, .. } = arg_expr else {
+                        return arg_str;
+                    };
+                    if !self.binding_is_copy_pass_by_value_scalar(name)
+                        || !arg_str.starts_with('&')
+                        || arg_str.starts_with("&mut ")
+                    {
+                        return arg_str;
+                    }
+                    let sig_for_peel = resolved_signature
+                        .as_ref()
+                        .or(method_signature.as_ref());
+                    let Some(sig) = sig_for_peel else {
+                        return arg_str;
+                    };
+                    let pidx = sig.arg_param_index(i);
+                    // Never peel HashMap/BTreeMap key borrows — `Reference(i64)` /
+                    // `&Q` formals must keep `&label` (P3.635 WDB-134).
+                    let is_ck = self.is_collection_key_lookup_at_site(
+                        sig,
+                        i,
+                        receiver_type_name.as_deref(),
+                    ) || matches!(
+                        method,
+                        "get" | "contains_key" | "get_key_value" | "remove"
+                    );
+                    if is_ck {
+                        return arg_str;
+                    }
+                    let slot_is_owned_copy_scalar = sig.formal_param_type(pidx).is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && crate::type_classification::is_copy_pass_by_value_formal(t)
+                    }) || receiver_type_name.as_ref().is_some_and(|rt| {
+                        self.struct_method_ast_formal_param_types
+                            .get(rt.as_str())
+                            .and_then(|methods| methods.get(method))
+                            .and_then(|formals| formals.get(i))
+                            .is_some_and(|t| {
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && crate::type_classification::is_copy_pass_by_value_formal(t)
+                            })
+                    });
+                    if slot_is_owned_copy_scalar {
+                        let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                            &arg_str,
+                        );
+                        if base == name.as_str() {
+                            arg_str = name.clone();
+                        }
+                    }
+                    arg_str
+                })
+                .collect()
         } else if let Some(ref sig) = resolved_signature {
             args.into_iter()
                 .enumerate()
@@ -252,8 +310,14 @@ impl<'ast> CodeGenerator<'ast> {
                                 .and_then(|methods| methods.get(method))
                                 .and_then(|formals| formals.get(i))
                                 .is_some_and(|t| {
-                                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                                        && !self.is_type_copy(t)
+                                    if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
+                                        return false;
+                                    }
+                                    if crate::type_classification::is_copy_pass_by_value_formal(t)
+                                    {
+                                        return true;
+                                    }
+                                    !self.is_type_copy(t)
                                         && !crate::codegen::rust::types::is_windjammer_text_type(t)
                                 })
                         });
@@ -455,7 +519,12 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::analyzer::OwnershipMode::Borrowed
                             if !callee_arg_emits_owned =>
                         {
-                            if callee_formal_is_copy && !is_collection_key {
+                            if (callee_formal_is_copy
+                                || crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                                    sig, i,
+                                ))
+                                && !is_collection_key
+                            {
                                 if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                                     return arg_str.trim_start_matches('&').to_string();
                                 }
@@ -770,20 +839,21 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    // regression: peel stale `&` on Copy-aggregate owned passes (`&through` → `through`).
+                    // regression: peel stale `&` on Copy owned passes (`&through` → `through`,
+                    // WDB-134 `get_label(&label)` → `get_label(label)` for `i64` formals).
                     if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                         if let (Some(rt), Some((_, arg_expr))) =
                             (receiver_type_name.as_deref(), arguments.get(i))
                         {
                             if let Expression::Identifier { name, .. } = arg_expr {
-                                let caller_copy = self.current_function_params.iter().any(|p| {
-                                    p.name == *name
-                                        && self.is_type_copy(&p.type_)
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            &p.type_,
-                                        )
-                                });
-                                let callee_copy = self
+                                let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &arg_str,
+                                );
+                                let caller_owned_copy_formal = self
+                                    .current_function_params
+                                    .iter()
+                                    .any(|p| p.name == *name && self.is_type_copy(&p.type_));
+                                let callee_owned_copy_formal = self
                                     .resolve_method_function_signature(
                                         rt,
                                         method,
@@ -793,23 +863,61 @@ impl<'ast> CodeGenerator<'ast> {
                                         let pidx = sig.arg_param_index(i);
                                         crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                             &sig, pidx,
-                                        ) || sig
-                                            .formal_param_type(pidx)
-                                            .or_else(|| sig.param_types.get(pidx))
-                                            .is_some_and(|t| {
-                                                let bare = match t {
-                                                    Type::Reference(inner)
-                                                    | Type::MutableReference(inner) => inner.as_ref(),
-                                                    other => other,
-                                                };
-                                                self.is_type_copy(bare)
-                                                    && !crate::type_classification::is_copy_pass_by_value_formal(
-                                                        bare,
-                                                    )
-                                            })
+                                        ) || sig.formal_param_type(pidx).is_some_and(|t| {
+                                            let bare = match t {
+                                                Type::Reference(inner)
+                                                | Type::MutableReference(inner) => inner.as_ref(),
+                                                other => other,
+                                            };
+                                            self.is_type_copy(bare)
+                                                && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                                    &sig, pidx,
+                                                )
+                                        })
                                     });
-                                if caller_copy && callee_copy {
-                                    arg_str = arg_str.trim_start_matches('&').to_string();
+                                if base == name.as_str()
+                                    && caller_owned_copy_formal
+                                    && (callee_arg_emits_owned || callee_owned_copy_formal)
+                                {
+                                    arg_str = name.clone();
+                                } else {
+                                    let caller_copy = self.current_function_params.iter().any(|p| {
+                                        p.name == *name
+                                            && self.is_type_copy(&p.type_)
+                                            && !crate::type_classification::is_copy_pass_by_value_formal(
+                                                &p.type_,
+                                            )
+                                    });
+                                    let callee_copy = self
+                                        .resolve_method_function_signature(
+                                            rt,
+                                            method,
+                                            arguments.len(),
+                                        )
+                                        .is_some_and(|sig| {
+                                            let pidx = sig.arg_param_index(i);
+                                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                                &sig, pidx,
+                                            ) || sig
+                                                .formal_param_type(pidx)
+                                                .or_else(|| sig.param_types.get(pidx))
+                                                .is_some_and(|t| {
+                                                    let bare = match t {
+                                                        Type::Reference(inner)
+                                                        | Type::MutableReference(inner) => {
+                                                            inner.as_ref()
+                                                        }
+                                                        other => other,
+                                                    };
+                                                    self.is_type_copy(bare)
+                                                        && !crate::type_classification::is_copy_pass_by_value_formal(
+                                                            bare,
+                                                        )
+                                                })
+                                        });
+                                    if caller_copy && callee_copy {
+                                        arg_str = arg_str.trim_start_matches('&').to_string();
+                                    }
                                 }
                             }
                         }

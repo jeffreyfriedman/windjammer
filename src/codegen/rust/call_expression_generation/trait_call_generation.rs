@@ -15,7 +15,13 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
     call_method: &str,
     arguments: &[(Option<String>, &'ast Expression<'ast>)],
 ) -> String {
-    let type_name = gen.infer_type_name(call_obj);
+    let type_name = gen
+        .mc_infer_method_receiver_type_name(call_obj)
+        .or_else(|| gen.infer_type_name(call_obj))
+        .or_else(|| {
+            gen.infer_expression_type(call_obj)
+                .and_then(|t| CodeGenerator::type_to_name(&t))
+        });
     let registry = gen
         .global_signature_registry()
         .unwrap_or(&gen.signature_registry);
@@ -260,6 +266,45 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         built
     };
 
+    // P3.635 / WDB-134: match scrutinees use Call(FieldAccess); belt map-key borrow.
+    if crate::codegen::rust::stdlib_method_traits::is_map_key_method(call_method) {
+        let qualified_for_key =
+            crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                type_name.as_deref(),
+                call_obj,
+                call_method,
+                |name| gen.is_imported_runtime_std_module(name),
+            );
+        let sig_for_key = method_signature.clone().or_else(|| {
+            crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                call_method,
+                type_name.as_deref(),
+                &gen.signature_registry,
+            )
+        });
+        if let Some(ref sig_for_key) = sig_for_key {
+            for (i, arg_str) in args.iter_mut().enumerate() {
+                let Some((_, arg_expr)) = arguments.get(i) else {
+                    continue;
+                };
+                gen.finalize_post_ir_collection_key_arg(
+                    arg_str,
+                    arg_expr,
+                    i,
+                    call_method,
+                    &qualified_for_key,
+                    type_name.as_deref(),
+                    sig_for_key,
+                );
+            }
+        }
+        if let Some(arg_str) = args.get_mut(0) {
+            if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);
+            }
+        }
+    }
+
     // Runtime std modules where WJ declares owned aggregates but Rust takes references.
     if let Expression::Identifier { name: obj_name, .. } = call_obj {
         let registry = gen
@@ -492,7 +537,17 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                 type_name.as_deref(),
                 false,
             );
-            gen.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
+            let map_key_arg = i == 0
+                && crate::codegen::rust::stdlib_method_traits::method_is_map_key_qualified(
+                    call_method,
+                    type_name.as_deref(),
+                    &gen.signature_registry,
+                );
+            if !map_key_arg {
+                gen.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
+            } else if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);
+            }
         }
     }
 

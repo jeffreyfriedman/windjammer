@@ -1,28 +1,5 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.643 (2026-10-04) — TDD WDB-441 (DB agent; no compiler src)
-
-Copy `i64` local into indexed assign must not `.clone()`; product emits
-`self.entities[i] = swapped_entity.clone()`.
-
-| Gate | Status |
-|------|--------|
-| WDB-441 MultiFile | ⏳ TDD pending — `= swapped_entity` |
-| WDB-441 tip-out | ⏳ TDD pending — `swapped_entity.clone()` in component_storage |
-
-**Root cause layer:** copy / index-assign — Copy `i64` locals assigned into `Vec` slots must not auto-clone.
-
-**Why this is a new class:**
-- WDB-437 is formal into **let**.
-- WDB-440 is f32 into **struct lit**.
-- WDB-436 is loop counter into **cast** assign.
-
-**What became unnecessary:** `swapped_entity.clone()` in ECS sparse swap-remove.
-
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
-
-**Do not steal:** WDB-406/408/411/440–441, P3.508–P3.642, WDB-412–441 (filed).
-
 ## P3.642 (2026-10-04) — reused owned String into owned formal must clone first use
 
 Product `wj-todo-cli` `stats` / `export`: `let snapshot = encode_store(store)` then
@@ -122,23 +99,34 @@ tuple field, not over-borrow one slot among several.
 
 **Do not steal:** WDB-134/438, P3.508–P3.638 (filed).
 
-## P3.638 (2026-10-04) — HashMap get `&String` payload into owned `Option<String>`
+## P3.638 (2026-10-04) — HashMap/`Map::get` `&String` payload into owned `Option<String>`
 
-Product-shaped `Event::get_data_string`: match `HashMap::get` →
-`Some(EventDataValue::String(value)) => Some(value)` emits `&String` into
-`Option<String>` without `.clone()` → E0308.
+Product-shaped `Event::get_data_string` with `use std::map::Map`: project analysis
+registers `Map::get -> Option<V>` (owned key). Match emitted
+`Some(EventDataValue::String(value)) => Some(value)` (`&String` → E0308).
+Single-file / bare `Map` without std/map pull still cloned (HashMap meta).
 
 | Gate | Status |
 |------|--------|
-| `hashmap_get_match_string_payload_must_clone_into_owned` | ❌ tip RED |
+| unit `wj_map_get_option_v_still_shared_get_via_hashmap_contract` | ✅ GREEN |
+| `module_file_map_get_string_payload_must_clone` | ✅ tip GREEN |
+| `single_file_hashmap_get_string_payload_must_clone` | ✅ tip GREEN |
+| tip product `src/event` module-file | ✅ `value.clone()` |
+| WDB-347 Copy match payload (no noise on owned Copy) | ✅ narrowed to `copy_match_payload_binding` |
 
-**Root cause layer:** match binding — borrowed enum payload into owned Option
-must clone (signature-driven).
+**Root cause layer:** stdlib trait classification — `is_map_shared_get_call` required
+`Option<&V>` on the looked-up sig; WJ `Map::get` Option\<V\> + Owned key failed closed,
+so match bindings were not borrowed and WDB-347 blanket-skipped clone.
 
-**What became unnecessary:** reshaping Event get helpers with manual clones in apps.
+**Fix:** Honor HashMap/BTreeMap meta shared-ref contract for Map\* receivers; narrow
+identifier early-return to `copy_match_payload_binding` (P3.574 intent) with `*` for
+`&Copy` into owned context.
 
-**Gates:** filed with P3.635–638 cluster commit `249f4c83`.
-- `cargo test --release --test all --features integration_tests,codegen_tests -- hashmap_get_match_string_payload_must_clone_into_owned`
+**What became unnecessary:** surgical gen patches / app-side `.clone()` on Event getters.
+
+**Gates:** `CARGO_TARGET_DIR=…/windjammer-game/.cargo-target-wj`
+- `cargo test --release -p windjammer --lib wj_map_get_option_v_still_shared_get`
+- `cargo test --release --test bug_hashmap_get_match_string_payload_must_clone_into_owned_test --features integration_tests,codegen_tests`
 
 **Do not steal:** WDB-134/438, P3.508–P3.637 (filed).
 

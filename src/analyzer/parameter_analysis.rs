@@ -325,7 +325,18 @@ impl<'ast> Analyzer<'ast> {
             func,
         ) {
             match pass_through_mode {
-                OwnershipMode::Borrowed => return Ok(OwnershipMode::Borrowed),
+                OwnershipMode::Borrowed => {
+                    // Copy map keys stay owned on the wrapper; HashMap::get borrows at the
+                    // inner call site (`get(&label)`), not on `get_label(label)` callers.
+                    // (P3.635 / WDB-134 — must beat early Borrowed return before the
+                    // is_only_hashmap_lookup_key_param check below.)
+                    if self.is_copy_type(param_type)
+                        && self.is_only_hashmap_lookup_key_param(param_name, body, func)
+                    {
+                        return Ok(OwnershipMode::Owned);
+                    }
+                    return Ok(OwnershipMode::Borrowed);
+                }
                 OwnershipMode::MutBorrowed => {
                     // Copy types passthrough to &mut callees need &mut at the wrapper too.
                     // `mut param` used only as an argument to a &mut callee keeps an owned

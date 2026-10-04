@@ -107,9 +107,24 @@ impl<'ast> CodeGenerator<'ast> {
             };
         }
 
-        // WDB-347: match-arm bindings are already owned (or `*`-deref'd for `&Copy`).
-        // Never auto-clone them — `r.clone()` on Copy f32 payload is noise / tip RED.
-        if self.match_arm_bindings.contains(name) {
+        // WDB-347 / P3.574: only Copy match payloads skip the rest of this path's
+        // auto-clone noise (`r.clone()` on f32). Non-Copy match bindings (e.g.
+        // `HashMap`/`Map::get` → `&String`) must fall through so owned returns clone.
+        if self.copy_match_payload_binding(name) {
+            // Still allow `*` when the Copy payload is bound behind `Option<&Enum>`.
+            if self.in_owned_value_context
+                && !self.in_call_argument_generation
+                && !self.generating_assignment_target
+                && !self.in_field_access_object
+            {
+                if let Some(ty) = self.local_var_types.get(name) {
+                    if let Type::Reference(inner) | Type::MutableReference(inner) = ty {
+                        if self.is_type_copy(inner) {
+                            return format!("*{}", base_name);
+                        }
+                    }
+                }
+            }
             return base_name;
         }
 

@@ -127,6 +127,12 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return true;
         }
+        if sig.formal_param_type(pidx).is_some_and(|t| {
+            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                && crate::type_classification::is_copy_pass_by_value_formal(t)
+        }) {
+            return true;
+        }
         // Bare WJ `Vec`/`Map` formals emit owned Rust containers (WDB-281: `contains(items)`
         // must not auto-borrow `&items` then leave E0308 into owned `Vec`).
         if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx)
@@ -262,6 +268,14 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return Some(s);
             }
+            if crate::codegen::rust::stdlib_method_traits::is_map_key_method(simple) {
+                if let Some(s) = SignatureRegistry::stdlib()
+                    .get_signature(&format!("HashMap::{simple}"))
+                    .cloned()
+                {
+                    return Some(s);
+                }
+            }
             return None;
         }
 
@@ -387,6 +401,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut key_sig = contract_sig.clone();
         let mut key_rt = key_receiver;
         let mut is_ck = self.is_collection_key_lookup_at_site(&key_sig, arg_index, key_rt.as_deref());
+        // debug probe removed
         if !is_ck {
             if let Some(std_sig) =
                 crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
@@ -402,7 +417,55 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+        // P3.635: `self.inner.get(label)` when field typing fails to name `HashMap`
+        // still must borrow Copy keys. Skip only when receiver registers an Owned
+        // non-Copy `get` (NoteStore-style), not map-key Deref.
+        if !is_ck && crate::codegen::rust::stdlib_method_traits::is_map_key_method(method) {
+            let owned_custom_get = receiver_rt.is_some_and(|rt| {
+                let base = rt.split('<').next().unwrap_or(rt);
+                if crate::type_classification::is_map_type_name(base)
+                    || crate::type_classification::is_set_type_name(base)
+                {
+                    return false;
+                }
+                let key = format!("{base}::{method}");
+                let sig = self
+                    .signature_registry
+                    .get_signature(&key)
+                    .or_else(|| {
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(&key))
+                    });
+                sig.is_some_and(|sig| {
+                    let pidx = sig.arg_param_index(arg_index);
+                    sig.formal_param_type(pidx).is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && matches!(t, Type::Custom(_))
+                            && !crate::type_classification::is_copy_pass_by_value_formal(t)
+                    })
+                })
+            });
+            if !owned_custom_get {
+                if let Some(std_sig) =
+                    SignatureRegistry::stdlib().get_signature(&format!("HashMap::{method}"))
+                {
+                    key_sig = std_sig.clone();
+                    key_rt = Some("HashMap".into());
+                    is_ck = true;
+                }
+            }
+        }
         if !is_ck {
+            // P3.635 last-resort: `get`/`contains_key`/… on a map field whose type
+            // inference failed. Do not use `is_map_key_method` (None receiver → false).
+            let map_key_spelling = matches!(
+                method,
+                "get" | "contains_key" | "get_key_value" | "remove"
+            );
+            if map_key_spelling && !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(coerced);
+            }
             return;
         }
         if coerced.ends_with(".to_string()")
@@ -421,6 +484,11 @@ impl<'ast> CodeGenerator<'ast> {
             key_rt.as_deref(),
             false,
         );
+        // Belt: Copy scalar keys into HashMap::get must keep `&` even when
+        // finalize_collection_key early-returned on stale Owned key formals.
+        if !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(coerced);
+        }
     }
 
     /// Apply IR-driven coercion to a call-site argument when call_sites cutover is on.
@@ -1785,6 +1853,41 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Identity;
         }
+        // P3.635 / WDB-134: Copy scalar bindings into owned Copy formals must move
+        // (`get_label(label)`), never Borrow → `&label` into `label: i64`. Finalize
+        // peels are skipped when `ir_cutover.call_sites` is on — fix here.
+        // Skip collection-key sites (`HashMap::get`) — those need `&Q` even for Copy keys.
+        if matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow) {
+            let key_receiver = crate::codegen::rust::stdlib_method_traits::collection_key_receiver_type(
+                callee_name,
+                receiver_type_name,
+                &sig,
+            );
+            let is_ck = self.is_collection_key_lookup_at_site(
+                &sig,
+                arg_index,
+                key_receiver.as_deref(),
+            );
+            if !is_ck {
+                if let Expression::Identifier { name, .. } = arg_expr {
+                    if self.binding_is_copy_pass_by_value_scalar(name)
+                        || self
+                            .current_function_params
+                            .iter()
+                            .any(|p| p.name == *name && self.is_type_copy(&p.type_))
+                    {
+                        let owned_copy_slot = Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+                            || crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                                &sig,
+                                arg_index,
+                            );
+                        if owned_copy_slot {
+                            kind = CoercionKind::Identity;
+                        }
+                    }
+                }
+            }
+        }
         // WDB-367: unit keywords are constructors, not bindings — never `None.clone()`.
         if matches!(kind, CoercionKind::Clone)
             && matches!(
@@ -1823,6 +1926,10 @@ impl<'ast> CodeGenerator<'ast> {
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
             && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+            && !crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                &sig,
+                arg_index,
+            )
         {
             kind = CoercionKind::Borrow;
         }
@@ -1831,6 +1938,10 @@ impl<'ast> CodeGenerator<'ast> {
         if matches!(kind, CoercionKind::Identity)
             && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
             && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+            && !crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                &sig,
+                arg_index,
+            )
             && !prepared_arg.starts_with('&')
             && !prepared_arg.starts_with("&mut ")
             // WDB-329: `idx as usize` into Vec::remove Owned usize — never promote to Borrow
@@ -1867,7 +1978,14 @@ impl<'ast> CodeGenerator<'ast> {
             arg_index,
             key_receiver_for_coercion.as_deref(),
         ) {
-            if matches!(kind, CoercionKind::ToOwnedString | CoercionKind::Clone) {
+            // Always borrow keys into HashMap/BTreeMap::get/contains_key (&Q), including
+            // Copy scalars that earlier Identity'd for owned wrapper formals (P3.635).
+            if matches!(
+                kind,
+                CoercionKind::ToOwnedString
+                    | CoercionKind::Clone
+                    | CoercionKind::Identity
+            ) {
                 kind = CoercionKind::Borrow;
             }
             expected.ownership = OwnedType::Ref(Region::fresh(4));
@@ -5007,6 +5125,10 @@ impl<'ast> CodeGenerator<'ast> {
         if allow_shared
             && !skip_stale_borrow
             && !local_move_owned_text
+            && !crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                &sig,
+                arg_index,
+            )
             && !crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
             && !crate::codegen::rust::expression_helpers::is_reference_expression(arg_expr)
         {
@@ -5039,6 +5161,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     .or_else(|| g.get_signature(simple))
                             };
                             gs.is_some_and(|gs| {
+                                    if crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                                        gs,
+                                        arg_index,
+                                    ) {
+                                        return false;
+                                    }
                                     let pidx = gs.arg_param_index(arg_index);
                                     crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                                         gs, pidx,
@@ -5109,17 +5237,44 @@ impl<'ast> CodeGenerator<'ast> {
                     ) {
                         // WDB-169/WDB-190: call temps autoborrow — never `&callee()`.
                     } else if !local_move_owned_text {
-                        let mut expected =
-                            crate::ir::signature_bridge::safety_type_from_signature_param(
-                                &sig, param_idx,
+                        let callee_owned_copy_scalar =
+                            crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                                &sig,
+                                arg_index,
                             );
-                        if is_ck {
-                            expected.ownership = OwnedType::Ref(Region::fresh(4));
+                        if callee_owned_copy_scalar && !is_ck {
+                            if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                                if let Expression::Identifier { name, .. } = arg_expr {
+                                    let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                        coerced,
+                                    );
+                                    if base == name.as_str() {
+                                        *coerced = name.clone();
+                                    } else {
+                                        *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                                            coerced,
+                                        );
+                                    }
+                                } else {
+                                    *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                                        coerced,
+                                    );
+                                }
+                            }
+                        } else if !callee_owned_copy_scalar || is_ck {
+                            let mut expected =
+                                crate::ir::signature_bridge::safety_type_from_signature_param(
+                                    &sig, param_idx,
+                                );
+                            if is_ck {
+                                expected.ownership = OwnedType::Ref(Region::fresh(4));
+                            }
+                            let actual =
+                                self.infer_actual_safety_type(arg_expr, coerced.as_str());
+                            crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
+                                coerced, &actual, &expected,
+                            );
                         }
-                        let actual = self.infer_actual_safety_type(arg_expr, coerced.as_str());
-                        crate::ir::coercion::enforce_ownership_contract_on_coerced_arg(
-                            coerced, &actual, &expected,
-                        );
                     }
                 }
             }
@@ -7912,7 +8067,11 @@ impl<'ast> CodeGenerator<'ast> {
                     &resolved, ridx,
                 ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
                     &resolved, ridx,
-                ) || matches!(
+                ) || resolved.formal_param_type(ridx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::type_classification::is_copy_pass_by_value_formal(t)
+                })
+                || matches!(
                     resolved.param_ownership.get(ridx),
                     Some(crate::analyzer::OwnershipMode::Owned)
                 )) && !forwarding_borrow
@@ -7940,6 +8099,18 @@ impl<'ast> CodeGenerator<'ast> {
                 let qualified = format!("{rt}::{method}");
                 if let Some(gs) = global.get_signature(&qualified) {
                     let gpidx = gs.arg_param_index(arg_index);
+                    let owned_copy_scalar = gs.formal_param_type(gpidx).is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && crate::type_classification::is_copy_pass_by_value_formal(t)
+                    });
+                    if owned_copy_scalar {
+                        if coerced.starts_with('&') {
+                            *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
+                                coerced,
+                            );
+                        }
+                        return;
+                    }
                     if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, gpidx)
                         && !coerced.starts_with('&')
                     {
@@ -7976,8 +8147,13 @@ impl<'ast> CodeGenerator<'ast> {
                     .and_then(|methods| methods.get(method))
                     .and_then(|formals| formals.get(arg_index))
                     .is_some_and(|t| {
-                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                            && !self.is_type_copy(t)
+                        if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
+                            return false;
+                        }
+                        if crate::type_classification::is_copy_pass_by_value_formal(t) {
+                            return true;
+                        }
+                        !self.is_type_copy(t)
                             && !crate::codegen::rust::types::is_windjammer_text_type(t)
                     }))
             {

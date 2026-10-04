@@ -526,6 +526,89 @@ pub fn strip_double_ref_on_shared_binding(
     strip_redundant_borrow_on_ref_binding(arg_expr, arg_str);
 }
 
+/// Bare formal at a user arg slot is a Copy pass-by-value scalar (`i64`, `bool`, …).
+///
+/// Uses AST `formal_param_types` when present; otherwise unwraps converged `Reference(T)`.
+/// P3.635 / WDB-134: stale `Borrowed` passthrough from inner `HashMap::get` must not
+/// force `&label` at `get_label(label: i64)` call sites.
+/// P3.635 / WDB-134 + P3.637 belt after terminal IR reconcile on method args.
+pub(crate) fn reconcile_method_call_owned_copy_scalar_identifier_arg(
+    gen: &crate::codegen::rust::CodeGenerator<'_>,
+    coerced: &mut String,
+    arg_expr: &Expression,
+    contract_sig: &FunctionSignature,
+    user_arg_index: usize,
+    receiver_rt: Option<&str>,
+) {
+    let Expression::Identifier { name, .. } = arg_expr else {
+        return;
+    };
+    let pidx = contract_sig.arg_param_index(user_arg_index);
+    let callee_owned_copy_scalar =
+        callee_user_arg_bare_formal_is_copy_pass_by_value(contract_sig, user_arg_index);
+    let callee_shared = !callee_owned_copy_scalar
+        && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+            contract_sig, pidx,
+        ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+            contract_sig, pidx,
+        ) || contract_sig
+            .formal_param_type(pidx)
+            .or_else(|| contract_sig.param_types.get(pidx))
+            .is_some_and(string_utilities::param_is_rust_str_ref));
+    if callee_shared
+        && !gen.binding_is_copy_pass_by_value_scalar(name)
+        && !gen.local_should_move_into_owned_text_formal(name, contract_sig, user_arg_index)
+    {
+        let base = expression_utilities::borrow_base_expr(coerced)
+            .trim_end_matches(".clone()")
+            .trim()
+            .to_string();
+        if !base.starts_with('&') {
+            *coerced = format!("&{base}");
+        } else {
+            *coerced = base;
+        }
+    }
+    if gen.local_should_move_into_owned_text_formal(name, contract_sig, user_arg_index)
+        && coerced.starts_with('&')
+        && !coerced.starts_with("&mut ")
+    {
+        *coerced = expression_utilities::borrow_base_expr(coerced).to_string();
+    }
+    let is_ck = gen.is_collection_key_lookup_at_site(contract_sig, user_arg_index, receiver_rt);
+    if callee_owned_copy_scalar
+        && !is_ck
+        && coerced.starts_with('&')
+        && !coerced.starts_with("&mut ")
+    {
+        let base = expression_utilities::borrow_base_expr(coerced);
+        if base == name.as_str() {
+            *coerced = name.clone();
+        }
+    }
+}
+
+pub(crate) fn callee_user_arg_bare_formal_is_copy_pass_by_value(
+    sig: &FunctionSignature,
+    user_arg_index: usize,
+) -> bool {
+    let pidx = sig.arg_param_index(user_arg_index);
+    let bare = if let Some(t) = sig.formal_param_type(pidx) {
+        match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        }
+    } else if let Some(t) = sig.param_types.get(pidx) {
+        match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+            other => other,
+        }
+    } else {
+        return false;
+    };
+    crate::type_classification::is_copy_pass_by_value_formal(bare)
+}
+
 /// `param_types` encodes body-converged shared borrow (`Reference(T)` + Borrowed) for a
 /// non-Copy aggregate — trust the registry wrap even without `emitted_rust_ref_params`.
 fn registry_param_types_indicate_shared_borrow(
@@ -653,9 +736,20 @@ pub fn finalize_collection_key_call_site_arg(
         strip_leading_shared_ref(arg_str);
         return;
     }
+    let is_ck = is_collection_key_arg(sig, arg_index, receiver_type);
     if arg_binding_already_shared_ref || arg_already_rust_ref {
         // Already `&str` / `&T` — HashMap::get wants `&Q`. Never `.clone()` into the key.
         expression_utilities::strip_trailing_clone(arg_str);
+        // P3.635 / WDB-134: owned Copy formals (`label: i64`) may still sit in
+        // `inferred_borrowed_params` from stale map-key body inference — emit explicit
+        // `&label` for collection-key callees (tip truth + product grep gates).
+        if is_ck
+            && !arg_str.starts_with('&')
+            && key_formal_is_copy
+            && matches!(arg_expr, Expression::Identifier { .. })
+        {
+            expression_utilities::apply_shared_borrow_prefix(arg_str);
+        }
         return;
     }
     if is_collection_key_arg(sig, arg_index, receiver_type)
@@ -664,7 +758,7 @@ pub fn finalize_collection_key_call_site_arg(
     {
         expression_utilities::strip_trailing_clone(arg_str);
     }
-    if !is_collection_key_arg(sig, arg_index, receiver_type) || arg_str.starts_with('&') {
+    if !is_ck || arg_str.starts_with('&') {
         return;
     }
     if arg_str.ends_with(".to_string()")
