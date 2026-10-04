@@ -3745,6 +3745,13 @@ impl<'ast> CodeGenerator<'ast> {
         if Self::param_used_in_binary_comparison(&param.name, &func.body) {
             return false;
         }
+        // P3.615: `impl Into<String>` + `.into()` moves the formal. Reused params
+        // (`check_rate(client_key)` then `RequestLogEntry { client_key }`) must stay
+        // concrete `String` so call sites do not emit `client_key.into()` before the
+        // second use (proxy `complete_proxy` E0382).
+        if Self::count_param_identifier_uses(&param.name, &func.body) >= 2 {
+            return false;
+        }
         // Enum variant payloads are concrete `String` — Into formals omit `.into()` at
         // construction sites and break ownership gates (`Shape::Named(name)`).
         if crate::analyzer::field_enum_borrow::param_consumed_by_enum_variant_ctor(
@@ -3763,6 +3770,106 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Parameterized(name, _) if name != "Result" && name != "Option" => true,
             _ => false,
         }
+    }
+
+    /// Count bare `param_name` identifier occurrences in `body` (call args, lets,
+    /// struct fields, returns). Used to block `impl Into<String>` when the formal
+    /// would be moved more than once (P3.615).
+    fn count_param_identifier_uses(param_name: &str, body: &[&Statement<'_>]) -> usize {
+        fn count_expr(expr: &Expression<'_>, param_name: &str) -> usize {
+            match expr {
+                Expression::Identifier { name, .. } if name == param_name => 1,
+                Expression::Binary { left, right, .. } => {
+                    count_expr(left, param_name) + count_expr(right, param_name)
+                }
+                Expression::Unary { operand, .. } => count_expr(operand, param_name),
+                Expression::Call { arguments, function, .. } => {
+                    count_expr(function, param_name)
+                        + arguments
+                            .iter()
+                            .map(|(_, a)| count_expr(a, param_name))
+                            .sum::<usize>()
+                }
+                Expression::MethodCall {
+                    object, arguments, ..
+                } => {
+                    count_expr(object, param_name)
+                        + arguments
+                            .iter()
+                            .map(|(_, a)| count_expr(a, param_name))
+                            .sum::<usize>()
+                }
+                Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+                    count_expr(object, param_name)
+                }
+                Expression::StructLiteral { fields, .. } => fields
+                    .iter()
+                    .map(|(_, e)| count_expr(e, param_name))
+                    .sum(),
+                Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                    elements.iter().map(|e| count_expr(e, param_name)).sum()
+                }
+                Expression::Block { statements, .. } => statements
+                    .iter()
+                    .map(|s| count_stmt(s, param_name))
+                    .sum(),
+                _ => 0,
+            }
+        }
+        fn count_stmt(stmt: &Statement<'_>, param_name: &str) -> usize {
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                }
+                | Statement::Let { value: expr, .. }
+                | Statement::Assignment { value: expr, .. } => count_expr(expr, param_name),
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    count_expr(condition, param_name)
+                        + then_block
+                            .iter()
+                            .map(|s| count_stmt(s, param_name))
+                            .sum::<usize>()
+                        + else_block.as_ref().map_or(0, |b| {
+                            b.iter().map(|s| count_stmt(s, param_name)).sum()
+                        })
+                }
+                Statement::For {
+                    iterable, body, ..
+                }
+                | Statement::While {
+                    condition: iterable,
+                    body,
+                    ..
+                } => {
+                    count_expr(iterable, param_name)
+                        + body.iter().map(|s| count_stmt(s, param_name)).sum::<usize>()
+                }
+                Statement::Loop { body, .. } => {
+                    body.iter().map(|s| count_stmt(s, param_name)).sum()
+                }
+                Statement::Match { value, arms, .. } => {
+                    count_expr(value, param_name)
+                        + arms
+                            .iter()
+                            .map(|arm| match &arm.body {
+                                Expression::Block { statements, .. } => statements
+                                    .iter()
+                                    .map(|s| count_stmt(s, param_name))
+                                    .sum(),
+                                other => count_expr(other, param_name),
+                            })
+                            .sum::<usize>()
+                }
+                _ => 0,
+            }
+        }
+        body.iter().map(|s| count_stmt(s, param_name)).sum()
     }
 
     /// True when `param_name` appears as the bare RHS of a field assignment
