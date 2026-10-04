@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.616 (2026-10-03) — reused owned string must not emit `.into().clone()`
+
+Product `wj-auth-api` `handle`: after `own(path)` / sibling Into paint, tip emits
+`emit_access_log(…, path.into().clone(), …)` / `origin.into().clone()` → E0282.
+Also blocked behind P3.614 E0507 on headers for-in.
+
+| Gate | Status |
+|------|--------|
+| `reused_owned_string_must_not_emit_into_clone` | ❌ tip RED — product auth-api |
+
+**Root cause layer:** formal encoding — reused owned locals/formals must clone as
+`String` (or borrow), never `.into().clone()` after ambiguous Into paint.
+
+**Why this is a new class:**
+- P3.615 is proxy `client_key.into()` **move** (E0382) before second use.
+- P3.616 is `.into().clone()` **inference** failure (E0282) on reused path/origin.
+
+**What became unnecessary:** dropping path reuse in auth access-log calls.
+
+**Gates:** tip p3610 `$WJ test` auth-api RED 2026-10-03; cargo gate must FAIL.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_must_not_emit_into_clone`
+
+**Do not steal:** WDB-406/408/411/430–435, P3.508–P3.615, WDB-412–435 (filed).
+
 ## P3.615 (2026-10-03) — reused `client_key` must not `impl Into` + `.into()` move
 
 Product `wj-proxy` `complete_proxy(…, client_key: string, …)`: tip emits
