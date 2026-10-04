@@ -41,7 +41,8 @@ fn test_multipass_module_qualified_autoborrow() {
     let src = dir.path().join("src");
     fs::create_dir_all(&src).unwrap();
 
-    // Module that wraps an FFI call with a borrowed string parameter
+    // Module that wraps an FFI call with an owned String parameter — the WJ
+    // wrapper keeps owned `string` (must not demote to `&str` then bare-pass).
     fs::write(
         src.join("draw.wj"),
         r#"
@@ -87,14 +88,15 @@ pub fn render() {
         stderr
     );
 
-    // Verify the generated Rust code has auto-borrow (&label)
+    // draw_text forwards into owned FFI `String` → formal stays Owned (WDB-216 /
+    // bare-pass skip). Last-use must move `label`, not auto-borrow `&label`.
     let game_rs = out.join("game.rs");
     assert!(game_rs.exists(), "game.rs not generated");
     let code = fs::read_to_string(&game_rs).unwrap();
 
     assert!(
-        code.contains("&label"),
-        "Generated Rust should auto-borrow String variable as &label for draw::draw_text.\n\
+        code.contains("draw::draw_text(label") && !code.contains("draw::draw_text(&label"),
+        "draw::draw_text must move last-use label into owned formal (FFI forward).\n\
          Generated code:\n{}",
         code
     );
@@ -170,14 +172,14 @@ pub fn render() {
     assert!(game_rs.exists(), "game.rs not generated");
     let code = fs::read_to_string(&game_rs).unwrap();
 
-    // draw::draw_text should auto-borrow (string param is Borrowed)
+    // draw::draw_text forwards to owned FFI → move last-use label (not `&label`).
     assert!(
-        code.contains("draw::draw_text(&label"),
-        "draw::draw_text should auto-borrow label.\nGenerated:\n{}",
+        code.contains("draw::draw_text(label") && !code.contains("draw::draw_text(&label"),
+        "draw::draw_text must move label into owned FFI-forward formal.\nGenerated:\n{}",
         code
     );
 
-    // hud::draw_text may still show `&info` if ownership passes as reference; both forms can be valid Rust
+    // hud::draw_text is a distinct module-qualified callee — call must resolve.
     assert!(
         code.contains("hud::draw_text("),
         "expected hud::draw_text call in generated code:\n{}",

@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.632 (2026-10-04) — tip-truth gates: module_qualified move + class3 demoted `&str`
+
+Stale assertions expected `&label` auto-borrow / call-site `.to_string("Metal")`
+while tip correctly:
+- keeps owned `draw_text` (FFI forward) and **moves** last-use `label`;
+- demotes `set_name` to `name: &str` with assign-site `name.to_string()`.
+
+| Gate | Status |
+|------|--------|
+| `test_multipass_module_qualified_autoborrow` | ✅ tip GREEN (move, not `&label`) |
+| `test_multipass_no_name_collision_different_modules` | ✅ tip GREEN |
+| `class3_string_literal_to_owned_param` | ✅ tip GREEN (owned coerce **or** demoted `&str`) |
+
+**Root cause layer:** n/a (gate alignment) — tip ownership already correct; tests
+were false RED against evolved string demotion / FFI-forward owned formals.
+
+**What became unnecessary:** chasing peels to force `&label` / call-site
+`.to_string()` when tip already emits valid Rust.
+
+**Gates:** `cargo test --release --test all -- test_multipass_module_qualified class3_string_literal_to_owned_param`
+
 ## P3.631 (2026-10-04) — notes-api mixed demoted `&str` + owned `String` call args
 
 Product `handle_request` → `App::handle`: after `method` demotes to `&str`, owned
@@ -66,13 +87,8 @@ Log `/tmp/wj-full-suite-p3628.log`; fails `/tmp/wj-suite-fails-p3628.txt`.
 - ~~`dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`~~ ✅ P3.627
 - ~~`e0507` multi-loop borrow pair~~ ✅ P3.628
 
-**Tip-live still open (priority):**
-- `module_qualified_signature_test::test_multipass_module_qualified_autoborrow` (likely stale expect: owned FFI forward → move)
-- `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
-- ~~`path_and_bytes_borrow_tests::path_bytes_wal_layout_rustc_cargo_check`~~ ✅ P3.630 (FFI owned FfiString move)
-- ~~`trait_impl_owned_param_no_reborrow_test::…`~~ ✅ P3.629
-- ~~notes_api empty-lit owned gates (demoted method + forwarder)~~ ✅ P3.631
-- ~~`owned_string_for_loop_load_must_not_borrow_path`~~ ✅ P3.590b (AST-owned text move)
+**Cleared tip-live this session:** P3.629 trait `mut`, P3.630 FfiString + load_batch,
+P3.631 notes-api owned slots, P3.632 module_qualified/class3 gate alignment.
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
 
