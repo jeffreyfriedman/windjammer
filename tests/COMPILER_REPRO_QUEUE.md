@@ -7,10 +7,11 @@ Copy `i32` formal into tuple literal must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-438 MultiFile | ⏳ TDD pending — `push((x, y + 1, …))` |
-| WDB-438 tip-out | ⏳ TDD pending — `x.clone()` / `y.clone()` in astar tuple push |
+| WDB-438 MultiFile | ✅ isolate GREEN — product-shaped `CostGrid::get_neighbors` emits bare `push((x, y + 1, self.get_cost(…)))` |
+| WDB-438 tip-out | ❌ tip RED — `x.clone()` / `y.clone()` in `rel_tip_out/ai/astar_grid.rs` neighbor pushes |
 
-**Root cause layer:** copy / tuple — Copy formals as tuple elements must not auto-clone.
+**Root cause layer:** copy / tuple — Copy formals as tuple elements must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-437 is formal into **let**.
@@ -19,9 +20,10 @@ Copy `i32` formal into tuple literal must not `.clone()`; product emits
 
 **What became unnecessary:** `x.clone()` / `y.clone()` in neighbor tuple construction.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb438_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; strengthened method+`get_cost` fixture; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/437, P3.508–P3.633, WDB-412–437 (filed).
+**Do not steal:** WDB-406/408/411/437–438, P3.508–P3.638, WDB-412–438 (filed).
 
 ## P3.633 (2026-10-04) — multipass homonym `draw_text`: module-qualified call-site sig
 

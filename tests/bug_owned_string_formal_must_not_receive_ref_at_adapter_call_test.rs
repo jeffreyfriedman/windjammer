@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.637: owned `String` method formal must not receive `&String` at adapter call.
+//! P3.638: owned `String` method formal must not receive `&String` at adapter call.
 //!
 //! Product `wj-auth-api` adapter:
 //! ```ignore
@@ -72,7 +72,7 @@ fn owned_string_formal_must_not_receive_ref_at_adapter_call() {
         .expect("wj build wj-auth-api");
     assert!(
         build.status.success(),
-        "P3.637 wj-auth-api transpile failed:\n{}",
+        "P3.638 wj-auth-api transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -89,8 +89,8 @@ fn owned_string_formal_must_not_receive_ref_at_adapter_call() {
         .find(|l| l.contains("handle_http("))
         .unwrap_or("")
         .to_string();
-    eprintln!("P3.637 handle_http: {handle_sig}");
-    eprintln!("P3.637 call: {call}");
+    eprintln!("P3.638 handle_http: {handle_sig}");
+    eprintln!("P3.638 call: {call}");
 
     let authz_owned = handle_sig.contains("authorization: String")
         || handle_sig.contains("authorization: impl Into<String>");
@@ -98,6 +98,6 @@ fn owned_string_formal_must_not_receive_ref_at_adapter_call() {
 
     assert!(
         !bad,
-        "P3.637 RED: owned authorization formal must receive moved meta.2, not &meta.2:\n  {call}\n{adapter}"
+        "P3.638 RED: owned authorization formal must receive moved meta.2, not &meta.2:\n  {call}\n{adapter}"
     );
 }

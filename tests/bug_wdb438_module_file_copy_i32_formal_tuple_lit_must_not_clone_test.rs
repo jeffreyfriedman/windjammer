@@ -11,9 +11,10 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-438: Copy `i32` formal into tuple literal must not `.clone()`.
+//! WDB-438: Copy `i32` formal into tuple literal must not `.clone()` when
+//! the same formal is also passed to a sibling call in that tuple.
 //!
-//! Product `ai/astar_grid.rs`:
+//! Product `ai/astar_grid.rs` `get_neighbors`:
 //!   `result.push((x.clone(), y + 1_i32, self.get_cost(x, y + 1_i32)))`
 //! WJ is `result.push((x, y + 1, self.get_cost(x, y + 1)))`.
 //! Distinct from WDB-437 (formal into **let**), WDB-434 (const into **call**),
@@ -26,17 +27,23 @@ use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
 const SRC: &str = r#"
-pub fn neighbor_north(x: i32, y: i32, cost: f32) -> (i32, i32, f32) {
-    (x, y + 1, cost)
+pub struct CostGrid {
+    pub base: f32,
 }
 
-pub fn collect_cardinals(x: i32, y: i32) -> Vec<(i32, i32, f32)> {
-    let mut result: Vec<(i32, i32, f32)> = Vec::new()
-    result.push((x, y + 1, 1.0))
-    result.push((x + 1, y, 1.0))
-    result.push((x, y - 1, 1.0))
-    result.push((x - 1, y, 1.0))
-    result
+impl CostGrid {
+    pub fn get_cost(self, x: i32, y: i32) -> f32 {
+        self.base + (x as f32) * 0.01 + (y as f32) * 0.01
+    }
+
+    pub fn get_neighbors(self, x: i32, y: i32) -> Vec<(i32, i32, f32)> {
+        let mut result: Vec<(i32, i32, f32)> = Vec::new()
+        result.push((x, y + 1, self.get_cost(x, y + 1)))
+        result.push((x + 1, y, self.get_cost(x + 1, y)))
+        result.push((x, y - 1, self.get_cost(x, y - 1)))
+        result.push((x - 1, y, self.get_cost(x - 1, y)))
+        result
+    }
 }
 "#;
 
