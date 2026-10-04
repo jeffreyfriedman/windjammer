@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.659 (2026-10-04) — TDD WDB-445 (DB agent; no compiler src)
+
+Copy `f32` formal into `let` must not `.clone()`; product emits
+`let mut x = start_x.clone()` in vegetation scatter.
+
+| Gate | Status |
+|------|--------|
+| WDB-445 MultiFile | ⏳ TDD pending — `let mut x = start_x` |
+| WDB-445 tip-out | ⏳ TDD pending — `start_x.clone()` in vegetation |
+
+**Root cause layer:** copy / f32-formal-let — Copy `f32` formals bound into locals must not auto-clone.
+
+**Why this is a new class:**
+- WDB-437 is i32 **formal** into let.
+- WDB-442 is u32 **local** into let.
+- WDB-440 is f32 into **struct lit**.
+
+**What became unnecessary:** `start_x.clone()` in terrain vegetation scatter loops.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/444–445, P3.508–P3.658, WDB-412–445 (filed).
+
 ## P3.658 (2026-10-04) — demoted `&str` HashMap key must not `get(&key)`
 
 Product `wj-toml` `get`: tip demotes `key` to `&str` then emits `map.get(&key)`
