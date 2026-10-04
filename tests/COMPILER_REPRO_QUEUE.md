@@ -1,5 +1,23 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.622 (2026-10-04) — wdb-layers multipass hang in trait_definition_sigs_for_method
+
+Full `cargo test --release --test all` stuck ~45m / 12GB RSS on tip `wj build`
+`windjammerdb/crates/wdb-layers/src/mod.wj` during `generate_method_call` →
+`resolve_method_for_call_site_in_module` → `trait_definition_sigs_for_method`
+(hot `memcmp` / trait-key scan). Not UE wedge (CPU > 0, growing RSS).
+
+| Gate | Status |
+|------|--------|
+| Full suite through wdb-layers dogfood | ❌ hang / patho perf — sample 2026-10-04 |
+
+**Root cause layer:** signature resolution performance (trait method key scan),
+not ownership coerce.
+
+**What became unnecessary:** N/A — need index/cache for trait method defs.
+
+**Do not steal:** P3.619–621 landed; tip-out RED cluster (product regen).
+
 ## P3.590c (2026-10-04) — stale metadata must not `&source_dir` into owned validate
 
 Product `BuildFingerprint::validate(source_dir: String)` — tip without metadata
