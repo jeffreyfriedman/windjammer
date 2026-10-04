@@ -641,6 +641,19 @@ impl AutoCloneAnalysis {
                             }
                         }
                     }
+                } else if let Expression::MethodCall { arguments, .. } = value {
+                    for (_label, arg) in arguments {
+                        if let Expression::Identifier { name, .. } = arg {
+                            let reused = arms
+                                .iter()
+                                .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
+                            if reused {
+                                analysis
+                                    .clone_sites
+                                    .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
+                            }
+                        }
+                    }
                 }
             }
             Self::walk_stmt_for_counter(stmt, &mut counter);

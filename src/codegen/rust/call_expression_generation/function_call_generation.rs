@@ -972,9 +972,10 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
         if already_rust_ref {
             continue;
         }
-        if gen.preregistered_free_call_arg_expects_borrow(func_name, i)
-            || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
-            || stale_shared_clone
+        if !arg.contains("string_to_ffi(")
+            && (gen.preregistered_free_call_arg_expects_borrow(func_name, i)
+                || gen.callee_arg_expects_shared_borrow_at_call(func_name, i)
+                || stale_shared_clone)
         {
             *arg = crate::ir::target_encodings::rust_shared_borrow(arg);
         }

@@ -40,6 +40,44 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression,
         arms: &[crate::parser::MatchArm],
     ) -> String {
+        let patch_match_scrutinee_call_args = |value_str: &mut String,
+                                               arguments: &[(Option<String>, &Expression)],
+                                               callee: Option<&str>,
+                                               is_method: bool| {
+            for (i, (_label, arg)) in arguments.iter().enumerate() {
+                let Expression::Identifier { name, .. } = arg else {
+                    continue;
+                };
+                let arm_reuses = arms
+                    .iter()
+                    .any(|arm| Self::match_arm_body_uses_binding(arm.body, name));
+                let analysis_wants = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                    a.needs_clone(name, self.current_statement_idx).is_some()
+                });
+                let callee_shared = if is_method {
+                    false
+                } else {
+                    callee.is_some_and(|c| {
+                        self.preregistered_free_call_arg_expects_borrow(c, i)
+                            || self.callee_arg_expects_borrow_at_call(c, i)
+                    })
+                };
+                if (arm_reuses || analysis_wants)
+                    && !value_str.contains(&format!("{name}.clone()"))
+                    && !self.binding_is_runtime_non_clone(name)
+                    && !self.ident_skips_auto_clone_as_copy(name, arg)
+                    && !callee_shared
+                    && !value_str.contains(&format!("&{name}"))
+                    && !value_str.contains(&format!("&mut {name}"))
+                {
+                    *value_str = string_utilities::replace_ident_token(
+                        value_str,
+                        name,
+                        &format!("{name}.clone()"),
+                    );
+                }
+            }
+        };
         if let Expression::Call {
             function,
             arguments,
@@ -50,38 +88,9 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::Identifier { name, .. } => Some(name.as_str()),
                 _ => None,
             };
-            for (i, (_label, arg)) in arguments.iter().enumerate() {
-                if let Expression::Identifier { name, .. } = arg {
-                    let arm_reuses = arms
-                        .iter()
-                        .any(|arm| Self::match_arm_body_uses_binding(arm.body, name));
-                    let analysis_wants = self
-                        .auto_clone_analysis
-                        .as_ref()
-                        .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
-                    let callee_shared = callee.is_some_and(|c| {
-                        self.preregistered_free_call_arg_expects_borrow(c, i)
-                            || self.callee_arg_expects_borrow_at_call(c, i)
-                    });
-                    if (arm_reuses || analysis_wants)
-                        && !value_str.contains(&format!("{name}.clone()"))
-                        && !self.binding_is_runtime_non_clone(name)
-                        && !self.ident_skips_auto_clone_as_copy(name, arg)
-                        && !callee_shared
-                        && !value_str.contains(&format!("&{name}"))
-                        && !value_str.contains(&format!("&mut {name}"))
-                    {
-                        // Shared-ref / already-borrowed args do not move. Token-replace
-                        // only: substring `i` → `i.clone()` split `get_index`. Copy
-                        // bindings (loop `i`) skip — Identity, no clone.
-                        value_str = string_utilities::replace_ident_token(
-                            &value_str,
-                            name,
-                            &format!("{name}.clone()"),
-                        );
-                    }
-                }
-            }
+            patch_match_scrutinee_call_args(&mut value_str, arguments, callee, false);
+        } else if let Expression::MethodCall { arguments, .. } = value {
+            patch_match_scrutinee_call_args(&mut value_str, arguments, None, true);
         }
         value_str
     }
