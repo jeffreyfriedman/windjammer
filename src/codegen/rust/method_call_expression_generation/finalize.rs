@@ -755,11 +755,6 @@ impl<'ast> CodeGenerator<'ast> {
                             (receiver_type_name.as_deref(), arguments.get(i))
                         {
                             if let Expression::Identifier { name, .. } = arg_expr {
-                                if method == "verify_user" {
-                                    eprintln!(
-                                        "P3.637 finalize bare-id method={method} i={i} name={name} arg_str={arg_str} owned={callee_arg_emits_owned} rt={rt}"
-                                    );
-                                }
                                 let copy_aggregate_owned_pass = {
                                     let caller_copy = self.current_function_params.iter().any(
                                         |p| {

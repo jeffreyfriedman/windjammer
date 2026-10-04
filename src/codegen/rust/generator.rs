@@ -1767,12 +1767,6 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let pidx = sig.arg_param_index(arg_index);
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
-            if method == "verify_user" {
-                eprintln!(
-                    "P3.637 method_registry owned_contract block rt={receiver_type} arg={arg_index} pidx={pidx} flags={:?}",
-                    sig.emitted_rust_ref_params
-                );
-            }
             return false;
         }
         if sig.formal_param_type(pidx).is_some_and(|t| {
@@ -1781,14 +1775,7 @@ impl<'ast> CodeGenerator<'ast> {
         }) {
             return false;
         }
-        let shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx);
-        if method == "verify_user" {
-            eprintln!(
-                "P3.637 method_registry rt={receiver_type} arg={arg_index} pidx={pidx} shared={shared} flags={:?} name={}",
-                sig.emitted_rust_ref_params, sig.name
-            );
-        }
-        shared
+        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx)
     }
 
     pub(crate) fn find_signature_by_name_and_arg_count_with_global(
