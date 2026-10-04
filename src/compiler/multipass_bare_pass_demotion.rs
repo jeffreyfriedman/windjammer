@@ -70,6 +70,41 @@ impl<'a> ProgramLookup<'a> {
             .is_some_and(|decl| decl.is_pub && decl.parent_type.is_none())
     }
 
+    fn pub_free_fn(&self, callee_key: &str) -> Option<&'a FunctionDecl<'a>> {
+        if registry_key_is_type_qualified_method(callee_key) {
+            return None;
+        }
+        let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+        self.free_fns
+            .get(simple)
+            .copied()
+            .filter(|decl| decl.is_pub && decl.parent_type.is_none())
+    }
+
+    /// O(1) — must not rescan programs per registry×param slot (P3.622 follow-up).
+    fn declares_pub_owned_custom_formal_at(
+        &self,
+        callee_key: &str,
+        param_idx: usize,
+        copy_types: &std::collections::HashSet<String>,
+    ) -> bool {
+        let Some(decl) = self.pub_free_fn(callee_key) else {
+            return false;
+        };
+        non_self_param(&decl.parameters, param_idx).is_some_and(|p| {
+            matches!(&p.type_, Type::Custom(name)
+                if !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    && !is_copy_formal_name(name, copy_types))
+        })
+    }
+
+    fn declares_pub_vec_formal_at(&self, callee_key: &str, param_idx: usize) -> bool {
+        let Some(decl) = self.pub_free_fn(callee_key) else {
+            return false;
+        };
+        non_self_param(&decl.parameters, param_idx).is_some_and(|p| is_vec_container_type(&p.type_))
+    }
+
     fn function_body(
         &self,
         registry_key: &str,
@@ -133,6 +168,7 @@ pub fn restore_owned_formals_for_producer_only_call_sites(
     registry: &mut SignatureRegistry,
     programs: &[&Program],
 ) {
+    let lookup = ProgramLookup::build(programs);
     let mut kinds: HashMap<(String, usize), ProducerOnlyArgPassKinds> = HashMap::new();
     for program in programs {
         collect_producer_only_call_kinds(program, registry, &mut kinds);
@@ -155,7 +191,7 @@ pub fn restore_owned_formals_for_producer_only_call_sites(
         if !is_vec_container_type(&formal_ty) {
             continue;
         }
-        if !programs_declare_pub_free_fn_vec_formal_at(programs, &key, idx) {
+        if !lookup.declares_pub_vec_formal_at(&key, idx) {
             continue;
         }
         let mut new_sig = sig;
@@ -404,6 +440,8 @@ fn registry_key_is_type_qualified_method(registry_key: &str) -> bool {
     })
 }
 
+/// Fallback when no `ProgramLookup` is available. Hot paths must use
+/// `ProgramLookup::declares_pub_owned_custom_formal_at` instead (P3.622).
 fn programs_declare_pub_free_fn_owned_custom_formal_at(
     programs: &[&Program],
     callee_key: &str,
@@ -424,8 +462,7 @@ fn programs_declare_pub_free_fn_owned_custom_formal_at(
             if !decl.is_pub || decl.parent_type.is_some() {
                 return false;
             }
-            let user_params: Vec<_> = decl.parameters.iter().filter(|p| p.name != "self").collect();
-            user_params.get(param_idx).is_some_and(|p| {
+            non_self_param(&decl.parameters, param_idx).is_some_and(|p| {
                 matches!(&p.type_, Type::Custom(name)
                     if !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
                         && !is_copy_formal_name(name, copy_types))
@@ -434,6 +471,8 @@ fn programs_declare_pub_free_fn_owned_custom_formal_at(
     })
 }
 
+/// Fallback when no `ProgramLookup` is available. Hot paths must use
+/// `ProgramLookup::declares_pub_vec_formal_at` instead (P3.622).
 fn programs_declare_pub_free_fn_vec_formal_at(
     programs: &[&Program],
     callee_key: &str,
@@ -453,9 +492,7 @@ fn programs_declare_pub_free_fn_vec_formal_at(
             if !decl.is_pub || decl.parent_type.is_some() {
                 return false;
             }
-            let user_params: Vec<_> = decl.parameters.iter().filter(|p| p.name != "self").collect();
-            user_params
-                .get(param_idx)
+            non_self_param(&decl.parameters, param_idx)
                 .is_some_and(|p| is_vec_container_type(&p.type_))
         })
     })
@@ -1638,6 +1675,57 @@ fn on_startup(buf: Vec<u8>) -> int {
         );
     }
 
+    /// P3.622 follow-up: Custom-formal restore must use ProgramLookup O(1), not
+    /// rescan every program per registry×param (wdb-layers hang after trait-sig fix).
+    #[test]
+    fn restore_pub_owned_custom_formals_uses_program_lookup() {
+        use std::time::{Duration, Instant};
+
+        let mut programs = Vec::new();
+        for i in 0..300 {
+            programs.push(parse_program_owned(format!(
+                r#"
+struct Store{i} {{ n: int }}
+pub fn load_store_{i}(store: Store{i}) -> Store{i} {{
+    store
+}}
+fn caller_{i}(store: Store{i}) -> Store{i} {{
+    load_store_{i}(store)
+}}
+"#
+            )));
+        }
+
+        let mut registry = SignatureRegistry::new();
+        for i in 0..300 {
+            let name = format!("load_store_{i}");
+            let ty = format!("Store{i}");
+            let mut sig = owned_custom_sig(&name, &ty);
+            sig.return_type = Some(Type::Custom(ty.clone()));
+            // Simulate bare-pass demotion that restore must undo.
+            sig.param_ownership[0] = OwnershipMode::Borrowed;
+            registry.add_function(name, sig);
+        }
+
+        let refs: Vec<&Program> = programs.iter().copied().collect();
+        let start = Instant::now();
+        restore_pub_owned_non_copy_api_formals(&mut registry, &refs);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(800),
+            "P3.622 custom-formal restore must use ProgramLookup (took {elapsed:?} with 300 programs)"
+        );
+        assert!(
+            matches!(
+                registry
+                    .get_signature("load_store_0")
+                    .and_then(|s| s.param_ownership.first()),
+                Some(OwnershipMode::Owned)
+            ),
+            "pub owned Custom formal must restore to Owned"
+        );
+    }
+
     #[test]
     fn bare_pass_skips_row_col_chain_tuple_return_helper() {
         let domain = parse_program(
@@ -2754,12 +2842,22 @@ fn callee_pub_owned_formal_skip_bare_pass(
         }
         // WDB-192/174: pub APIs declare owned Custom formals in source — keep owned
         // even when a single caller bare-passes (`job_store_load_jobs(store, …)`).
-        if programs_declare_pub_free_fn_owned_custom_formal_at(
-            programs,
-            callee_key,
-            param_idx,
-            &std::collections::HashSet::new(),
-        ) {
+        // Prefer ProgramLookup (O(1)); never rescan all programs per slot.
+        let owned_custom = if let Some(lookup) = lookup {
+            lookup.declares_pub_owned_custom_formal_at(
+                callee_key,
+                param_idx,
+                &std::collections::HashSet::new(),
+            )
+        } else {
+            programs_declare_pub_free_fn_owned_custom_formal_at(
+                programs,
+                callee_key,
+                param_idx,
+                &std::collections::HashSet::new(),
+            )
+        };
+        if owned_custom {
             return true;
         }
         return if let Some(lookup) = lookup {

@@ -20,22 +20,30 @@ container without emission confirmation.
 
 **Gates:** `cargo test --release --test all -- test_cross_file_borrowed_param bug_thread_spawn_closure bug_mpsc_sync_channel owned_string_return_into_demoted_str cross_crate_owned_struct_formal cross_crate_owned_bus_formal wdb281`
 
-## P3.622 (2026-10-04) — wdb-layers multipass hang in trait_definition_sigs_for_method
+## P3.622 (2026-10-04) — wdb-layers multipass hang (trait-sig + custom-formal restore)
 
-Full `cargo test --release --test all` stuck ~45m / 12GB RSS on tip `wj build`
-`windjammerdb/crates/wdb-layers/src/mod.wj` during `generate_method_call` →
-`resolve_method_for_call_site_in_module` → `trait_definition_sigs_for_method`
-(hot `memcmp` / trait-key scan). Not UE wedge (CPU > 0, growing RSS).
+Full `cargo test --release --test all` stuck on tip `wj build`
+`windjammerdb/crates/wdb-layers/src/mod.wj` (CPU > 0, growing RSS — not UE).
+
+Two stacked patho scans:
+
+1. `trait_definition_sigs_for_method` walked all registry sigs per method call.
+2. After (1), hang moved to `restore_pub_owned_non_copy_api_formals` →
+   `programs_declare_pub_free_fn_owned_custom_formal_at` rescanning every program
+   per registry×param Custom formal (P3.585 indexed Vec path but missed Custom).
 
 | Gate | Status |
 |------|--------|
-| Full suite through wdb-layers dogfood | 🔧 tip fix — drop O(\|sigs\|) scan; use `trait_method_keys` only |
+| `restore_pub_owned_scales_with_program_lookup_index` | ✅ GREEN |
+| `restore_pub_owned_custom_formals_uses_program_lookup` | ✅ GREEN |
+| Full suite through wdb-layers dogfood | 🔧 tip fix — trait keys + ProgramLookup for Custom formals |
 
-**Root cause layer:** signature resolution performance — second loop over all
-registry signatures + `is_trait_method_key` per method call.
+**Root cause layer:** signature resolution + bare-pass restore performance
+(index completeness — not ownership heuristics).
 
-**What became unnecessary:** full-registry trait-key memcmp scan on every method
-resolution; `all_trait_method_keys` merge is HashSet not O(n²) any().
+**What became unnecessary:** full-registry trait-key scan; per-slot
+`programs_declare_pub_free_fn_owned_custom_formal_at` / vec formal rescans on
+hot restore paths (`ProgramLookup::declares_pub_*`).
 
 **Do not steal:** P3.619–621 landed; tip-out RED cluster (product regen).
 
