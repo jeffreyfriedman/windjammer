@@ -1508,6 +1508,12 @@ pub fn is_collection_key_lookup_with_project(
             })
         });
     if let Some(base) = receiver_base {
+        let base_leaf = base.rsplit("::").next().unwrap_or(base);
+        // P3.644/649: `Vec`/`VecDeque` index methods (`get`/`remove`) are never map-key
+        // lookups — even when a poisoned HashMap::get sig won resolution.
+        if matches!(base_leaf, "Vec" | "VecDeque" | "LinkedList") {
+            return false;
+        }
         if is_map_type_name(base) || is_set_type_name(base) {
             if callee_arg_expects_reference_param(sig, arg_index) {
                 return true;
@@ -1565,6 +1571,16 @@ pub fn is_collection_key_lookup_with_project(
         {
             return false;
         }
+    }
+    // P3.644/649/650: `Vec::get` / `Vec::remove` Owned `usize` (and user `get(id: i64)`)
+    // must not inherit HashMap::get `&K` when the receiver type failed to infer —
+    // signature shape (owned Copy index) decides, not the simple name `get`/`remove`.
+    if !callee_arg_expects_reference_param(sig, arg_index)
+        && crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+            sig, arg_index,
+        )
+    {
+        return false;
     }
     // Receiver type unknown at codegen (`map` from `Ok(map)`): registry consensus —
     // only for method-shaped / self-receiver sigs (guard above).

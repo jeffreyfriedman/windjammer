@@ -102,14 +102,12 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     let pidx = sig.arg_param_index(i);
                     // Never peel HashMap/BTreeMap key borrows — `Reference(i64)` /
-                    // `&Q` formals must keep `&label` (P3.635 WDB-134).
+                    // `&Q` formals must keep `&label` (P3.635 WDB-134). Do not treat
+                    // bare `get`/`remove` as map keys (P3.649–651 Vec/Store).
                     let is_ck = self.is_collection_key_lookup_at_site(
                         sig,
                         i,
                         receiver_type_name.as_deref(),
-                    ) || matches!(
-                        method,
-                        "get" | "contains_key" | "get_key_value" | "remove"
                     );
                     if is_ck {
                         return arg_str;

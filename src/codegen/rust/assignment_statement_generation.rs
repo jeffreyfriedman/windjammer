@@ -380,16 +380,22 @@ impl<'ast> CodeGenerator<'ast> {
                         self.resolve_compound_assign_int_rust_type_name(target)
                     {
                         let rhs_ty = self.infer_expression_type(right);
+                        // P3.646: never `ref_copy as usize` — deref `&Copy` into owned int.
                         let deref_borrowed_copy = self
                             .deref_borrowed_iter_copy_rhs_for_int_compound(
                                 right,
                                 &mut right_str,
-                                synth_tgt_is_int,
+                                true,
                                 rhs_ty.as_ref(),
                             );
                         let val_width = rhs_ty
                             .as_ref()
-                            .and_then(Self::int_rust_type_name)
+                            .and_then(|t| match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    Self::int_rust_type_name(inner)
+                                }
+                                other => Self::int_rust_type_name(other),
+                            })
                             .unwrap_or("i64");
                         let already_target_cast = right_str.ends_with(&format!(" as {cast}"))
                             || right_str.ends_with(&format!(") as {cast}"));
@@ -661,27 +667,62 @@ impl<'ast> CodeGenerator<'ast> {
         tgt_is_int: bool,
         val_ty: Option<&Type>,
     ) -> bool {
-        if !tgt_is_int || value_str.starts_with('*') {
+        if !tgt_is_int {
             return false;
         }
         let Expression::Identifier { name, .. } = value else {
             return false;
         };
-        if !self.borrowed_iterator_vars.contains(name) {
-            return false;
-        }
-        let copy_pointee = match val_ty {
+        // Prefer typed `&Copy` (values()/keys() loop locals). Also honor
+        // `borrowed_iterator_vars` / local_var_types when infer lost the Reference wrap.
+        let ty = val_ty
+            .cloned()
+            .or_else(|| self.local_var_types.get(name).cloned());
+        let copy_pointee = match ty.as_ref() {
             Some(Type::Reference(inner) | Type::MutableReference(inner)) => {
                 self.is_type_copy(inner)
             }
-            // Bare Copy local type while still in borrowed_iterator_vars (missing ref wrap).
-            Some(t) => self.is_type_copy(t),
-            None => true,
+            Some(t)
+                if self.borrowed_iterator_vars.contains(name) && self.is_type_copy(t) =>
+            {
+                true
+            }
+            None if self.borrowed_iterator_vars.contains(name) => true,
+            // Map::values()/keys() always yield shared refs even when element is Copy.
+            _ if self.borrowed_iterator_vars.contains(name)
+                && crate::type_classification::is_numeric_type(
+                    &match ty.as_ref() {
+                        Some(Type::Custom(n)) => n.clone(),
+                        Some(Type::Int) => "i64".into(),
+                        Some(Type::Int32) => "i32".into(),
+                        Some(Type::Uint) => "u64".into(),
+                        _ => String::new(),
+                    },
+                ) =>
+            {
+                true
+            }
+            _ => false,
         };
         if !copy_pointee {
             return false;
         }
-        *value_str = format!("*{value_str}");
+        // Drop a mistaken width cast on the bare ident (`count as usize` → `count`).
+        let bare = if let Some(rest) = value_str.strip_prefix('*') {
+            rest.trim()
+        } else {
+            value_str.as_str()
+        };
+        let bare = if let Some((head, _)) = bare.split_once(" as ") {
+            if head.trim() == name {
+                head.trim().to_string()
+            } else {
+                bare.to_string()
+            }
+        } else {
+            bare.to_string()
+        };
+        *value_str = format!("*{bare}");
         true
     }
 }
@@ -693,6 +734,40 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::parser::Parser;
     use crate::CompilationTarget;
+
+    /// P3.646: Map::values() &usize into usize compound assign must deref.
+    #[test]
+    fn p3646_hashmap_values_usize_sum_must_deref() {
+        let source = r#"
+use std::collections::HashMap
+pub struct Bus { counts: HashMap<string, usize> }
+impl Bus {
+    pub fn listener_count(self) -> usize {
+        let mut total: usize = 0usize
+        for count in self.counts.values() {
+            total = total + count
+        }
+        total
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let parser = Box::leak(Box::new(Parser::new(tokens)));
+        let program = parser.parse().expect("parse");
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let mut codegen = CodeGenerator::new_for_module(registry, CompilationTarget::Rust);
+        let generated = codegen.generate_program(&program, &analyzed);
+        assert!(
+            !generated.contains("count as usize"),
+            "P3.646 unit RED: must not cast &usize:\n{generated}"
+        );
+        assert!(
+            generated.contains("*count"),
+            "P3.646 unit RED: expect *count:\n{generated}"
+        );
+    }
 
     /// WDB-391: helper `u32` assigned to a field and reused must not `.clone()`.
     #[test]

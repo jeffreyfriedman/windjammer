@@ -210,6 +210,8 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
 
     // P3.576 / wj-sync: after refresh overlay, replace poisoned Owned wrapper/`*::get`
     // with stdlib `HashMap::get` (Borrowed `&K`) for Call(FieldAccess) match scrutinees.
+    // Do not treat owned Copy formals (`usize` / `i64` on Vec::get / Store::get) as
+    // poisoned map keys (P3.649–651).
     let method_signature = {
         let hashmap_bridge =
             crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
@@ -221,20 +223,54 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         match (method_signature, hashmap_bridge) {
             (Some(cur), Some(hashmap)) => {
                 let pidx = cur.arg_param_index(0);
+                let owned_copy = cur
+                    .formal_param_type(pidx)
+                    .or_else(|| cur.param_types.get(pidx))
+                    .is_some_and(|t| {
+                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            && crate::type_classification::is_copy_pass_by_value_formal(t)
+                    });
+                let receiver_base = type_name
+                    .as_deref()
+                    .map(|rt| rt.split('<').next().unwrap_or(rt));
+                let receiver_is_non_map = receiver_base.is_some_and(|base| {
+                    !crate::type_classification::is_map_type_name(base)
+                        && !crate::type_classification::is_set_type_name(base)
+                        && !crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                            base,
+                        )
+                });
                 let poisoned_owned = matches!(
                     cur.param_ownership.get(pidx),
                     Some(OwnershipMode::Owned)
                 ) && !matches!(
                     cur.param_types.get(pidx),
                     Some(Type::Reference(_)) | Some(Type::MutableReference(_))
-                );
+                ) && !owned_copy
+                    && !receiver_is_non_map;
                 if poisoned_owned {
                     Some(hashmap)
                 } else {
                     Some(cur)
                 }
             }
-            (None, Some(hashmap)) => Some(hashmap),
+            (None, Some(hashmap)) => {
+                let receiver_base = type_name
+                    .as_deref()
+                    .map(|rt| rt.split('<').next().unwrap_or(rt));
+                let receiver_is_non_map = receiver_base.is_some_and(|base| {
+                    !crate::type_classification::is_map_type_name(base)
+                        && !crate::type_classification::is_set_type_name(base)
+                        && !crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                            base,
+                        )
+                });
+                if receiver_is_non_map {
+                    None
+                } else {
+                    Some(hashmap)
+                }
+            }
             (other, _) => other,
         }
     };
@@ -266,41 +302,65 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         built
     };
 
-    // P3.635 / WDB-134: match scrutinees use Call(FieldAccess); belt map-key borrow.
+    // P3.635 / WDB-134: match scrutinees use Call(FieldAccess); belt map-key borrow
+    // only for map/set/wrapper receivers — never Vec::get / Store::get (P3.649–651).
     if crate::codegen::rust::stdlib_method_traits::is_map_key_method(call_method) {
-        let qualified_for_key =
-            crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                type_name.as_deref(),
-                call_obj,
-                call_method,
-                |name| gen.is_imported_runtime_std_module(name),
-            );
-        let sig_for_key = method_signature.clone().or_else(|| {
-            crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
-                call_method,
-                type_name.as_deref(),
-                &gen.signature_registry,
-            )
+        let receiver_base = type_name
+            .as_deref()
+            .map(|rt| rt.split('<').next().unwrap_or(rt));
+        let receiver_is_mapish = receiver_base.is_some_and(|base| {
+            crate::type_classification::is_map_type_name(base)
+                || crate::type_classification::is_set_type_name(base)
+                || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(base)
         });
-        if let Some(ref sig_for_key) = sig_for_key {
-            for (i, arg_str) in args.iter_mut().enumerate() {
-                let Some((_, arg_expr)) = arguments.get(i) else {
-                    continue;
-                };
-                gen.finalize_post_ir_collection_key_arg(
-                    arg_str,
-                    arg_expr,
-                    i,
-                    call_method,
-                    &qualified_for_key,
+        if receiver_is_mapish {
+            let qualified_for_key =
+                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
                     type_name.as_deref(),
-                    sig_for_key,
+                    call_obj,
+                    call_method,
+                    |name| gen.is_imported_runtime_std_module(name),
                 );
+            let sig_for_key = method_signature.clone().or_else(|| {
+                crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                    call_method,
+                    type_name.as_deref(),
+                    &gen.signature_registry,
+                )
+            });
+            if let Some(ref sig_for_key) = sig_for_key {
+                for (i, arg_str) in args.iter_mut().enumerate() {
+                    let Some((_, arg_expr)) = arguments.get(i) else {
+                        continue;
+                    };
+                    gen.finalize_post_ir_collection_key_arg(
+                        arg_str,
+                        arg_expr,
+                        i,
+                        call_method,
+                        &qualified_for_key,
+                        type_name.as_deref(),
+                        sig_for_key,
+                    );
+                }
             }
-        }
-        if let Some(arg_str) = args.get_mut(0) {
-            if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
-                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(arg_str);
+        } else if matches!(call_method, "get" | "remove") {
+            // Peel stale `&0_usize` when a prior pass over-borrowed into owned Copy.
+            for arg_str in args.iter_mut() {
+                if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                    let looks_like_int_lit = arg_str.contains("_usize")
+                        || arg_str.contains("_i64")
+                        || arg_str.contains("_i32")
+                        || arg_str
+                            .trim_start_matches('&')
+                            .chars()
+                            .all(|c| c.is_ascii_digit() || c == '_');
+                    if looks_like_int_lit {
+                        *arg_str =
+                            crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
+                                .to_string();
+                    }
+                }
             }
         }
     }

@@ -805,13 +805,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 &contract_sig,
                                 i,
                                 receiver_rt.as_deref(),
-                            ) || matches!(
-                                method,
-                                "get" | "contains_key" | "get_key_value" | "remove"
                             );
                             // P3.635: peel `&label` into owned Copy formals — never undo
-                            // HashMap::get / contains_key key borrows (incl. field receivers
-                            // whose type inference failed to name HashMap).
+                            // confirmed HashMap/BTreeMap key borrows. Bare `get`/`remove`
+                            // are not map keys (P3.649–651).
                             if !is_ck
                                 && self.binding_is_copy_pass_by_value_scalar(name)
                                 && coerced.starts_with('&')
@@ -847,6 +844,8 @@ impl<'ast> CodeGenerator<'ast> {
             .collect();
 
         // P3.635 / WDB-134: HashMap/BTreeMap key args must emit `&key` (match scrutinees).
+        // Only when the receiver is a map/set/wrapper — never blanketed `get`/`remove`
+        // (P3.649–651: Vec::get / Vec::remove / Store::get take owned Copy indices).
         if crate::codegen::rust::stdlib_method_traits::is_map_key_method(method) {
             let receiver_rt_owned = type_name.clone().or_else(|| {
                 self.mc_infer_method_receiver_type_name(object)
@@ -857,47 +856,120 @@ impl<'ast> CodeGenerator<'ast> {
                     })
             });
             let receiver_rt = receiver_rt_owned.as_deref();
-            let qualified = crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
-                receiver_rt,
-                object,
-                method,
-                |name| self.is_imported_runtime_std_module(name),
-            );
-            let sig_for_key = method_signature
-                .clone()
-                .or_else(|| {
+            let receiver_base = receiver_rt.map(|rt| rt.split('<').next().unwrap_or(rt));
+            let receiver_is_mapish = receiver_base.is_some_and(|base| {
+                crate::type_classification::is_map_type_name(base)
+                    || crate::type_classification::is_set_type_name(base)
+                    || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                        base,
+                    )
+            });
+            // Field access with unknown type: still try collection-key finalize when
+            // the resolved method signature already looks like a map-key borrow.
+            let sig_looks_like_map_key = method_signature.as_ref().is_some_and(|sig| {
+                self.is_collection_key_lookup_at_site(sig, 0, receiver_rt)
+            });
+            if receiver_is_mapish || (receiver_rt.is_none() && sig_looks_like_map_key) {
+                let qualified =
+                    crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                        receiver_rt,
+                        object,
+                        method,
+                        |name| self.is_imported_runtime_std_module(name),
+                    );
+                let sig_for_key = method_signature.clone().or_else(|| {
                     crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
                         method,
                         receiver_rt,
                         &self.signature_registry,
                     )
-                })
-                .or_else(|| {
-                    SignatureRegistry::stdlib()
-                        .get_signature(&format!("HashMap::{method}"))
-                        .cloned()
                 });
-            if let Some(sig_for_key) = sig_for_key {
-                for (i, arg_str) in args_vec.iter_mut().enumerate() {
-                    let Some((_, arg_expr)) = arguments.get(i) else {
-                        continue;
-                    };
-                    self.finalize_post_ir_collection_key_arg(
-                        arg_str,
-                        arg_expr,
-                        i,
-                        method,
-                        &qualified,
-                        receiver_rt,
-                        &sig_for_key,
-                    );
+                if let Some(sig_for_key) = sig_for_key {
+                    for (i, arg_str) in args_vec.iter_mut().enumerate() {
+                        let Some((_, arg_expr)) = arguments.get(i) else {
+                            continue;
+                        };
+                        self.finalize_post_ir_collection_key_arg(
+                            arg_str,
+                            arg_expr,
+                            i,
+                            method,
+                            &qualified,
+                            receiver_rt,
+                            &sig_for_key,
+                        );
+                    }
                 }
             }
-            if let Some(arg_str) = args_vec.get_mut(0) {
-                if !arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
-                    crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
-                        arg_str,
-                    );
+        }
+
+        // P3.649–651: `Vec::get(0)` / `Vec::remove(0)` / user `Store::get(99)` take owned
+        // Copy indices — peel stale `&N_usize` / `&99_i64` left by map-key over-borrow.
+        if matches!(method, "get" | "contains_key" | "get_key_value" | "remove") {
+            let receiver_rt_owned = type_name.clone().or_else(|| {
+                self.mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object))
+                    .or_else(|| {
+                        self.infer_expression_type(object)
+                            .and_then(|t| Self::type_to_name(&t))
+                    })
+            });
+            let receiver_base = receiver_rt_owned
+                .as_deref()
+                .map(|rt| rt.split('<').next().unwrap_or(rt));
+            let receiver_is_mapish = receiver_base.is_some_and(|base| {
+                crate::type_classification::is_map_type_name(base)
+                    || crate::type_classification::is_set_type_name(base)
+                    || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                        base,
+                    )
+            });
+            if !receiver_is_mapish {
+                let peel_sig = method_signature.as_ref();
+                for (i, arg_str) in args_vec.iter_mut().enumerate() {
+                    if !arg_str.starts_with('&') || arg_str.starts_with("&mut ") {
+                        continue;
+                    }
+                    let owned_copy = peel_sig.is_some_and(|sig| {
+                        crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                            sig, i,
+                        )
+                    }) || peel_sig.is_some_and(|sig| {
+                        let pidx = sig.arg_param_index(i);
+                        sig.formal_param_type(pidx)
+                            .or_else(|| sig.param_types.get(pidx))
+                            .is_some_and(|t| {
+                                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                    && crate::type_classification::is_copy_pass_by_value_formal(t)
+                            })
+                    });
+                    // Slice/Vec::get / remove: stdlib formals are owned usize.
+                    let std_owned_usize = matches!(method, "get" | "remove")
+                        && SignatureRegistry::stdlib()
+                            .get_signature(&format!("Vec::{method}"))
+                            .or_else(|| {
+                                SignatureRegistry::stdlib()
+                                    .get_signature(&format!("slice::{method}"))
+                            })
+                            .is_some_and(|sig| {
+                                let pidx = sig.arg_param_index(i);
+                                sig.formal_param_type(pidx)
+                                    .or_else(|| sig.param_types.get(pidx))
+                                    .is_some_and(|t| {
+                                        !matches!(
+                                            t,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        ) && crate::type_classification::is_copy_pass_by_value_formal(
+                                            t,
+                                        )
+                                    })
+                            });
+                    if owned_copy || std_owned_usize {
+                        *arg_str = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                            arg_str,
+                        )
+                        .to_string();
+                    }
                 }
             }
         }
