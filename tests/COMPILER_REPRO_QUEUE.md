@@ -1,5 +1,54 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.655 (2026-10-04) — product wj-regex owned args into regex must auto-borrow
+
+Product `wj-regex` thin wrappers: tip keeps `pattern: String, text: String` and
+emits bare `regex::is_match(pattern, text)` (also find/find_all/split) while
+runtime formals are `&str` → E0308. `replace`/`escape` may already demote.
+
+| Gate | Status |
+|------|--------|
+| `regex_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-regex |
+
+**Root cause layer:** call-site coercion — owned String formals into demoted
+stdlib/runtime `&str` formals must auto-borrow (signature-driven).
+
+**Why this is a new class:**
+- P3.645 is csv `parse`/`write`.
+- P3.654 is crypto `verify_password`.
+- P3.655 is regex module multi-fn thin-wrap product.
+
+**What became unnecessary:** `.as_str()` / reshape regex package.
+
+**Gates:** tip dogfood wj-regex RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- regex_stdlib_owned_args_must_auto_borrow_product`
+
+**Do not steal:** P3.645–654 (filed).
+
+## P3.654 (2026-10-04) — product wj-hash owned args into crypto must auto-borrow
+
+Product `wj-hash` `verify_password`: tip keeps owned `String` formals and emits
+`crypto::verify_password(password, hash)` while runtime wants `&str` → E0308.
+`hash_password` may already demote.
+
+| Gate | Status |
+|------|--------|
+| `hash_crypto_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-hash |
+
+**Root cause layer:** call-site coercion — owned String into demoted crypto
+`&str` formals must auto-borrow (signature-driven).
+
+**Why this is a new class:**
+- P3.645 is csv stdlib.
+- P3.654 is crypto bcrypt verify (product thin-wrap inconsistency vs hash_password).
+
+**What became unnecessary:** `.as_str()` / reshape hash package.
+
+**Gates:** tip dogfood wj-hash RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- hash_crypto_owned_args_must_auto_borrow_product`
+
+**Do not steal:** P3.645–653 (filed).
+
 ## P3.653 (2026-10-04) — TDD WDB-443 (DB agent; no compiler src)
 
 Copy `i32` formals into HashMap key tuple must not `.clone()`; product emits
@@ -7,10 +56,11 @@ Copy `i32` formals into HashMap key tuple must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-443 MultiFile | ⏳ TDD pending — `insert((start_x, start_y), …)` |
-| WDB-443 tip-out | ⏳ TDD pending — `start_x.clone()` in astar g_score.insert |
+| WDB-443 MultiFile | ✅ isolate GREEN — `insert((start_x, start_y), …)` (no `.clone()`) |
+| WDB-443 tip-out | ❌ tip RED — `start_x.clone()` / `nx.clone()` in `rel_tip_out/ai/astar_grid.rs` |
 
-**Root cause layer:** copy / hashmap-key-tuple — Copy formals as HashMap key tuple elems must not auto-clone.
+**Root cause layer:** copy / hashmap-key-tuple — Copy formals as HashMap key tuple elems must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-438 is tuple lit into **Vec::push**.
@@ -19,9 +69,10 @@ Copy `i32` formals into HashMap key tuple must not `.clone()`; product emits
 
 **What became unnecessary:** `start_x.clone()` / `nx.clone()` in astar g_score keys.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb443_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/442–443, P3.508–P3.652, WDB-412–443 (filed).
+**Do not steal:** WDB-406/408/411/442–443, P3.508–P3.653, WDB-412–443 (filed).
 
 ## P3.652 (2026-10-04) — TDD WDB-442 (DB agent; no compiler src)
 
