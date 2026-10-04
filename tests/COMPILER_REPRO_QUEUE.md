@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.634 (2026-10-04) — TDD WDB-438 (DB agent; no compiler src)
+
+Copy `i32` formal into tuple literal must not `.clone()`; product emits
+`result.push((x.clone(), y + 1_i32, …))` in astar_grid neighbors.
+
+| Gate | Status |
+|------|--------|
+| WDB-438 MultiFile | ⏳ TDD pending — `push((x, y + 1, …))` |
+| WDB-438 tip-out | ⏳ TDD pending — `x.clone()` / `y.clone()` in astar tuple push |
+
+**Root cause layer:** copy / tuple — Copy formals as tuple elements must not auto-clone.
+
+**Why this is a new class:**
+- WDB-437 is formal into **let**.
+- WDB-434 is const into **call** formals.
+- WDB-423 is **indexed** tuple element.
+
+**What became unnecessary:** `x.clone()` / `y.clone()` in neighbor tuple construction.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/437, P3.508–P3.633, WDB-412–437 (filed).
+
 ## P3.633 (2026-10-04) — multipass homonym `draw_text`: module-qualified call-site sig
 
 When `draw::draw_text` and `hud::draw_text` both exist, `game.rs` emitted
