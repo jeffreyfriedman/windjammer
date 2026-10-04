@@ -7,8 +7,8 @@
 
 | Gate | Status |
 |------|--------|
-| WDB-436 MultiFile | ⏳ TDD pending — `before_idx = i` (cast without clone) |
-| WDB-436 tip-out | ⏳ TDD pending — `i.clone() as i32` in clip.rs |
+| WDB-436 MultiFile | ✅ GREEN @ `70f7225b` — isolate `before_idx = i` no `.clone()` |
+| WDB-436 tip-out | ❌ RED @ `70f7225b` — `i.clone() as i32` in animation/clip |
 
 **Root cause layer:** copy / loop — usize counter cast-assign to i32 must not auto-clone.
 
@@ -19,9 +19,9 @@
 
 **What became unnecessary:** `i.clone()` when assigning loop counter across int widths.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-03)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb436_` — 1 passed / 1 failed (isolate GREEN, tip RED).
 
-**Do not steal:** WDB-406/408/411/435, P3.508–P3.616, WDB-412–435 (filed).
+**Do not steal:** WDB-406/408/411/435, P3.508–P3.617, WDB-412–436 (filed).
 
 ## P3.616 (2026-10-03) — reused owned string must not emit `.into().clone()`
 
