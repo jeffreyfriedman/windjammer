@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.664 (2026-10-04) — TDD WDB-448 (DB agent; no compiler src)
+
+Copy `f32` **formal** into field assign must not `.clone()`; product emits
+`self.delta_time = actual_dt.clone()` in game_loop update.
+
+| Gate | Status |
+|------|--------|
+| WDB-448 MultiFile | ⏳ TDD pending — bare `actual_dt` |
+| WDB-448 tip-out | ⏳ TDD pending — `actual_dt.clone()` in game_loop |
+
+**Root cause layer:** copy / f32-formal-field-assign — Copy `f32` formals assigned into fields must not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is i32 **formal** into field assign.
+- WDB-445 is f32 **formal** into let.
+- WDB-440 is f32 into **struct lit**.
+
+**What became unnecessary:** `actual_dt.clone()` in FrameTimer::update.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/447–448, P3.508–P3.663, WDB-412–448 (filed).
+
 ## P3.663 (2026-10-04) — TDD WDB-447 (DB agent; no compiler src)
 
 Copy `u32` **formal** into indexed assign must not `.clone()`; product emits
