@@ -772,16 +772,35 @@ impl<'ast> CodeGenerator<'ast> {
             let leaf = base.rsplit("::").next().unwrap_or(base);
             for candidate in [type_name.as_str(), base, leaf] {
                 let qualified = format!("{candidate}::{method}");
-                if let Some(sig) = self.get_signature_with_global(&qualified) {
-                    if let Some(ret) = &sig.return_type {
-                        return Some(Self::substitute_stdlib_generics(ret, &recv));
-                    }
-                }
+                let from_registry = self.get_signature_with_global(&qualified).and_then(|sig| {
+                    sig.return_type
+                        .as_ref()
+                        .map(|ret| Self::substitute_stdlib_generics(ret, &recv))
+                });
                 // Stdlib MethodSignature table (HashMap::values → Iterator<&V>, P3.646).
-                if let Some(ms) = self.lookup_method_signature(candidate, method) {
-                    if let Some(ret) = &ms.return_type {
-                        return Some(Self::substitute_stdlib_generics(ret, &recv));
-                    }
+                // Prefer parameterized `Iterator<item>` over a bare `Iterator` stub from
+                // registry/meta — bare Iterator collapses to the map receiver → `(K, V)`.
+                let from_stdlib = self.lookup_method_signature(candidate, method).and_then(|ms| {
+                    ms.return_type
+                        .as_ref()
+                        .map(|ret| Self::substitute_stdlib_generics(ret, &recv))
+                });
+                let pick = match (&from_stdlib, &from_registry) {
+                    (
+                        Some(Type::Parameterized(b, p)),
+                        _,
+                    ) if b == "Iterator" && p.len() == 1 => from_stdlib,
+                    (
+                        _,
+                        Some(Type::Parameterized(b, p)),
+                    ) if b == "Iterator" && p.len() == 1 => from_registry,
+                    (Some(_), Some(Type::Custom(n))) if n == "Iterator" => from_stdlib,
+                    (Some(t), _) => Some(t.clone()),
+                    (_, Some(t)) => Some(t.clone()),
+                    _ => None,
+                };
+                if pick.is_some() {
+                    return pick;
                 }
             }
         }
