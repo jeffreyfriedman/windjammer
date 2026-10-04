@@ -88,6 +88,55 @@ impl<'ast> CodeGenerator<'ast> {
                     let Expression::Identifier { name, .. } = arg_expr else {
                         return arg_str;
                     };
+                    // P3.647: IR cutover skips the legacy ownership rewrite below.
+                    // Still clone multi-use owned formals into owned slots here.
+                    if let Some(sig) = resolved_signature
+                        .as_ref()
+                        .or(method_signature.as_ref())
+                    {
+                        let pidx = sig.arg_param_index(i);
+                        let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            sig, pidx,
+                        ) || matches!(
+                            crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
+                                sig,
+                                i,
+                                receiver_type_name.as_deref(),
+                            ),
+                            OwnershipMode::Owned
+                        );
+                        let clone_required = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone(name, self.current_statement_idx).is_some()
+                                || a.needs_clone_anywhere(name)
+                        });
+                        let formal_copy = sig.formal_param_type(pidx).is_some_and(|t| {
+                            let bare = match t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    inner.as_ref()
+                                }
+                                other => other,
+                            };
+                            self.is_type_copy(bare)
+                                && crate::type_classification::is_copy_pass_by_value_formal(bare)
+                        });
+                        if owned_slot
+                            && !formal_copy
+                            && !self.binding_is_copy_pass_by_value_scalar(name)
+                        {
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &arg_str,
+                                );
+                            // Peel spurious `&clips` into owned Vec (product blend_tree /
+                            // evaluate → evaluate_node) and clone when reused.
+                            if clone_required {
+                                return format!("{base}.clone()");
+                            }
+                            if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
+                                return base.to_string();
+                            }
+                        }
+                    }
                     if !self.binding_is_copy_pass_by_value_scalar(name)
                         || !arg_str.starts_with('&')
                         || arg_str.starts_with("&mut ")
@@ -109,7 +158,20 @@ impl<'ast> CodeGenerator<'ast> {
                         i,
                         receiver_type_name.as_deref(),
                     );
+                    // P3.658: demoted `&str` keys are already `&Q` — peel even for map-key sites.
                     if is_ck {
+                        if self.emitted_rust_ref_formals.contains(name.as_str())
+                            || self.str_ref_optimized_params.contains(name.as_str())
+                            || self.identifier_already_ref(name)
+                            || self.identifier_binding_already_rust_ref(name)
+                        {
+                            let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &arg_str,
+                            );
+                            if base == name.as_str() {
+                                return name.clone();
+                            }
+                        }
                         return arg_str;
                     }
                     let slot_is_owned_copy_scalar = sig.formal_param_type(pidx).is_some_and(|t| {
@@ -243,6 +305,24 @@ impl<'ast> CodeGenerator<'ast> {
                                 ownership = OwnershipMode::Owned;
                             }
                         }
+                    }
+                    // P3.654–657: runtime-std `&str` baseline beats layered WJ owned
+                    // `string` stubs (`crypto::verify_password`, `regex::is_match`,
+                    // `mime::is_*`) so finalize borrows instead of peeling.
+                    let runtime_callee =
+                        crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                            receiver_type_name.as_deref(),
+                            object,
+                            method,
+                            |name| self.is_imported_runtime_std_module(name),
+                        );
+                    if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                        &self.signature_registry,
+                        &runtime_callee,
+                        Some(sig),
+                        i,
+                    ) {
+                        ownership = OwnershipMode::Borrowed;
                     }
                     // Spurious `&mut` from stale IR call-site lowering: strip when the
                     // converged contract is owned (not MutBorrowed).
@@ -577,12 +657,36 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                                 return arg_str;
                             }
-                            if !is_collection_key
+                            // P3.658: demoted `&str` / emitted shared-ref formals are already
+                            // `&Q` for HashMap::get — do not `apply_borrow` into `get(&key)`.
+                            let arg_already_shared_ref = arguments.get(i).is_some_and(|(_, e)| {
+                                matches!(
+                                    e,
+                                    Expression::Identifier { name, .. }
+                                        if self.identifier_binding_already_rust_ref(name)
+                                            || self.emitted_rust_ref_formals.contains(name.as_str())
+                                            || self.str_ref_optimized_params.contains(name.as_str())
+                                            || self.identifier_already_ref(name)
+                                )
+                            });
+                            // Layered WJ stubs keep `param_types = string` even when
+                            // ownership was forced Borrowed from the runtime baseline
+                            // (P3.654–657). Do not treat that as "already owned / skip &".
+                            let layered_wj_string_skip = !is_collection_key
                                 && sig.param_types.get(sig_param_idx).is_some_and(|t| {
                                     matches!(t, Type::String)
-                                        || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                                        || matches!(
+                                            t,
+                                            Type::Custom(n) if n == "string" || n == "String"
+                                        )
                                 })
-                            {
+                                && !crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                                    &self.signature_registry,
+                                    &runtime_callee,
+                                    Some(sig),
+                                    i,
+                                );
+                            if arg_already_shared_ref || layered_wj_string_skip {
                                 arg_str
                             } else {
                                 apply_borrow(&mut arg_str);
@@ -1045,14 +1149,25 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    if callee_arg_emits_owned {
+                    // P3.647: multi-use owned formals into owned slots must `.clone()`.
+                    // Gate on ownership / emit-owned (not only demoted rust-ref formals).
+                    // Prefer statement-local needs_clone; fall back to needs_clone_anywhere
+                    // when IR/codegen statement indices diverge from analysis.
+                    if matches!(ownership, OwnershipMode::Owned) || callee_arg_emits_owned {
                         if let Some((_, arg_expr)) = arguments.get(i) {
                             if let Expression::Identifier { name, .. } = arg_expr {
-                                if self.emitted_rust_ref_formals.contains(name)
+                                let auto_clone = self.auto_clone_analysis.as_ref().is_some_and(
+                                    |a| {
+                                        a.needs_clone(name, self.current_statement_idx).is_some()
+                                            || a.needs_clone_anywhere(name)
+                                    },
+                                );
+                                let demoted_owned_outer = self.emitted_rust_ref_formals.contains(name)
                                     && self
                                         .current_function_params
                                         .iter()
-                                        .any(|p| p.name == *name)
+                                        .any(|p| p.name == *name);
+                                if (auto_clone || demoted_owned_outer)
                                     && !arg_str.ends_with(".clone()")
                                     && !callee_formal_is_copy
                                 {
@@ -1074,24 +1189,36 @@ impl<'ast> CodeGenerator<'ast> {
                             callee_wants_shared && !callee_wants_owned,
                             callee_wants_owned,
                         );
+                        let strip_callee = if sig.name.contains("::") {
+                            sig.name.clone()
+                        } else {
+                            crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                                receiver_type_name.as_deref(),
+                                object,
+                                method,
+                                |name| self.is_imported_runtime_std_module(name),
+                            )
+                        };
                         self.maybe_pure_forwarding_strip_call_arg(
                             &mut arg_str,
                             arg_expr,
-                            receiver_type_name.as_deref(),
-                            Some(method),
+                            Some(strip_callee.as_str()),
                             Some(i),
-                            Some(arguments.len()),
                             Some(&sig),
                         );
                         // Single-statement consuming moves: strip over-eager `.clone()`
                         // (`local.merge(remote)`). Finalize runs after arguments.rs.
                         if let Expression::Identifier { name, .. } = arg_expr {
+                            // P3.647: do not strip clones that auto-clone analysis requires
+                            // (including needs_clone_anywhere when statement indices diverge).
+                            let clone_required = self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                                a.needs_clone(name, self.current_statement_idx).is_some()
+                                    || a.needs_clone_anywhere(name)
+                            });
                             if arg_str.ends_with(".clone()")
                                 && !(callee_wants_shared && !callee_wants_owned)
                                 && self.caller_keeps_owned_outer_formal(name)
-                                && !self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                                    a.needs_clone(name, self.current_statement_idx).is_some()
-                                })
+                                && !clone_required
                             {
                                 crate::codegen::rust::expression_utilities::strip_trailing_clone(
                                     &mut arg_str,
@@ -1438,6 +1565,39 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             };
             self.strip_stale_amp_on_already_ref_arg(arg_expr, arg_str);
+        }
+        // P3.654–657: after strip, re-apply runtime-std borrows for module `::` calls.
+        // IR call_sites skip the legacy ownership match below; peel/strip can leave
+        // bare owned String into crypto/regex/mime `&str` formals.
+        if separator == "::" {
+            let qualified = format!("{obj_str}::{method}");
+            let sig_for_runtime = resolved_signature
+                .as_ref()
+                .or(method_signature.as_ref());
+            for (i, arg_str) in processed_args.iter_mut().enumerate() {
+                if arg_str.starts_with('&') || arg_str.starts_with("&mut ") {
+                    continue;
+                }
+                let Some((_, arg_expr)) = arguments.get(i) else {
+                    continue;
+                };
+                let Expression::Identifier { name, .. } = arg_expr else {
+                    continue;
+                };
+                if self.emitted_rust_ref_formals.contains(name.as_str())
+                    || self.str_ref_optimized_params.contains(name.as_str())
+                {
+                    continue;
+                }
+                if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &self.signature_registry,
+                    &qualified,
+                    sig_for_runtime,
+                    i,
+                ) {
+                    *arg_str = format!("&{arg_str}");
+                }
+            }
         }
         for (i, arg_str) in processed_args.iter_mut().enumerate() {
             let Some((_, arg_expr)) = arguments.get(i) else {

@@ -2787,6 +2787,145 @@ mod tests {
     }
 
     #[test]
+    /// P3.647: recursive owned Vec formal reused across two method calls.
+    #[test]
+    fn p3647_recursive_owned_vec_param_needs_clone() {
+        let func = FunctionDecl {
+            name: "evaluate_node".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![
+                Parameter {
+                    name: "self".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("Tree".to_string()),
+                    ownership: OwnershipHint::Ref,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+                Parameter {
+                    name: "node_id".to_string(),
+                    pattern: None,
+                    type_: Type::Custom("u32".to_string()),
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+                Parameter {
+                    name: "clips".to_string(),
+                    pattern: None,
+                    type_: Type::Vec(Box::new(Type::Custom("Clip".to_string()))),
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+                Parameter {
+                    name: "t".to_string(),
+                    pattern: None,
+                    type_: Type::Float,
+                    ownership: OwnershipHint::Owned,
+                    is_mutable: false,
+                    decorators: vec![],
+                },
+            ],
+            return_type: Some(Type::Custom("u32".to_string())),
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: Some("Tree".to_string()),
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("a".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "self".to_string(),
+                            location: None,
+                        }),
+                        method: "evaluate_node".to_string(),
+                        type_args: None,
+                        arguments: vec![
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "node_id".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "clips".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "t".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                        ],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("b".to_string()),
+                    mutable: false,
+                    type_: None,
+                    value: test_alloc_expr(Expression::MethodCall {
+                        object: test_alloc_expr(Expression::Identifier {
+                            name: "self".to_string(),
+                            location: None,
+                        }),
+                        method: "evaluate_node".to_string(),
+                        type_args: None,
+                        arguments: vec![
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "node_id".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "clips".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                            (
+                                None,
+                                test_alloc_expr(Expression::Identifier {
+                                    name: "t".to_string(),
+                                    location: None,
+                                }),
+                            ),
+                        ],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone("clips", 0).is_some(),
+            "P3.647: first recursive move of owned Vec must clone; sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
     fn test_multi_use_owned_string_param_needs_clone_on_first_call() {
         let func = FunctionDecl {
             name: "render_panel".to_string(),
