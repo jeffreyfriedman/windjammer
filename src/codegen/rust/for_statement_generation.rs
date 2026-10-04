@@ -198,12 +198,16 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
         // Map `.values()` / `.keys()` yield shared refs — loop vars are `&V` (P3.303 push clone).
-        if let Expression::MethodCall { method, .. } = iterable {
-            if matches!(method.as_str(), "values" | "keys") {
-                is_borrowed_iterator = true;
-            }
-        }
-        if by_value_owned_iter {
+        // Must win over `by_value_owned_iter`: registry Item may look like owned Copy `usize`
+        // while Rust's `Values` iterator still yields `&V` (P3.646 E0606 `count as usize`).
+        let is_map_shared_ref_iter = matches!(
+            iterable,
+            Expression::MethodCall { method, .. }
+                if matches!(method.as_str(), "values" | "keys")
+        );
+        if is_map_shared_ref_iter {
+            is_borrowed_iterator = true;
+        } else if by_value_owned_iter {
             is_borrowed_iterator = false;
         }
 
@@ -304,12 +308,15 @@ impl<'ast> CodeGenerator<'ast> {
         // `needs_borrow` can stay true after `copy_element_by_value` clears
         // `is_borrowed_iterator`; any `&iterable` loop must track borrowed bindings.
         // Also detect when `generate_expression` already emitted a leading `&`.
+        // P3.646: `values()`/`keys()` always track `&V` bindings — even when the
+        // registry Item looks like owned Copy (`usize`), Rust still yields `&V`.
         let tracks_borrowed_loop_var = !use_copied_for_copy_elems
-            && !by_value_owned_iter
+            && (is_map_shared_ref_iter || !by_value_owned_iter)
             && (needs_borrow
                 || is_borrowed_iterator
                 || needs_mut_borrow
-                || iter_expr.starts_with('&'));
+                || iter_expr.starts_with('&')
+                || is_map_shared_ref_iter);
         if tracks_borrowed_loop_var {
             let enumerate_index_var = Self::extract_enumerate_index_var(iterable, pattern);
             let mut all_bindings = std::collections::HashSet::new();

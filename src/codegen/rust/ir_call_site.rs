@@ -418,10 +418,19 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // P3.635: `self.inner.get(label)` when field typing fails to name `HashMap`
-        // still must borrow Copy keys. Skip only when receiver registers an Owned
-        // non-Copy `get` (NoteStore-style), not map-key Deref.
+        // still must borrow Copy keys. Skip when the receiver is clearly not a map
+        // (Vec/slice/user Store) or the formal is an owned Copy scalar (usize/i64) —
+        // P3.649–651: `parts.get(0)` / `logs.remove(0)` / `store.get(99)`.
         if !is_ck && crate::codegen::rust::stdlib_method_traits::is_map_key_method(method) {
-            let owned_custom_get = receiver_rt.is_some_and(|rt| {
+            let receiver_base = receiver_rt.map(|rt| rt.split('<').next().unwrap_or(rt));
+            let receiver_is_non_map = receiver_base.is_some_and(|base| {
+                !crate::type_classification::is_map_type_name(base)
+                    && !crate::type_classification::is_set_type_name(base)
+                    && !crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                        base,
+                    )
+            });
+            let owned_copy_or_custom_get = receiver_rt.is_some_and(|rt| {
                 let base = rt.split('<').next().unwrap_or(rt);
                 if crate::type_classification::is_map_type_name(base)
                     || crate::type_classification::is_set_type_name(base)
@@ -439,33 +448,62 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                 sig.is_some_and(|sig| {
                     let pidx = sig.arg_param_index(arg_index);
-                    sig.formal_param_type(pidx).is_some_and(|t| {
-                        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                            && matches!(t, Type::Custom(_))
-                            && !crate::type_classification::is_copy_pass_by_value_formal(t)
-                    })
+                    sig.formal_param_type(pidx)
+                        .or_else(|| sig.param_types.get(pidx))
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && (crate::type_classification::is_copy_pass_by_value_formal(t)
+                                    || (matches!(t, Type::Custom(_))
+                                        && !crate::type_classification::is_copy_pass_by_value_formal(
+                                            t,
+                                        )))
+                        })
                 })
-            });
-            if !owned_custom_get {
-                if let Some(std_sig) =
-                    SignatureRegistry::stdlib().get_signature(&format!("HashMap::{method}"))
-                {
-                    key_sig = std_sig.clone();
-                    key_rt = Some("HashMap".into());
-                    is_ck = true;
+            }) || contract_sig
+                .formal_param_type(contract_sig.arg_param_index(arg_index))
+                .or_else(|| {
+                    contract_sig
+                        .param_types
+                        .get(contract_sig.arg_param_index(arg_index))
+                })
+                .is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::type_classification::is_copy_pass_by_value_formal(t)
+                });
+            if receiver_is_non_map || owned_copy_or_custom_get {
+                // P3.649–651: peel stale `&0_usize` / `&99_i64` into owned Copy formals
+                // when a prior pass treated `get`/`remove` as map-key sites.
+                if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+                    let pidx = contract_sig.arg_param_index(arg_index);
+                    let owned_copy = contract_sig
+                        .formal_param_type(pidx)
+                        .or_else(|| contract_sig.param_types.get(pidx))
+                        .is_some_and(|t| {
+                            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && crate::type_classification::is_copy_pass_by_value_formal(t)
+                        })
+                        || crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                            contract_sig,
+                            arg_index,
+                        );
+                    if owned_copy {
+                        *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                            coerced,
+                        )
+                        .to_string();
+                    }
                 }
+                return;
+            }
+            if let Some(std_sig) =
+                SignatureRegistry::stdlib().get_signature(&format!("HashMap::{method}"))
+            {
+                key_sig = std_sig.clone();
+                key_rt = Some("HashMap".into());
+                is_ck = true;
             }
         }
         if !is_ck {
-            // P3.635 last-resort: `get`/`contains_key`/… on a map field whose type
-            // inference failed. Do not use `is_map_key_method` (None receiver → false).
-            let map_key_spelling = matches!(
-                method,
-                "get" | "contains_key" | "get_key_value" | "remove"
-            );
-            if map_key_spelling && !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
-                crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(coerced);
-            }
             return;
         }
         if coerced.ends_with(".to_string()")

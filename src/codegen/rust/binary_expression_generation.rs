@@ -1355,6 +1355,50 @@ impl<'ast> CodeGenerator<'ast> {
             }
         } // end is_comparison guard
 
+        // P3.646: arithmetic with borrowed-iter `&Copy` vs owned Copy (`total + count`
+        // where `count` is `HashMap::values()` → `&usize`) must `*count`, not leave a
+        // later `as usize` cast on the ref (E0606).
+        if is_arithmetic {
+            let deref_borrowed_copy_arith = |expr: &Expression<'_>, s: &mut String, gen: &Self| {
+                let Expression::Identifier { name, .. } = expr else {
+                    return;
+                };
+                let ty = gen
+                    .infer_expression_type(expr)
+                    .or_else(|| gen.local_var_types.get(name).cloned());
+                let is_ref_copy = matches!(
+                    ty.as_ref(),
+                    Some(Type::Reference(inner) | Type::MutableReference(inner))
+                        if gen.is_type_copy(inner)
+                );
+                let is_borrowed_copy = gen.borrowed_iterator_vars.contains(name)
+                    && (is_ref_copy
+                        || ty.as_ref().is_some_and(|t| gen.is_type_copy(t))
+                        || gen.expression_is_copy(expr));
+                if !(is_ref_copy || is_borrowed_copy) {
+                    return;
+                }
+                // Strip mistaken `name as WIDTH` before deref (E0606 on &Copy).
+                let bare = s.strip_prefix('*').unwrap_or(s.as_str()).trim();
+                let bare = if let Some((head, _)) = bare.split_once(" as ") {
+                    if head.trim() == name {
+                        head.trim()
+                    } else {
+                        bare
+                    }
+                } else {
+                    bare
+                };
+                if bare.starts_with('*') {
+                    *s = bare.to_string();
+                } else {
+                    *s = format!("*{bare}");
+                }
+            };
+            deref_borrowed_copy_arith(left, &mut left_str, self);
+            deref_borrowed_copy_arith(right, &mut right_str, self);
+        }
+
         // TDD FIX for E0614: Call balance_eq for ALL comparisons, not just == and !=
         // This handles match arm bindings (owned Copy types like i32) in >=, <=, >, < too.
         // `.as_str()` for owned String vs lit is only for PartialOrd — PartialEq is native.
