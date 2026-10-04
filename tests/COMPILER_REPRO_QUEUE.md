@@ -33,7 +33,7 @@ Product `wj-notes-api` `store.get(99)`: tip emits `get(&99_i64)` while formal is
 
 | Gate | Status |
 |------|--------|
-| `owned_i64_method_formal_must_not_receive_ref_literal` | ❌ tip RED |
+| `owned_i64_method_formal_must_not_receive_ref_literal` | ❌ tip RED — cargo 0/3 (2026-10-04) |
 
 **Root cause layer:** call-site ownership — Copy integer literals into owned
 integer formals must not auto-borrow.
@@ -44,7 +44,7 @@ integer formals must not auto-borrow.
 
 **What became unnecessary:** reshaping notes `store.get(99)` tests.
 
-**Gates:** tip 13:39 dogfood notes-api RED.
+**Gates:** tip dogfood notes-api RED; cargo verified **0 passed / 3 failed** (P3.649–651 filter).
 - `cargo test --release --test all --features integration_tests,codegen_tests -- owned_i64_method_formal_must_not_receive_ref_literal`
 
 **Do not steal:** P3.646–650 (filed).
@@ -56,7 +56,7 @@ Isolate named-local remove gate can false-GREEN.
 
 | Gate | Status |
 |------|--------|
-| `vec_remove_usize_literal_must_not_borrow` | ❌ tip RED — product proxy |
+| `vec_remove_usize_literal_must_not_borrow` | ❌ tip RED — cargo 0/3 (2026-10-04) |
 
 **Root cause layer:** call-site ownership — `Vec::remove` takes owned `usize`;
 integer literals must not be borrowed.
@@ -79,7 +79,7 @@ Blocks scheduler (path-dep). Distinct from P3.644 (variable `idx as usize` in sy
 
 | Gate | Status |
 |------|--------|
-| `slice_get_usize_literal_must_not_borrow` | ❌ tip RED — product wj-cron |
+| `slice_get_usize_literal_must_not_borrow` | ❌ tip RED — cargo 0/3 (2026-10-04) |
 
 **Root cause layer:** call-site ownership — `slice::get` takes owned `usize`;
 integer literals must not be borrowed as `&N_usize`.
