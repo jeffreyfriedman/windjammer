@@ -2394,3 +2394,53 @@ mod pattern_registry_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod p3654_crypto_borrow_contract {
+    use super::*;
+    use crate::analyzer::SignatureRegistry;
+
+    #[test]
+    fn crypto_verify_password_stdlib_needs_auto_borrow() {
+        let reg = SignatureRegistry::stdlib();
+        let sig = reg
+            .get_signature("crypto::verify_password")
+            .expect("crypto::verify_password must be scanned from runtime");
+        assert_eq!(
+            sig.param_ownership,
+            vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed]
+        );
+        assert!(
+            runtime_std_param_needs_auto_borrow_resolved(
+                &reg,
+                "crypto::verify_password",
+                Some(sig),
+                0
+            ),
+            "arg0 must need auto-borrow"
+        );
+        assert!(
+            runtime_std_param_needs_auto_borrow_resolved(
+                &reg,
+                "crypto::verify_password",
+                Some(sig),
+                1
+            ),
+            "arg1 must need auto-borrow"
+        );
+    }
+
+    #[test]
+    fn regex_is_match_and_mime_is_text_stdlib_need_auto_borrow() {
+        let reg = SignatureRegistry::stdlib();
+        for key in ["regex::is_match", "mime::is_text"] {
+            let sig = reg
+                .get_signature(key)
+                .unwrap_or_else(|| panic!("{key} must be scanned from runtime"));
+            assert!(
+                runtime_std_param_needs_auto_borrow_resolved(&reg, key, Some(sig), 0),
+                "{key} arg0 must need auto-borrow"
+            );
+        }
+    }
+}
