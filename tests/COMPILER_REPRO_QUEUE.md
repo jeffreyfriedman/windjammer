@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.662 (2026-10-04) — TDD WDB-446 (DB agent; no compiler src)
+
+Copy `i32` **local** into typed `let` must not `.clone()`; product emits
+`let mut slice_count: i32 = gd.clone()` / `let mut x: i32 = u.clone()` in meshing.
+
+| Gate | Status |
+|------|--------|
+| WDB-446 MultiFile | ⏳ TDD pending — bare `gd` / `u` |
+| WDB-446 tip-out | ⏳ TDD pending — `gd.clone()` / `u.clone()` in meshing |
+
+**Root cause layer:** copy / i32-local-typed-let — Copy `i32` locals into typed lets must not auto-clone.
+
+**Why this is a new class:**
+- WDB-437 is i32 **formal** into let.
+- WDB-442 is u32 **local** into let.
+- WDB-445 is f32 **formal** into let.
+
+**What became unnecessary:** `gd.clone()` / `u.clone()` in voxel greedy meshing.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/445–446, P3.508–P3.661, WDB-412–446 (filed).
+
 ## P3.661 (2026-10-04) — product wj-json-util owned Value into json::get must auto-borrow
 
 Product `wj-json-util` `take_field` / `child_at`: tip emits `json::get(value, &key)`
