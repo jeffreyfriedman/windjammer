@@ -7,10 +7,11 @@ Copy `f32` formal into `let` must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-445 MultiFile | ⏳ TDD pending — `let mut x = start_x` |
-| WDB-445 tip-out | ⏳ TDD pending — `start_x.clone()` in vegetation |
+| WDB-445 MultiFile | ✅ isolate GREEN — `let mut x = start_x` (no `.clone()`) |
+| WDB-445 tip-out | ❌ tip RED — `start_x.clone()` in `rel_tip_out/terrain/vegetation.rs` |
 
-**Root cause layer:** copy / f32-formal-let — Copy `f32` formals bound into locals must not auto-clone.
+**Root cause layer:** copy / f32-formal-let — Copy `f32` formals bound into locals must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-437 is i32 **formal** into let.
@@ -19,9 +20,10 @@ Copy `f32` formal into `let` must not `.clone()`; product emits
 
 **What became unnecessary:** `start_x.clone()` in terrain vegetation scatter loops.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb445_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/444–445, P3.508–P3.658, WDB-412–445 (filed).
+**Do not steal:** WDB-406/408/411/444–445, P3.508–P3.659, WDB-412–445 (filed).
 
 ## P3.658 (2026-10-04) — demoted `&str` HashMap key must not `get(&key)`
 
