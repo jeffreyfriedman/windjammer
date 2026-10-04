@@ -188,10 +188,11 @@ Copy `i32` formal into tuple literal must not `.clone()`; product emits
 
 **What became unnecessary:** `x.clone()` / `y.clone()` in neighbor tuple construction.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb438` → `wdb438_` — **1 passed / 1 failed**
-(`wdb438_module` ✅, tip-out ❌ until regen; 2026-10-04).
+**Gates:** `CARGO_TARGET_DIR=$HOME/Library/Caches/windjammer/cargo-target/shared` →
+`cargo test --release --test all -- wdb438_` — **1 passed / 1 failed** post-fix
+`9cb2896a` (`wdb438_module` ✅, tip-out ❌ until product regen; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/437–438, P3.508–P3.638, WDB-412–438 (filed).
+**Do not steal:** WDB-406/408/411/437–438, P3.508–P3.641, WDB-412–440 (filed).
 
 ## P3.633 (2026-10-04) — multipass homonym `draw_text`: module-qualified call-site sig
 
