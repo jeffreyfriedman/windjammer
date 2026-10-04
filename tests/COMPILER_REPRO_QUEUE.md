@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.641 (2026-10-04) — TDD WDB-440 (DB agent; no compiler src)
+
+Copy `f32` local into struct literal field must not `.clone()`; product emits
+`mse: mse.clone()` in `ComparisonResult { … }`.
+
+| Gate | Status |
+|------|--------|
+| WDB-440 MultiFile | ⏳ TDD pending — `mse: mse` |
+| WDB-440 tip-out | ⏳ TDD pending — `mse: mse.clone()` in frame_analysis |
+
+**Root cause layer:** copy / struct-lit — Copy `f32` locals as struct fields must not auto-clone.
+
+**Why this is a new class:**
+- WDB-437 is formal into **let**.
+- WDB-428 is Copy into **println**.
+- WDB-347 is Copy f32 **match** binding.
+
+**What became unnecessary:** `mse.clone()` in SSIM comparison result construction.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/439–440, P3.508–P3.640, WDB-412–440 (filed).
+
 ## P3.640 (2026-10-04) — TDD WDB-439 (DB agent; no compiler src)
 
 Copy `i32` from indexed tuple field `.0` / `.1` must not `.clone()` on return;
