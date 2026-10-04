@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.643 (2026-10-04) — TDD WDB-441 (DB agent; no compiler src)
+
+Copy `i64` local into indexed assign must not `.clone()`; product emits
+`self.entities[i] = swapped_entity.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-441 MultiFile | ⏳ TDD pending — `= swapped_entity` |
+| WDB-441 tip-out | ⏳ TDD pending — `swapped_entity.clone()` in component_storage |
+
+**Root cause layer:** copy / index-assign — Copy `i64` locals assigned into `Vec` slots must not auto-clone.
+
+**Why this is a new class:**
+- WDB-437 is formal into **let**.
+- WDB-440 is f32 into **struct lit**.
+- WDB-436 is loop counter into **cast** assign.
+
+**What became unnecessary:** `swapped_entity.clone()` in ECS sparse swap-remove.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/440–441, P3.508–P3.642, WDB-412–441 (filed).
+
 ## P3.642 (2026-10-04) — reused owned String into owned formal must clone first use
 
 Product `wj-todo-cli` `stats` / `export`: `let snapshot = encode_store(store)` then
