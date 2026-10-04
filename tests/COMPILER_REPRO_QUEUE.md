@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.640 (2026-10-04) — TDD WDB-439 (DB agent; no compiler src)
+
+Copy `i32` from indexed tuple field `.0` / `.1` must not `.clone()` on return;
+product emits `return self.nodes[index as usize].0.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-439 MultiFile | ⏳ TDD pending — `return self.nodes[i].0` |
+| WDB-439 tip-out | ⏳ TDD pending — `.0.clone()` / `.1.clone()` on nodes[i] |
+
+**Root cause layer:** copy / index-tuple-field — Copy `i32` via `nodes[i].0` must not auto-clone.
+
+**Why this is a new class:**
+- WDB-363 is `].clone().field` (clone element then field).
+- WDB-423 is destructure of indexed tuple element.
+- WDB-438 is Copy formals in tuple **literal** into `push`.
+
+**What became unnecessary:** `.0.clone()` / `.1.clone()` on astar node accessors.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/438–439, P3.508–P3.639, WDB-412–439 (filed).
+
 ## P3.639 (2026-10-04) — owned String formal must not receive `&String` at adapter
 
 Product `wj-auth-api` adapter: `handle_http(…, authorization: String, …)` but tip
@@ -113,8 +136,8 @@ Copy `i32` formal into tuple literal must not `.clone()`; product emits
 
 **What became unnecessary:** `x.clone()` / `y.clone()` in neighbor tuple construction.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb438_` — **1 passed / 1 failed**
-(isolate GREEN, tip RED; strengthened method+`get_cost` fixture; 2026-10-04).
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb438` → `wdb438_` — **1 passed / 1 failed**
+(`wdb438_module` ✅, tip-out ❌ until regen; 2026-10-04).
 
 **Do not steal:** WDB-406/408/411/437–438, P3.508–P3.638, WDB-412–438 (filed).
 
