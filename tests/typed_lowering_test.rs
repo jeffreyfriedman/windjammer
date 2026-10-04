@@ -154,12 +154,21 @@ fn main() {
 }
 "#);
 
-    let has_to_string = rust.contains("\"Metal\".to_string()")
+    // Tip may keep owned `name: String` (call-site `.to_string()` / `String::from`)
+    // or demote the formal to `&str` when the body only assigns into a String field
+    // (`self.name = name.to_string()`). Both are valid; bare lit into `&str` is preferred.
+    let owned_call_site = rust.contains("\"Metal\".to_string()")
         || rust.contains("\"Metal\".to_owned()")
         || rust.contains("String::from(\"Metal\")");
+    let demoted_str_formal = rust.contains("name: &str")
+        && rust.contains("mat.set_name(\"Metal\")")
+        && rust.contains("self.name = name.to_string()");
 
-    assert!(has_to_string,
-        "String literal to owned String param needs .to_string()\nGenerated:\n{}", rust);
+    assert!(
+        owned_call_site || demoted_str_formal,
+        "string lit into text formal needs owned coercion or demoted &str assign path\nGenerated:\n{}",
+        rust
+    );
 }
 
 // ============================================================================
