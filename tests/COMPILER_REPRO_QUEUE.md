@@ -61,7 +61,7 @@ Two stacked patho scans:
 | `restore_pub_owned_scales_with_program_lookup_index` | ✅ GREEN |
 | `restore_pub_owned_custom_formals_uses_program_lookup` | ✅ GREEN |
 | tip `wj build` wdb-layers `--library --module-file --no-cargo` | ✅ completes ~275s (EXIT:0; was hung in Custom-formal restore) |
-| Full suite through wdb-layers dogfood | 🔧 tip fix landed — suite re-running on `bdd8148e` |
+| Full suite through wdb-layers dogfood | 🔧 tip fix landed — suite re-running on `d61ee6ab` |
 
 **Root cause layer:** signature resolution + bare-pass restore performance
 (index completeness — not ownership heuristics).
@@ -190,9 +190,10 @@ Copy `i32` formal into local `let` must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-437 MultiFile | ✅ GREEN @ `c2b9db42` — isolate `let mut r = radius` no `.clone()` |
-| WDB-437 tip-out | ❌ RED @ `c2b9db42` — `radius.clone()` in station_geometry tip+gen |
+| WDB-437 tip-out | ✅ GREEN after tip regen (`d61ee6ab`) — tip already correct; stale `rel_tip_out`/gen cleared |
 
-**Root cause layer:** copy / formal — Copy formals bound into locals must not auto-clone.
+**Root cause layer:** copy / formal — Copy formals bound into locals must not auto-clone
+(tip already GREEN; tip-out was product lag).
 
 **Why this is a new class:**
 - WDB-427 is Copy **field** into let (`chunk.size.clone()`).
@@ -201,7 +202,7 @@ Copy `i32` formal into local `let` must not `.clone()`; product emits
 
 **What became unnecessary:** `radius.clone()` when initializing `r` from an i32 formal.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb437_` — 1 passed / 1 failed (isolate GREEN, tip RED).
+**Gates:** `cargo test --release --test all -- wdb437_` → 2 passed (2026-10-04).
 
 **Do not steal:** WDB-406/408/411/436, P3.508–P3.618, WDB-412–437 (filed).
 
@@ -213,9 +214,10 @@ Copy `i32` formal into local `let` must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-436 MultiFile | ✅ GREEN @ `70f7225b` — isolate `before_idx = i` no `.clone()` |
-| WDB-436 tip-out | ❌ RED @ `70f7225b` — `i.clone() as i32` in animation/clip |
+| WDB-436 tip-out | ✅ GREEN after tip regen (`d61ee6ab`) — tip already correct; stale `rel_tip_out`/gen cleared |
 
-**Root cause layer:** copy / loop — usize counter cast-assign to i32 must not auto-clone.
+**Root cause layer:** copy / loop — usize counter cast-assign to i32 must not auto-clone
+(tip already GREEN; tip-out was product lag).
 
 **Why this is a new class:**
 - WDB-394 is assign **without** cast (`best_idx = i.clone()`).
