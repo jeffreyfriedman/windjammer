@@ -1,5 +1,74 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.651 (2026-10-04) — owned i64 method formal must not receive `&99`
+
+Product `wj-notes-api` `store.get(99)`: tip emits `get(&99_i64)` while formal is
+`id: i64` → E0308.
+
+| Gate | Status |
+|------|--------|
+| `owned_i64_method_formal_must_not_receive_ref_literal` | ❌ tip RED |
+
+**Root cause layer:** call-site ownership — Copy integer literals into owned
+integer formals must not auto-borrow.
+
+**Why this is a new class:**
+- P3.649/650 are `&usize` into slice get / Vec::remove.
+- P3.651 is `&i64` literal into owned `i64` method formal (notes Store::get).
+
+**What became unnecessary:** reshaping notes `store.get(99)` tests.
+
+**Gates:** tip 13:39 dogfood notes-api RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_i64_method_formal_must_not_receive_ref_literal`
+
+**Do not steal:** P3.646–650 (filed).
+
+## P3.650 (2026-10-04) — `Vec::remove(0)` literal must not borrow
+
+Product `wj-proxy` `self.logs.remove(0)` tip emits `remove(&0_usize)` → E0308.
+Isolate named-local remove gate can false-GREEN.
+
+| Gate | Status |
+|------|--------|
+| `vec_remove_usize_literal_must_not_borrow` | ❌ tip RED — product proxy |
+
+**Root cause layer:** call-site ownership — `Vec::remove` takes owned `usize`;
+integer literals must not be borrowed.
+
+**Why this is a new class:**
+- `bug_vec_remove_usize_no_ref` is named local `pos`.
+- P3.650 is literal `0` → `&0_usize` on product proxy.
+
+**What became unnecessary:** casting / reshape ring-buffer trim in proxy.
+
+**Gates:** tip 13:39 dogfood proxy RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- vec_remove_usize_literal_must_not_borrow`
+
+**Do not steal:** P3.646–649 (filed).
+
+## P3.649 (2026-10-04) — slice `.get(N)` literal must not borrow `&N_usize`
+
+Product `wj-cron` `parts.get(0)` … tip emits `parts.get(&0_usize)` → E0277.
+Blocks scheduler (path-dep). Distinct from P3.644 (variable `idx as usize` in sync).
+
+| Gate | Status |
+|------|--------|
+| `slice_get_usize_literal_must_not_borrow` | ❌ tip RED — product wj-cron |
+
+**Root cause layer:** call-site ownership — `slice::get` takes owned `usize`;
+integer literals must not be borrowed as `&N_usize`.
+
+**Why this is a new class:**
+- P3.644 is variable cast index `&(idx as usize)` (sync pool).
+- P3.649 is integer **literal** `&0_usize` (cron parse).
+
+**What became unnecessary:** reshaping cron field splits / scheduler deps.
+
+**Gates:** tip 13:39 dogfood cron/scheduler RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- slice_get_usize_literal_must_not_borrow`
+
+**Do not steal:** P3.646–648 (filed).
+
 ## P3.646 (2026-10-04) — HashMap::values() `&Copy` into owned add / cast
 
 Product `EventBus::listener_count`: `for count in self.subscriber_counts.values()`
