@@ -179,7 +179,11 @@ pub(crate) fn has_ownership_collision_for_call(
         return gen.has_explicit_ownership_collision_with_global(func_name);
     }
     let simple_name = func_name.rsplit("::").next().unwrap_or(func_name);
-    if gen.has_explicit_ownership_collision_with_global(simple_name) {
+    // Module-qualified user paths (`draw::draw_text`) disambiguate homonyms — do not
+    // treat bare `draw_text` ownership collision as blocking this call site.
+    if ownership_collision_blocks_autoborrow(func_name)
+        && gen.has_explicit_ownership_collision_with_global(simple_name)
+    {
         return true;
     }
     // Simple-name ownership/type collision (e.g. two modules' `draw_text`) must
@@ -1357,6 +1361,10 @@ pub(crate) fn qualified_callee_skips_bare_homonym_lookup(callee_name: &str) -> b
     if callee_name.starts_with("std::") {
         return true;
     }
+    // User crate modules (`draw::draw_text` vs `hud::draw_text`) disambiguate by prefix.
+    if is_lowercase_user_module_qualified_call(callee_name) {
+        return true;
+    }
     // Runtime-std modules (`csv::write`, `thread::spawn` after boundary registration).
     // Use the first path segment only — do not blanket-skip every user `helper::fn`.
     callee_name.rsplit_once("::").is_some_and(|(module, _)| {
@@ -2494,6 +2502,13 @@ mod tests {
         let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), &empty_aliases(), None);
         assert!(result.is_some());
         assert!(result.unwrap().has_collision);
+    }
+
+    #[test]
+    fn user_module_qualified_call_skips_bare_homonym_refresh() {
+        assert!(qualified_callee_skips_bare_homonym_lookup("draw::draw_text"));
+        assert!(qualified_callee_skips_bare_homonym_lookup("hud::draw_text"));
+        assert!(!qualified_callee_skips_bare_homonym_lookup("draw_text"));
     }
 
     #[test]

@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.633 (2026-10-04) — multipass homonym `draw_text`: module-qualified call-site sig
+
+When `draw::draw_text` and `hud::draw_text` both exist, `game.rs` emitted
+`draw::draw_text(&label, …)` — wrong homonym borrow from bare `draw_text` refresh
+challengers while single-module multipass still moved `label`.
+
+| Gate | Status |
+|------|--------|
+| `test_multipass_module_qualified_autoborrow` | ✅ GREEN |
+| `test_multipass_no_name_collision_different_modules` | ✅ GREEN |
+| spawn / mpsc / notes empty-lit / `owned_string_for_loop_load` | ✅ no-reg |
+
+**Root cause layer:** call-site signature refresh (`qualified_callee_skips_bare_homonym_lookup` + `has_ownership_collision_for_call`) — user `draw::fn` paths did not skip bare leaf registry keys, so `prefer_shared_text_ref_signature` upgraded owned FFI-forward formals from a sibling homonym; simple-name ownership collision also flagged module-qualified calls.
+
+**Fix:** Treat `is_lowercase_user_module_qualified_call` like runtime-std/type-qualified paths (no bare homonym challengers); only apply simple-name explicit ownership collision when `ownership_collision_blocks_autoborrow(func_name)`.
+
+**What became unnecessary:** Peels/heuristics to strip `&label` on collision — registry key discipline fixes emit at source.
+
+**Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
+`cargo test --release --test all -- test_multipass_module_qualified`
+`cargo test --release --lib -- user_module_qualified_call_skips_bare_homonym_refresh`
+`cargo test --release --test all -- owned_string_for_loop_load spawn mpsc empty_lit`
+
 ## P3.632 (2026-10-04) — tip-truth gates: module_qualified move + class3 demoted `&str`
 
 Stale assertions expected `&label` auto-borrow / call-site `.to_string("Metal")`
@@ -10,7 +33,7 @@ while tip correctly:
 | Gate | Status |
 |------|--------|
 | `test_multipass_module_qualified_autoborrow` | ✅ tip GREEN (move, not `&label`) |
-| `test_multipass_no_name_collision_different_modules` | ✅ tip GREEN |
+| `test_multipass_no_name_collision_different_modules` | ✅ GREEN (P3.633 compiler fix) |
 | `class3_string_literal_to_owned_param` | ✅ tip GREEN (owned coerce **or** demoted `&str`) |
 
 **Root cause layer:** n/a (gate alignment) — tip ownership already correct; tests
