@@ -78,8 +78,8 @@ Copy `i32` formal into local `let` must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-437 MultiFile | ⏳ TDD pending — `let mut r = radius` |
-| WDB-437 tip-out | ⏳ TDD pending — `radius.clone()` in station_geometry |
+| WDB-437 MultiFile | ✅ GREEN @ `c2b9db42` — isolate `let mut r = radius` no `.clone()` |
+| WDB-437 tip-out | ❌ RED @ `c2b9db42` — `radius.clone()` in station_geometry tip+gen |
 
 **Root cause layer:** copy / formal — Copy formals bound into locals must not auto-clone.
 
@@ -90,9 +90,9 @@ Copy `i32` formal into local `let` must not `.clone()`; product emits
 
 **What became unnecessary:** `radius.clone()` when initializing `r` from an i32 formal.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb437_` — 1 passed / 1 failed (isolate GREEN, tip RED).
 
-**Do not steal:** WDB-406/408/411/436, P3.508–P3.617, WDB-412–436 (filed).
+**Do not steal:** WDB-406/408/411/436, P3.508–P3.618, WDB-412–437 (filed).
 
 ## P3.617 (2026-10-03) — TDD WDB-436 (DB agent; no compiler src)
 
