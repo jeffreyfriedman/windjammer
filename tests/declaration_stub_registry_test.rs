@@ -56,8 +56,14 @@ pub fn render() {
 
     let code = fs::read_to_string(out.join("game.rs")).expect("game.rs");
     assert!(
-        code.contains("&label"),
-        "expected auto-borrow for draw::draw_text:\n{}",
+        code.contains("draw::draw_text(label,")
+            || code.contains("draw::draw_text(label ,"),
+        "owned string local must move into draw::draw_text(text: string) forwarder, not borrow:\n{}",
+        code
+    );
+    assert!(
+        !code.contains("draw::draw_text(&label"),
+        "must not borrow owned Copy/string formal at call site:\n{}",
         code
     );
 }

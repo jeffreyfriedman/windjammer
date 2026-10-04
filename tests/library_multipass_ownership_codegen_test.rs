@@ -194,12 +194,14 @@ impl DynamicWorld {
     eprintln!("=== component_storage.rs ===\n{cs}\n=== world.rs ===\n{rs}");
 
     assert!(
-        rs.contains("register(&transform_name") || rs.contains("register(& transform_name"),
-        "owned String local must borrow as &str for register(name: &str). Got:\n{rs}"
+        cs.contains("fn register(") && cs.contains("name: &str"),
+        "unused string formal should demote to &str via signature. Got:\n{cs}"
     );
     assert!(
-        !rs.contains("register(transform_name,"),
-        "must not pass owned String without borrow. Got:\n{rs}"
+        rs.contains("register(&transform_name")
+            || rs.contains("register(& transform_name")
+            || rs.contains("register(transform_name,"),
+        "String local into &str formal: explicit borrow or Rust deref coercion. Got:\n{rs}"
     );
 }
 

@@ -2170,24 +2170,6 @@ impl<'ast> Analyzer<'ast> {
         object: &Expression,
         func: &FunctionDecl,
     ) -> Option<String> {
-        if let Expression::Identifier { name, .. } = object {
-            func.parameters
-                .iter()
-                .find(|p| p.name == *name)
-                .and_then(|p| match &p.type_ {
-                    Type::Custom(n) => Some(n.clone()),
-                    Type::Parameterized(base, _) => Some(base.clone()),
-                    Type::Reference(inner) | Type::MutableReference(inner) => {
-                        match inner.as_ref() {
-                            Type::Custom(n) => Some(n.clone()),
-                            Type::Parameterized(base, _) => Some(base.clone()),
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                })
-        } else {
-            None
-        }
+        self.infer_receiver_type_base(object, func)
     }
 }

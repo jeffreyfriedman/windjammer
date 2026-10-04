@@ -135,6 +135,10 @@ pub fn type_is_option_mut_ref(ty: &Type) -> bool {
 }
 
 /// Map/set key lookup returning a shared reference inside `Option` (e.g. `HashMap::get`).
+///
+/// WJ `std::map::Map::get -> Option<V>` (often with owned `key: K`) is surface sugar; the
+/// Rust backend lowers to `HashMap::get -> Option<&V>`. Project analysis of `std/map.wj`
+/// must not hide that shared-ref contract (P3.638 / event `get_data_string`).
 pub fn is_map_shared_get_call(
     method: &str,
     receiver_type: Option<&str>,
@@ -144,13 +148,28 @@ pub fn is_map_shared_get_call(
     let Some(sig) = sig else {
         return false;
     };
-    if !method_returns_option_shared_ref(sig) {
+    let receiver_is_map = receiver_type.is_some_and(|rt| {
+        let base = rt.split('<').next().unwrap_or(rt);
+        is_map_type_name(base)
+    });
+    let backend_shared_get = ["HashMap", "BTreeMap"].iter().any(|backend| {
+        registry
+            .get_signature(&format!("{backend}::{method}"))
+            .is_some_and(method_returns_option_shared_ref)
+    });
+    let returns_shared =
+        method_returns_option_shared_ref(sig) || (receiver_is_map && backend_shared_get);
+    if !returns_shared {
         return false;
     }
     if method_is_map_key_qualified(method, receiver_type, registry) {
         return true;
     }
-    is_collection_key_lookup(sig, 0, receiver_type)
+    if is_collection_key_lookup(sig, 0, receiver_type) {
+        return true;
+    }
+    // WJ Map::get may record Owned keys; still a shared-ref get via HashMap contract.
+    receiver_is_map && backend_shared_get
 }
 
 /// Name of a method on `receiver_type` that returns `Option<&mut T>`, if any.
@@ -1884,6 +1903,32 @@ mod pattern_registry_tests {
         assert!(is_map_shared_get_call("get", Some("HashMap"), reg));
         assert!(map_has_get_mut_sibling(Some("HashMap"), reg));
         assert!(!is_map_shared_get_call("get", Some("String"), reg));
+    }
+
+    #[test]
+    fn wj_map_get_option_v_still_shared_get_via_hashmap_contract() {
+        // Simulate project-analyzed std/map.wj: Map::get(key: K) -> Option<V>.
+        let mut reg = SignatureRegistry::stdlib().clone();
+        let mut map_get = reg
+            .get_signature("HashMap::get")
+            .expect("HashMap::get")
+            .clone();
+        map_get.name = "Map::get".to_string();
+        map_get.return_type = Some(Type::Option(Box::new(Type::Custom("V".to_string()))));
+        // WJ surface uses owned key; Rust backend still borrows.
+        if let Some(own) = map_get.param_ownership.get_mut(1) {
+            *own = OwnershipMode::Owned;
+        }
+        if let Some(ty) = map_get.param_types.get_mut(1) {
+            *ty = Type::Custom("K".to_string());
+        }
+        reg.add_function("Map::get".to_string(), map_get);
+        assert!(
+            is_map_shared_get_call("get", Some("Map"), &reg),
+            "P3.638: WJ Map::get Option<V> + Owned key must still classify as shared-ref get"
+        );
+        // remove returns owned Option<V> on HashMap — must not become shared-get
+        assert!(!is_map_shared_get_call("remove", Some("Map"), &reg));
     }
 
     #[test]
