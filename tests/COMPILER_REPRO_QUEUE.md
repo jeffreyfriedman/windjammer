@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.656 (2026-10-04) — TDD WDB-444 (DB agent; no compiler src)
+
+Copy unit-enum formals into field assign / struct lit must not `.clone()`;
+product emits `weather.clone()` / `intensity.clone()` in weather_system.
+
+| Gate | Status |
+|------|--------|
+| WDB-444 MultiFile | ⏳ TDD pending — bare `weather` / `intensity` |
+| WDB-444 tip-out | ⏳ TDD pending — `weather.clone()` in weather_system |
+
+**Root cause layer:** copy / unit-enum — Copy unit enums as formals/locals must not auto-clone into assigns.
+
+**Why this is a new class:**
+- WDB-384/392 are `Direction::Variant.clone()` **path** exprs.
+- WDB-440 is f32 into **struct lit**.
+- WDB-437 is i32 formal into **let**.
+
+**What became unnecessary:** `weather.clone()` / `intensity.clone()` in WeatherSystem.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/443–444, P3.508–P3.655, WDB-412–444 (filed).
+
 ## P3.655 (2026-10-04) — product wj-regex owned args into regex must auto-borrow
 
 Product `wj-regex` thin wrappers: tip keeps `pattern: String, text: String` and
