@@ -1,5 +1,22 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.590b (2026-10-04) — `load_batch` moves owned path (tip-out GREEN)
+
+Product `AssetLoader::load_batch` reuses `name` in Err → `name.clone()`, but
+`path` must move into owned `String` formal. Tip assets transpile emits
+`self.load(name.clone(), path, size)`. Stale gen had `&path` (false tip-out RED).
+
+| Gate | Status |
+|------|--------|
+| `owned_string_for_loop_load_must_not_borrow_path` | ✅ tip GREEN |
+| `tip_out_loader_load_batch_must_not_borrow_path` | ✅ tip-out GREEN |
+| `tip_out_loader_owned_string_path_must_not_borrow` | ✅ tip-out GREEN |
+
+**Root cause layer:** tip call-site already correct after P3.588/590; sync
+`gen/assets/loader.rs` via tip `wj build src/assets`.
+
+**Do not steal:** remaining engine E0308 clusters (mesh_renderer, blend_tree, …).
+
 ## P3.621 (2026-10-04) — owned String return into demoted `&str` method formal
 
 Product `wj-webhook` adapter: `app.handle(method_label(req.method), …)` where
@@ -150,15 +167,18 @@ Product `wj-proxy` `complete_proxy(…, client_key: string, …)`: tip emits
 
 | Gate | Status |
 |------|--------|
-| `reused_owned_string_method_formal_must_not_into_move_before_second_use` | ❌ tip RED — product proxy |
+| `reused_owned_string_method_formal_must_not_into_move_before_second_use` | ✅ tip GREEN |
 
-**Root cause layer:** formal encoding — reused owned string method formals must not
-take the pub-builder Into upgrade; consuming `.into()` before second use is illegal.
+**Root cause layer:** formal encoding — reused owned string method formals (≥2
+identifier uses) must not take the pub-builder `impl Into<String>` upgrade;
+consuming `.into()` before second use is illegal.
 
-**What became unnecessary:** manual `client_key.clone()` rewrites in proxy domain.
+**What became unnecessary:** manual `client_key.clone()` rewrites in proxy domain;
+`client_key: impl Into<String>` + `check_rate(client_key.into())` before log reuse.
 
-**Gates:** tip eco-gates product build + cargo gate FAILED (RED) 2026-10-03.
-- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_method_formal_must_not_into_move_before_second_use`
+**Gates:** tip `.cargo-target-wj` 2026-10-04 — proxy emit `client_key: String` +
+`check_rate(client_key.clone())`;
+`cargo test --release --test all -- reused_owned_string_method_formal_must_not_into_move_before_second_use`.
 
 **Do not steal:** WDB-406/408/411/430–435, P3.508–P3.614, WDB-412–435 (filed).
 
