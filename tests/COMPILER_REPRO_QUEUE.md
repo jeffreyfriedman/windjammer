@@ -1,5 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.646 (2026-10-04) — HashMap::values() `&Copy` into owned add / cast
+
+Product `EventBus::listener_count`: `for count in self.subscriber_counts.values()`
+tip emits `total += count as usize` → E0606 (`&usize` as `usize`). Correct is
+`*count` (or auto-deref in `+`). Engine surgically restored `*count`.
+
+| Gate | Status |
+|------|--------|
+| tip product `event/bus` listener_count | ❌ RED (`count as usize`) |
+
+**Root cause layer:** borrowed-iter Copy elem — `&usize` must deref into owned
+usize context (not `as usize`).
+
+**Do not steal:** P3.638 Map::get shared-ref (GREEN).
+
+## P3.647 (2026-10-04) — reused owned `Vec` formal gets `&clips` at recursive calls
+
+`BlendTree::evaluate_node(clips: Vec<…>)` stays owned; recursive call sites emit
+`&clips` → E0308. Need demote-to-`&Vec` (read-only index) **or** `.clone()` at
+multi-use sites — not bare `&` into owned formal.
+
+| Gate | Status |
+|------|--------|
+| tip `animation/blend_tree` evaluate_node | ❌ RED (`&clips` into `Vec`) |
+
+**Root cause layer:** call-site coerce vs formal ownership mismatch on reused Vec.
+
+**Do not steal:** P3.557/559 Vec demotion gates.
+
 ## P3.645 (2026-10-04) — product wj-csv owned args into stdlib must auto-borrow
 
 Product `wj-csv` thin wrappers: `csv.parse(text)` / `csv.write(rows)` tip emits
