@@ -14,13 +14,37 @@
 - `module_qualified_signature_test::test_multipass_module_qualified_autoborrow`
 - ~~`cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key`~~ ✅ P3.626
 - ~~`cross_crate_dogfooding_ownership_test::dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`~~ ✅ P3.627
-- `e0507_ownership_inference_test::test_for_loop_param_used_multiple_times_borrows`
+- ~~`e0507_ownership_inference_test::test_for_loop_param_used_multiple_times_borrows`~~ ✅ P3.628
+- ~~`e0507_ownership_inference_test::test_param_used_in_multiple_nested_loops_borrows`~~ ✅ P3.628
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
 - `codegen_windjammer_ui_full_regen_gate_test::datatable_owned_column_row_forward_must_cargo_check`
 
 **Gates:** log `/tmp/wj-full-suite-p3624b.log`; fail list `/tmp/wj-suite-fails.txt`.
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
+
+## P3.628 (2026-10-04) — multi-loop iterable reuse (`entity_components` E0382)
+
+| Gate | Status |
+|------|--------|
+| `test_for_loop_param_used_multiple_times_borrows` | ✅ GREEN — `for comp in &entity_components` |
+| `test_param_used_in_multiple_nested_loops_borrows` | ✅ GREEN |
+| WAL / store / spawn no-reg | ✅ GREEN (`dogfood_store_has_key`, `dogfood_wal_segment`, `spawn`, `mpsc`) |
+
+**Root cause layer:** codegen formal reconcile — `for_loop_borrow_needed` demoted
+params to `&Vec` formals, which suppressed use-site `&` in
+`should_borrow_for_iteration` (`inferred_borrowed_params` / `emitted_rust_ref_formals`).
+Tests (and E0382 fix intent) expect owned formals + borrowed iteration at the `for` site.
+
+**Fix:** Drop formal demotion branch for `for_loop_borrow_needed`; keep
+`precompute_for_loop_borrows` + `should_borrow_for_iteration` use-site borrow.
+
+**What became unnecessary:** Formal `&Vec` demotion solely for sequential/nested
+`for` iterable reuse; IR/solver unchanged (reuse was already marked in
+`for_loop_borrow_needed`).
+
+**Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
+`cargo test --release --test all -- test_for_loop_param_used_multiple_times_borrows test_param_used_in_multiple_nested_loops_borrows dogfood_store_has_key dogfood_wal_segment spawn mpsc`.
 
 ## P3.626 (2026-10-04) — WDB-209 `latest.has_key(key)` last-use move (tip-live)
 
