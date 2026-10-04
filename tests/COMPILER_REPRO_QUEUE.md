@@ -1,25 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
-## P3.625 (2026-10-04) — full suite post P3.622/624: 5622 ok / 121 fail (no hang)
+## P3.625 (2026-10-04) — full suite post P3.622–628 (no wdb-layers hang)
 
-`cargo test --release --test all` on tip `d61ee6ab`/`cd639652` finished in
-~1961s (EXIT:101). **wdb-layers dogfood no longer hangs** (P3.622).
+**wdb-layers dogfood no longer hangs** (P3.622). Re-run on `3c7dd5f1`:
+`cargo test --release --test all` → **5620 passed / 123 failed** (~1739s, EXIT:101).
+Log `/tmp/wj-full-suite-p3628.log`; fails `/tmp/wj-suite-fails-p3628.txt`.
 
 | Bucket | Count | Notes |
 |--------|------:|-------|
 | tip-out / gen / product scanners | ~85 | stale `.agent-wip/rel_tip_out` + game-core `gen/` — regen with tip `wj` |
-| tip-live / assertion | ~36 | triage next — many look like evolved tip vs stale expect (e.g. `module_qualified` wants `&label` while tip last-use-moves into owned `draw_text` that forwards to owned FFI) |
+| tip-live / assertion | ~38 | triage next (e0507 + WDB-209 + WAL cleared by P3.626–628) |
 
-**Sample tip-live to triage first:**
-- `module_qualified_signature_test::test_multipass_module_qualified_autoborrow`
-- ~~`cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key`~~ ✅ P3.626
-- ~~`cross_crate_dogfooding_ownership_test::dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`~~ ✅ P3.627
-- ~~`e0507_ownership_inference_test::test_for_loop_param_used_multiple_times_borrows`~~ ✅ P3.628
-- ~~`e0507_ownership_inference_test::test_param_used_in_multiple_nested_loops_borrows`~~ ✅ P3.628
+**Cleared tip-live:**
+- ~~`dogfood_store_has_key_forward_ref_borrows_owned_key`~~ ✅ P3.626
+- ~~`dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`~~ ✅ P3.627
+- ~~`e0507` multi-loop borrow pair~~ ✅ P3.628
+
+**Tip-live still open (priority):**
+- `module_qualified_signature_test::test_multipass_module_qualified_autoborrow` (likely stale expect: owned FFI forward → move)
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
-- `codegen_windjammer_ui_full_regen_gate_test::datatable_owned_column_row_forward_must_cargo_check`
-
-**Gates:** log `/tmp/wj-full-suite-p3624b.log`; fail list `/tmp/wj-suite-fails.txt`.
+- `path_and_bytes_borrow_tests::path_bytes_wal_layout_rustc_cargo_check`
+- `trait_impl_owned_param_no_reborrow_test::…`
+- notes_api empty-lit owned gates; `owned_string_for_loop_load_must_not_borrow_path`
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
 
