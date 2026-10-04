@@ -12,7 +12,7 @@
 
 **Sample tip-live to triage first:**
 - `module_qualified_signature_test::test_multipass_module_qualified_autoborrow`
-- `cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key`
+- ~~`cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key`~~ ✅ P3.626
 - `e0507_ownership_inference_test::test_for_loop_param_used_multiple_times_borrows`
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
 - `codegen_windjammer_ui_full_regen_gate_test::datatable_owned_column_row_forward_must_cargo_check`
@@ -20,6 +20,29 @@
 **Gates:** log `/tmp/wj-full-suite-p3624b.log`; fail list `/tmp/wj-suite-fails.txt`.
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
+
+## P3.626 (2026-10-04) — WDB-209 `latest.has_key(key)` last-use move (tip-live)
+
+| Gate | Status |
+|------|--------|
+| `dogfood_store_has_key_forward_ref_borrows_owned_key` | ✅ GREEN — `latest.has_key(key)` moves |
+| WDB-209 multipass + demotion regression bundle | ✅ GREEN (8 tests) |
+
+**Root cause layer:** codegen prepare (`param_has_owning_method_use`) — stale
+readonly convergence on sibling `get(&key)` made
+`method_call_arg_emits_shared_rust_ref` run before WJ AST owned `Key` on
+`BasePart::has_key`, so `non_self_owned_forward` demoted `key_in_latest_base`
+to `&Key` + `.clone()` at the call site.
+
+**Fix:** Check `method_call_arg_formal_is_owned_non_copy` before shared-ref
+skips in owning-use detection (`expression_has_owning_method_use` /
+`expression_has_owning_method_call_arg_use` / `method_call_sibling_ast_expects_owned_arg`).
+
+**What became unnecessary:** `key.clone()` at `latest.has_key` when formal stays
+owned; no ir_call_site peel / method-name heuristics.
+
+**Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
+`cargo test --release --test all -- wdb209_multipass_catalog_push_column_col_must_stay_owned dogfood_store_has_key_forward_ref_borrows_owned_key bug_demoted_vec_param_into_owned_vec_callee_must_clone_test bug_wdb124_module_file_demoted_vec_i64_formal_must_borrow_clone_call_sites_test bug_wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites_test bug_mut_param_passthrough_no_shared_amp_test` → **8 passed**.
 
 ## P3.624 (2026-10-04) — WDB-435 generic `ObjectPool<T>` Copy usize field return
 

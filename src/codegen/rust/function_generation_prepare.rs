@@ -3770,16 +3770,18 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Identifier { name, .. } if name == param_name
                         ) || Self::expr_is_field_or_index_of_param(arg, param_name);
                     if arg_is_param_or_field {
+                        // WJ AST / registry owned formals beat stale shared-ref metadata
+                        // (`BasePart::has_key(key: Key)` → `get(&key)` must still move at
+                        // `latest.has_key(key)` — WDB-209).
+                        if self.method_call_arg_formal_is_owned_non_copy(
+                            object, method, i, func,
+                        ) || self.method_call_sibling_ast_expects_owned_arg(object, method, i, func)
+                        {
+                            return true;
+                        }
                         // Emitted `&str` / shared-ref siblings are not owning uses.
                         if self.method_call_arg_emits_shared_rust_ref(object, method, i, func) {
                             continue;
-                        }
-                        if self.method_call_sibling_ast_expects_owned_arg(
-                            object, method, i, func,
-                        ) || self.method_call_arg_formal_is_owned_non_copy(
-                            object, method, i, func,
-                        ) {
-                            return true;
                         }
                     }
                 }
@@ -4051,21 +4053,19 @@ impl<'ast> CodeGenerator<'ast> {
                             Expression::Identifier { name, .. } if name == param_name
                         ) || Self::expr_is_field_or_index_of_param(arg, param_name);
                     if arg_is_param_or_field {
+                        // Owned AST / emitted String formals beat stale borrow flags
+                        // (P3.601; WDB-209: `has_key(key: Key)` must count before readonly
+                        // `get` convergence marks the slot shared-ref).
+                        if self.method_call_arg_formal_is_owned_non_copy(
+                            object, method, i, func,
+                        ) || self.method_call_sibling_ast_expects_owned_arg(object, method, i, func)
+                        {
+                            return true;
+                        }
                         // Codegen-confirmed shared-ref (`find_index(&str)`) is not owning —
                         // must not block outer demotion (`set_bool` → `&str`).
                         if self.method_call_arg_emits_shared_rust_ref(object, method, i, func) {
                             continue;
-                        }
-                        // Owned AST / emitted String formals beat stale borrow flags
-                        // (P3.601: `render_grid(left)` → `Tile::value_html(left)` must
-                        // count as owning so free-fn Into can fire; `expects_borrow` used
-                        // to `continue` first and skip these).
-                        if self.method_call_sibling_ast_expects_owned_arg(object, method, i, func)
-                            || self.method_call_arg_formal_is_owned_non_copy(
-                                object, method, i, func,
-                            )
-                        {
-                            return true;
                         }
                         if self.method_call_arg_expects_borrow(object, method, i, func) {
                             continue;
@@ -6800,6 +6800,9 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        if self.method_call_arg_formal_is_owned_non_copy(object, method, arg_index, func) {
+            return true;
+        }
         // Same-impl AST still says `find_index(key: string)` after codegen demoted to
         // `&str` — trust emitted shared-ref so wrappers (`set_bool`) demote too.
         if self.method_call_arg_emits_shared_rust_ref(object, method, arg_index, func) {
