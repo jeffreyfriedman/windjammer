@@ -1767,6 +1767,12 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let pidx = sig.arg_param_index(arg_index);
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(&sig, pidx) {
+            if method == "verify_user" {
+                eprintln!(
+                    "P3.637 method_registry owned_contract block rt={receiver_type} arg={arg_index} pidx={pidx} flags={:?}",
+                    sig.emitted_rust_ref_params
+                );
+            }
             return false;
         }
         if sig.formal_param_type(pidx).is_some_and(|t| {
@@ -1775,7 +1781,14 @@ impl<'ast> CodeGenerator<'ast> {
         }) {
             return false;
         }
-        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx)
+        let shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx);
+        if method == "verify_user" {
+            eprintln!(
+                "P3.637 method_registry rt={receiver_type} arg={arg_index} pidx={pidx} shared={shared} flags={:?} name={}",
+                sig.emitted_rust_ref_params, sig.name
+            );
+        }
+        shared
     }
 
     pub(crate) fn find_signature_by_name_and_arg_count_with_global(
@@ -4718,8 +4731,13 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.suppress_borrowed_clone
                 {
                     let self_is_borrowed = self.current_function_params.iter().any(|p| {
-                        p.name == "self" && matches!(p.ownership, crate::parser::OwnershipHint::Ref)
-                    });
+                        p.name == "self"
+                            && matches!(
+                                p.ownership,
+                                crate::parser::OwnershipHint::Ref
+                                    | crate::parser::OwnershipHint::Mut
+                            )
+                    }) || self.current_method_self_emits_borrowed_receiver();
                     if self_is_borrowed {
                         let is_copy = self
                             .infer_expression_type(expr)
@@ -4779,6 +4797,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && (self.inferred_borrowed_params.contains("self")
                         || self.inferred_mut_borrowed_params.contains("self")
                         || self.emitted_rust_ref_formals.contains("self")
+                        || self.current_method_self_emits_borrowed_receiver()
                         || self.current_function_params.iter().any(|p| {
                             p.name == "self"
                                 && matches!(

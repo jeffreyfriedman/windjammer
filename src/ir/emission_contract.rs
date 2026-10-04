@@ -39,6 +39,25 @@ pub fn plain_string_formal_passes_owned_at_call_site(
     true
 }
 
+/// Read `emitted_rust_ref_params[param_idx]`, including MethodSignature dual-layout
+/// (user-param flags omit the `self` slot while FunctionSignature indices include it).
+///
+/// P3.637: `verify_user(&str, &str)` with flags `[true, true]` must not treat the second
+/// user arg as missing (`arg_param_index(1) == 2` → OOB) when the vector has no self slot.
+fn emitted_shared_ref_flag(sig: &FunctionSignature, param_idx: usize) -> Option<bool> {
+    let flags = sig.emitted_rust_ref_params.as_ref()?;
+    if let Some(&v) = flags.get(param_idx) {
+        return Some(v);
+    }
+    // Dual layout: `arg_param_index` includes a self slot, but MethodSignature-length
+    // (and some registry) flag vectors omit it — so the last user arg indexes off the end.
+    // When the with-self index is OOB, fall back to the user-param index.
+    if sig.has_self_receiver_slot() && param_idx > 0 {
+        return flags.get(param_idx - 1).copied();
+    }
+    None
+}
+
 /// Whether codegen recorded (or unambiguously converged) a shared-ref Rust formal for `param_idx`.
 ///
 /// Plain WJ `string` formals require `emitted_rust_ref_params` — stale analyzer `Reference(str)`
@@ -50,14 +69,11 @@ pub fn callee_emits_shared_rust_ref_param(
     // Check emission flags before `emitted_owned_arg_contract` — that helper can call
     // back into this function via `bare_formal_is_owned_user_type` (stack overflow on
     // MutBorrowed collision stubs with no `emitted_rust_ref_params`).
-    if let Some(ref flags) = sig.emitted_rust_ref_params {
-        if flags.get(param_idx).copied().unwrap_or(false) {
-            return true;
-        }
-        if flags.get(param_idx).copied() == Some(false) {
-            // Codegen recorded an owned Rust formal; stale analyzer Reference(T) must not force `&`.
-            return false;
-        }
+    match emitted_shared_ref_flag(sig, param_idx) {
+        Some(true) => return true,
+        // Codegen recorded an owned Rust formal; stale analyzer Reference(T) must not force `&`.
+        Some(false) => return false,
+        None => {}
     }
     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx) {
         return false;
@@ -121,11 +137,7 @@ pub fn callee_emits_shared_rust_ref_param(
     // ownership is Owned, bare Custom is owned even if `param_types` still has a stale
     // `Reference(T)` (ReBAC `policy: Policy` after keep-owned refresh).
     if let Some(formal) = sig.formal_param_type(param_idx) {
-        let emits_shared_flag = sig
-            .emitted_rust_ref_params
-            .as_ref()
-            .and_then(|flags| flags.get(param_idx))
-            .copied();
+        let emits_shared_flag = emitted_shared_ref_flag(sig, param_idx);
         // Source-level `&T` / `&mut T` formals (QuestId, Key, …) — shared-ref contract.
         // Distinct from body-converged `Reference(T)` on bare owned aggregates (TableColumn).
         if matches!(formal, Type::Reference(_) | Type::MutableReference(_)) {
@@ -211,12 +223,7 @@ pub fn callee_emits_shared_rust_ref_param(
         // in formal_param_types must not resurrect `&through` at call sites (regression-060).
         if crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
             && !crate::type_classification::is_copy_pass_by_value_formal(bare)
-            && sig
-                .emitted_rust_ref_params
-                .as_ref()
-                .and_then(|flags| flags.get(param_idx))
-                .copied()
-                != Some(true)
+            && emitted_shared_ref_flag(sig, param_idx) != Some(true)
         {
             return false;
         }

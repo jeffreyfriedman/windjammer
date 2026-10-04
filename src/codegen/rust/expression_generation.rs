@@ -1218,7 +1218,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     crate::parser::OwnershipHint::Ref
                                         | crate::parser::OwnershipHint::Mut
                                 )
-                        }))
+                        })
+                        // P3.636: multipass may emit `&mut self` via `self_receiver_upgrades`
+                        // / registry refresh without re-seeding inferred_* during the body
+                        // pass — still treat `self.field` as behind a reference.
+                        || self.current_method_self_emits_borrowed_receiver())
                 {
                     return true;
                 }
@@ -1254,5 +1258,70 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => false,
         }
+    }
+
+    /// True when the current method emits `&self` / `&mut self` (inferred, upgraded, or
+    /// registry-confirmed) — used so `self.field` into owned formals still `.clone()`.
+    pub(in crate::codegen::rust) fn current_method_self_emits_borrowed_receiver(&self) -> bool {
+        let Some(fn_name) = self.current_function_name.as_deref() else {
+            return false;
+        };
+        // Prefer inferred/emitted sets already seeded for this body.
+        if self.inferred_borrowed_params.contains("self")
+            || self.inferred_mut_borrowed_params.contains("self")
+            || self.emitted_rust_ref_formals.contains("self")
+        {
+            return true;
+        }
+        let suffix = format!("::{fn_name}");
+        let upgrade_borrowed = self.self_receiver_upgrades.iter().any(|(key, mode)| {
+            (key == fn_name || key.ends_with(&suffix))
+                && matches!(
+                    mode,
+                    crate::analyzer::OwnershipMode::Borrowed
+                        | crate::analyzer::OwnershipMode::MutBorrowed
+                )
+        });
+        if upgrade_borrowed {
+            return true;
+        }
+        let mut keys = vec![fn_name.to_string()];
+        if let Some(sn) = self.current_struct_name.as_deref() {
+            keys.push(format!("{sn}::{fn_name}"));
+        }
+        for key in &keys {
+            for reg in [&self.signature_registry]
+                .into_iter()
+                .chain(self.global_signature_registry().into_iter())
+            {
+                if let Some(sig) = reg.get_signature(key) {
+                    if !sig.has_self_receiver {
+                        continue;
+                    }
+                    if matches!(
+                        sig.param_ownership.first(),
+                        Some(crate::analyzer::OwnershipMode::Borrowed)
+                            | Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                    ) {
+                        return true;
+                    }
+                    if sig
+                        .emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|f| f.first())
+                        .copied()
+                        == Some(true)
+                    {
+                        return true;
+                    }
+                    if sig.param_types.first().is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    }) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }

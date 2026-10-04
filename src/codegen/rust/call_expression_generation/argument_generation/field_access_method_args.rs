@@ -23,6 +23,52 @@ fn module_qualified_call_name(
     )
 }
 
+/// `self.field` behind `&self`/`&mut self` into an owned formal must `.clone()`.
+fn ensure_clone_borrowed_self_field_into_owned(
+    gen: &CodeGenerator<'_>,
+    coerced: &mut String,
+    arg: &Expression<'_>,
+    sig: &crate::analyzer::FunctionSignature,
+    arg_index: usize,
+    qualified_name: &str,
+) {
+    if !matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. }) {
+        return;
+    }
+    if coerced.ends_with(".clone()") || coerced.ends_with(".to_owned()") {
+        return;
+    }
+    if gen.expression_is_copy(arg) {
+        return;
+    }
+    if !gen.field_access_root_is_behind_reference(arg) {
+        return;
+    }
+    let pidx = sig.arg_param_index(arg_index);
+    let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+        || crate::analyzer::SignatureRegistry::stdlib()
+            .get_signature(qualified_name)
+            .or_else(|| {
+                let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+                crate::analyzer::SignatureRegistry::stdlib().get_signature(simple)
+            })
+            .is_some_and(|std_sig| {
+                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    std_sig,
+                    std_sig.arg_param_index(arg_index),
+                )
+            });
+    if !owned_slot {
+        return;
+    }
+    let base = if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
+        coerced[1..].to_string()
+    } else {
+        coerced.clone()
+    };
+    *coerced = format!("{base}.clone()");
+}
+
 pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
     gen: &mut CodeGenerator<'ast>,
     sig: &crate::analyzer::FunctionSignature,
@@ -122,6 +168,17 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                         &effective_sig,
                         i,
                         type_name.as_deref(),
+                    );
+                    // P3.636: `json.to_string(self.events)` is Call(FieldAccess), not a
+                    // free `json::to_string` site � clone `self.field` behind `&mut self`
+                    // into owned formals when IR missed Clone.
+                    ensure_clone_borrowed_self_field_into_owned(
+                        gen,
+                        &mut coerced,
+                        arg_to_generate,
+                        &effective_sig,
+                        i,
+                        &qualified_name,
                     );
                     return vec![coerced];
                 }
@@ -265,6 +322,27 @@ pub(in crate::codegen::rust) fn field_access_method_args_fallback<'ast>(
                             &qualified_name,
                             type_name.as_deref(),
                             &std_sig,
+                        );
+                    }
+                    if let Some(ref sig) = fallback_sig {
+                        ensure_clone_borrowed_self_field_into_owned(
+                            gen,
+                            &mut coerced,
+                            arg_to_generate,
+                            sig,
+                            i,
+                            &qualified_name,
+                        );
+                    } else if let Some(std_sig) =
+                        crate::analyzer::SignatureRegistry::stdlib().get_signature(&qualified_name)
+                    {
+                        ensure_clone_borrowed_self_field_into_owned(
+                            gen,
+                            &mut coerced,
+                            arg_to_generate,
+                            std_sig,
+                            i,
+                            &qualified_name,
                         );
                     }
                     return coerced;

@@ -50,7 +50,11 @@ impl<'ast> CodeGenerator<'ast> {
             &unused_params,
         ));
 
-        self.refresh_method_registry_from_emitted_formals(func);
+        // P3.636: trust emitted `&self` / `&mut self` strings — some formal paths emit a
+        // borrowed receiver without seeding inferred_* before the body pass.
+        self.sync_self_borrow_tracking_from_emitted_params(&params);
+
+        self.refresh_method_registry_from_emitted_formals(func, &params);
         self.refresh_free_function_registry_from_emitted_formals(func, &params);
         if self.current_struct_name.is_none() {
             self.preregistered_free_function_emitted_params
@@ -101,7 +105,9 @@ impl<'ast> CodeGenerator<'ast> {
             &unused_params,
         ));
 
-        self.refresh_method_registry_from_emitted_formals(func);
+        self.sync_self_borrow_tracking_from_emitted_params(&params);
+
+        self.refresh_method_registry_from_emitted_formals(func, &params);
         self.refresh_free_function_registry_from_emitted_formals(func, &params);
         if self.current_struct_name.is_none() {
             self.preregistered_free_function_emitted_params

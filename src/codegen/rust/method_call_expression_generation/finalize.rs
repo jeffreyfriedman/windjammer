@@ -327,23 +327,45 @@ impl<'ast> CodeGenerator<'ast> {
                             || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
                                 &sig, sig_param_idx,
                             );
-                        ast_owned
-                            || from_sig
-                            || receiver_type_name.as_ref().is_some_and(|rt| {
+                        let resolve_owned = receiver_type_name.as_ref().is_some_and(|rt| {
+                            self.resolve_method_function_signature(
+                                rt,
+                                method,
+                                arguments.len(),
+                            )
+                            .is_some_and(|resolved| {
+                                let pidx = resolved.arg_param_index(i);
+                                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    &resolved, pidx,
+                                ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                                    &resolved, pidx,
+                                )
+                            })
+                        });
+                        let owned = ast_owned || from_sig || resolve_owned;
+                        // P3.637: demoted `&str` method formals (refresh / dual-layout) beat
+                        // stale AST/`bare_formal_is_owned_user_type` owned claims that block
+                        // `&password` on multi-arg sites while `&username` already borrowed.
+                        if owned {
+                            let shared = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                sig, sig_param_idx,
+                            ) || receiver_type_name.as_ref().is_some_and(|rt| {
                                 self.resolve_method_function_signature(
                                     rt,
                                     method,
                                     arguments.len(),
                                 )
                                 .is_some_and(|resolved| {
-                                    let pidx = resolved.arg_param_index(i);
-                                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                        &resolved, pidx,
-                                    ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
-                                        &resolved, pidx,
+                                    crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                        &resolved,
+                                        resolved.arg_param_index(i),
                                     )
                                 })
-                            })
+                            });
+                            owned && !shared
+                        } else {
+                            false
+                        }
                     };
                     let apply_borrow = |arg_str: &mut String| {
                         if callee_arg_emits_owned
@@ -733,6 +755,11 @@ impl<'ast> CodeGenerator<'ast> {
                             (receiver_type_name.as_deref(), arguments.get(i))
                         {
                             if let Expression::Identifier { name, .. } = arg_expr {
+                                if method == "verify_user" {
+                                    eprintln!(
+                                        "P3.637 finalize bare-id method={method} i={i} name={name} arg_str={arg_str} owned={callee_arg_emits_owned} rt={rt}"
+                                    );
+                                }
                                 let copy_aggregate_owned_pass = {
                                     let caller_copy = self.current_function_params.iter().any(
                                         |p| {

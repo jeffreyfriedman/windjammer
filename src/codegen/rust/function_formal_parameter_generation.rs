@@ -1657,26 +1657,44 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Ref => {
                         if param.name == "self" {
                             let body_modifies = body_modifies;
-                            if let Some(ownership_mode) =
+                            let self_str = if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
                                 match ownership_mode {
-                                    OwnershipMode::MutBorrowed => return "&mut self".to_string(),
+                                    OwnershipMode::MutBorrowed => "&mut self",
                                     OwnershipMode::Borrowed => {
                                         if !self.in_trait_impl && body_modifies {
-                                            return "&mut self".to_string();
+                                            "&mut self"
+                                        } else {
+                                            "&self"
                                         }
-                                        return "&self".to_string();
                                     }
-                                    OwnershipMode::Owned => {
-                                        return "self".to_string();
-                                    }
+                                    OwnershipMode::Owned => "self",
+                                }
+                            } else if !self.in_trait_impl && body_modifies {
+                                "&mut self"
+                            } else {
+                                "&self"
+                            };
+                            match self_str {
+                                "&mut self" => {
+                                    self.inferred_mut_borrowed_params
+                                        .insert("self".to_string());
+                                    self.inferred_borrowed_params.remove("self");
+                                    self.emitted_rust_ref_formals.insert("self".to_string());
+                                }
+                                "&self" => {
+                                    self.inferred_borrowed_params.insert("self".to_string());
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                    self.emitted_rust_ref_formals.insert("self".to_string());
+                                }
+                                _ => {
+                                    self.inferred_borrowed_params.remove("self");
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                    self.emitted_rust_ref_formals.remove("self");
                                 }
                             }
-                            if !self.in_trait_impl && body_modifies {
-                                return "&mut self".to_string();
-                            }
-                            return "&self".to_string();
+                            return self_str.to_string();
                         }
                         // Public API keeps owned `string` despite Ref / analyzer demotion.
                         if crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
@@ -1720,28 +1738,48 @@ impl<'ast> CodeGenerator<'ast> {
                     OwnershipHint::Mut => {
                         if param.name == "self" {
                             let body_modifies = body_modifies;
-                            if let Some(ownership_mode) =
+                            let self_str = if let Some(ownership_mode) =
                                 self.get_effective_self_ownership(&func.name, analyzed)
                             {
-                                return match ownership_mode {
+                                match ownership_mode {
                                     OwnershipMode::Borrowed => {
                                         if !self.in_trait_impl && body_modifies {
-                                            "&mut self".to_string()
+                                            "&mut self"
                                         } else {
-                                            "&self".to_string()
+                                            "&self"
                                         }
                                     }
-                                    OwnershipMode::MutBorrowed => "&mut self".to_string(),
+                                    OwnershipMode::MutBorrowed => "&mut self",
                                     OwnershipMode::Owned => {
                                         if self.in_trait_impl {
-                                            "self".to_string()
+                                            "self"
                                         } else {
-                                            self.owned_self_receiver(&analyzed.decl).to_string()
+                                            self.owned_self_receiver(&analyzed.decl)
                                         }
                                     }
-                                };
+                                }
+                            } else {
+                                "&mut self"
+                            };
+                            match self_str {
+                                "&mut self" => {
+                                    self.inferred_mut_borrowed_params
+                                        .insert("self".to_string());
+                                    self.inferred_borrowed_params.remove("self");
+                                    self.emitted_rust_ref_formals.insert("self".to_string());
+                                }
+                                "&self" => {
+                                    self.inferred_borrowed_params.insert("self".to_string());
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                    self.emitted_rust_ref_formals.insert("self".to_string());
+                                }
+                                _ => {
+                                    self.inferred_borrowed_params.remove("self");
+                                    self.inferred_mut_borrowed_params.remove("self");
+                                    self.emitted_rust_ref_formals.remove("self");
+                                }
                             }
-                            return "&mut self".to_string();
+                            return self_str.to_string();
                         }
                         // Don't add &mut if the type is already a MutableReference
                         if matches!(formal_type, Type::MutableReference(_)) {

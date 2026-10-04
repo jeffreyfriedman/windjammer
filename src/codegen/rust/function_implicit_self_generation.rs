@@ -7,6 +7,43 @@ use crate::parser::*;
 use super::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
+    /// Align `inferred_*` / call-site clone helpers with the receiver string we actually emit.
+    ///
+    /// P3.636: some formal-emit paths produce `&mut self` / `&self` without seeding
+    /// `inferred_mut_borrowed_params`, so `self.field` into owned formals (e.g.
+    /// `json::to_string`) incorrectly moves instead of `.clone()`.
+    pub(in crate::codegen::rust) fn sync_self_borrow_tracking_from_emitted_params(
+        &mut self,
+        params: &[String],
+    ) {
+        let Some(self_param) = params.iter().find(|p| {
+            let s = p.as_str();
+            s == "self"
+                || s == "mut self"
+                || s.starts_with("&self")
+                || s.starts_with("&mut self")
+                || s.starts_with("&'a self")
+                || s.starts_with("&'a mut self")
+        }) else {
+            return;
+        };
+        let s = self_param.as_str();
+        if s.starts_with("&mut self") || s.starts_with("&'a mut self") {
+            self.inferred_mut_borrowed_params.insert("self".to_string());
+            self.inferred_borrowed_params.remove("self");
+            self.emitted_rust_ref_formals.insert("self".to_string());
+        } else if s.starts_with("&self") || s.starts_with("&'a self") {
+            self.inferred_borrowed_params.insert("self".to_string());
+            self.inferred_mut_borrowed_params.remove("self");
+            self.emitted_rust_ref_formals.insert("self".to_string());
+        } else {
+            // Owned `self` / `mut self` — field moves are legal.
+            self.inferred_borrowed_params.remove("self");
+            self.inferred_mut_borrowed_params.remove("self");
+            self.emitted_rust_ref_formals.remove("self");
+        }
+    }
+
     /// Extend `params` with implicit receiver when inferred or required by trait/field access.
     pub(in crate::codegen::rust) fn extend_implicit_self_parameters(
         &mut self,
