@@ -1,5 +1,76 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.645 (2026-10-04) — product wj-csv owned args into stdlib must auto-borrow
+
+Product `wj-csv` thin wrappers: `csv.parse(text)` / `csv.write(rows)` tip emits
+bare owned → E0308 (`&str` / `&[Vec<String>]`). Isolate write gate can false-GREEN.
+
+| Gate | Status |
+|------|--------|
+| `csv_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-csv |
+
+**Root cause layer:** call-site coercion — owned String / Vec into demoted stdlib
+formals must auto-borrow (signature-driven), including homonym `fn write`.
+
+**Why this is a new class:**
+- P3.644 is slice `.get` `&usize` (sync pool).
+- P3.645 is stdlib `csv::parse`/`write` product thin-wrap borrow.
+
+**What became unnecessary:** renaming wrappers / `.as_str()` / `&rows` in wj-csv.
+
+**Gates:** tip probe 12:02 — `csv::parse(text)` / `csv::write(rows)` RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- csv_stdlib_owned_args_must_auto_borrow_product`
+
+**Do not steal:** WDB-441, P3.508–P3.644 (filed).
+
+## P3.644 (2026-10-04) — slice/Vec `.get(usize)` must not borrow index
+
+Product `wj-sync` `pool.wj`: `job_txs.get(idx)` tip emits
+`job_txs.get(&(idx as usize))` → E0277 (`SliceIndex` not for `&usize`).
+
+| Gate | Status |
+|------|--------|
+| `slice_get_usize_index_must_not_borrow` | ❌ tip RED — product wj-sync |
+
+**Root cause layer:** call-site ownership — `slice::get` / `Vec::get` takes owned
+`usize` (Copy), must not prefix `&` on the cast index.
+
+**Why this is a new class:**
+- `bug_vec_remove_usize_no_ref` is `.remove` owned usize.
+- P3.644 is `.get` on Vec of mpsc Senders with `int as usize` index.
+
+**What became unnecessary:** `*` deref / reshape pool index access in wj-sync.
+
+**Gates:** tip probe 12:02 — `get(&(idx as usize))` RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- slice_get_usize_index_must_not_borrow`
+
+**Do not steal:** WDB-441, P3.508–P3.643 (filed).
+
+## P3.643 (2026-10-04) — TDD WDB-441 (DB agent; no compiler src)
+
+Copy `i64` local into indexed assign must not `.clone()`; product emits
+`self.entities[i] = swapped_entity.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-441 MultiFile | ✅ isolate GREEN — `entities[i] = swapped_entity` (no `.clone()`) |
+| WDB-441 tip-out | ❌ tip RED — `swapped_entity.clone()` in `rel_tip_out/ecs/component_storage.rs` |
+
+**Root cause layer:** copy / index-assign — Copy `i64` locals assigned into `Vec` slots must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
+
+**Why this is a new class:**
+- WDB-437 is formal into **let**.
+- WDB-440 is f32 into **struct lit**.
+- WDB-436 is loop counter into **cast** assign.
+
+**What became unnecessary:** `swapped_entity.clone()` in ECS sparse swap-remove.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb441_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
+
+**Do not steal:** WDB-406/408/411/440–441, P3.508–P3.643, WDB-412–441 (filed).
+
 ## P3.642 (2026-10-04) — reused owned String into owned formal must clone first use
 
 Product `wj-todo-cli` `stats` / `export`: `let snapshot = encode_store(store)` then
