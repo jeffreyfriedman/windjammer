@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.618 (2026-10-04) — TDD WDB-437 (DB agent; no compiler src)
+
+Copy `i32` formal into local `let` must not `.clone()`; product emits
+`let mut r = radius.clone()` in station_geometry capsules.
+
+| Gate | Status |
+|------|--------|
+| WDB-437 MultiFile | ⏳ TDD pending — `let mut r = radius` |
+| WDB-437 tip-out | ⏳ TDD pending — `radius.clone()` in station_geometry |
+
+**Root cause layer:** copy / formal — Copy formals bound into locals must not auto-clone.
+
+**Why this is a new class:**
+- WDB-427 is Copy **field** into let (`chunk.size.clone()`).
+- WDB-428 is **local** in println.
+- WDB-434 is const into **call** formals.
+
+**What became unnecessary:** `radius.clone()` when initializing `r` from an i32 formal.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/436, P3.508–P3.617, WDB-412–436 (filed).
+
 ## P3.617 (2026-10-03) — TDD WDB-436 (DB agent; no compiler src)
 
 `usize` loop counter assigned to `i32` with cast must not `.clone()`; product emits
