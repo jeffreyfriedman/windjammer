@@ -85,20 +85,21 @@ Product `wj-sync` `shared_map_get` emits `g.get(key)` → E0308. Isolate
 
 | Gate | Status |
 |------|--------|
-| `mutex_guard_hashmap_string_key_must_borrow` | ❌ tip RED — regression vs prior GREEN |
-| product `wj-sync` shared_map_get | ❌ tip RED — `g.get(key)` |
+| `mutex_guard_hashmap_string_key_must_borrow` | ✅ tip GREEN — `g.get(&key)` / `contains_key(&key)` |
+| `sync_shared_map_get_must_borrow_key_product` | ✅ tip GREEN — product companion |
 
-**Root cause layer:** map-key borrow belt must not be disabled for String keys /
-MutexGuard Deref when fixing Vec/slice Copy-index over-borrow.
+**Root cause layer:** signature — `Ok(g) => g.get(key)` with `rt=None` resolved to
+`Vec::get` (Owned usize) after P3.649–651; HashMap bridge must treat that homonym
+as poisoned for wrapper/unknown receivers (keep real `Vec::get` when receiver is `Vec`).
 
 **Why this is a new class:**
 - P3.649–651 are Copy `usize`/`i64` indices that must NOT borrow.
 - P3.660 is owned `String` HashMap keys that must STILL borrow (`get(&key)`).
 
-**What became unnecessary:** reshaping sync SharedMap helpers.
+**What became unnecessary:** SharedMap-name peels alone without fixing Vec::get homonym.
 
-**Gates:** tip e6aeefa3 dogfood sync RED; cargo mutex_guard gate RED.
-- `cargo test --release --test all --features integration_tests,codegen_tests -- mutex_guard_hashmap_string_key_must_borrow`
+**Gates:**
+- `cargo test --release --test all --features integration_tests,codegen_tests -- mutex_guard_hashmap_string_key_must_borrow toml_hashmap_get_demoted_str_key_must_not_double_borrow_product sync_shared_map_get_must_borrow_key_product` → GREEN
 
 **Do not steal:** P3.576/P3.288, P3.649–659 (filed).
 

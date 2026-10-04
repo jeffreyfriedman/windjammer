@@ -882,13 +882,29 @@ impl<'ast> CodeGenerator<'ast> {
                     || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
+                    // P3.660 / wj-sync: lock-guard bindings sometimes infer as the outer
+                    // SharedMap alias rather than `MutexGuard<HashMap<…>>`.
+                    || base == "SharedMap"
+                    || base == "SharedMapSI"
+                    || base.ends_with("SharedMap")
+                    || base.ends_with("SharedMapSI")
             });
             // Field access with unknown type: still try collection-key finalize when
             // the resolved method signature already looks like a map-key borrow.
             let sig_looks_like_map_key = method_signature.as_ref().is_some_and(|sig| {
                 self.is_collection_key_lookup_at_site(sig, 0, receiver_rt)
             });
-            if receiver_is_mapish || (receiver_rt.is_none() && sig_looks_like_map_key) {
+            let wrapper_key_sig = crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                method,
+                receiver_rt,
+                &self.signature_registry,
+            );
+            // P3.660: enter when wrapper consensus finds HashMap::{get,contains_key}
+            // even if the receiver name is a non-mapish alias / unknown guard.
+            if receiver_is_mapish
+                || (receiver_rt.is_none() && sig_looks_like_map_key)
+                || wrapper_key_sig.is_some()
+            {
                 let qualified =
                     crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
                         receiver_rt,
@@ -896,13 +912,16 @@ impl<'ast> CodeGenerator<'ast> {
                         method,
                         |name| self.is_imported_runtime_std_module(name),
                     );
-                let sig_for_key = method_signature.clone().or_else(|| {
-                    crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
-                        method,
-                        receiver_rt,
-                        &self.signature_registry,
-                    )
-                });
+                let sig_for_key = method_signature
+                    .clone()
+                    .or(wrapper_key_sig)
+                    .or_else(|| {
+                        crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                            method,
+                            receiver_rt,
+                            &self.signature_registry,
+                        )
+                    });
                 if let Some(sig_for_key) = sig_for_key {
                     for (i, arg_str) in args_vec.iter_mut().enumerate() {
                         let Some((_, arg_expr)) = arguments.get(i) else {
@@ -942,8 +961,23 @@ impl<'ast> CodeGenerator<'ast> {
                     || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
+                    || base == "SharedMap"
+                    || base == "SharedMapSI"
+                    || base.ends_with("SharedMap")
+                    || base.ends_with("SharedMapSI")
             });
             if !receiver_is_mapish {
+                // P3.660: SharedMap / MutexGuard consensus still map-key — do not peel
+                // String keys when the inferred name is a non-mapish alias.
+                if crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
+                    method,
+                    receiver_rt_owned.as_deref(),
+                    &self.signature_registry,
+                )
+                .is_some()
+                {
+                    // keep args
+                } else {
                 let peel_sig = method_signature.as_ref();
                 for (i, arg_str) in args_vec.iter_mut().enumerate() {
                     if !arg_str.starts_with('&') || arg_str.starts_with("&mut ") {
@@ -972,16 +1006,11 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                             .is_some_and(|sig| {
                                 let pidx = sig.arg_param_index(i);
-                                sig.formal_param_type(pidx)
-                                    .or_else(|| sig.param_types.get(pidx))
-                                    .is_some_and(|t| {
-                                        !matches!(
-                                            t,
-                                            Type::Reference(_) | Type::MutableReference(_)
-                                        ) && crate::type_classification::is_copy_pass_by_value_formal(
-                                            t,
-                                        )
-                                    })
+                                crate::type_classification::is_copy_pass_by_value_formal(
+                                    sig.formal_param_type(pidx)
+                                        .or_else(|| sig.param_types.get(pidx))
+                                        .unwrap_or(&Type::Custom("_".into())),
+                                )
                             });
                     if owned_copy || std_owned_usize {
                         *arg_str = crate::codegen::rust::expression_utilities::borrow_base_expr(
@@ -989,6 +1018,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                         .to_string();
                     }
+                }
                 }
             }
         }

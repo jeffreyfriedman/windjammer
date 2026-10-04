@@ -430,11 +430,23 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
                         base,
                     )
+                    // P3.660: SharedMap aliases are map handles, not Vec/Store.
+                    && base != "SharedMap"
+                    && base != "SharedMapSI"
+                    && !base.ends_with("SharedMap")
+                    && !base.ends_with("SharedMapSI")
             });
             let owned_copy_or_custom_get = receiver_rt.is_some_and(|rt| {
                 let base = rt.split('<').next().unwrap_or(rt);
                 if crate::type_classification::is_map_type_name(base)
                     || crate::type_classification::is_set_type_name(base)
+                    || crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                        base,
+                    )
+                    || base == "SharedMap"
+                    || base == "SharedMapSI"
+                    || base.ends_with("SharedMap")
+                    || base.ends_with("SharedMapSI")
                 {
                     return false;
                 }
@@ -452,12 +464,13 @@ impl<'ast> CodeGenerator<'ast> {
                     sig.formal_param_type(pidx)
                         .or_else(|| sig.param_types.get(pidx))
                         .is_some_and(|t| {
+                            // P3.649–651: owned Copy indices / user Store keys skip map-key
+                            // borrow. P3.660: WJ `string` / `String` keys must still borrow.
                             !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                                && !matches!(t, Type::String)
                                 && (crate::type_classification::is_copy_pass_by_value_formal(t)
-                                    || (matches!(t, Type::Custom(_))
-                                        && !crate::type_classification::is_copy_pass_by_value_formal(
-                                            t,
-                                        )))
+                                    || matches!(t, Type::Custom(_)))
                         })
                 })
             }) || contract_sig
