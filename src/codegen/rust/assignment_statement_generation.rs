@@ -145,22 +145,32 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 } else if let Some(cast) = self.resolve_compound_assign_int_rust_type_name(target) {
-                    let val_width = val_ty
-                        .as_ref()
-                        .and_then(Self::int_rust_type_name)
-                        .unwrap_or("i64");
-                    let already_target_cast = value_str.ends_with(&format!(" as {cast}"))
-                        || value_str.ends_with(&format!(") as {cast}"));
-                    if val_width != cast
-                        && !already_target_cast
-                        && !Self::compound_rhs_is_untyped_int_literal(value, &value_str)
-                    {
-                        if matches!(value, Expression::Binary { .. })
-                            || matches!(value, Expression::Call { .. })
+                    // P3.646: `HashMap::values()` / borrowed-iter `&Copy` into owned
+                    // int compound assign → `*count`, not `count as usize` (E0606).
+                    let deref_borrowed_copy = self.deref_borrowed_iter_copy_rhs_for_int_compound(
+                        value,
+                        &mut value_str,
+                        tgt_is_int,
+                        val_ty.as_ref(),
+                    );
+                    if !deref_borrowed_copy {
+                        let val_width = val_ty
+                            .as_ref()
+                            .and_then(Self::int_rust_type_name)
+                            .unwrap_or("i64");
+                        let already_target_cast = value_str.ends_with(&format!(" as {cast}"))
+                            || value_str.ends_with(&format!(") as {cast}"));
+                        if val_width != cast
+                            && !already_target_cast
+                            && !Self::compound_rhs_is_untyped_int_literal(value, &value_str)
                         {
-                            value_str = format!("({value_str}) as {cast}");
-                        } else {
-                            value_str = format!("{value_str} as {cast}");
+                            if matches!(value, Expression::Binary { .. })
+                                || matches!(value, Expression::Call { .. })
+                            {
+                                value_str = format!("({value_str}) as {cast}");
+                            } else {
+                                value_str = format!("{value_str} as {cast}");
+                            }
                         }
                     }
                 }
@@ -369,8 +379,15 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if let Some(cast) =
                         self.resolve_compound_assign_int_rust_type_name(target)
                     {
-                        let val_width = self
-                            .infer_expression_type(right)
+                        let rhs_ty = self.infer_expression_type(right);
+                        let deref_borrowed_copy = self
+                            .deref_borrowed_iter_copy_rhs_for_int_compound(
+                                right,
+                                &mut right_str,
+                                synth_tgt_is_int,
+                                rhs_ty.as_ref(),
+                            );
+                        let val_width = rhs_ty
                             .as_ref()
                             .and_then(Self::int_rust_type_name)
                             .unwrap_or("i64");
@@ -380,7 +397,8 @@ impl<'ast> CodeGenerator<'ast> {
                         // (`triangles as i64 as i32`) — emitted i64 width wins.
                         let rhs_explicit_i64 =
                             right_str.ends_with(" as i64") || right_str.ends_with(") as i64");
-                        if val_width != cast
+                        if !deref_borrowed_copy
+                            && val_width != cast
                             && !already_target_cast
                             && !(cast == "i32" && rhs_explicit_i64)
                             && !Self::compound_rhs_is_untyped_int_literal(right, &right_str)
@@ -630,6 +648,41 @@ impl<'ast> CodeGenerator<'ast> {
 
         output.push_str(";\n");
         output
+    }
+
+    /// P3.646: borrowed-iter Copy (`HashMap::values()` → `&usize`) into owned int
+    /// compound assign must `*name`, not `name as usize`.
+    ///
+    /// Returns `true` when a leading `*` was applied (caller should skip width cast).
+    fn deref_borrowed_iter_copy_rhs_for_int_compound(
+        &self,
+        value: &Expression<'_>,
+        value_str: &mut String,
+        tgt_is_int: bool,
+        val_ty: Option<&Type>,
+    ) -> bool {
+        if !tgt_is_int || value_str.starts_with('*') {
+            return false;
+        }
+        let Expression::Identifier { name, .. } = value else {
+            return false;
+        };
+        if !self.borrowed_iterator_vars.contains(name) {
+            return false;
+        }
+        let copy_pointee = match val_ty {
+            Some(Type::Reference(inner) | Type::MutableReference(inner)) => {
+                self.is_type_copy(inner)
+            }
+            // Bare Copy local type while still in borrowed_iterator_vars (missing ref wrap).
+            Some(t) => self.is_type_copy(t),
+            None => true,
+        };
+        if !copy_pointee {
+            return false;
+        }
+        *value_str = format!("*{value_str}");
+        true
     }
 }
 

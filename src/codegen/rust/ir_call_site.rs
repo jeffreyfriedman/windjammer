@@ -3473,33 +3473,63 @@ impl<'ast> CodeGenerator<'ast> {
                 arg_expr,
                 &mut coerced,
             );
-            if receiver_type_name.is_none()
-                && !coerced.starts_with('&')
-                && !coerced.starts_with("&mut ")
-            {
+            // P3.637: demoted `&str` method formals need `&local` even on last-use
+            // (Rust does not auto-borrow `String` into `&str`). Free and method sites.
+            // Do not consult `local_should_move_into_owned_text_formal` here — that helper
+            // assumes an owned-text formal; demoted `&str` always needs an explicit borrow.
+            if !coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                 let skip_shared_borrow = matches!(
                     arg_expr,
-                    Expression::Identifier { name, .. }
+                    Expression::Identifier { .. }
                         if Self::sig_arg_confirms_owned_emission(&sig, arg_index)
-                            || self.local_should_move_into_owned_text_formal(
-                                name, &sig, arg_index,
-                            )
                 );
                 if !skip_shared_borrow
                     && matches!(arg_expr, Expression::Identifier { .. })
-                    && self.ir_callee_arg_expects_shared_borrow(
+                    && (self.ir_callee_arg_expects_shared_borrow(
                         registry,
                         callee_name,
                         arg_index,
                         user_arg_count,
                         Some(&sig),
-                    )
+                    ) || sig
+                        .formal_param_type(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx))
+                        .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+                        || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            &sig, param_idx,
+                        ))
                 {
                     crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(
                         &mut coerced,
                     );
                 }
             }
+        } else if matches!(arg_expr, Expression::Identifier { .. })
+            && !coerced.starts_with('&')
+            && !coerced.starts_with("&mut ")
+            && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
+            && (sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx))
+                .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+                || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    &sig, param_idx,
+                )
+                || (sig.has_self_receiver
+                    && crate::ir::formal_predicates::formal_is_plain_windjammer_string(
+                        &sig, param_idx,
+                    )
+                    && matches!(
+                        sig.param_ownership.get(param_idx),
+                        Some(crate::analyzer::OwnershipMode::Borrowed)
+                    )
+                    && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        &sig, param_idx,
+                    )))
+        {
+            // P3.637: method call-site sig may still say WJ `string` while emission is
+            // `&str` — still borrow owned locals (username/password into demoted formals).
+            crate::codegen::rust::expression_utilities::apply_shared_borrow_prefix(&mut coerced);
         } else if coerced.ends_with(".to_string().clone()")
             || coerced.ends_with(".to_owned().clone()")
         {

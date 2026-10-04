@@ -641,6 +641,36 @@ impl<'ast> CodeGenerator<'ast> {
                         // P3.636: field behind `&mut self` into owned formal must `.clone()`.
                         if matches!(arg_to_generate, Expression::FieldAccess { .. }) {
                             let pidx = contract_sig.arg_param_index(i);
+                            // Prefer runtime `json::to_string(value: T)` owned contract over
+                            // MutBorrowed `to_string` homonyms (String::to_string).
+                            let std_owned = crate::analyzer::SignatureRegistry::stdlib()
+                                .get_signature(&qualified_callee)
+                                .or_else(|| {
+                                    crate::analyzer::SignatureRegistry::stdlib()
+                                        .get_signature("json::to_string")
+                                })
+                                .or_else(|| {
+                                    crate::analyzer::SignatureRegistry::stdlib()
+                                        .get_signature("json::to_string_pretty")
+                                })
+                                .filter(|std_sig| {
+                                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                        std_sig,
+                                        std_sig.arg_param_index(i),
+                                    )
+                                });
+                            if let Some(std_sig) = std_owned {
+                                if matches!(method, "to_string" | "to_string_pretty")
+                                    && (qualified_callee.contains("json::")
+                                        || matches!(
+                                            object,
+                                            Expression::Identifier { name, .. } if name == "json"
+                                        ))
+                                {
+                                    contract_sig = std_sig.clone();
+                                }
+                            }
+                            let pidx = contract_sig.arg_param_index(i);
                             let owned_text_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &contract_sig, pidx,
                             ) || (contract_sig
@@ -663,8 +693,20 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
                                     &contract_sig, pidx,
                                 ));
+                            let behind_ref = self
+                                .field_access_root_is_behind_reference(arg_to_generate);
+                            // Multipass may emit `&mut self` without seeding inferred_*;
+                            // still clone `self.field` into owned json::to_string.
+                            let self_field = matches!(
+                                arg_to_generate,
+                                Expression::FieldAccess { object, .. }
+                                    if matches!(
+                                        &**object,
+                                        Expression::Identifier { name, .. } if name == "self"
+                                    )
+                            ) && self.current_method_self_emits_borrowed_receiver();
                             if owned_text_slot {
-                                if self.field_access_root_is_behind_reference(arg_to_generate) {
+                                if behind_ref || self_field {
                                     if !coerced.ends_with(".clone()")
                                         && !coerced.ends_with(".to_owned()")
                                     {
@@ -682,6 +724,37 @@ impl<'ast> CodeGenerator<'ast> {
                                 {
                                     coerced = coerced[1..].to_string();
                                 }
+                            }
+                        }
+                        // P3.637: owned String locals into demoted `&str` method formals.
+                        if let Expression::Identifier { name, .. } = arg_to_generate {
+                            let pidx = contract_sig.arg_param_index(i);
+                            let wants_str = contract_sig
+                                .formal_param_type(pidx)
+                                .or_else(|| contract_sig.param_types.get(pidx))
+                                .is_some_and(
+                                    crate::codegen::rust::string_utilities::param_is_rust_str_ref,
+                                )
+                                || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                    &contract_sig, pidx,
+                                )
+                                || (crate::ir::formal_predicates::formal_is_plain_windjammer_string(
+                                    &contract_sig, pidx,
+                                ) && matches!(
+                                    contract_sig.param_ownership.get(pidx),
+                                    Some(OwnershipMode::Borrowed)
+                                ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    &contract_sig, pidx,
+                                ));
+                            if wants_str
+                                && !coerced.starts_with('&')
+                                && !coerced.starts_with("&mut ")
+                                && !self.identifier_binding_already_rust_ref(name)
+                                && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    &contract_sig, pidx,
+                                )
+                            {
+                                coerced = format!("&{coerced}");
                             }
                         }
                         let pidx = contract_sig.arg_param_index(i);

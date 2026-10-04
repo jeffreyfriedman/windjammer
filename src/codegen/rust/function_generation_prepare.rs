@@ -12397,11 +12397,22 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn refresh_method_registry_from_emitted_formals(
         &mut self,
         func: &FunctionDecl<'ast>,
+        emitted_param_strings: &[String],
     ) {
         let Some(impl_type) = self.current_struct_name.clone() else {
             return;
         };
         let qualified = format!("{impl_type}::{}", func.name);
+
+        let emitted_formal_is_shared_ref = |emitted: &str| -> bool {
+            (emitted.contains(": &")
+                || emitted.contains(": &'a ")
+                || emitted.starts_with('&') && !emitted.starts_with("&mut "))
+                && !emitted.contains(": &mut ")
+                && !emitted.contains(": &'a mut ")
+                && !emitted.starts_with("&mut ")
+                && !emitted.starts_with("&'a mut ")
+        };
 
         let string_ref_flags: Vec<bool> = func
             .parameters
@@ -12417,13 +12428,20 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(methods) = self.method_signatures_by_type.get_mut(&impl_type) {
             if let Some(sig) = methods.get_mut(func.name.as_str()) {
                 let mut param_idx = 0;
+                let mut emitted_idx = 0;
                 for param in &func.parameters {
                     if param.name == "self" {
+                        if emitted_idx < emitted_param_strings.len() {
+                            emitted_idx += 1;
+                        }
                         continue;
                     }
                     if param_idx >= sig.param_types.len() {
                         break;
                     }
+                    let emitted_shared = emitted_param_strings
+                        .get(emitted_idx)
+                        .is_some_and(|s| emitted_formal_is_shared_ref(s));
                     if self.inferred_mut_borrowed_params.contains(&param.name) {
                         if !matches!(sig.param_types[param_idx], Type::MutableReference(_)) {
                             sig.param_types[param_idx] =
@@ -12433,7 +12451,13 @@ impl<'ast> CodeGenerator<'ast> {
                             sig.param_ownership[param_idx] =
                                 crate::analyzer::OwnershipMode::MutBorrowed;
                         }
-                    } else if self.emitted_rust_ref_formals.contains(&param.name) {
+                    } else if self.emitted_rust_ref_formals.contains(&param.name) || emitted_shared {
+                        // P3.637: trust emitted `password: &str` even when the formal path
+                        // forgot to seed `emitted_rust_ref_formals` (username got the set,
+                        // password only the string).
+                        if emitted_shared {
+                            self.emitted_rust_ref_formals.insert(param.name.clone());
+                        }
                         let inner = Self::demoted_shared_ref_inner_type(&param.type_);
                         if !matches!(&sig.param_types[param_idx], Type::Reference(_))
                             || (crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
@@ -12471,23 +12495,37 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     param_idx += 1;
+                    if emitted_idx < emitted_param_strings.len() {
+                        emitted_idx += 1;
+                    }
                 }
 
                 let mut ms_emitted = vec![false; sig.param_types.len()];
                 let mut user_param_idx = 0;
+                let mut emitted_idx = 0;
                 for param in &func.parameters {
                     if param.name == "self" {
+                        if emitted_idx < emitted_param_strings.len() {
+                            emitted_idx += 1;
+                        }
                         continue;
                     }
                     // MethodSignature param vectors exclude `self` — index by user param only.
                     if user_param_idx < ms_emitted.len() {
                         // Shared `&T` only; `&mut T` is tracked via param_ownership MutBorrowed
                         // and `function_emitted_mut_arg_indices`.
-                        ms_emitted[user_param_idx] =
-                            self.emitted_rust_ref_formals.contains(&param.name)
-                                && !self.inferred_mut_borrowed_params.contains(&param.name);
+                        // P3.637: also trust the emitted formal string (`password: &str`).
+                        let from_string = emitted_param_strings
+                            .get(emitted_idx)
+                            .is_some_and(|s| emitted_formal_is_shared_ref(s));
+                        ms_emitted[user_param_idx] = (from_string
+                            || self.emitted_rust_ref_formals.contains(&param.name))
+                            && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;
+                    if emitted_idx < emitted_param_strings.len() {
+                        emitted_idx += 1;
+                    }
                 }
                 sig.emitted_rust_ref_params = Some(ms_emitted);
                 sig.string_ref_string_formal_params = Some(string_ref_flags);
@@ -12570,8 +12608,12 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let mut emitted = vec![false; updated.param_ownership.len()];
         let mut user_param_idx = 0;
+        let mut emitted_idx = 0;
         for param in &func.parameters {
             if param.name == "self" {
+                if emitted_idx < emitted_param_strings.len() {
+                    emitted_idx += 1;
+                }
                 continue;
             }
             let reg_idx = if updated.has_self_receiver {
@@ -12581,9 +12623,7 @@ impl<'ast> CodeGenerator<'ast> {
             };
             if reg_idx < emitted.len() {
                 // Align with `MethodSignature::emitted_rust_ref_params` (ms_emitted above):
-                // only codegen-confirmed `emitted_rust_ref_formals` mark shared `&str`.
-                // Body-converged `str_ref_optimized_params` without an emitted `&T`
-                // must not poison later owned `String` slots (notes-api `handle`).
+                // codegen-confirmed shared-ref via set *or* emitted formal string (P3.637).
                 // Trait-impl bare `string` formals always emit `String` (match the trait);
                 // discard-only analysis must not claim shared-ref (P3.308 → `&_temp0`).
                 let trait_keeps_owned_string = self.in_trait_impl
@@ -12593,12 +12633,18 @@ impl<'ast> CodeGenerator<'ast> {
                         crate::parser::Type::Reference(_)
                             | crate::parser::Type::MutableReference(_)
                     );
+                let from_string = emitted_param_strings
+                    .get(emitted_idx)
+                    .is_some_and(|s| emitted_formal_is_shared_ref(s));
                 let emits_shared_ref = !trait_keeps_owned_string
-                    && self.emitted_rust_ref_formals.contains(&param.name)
+                    && (from_string || self.emitted_rust_ref_formals.contains(&param.name))
                     && !self.inferred_mut_borrowed_params.contains(&param.name);
                 emitted[reg_idx] = emits_shared_ref;
             }
             user_param_idx += 1;
+            if emitted_idx < emitted_param_strings.len() {
+                emitted_idx += 1;
+            }
         }
         updated.emitted_rust_ref_params = Some(emitted);
         // Align self ownership with what we actually emitted (`&self` / `&mut self` / owned).

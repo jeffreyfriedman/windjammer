@@ -300,7 +300,8 @@ emits `handle_http(…, &meta.2, …)` → E0308. Sibling `meta.0`/`meta.1` move
 
 | Gate | Status |
 |------|--------|
-| `owned_string_formal_must_not_receive_ref_at_adapter_call` | ❌ tip RED — product auth-api |
+| `owned_string_formal_must_not_receive_ref_at_adapter_call` | ✅ tip GREEN — `meta.2` moves |
+| product auth-api adapter cargo-check | ✅ GREEN (with P3.637) |
 
 **Root cause layer:** call-site ownership — owned String method formal must move
 tuple field, not over-borrow one slot among several.
@@ -356,10 +357,15 @@ P3.621 (`&method_label(…)` call-expr borrow).
 
 | Gate | Status |
 |------|--------|
-| `owned_string_into_demoted_str_method_formal_must_auto_borrow` | ❌ tip RED — product auth-api |
+| `owned_string_into_demoted_str_method_formal_must_auto_borrow` | ✅ tip GREEN — `&username` / `&password` |
+| product auth-api cargo-check | ✅ GREEN |
 
 **Root cause layer:** call-site coercion — owned String **locals** into demoted
-`&str` method formals must auto-borrow (signature-driven).
+`&str` method formals must auto-borrow (signature-driven), including last-use
+second args on methods (IR free-fn-only shared-borrow reapply missed methods).
+
+**Fix:** Method-arg post-IR force `&` for Identifier into `&str` / demoted shared
+text formals; widen IR reconcile shared-borrow reapply beyond free-fn-only.
 
 **Why this is a new class:**
 - P3.621 is owned **call-expr return** into `&str` (webhook, tip GREEN).
@@ -367,7 +373,7 @@ P3.621 (`&method_label(…)` call-expr borrow).
 
 **What became unnecessary:** `.as_str()` / reshaping find_user/verify_user in auth.
 
-**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3635` — RED with P3.636/639.
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-agent-test-p3636` — **3 passed** with P3.636 + WDB-134 (2026-10-04).
 - `cargo test --release --test all --features integration_tests,codegen_tests -- owned_string_into_demoted_str_method_formal_must_auto_borrow`
 
 **Do not steal:** WDB-134/438, P3.508–P3.636 (filed).
@@ -380,10 +386,16 @@ the remaining webhook blocker.
 
 | Gate | Status |
 |------|--------|
-| `mut_self_field_into_owned_json_formal_must_clone` | ❌ tip RED — product webhook |
+| `mut_self_field_into_owned_json_formal_must_clone` | ✅ tip GREEN — `self.events.clone()` |
+| product webhook cargo-check | ✅ GREEN |
 
 **Root cause layer:** field access — non-Copy field behind `&mut self` into owned
-formal must clone or demote callee to borrow.
+formal must clone; method-path `json.to_string` was resolving MutBorrowed
+`to_string` homonyms instead of runtime `json::to_string(value: T)` owned.
+
+**Fix:** Prefer stdlib `json::to_string` owned contract on method sites; treat
+`self.field` as behind-ref when current method emits borrowed self (upgrades /
+registry), then `.clone()` into owned slots.
 
 **Why this is a new class:**
 - P3.620 was `&mut EventBus` into owned emit (tip GREEN).
@@ -391,7 +403,7 @@ formal must clone or demote callee to borrow.
 
 **What became unnecessary:** manual `.clone()` reshape in webhook `list_events`.
 
-**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3635` — 0 passed / 3 failed (2026-10-04).
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-agent-test-p3636` — **3 passed** with P3.637 + WDB-134 (2026-10-04).
 - `cargo test --release --test all --features integration_tests,codegen_tests -- mut_self_field_into_owned_json_formal_must_clone`
 
 **Do not steal:** WDB-134/438, P3.508–P3.635 (filed).

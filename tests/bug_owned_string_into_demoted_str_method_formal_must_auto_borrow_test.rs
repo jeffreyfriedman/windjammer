@@ -107,11 +107,12 @@ fn owned_string_into_demoted_str_method_formal_must_auto_borrow() {
     let verify_wants_str = verify_sig.contains("username: &str");
     let bad_find = find_wants_str && find_call.contains("find_user(username)") && !find_call.contains("find_user(&username)");
     let bad_verify = verify_wants_str
-        && verify_call.contains("verify_user(username, password)")
-        && !verify_call.contains("verify_user(&username");
+        && (!verify_call.contains("verify_user(&username")
+            || verify_call.contains("verify_user(&username, password)")
+                && !verify_call.contains("verify_user(&username, &password)"));
 
     assert!(
         !bad_find && !bad_verify,
-        "P3.637 RED: owned String locals into demoted &str method formals must auto-borrow:\n  {find_call}\n  {verify_call}"
+        "P3.637 RED: owned String locals into demoted &str method formals must auto-borrow both args:\n  {find_call}\n  {verify_call}"
     );
 }

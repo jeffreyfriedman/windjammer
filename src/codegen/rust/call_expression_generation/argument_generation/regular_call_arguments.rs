@@ -524,6 +524,43 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     {
                         coerced = gen.maybe_auto_clone_expr_path(arg, &coerced, Some(func_name), Some(i));
                     }
+                    // P3.636: `self.field` behind `&mut self`/`&self` into owned formals
+                    // (incl. `json::to_string(value: T)`) must `.clone()` even when
+                    // auto-clone analysis did not mark reuse (illegal move, not reuse).
+                    if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
+                        && gen.field_access_root_is_behind_reference(arg)
+                        && !coerced.ends_with(".clone()")
+                        && !coerced.ends_with(".to_owned()")
+                        && !gen.expression_is_copy(arg)
+                    {
+                        let owned_slot = peel_sig.as_ref().is_some_and(|sig| {
+                            let pidx = sig.arg_param_index(i);
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, pidx,
+                            )
+                        }) || crate::analyzer::SignatureRegistry::stdlib()
+                            .get_signature(func_name)
+                            .or_else(|| {
+                                let lookup = gen.signature_lookup_callee_name(func_name);
+                                crate::analyzer::SignatureRegistry::stdlib()
+                                    .get_signature(lookup.as_ref())
+                            })
+                            .is_some_and(|std_sig| {
+                                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    std_sig,
+                                    std_sig.arg_param_index(i),
+                                )
+                            });
+                        if owned_slot {
+                            let base = if coerced.starts_with('&') && !coerced.starts_with("&mut ")
+                            {
+                                coerced[1..].to_string()
+                            } else {
+                                coerced.clone()
+                            };
+                            coerced = format!("{base}.clone()");
+                        }
+                    }
                     if let Expression::Identifier { name, .. } = arg {
                         let lookup = gen.signature_lookup_callee_name(func_name);
                         let candidates = [
