@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.629 (2026-10-04) — trait impl owned formal `mut` (E0053 + E0596)
+
+| Gate | Status |
+|------|--------|
+| `trait_impl_owned_param_not_reborrowed_when_mutated` | ✅ GREEN — `mut ctx: App`, not `&mut App` |
+| spawn / mpsc / `dogfood_store_has_key` no-reg | ✅ GREEN |
+
+**Root cause layer:** codegen formal emission — E0053 early return for trait impl
+owned non-`self` formals skipped the owned-formal `auto_needs_mut` path, so
+`ctx.record_resource(...)` emitted with immutable `ctx: App` (rustc E0596).
+
+**Fix:** `format_trait_impl_owned_formal` — keep owned AST type (never `&mut T`
+for trait contract) but apply the same body-driven `mut` prefix as regular
+owned formals (`variable_needs_mut` + analyzer mutation sets).
+
+**What became unnecessary:** No ir_call_site peel or method-name ownership
+heuristics; trait ownership still wins over analyzer MutBorrowed demotion.
+
+**Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
+`cargo test --release --test all -- trait_impl_owned_param_not_reborrowed_when_mutated dogfood_store_has_key_forward_ref_borrows_owned_key bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test`.
+
 ## P3.625 (2026-10-04) — full suite post P3.622–628 (no wdb-layers hang)
 
 **wdb-layers dogfood no longer hangs** (P3.622). Re-run on `3c7dd5f1`:
@@ -20,7 +41,7 @@ Log `/tmp/wj-full-suite-p3628.log`; fails `/tmp/wj-suite-fails-p3628.txt`.
 - `module_qualified_signature_test::test_multipass_module_qualified_autoborrow` (likely stale expect: owned FFI forward → move)
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
 - `path_and_bytes_borrow_tests::path_bytes_wal_layout_rustc_cargo_check`
-- `trait_impl_owned_param_no_reborrow_test::…`
+- ~~`trait_impl_owned_param_no_reborrow_test::…`~~ ✅ P3.629
 - notes_api empty-lit owned gates; `owned_string_for_loop_load_must_not_borrow_path`
 
 **Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.

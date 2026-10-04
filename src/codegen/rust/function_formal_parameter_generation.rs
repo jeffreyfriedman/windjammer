@@ -39,6 +39,26 @@ impl<'ast> CodeGenerator<'ast> {
         Self::find_unused_bindings(body, &mut self.unused_let_bindings);
     }
 
+    /// E0053: trait impl non-`self` formals stay owned (match trait AST), never `&mut T`.
+    /// E0596: owned bindings still need `mut` when the body mutates them.
+    fn format_trait_impl_owned_formal(
+        &self,
+        param: &Parameter,
+        analyzed: &AnalyzedFunction<'ast>,
+    ) -> String {
+        let type_str = self.type_to_rust(&param.type_);
+        let auto_needs_mut = !param.is_mutable
+            && (self.variable_needs_mut(&param.name)
+                || analyzed.mutated_parameters.contains(&param.name)
+                || analyzed.field_mutated_parameters.contains(&param.name));
+        let mut_prefix = if param.is_mutable || auto_needs_mut {
+            "mut "
+        } else {
+            ""
+        };
+        format!("{mut_prefix}{}: {type_str}", param.name)
+    }
+
     pub(in crate::codegen::rust) fn collect_additional_formal_parameter_strings(
         &mut self,
         analyzed: &AnalyzedFunction<'ast>,
@@ -116,7 +136,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_borrowed_params.remove(&param.name);
                     self.inferred_mut_borrowed_params.remove(&param.name);
                     self.emitted_rust_ref_formals.remove(&param.name);
-                    return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                    return self.format_trait_impl_owned_formal(param, analyzed);
                 }
                 if param.name != "self"
                     && self.param_has_forward_ref_keep_owned(
@@ -3135,7 +3155,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     Type::Reference(_) | Type::MutableReference(_)
                                 )
                             {
-                                return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
+                                return self.format_trait_impl_owned_formal(param, analyzed);
                             }
                             copy_aggregate_ref_formal.unwrap_or_else(|| match ownership_mode {
                                 OwnershipMode::Owned => {
