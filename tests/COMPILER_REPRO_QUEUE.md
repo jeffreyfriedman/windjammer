@@ -1,5 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.652 (2026-10-04) — TDD WDB-442 (DB agent; no compiler src)
+
+Copy `u32` local into `let` must not `.clone()`; product emits
+`let mut step = budget.clone()` in async_loader pump.
+(Prior P3.646 slot collision with HashMap::values — renumbered.)
+
+| Gate | Status |
+|------|--------|
+| WDB-442 MultiFile | ✅ isolate GREEN — `let mut step = budget` (no `.clone()`) |
+| WDB-442 tip-out | ❌ tip RED — `budget.clone()` in `rel_tip_out/world/async_loader.rs` |
+
+**Root cause layer:** copy / local-let — Copy `u32` locals bound into locals must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
+
+**Why this is a new class:**
+- WDB-437 is i32 **formal** into let.
+- WDB-441 is i64 into **index assign**.
+- WDB-440 is f32 into **struct lit**.
+
+**What became unnecessary:** `budget.clone()` in world async_loader pump.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb442_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
+
+**Do not steal:** WDB-406/408/411/441–442, P3.508–P3.651, WDB-412–442 (filed).
+
 ## P3.651 (2026-10-04) — owned i64 method formal must not receive `&99`
 
 Product `wj-notes-api` `store.get(99)`: tip emits `get(&99_i64)` while formal is
