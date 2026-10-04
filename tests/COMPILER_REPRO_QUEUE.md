@@ -1,5 +1,76 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.621 (2026-10-04) — owned String return into demoted `&str` method formal
+
+Product `wj-webhook` adapter: `app.handle(method_label(req.method), …)` where
+`handle` demotes `method: string` → `method: &str` and `method_label` returns
+`String` → E0308. Tip must auto-borrow (`&method_label(…)`) or keep owned formal.
+
+| Gate | Status |
+|------|--------|
+| `owned_string_return_into_demoted_str_method_formal_must_auto_borrow` | ❌ tip RED — product webhook |
+
+**Root cause layer:** call-site coercion — owned `String` expr into demoted `&str`
+method formal must borrow (signature-driven).
+
+**Why this is a new class:**
+- P3.620 is `&mut` into **owned** cross-crate formal (EventBus).
+- P3.621 is owned return into **demoted** `&str` method formal.
+
+**What became unnecessary:** `.as_str()` / reshaping `handle` / adapter in webhook.
+
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619` — 0 passed / 3 failed with P3.619–620 (2026-10-04).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- owned_string_return_into_demoted_str_method_formal_must_auto_borrow`
+
+**Do not steal:** WDB-406/408/411/436–437, P3.508–P3.620, WDB-412–437 (filed).
+
+## P3.620 (2026-10-04) — owned EventBus formal must not receive `&mut bus`
+
+Product `wj-webhook` `queue_via_event_bus`: `let bus = emit(bus, …)` where
+`emit(bus: EventBus, …) -> EventBus`. Tip emits `emit(&mut bus, …)` → E0308.
+
+| Gate | Status |
+|------|--------|
+| `cross_crate_owned_bus_formal_must_not_receive_mut_ref` | ❌ tip RED — product webhook |
+
+**Root cause layer:** call-site ownership — reassignment into owned cross-crate
+formal must **move**, not prefix `&mut`.
+
+**Why this is a new class:**
+- P3.619 is `&mut CronExpr` into owned CronExpr (match `Ok` binding).
+- P3.620 is `&mut EventBus` into owned EventBus (reassign `let bus = emit(bus, …)`).
+
+**What became unnecessary:** `.clone()` / reshaping emit calls in webhook.
+
+**Gates:** same cargo run as P3.619 — RED.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- cross_crate_owned_bus_formal_must_not_receive_mut_ref`
+
+**Do not steal:** WDB-406/408/411/436–437, P3.508–P3.619, WDB-412–437 (filed).
+
+## P3.619 (2026-10-04) — owned CronExpr formal must not receive `&mut cron`
+
+Product `wj-scheduler` → `wj_cron::matches_cron(expr: CronExpr, …)` /
+`next_run(expr: CronExpr, …)`: tip emits `matches_cron(&mut cron, …)` /
+`next_run(&mut cron, …)` → E0308. Source uses bare `matches_cron(cron, …)`.
+
+| Gate | Status |
+|------|--------|
+| `cross_crate_owned_struct_formal_must_not_receive_mut_ref` | ❌ tip RED — product scheduler |
+
+**Root cause layer:** call-site ownership — owned cross-crate Custom formal must
+receive move (or `&T` if demoted), never `&mut T`.
+
+**Why this is a new class:**
+- P3.574 is package formal should demote to `&CronExpr` (field reads / multi-call).
+- P3.619 is **app call site** wrongly emitting `&mut cron` into still-owned formal.
+
+**What became unnecessary:** `.clone()` / reshaping scheduler cron calls.
+
+**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3619` — 0 passed / 3 failed (2026-10-04).
+- `cargo test --release --test all --features integration_tests,codegen_tests -- cross_crate_owned_struct_formal_must_not_receive_mut_ref`
+
+**Do not steal:** WDB-406/408/411/436–437, P3.508–P3.618, WDB-412–437 (filed).
+
 ## P3.618 (2026-10-04) — TDD WDB-437 (DB agent; no compiler src)
 
 Copy `i32` formal into local `let` must not `.clone()`; product emits
