@@ -340,19 +340,25 @@ impl<'ast> CodeGenerator<'ast> {
             self.usize_variables.insert(idx_var);
         }
 
-        // TDD FIX: Track types for ALL bound variables (simple and tuple patterns)
+        // TDD FIX: Track types for ALL bound variables (simple and tuple patterns).
+        // Whole binding (`for pair in &vec`) → `&T` / `&(K, V)` (P3.614).
+        // Tuple destructure (`for (k, v) in &map`) → `(&K, &V)` (P3.597).
         if let Some(elem_type) = loop_element_type.clone() {
-            let elem_type = if tracks_borrowed_loop_var {
-                Self::wrap_for_loop_element_as_borrowed(elem_type)
-            } else {
-                elem_type
-            };
             match pattern {
                 Pattern::Identifier(var) => {
+                    let elem_type = if tracks_borrowed_loop_var {
+                        Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                    } else {
+                        elem_type
+                    };
                     self.local_var_types.insert(var.clone(), elem_type);
                 }
                 Pattern::Tuple(patterns) => {
-                    // elem_type should be Tuple with matching arity
+                    let elem_type = if tracks_borrowed_loop_var {
+                        Self::wrap_for_loop_element_as_borrowed(elem_type)
+                    } else {
+                        elem_type
+                    };
                     if let Type::Tuple(tuple_types) = &elem_type {
                         for (pat, ty) in patterns.iter().zip(tuple_types.iter()) {
                             if let Pattern::Identifier(var) = pat {
@@ -362,24 +368,33 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 _ => {
-                    // For other patterns, use the old loop_var approach
                     if let Some(var) = &loop_var {
+                        let elem_type = if tracks_borrowed_loop_var {
+                            Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                        } else {
+                            elem_type
+                        };
                         self.local_var_types.insert(var.clone(), elem_type);
                     }
                 }
             }
         } else if let Some(iterable_type) = self.infer_expression_type(iterable) {
             if let Some(elem_type) = Self::extract_iterator_element_type(&iterable_type) {
-                let elem_type = if tracks_borrowed_loop_var {
-                    Self::wrap_for_loop_element_as_borrowed(elem_type)
-                } else {
-                    elem_type
-                };
                 match pattern {
                     Pattern::Identifier(var) => {
+                        let elem_type = if tracks_borrowed_loop_var {
+                            Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                        } else {
+                            elem_type
+                        };
                         self.local_var_types.insert(var.clone(), elem_type);
                     }
                     Pattern::Tuple(patterns) => {
+                        let elem_type = if tracks_borrowed_loop_var {
+                            Self::wrap_for_loop_element_as_borrowed(elem_type)
+                        } else {
+                            elem_type
+                        };
                         if let Type::Tuple(tuple_types) = &elem_type {
                             for (pat, ty) in patterns.iter().zip(tuple_types.iter()) {
                                 if let Pattern::Identifier(var) = pat {
@@ -390,6 +405,11 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => {
                         if let Some(var) = &loop_var {
+                            let elem_type = if tracks_borrowed_loop_var {
+                                Self::wrap_for_loop_whole_binding_as_borrowed(elem_type)
+                            } else {
+                                elem_type
+                            };
                             self.local_var_types.insert(var.clone(), elem_type);
                         }
                     }

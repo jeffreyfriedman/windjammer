@@ -36,7 +36,17 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 false
             }
-            Expression::Identifier { name, .. } => self.for_loop_borrow_needed.contains(name),
+            Expression::Identifier { name, .. } => {
+                // `for_loop_borrow_needed` marks reuse after/in the loop, but demoted
+                // `&Vec`/`&Map` formals are already shared refs — prepending another
+                // `&` yields `&&Vec` (E0277). P3.614 headers_meta after `.len()` reuse.
+                self.for_loop_borrow_needed.contains(name)
+                    && !self.emitted_rust_ref_formals.contains(name)
+                    && !self.inferred_borrowed_params.contains(name)
+                    && !self.local_var_types.get(name).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    })
+            }
             _ => false,
         }
     }
