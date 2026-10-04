@@ -1,5 +1,6 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+
 ## P3.662 (2026-10-04) — TDD WDB-446 (DB agent; no compiler src)
 
 Copy `i32` **local** into typed `let` must not `.clone()`; product emits
@@ -109,7 +110,7 @@ owned `String` + single borrow.
 
 | Gate | Status |
 |------|--------|
-| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
+| `toml_hashmap_get_demoted_str_key_must_not_double_borrow_product` | ✅ tip GREEN — product wj-toml 17 (2026-10-04 tip 17:41) |
 
 **Root cause layer:** map-key borrow + demotion — do not add `&` when the key
 formal/local is already `&str`.
