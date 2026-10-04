@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.653 (2026-10-04) — TDD WDB-443 (DB agent; no compiler src)
+
+Copy `i32` formals into HashMap key tuple must not `.clone()`; product emits
+`g_score.insert((start_x.clone(), start_y.clone()), …)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-443 MultiFile | ⏳ TDD pending — `insert((start_x, start_y), …)` |
+| WDB-443 tip-out | ⏳ TDD pending — `start_x.clone()` in astar g_score.insert |
+
+**Root cause layer:** copy / hashmap-key-tuple — Copy formals as HashMap key tuple elems must not auto-clone.
+
+**Why this is a new class:**
+- WDB-438 is tuple lit into **Vec::push**.
+- WDB-437 is formal into **let**.
+- WDB-441 is i64 into **index assign**.
+
+**What became unnecessary:** `start_x.clone()` / `nx.clone()` in astar g_score keys.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/442–443, P3.508–P3.652, WDB-412–443 (filed).
+
 ## P3.652 (2026-10-04) — TDD WDB-442 (DB agent; no compiler src)
 
 Copy `u32` local into `let` must not `.clone()`; product emits
