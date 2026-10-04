@@ -1,5 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.625 (2026-10-04) — full suite post P3.622/624: 5622 ok / 121 fail (no hang)
+
+`cargo test --release --test all` on tip `d61ee6ab`/`cd639652` finished in
+~1961s (EXIT:101). **wdb-layers dogfood no longer hangs** (P3.622).
+
+| Bucket | Count | Notes |
+|--------|------:|-------|
+| tip-out / gen / product scanners | ~85 | stale `.agent-wip/rel_tip_out` + game-core `gen/` — regen with tip `wj` |
+| tip-live / assertion | ~36 | triage next — many look like evolved tip vs stale expect (e.g. `module_qualified` wants `&label` while tip last-use-moves into owned `draw_text` that forwards to owned FFI) |
+
+**Sample tip-live to triage first:**
+- `module_qualified_signature_test::test_multipass_module_qualified_autoborrow`
+- `cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key`
+- `e0507_ownership_inference_test::test_for_loop_param_used_multiple_times_borrows`
+- `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
+- `codegen_windjammer_ui_full_regen_gate_test::datatable_owned_column_row_forward_must_cargo_check`
+
+**Gates:** log `/tmp/wj-full-suite-p3624b.log`; fail list `/tmp/wj-suite-fails.txt`.
+
+**Do not steal:** tip-out mass regen is product work; prefer tip-live signature/solver fixes.
+
 ## P3.624 (2026-10-04) — WDB-435 generic `ObjectPool<T>` Copy usize field return
 
 Product `object_pool` emitted `self.capacity.clone()` / `self.in_use.clone()` on
@@ -61,7 +82,7 @@ Two stacked patho scans:
 | `restore_pub_owned_scales_with_program_lookup_index` | ✅ GREEN |
 | `restore_pub_owned_custom_formals_uses_program_lookup` | ✅ GREEN |
 | tip `wj build` wdb-layers `--library --module-file --no-cargo` | ✅ completes ~275s (EXIT:0; was hung in Custom-formal restore) |
-| Full suite through wdb-layers dogfood | 🔧 tip fix landed — suite re-running on `d61ee6ab` |
+| Full suite through wdb-layers dogfood | ✅ completes on `d61ee6ab`/`cd639652` — 5622 passed / 121 failed in ~1961s (no hang; codegen through 1025 files) |
 
 **Root cause layer:** signature resolution + bare-pass restore performance
 (index completeness — not ownership heuristics).
