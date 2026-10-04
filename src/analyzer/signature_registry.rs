@@ -988,15 +988,12 @@ impl SignatureRegistry {
 
     /// Trait-definition keys on this layer plus `global_fallback`.
     pub fn all_trait_method_keys(&self) -> Vec<String> {
-        let mut keys: Vec<String> = self.trait_method_keys.iter().cloned().collect();
+        let mut keys: std::collections::HashSet<String> =
+            self.trait_method_keys.iter().cloned().collect();
         if let Some(g) = self.global_fallback.as_ref() {
-            for k in g.all_trait_method_keys() {
-                if !keys.iter().any(|e| e == &k) {
-                    keys.push(k);
-                }
-            }
+            keys.extend(g.all_trait_method_keys());
         }
-        keys
+        keys.into_iter().collect()
     }
 
     /// Record that `key` is a `Trait::method` definition (not an inherent impl).

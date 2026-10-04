@@ -1756,6 +1756,21 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
     ) {
         return false;
     }
+    // Analyzer Borrowed without an explicit owned-emission slot is `&Vec` / `&Map`
+    // (cross-file `check_collisions(walls)` → `&walls`). Explicit `emitted=false`
+    // keeps the owned-container slot (WDB-281 / P3.589 `data: Vec<u8>`).
+    if matches!(
+        sig.param_ownership.get(param_idx),
+        Some(OwnershipMode::Borrowed)
+    ) && sig
+        .emitted_rust_ref_params
+        .as_ref()
+        .and_then(|flags| flags.get(param_idx))
+        .copied()
+        != Some(false)
+    {
+        return false;
+    }
     // Bare WJ `Vec`/`Map` AST formals emit owned containers unless codegen confirmed `&Vec`
     // (WDB-281). Stale analyzer `Reference(Vec)` in `param_types` must not deny the slot —
     // that previously forced call-site `&items` into owned `contains(items: Vec)`.

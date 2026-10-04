@@ -1,5 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.623 (2026-10-04) — cross-file Borrowed bare Vec must `&walls`
+
+`test_cross_file_borrowed_param_gets_ampersand`: analyzer Borrowed `walls: Vec`
+with no emission flags must emit `check_collisions(&walls)`. Tip forced Owned
+expected (ast_bare_vec override + `bare_formal_is_vec_or_map`).
+
+| Gate | Status |
+|------|--------|
+| `test_cross_file_borrowed_param_gets_ampersand` | ✅ tip GREEN |
+| `borrowed_bare_vec_expects_shared_ref_at_call_site` | ✅ unit GREEN |
+| WDB-281 tip-out contains owned Vec | ✅ still GREEN |
+
+**Root cause layer:** constraint/solver (`safety_type_from_signature_param`) —
+analysis-only Borrowed bare Vec is Ref; only `emitted=false` stays Owned.
+
+**What became unnecessary:** mistaking analysis-only Borrowed Vec for owned
+container without emission confirmation.
+
+**Gates:** `cargo test --release --test all -- test_cross_file_borrowed_param bug_thread_spawn_closure bug_mpsc_sync_channel owned_string_return_into_demoted_str cross_crate_owned_struct_formal cross_crate_owned_bus_formal wdb281`
+
 ## P3.622 (2026-10-04) — wdb-layers multipass hang in trait_definition_sigs_for_method
 
 Full `cargo test --release --test all` stuck ~45m / 12GB RSS on tip `wj build`
@@ -9,12 +29,13 @@ Full `cargo test --release --test all` stuck ~45m / 12GB RSS on tip `wj build`
 
 | Gate | Status |
 |------|--------|
-| Full suite through wdb-layers dogfood | ❌ hang / patho perf — sample 2026-10-04 |
+| Full suite through wdb-layers dogfood | 🔧 tip fix — drop O(\|sigs\|) scan; use `trait_method_keys` only |
 
-**Root cause layer:** signature resolution performance (trait method key scan),
-not ownership coerce.
+**Root cause layer:** signature resolution performance — second loop over all
+registry signatures + `is_trait_method_key` per method call.
 
-**What became unnecessary:** N/A — need index/cache for trait method defs.
+**What became unnecessary:** full-registry trait-key memcmp scan on every method
+resolution; `all_trait_method_keys` merge is HashSet not O(n²) any().
 
 **Do not steal:** P3.619–621 landed; tip-out RED cluster (product regen).
 

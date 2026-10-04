@@ -778,6 +778,9 @@ fn trait_definition_sigs_for_method(
     registry: &SignatureRegistry,
     method: &str,
 ) -> Vec<(String, FunctionSignature)> {
+    // P3.622: only walk `trait_method_keys` (typically tens of keys). Scanning every
+    // registry signature + `is_trait_method_key` per method call is O(|sigs|) and
+    // hung wdb-layers multipass (~12GB / 45m in `memcmp` on trait-key checks).
     let suffix = format!("::{method}");
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -789,14 +792,6 @@ fn trait_definition_sigs_for_method(
             if seen.insert(tk.clone()) {
                 out.push((tk, sig));
             }
-        }
-    }
-    for (key, sig) in &registry.signatures {
-        if (key == method || key.ends_with(&suffix))
-            && registry.is_trait_method_key(key)
-            && seen.insert(key.clone())
-        {
-            out.push((key.clone(), sig.clone()));
         }
     }
     out
