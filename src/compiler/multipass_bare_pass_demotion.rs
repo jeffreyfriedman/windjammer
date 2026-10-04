@@ -827,6 +827,97 @@ fn check_nonempty(field: string, value: string) -> Result<string, string> {
         }
     }
 
+    #[test]
+    fn bare_pass_must_not_mut_borrow_path_dep_owned_custom_emission_slot() {
+        // P3.619: importer `matches_cron(cron, …)` must not demote path-dep
+        // `expr: CronExpr` (Owned + emit false) to MutBorrowed / `&mut CronExpr`.
+        let caller = parse_program(
+            r#"
+struct CronExpr { n: int }
+struct At { minute: int, hour: int, day: int, month: int, day_of_week: int }
+fn check_schedule(expr: string, at: At) -> bool {
+    match parse_cron(expr) {
+        Ok(cron) => matches_cron(cron, at.minute, at.hour, at.day, at.month, at.day_of_week),
+        Err(_) => false,
+    }
+}
+"#,
+        );
+        let mut registry = SignatureRegistry::new();
+        let matches = FunctionSignature {
+            name: "matches_cron".into(),
+            param_types: vec![
+                Type::Custom("CronExpr".into()),
+                Type::Int,
+                Type::Int,
+                Type::Int,
+                Type::Int,
+                Type::Int,
+            ],
+            formal_param_types: vec![
+                Type::Custom("CronExpr".into()),
+                Type::Int,
+                Type::Int,
+                Type::Int,
+                Type::Int,
+                Type::Int,
+            ],
+            param_ownership: vec![OwnershipMode::Owned; 6],
+            return_type: Some(Type::Bool),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false; 6]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        };
+        registry
+            .signatures
+            .insert("matches_cron".into(), matches.clone());
+        registry
+            .signatures
+            .insert("wj_cron::matches_cron".into(), matches);
+        registry.signatures.insert(
+            "parse_cron".into(),
+            FunctionSignature {
+                name: "parse_cron".into(),
+                param_types: vec![Type::String],
+                formal_param_types: vec![Type::String],
+                param_ownership: vec![OwnershipMode::Owned],
+                return_type: Some(Type::Result(
+                    Box::new(Type::Custom("CronExpr".into())),
+                    Box::new(Type::String),
+                )),
+                return_ownership: OwnershipMode::Owned,
+                has_self_receiver: false,
+                is_extern: false,
+                emitted_rust_ref_params: Some(vec![false]),
+                string_ref_string_formal_params: None,
+                field_extract_params: None,
+                forwarding_borrow_params: None,
+            },
+        );
+        let empty = std::collections::HashSet::new();
+        promote_callees_from_bare_pass_callers(&mut registry, &[caller], &empty);
+        for key in ["matches_cron", "wj_cron::matches_cron"] {
+            let sig = registry.get_signature(key).expect(key);
+            assert_eq!(
+                sig.param_ownership.first().copied(),
+                Some(OwnershipMode::Owned),
+                "{key} must keep path-dep Owned CronExpr; got {:?}",
+                sig.param_ownership.first()
+            );
+            assert!(
+                !matches!(
+                    sig.param_types.first(),
+                    Some(Type::MutableReference(_))
+                ),
+                "{key} must not wrap CronExpr as MutableReference"
+            );
+        }
+    }
+
     fn owned_custom_sig(name: &str, ty: &str) -> FunctionSignature {
         FunctionSignature {
             name: name.to_string(),
@@ -1899,9 +1990,10 @@ fn bare_pass_hint_should_skip(
         return true;
     }
     // Path-dep / defining-module codegen already recorded owned emission for this
-    // slot (`require_nonempty(value: String)` → emit false). Importer bare-pass
-    // cannot see `Ok(value)` in another crate and must not rewrite the slot to `&str`.
-    if matches!(mode, OwnershipMode::Borrowed)
+    // slot (`require_nonempty(value: String)` / `matches_cron(expr: CronExpr)` →
+    // emit false). Importer bare-pass cannot see the defining body and must not
+    // rewrite the slot to `&str` or `&mut T` (P3.619/620 → E0308 into owned formals).
+    if matches!(mode, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
         && matches!(
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Owned)

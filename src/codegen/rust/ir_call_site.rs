@@ -2288,10 +2288,21 @@ impl<'ast> CodeGenerator<'ast> {
         let owned_clone_temp = prepared_arg.ends_with(".clone()")
             || prepared_arg.ends_with(".to_string()")
             || prepared_arg.ends_with(".to_owned()");
+        // P3.621: owned `String` / WJ text into demoted `&str` needs explicit `&`
+        // (`handle(method_label(...))`). Rustc does not autoborrow a by-value
+        // `String` into `&str` — only `&String` deref-coerces.
+        let owned_text_into_str_ref = crate::ir::coercion::is_string_base(&actual.base)
+            && matches!(
+                actual.ownership,
+                OwnedType::Owned | OwnedType::Copy | OwnedType::Inferred
+            )
+            && crate::ir::coercion::is_string_base(&expected.base)
+            && matches!(expected.ownership, OwnedType::Ref(_));
         // Call temps that rustc can autoborrow (`encode_startup()`) stay Identity.
         // Owned `.clone()` into Custom `&T` does not autoborrow (encode_line).
         let rust_autoborrows_temp = call_temp_autoborrow
-            && !(owned_clone_temp && !crate::ir::coercion::is_string_base(&expected.base));
+            && !(owned_clone_temp && !crate::ir::coercion::is_string_base(&expected.base))
+            && !owned_text_into_str_ref;
         if rust_autoborrows_temp && matches!(resolved_kind, CoercionKind::Borrow) {
             resolved_kind = CoercionKind::Identity;
         }

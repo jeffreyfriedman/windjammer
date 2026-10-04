@@ -88,43 +88,48 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut out = Vec::new();
 
+        // `Ok(mut app)` / `Some(mut x)` parse as Tuple([MutBinding]) — not Single —
+        // because MutBinding is not a plain Identifier. Still bind Option/Result
+        // payloads so method receivers resolve (P3.621 / MutexGuard → demoted &str).
+        if let Pattern::EnumVariant(variant, binding) = pattern {
+            let single_name = match binding {
+                EnumPatternBinding::Single(name) => Some(name.as_str()),
+                EnumPatternBinding::Tuple(pats) if pats.len() == 1 => {
+                    Self::pattern_simple_binding_name(&pats[0])
+                }
+                _ => None,
+            };
+            if let Some(var_name) = single_name {
+                let payload = if variant == "Some" || variant.ends_with("::Some") {
+                    match &inner_type {
+                        Type::Option(inner_t) => Some(inner_t.as_ref().clone()),
+                        _ => None,
+                    }
+                } else if variant == "Ok" || variant.ends_with("::Ok") {
+                    match &inner_type {
+                        Type::Result(ok, _) => Some(ok.as_ref().clone()),
+                        _ => None,
+                    }
+                } else if variant == "Err" || variant.ends_with("::Err") {
+                    match &inner_type {
+                        Type::Result(_, err) => Some(err.as_ref().clone()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if let Some(ty) = payload {
+                    if yields_refs {
+                        out.push((var_name.to_string(), Type::Reference(Box::new(ty))));
+                    } else {
+                        out.push((var_name.to_string(), ty));
+                    }
+                    return out;
+                }
+            }
+        }
+
         match pattern {
-            Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name))
-                if variant == "Some" || variant.ends_with("::Some") =>
-            {
-                if let Type::Option(inner_t) = &inner_type {
-                    let ty = inner_t.as_ref().clone();
-                    if yields_refs {
-                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
-                    } else {
-                        out.push((var_name.clone(), ty));
-                    }
-                }
-            }
-            Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name))
-                if variant == "Ok" || variant.ends_with("::Ok") =>
-            {
-                if let Type::Result(ok, _) = &inner_type {
-                    let ty = ok.as_ref().clone();
-                    if yields_refs {
-                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
-                    } else {
-                        out.push((var_name.clone(), ty));
-                    }
-                }
-            }
-            Pattern::EnumVariant(variant, EnumPatternBinding::Single(var_name))
-                if variant == "Err" || variant.ends_with("::Err") =>
-            {
-                if let Type::Result(_, err) = &inner_type {
-                    let ty = err.as_ref().clone();
-                    if yields_refs {
-                        out.push((var_name.clone(), Type::Reference(Box::new(ty))));
-                    } else {
-                        out.push((var_name.clone(), ty));
-                    }
-                }
-            }
             Pattern::EnumVariant(variant_name, EnumPatternBinding::Struct(fields, _)) => {
                 let Some(key) = self.enum_pattern_registry_key(variant_name, &inner_type) else {
                     return out;
@@ -134,15 +139,15 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 let map: HashMap<String, Type> = named.iter().cloned().collect();
                 for (fname, pat) in fields.iter() {
-                    if let Pattern::Identifier(binding_name) = pat {
+                    if let Some(binding_name) = Self::pattern_simple_binding_name(pat) {
                         if let Some(ft) = map.get(fname) {
                             if yields_refs {
                                 out.push((
-                                    binding_name.clone(),
+                                    binding_name.to_string(),
                                     Type::Reference(Box::new(ft.clone())),
                                 ));
                             } else {
-                                out.push((binding_name.clone(), ft.clone()));
+                                out.push((binding_name.to_string(), ft.clone()));
                             }
                         }
                     }
@@ -181,13 +186,13 @@ impl<'ast> CodeGenerator<'ast> {
                 };
 
                 for (pat, ty) in pats.iter().zip(types.iter()) {
-                    if let Pattern::Identifier(name) = pat {
+                    if let Some(name) = Self::pattern_simple_binding_name(pat) {
                         if yields_refs {
                             // Match scrutinee is borrowed, bindings are refs
-                            out.push((name.clone(), Type::Reference(Box::new(ty.clone()))));
+                            out.push((name.to_string(), Type::Reference(Box::new(ty.clone()))));
                         } else {
                             // Match scrutinee is owned, bindings are owned
-                            out.push((name.clone(), ty.clone()));
+                            out.push((name.to_string(), ty.clone()));
                         }
                     }
                 }
@@ -196,6 +201,17 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         out
+    }
+
+    /// Identifier / `mut x` / `ref x` / `ref mut x` binding names in enum payloads.
+    fn pattern_simple_binding_name<'p>(pat: &'p Pattern<'_>) -> Option<&'p str> {
+        match pat {
+            Pattern::Identifier(name)
+            | Pattern::MutBinding(name)
+            | Pattern::Ref(name)
+            | Pattern::RefMut(name) => Some(name.as_str()),
+            _ => None,
+        }
     }
 
     /// `Data::Arrow(handle)` → payload types from the global enum registry,
@@ -208,6 +224,14 @@ impl<'ast> CodeGenerator<'ast> {
         let (variant_name, var_name) = match pattern {
             Pattern::EnumVariant(variant_name, EnumPatternBinding::Single(var_name)) => {
                 (variant_name.as_str(), var_name.as_str())
+            }
+            Pattern::EnumVariant(variant_name, EnumPatternBinding::Tuple(pats))
+                if pats.len() == 1 =>
+            {
+                match Self::pattern_simple_binding_name(&pats[0]) {
+                    Some(name) => (variant_name.as_str(), name),
+                    None => return Vec::new(),
+                }
             }
             _ => return Vec::new(),
         };
