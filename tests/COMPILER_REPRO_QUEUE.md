@@ -13,6 +13,7 @@
 **Sample tip-live to triage first:**
 - `module_qualified_signature_test::test_multipass_module_qualified_autoborrow`
 - ~~`cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key`~~ ✅ P3.626
+- ~~`cross_crate_dogfooding_ownership_test::dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`~~ ✅ P3.627
 - `e0507_ownership_inference_test::test_for_loop_param_used_multiple_times_borrows`
 - `typed_lowering_test::class3_string_literal_to_owned_param` (`String::from` vs `.to_string()`)
 - `codegen_windjammer_ui_full_regen_gate_test::datatable_owned_column_row_forward_must_cargo_check`
@@ -43,6 +44,35 @@ owned; no ir_call_site peel / method-name heuristics.
 
 **Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
 `cargo test --release --test all -- wdb209_multipass_catalog_push_column_col_must_stay_owned dogfood_store_has_key_forward_ref_borrows_owned_key bug_demoted_vec_param_into_owned_vec_callee_must_clone_test bug_wdb124_module_file_demoted_vec_i64_formal_must_borrow_clone_call_sites_test bug_wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites_test bug_mut_param_passthrough_no_shared_amp_test` → **8 passed**.
+
+## P3.627 (2026-10-04) — WAL cross-crate `append_put` forwarding borrow (P3.626 regression)
+
+After P3.589 owned-Vec denial in `call_site_needs_shared_ref_at_emit`,
+`maybe_borrow_vec_or_helper` added `&vec![…]` from metadata
+`forwarding_borrow_params`, then owned-formal terminal peel converted to
+`.clone()` → RED `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal`.
+
+| Gate | Status |
+|------|--------|
+| `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal` | ✅ GREEN — `&vec![…]` / `&encode_int64(…)` |
+| `owned_vec_u8_literal_must_not_borrow_at_call_site` | ✅ no-reg |
+| `dogfood_store_has_key_forward_ref_borrows_owned_key` | ✅ no-reg |
+| `forwarding_borrow_beats_emitted_owned_vec_contract` | ✅ lib GREEN (metadata oracle) |
+
+**Root cause layer:** ir_call_site terminal reconcile — owned-emission peel after
+`maybe_borrow_vec_or_helper` ignored defining-crate `forwarding_borrow_params`.
+
+**Fix:** `forwarding_borrow_metadata_requests_call_site_borrow` in signature
+bridge; skip `coerce_borrowed_arg_to_owned` when metadata marks forwarding borrow;
+P3.589 bridge denial unchanged for stale owned-Vec flags.
+
+**What became unnecessary:** cross-crate `.clone()` on vec literals / helper
+returns into `WalSegment::append_put` when dependency metadata already records
+forwarding borrow.
+
+**Gates:** `CARGO_TARGET_DIR=~/Library/Caches/windjammer/cargo-target/shared`
+`cargo test --release --test all -- dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal owned_vec_u8_literal_must_not_borrow dogfood_store_has_key_forward_ref`
+→ **3 passed**; `cargo test --release -p windjammer --lib forwarding_borrow` → **3 passed**.
 
 ## P3.624 (2026-10-04) — WDB-435 generic `ObjectPool<T>` Copy usize field return
 

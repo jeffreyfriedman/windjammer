@@ -846,6 +846,24 @@ pub fn call_site_expects_owned_pass(sig: &FunctionSignature, param_idx: usize) -
     )
 }
 
+/// Defining-crate metadata: param only forwards into borrowing callees (`append_put` →
+/// `WalRecord::put`). Cross-crate callers borrow temporaries (`&vec![…]`, `&helper()`)
+/// even when the exported formal still emits owned `Vec` (P3.586).
+///
+/// Distinct from [`call_site_needs_shared_ref_at_emit`]: P3.589 denies stale forwarding
+/// on owned-Vec emit in the bridge; this flag is authoritative for dependency callees
+/// in `maybe_borrow_vec_or_helper` and owned-formal peel guards.
+pub fn forwarding_borrow_metadata_requests_call_site_borrow(
+    sig: &FunctionSignature,
+    param_idx: usize,
+) -> bool {
+    sig.forwarding_borrow_params
+        .as_ref()
+        .and_then(|flags| flags.get(param_idx))
+        .copied()
+        .unwrap_or(false)
+}
+
 /// Unified shared-ref contract: IR bridge + codegen emission oracle.
 ///
 /// Replaces repeated `call_site_expects_shared_borrow || callee_emits_shared_rust_ref_param`
@@ -1330,14 +1348,14 @@ mod tests {
             forwarding_borrow_params: Some(vec![false, true, true]),
         };
         assert!(
-            call_site_needs_shared_ref_at_emit(&sig, 1),
-            "key forwarding_borrow must request shared ref at emit"
+            forwarding_borrow_metadata_requests_call_site_borrow(&sig, 1),
+            "key forwarding_borrow metadata must request borrow at emit"
         );
         assert!(
-            call_site_needs_shared_ref_at_emit(&sig, 2),
-            "value forwarding_borrow must request shared ref at emit"
+            forwarding_borrow_metadata_requests_call_site_borrow(&sig, 2),
+            "value forwarding_borrow metadata must request borrow at emit"
         );
-        assert!(!call_site_needs_shared_ref_at_emit(&sig, 0));
+        assert!(!forwarding_borrow_metadata_requests_call_site_borrow(&sig, 0));
     }
 
     /// P3.588 / WDB-110: AsRef-owned `string` keeps `String` emit + forwarding_borrow;
