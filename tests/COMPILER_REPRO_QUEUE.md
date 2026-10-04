@@ -31,7 +31,7 @@ runtime formals are `&str` → E0308. `replace`/`escape` may already demote.
 
 | Gate | Status |
 |------|--------|
-| `regex_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-regex |
+| `regex_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
 
 **Root cause layer:** call-site coercion — owned String formals into demoted
 stdlib/runtime `&str` formals must auto-borrow (signature-driven).
@@ -56,7 +56,7 @@ Product `wj-hash` `verify_password`: tip keeps owned `String` formals and emits
 
 | Gate | Status |
 |------|--------|
-| `hash_crypto_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-hash |
+| `hash_crypto_owned_args_must_auto_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
 
 **Root cause layer:** call-site coercion — owned String into demoted crypto
 `&str` formals must auto-borrow (signature-driven).
