@@ -548,6 +548,9 @@ impl<'ast> CodeGenerator<'ast> {
         // AND: Don't clone in borrow context (&recipe.ingredients → reference is sufficient)
         // TDD FIX: Don't clone when generating call arguments (Call handler applies ownership)
         // WINDJAMMER PHILOSOPHY: type-driven Copy detection only — never field-name lists.
+        // P3.614: use move-out Copy check — `&String` is Copy as a reference but moving
+        // `String` out of `&(String,…)` still needs `.clone()` (is_type_copy(Reference)
+        // would skip incorrectly when wrap typed fields as `&T`).
         if !self.generating_assignment_target
             && !self.suppress_borrowed_clone
             && !self.in_explicit_clone_call
@@ -557,14 +560,17 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.in_user_written_closure
         {
             if let Expression::Identifier { name: var_name, .. } = object {
-                if self.borrowed_iterator_vars.contains(var_name) {
-                    // First: use type inference to check if the field type is Copy
-                    let is_copy = self
+                let object_is_shared_ref = self.borrowed_iterator_vars.contains(var_name)
+                    || self.local_var_types.get(var_name).is_some_and(|t| {
+                        matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                    });
+                if object_is_shared_ref {
+                    let can_copy_move_out = self
                         .infer_expression_type(expr_to_generate)
                         .as_ref()
-                        .is_some_and(|t| self.is_type_copy(t));
+                        .is_some_and(|t| self.is_copy_move_out_type(t));
 
-                    if !is_copy && !base_expr.ends_with(".clone()") {
+                    if !can_copy_move_out && !base_expr.ends_with(".clone()") {
                         return format!("{}.clone()", base_expr);
                     }
                 }

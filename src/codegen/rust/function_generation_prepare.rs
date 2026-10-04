@@ -3219,7 +3219,16 @@ impl<'ast> CodeGenerator<'ast> {
     fn expr_moves_for_loop_var(name: &str, expr: &Expression<'ast>) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
-            Expression::FieldAccess { object, .. } | Expression::MethodCall { object, .. } => {
+            // P3.614: `let key = pair.0` / `return pair.1` moves non-Copy fields out of
+            // the loop element — keep Owned `Vec` (do not demote to `&Vec`).
+            // Compare sites still use `expr_moves_for_loop_var_under_compare` (WDB-412).
+            Expression::FieldAccess { object, .. } => {
+                matches!(
+                    &**object,
+                    Expression::Identifier { name: id, .. } if id == name
+                ) || Self::expr_moves_for_loop_var_in_object(name, object)
+            }
+            Expression::MethodCall { object, .. } => {
                 Self::expr_moves_for_loop_var_in_object(name, object)
             }
             Expression::Binary { left, right, op, .. } => {

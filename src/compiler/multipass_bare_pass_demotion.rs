@@ -3,7 +3,7 @@
 //! (WDB-112 / cross-crate Vec / WDB-113).
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
-use crate::parser::{Expression, FunctionDecl, Item, Program, Statement, Type};
+use crate::parser::{Expression, FunctionDecl, Item, Pattern, Program, Statement, Type};
 use std::collections::{HashMap, HashSet};
 
 /// Precomputed AST indexes for bare-pass restore (P3.585).
@@ -1952,6 +1952,8 @@ fn bare_pass_hint_should_skip(
                 || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
                 // P3.582: `csr.neighbors` / `let n = csr.offsets` moves — not `&DenseCsr`.
                 || param_has_field_or_index_move_binding(body, param_name)
+                // P3.614: `for pair in headers { let key = pair.0 }` — keep Owned Vec.
+                || param_for_in_moves_element_fields(body, param_name)
         }
         OwnershipMode::Borrowed => {
             param_stored_in_struct_literal(body, param_name)
@@ -1962,6 +1964,8 @@ fn bare_pass_hint_should_skip(
                 || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
                 // P3.582: returning/moving `param.field` must keep owned Custom (library multipass).
                 || param_has_field_or_index_move_binding(body, param_name)
+                // P3.614: for-in field moves must not demote `Vec` to `&Vec` (E0507).
+                || param_for_in_moves_element_fields(body, param_name)
         }
         OwnershipMode::Owned => false,
     }
@@ -3226,6 +3230,79 @@ fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
             .any(|s| statement_mentions_param(s, param_name)),
         _ => false,
     }
+}
+
+/// P3.614: `for pair in headers { let key = pair.0 }` / `return pair.1` moves
+/// non-Copy fields out of the loop element. Bare-pass must not demote that `Vec`
+/// to `&Vec` (E0507 under borrowed for-in). Compare-only loops stay demotable
+/// (WDB-412).
+fn param_for_in_moves_element_fields(body: &[&Statement], param_name: &str) -> bool {
+    for stmt in body {
+        match stmt {
+            Statement::For {
+                pattern,
+                iterable,
+                body: loop_body,
+                ..
+            } => {
+                let iterates_param = matches!(
+                    iterable,
+                    Expression::Identifier { name, .. } if name == param_name
+                );
+                if iterates_param {
+                    if let Pattern::Identifier(loop_var) = pattern {
+                        if loop_body
+                            .iter()
+                            .any(|s| stmt_has_field_move_binding(s, loop_var))
+                        {
+                            return true;
+                        }
+                    } else if loop_body.iter().any(|s| {
+                        // Tuple destructure still moves when body reassigns/returns
+                        // owned pieces via further field access on nested bindings.
+                        stmt_has_field_move_binding(s, param_name)
+                    }) {
+                        // Destructured for-in over the param with residual field
+                        // moves from the collection itself — keep owned.
+                        return true;
+                    }
+                }
+                if param_for_in_moves_element_fields(loop_body.as_slice(), param_name) {
+                    return true;
+                }
+            }
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                if param_for_in_moves_element_fields(then_block.as_slice(), param_name) {
+                    return true;
+                }
+                if let Some(e) = else_block {
+                    if param_for_in_moves_element_fields(e.as_slice(), param_name) {
+                        return true;
+                    }
+                }
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } => {
+                if param_for_in_moves_element_fields(body.as_slice(), param_name) {
+                    return true;
+                }
+            }
+            Statement::Match { arms, .. } => {
+                for arm in arms {
+                    if let Expression::Block { statements, .. } = arm.body {
+                        if param_for_in_moves_element_fields(statements, param_name) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn param_has_field_or_index_move_binding(body: &[&Statement], param_name: &str) -> bool {

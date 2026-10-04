@@ -170,15 +170,19 @@ moves out of borrowed tuple → E0507; product also emits `*pair.0 == "…"` (E0
 
 | Gate | Status |
 |------|--------|
-| `borrowed_for_in_tuple_field_must_clone_into_owned` | ❌ tip RED — star-deref / move under `&Vec` |
+| `borrowed_for_in_tuple_field_must_clone_into_owned` | ✅ tip GREEN |
 | borrow-tracking prerequisite (`049fd5f9`) | ✅ landed — demoted `&Vec` marked borrowed |
 
-**Root cause layer:** codegen / for-in — borrowed tuple field extract into owned
-slots must `.clone()` (or keep Owned Vec when moving pair.N); string field `==`
-lit must not `*pair.0` / `*key`.
+**Root cause layer:** constraint/prepare + bare-pass — `pair.N` field moves count as
+consuming the for-in element so `Vec` stays Owned (not bare-pass/`&Vec` demotion);
+when borrow iteration is still required, whole binding types as `&(K,V)` and field
+extract uses move-out Copy check (`.clone()`), not `is_type_copy(&T)`.
 
-**Gates:** tip p3610 2026-10-03 — isolate + product notes/auth/proxy still FAILED (RED).
-- `cargo test --release --test all --features integration_tests,codegen_tests -- borrowed_for_in_tuple_field_must_clone_into_owned` → 0 passed; 1 failed
+**What became unnecessary:** demoting headers to `&Vec` then star-deref/`pair.N`
+moves; treating whole-tuple for-in bindings as `(&K,&V)` (Map-only shape).
+
+**Gates:** tip `.cargo-target-wj` 2026-10-04 — emit Owned Vec + cargo-check;
+`cargo test --release --test all -- borrowed_for_in_tuple_field_must_clone_into_owned`.
 
 **Do not steal:** WDB tip-outs / P3.508–P3.613 / WDB-435 (filed).
 

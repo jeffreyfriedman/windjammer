@@ -273,9 +273,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Borrowed for-in (`&collection`) wraps each yielded binding as `&T`.
-    /// Map entries are `(&K, &V)`, not `&(K, V)` — wrapping the whole tuple breaks
-    /// XOR Copy-key deref (`k == id` with `k: &i64`, P3.597).
+    /// Borrowed for-in over a whole element binding (`for pair in &vec`): `&T`.
+    /// For tuple elements this is `&(K, V)` — matching Rust `for pair in &Vec<(K,V)>`.
+    /// Do not use for map/tuple destructure (`for (k, v) in …`); that needs
+    /// [`Self::wrap_for_loop_element_as_borrowed`].
+    pub(in crate::codegen::rust) fn wrap_for_loop_whole_binding_as_borrowed(
+        elem_type: Type,
+    ) -> Type {
+        match elem_type {
+            Type::Reference(_) | Type::MutableReference(_) => elem_type,
+            other => Type::Reference(Box::new(other)),
+        }
+    }
+
+    /// Borrowed for-in with tuple destructure (`for (k, v) in &map`): `(&K, &V)`.
+    /// Wrapping the whole tuple as `&(K, V)` breaks XOR Copy-key deref
+    /// (`k == id` with `k: &i64`, P3.597).
     pub(in crate::codegen::rust) fn wrap_for_loop_element_as_borrowed(elem_type: Type) -> Type {
         match elem_type {
             Type::Reference(_) | Type::MutableReference(_) => elem_type,
