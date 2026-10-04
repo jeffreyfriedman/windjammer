@@ -57,7 +57,7 @@ path_set sites emit `json::get(&out, &head)`.
 
 | Gate | Status |
 |------|--------|
-| `json_get_owned_value_must_auto_borrow_product` | ❌ tip RED — product wj-json-util; cargo 0/1 |
+| `json_get_owned_value_must_auto_borrow_product` | ✅ tip GREEN — product 15 + cargo 1/1 (2026-10-04 tip 18:24) |
 
 **Root cause layer:** call-site coercion — owned `Value` into demoted `&Value`
 stdlib formals must auto-borrow (signature-driven), including free-fn `json::get`.
@@ -156,7 +156,7 @@ already demote.
 
 | Gate | Status |
 |------|--------|
-| `mime_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
+| `mime_stdlib_owned_args_must_auto_borrow_product` | ✅ tip GREEN — product 12 + cargo 1/1 (2026-10-04 tip 18:24) |
 
 **Root cause layer:** call-site coercion — owned String into demoted mime `&str`
 formals must auto-borrow (signature-driven).
@@ -205,7 +205,7 @@ runtime formals are `&str` → E0308. `replace`/`escape` may already demote.
 
 | Gate | Status |
 |------|--------|
-| `regex_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
+| `regex_stdlib_owned_args_must_auto_borrow_product` | ✅ tip GREEN — product 9 + cargo 1/1 (2026-10-04 tip 18:24) |
 
 **Root cause layer:** call-site coercion — owned String formals into demoted
 stdlib/runtime `&str` formals must auto-borrow (signature-driven).
@@ -230,7 +230,7 @@ Product `wj-hash` `verify_password`: tip keeps owned `String` formals and emits
 
 | Gate | Status |
 |------|--------|
-| `hash_crypto_owned_args_must_auto_borrow_product` | ❌ tip RED — cargo 0/2 (2026-10-04) |
+| `hash_crypto_owned_args_must_auto_borrow_product` | ✅ tip GREEN — product 4 + cargo 1/1 (2026-10-04 tip 18:24) |
 
 **Root cause layer:** call-site coercion — owned String into demoted crypto
 `&str` formals must auto-borrow (signature-driven).
@@ -420,7 +420,7 @@ bare owned → E0308 (`&str` / `&[Vec<String>]`). Isolate write gate can false-G
 
 | Gate | Status |
 |------|--------|
-| `csv_stdlib_owned_args_must_auto_borrow_product` | ❌ tip RED — product wj-csv |
+| `csv_stdlib_owned_args_must_auto_borrow_product` | ✅ tip GREEN — product 6 + cargo 1/1 (2026-10-04 tip 18:24) |
 
 **Root cause layer:** call-site coercion — owned String / Vec into demoted stdlib
 formals must auto-borrow (signature-driven), including homonym `fn write`.
