@@ -7,10 +7,11 @@ Copy `i32` **local** into typed `let` must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-446 MultiFile | ⏳ TDD pending — bare `gd` / `u` |
-| WDB-446 tip-out | ⏳ TDD pending — `gd.clone()` / `u.clone()` in meshing |
+| WDB-446 MultiFile | ✅ isolate GREEN — `let mut slice_count: i32 = gd` / `let mut x: i32 = u` |
+| WDB-446 tip-out | ❌ tip RED — `gd.clone()` / `u.clone()` in `rel_tip_out/voxel/meshing.rs` |
 
-**Root cause layer:** copy / i32-local-typed-let — Copy `i32` locals into typed lets must not auto-clone.
+**Root cause layer:** copy / i32-local-typed-let — Copy `i32` locals into typed lets must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-437 is i32 **formal** into let.
@@ -19,9 +20,11 @@ Copy `i32` **local** into typed `let` must not `.clone()`; product emits
 
 **What became unnecessary:** `gd.clone()` / `u.clone()` in voxel greedy meshing.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb446_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/445–446, P3.508–P3.661, WDB-412–446 (filed).
+**Do not steal:** WDB-406/408/411/445–446, P3.508–P3.662, WDB-412–446 (filed).
+
 
 ## P3.661 (2026-10-04) — product wj-json-util owned Value into json::get must auto-borrow
 
