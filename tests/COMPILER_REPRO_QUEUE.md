@@ -29,6 +29,11 @@ into owned WAL formals; quest gate false-RED on trivial getter→field lower.
 
 **Do not steal:** P3.647 owned-Vec clone path; P3.672 MutBorrowed; P3.456 keep-owned; P3.589/627 forwarding.
 
+**Full suite (2026-10-05):** host OOM/thrash blocked `cargo test --release --test all` completion
+(~16 Gi RAM, &lt;5k free pages; suite died ~275–302 oks). Focused tip-live + no-reg gates above are GREEN.
+Re-run full suite when the machine has headroom.
+
+
 
 ## P3.673 (2026-10-05) — implicit-self passthrough must demote `item_id: &str`
 
