@@ -125,12 +125,14 @@ impl Manager {
     let rust = parse_and_generate(source);
     // The compiler correctly infers &self for state() since it only reads self.state.
     // So quest.state() on &Quest from .values() is valid without clone.
+    // Tip may also lower the trivial getter to a field read (`quest.state == …`).
     let valid = rust.contains("quest.clone().state()")
         || rust.contains(".clone().state()")
-        || rust.contains("quest.state()");
+        || rust.contains("quest.state()")
+        || rust.contains("quest.state");
     assert!(
         valid,
-        "quest.state() or quest.clone().state() expected. Got:\n{}",
+        "quest.state() / quest.state field / quest.clone().state() expected. Got:\n{}",
         rust
     );
 }

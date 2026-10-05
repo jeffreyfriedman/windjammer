@@ -1,5 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.674 (2026-10-05) — shared-ref emit beats AST-owned peel; WAL owned temps
+
+P3.647 owned-slot peel treated WJ AST bare `Value`/`Vec` as owned even when codegen
+emitted `&T` (`apply_patch_put(value: &Value)`), rewriting IR `&value` → `value.clone()`.
+Separately, `maybe_borrow_vec_or_helper` ORed raw `forwarding_borrow_params` and forced
+`&vec![…]` into keep-owned WAL `append_put(Vec)` formals; the owned peel then emitted
+`.clone()` on temporaries (E0308 / wasteful).
+
+| Gate | Status |
+|------|--------|
+| `dogfood_lsm_store_apply_patch_asymmetric_coercion` | ✅ tip GREEN — `apply_patch_put(…, &value)` |
+| `dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal` | ✅ tip GREEN — owned `vec![…]` / `encode_int64(…)` (no `&` / no temp `.clone()`) |
+| `test_builder_pattern_self_clone_when_owned_method` | ✅ tip GREEN — `&Uniform` call-site borrow |
+| `test_shared_ref_quest_state_from_values` | ✅ tip GREEN — field-read / `quest.state()` gate |
+| `reused_owned_vec_formal_must_not_reborrow_recursive` | ✅ tip GREEN — gate scoped to `evaluate_node` formal (outer `evaluate(Vec)` no longer false-RED) |
+
+**Root cause layer:** signature/emission oracle + temporary reconcile narrow —
+`shared_ref_emit_slot` gates the P3.647 AST-owned peel; `maybe_borrow` drops the raw
+`forwarding_borrow` dual-oracle (uses `call_site_needs_shared_ref_at_emit` only).
+
+**What became unnecessary:** `value.clone()` into `&Value`; `&vec![].clone()` dual-oracle
+into owned WAL formals; quest gate false-RED on trivial getter→field lower.
+
+**Gates:**
+- `cargo test --release --test all -- dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal dogfood_lsm_store_apply_patch_asymmetric_coercion test_shared_ref_quest_state_from_values test_builder_pattern_self_clone_when_owned_method bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test test_passthrough_to_borrowed_param` → **9 passed**
+- No-reg: `dogfood_wal_segment_vec_literal dogfood_lsm_engine_apply_writes auto_mut_borrow_arg bug_demoted_vec_param owned_vec_reuse` → **7 passed**; `cargo test --release --lib -- forwarding_borrow` → **4 passed**
+
+**Do not steal:** P3.647 owned-Vec clone path; P3.672 MutBorrowed; P3.456 keep-owned; P3.589/627 forwarding.
+
 
 ## P3.673 (2026-10-05) — implicit-self passthrough must demote `item_id: &str`
 

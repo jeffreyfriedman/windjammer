@@ -123,7 +123,26 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             return arg_str;
                         }
-                        let ast_owned_vec_or_custom = receiver_type_name.as_ref().is_some_and(|rt| {
+                        // P3.674: AST bare `Value`/`Vec` must not force an owned slot when
+                        // codegen emits `&T` (apply_patch_put `value: &Value`). P3.647's
+                        // peel would rewrite IR `&value` → `value.clone()` (E0308 / wrong).
+                        let shared_ref_emit_slot = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            sig, pidx,
+                        ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                            sig, pidx,
+                        ) || sig.param_types.get(pidx).is_some_and(|t| {
+                            matches!(t, Type::Reference(_))
+                        }) || (matches!(
+                            sig.param_ownership.get(pidx),
+                            Some(OwnershipMode::Borrowed)
+                        ) && sig
+                            .emitted_rust_ref_params
+                            .as_ref()
+                            .and_then(|f| f.get(pidx))
+                            .copied()
+                            != Some(false));
+                        let ast_owned_vec_or_custom = !shared_ref_emit_slot
+                            && receiver_type_name.as_ref().is_some_and(|rt| {
                             self.struct_method_ast_formal_param_types
                                 .get(rt.as_str())
                                 .and_then(|methods| methods.get(method))
@@ -141,7 +160,8 @@ impl<'ast> CodeGenerator<'ast> {
                                                 )))
                                 })
                         });
-                        let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        let owned_slot = !shared_ref_emit_slot
+                            && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             sig, pidx,
                         ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
                             sig, pidx,
@@ -153,7 +173,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 receiver_type_name.as_deref(),
                             ),
                             OwnershipMode::Owned
-                        );
+                        ));
                         let clone_required = self.auto_clone_analysis.as_ref().is_some_and(|a| {
                             a.needs_clone(name, self.current_statement_idx).is_some()
                                 || a.needs_clone_anywhere(name)
