@@ -1,5 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.670 (2026-10-04) — TDD WDB-451 (DB agent; no compiler src)
+
+Copy `i64` **formal** into field assign must not `.clone()`; product emits
+`self.last_poll_time = current_time.clone()` in live_reload poll.
+
+| Gate | Status |
+|------|--------|
+| WDB-451 MultiFile | ⏳ TDD pending — bare `current_time` |
+| WDB-451 tip-out | ⏳ TDD pending — `current_time.clone()` in live_reload |
+
+**Root cause layer:** copy / i64-formal-field-assign — Copy `i64` formals assigned into fields must not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is i32 **formal** into field assign.
+- WDB-448 is f32 **formal** into field assign.
+- WDB-449 is bool **formal** into field assign.
+- WDB-441 is i64 **local** into index assign.
+
+**What became unnecessary:** `current_time.clone()` in LiveReloadSystem::poll.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/450–451, P3.508–P3.669, WDB-412–451 (filed).
+
 ## P3.669 (2026-10-04) — json-util merge overlay loop must not move owned Value
 
 Product `wj-json-util::merge_values` tip shared 21:42: E0382 —
