@@ -73,4 +73,15 @@ fn notes_api_product_qs_get_literal_must_not_string_from() {
             && !api_rs.contains("\"encoding\".to_string()"),
         "product qs_get key &str must not own the encoding literal:\n{api_rs}"
     );
+    // P3.666 tip 20:06 also owns "q" / "limit" keys the same way.
+    assert!(
+        !api_rs.contains("String::from(\"q\")")
+            && !api_rs.contains("\"q\".to_string()"),
+        "product qs_get key &str must not own the q literal:\n{api_rs}"
+    );
+    assert!(
+        !api_rs.contains("String::from(\"limit\")")
+            && !api_rs.contains("\"limit\".to_string()"),
+        "product qs_get key &str must not own the limit literal:\n{api_rs}"
+    );
 }
