@@ -524,20 +524,23 @@ Tip clones only the second call; first move invalidates reuse.
 
 | Gate | Status |
 |------|--------|
-| `reused_owned_string_into_owned_formal_must_clone_first_use` | ✅ tip GREEN |
+| `reused_owned_string_into_owned_formal_must_clone_first_use` | ❌ tip RED — product todo-cli (reconfirmed tip 19:18) |
 
-**Root cause layer:** constraint/reuse (match-arm binding walk) — `match_arm_body_uses_binding`
-/ auto_clone `statement_uses_binding` skipped nested `Statement::Match` / `Let` / `If`,
-so export’s deeper `decode_store(snapshot)` under `match todos_to_json` never counted as
-arm reuse; first match-scrutinee call moved while a later site still got `.clone()`.
+**Root cause layer:** reuse analysis — when an owned String local is passed into an
+owned formal more than once, the **first** call must clone (or demote the formal).
 
-**What became unnecessary:** todo-cli manual first-use clones; no new `ir_call_site` peel.
+**Why this is a new class:**
+- P3.615 is `.into()` move before second use (proxy).
+- P3.616 is `.into().clone()` inference failure (auth).
+- P3.642 is bare move on first use + late `.clone()` on second (todo-cli snapshot).
 
-**Gates (2026-10-04 tip):**
-- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_into_owned_formal_must_clone_first_use` → **1 passed**
-- export: `decode_store(snapshot.clone())` on first use; stats keeps last-use move on second.
+**What became unnecessary:** reshaping export/stats with manual first-use clones.
 
-**Do not steal:** WDB tip-out Copy-clone lag rows; other tip-live REDs.
+**Gates:** tip game `.cargo-target-wj` 19:18 / eco `.cargo-target-p3642` — **0 passed / 1 failed** (2026-10-04 19:54).
+- Product `wj build --no-cargo`: first `decode_store(snapshot)` move + later `snapshot.clone()`.
+- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_into_owned_formal_must_clone_first_use` → FAILED.
+
+**Do not steal:** WDB-439/440, P3.508–P3.641 (filed).
 
 ## P3.641 (2026-10-04) — TDD WDB-440 (DB agent; no compiler src)
 
