@@ -1,6 +1,39 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.679 (2026-10-05) — `while i < 64` literal + substring must unify int/usize
+
+`wj-sha` fixed-width hex scan:
+```wj
+let mut i = 0
+while i < 64 {
+    let ch = strings.substring(text, i, i + 1)
+    …
+}
+```
+Tip 18:38 emits `while i < 64_usize` with `i: i32`, then
+`substring(&text, i, (i + 1) as usize)` → E0308 (start uncast).
+Len-driven loops (`while i < strings.len(s)`) already GREEN (P3.300/P3.452);
+**literal** end bound still widthsplit. Product uses `strings.chars` +
+`contains` hex check until tip greens.
+
+| Gate | Status |
+|------|--------|
+| `while_lit_bound_substring_int_must_unify_usize` | ❌ tip RED — game tip **18:38** `64_usize` + uncast `i` |
+
+**Root cause layer:** loop-bound / index-width — literal int compare must not
+stamp bound as `usize` while leaving the induction var `i32` for substring formals.
+
+**Why this is a new class:**
+- P3.300 / P3.315 / P3.452 are `i+1` / len-driven substring unify.
+- This is a **literal** `while i < N` bound (N not `.len()`).
+
+**What became unnecessary:** reshaping fixed-width scans away from indexed substring.
+
+**Gates:** tip 18:38 cargo-check of isolate — **failing** (2026-10-05).
+
+**Do not steal:** P3.300/P3.315/P3.452/P3.454, P3.671–P3.678 (filed).
+
 ## P3.678 (2026-10-05) — HashMap::get identity `"${v}"` let-match must clone
 
 notes-api `notes_config_from_map`: `let s = match map.get(...) { Some(v) => "${v}", … }`
