@@ -1,30 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
-## P3.671 (2026-10-04) — notes-api qs_get query must not `format!("{}", query)`
+## P3.671 (2026-10-05) — notes-api qs_get query must not `format!("{}", query)`
 
-Product `wj-notes-api` tip shared 23:55: `pretty`/`encoding` pass demoted `query`
-bare into `qs_get`, but `q`/`limit` still emit
-`{ let _temp0 = format!("{}", query); qs_get(_temp0, "q") }`. Do not reshape
-the app with manual clones / rebinds.
+Product `wj-notes-api` `list_notes_for_query` uses `"${query}"` / `"${pattern}"`
+identity interpolation for reuse into owned path-dep formals. Tip emitted
+`{ let _temp0 = format!("{}", query); qs_get(_temp0, "q") }`.
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip RED — `format!("{}", query)` on `q`/`limit` sites (tip 23:55) |
+| `notes_api_product_qs_get_query_must_not_format_temp` | ✅ tip GREEN — `qs_get(query.clone(), "q"/"limit")` |
+| `identity_string_interpolation_into_owned_formal_must_not_format` | ✅ tip GREEN — isolate |
 
-**Root cause layer:** ownership / demoted-string call-site — reused demoted
-`&str`/`string` formal into owned `string` path-dep param should borrow or
-`.to_string()` once; must not insert `format!("{}", …)` identity temps on some
-sites only.
+**Root cause layer:** coercion/encoding — identity `format!("{}", text)` on
+Windjammer text lowers via `compute_coercion` to owned `String` (Clone for owned
+bindings so reuse analysis stays sound; ToOwnedString for `&str`). Non-text
+Display args still use `format!`.
 
-**Why this is a new class:**
-- P3.666 greened key literals (`"pretty"` not `.to_string()`).
-- Distinct: first-arg `query` ownership still inconsistent across sibling calls.
+**What became unnecessary:** format-temp hoist for identity `"${s}"` on string;
+no new `ir_call_site` peel / no app reshape.
 
-**What became unnecessary:** app-side `own(query)` / `format!("{}", query)`.
-
-**Gates:** tip shared 23:55 product transpile shows format temps on `q`/`limit`
-only; gate asserts no `format!("{}", query)` in `domain/api.rs`.
+**Gates:**
+- `cargo test --release --test all -- notes_api_product_qs_get_query_must_not_format_temp identity_string_interpolation_into_owned_formal_must_not_format json_get_owned_value_must_auto_borrow_product owned_vec_formal` → **10 passed**
 
 **Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670 (filed).
 
@@ -269,19 +266,22 @@ path_set sites emit `json::get(&out, &head)`.
 
 | Gate | Status |
 |------|--------|
-| `json_get_owned_value_must_auto_borrow_product` | ✅ tip GREEN — product 15 + cargo 1/1 (2026-10-04 tip 18:24) |
+| `json_get_owned_value_must_auto_borrow_product` | ✅ tip GREEN — demoted `value: &Value` + bare `json::get(value, …)` (P3.669 hold; gate updated 2026-10-05) |
 
 **Root cause layer:** call-site coercion — owned `Value` into demoted `&Value`
 stdlib formals must auto-borrow (signature-driven), including free-fn `json::get`.
+After P3.669, helpers demote to `&Value` so bare `value` at `json::get` is correct;
+gate rejects only owned `value: Value` + bare `json::get(value,`.
 
 **Why this is a new class:**
 - `json_get_index_owned_value_multipass` covers `get_index`.
 - P3.661 is `json::get` on product helpers (inconsistent with get_index / path_set).
 
-**What became unnecessary:** manual `&value` / reshape json-util.
+**What became unnecessary:** manual `&value` / reshape json-util; stale gate that
+required `&value` after demotion.
 
 **Gates:** tip dogfood wj-json-util GREEN.
-- `cargo test --release --test all --features integration_tests,codegen_tests -- json_get_owned_value_must_auto_borrow_product`
+- `cargo test --release --test all -- json_get_owned_value_must_auto_borrow_product` → **ok**
 
 **Do not steal:** P3.654–660 (filed).
 
@@ -626,7 +626,7 @@ had `forwarding_borrow` forcing `&clips` into owned formals.
 | unit `p3647_parsed_source_needs_clone_on_first_recursive_clips` | ✅ GREEN |
 | MultiFile `reused_owned_vec_formal_must_not_reborrow_recursive` | ✅ tip GREEN — `clips.clone()` |
 | isolate `owned_vec_formal_with_forwarding_borrow_must_not_reborrow` | ✅ tip GREEN |
-| product tip `blend_tree` evaluate_node (P3.647b/c) | ✅ tip GREEN — `clips.clone()`; metadata Self+4 |
+| product tip `blend_tree` evaluate_node (P3.647b/c) | ✅ tip GREEN — `clips.clone()`; metadata Self+4 (narrow re-borrow skip hold 2026-10-05) |
 | tip `animation/blend_tree` evaluate_node | ✅ tip GREEN (same) |
 
 **Root cause layer:** signature (P3.647c metadata Self+N duplicated by

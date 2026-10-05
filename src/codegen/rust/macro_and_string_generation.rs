@@ -92,6 +92,34 @@ impl<'ast> CodeGenerator<'ast> {
         apply_coercion(&kind, generated, Target::Rust)
     }
 
+    /// True when `expr` is already Windjammer text (`string` / `String` / `&str`).
+    /// Used to skip identity `format!("{}", text)` (P3.671).
+    fn expression_is_windjammer_text(&self, expr: &Expression<'ast>) -> bool {
+        if let Some(ty) = self.infer_expression_type(expr) {
+            if crate::ir::formal_predicates::is_windjammer_text_type(&ty) {
+                return true;
+            }
+        }
+        match expr {
+            Expression::Identifier { name, .. } => {
+                self.local_var_types
+                    .get(name.as_str())
+                    .is_some_and(crate::ir::formal_predicates::is_windjammer_text_type)
+                    || self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+                    })
+                    || self.str_ref_optimized_params.contains(name.as_str())
+                    || self.emitted_rust_ref_formals.contains(name.as_str())
+            }
+            Expression::Literal {
+                value: crate::parser::Literal::String(_),
+                ..
+            } => true,
+            _ => false,
+        }
+    }
+
     /// Generate code for macro invocation expression
     /// Handles format!, println!, vec!, and other macros with special semantics
     pub(in crate::codegen::rust) fn generate_macro_invocation(
@@ -173,6 +201,39 @@ impl<'ast> CodeGenerator<'ast> {
         self.coerce_string_literals_to_owned = prev_coerce;
         self.in_match_arm_needing_string = prev_match_arm;
         self.suppress_string_conversion.set(prev_suppress);
+
+        // P3.671: identity string interpolation `"${s}"` → owned `String` via IR
+        // coercion, never `format!("{}", s)`. Non-text Display args still use `format!`.
+        //
+        // Important: reuse analysis treats `format!("{}", s)` as a Read of `s`. Lowering
+        // to a bare move would desync and cause E0382 on multi-use sites (notes-api
+        // `qs_get("${query}", …)` twice). Interpolation yields a *fresh* owned value, so
+        // owned-string Identity is upgraded to Clone (same allocation semantics as format!).
+        if name == "format" && args.len() == 2 {
+            if let Expression::Literal {
+                value: crate::parser::Literal::String(tmpl),
+                ..
+            } = args[0]
+            {
+                if tmpl == "{}" && arg_strs.len() == 2 {
+                    if self.expression_is_windjammer_text(args[1]) {
+                        let actual = self.infer_actual_safety_type(args[1], &arg_strs[1]);
+                        let expected = safety_type_from_parser_type(
+                            &Type::String,
+                            Some(OwnershipMode::Owned),
+                        );
+                        let mut kind = compute_coercion(&actual, &expected);
+                        if matches!(kind, CoercionKind::Identity)
+                            && matches!(actual.ownership, crate::ir::OwnedType::Owned)
+                            && matches!(actual.base, crate::ir::BaseType::String)
+                        {
+                            kind = CoercionKind::Clone;
+                        }
+                        return apply_coercion(&kind, &arg_strs[1], Target::Rust);
+                    }
+                }
+            }
+        }
 
         if name == "thread_local" && matches!(delimiter, MacroDelimiter::Braces) && args.len() == 1 {
             if let Expression::Block { statements, .. } = args[0] {
