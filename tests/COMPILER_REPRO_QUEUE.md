@@ -1,5 +1,6 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+
 ## P3.675 (2026-10-05) — TDD WDB-452 (DB agent; no compiler src)
 
 Copy `f32` **formal** into **local reassignment** must not `.clone()`; product emits
@@ -24,7 +25,6 @@ Copy `f32` **formal** into **local reassignment** must not `.clone()`; product e
 (isolate GREEN, tip RED; 2026-10-05).
 
 **Do not steal:** WDB-406/408/411/451–452, P3.508–P3.675, WDB-412–452 (filed).
-
 
 ## P3.674 (2026-10-05) — shared-ref emit beats AST-owned peel; WAL owned temps
 
@@ -113,7 +113,7 @@ identity interpolation for reuse into owned path-dep formals. Tip emitted
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip binary RED — tip-session **02:10** + wdb435 **18:39** still `format!("{}", query)` on `q`/`limit` (WIP cargo-bin claimed GREEN; tip-out/install lag) |
+| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip binary RED — agent-tip-session **02:10** still `format!("{}", query)` on `q`/`limit` (WIP cargo-bin claimed GREEN; tip-out lag) |
 | `identity_string_interpolation_into_owned_formal_must_not_format` | ⏳ recheck on tip binary |
 
 **Root cause layer:** coercion/encoding — identity `format!("{}", text)` on
@@ -123,8 +123,8 @@ Windjammer text should lower to owned `String` (Clone / ToOwnedString), not
 **What became unnecessary:** format-temp hoist for identity `"${s}"` on string;
 no app reshape.
 
-**Gates:** tip `…/agent-tip-session/release/wj` **02:10** and `…/agent-tdd-wdb435/release/wj` **18:39**
-product transpile still `format!("{}", query)` at `q`/`limit` (2026-10-05 eco dogfood).
+**Gates:** tip `…/agent-tip-session/release/wj` **02:10** product transpile
+`format!("{}", query)` at `q`/`limit` (2026-10-05 eco dogfood).
 
 **Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670, P3.672–P3.674 (filed).
 
