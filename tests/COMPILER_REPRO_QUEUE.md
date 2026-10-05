@@ -22,7 +22,6 @@ Copy `f32` **formal** into **local reassignment** must not `.clone()`; product e
 **Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-05)
 
 **Do not steal:** WDB-406/408/411/451–452, P3.508–P3.674, WDB-412–452 (filed).
-
 ## P3.674 (2026-10-05) — shared-ref emit beats AST-owned peel; WAL owned temps
 
 P3.647 owned-slot peel treated WJ AST bare `Value`/`Vec` as owned even when codegen
@@ -110,21 +109,21 @@ identity interpolation for reuse into owned path-dep formals. Tip emitted
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip RED — tip binary 02:10 still `format!("{}", query)` on `q`/`limit` (queue prior GREEN was WIP cargo-bin; tip-out lag) |
-| `identity_string_interpolation_into_owned_formal_must_not_format` | ⏳ recheck on tip binary |
+| `notes_api_product_qs_get_query_must_not_format_temp` | ✅ tip GREEN — `qs_get(query.clone(), "q"/"limit")` |
+| `identity_string_interpolation_into_owned_formal_must_not_format` | ✅ tip GREEN — isolate |
 
 **Root cause layer:** coercion/encoding — identity `format!("{}", text)` on
-Windjammer text should lower via `compute_coercion` to owned `String` (Clone for owned
-bindings; ToOwnedString for `&str`). Tip-shared/agent-tip-session 02:10 product
-transpile still hoists format temps.
+Windjammer text lowers via `compute_coercion` to owned `String` (Clone for owned
+bindings so reuse analysis stays sound; ToOwnedString for `&str`). Non-text
+Display args still use `format!`.
 
 **What became unnecessary:** format-temp hoist for identity `"${s}"` on string;
 no new `ir_call_site` peel / no app reshape.
 
-**Gates:** tip `…/agent-tip-session/release/wj` **02:10** product transpile still
-`format!("{}", query)` at `q`/`limit`; WIP cargo-bin may already GREEN — tip lag.
+**Gates:**
+- `cargo test --release --test all -- notes_api_product_qs_get_query_must_not_format_temp identity_string_interpolation_into_owned_formal_must_not_format json_get_owned_value_must_auto_borrow_product owned_vec_formal` → **10 passed**
 
-**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670, P3.672–P3.674 (filed).
+**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670 (filed).
 
 ## P3.670 (2026-10-04) — TDD WDB-451 (DB agent; no compiler src)
 
