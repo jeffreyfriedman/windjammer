@@ -10,21 +10,20 @@ Gate asserts extended for `q` / `limit`.
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ tip RED — `"pretty".to_string()` / `"encoding".to_string()` / `"q".to_string()` / `"limit".to_string()` |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ tip RED — `"pretty".to_string()` / `"encoding".to_string()` / `"q".to_string()` / `"limit".to_string()` (reconfirmed tip 20:41 after path-dep regen) |
 | isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ⏳ recheck with tip |
 
-**Root cause layer:** signature / path-dep ABI recovery — multipass IR treats
-`qs_get` key as Owned → `.to_string()` on literals into demoted `&str`.
+**Root cause layer:** signature / path-dep ABI → call-site — path-dep `get` metadata is
+`Owned`+`Borrowed` / Rust `key: &str`, but multipass still emits `"pretty".to_string()`.
 
 **Why this is a new class:**
-- P3.486 greened the same product sites; this is tip regression after P3.642/P3.660 tip churn.
-- Distinct from owned `query` first-arg temps (`format!("{}", query)`).
+- P3.486 greened the same product sites; tip regressed after P3.642/P3.660 tip churn.
+- Distinct from owned `query` first-arg temps (`format!("{}", query)` on some sites).
 
 **What became unnecessary:** reshaping `query_wants_pretty` / list filters with bare keys.
 
-**Gates:** tip shared `…/cargo-target/shared/release/wj` 20:06 — product `$WJ test` **4 E0308**;
-product transpile sites confirmed RED (2026-10-04 20:40);
-`cargo test … -- notes_api_product_qs_get_literal_must_not_string_from`.
+**Gates:** tip shared `…/cargo-target/shared/release/wj` 20:41 — product `$WJ test` **4 E0308**;
+`cargo test … -- notes_api_product_qs_get_literal_must_not_string_from` → FAILED (prior).
 
 **Do not steal:** P3.486/P3.489, P3.642, P3.660, WDB-448/449, P3.508–P3.665 (filed).
 
