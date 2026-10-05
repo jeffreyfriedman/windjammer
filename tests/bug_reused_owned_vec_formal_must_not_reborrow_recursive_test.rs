@@ -51,9 +51,34 @@ fn reused_owned_vec_formal_must_not_reborrow_recursive() {
     let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs").clone();
     eprintln!("P3.647 emit:\n{rs}");
-    let formal_owned = rs.contains("clips: Vec<Clip>");
-    let formal_borrowed = rs.contains("clips: &Vec<Clip>") || rs.contains("clips: &[Clip]");
-    if formal_owned {
+    // Gate on `evaluate_node`'s formal only — outer `evaluate(clips: Vec)` must not
+    // make `formal_owned` true when the recursive method demoted to `&Vec` (P3.674).
+    let node_formal_owned = rs.lines().any(|l| {
+        l.contains("fn evaluate_node") && l.contains("clips: Vec<Clip>") && !l.contains("&Vec")
+    }) || {
+        // Signature may wrap across lines: `fn evaluate_node(...\n    clips: Vec<Clip>`
+        let mut saw_fn = false;
+        rs.lines().any(|l| {
+            if l.contains("fn evaluate_node") {
+                saw_fn = true;
+            }
+            if saw_fn && l.contains("clips: &Vec<Clip>") {
+                saw_fn = false;
+                return false;
+            }
+            if saw_fn && l.contains("clips: Vec<Clip>") {
+                saw_fn = false;
+                return true;
+            }
+            if saw_fn && l.contains('{') {
+                saw_fn = false;
+            }
+            false
+        })
+    };
+    let node_formal_borrowed = rs.contains("fn evaluate_node")
+        && (rs.contains("clips: &Vec<Clip>") || rs.contains("clips: &[Clip]"));
+    if node_formal_owned {
         assert!(
             !rs.contains(", &clips,") && !rs.contains(", &clips)"),
             "P3.647 RED: recursive call reborrows into owned Vec:\n{rs}"
@@ -64,8 +89,8 @@ fn reused_owned_vec_formal_must_not_reborrow_recursive() {
         );
     } else {
         assert!(
-            formal_borrowed,
-            "P3.647: expect owned Vec or demoted &Vec formal:\n{rs}"
+            node_formal_borrowed,
+            "P3.647: expect owned Vec or demoted &Vec on evaluate_node:\n{rs}"
         );
     }
     test.cargo_check().expect("cargo-check");

@@ -8110,13 +8110,12 @@ impl<'ast> CodeGenerator<'ast> {
                     continue;
                 };
                 let pidx = gs.arg_param_index(arg_index);
-                if gs
-                    .forwarding_borrow_params
-                    .as_ref()
-                    .and_then(|flags| flags.get(pidx))
-                    .copied()
-                    .unwrap_or(false)
-                    || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx)
+                // P3.674: do not OR raw `forwarding_borrow_params` here — that dual-oracle
+                // forced `&vec![…]` into codegen-owned Vec formals (WAL append_put after
+                // P3.456 keep-owned), then the owned peel rewrote them to `.clone()`.
+                // `call_site_needs_shared_ref_at_emit` already honors forwarding_borrow when
+                // emit is shared-ref and denies it for owned-Vec/String emit (P3.589/647b).
+                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(gs, pidx)
                     || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(gs, pidx)
                     || crate::codegen::rust::call_site_borrow::callee_arg_expects_shared_vec_ref(
                         gs, arg_index,

@@ -4746,10 +4746,12 @@ fn dogfood_txn_manager_e2e_cargo_check() {
     cargo_check_dogfood_gen("txn-crate", false);
 }
 
-// ── regression: WalSegment append_put — cross-crate vec literal/helper borrow ───────────────
+// ── regression: WalSegment append_put — cross-crate owned vec literal/helper (P3.674) ────────
 //
-// wal-crate in-crate tests emit append_put(&vec![...]); engine-crate lsm_test.rs:130 emits
-// append_put(vec![5], encode_int64(99)) when WalSegment comes from cross-crate metadata.
+// Tip keep-owned (P3.456) emits `append_put(key: Vec<u8>, value: Vec<u8>)` with
+// `forwarding_borrow_params` set. Call sites must pass owned temporaries (`vec![…]`,
+// `encode_int64(…)`) — not `&vec![…]` (E0308 into owned formals) and not `.clone()` on
+// pure rvalues (P3.647 peel after stale forwarding dual-oracle).
 
 #[test]
 fn dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal() {
@@ -4796,11 +4798,18 @@ pub fn test_store_rebuild_from_segment() {
     let rs = fs::read_to_string(substrate_gen.join("lsm_test.rs")).expect("lsm_test.rs");
     for line in rs.lines() {
         if line.contains("append_put(") {
+            let owned_pass = (line.contains("vec![5]") || line.contains("vec![5_u8]"))
+                && line.contains("encode_int64")
+                && !line.contains("&vec![")
+                && !line.contains("& vec![")
+                && !line.contains("&encode_int64");
+            let no_temp_clone = !line.contains("vec![5_u8].clone()")
+                && !line.contains("vec![5].clone()")
+                && !line.contains("encode_int64(99_i64).clone()")
+                && !line.contains("encode_int64(99).clone()");
             assert!(
-                line.contains("&vec![5]")
-                    || line.contains("& vec![5]")
-                    || (line.contains("&") && line.contains("encode_int64")),
-                "cross-crate append_put must borrow vec literal and helper return (lsm_test.rs:130). Line: {line}\nFull:\n{rs}"
+                owned_pass && no_temp_clone,
+                "cross-crate append_put must pass owned vec/helper temps (no & / no .clone()). Line: {line}\nFull:\n{rs}"
             );
         }
     }
