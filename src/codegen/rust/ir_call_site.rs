@@ -6404,7 +6404,10 @@ impl<'ast> CodeGenerator<'ast> {
             crate::ir::signature_bridge::forwarding_borrow_metadata_requests_call_site_borrow(
                 sig, param_idx,
             );
-        if callee_emits_owned && !forwarding_borrow {
+        // P3.647b: owned emission wins over forwarding_borrow. Product BlendTree keeps
+        // `clips: Vec<_>` while forwarding_borrow_params[clips]=true (forwarded into
+        // demoted `sample_clip_pose(&Vec)`). Forcing `&clips` into that owned formal → E0308.
+        if callee_emits_owned {
             if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                 *coerced = crate::codegen::rust::expression_utilities::coerce_borrowed_arg_to_owned(
                     coerced,
@@ -8252,13 +8255,15 @@ impl<'ast> CodeGenerator<'ast> {
                 || matches!(effective_own, crate::analyzer::OwnershipMode::MutBorrowed);
             let forwarding_borrow =
                 self.ir_forwarding_borrow_param_at_call_site(&sig, pidx, arg_index, Some(*rt), method);
+            // P3.647b: do not let forwarding_borrow block peel into owned Vec/Custom formals.
+            let emitted_owned = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, pidx,
+            ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
+                &sig, pidx,
+            );
             if !slot_expects_mut
-                && !forwarding_borrow
-                && (crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    &sig, pidx,
-                ) || crate::codegen::rust::signature_promotion::bare_formal_is_owned_user_type(
-                    &sig, pidx,
-                ) || self
+                && (!forwarding_borrow || emitted_owned)
+                && (emitted_owned || self
                     .struct_method_ast_formal_param_types
                     .get(*rt)
                     .and_then(|methods| methods.get(method))

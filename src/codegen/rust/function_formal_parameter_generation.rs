@@ -458,6 +458,8 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     );
+                // WDB-101: opaque cross-module `&T` wrappers keep owned outer formals.
+                // P3.669: pure Custom→same-type shared-ref forwarders demote instead.
                 let cross_module_borrow_keep_owned = param.name != "self"
                     && matches!(&param.type_, Type::Custom(_))
                     && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
@@ -466,7 +468,8 @@ impl<'ast> CodeGenerator<'ast> {
                         func.body.as_slice(),
                         &param.name,
                         func,
-                    );
+                    )
+                    && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func);
                 if param.name != "self"
                     && matches!(&param.type_, Type::Custom(_))
                     && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)

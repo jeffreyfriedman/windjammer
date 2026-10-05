@@ -526,10 +526,26 @@ impl AutoCloneAnalysis {
             }
             saw_candidate = true;
             let pidx = sig.arg_param_index(arg_index);
-            // Runtime-std baseline (`json::is_array` `&Value`) beats WJ owned stubs so
-            // reuse analysis records Read — not Move → `&v.clone()` (json multipass).
-            if Self::sig_arg_is_shared_borrow_formal(sig, pidx)
-                || crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+            if Self::sig_arg_is_shared_borrow_formal(sig, pidx) {
+                continue;
+            }
+            // Bare owned WJ formals on *user* methods (`clips: Vec<Clip>`) must Move
+            // even when analyzer Borrowed + `runtime_wj_owned_rust_borrowed` would
+            // auto-borrow (P3.647). Runtime-std callees (`json::is_array`) still use
+            // the borrow baseline so multipass records Read not `&v.clone()` (P3.668).
+            let bare_owned_ast = sig
+                .formal_param_type(pidx)
+                .or_else(|| sig.formal_param_types.get(pidx))
+                .is_some_and(|t| {
+                    !matches!(
+                        t,
+                        crate::parser::Type::Reference(_)
+                            | crate::parser::Type::MutableReference(_)
+                    )
+                });
+            let runtime_std_callee = Self::callee_is_runtime_std_baseline(&sig.name);
+            if !(bare_owned_ast && !runtime_std_callee)
+                && crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                     registry,
                     &sig.name,
                     Some(sig),
@@ -590,8 +606,24 @@ impl AutoCloneAnalysis {
             return UsageKind::Move;
         }
         let pidx = sig.arg_param_index(arg_index);
-        if Self::sig_arg_is_shared_borrow_formal(sig, pidx)
-            || crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+        if Self::sig_arg_is_shared_borrow_formal(sig, pidx) {
+            return UsageKind::Read;
+        }
+        // Same P3.647 / P3.668 policy as method_call_arg_usage_kind.
+        // `self.evaluate_node(...)` is often Call(FieldAccess(self, …)) here.
+        let bare_owned_ast = sig
+            .formal_param_type(pidx)
+            .or_else(|| sig.formal_param_types.get(pidx))
+            .is_some_and(|t| {
+                !matches!(
+                    t,
+                    crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)
+                )
+            });
+        let runtime_std_callee = Self::callee_is_runtime_std_baseline(callee_name)
+            || Self::callee_is_runtime_std_baseline(&sig.name);
+        if !(bare_owned_ast && !runtime_std_callee)
+            && crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                 registry,
                 callee_name,
                 Some(sig),
@@ -602,6 +634,15 @@ impl AutoCloneAnalysis {
         } else {
             UsageKind::Move
         }
+    }
+
+    fn callee_is_runtime_std_baseline(callee_name: &str) -> bool {
+        if crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(callee_name) {
+            return true;
+        }
+        let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+        stdlib.get_signature(callee_name).is_some()
+            || stdlib.get_fallback_signature(callee_name).is_some()
     }
 
     fn match_arm_reuses_binding(arm_body: &Expression, name: &str) -> bool {
@@ -3093,7 +3134,6 @@ mod tests {
         );
     }
 
-    #[test]
     /// P3.647: recursive owned Vec formal reused across two method calls.
     #[test]
     fn p3647_recursive_owned_vec_param_needs_clone() {
@@ -3230,6 +3270,60 @@ mod tests {
             analysis.needs_clone("clips", 0).is_some(),
             "P3.647: first recursive move of owned Vec must clone; sites={:?}",
             analysis.clone_sites
+        );
+    }
+
+
+    #[test]
+    fn p3647_parsed_source_needs_clone_on_first_recursive_clips() {
+        use crate::analyzer::Analyzer;
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+        let source = r#"
+pub struct Clip { pub id: u32 }
+pub struct Tree { pub root: u32 }
+impl Tree {
+    pub fn evaluate(self, clips: Vec<Clip>, t: f32) -> u32 {
+        self.evaluate_node(self.root, clips, t)
+    }
+    fn evaluate_node(self, node_id: u32, clips: Vec<Clip>, t: f32) -> u32 {
+        if node_id == 0 {
+            return clips[0].id
+        }
+        let a = self.evaluate_node(node_id - 1, clips, t)
+        let b = self.evaluate_node(node_id - 1, clips, t)
+        a + b
+    }
+}
+"#;
+        let mut lexer = Lexer::new(source);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = Parser::new(tokens);
+        let program = parser.parse().unwrap();
+        let mut analyzer = Analyzer::new();
+        let (analyzed, registry, _) = analyzer.analyze_program(&program).unwrap();
+        let func = analyzed
+            .iter()
+            .find(|f| f.decl.name == "evaluate_node")
+            .expect("evaluate_node");
+        let analysis =
+            AutoCloneAnalysis::analyze_function_with_registry(&func.decl, Some(&registry));
+        assert_eq!(
+            AutoCloneAnalysis::method_call_arg_usage_kind(
+                "evaluate_node",
+                1,
+                3,
+                Some(&registry),
+            ),
+            UsageKind::Move,
+            "P3.647: bare owned Vec formal must Move despite analyzer Borrowed"
+        );
+        assert!(
+            analysis.needs_clone_anywhere("clips")
+                || func.auto_clone_analysis.needs_clone_anywhere("clips"),
+            "P3.647: clips must need clone; sites={:?} / {:?}",
+            analysis.clone_sites,
+            func.auto_clone_analysis.clone_sites
         );
     }
 

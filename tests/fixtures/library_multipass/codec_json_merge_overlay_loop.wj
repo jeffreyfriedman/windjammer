@@ -1,0 +1,32 @@
+use std::json
+
+/// Minimal `wj-json-util::merge_values` loop shape: owned overlay reused across
+/// iterations into a helper that only reads via `json.get`.
+fn take_field(value: Value, key: string) -> Option<Value> {
+    json.get(value, key)
+}
+
+pub fn count_overlay_fields(overlay_text: string) -> Result<int, string> {
+    match json.parse(overlay_text) {
+        Ok(overlay) => {
+            if !json.is_object(overlay) {
+                return Err("expect object")
+            }
+            let key_list = json.keys(overlay)
+            let mut count = 0
+            let mut i = 0
+            while i < key_list.len() {
+                let key = key_list[i]
+                match take_field(overlay, key) {
+                    Some(_) => {
+                        count = count + 1
+                    },
+                    None => {},
+                }
+                i = i + 1
+            }
+            Ok(count)
+        },
+        Err(e) => Err(e),
+    }
+}

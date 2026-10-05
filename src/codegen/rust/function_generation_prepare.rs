@@ -8139,15 +8139,20 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::type_classification::is_copy_pass_by_value_formal(&param.type_) {
             return false;
         }
-        if self.param_cross_module_borrowed_callee_keeps_owned_formal(
+        // WDB-101/102 keep-owned: opaque cross-module `&T` wrappers and Vec→`&[T]`
+        // AsRef adapters. P3.669: pure Custom→same-type shared-ref forwarders
+        // (`take_field(value: Value)` → `json.get(&Value)`) must demote instead.
+        if (self.param_cross_module_borrowed_callee_keeps_owned_formal(
             func.body.as_slice(),
             &param.name,
             func,
-        ) || self.param_runtime_wj_owned_rust_borrowed_forces_owned_formal(
-            func.body.as_slice(),
-            &param.name,
-            func,
-        ) {
+        ) && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func))
+            || self.param_runtime_wj_owned_rust_borrowed_forces_owned_formal(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
+        {
             return false;
         }
         let non_self_facade = self.param_is_non_self_forward_facade_borrow_candidate(param, func);
@@ -8972,13 +8977,103 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Runtime WJ-owned / Rust-borrowed forwards (`from_chars(parts: Vec<char>)` → `&[char]`)
     /// keep owned container formals + call-site borrow (WDB-102).
+    ///
+    /// Bare Custom (`Value` → `&Value`) does **not** force owned — those demote via
+    /// borrow-delegation so loop reuse can pass `&overlay` (P3.669).
     pub(in crate::codegen::rust) fn param_runtime_wj_owned_rust_borrowed_forces_owned_formal(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        self.param_only_forwarded_to_runtime_wj_owned_rust_borrowed(body, param_name, func)
+        if !self.param_only_forwarded_to_runtime_wj_owned_rust_borrowed(body, param_name, func)
+        {
+            return false;
+        }
+        let Some(param) = func.parameters.iter().find(|p| p.name == param_name) else {
+            return false;
+        };
+        Self::param_type_is_vec_container(&param.type_)
+            || Self::param_type_is_owned_forward_container(&param.type_)
+    }
+
+    /// P3.669: pure forwarder of Custom into same-type shared ref must demote
+    /// (`fn take_field(value: Value) { json.get(value, key) }` → `value: &Value`).
+    pub(in crate::codegen::rust) fn param_pure_custom_same_type_shared_ref_should_demote(
+        &self,
+        param: &crate::parser::Parameter,
+        func: &FunctionDecl<'ast>,
+    ) -> bool {
+        let Type::Custom(custom_name) = &param.type_ else {
+            return false;
+        };
+        if self.is_type_copy(&param.type_)
+            || crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+            || Self::param_type_is_vec_container(&param.type_)
+            || Self::param_type_is_owned_forward_container(&param.type_)
+        {
+            return false;
+        }
+        // Prefer pure-forward detection; also accept single-expr bodies that only
+        // forward this param into call args (parser may wrap return differently).
+        let pure = self.func_is_pure_forwarding_delegate(func);
+        let only_arg = self.param_only_used_as_call_argument(
+            func.body.as_slice(),
+            &param.name,
+            func,
+        );
+        if !pure && !(only_arg && func.body.len() == 1) {
+            return false;
+        }
+        if !only_arg {
+            return false;
+        }
+        let mut saw_site = false;
+        let mut all_same_custom_shared_ref = true;
+        let custom_name = custom_name.as_str();
+        {
+            let mut visit = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
+                saw_site = true;
+                let pidx = sig.arg_param_index(arg_index);
+                let bare = sig
+                    .formal_param_type(pidx)
+                    .or_else(|| sig.param_types.get(pidx))
+                    .map(|t| match t {
+                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                        other => other,
+                    });
+                let same_custom = bare.is_some_and(|t| {
+                    matches!(t, Type::Custom(n) if Self::custom_type_names_match(n, custom_name))
+                });
+                let shared_ref = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                    sig, pidx,
+                ) || sig.param_types.get(pidx).is_some_and(|t| {
+                    matches!(t, Type::Reference(_))
+                }) || matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(crate::analyzer::OwnershipMode::Borrowed)
+                );
+                if !(same_custom && shared_ref) {
+                    all_same_custom_shared_ref = false;
+                }
+            };
+            self.for_each_param_call_argument_site(
+                func.body.as_slice(),
+                &param.name,
+                func,
+                &mut visit,
+            );
+        }
+        saw_site && all_same_custom_shared_ref
+    }
+
+    fn custom_type_names_match(a: &str, b: &str) -> bool {
+        if a == b {
+            return true;
+        }
+        let simple_a = a.rsplit("::").next().unwrap_or(a);
+        let simple_b = b.rsplit("::").next().unwrap_or(b);
+        simple_a == simple_b
     }
 
     /// Cross-module shared-ref callees (`graph_vertex_i64_get(map: &GraphVertexI64Map)`) keep
