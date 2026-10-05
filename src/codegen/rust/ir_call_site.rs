@@ -6400,10 +6400,6 @@ impl<'ast> CodeGenerator<'ast> {
                     sig, param_idx,
                 )
                 || Self::sig_arg_confirms_owned_emission(sig, arg_index));
-        let forwarding_borrow =
-            crate::ir::signature_bridge::forwarding_borrow_metadata_requests_call_site_borrow(
-                sig, param_idx,
-            );
         // P3.647b: owned emission wins over forwarding_borrow. Product BlendTree keeps
         // `clips: Vec<_>` while forwarding_borrow_params[clips]=true (forwarded into
         // demoted `sample_clip_pose(&Vec)`). Forcing `&clips` into that owned formal → E0308.
@@ -6416,10 +6412,12 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
 
+        // Do NOT OR raw `forwarding_borrow_params` here — that dual-oracle bypassed
+        // P3.589 / P3.647b denials inside `call_site_needs_shared_ref_at_emit`
+        // (owned Vec emission with forwarding still set → re-borrow after peel).
         let wants_shared = global_confirms_shared_ref(param_idx)
             || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
             || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx)
-            || forwarding_borrow
             || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index);
         if wants_shared
             && !coerced.starts_with("&mut ")

@@ -90,14 +90,42 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     // P3.647: IR cutover skips the legacy ownership rewrite below.
                     // Still clone multi-use owned formals into owned slots here.
-                    if let Some(sig) = resolved_signature
+                    // Prefer codegen-refreshed Type::method / AST formals over a stale
+                    // `resolved_signature` that still has analyzer Borrowed + forwarding
+                    // without `emitted_rust_ref_params` (product BlendTree::evaluate_node).
+                    let refreshed = receiver_type_name.as_ref().and_then(|rt| {
+                        self.resolve_method_function_signature(rt, method, arguments.len())
+                    });
+                    let sig = refreshed
                         .as_ref()
-                        .or(method_signature.as_ref())
-                    {
+                        .or(resolved_signature.as_ref())
+                        .or(method_signature.as_ref());
+                    if let Some(sig) = sig {
                         let pidx = sig.arg_param_index(i);
+                        let ast_owned_vec_or_custom = receiver_type_name.as_ref().is_some_and(|rt| {
+                            self.struct_method_ast_formal_param_types
+                                .get(rt.as_str())
+                                .and_then(|methods| methods.get(method))
+                                .and_then(|formals| formals.get(i))
+                                .is_some_and(|t| {
+                                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                                        && (matches!(t, Type::Vec(_))
+                                            || matches!(
+                                                t,
+                                                Type::Parameterized(name, _) if name == "Vec"
+                                            )
+                                            || (!self.is_type_copy(t)
+                                                && !crate::codegen::rust::types::is_windjammer_text_type(
+                                                    t,
+                                                )))
+                                })
+                        });
                         let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                             sig, pidx,
-                        ) || matches!(
+                        ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                            sig, pidx,
+                        ) || ast_owned_vec_or_custom
+                            || matches!(
                             crate::codegen::rust::call_signature_resolution::effective_param_ownership_for_method_arg(
                                 sig,
                                 i,
@@ -129,7 +157,25 @@ impl<'ast> CodeGenerator<'ast> {
                                 );
                             // Peel spurious `&clips` into owned Vec (product blend_tree /
                             // evaluate → evaluate_node) and clone when reused.
-                            if clone_required {
+                            // Auto-clone may miss reuse while analyzer still said Borrowed
+                            // (forwarding into `sample_clip_pose(&Vec)`); peeling `&` into
+                            // an owned non-Copy formal param without `.clone()` → E0382.
+                            let owned_non_copy_param = self.current_function_params.iter().any(|p| {
+                                p.name == *name
+                                    && !matches!(
+                                        p.type_,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    )
+                                    && !self.is_type_copy(&p.type_)
+                                    && !crate::codegen::rust::types::is_windjammer_text_type(
+                                        &p.type_,
+                                    )
+                            });
+                            if clone_required
+                                || (arg_str.starts_with('&')
+                                    && !arg_str.starts_with("&mut ")
+                                    && owned_non_copy_param)
+                            {
                                 return format!("{base}.clone()");
                             }
                             if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
@@ -1692,16 +1738,40 @@ impl<'ast> CodeGenerator<'ast> {
                 let Expression::Identifier { name, .. } = arg_expr else {
                     continue;
                 };
-                let wants_borrow = self
-                    .get_signature_with_global(&qualified)
+                // P3.647b: never re-borrow into codegen-owned Vec/Map formals after the
+                // IR peel (`&clips` → `clips` / `clips.clone()`). Stale analyzer
+                // `Reference(Vec)` + forwarding must not win over `emitted=false`.
+                let callee_sig = self
+                    .resolve_method_function_signature(rt, method, arguments.len())
+                    .or_else(|| self.get_signature_with_global(&qualified).cloned());
+                if let Some(ref sig) = callee_sig {
+                    let pidx = sig.arg_param_index(i);
+                    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, pidx,
+                    ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
+                        sig, pidx,
+                    ) || !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                        sig, pidx,
+                    ) {
+                        continue;
+                    }
+                }
+                let wants_borrow = callee_sig
+                    .as_ref()
                     .map(|sig| {
                         let pidx = sig.arg_param_index(i);
                         crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                             sig, pidx,
-                        ) || sig
+                        ) || (sig
                             .param_types
                             .get(pidx)
                             .is_some_and(|t| matches!(t, Type::Reference(_)))
+                            && sig
+                                .emitted_rust_ref_params
+                                .as_ref()
+                                .and_then(|f| f.get(pidx))
+                                .copied()
+                                != Some(false))
                     })
                     .unwrap_or(false)
                     || self.method_registry_arg_expects_shared_borrow(
@@ -1735,6 +1805,14 @@ impl<'ast> CodeGenerator<'ast> {
                                 Type::Parameterized(n, _)
                                     if crate::type_classification::is_stdlib_collection_type_name(n)
                             )
+                    }) || self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && (crate::type_classification::type_is_vec_container(&p.type_)
+                                || matches!(
+                                    &p.type_,
+                                    Type::Parameterized(n, _)
+                                        if crate::type_classification::is_stdlib_collection_type_name(n)
+                                ))
                     });
                 if is_owned_collection_local {
                     *arg_str = format!("&{arg_str}");
