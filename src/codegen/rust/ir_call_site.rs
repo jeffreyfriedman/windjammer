@@ -3721,7 +3721,8 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             });
         let expects_str_ref = !self.preregistered_free_call_arg_emits_owned(callee_name, arg_index)
-            && callee_wants_shared_ref_formal;
+            && (callee_wants_shared_ref_formal
+                || self.cross_crate_dep_arg_confirms_shared(callee_name, arg_index));
         if expects_str_ref {
             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                 arg_expr,
@@ -5946,7 +5947,10 @@ impl<'ast> CodeGenerator<'ast> {
                 && matches!(
                     text_sig.param_ownership.get(text_param_idx),
                     Some(crate::analyzer::OwnershipMode::Borrowed)
-                )));
+                ))
+            // P3.665: path-dep / import-alias demoted `&str` (notes-api `qs_get` key)
+            // when local text_sig still looks owned before metadata refresh lands.
+            || self.cross_crate_dep_arg_confirms_shared(callee_name, arg_index));
         if expects_str_ref {
             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                 arg_expr,
@@ -5985,13 +5989,15 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Empty/stub WJ sigs: type-qualified associated + unresolved instance builders
         // still auto-own bare string lits (signature-driven; no `new`/`from` name lists).
+        // P3.665: never re-own when path-dep / import-alias slot emits shared `&str`.
         if matches!(
             arg_expr,
             Expression::Literal {
                 value: Literal::String(_),
                 ..
             }
-        ) && (crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
+        ) && !self.cross_crate_dep_arg_confirms_shared(callee_name, arg_index)
+            && (crate::codegen::rust::string_utilities::type_qualified_associated_string_literal_needs_rust_owned_string(
             callee_name,
             arg_index,
             Some(&text_sig),
