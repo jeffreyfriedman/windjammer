@@ -1,5 +1,6 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+
 ## P3.664 (2026-10-04) — TDD WDB-448 (DB agent; no compiler src)
 
 Copy `f32` **formal** into field assign must not `.clone()`; product emits
@@ -24,7 +25,6 @@ Copy `f32` **formal** into field assign must not `.clone()`; product emits
 (isolate GREEN, tip RED; 2026-10-04).
 
 **Do not steal:** WDB-406/408/411/447–448, P3.508–P3.664, WDB-412–448 (filed).
-
 
 ## P3.663 (2026-10-04) — TDD WDB-447 (DB agent; no compiler src)
 
@@ -527,22 +527,22 @@ Tip clones only the second call; first move invalidates reuse.
 
 | Gate | Status |
 |------|--------|
-| `reused_owned_string_into_owned_formal_must_clone_first_use` | ❌ tip RED — product todo-cli |
+| `reused_owned_string_into_owned_formal_must_clone_first_use` | ✅ tip GREEN |
 
-**Root cause layer:** reuse analysis — when an owned String local is passed into an
-owned formal more than once, the **first** call must clone (or demote the formal).
+**Root cause layer:** constraint/reuse (match-arm binding walk) —
+`match_arm_body_uses_binding` / auto_clone `statement_uses_binding` skipped nested
+`Statement::Match` / `Let` / `If`, so export’s deeper `decode_store(snapshot)` under
+`match todos_to_json` never counted as arm reuse; first match-scrutinee call moved
+while a later site still got `.clone()`.
 
-**Why this is a new class:**
-- P3.615 is `.into()` move before second use (proxy).
-- P3.616 is `.into().clone()` inference failure (auth).
-- P3.642 is bare move on first use + late `.clone()` on second (todo-cli snapshot).
+**What became unnecessary:** todo-cli manual first-use clones; no new `ir_call_site` peel.
 
-**What became unnecessary:** reshaping export/stats with manual first-use clones.
+**Gates (2026-10-04 tip):**
+- `… -- reused_owned_string_into_owned_formal_must_clone_first_use` → **1 passed**
+- related `reused_owned_string` / `match_arm_owned_binding_reuse` / spawn / mpsc → **10 passed**
+- export: first `decode_store(snapshot.clone())`; stats keeps last-use move on second.
 
-**Gates:** `$CARGO_TARGET_DIR=/tmp/wj-tdd-p3641` — 0 passed / 1 failed (2026-10-04).
-- `cargo test --release --test all --features integration_tests,codegen_tests -- reused_owned_string_into_owned_formal_must_clone_first_use`
-
-**Do not steal:** WDB-439/440, P3.508–P3.641 (filed).
+**Do not steal:** WDB tip-out Copy-clone lag; other tip-live REDs.
 
 ## P3.641 (2026-10-04) — TDD WDB-440 (DB agent; no compiler src)
 
