@@ -1,6 +1,27 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.672 (2026-10-05) — auto_mut `&mut Vec` must not become `buf.clone()` after P3.647
+
+P3.647 IR-cutover clone path treated WJ AST bare `Vec` as an owned slot even when
+codegen emitted `&mut Vec`, rewriting `self.fill(&mut buf)` → `self.fill(buf.clone())`
+(P3.312 regression).
+
+| Gate | Status |
+|------|--------|
+| `auto_mut_borrow_arg_test::test_local_var_passed_to_mut_param_gets_mut_borrow` | ✅ tip GREEN — `self.fill(&mut buf)` |
+
+**Root cause layer:** (temporary) reconcile narrowed — MutBorrowed / `MutableReference`
+slots exit before the owned-Vec clone peel; AST bare `Vec` no longer overrides live
+`&mut` contracts.
+
+**What became unnecessary:** `buf.clone()` into `&mut Vec` formals after P3.647.
+
+**Gates:**
+- `cargo test --release --test all -- auto_mut_borrow_arg_test::test_local_var_passed_to_mut_param_gets_mut_borrow owned_vec_formal notes_api_product_qs_get_query_must_not_format_temp json_get_owned_value_must_auto_borrow_product` → **11 passed**
+
+**Do not steal:** P3.647 owned-Vec clone path; P3.312/P3.671.
+
 ## P3.671 (2026-10-05) — notes-api qs_get query must not `format!("{}", query)`
 
 Product `wj-notes-api` `list_notes_for_query` uses `"${query}"` / `"${pattern}"`
