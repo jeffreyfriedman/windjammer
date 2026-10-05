@@ -12765,60 +12765,100 @@ impl<'ast> CodeGenerator<'ast> {
             });
         if let Some(ref ms) = base_sig {
             // `base_sig` is already `to_function_signature()` — index 0 is the self slot when
-            // `has_self_receiver`. Sync user-param metadata at the same indices, but do not
-            // overwrite self: `to_function_signature` defaults self to MutBorrowed, which is
-            // not the analyzer/codegen-resolved receiver and must not clobber it.
-            for (idx, pt) in ms.param_types.iter().enumerate() {
-                if ms.has_self_receiver && idx == 0 {
-                    continue;
-                }
-                if idx < updated.param_types.len() {
-                    updated.param_types[idx] = pt.clone();
-                }
-                if idx < updated.param_ownership.len() {
-                    if let Some(own) = ms.param_ownership.get(idx) {
-                        updated.param_ownership[idx] = *own;
-                    }
-                }
-            }
-            for (idx, pt) in ms.formal_param_types.iter().enumerate() {
-                if ms.has_self_receiver && idx == 0 {
-                    continue;
-                }
-                if idx < updated.formal_param_types.len() {
-                    updated.formal_param_types[idx] = pt.clone();
-                } else {
-                    updated.formal_param_types.push(pt.clone());
+            // `has_self_receiver`. Replace param vectors from the MethodSignature conversion so
+            // stale longer tails (P3.647c Self+N duplicated) cannot survive multipass refresh.
+            // Preserve self ownership: `to_function_signature` may default MutBorrowed.
+            let preserved_self_own = if updated.has_self_receiver {
+                updated.param_ownership.first().copied()
+            } else {
+                None
+            };
+            updated.param_types = ms.param_types.clone();
+            updated.formal_param_types = ms.formal_param_types.clone();
+            updated.param_ownership = ms.param_ownership.clone();
+            if let Some(own) = preserved_self_own {
+                if let Some(slot) = updated.param_ownership.first_mut() {
+                    *slot = own;
                 }
             }
             if ms.forwarding_borrow_params.is_some() {
                 updated.forwarding_borrow_params = ms.forwarding_borrow_params.clone();
             }
         } else {
+            // No MethodSignature (register_impl early-return). Sync in place onto any
+            // existing Self-aligned registry entry — never append user params again
+            // (P3.647c: BlendTree::evaluate_node Self+4 → Self+8).
+            if updated.has_self_receiver && updated.param_types.is_empty() {
+                updated
+                    .param_types
+                    .push(Type::Custom("Self".to_string()));
+                updated
+                    .formal_param_types
+                    .push(Type::Custom("Self".to_string()));
+                updated
+                    .param_ownership
+                    .push(crate::analyzer::OwnershipMode::Borrowed);
+            }
+            let mut user_param_idx = 0;
             for param in &func.parameters {
                 if param.name == "self" {
                     continue;
                 }
-                let reg_idx = updated.param_types.len();
-                updated
-                    .param_types
-                    .push(if self.emitted_rust_ref_formals.contains(&param.name) {
-                        Type::Reference(Box::new(Self::demoted_shared_ref_inner_type(&param.type_)))
+                let reg_idx = if updated.has_self_receiver {
+                    user_param_idx + 1
+                } else {
+                    user_param_idx
+                };
+                let ty = if self.emitted_rust_ref_formals.contains(&param.name) {
+                    Type::Reference(Box::new(Self::demoted_shared_ref_inner_type(&param.type_)))
+                } else {
+                    param.type_.clone()
+                };
+                let own = if self.inferred_mut_borrowed_params.contains(&param.name) {
+                    crate::analyzer::OwnershipMode::MutBorrowed
+                } else if self.emitted_rust_ref_formals.contains(&param.name) {
+                    crate::analyzer::OwnershipMode::Borrowed
+                } else {
+                    crate::analyzer::OwnershipMode::Owned
+                };
+                if reg_idx < updated.param_types.len() {
+                    updated.param_types[reg_idx] = ty;
+                    if reg_idx < updated.param_ownership.len() {
+                        updated.param_ownership[reg_idx] = own;
                     } else {
-                        param.type_.clone()
-                    });
-                updated.param_ownership.push(
-                    if self.inferred_mut_borrowed_params.contains(&param.name) {
-                        crate::analyzer::OwnershipMode::MutBorrowed
-                    } else if self.emitted_rust_ref_formals.contains(&param.name) {
-                        crate::analyzer::OwnershipMode::Borrowed
+                        updated.param_ownership.push(own);
+                    }
+                    if reg_idx < updated.formal_param_types.len() {
+                        updated.formal_param_types[reg_idx] = param.type_.clone();
                     } else {
-                        crate::analyzer::OwnershipMode::Owned
-                    },
-                );
-                if updated.formal_param_types.len() <= reg_idx {
-                    updated.formal_param_types.push(param.type_.clone());
+                        while updated.formal_param_types.len() <= reg_idx {
+                            updated.formal_param_types.push(param.type_.clone());
+                        }
+                    }
+                } else if reg_idx == updated.param_types.len() {
+                    updated.param_types.push(ty);
+                    updated.param_ownership.push(own);
+                    while updated.formal_param_types.len() < updated.param_types.len() {
+                        updated.formal_param_types.push(param.type_.clone());
+                    }
                 }
+                user_param_idx += 1;
+            }
+        }
+        // Drop duplicated tails from a prior buggy append (P3.647c).
+        let expected_param_len = func.parameters.len();
+        if updated.param_types.len() > expected_param_len {
+            updated.param_types.truncate(expected_param_len);
+        }
+        if updated.param_ownership.len() > expected_param_len {
+            updated.param_ownership.truncate(expected_param_len);
+        }
+        if updated.formal_param_types.len() > expected_param_len {
+            updated.formal_param_types.truncate(expected_param_len);
+        }
+        if let Some(ref mut fwd) = updated.forwarding_borrow_params {
+            if fwd.len() > expected_param_len {
+                fwd.truncate(expected_param_len);
             }
         }
         let mut emitted = vec![false; updated.param_ownership.len()];

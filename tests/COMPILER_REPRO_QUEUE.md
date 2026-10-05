@@ -626,18 +626,23 @@ had `forwarding_borrow` forcing `&clips` into owned formals.
 | unit `p3647_parsed_source_needs_clone_on_first_recursive_clips` | ✅ GREEN |
 | MultiFile `reused_owned_vec_formal_must_not_reborrow_recursive` | ✅ tip GREEN — `clips.clone()` |
 | isolate `owned_vec_formal_with_forwarding_borrow_must_not_reborrow` | ✅ tip GREEN |
-| product tip `blend_tree` evaluate_node (P3.647b/c) | ❌ tip RED — owned formal + `&clips` call sites; metadata params duplicated (9≠5) |
-| tip `animation/blend_tree` evaluate_node | ❌ tip RED (same) |
+| product tip `blend_tree` evaluate_node (P3.647b/c) | ✅ tip GREEN — `clips.clone()`; metadata Self+4 |
+| tip `animation/blend_tree` evaluate_node | ✅ tip GREEN (same) |
 
-**Root cause layer:** constraint/reuse — `self.evaluate_node` parses as
-`Call(FieldAccess)`; `runtime_std_param_needs_auto_borrow_resolved` flipped bare
-owned `Vec` formals to Read. Guard: user bare-owned AST formals stay Move;
-runtime-std (`json::*`) still Read (P3.668). P3.647b: owned emission peels `&`
-even when `forwarding_borrow_params` is set.
+**Root cause layer:** signature (P3.647c metadata Self+N duplicated by
+`refresh_method_registry` append-on-missing-MethodSignature) + coercion
+(`call_site_needs_shared_ref` / finalize re-borrow after peel). Analyzer
+Borrowed + `forwarding_borrow` while codegen emits owned `Vec`
+(`emitted_rust_ref_params=false`); dual-oracle raw `forwarding_borrow` and a
+post-peel “owned collection local → `&`” loop re-introduced `&clips`.
 
-**What became unnecessary:** extra IR peels for recursive Vec; no new method-name lists.
+**What became unnecessary:** raw `|| forwarding_borrow` dual-oracle in
+`reconcile_multipass_demoted_*`; finalize re-borrow of owned Vec formals after
+IR peel. No new method-name lists.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- reused_owned_vec_formal_must_not_reborrow_recursive` → **passed**; lib `p3647_` → **passed**.
+**Gates:** `cargo test --release --test all -- owned_vec_formal` → **7 passed**
+(incl. tip product metadata + no-reborrow); lib
+`forwarding_borrow_must_not_borrow_codegen_owned_vec_when_analyzer_still_borrowed`.
 
 **Do not steal:** P3.557/559 Vec demotion gates; P3.668 json multipass.
 

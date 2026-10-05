@@ -925,6 +925,10 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     // P3.589: same for bare owned `Vec`/`Map` formals (`ComponentRegistry::add`
     // `data: Vec<u8>`). Readonly body use sets forwarding_borrow while codegen
     // keeps owned `Vec` — callers must pass `vec![…]`, not `&vec![…]`.
+    //
+    // P3.647b: trust codegen `emitted_rust_ref_params[i] == false` even when
+    // analyzer ownership still reads Borrowed (recursive `BlendTree::evaluate_node`
+    // forwards into demoted `sample_clip_pose(&Vec)` but emits `clips: Vec<_>`).
     if sig
         .forwarding_borrow_params
         .as_ref()
@@ -932,22 +936,27 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         .copied()
         .unwrap_or(false)
     {
-        let owned_emit_not_shared_ref = sig
+        let codegen_not_shared_ref = sig
             .emitted_rust_ref_params
             .as_ref()
             .and_then(|flags| flags.get(param_idx))
             .copied()
-            == Some(false)
-            && matches!(
-                sig.param_ownership.get(param_idx),
-                Some(OwnershipMode::Owned)
-            );
-        let owned_text_emit = owned_emit_not_shared_ref
+            == Some(false);
+        let mut_borrow_slot = matches!(
+            sig.param_ownership.get(param_idx),
+            Some(OwnershipMode::MutBorrowed)
+        ) || sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(|t| matches!(t, Type::MutableReference(_)));
+        let owned_text_emit = codegen_not_shared_ref
+            && !mut_borrow_slot
             && sig.formal_param_type(param_idx).is_some_and(|t| {
                 crate::codegen::rust::types::is_windjammer_text_type(t)
                     && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
             });
-        let owned_vec_emit = owned_emit_not_shared_ref
+        let owned_vec_emit = codegen_not_shared_ref
+            && !mut_borrow_slot
             && crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx);
         if !owned_text_emit && !owned_vec_emit {
             return true;
@@ -1417,6 +1426,48 @@ mod tests {
     }
 
 
+
+    /// P3.647b: recursive BlendTree keeps analyzer Borrowed + forwarding while codegen
+    /// emits owned `Vec` (`emitted_rust_ref_params[i]=false`). Must not share-ref.
+    #[test]
+    fn forwarding_borrow_must_not_borrow_codegen_owned_vec_when_analyzer_still_borrowed() {
+        let sig = FunctionSignature {
+            name: "BlendTree::evaluate_node".into(),
+            formal_param_types: vec![
+                Type::Custom("BlendTree".into()),
+                Type::Custom("u32".into()),
+                Type::Vec(Box::new(Type::Custom("AnimationClip".into()))),
+                Type::Custom("f32".into()),
+                Type::Custom("u32".into()),
+            ],
+            param_types: vec![
+                Type::Custom("BlendTree".into()),
+                Type::Custom("u32".into()),
+                Type::Vec(Box::new(Type::Custom("AnimationClip".into()))),
+                Type::Custom("f32".into()),
+                Type::Custom("u32".into()),
+            ],
+            param_ownership: vec![
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed, // analyzer lag
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            return_type: None,
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: true,
+            is_extern: false,
+            emitted_rust_ref_params: Some(vec![false, false, false, false, false]),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: Some(vec![false, false, true, false, false]),
+        };
+        assert!(
+            !call_site_needs_shared_ref_at_emit(&sig, 2),
+            "codegen-owned Vec must beat forwarding_borrow even when ownership is Borrowed"
+        );
+    }
 
     /// P3.589: owned `Vec<u8>` emit + forwarding_borrow must not share-ref
     /// (`&vec![…]` → E0308 into `data: Vec<u8>`).

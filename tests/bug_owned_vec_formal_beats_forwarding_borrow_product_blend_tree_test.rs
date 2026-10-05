@@ -81,18 +81,33 @@ fn owned_vec_formal_with_forwarding_borrow_must_not_reborrow() {
     test.cargo_check().expect("cargo-check");
 }
 
+fn tip_wj_binary() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("WJ_COMPILER") {
+        let p = PathBuf::from(p);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut candidates = vec![manifest.join("target-agent-tip/release/wj")];
+    if let Some(parent) = manifest.parent() {
+        candidates.push(parent.join("windjammer-game/.cargo-target-wj/release/wj"));
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
+
 #[test]
 fn tip_product_animation_blend_tree_metadata_must_not_duplicate_params() {
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/.cargo-target-wj/release/wj");
+    let Some(tip) = tip_wj_binary() else {
+        eprintln!("skip tip product metadata gate — tip wj missing");
+        return;
+    };
     let anim = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .join("windjammer-game/windjammer-game-core/src/animation");
-    if !tip.is_file() || !anim.join("mod.wj").is_file() {
-        eprintln!("skip tip product metadata gate — tip wj or animation sources missing");
+    if !anim.join("mod.wj").is_file() {
+        eprintln!("skip tip product metadata gate — animation sources missing");
         return;
     }
     let out = tempfile::tempdir().expect("tmpdir");
@@ -122,16 +137,16 @@ fn tip_product_animation_blend_tree_metadata_must_not_duplicate_params() {
 
 #[test]
 fn tip_product_animation_blend_tree_evaluate_node_must_not_reborrow_clips() {
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/.cargo-target-wj/release/wj");
+    let Some(tip) = tip_wj_binary() else {
+        eprintln!("skip tip product gate — tip wj missing");
+        return;
+    };
     let anim = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .join("windjammer-game/windjammer-game-core/src/animation");
-    if !tip.is_file() || !anim.join("mod.wj").is_file() {
-        eprintln!("skip tip product gate — tip wj or animation sources missing");
+    if !anim.join("mod.wj").is_file() {
+        eprintln!("skip tip product gate — animation sources missing");
         return;
     }
     let out = tempfile::tempdir().expect("tmpdir");
