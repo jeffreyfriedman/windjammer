@@ -1,5 +1,6 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+
 ## P3.670 (2026-10-04) — TDD WDB-451 (DB agent; no compiler src)
 
 Copy `i64` **formal** into field assign must not `.clone()`; product emits
@@ -26,29 +27,33 @@ Copy `i64` **formal** into field assign must not `.clone()`; product emits
 
 **Do not steal:** WDB-406/408/411/450–451, P3.508–P3.670, WDB-412–451 (filed).
 
-
 ## P3.669 (2026-10-04) — json-util merge overlay loop must not move owned Value
 
-Product `wj-json-util::merge_values`: E0382 — `take_field(overlay, key)` in a
-while-loop where `take_field(value: Value, …)` stayed owned (body only
-`json.get`). Tip cloned `out` but moved `overlay`.
+Product `wj-json-util::merge_values` tip shared 21:42: E0382 —
+`take_field(overlay, key)` in a while-loop where `take_field(value: Value, …)`
+is still owned (body only `json.get`). Tip clones `out` at the sibling call but
+moves `overlay` → second iteration fails. Do not reshape with manual `.clone()` /
+`&` in the package.
 
 | Gate | Status |
 |------|--------|
-| isolate `json_merge_overlay_loop_reuse_must_cargo_check` | ✅ tip GREEN — `take_field(value: &Value)` |
-| product `json_util_product_merge_values_must_cargo_check` | ✅ tip GREEN — demoted formal + `&overlay` |
+| isolate `json_merge_overlay_loop_reuse_must_cargo_check` | ❌ tip RED (filed) |
+| product `json_util_product_merge_values_must_cargo_check` | ❌ tip RED — `take_field(overlay, …)` + owned formal |
 
-**Root cause layer:** signature / formal demotion — WDB-101 cross-module keep-owned
-+ WDB-102 `forces_owned` treated `Value`→`json.get(&Value)` like Vec→`&[T]`. Pure
-Custom→same-type shared-ref forwarders now demote; `forces_owned` narrowed to
-Vec/map/set containers only.
+**Root cause layer:** ownership / loop-reuse + helper formal demotion — read-only
+`Value` helper formal used only via `json.get(&Value)` must demote to `&Value`,
+**or** loop reuse of owned `overlay` must clone/borrow at the call site (sibling
+`out.clone()` already happens).
 
-**What became unnecessary:** package-local `overlay.clone()` / loop peels;
-no new `ir_call_site` reconcile.
+**Why this is a new class:**
+- P3.661 / P3.668 green `json.get` / `is_array` / `len` auto-borrow on owned Value.
+- Distinct: **local helper** still emits owned `Value` formal; loop reuse of the
+  outer binding is not clone-on-reuse for `overlay` while `out` is.
 
-**Gates:**
-- `cargo test --release --test all --features integration_tests -- json_merge_overlay_loop_reuse json_util_product_merge` → **2 passed**
-- Related: `json_get_owned_value_multipass` / `json_is_array_len_owned_value_multipass` → **passed** (P3.668 hold)
+**What became unnecessary:** package-local `overlay.clone()` / rewriting merge.
+
+**Gates:** tip shared 21:42 product transpile shows `take_field(overlay, …)` +
+`fn take_field(value: Value, …)`; `$WJ test` packages/wj-json-util → E0382.
 
 **Do not steal:** P3.661/P3.668, P3.666–P3.668, WDB-448–450 (filed).
 
@@ -586,26 +591,20 @@ parameterized `Iterator<item>` over bare `Iterator`.
 
 ## P3.647 (2026-10-04) — reused owned `Vec` formal gets `&clips` at recursive calls
 
-`BlendTree::evaluate_node(clips: Vec<…>)` stays owned; recursive sites missed
-`.clone()` (E0382) because auto_clone treated args as Read.
+`BlendTree::evaluate_node(clips: Vec<…>)` stays owned; recursive call sites emitted
+`&clips` → E0308. Fix: IR cutover path peels `&clips` into owned slots and
+`.clone()` on multi-use (auto-clone).
 
 | Gate | Status |
 |------|--------|
 | unit `p3647_recursive_owned_vec_param_needs_clone` | ✅ GREEN |
-| unit `p3647_parsed_source_needs_clone_on_first_recursive_clips` | ✅ GREEN |
-| MultiFile `reused_owned_vec_formal_must_not_reborrow_recursive` | ✅ tip GREEN — `clips.clone()` |
+| MultiFile `reused_owned_vec_formal_must_not_reborrow_recursive` | ✅ GREEN |
 | tip `animation/blend_tree` evaluate_node | ⏳ tip rebuild |
 
-**Root cause layer:** constraint/reuse — `self.evaluate_node` parses as
-`Call(FieldAccess)`; `runtime_std_param_needs_auto_borrow_resolved` flipped bare
-owned `Vec` formals to Read. Guard: user bare-owned AST formals stay Move;
-runtime-std (`json::*`) still Read (P3.668).
+**Root cause layer:** IR `call_sites` cutover skipped legacy finalize ownership
+rewrite; owned Vec args kept spurious `&` / missed auto-clone.
 
-**What became unnecessary:** extra IR peels for recursive Vec; no new method-name lists.
-
-**Gates:** `cargo test --release --test all --features integration_tests -- reused_owned_vec_formal_must_not_reborrow_recursive` → **passed**; lib `p3647_` → **3 passed**.
-
-**Do not steal:** P3.557/559 Vec demotion gates; P3.668 json multipass.
+**Do not steal:** P3.557/559 Vec demotion gates.
 
 ## P3.645 (2026-10-04) — product wj-csv owned args into stdlib must auto-borrow
 
