@@ -105,14 +105,38 @@ pub fn install_import_alias_path_dep_signatures(
         let Some(sig) = registry.get_signature(qualified).cloned() else {
             continue;
         };
+        let path_dep_has_shared = sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|f| f.iter().any(|&x| x));
         if let Some(existing) = registry.get_signature(alias) {
+            // P3.666: path-dep shared `&str` must overwrite analyzer Owned stubs
+            // even when those stubs already carry all-false `emitted_rust_ref_params`
+            // (`codegen_refreshed_beats_analysis_only` would otherwise keep them).
+            if path_dep_has_shared
+                && crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
+                    &sig, existing,
+                )
+            {
+                registry.add_function(alias.clone(), sig);
+                continue;
+            }
+            if path_dep_has_shared
+                && !crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
+                    existing, &sig,
+                )
+            {
+                registry.add_function(alias.clone(), sig);
+                continue;
+            }
             if crate::codegen::rust::signature_promotion::shared_ref_emission_beats(existing, &sig)
                 || crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
                     existing, &sig,
                 )
-                || crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
-                    existing, &sig,
-                )
+                || (!path_dep_has_shared
+                    && crate::codegen::rust::signature_promotion::codegen_refreshed_beats_analysis_only(
+                        existing, &sig,
+                    ))
             {
                 continue;
             }
