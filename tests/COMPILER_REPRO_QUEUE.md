@@ -43,7 +43,7 @@ missing `;` / function returns `()` (E0308). Binding `Some(v)` keeps a real
 
 | Gate | Status |
 |------|--------|
-| `hashmap_owned_get_some_wildcard_bool_must_not_defer_drop_after_matches` | ❌ tip RED — tip-session 02:10 (filed + eco dogfood) |
+| `hashmap_owned_get_some_wildcard_bool_must_not_defer_drop_after_matches` | ❌ tip RED — game tip **18:38** still `matches!` + DEFER DROP (reconfirmed) |
 
 **Root cause layer:** defer-drop / matches! — P3.267 skipped mid-`match` bodies;
 `matches!` macro form still gets a post-expression defer-drop that is not a
@@ -171,20 +171,19 @@ identity interpolation for reuse into owned path-dep formals. Tip emitted
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip binary RED — agent-tip-session **02:10** still `format!("{}", query)` on `q`/`limit` (WIP cargo-bin claimed GREEN; tip-out lag) |
-| `identity_string_interpolation_into_owned_formal_must_not_format` | ⏳ recheck on tip binary |
+| `notes_api_product_qs_get_query_must_not_format_temp` | ✅ tip GREEN — game tip **18:38** `qs_get(query.clone(), "q"/"limit")` (no `format!`) |
+| `identity_string_interpolation_into_owned_formal_must_not_format` | ✅ tip GREEN |
 
 **Root cause layer:** coercion/encoding — identity `format!("{}", text)` on
-Windjammer text should lower to owned `String` (Clone / ToOwnedString), not
-`format!` temps. Tip installed binary lags WIP.
+Windjammer text lowers to owned `String` (Clone / ToOwnedString).
 
 **What became unnecessary:** format-temp hoist for identity `"${s}"` on string;
 no app reshape.
 
-**Gates:** tip `…/agent-tip-session/release/wj` **02:10** product transpile
-`format!("{}", query)` at `q`/`limit` (2026-10-05 eco dogfood).
+**Gates:** tip `…/windjammer-game/.cargo-target-wj/release/wj` **18:38** product
+transpile `qs_get(query.clone(), …)` at `q`/`limit` (2026-10-05 eco dogfood).
 
-**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670, P3.672–P3.674 (filed).
+**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670, P3.672–P3.676 (filed).
 
 ## P3.670 (2026-10-04) — TDD WDB-451 (DB agent; no compiler src)
 
