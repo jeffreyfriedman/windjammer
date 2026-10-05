@@ -1,6 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.665 (2026-10-04) — TDD WDB-449 (DB agent; no compiler src)
+
+Copy `bool` **formal** into field assign must not `.clone()`; product emits
+`self.enabled = enabled.clone()` / `self.is_enabled = enabled.clone()` in UI widgets.
+
+| Gate | Status |
+|------|--------|
+| WDB-449 MultiFile | ⏳ TDD pending — bare `enabled` |
+| WDB-449 tip-out | ⏳ TDD pending — `enabled.clone()` in ui/slider + ui/button |
+
+**Root cause layer:** copy / bool-formal-field-assign — Copy `bool` formals assigned into fields must not auto-clone.
+
+**Why this is a new class:**
+- WDB-393 is i32 **formal** into field assign.
+- WDB-448 is f32 **formal** into field assign.
+- WDB-444 is unit-enum **formal** assign.
+
+**What became unnecessary:** `enabled.clone()` in Slider/Button::set_enabled.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/448–449, P3.508–P3.664, WDB-412–449 (filed).
+
 ## P3.664 (2026-10-04) — TDD WDB-448 (DB agent; no compiler src)
 
 Copy `f32` **formal** into field assign must not `.clone()`; product emits
