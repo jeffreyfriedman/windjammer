@@ -163,6 +163,61 @@ fn apply_owned_string_literal_coercion<'ast>(
         let Some((_, arg_expr)) = arguments.get(i) else {
             continue;
         };
+        // P3.666: path-dep / import-alias demoted `&str` must keep bare lits
+        // (notes-api `qs_get(query, "pretty")` → not `"pretty".to_string()`).
+        // Also peel when the already-refreshed `signature` slot emits shared —
+        // `coerce_string_literals_to_owned` may have owned the lit before call-site
+        // passes, and the old early-continue on `.to_string()` left E0308.
+        let lookup = gen.signature_lookup_callee_name(func_name);
+        let slot_shared = |sig: &crate::analyzer::FunctionSignature| {
+            let pidx = sig.arg_param_index(i);
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
+                || sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|f| f.get(pidx))
+                    .copied()
+                    == Some(true)
+                || sig
+                    .param_types
+                    .get(pidx)
+                    .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+                || sig
+                    .formal_param_type(pidx)
+                    .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+                || matches!(
+                    sig.param_ownership.get(pidx),
+                    Some(crate::analyzer::OwnershipMode::Borrowed)
+                ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
+                    sig, pidx,
+                )
+        };
+        let path_dep_shared = signature.as_ref().is_some_and(slot_shared)
+            || gen.resolve_cross_crate_dep_signature(func_name)
+                .as_ref()
+                .is_some_and(slot_shared)
+            || gen
+                .global_signature_registry
+                .as_ref()
+                .and_then(|g| {
+                    g.get_signature(lookup.as_ref())
+                        .or_else(|| g.get_signature(func_name))
+                })
+                .is_some_and(slot_shared)
+            || gen
+                .signature_registry
+                .get_signature(lookup.as_ref())
+                .or_else(|| gen.signature_registry.get_signature(func_name))
+                .is_some_and(slot_shared)
+            || gen.cross_crate_dep_arg_confirms_shared(func_name, i);
+        if path_dep_shared {
+            if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
+                crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
+                    arg_expr, arg_str,
+                );
+            }
+            continue;
+        }
         if !matches!(
             arg_expr,
             Expression::Literal {
