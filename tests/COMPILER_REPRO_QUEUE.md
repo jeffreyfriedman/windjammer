@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.667 (2026-10-04) — TDD WDB-450 (DB agent; no compiler src)
+
+Copy `u32` **formal** into **indexed field** assign must not `.clone()`; product emits
+`self.chunks[i].gpu_buffer_id = buffer_id.clone()` in chunk_manager mark_uploaded.
+
+| Gate | Status |
+|------|--------|
+| WDB-450 MultiFile | ⏳ TDD pending — bare `buffer_id` |
+| WDB-450 tip-out | ⏳ TDD pending — `buffer_id.clone()` into `gpu_buffer_id` |
+
+**Root cause layer:** copy / u32-formal-indexed-field-assign — Copy `u32` formals assigned into indexed struct fields must not auto-clone.
+
+**Why this is a new class:**
+- WDB-447 is u32 formal into **element** assign (`tiles[i] = tile_id`).
+- WDB-376 is indexed **read** of `.buffer_id.clone()`.
+- WDB-441 is i64 **local** into index assign.
+
+**What became unnecessary:** `buffer_id.clone()` in ChunkManager::mark_uploaded.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+
+**Do not steal:** WDB-406/408/411/449–450, P3.508–P3.666, WDB-412–450 (filed).
+
 ## P3.666 (2026-10-04) — notes-api qs_get literal key must not `.to_string()` (P3.486 regression)
 
 Product `wj-notes-api` tip shared 20:06 / `$WJ test`: E0308 —
