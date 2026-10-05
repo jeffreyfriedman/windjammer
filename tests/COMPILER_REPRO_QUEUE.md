@@ -59,20 +59,20 @@ Gate asserts extended for `q` / `limit`.
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ tip RED — `"pretty".to_string()` / `"encoding".to_string()` / `"q".to_string()` / `"limit".to_string()` (reconfirmed tip 21:42 after path-dep regen) |
-| isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ⏳ recheck with tip |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ✅ tip GREEN — tip shared 21:42: `qs_get(query, "pretty")` / `"encoding"` / `"q"` / `"limit"` (no `.to_string()` / `String::from`) |
+| isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ✅ tip GREEN |
 
 **Root cause layer:** signature / path-dep ABI → call-site — path-dep `get` metadata is
-`Owned`+`Borrowed` / Rust `key: &str`, but multipass still emits `"pretty".to_string()`.
+`Owned`+`Borrowed` / Rust `key: &str`; tip 21:42 no longer emits owned key literals.
 
 **Why this is a new class:**
-- P3.486 greened the same product sites; tip regressed after P3.642/P3.660 tip churn.
-- Distinct from owned `query` first-arg temps (`format!("{}", query)` on some sites).
+- P3.486 greened the same product sites; tip regressed after P3.642/P3.660 tip churn; tip 21:42 restored.
+- Distinct from owned `query` first-arg temps (`format!("{}", query)` on some sites — still present on `q`/`limit`).
 
 **What became unnecessary:** reshaping `query_wants_pretty` / list filters with bare keys.
 
-**Gates:** tip shared `…/cargo-target/shared/release/wj` 20:41 — product `$WJ test` **4 E0308**;
-`cargo test … -- notes_api_product_qs_get_literal_must_not_string_from` → FAILED (prior).
+**Gates:** tip shared `…/cargo-target/shared/release/wj` **21:42** — product transpile
+`qs_get(…, "pretty"|"encoding"|"q"|"limit")` bare; cargo `--test all` P3.666 filters **3/3 GREEN**.
 
 **Do not steal:** P3.486/P3.489, P3.642, P3.660, WDB-448/449, P3.508–P3.665 (filed).
 
