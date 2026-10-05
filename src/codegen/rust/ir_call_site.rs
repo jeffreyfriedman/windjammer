@@ -8871,7 +8871,9 @@ impl<'ast> CodeGenerator<'ast> {
                 return SafetyType::borrowed(base, Region::fresh(11));
             }
             // Match-arm bindings are owned enum/struct payloads even when
-            // `local_var_types` temporarily marks them as references.
+            // `local_var_types` temporarily marks them as references — except
+            // genuine `Option<&T>` / `match &scrutinee` ref bindings tracked in
+            // `borrowed_iterator_vars` (HashMap::get → `&String`, P3.675).
             if self.match_arm_bindings.contains(name.as_str()) {
                 let ty = self.infer_expression_type(arg_expr);
                 let bare = ty.as_ref().map(|ty| match ty {
@@ -8883,6 +8885,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .unwrap_or(BaseType::Inferred);
                 if bare.is_some_and(|t| self.is_type_copy(t)) || self.binding_name_is_copy(name) {
                     return SafetyType::copy(base);
+                }
+                if self.borrowed_iterator_vars.contains(name) {
+                    return SafetyType::borrowed(base, Region::fresh(15));
                 }
                 return SafetyType::owned(base);
             }

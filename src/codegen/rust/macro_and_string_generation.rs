@@ -222,11 +222,13 @@ impl<'ast> CodeGenerator<'ast> {
                             &Type::String,
                             Some(OwnershipMode::Owned),
                         );
+                        // Identity interp always yields a *fresh* owned `String`
+                        // (format! allocation semantics). Never lower to a move of
+                        // the operand: multi-use E0382 (P3.671 qs_get) and
+                        // HashMap::get `&String` let-match E0308 (P3.675) when
+                        // `actual` is Owned+Inferred / misclassified Owned.
                         let mut kind = compute_coercion(&actual, &expected);
-                        if matches!(kind, CoercionKind::Identity)
-                            && matches!(actual.ownership, crate::ir::OwnedType::Owned)
-                            && matches!(actual.base, crate::ir::BaseType::String)
-                        {
+                        if matches!(kind, CoercionKind::Identity) {
                             kind = CoercionKind::Clone;
                         }
                         return apply_coercion(&kind, &arg_strs[1], Target::Rust);
