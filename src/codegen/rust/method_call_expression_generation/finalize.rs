@@ -1746,11 +1746,12 @@ impl<'ast> CodeGenerator<'ast> {
                     .or_else(|| self.get_signature_with_global(&qualified).cloned());
                 if let Some(ref sig) = callee_sig {
                     let pidx = sig.arg_param_index(i);
+                    // Only skip re-borrow for codegen-owned container slots (P3.647b).
+                    // Do not treat every `!call_site_needs_shared_ref` as skip — that
+                    // blocked legitimate `&Value` / map-key re-borrows (json_get product).
                     if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                         sig, pidx,
                     ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
-                        sig, pidx,
-                    ) || !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
                         sig, pidx,
                     ) {
                         continue;
