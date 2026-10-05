@@ -1,6 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.678 (2026-10-05) — HashMap::get identity `"${v}"` let-match must clone
+
+notes-api `notes_config_from_map`: `let s = match map.get(...) { Some(v) => "${v}", … }`
+emitted bare `Some(v) => v` (`&String` → E0308). Return-match already cloned (P3.671);
+let/`Block{Match}` path misclassified match-arm actual as Owned+Inferred so identity
+interp lowered to Identity (move) instead of Clone.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_get_identity_interp_into_owned_string_must_clone` | ✅ tip GREEN — `Some(v) => v.clone()` |
+| `notes_api_product_config_map_get_string_must_clone` | ✅ tip GREEN — product `config.rs` clones |
+
+**Root cause layer:** coercion/encoding + constraint/actual —
+identity `"${text}"` always Clone (fresh owned); `Block{Match}` ref bindings no longer
+forced into `match_arm_bindings` as Owned; `infer_actual` honors `borrowed_iterator_vars`
+for match-arm refs.
+
+**What became unnecessary:** bare move of HashMap::get `&String` into owned `string` let;
+narrow Owned+String-only Identity→Clone guard that missed Owned+Inferred.
+
+**Gates:** `CARGO_TARGET_DIR=…/target-agent-tip-p3675` →
+`notes_api_product_config_map_get_string_must_clone` + isolate — **2 passed** (2026-10-05).
+
+**Do not steal:** P3.671, P3.676–P3.678, WDB-452/453 (filed).
+
 ## P3.677 (2026-10-05) — TDD WDB-453 (DB agent; no compiler src)
 
 Copy `f32` **indexed field** on return must not `.clone()`; product emits

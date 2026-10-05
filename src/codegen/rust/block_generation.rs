@@ -543,14 +543,21 @@ impl<'ast> CodeGenerator<'ast> {
                     let mut added_borrowed: Vec<String> = Vec::new();
                     let mut bound_vars = std::collections::HashSet::new();
                     self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
-                    // WDB-347: arm payload bindings must not auto-clone (Copy f32).
-                    for var in &bound_vars {
-                        self.match_arm_bindings.insert(var.clone());
-                    }
+                    // Align with `generate_match_statement`: only *owned* arm
+                    // payloads go in `match_arm_bindings`. Ref bindings from
+                    // `Option<&T>` (HashMap::get) stay in `borrowed_iterator_vars`
+                    // so `infer_actual_safety_type` does not force Owned+Inferred
+                    // and peel identity `"${v}"` to a bare move (P3.675).
                     if match_binds_refs_flag {
                         for var in &bound_vars {
                             self.borrowed_iterator_vars.insert(var.clone());
                             added_borrowed.push(var.clone());
+                        }
+                    }
+                    for var in &bound_vars {
+                        if !added_borrowed.iter().any(|b| b == var) {
+                            // WDB-347: owned arm payloads must not auto-clone (Copy f32).
+                            self.match_arm_bindings.insert(var.clone());
                         }
                     }
                     // Also try infer_match_bound_types for richer type info
