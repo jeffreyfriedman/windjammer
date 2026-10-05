@@ -6710,14 +6710,32 @@ impl<'ast> CodeGenerator<'ast> {
                 // `Some`/`Ok`/`Err` / PascalCase variant ctors always store.
                 let is_lang_payload =
                     crate::analyzer::Analyzer::is_language_level_method_payload_store(method);
+                let runtime_key =
+                    crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                        None,
+                        object,
+                        method,
+                        |name| self.is_imported_runtime_std_module(name),
+                    );
                 arguments.iter().enumerate().any(|(i, (_, arg))| {
-                    let stores = is_lang_payload
-                        || self.method_call_argument_stores_owned_payload(
-                            method,
-                            object,
+                    // P3.669: runtime-std shared-ref slots (`json::get` `&Value`) are not
+                    // owned payload stores — layered bare `get` Owned stubs must not block
+                    // outer formal demotion for loop reuse.
+                    let runtime_borrow_slot = runtime_key.contains("::")
+                        && crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                            &self.signature_registry,
+                            &runtime_key,
+                            None,
                             i,
-                            arguments.len(),
                         );
+                    let stores = !runtime_borrow_slot
+                        && (is_lang_payload
+                            || self.method_call_argument_stores_owned_payload(
+                                method,
+                                object,
+                                i,
+                                arguments.len(),
+                            ));
                     if stores {
                         self.expression_moves_param_into_owned_payload(arg, param_name)
                     } else {
@@ -6868,6 +6886,25 @@ impl<'ast> CodeGenerator<'ast> {
                 global, method, arg_index,
             ) {
                 return true;
+            }
+        }
+        // P3.669: module-qualified runtime-std (`json::get`) borrows at Rust even when
+        // multipass layers a bare `get` Owned WJ stub — not an owned sibling emitter.
+        if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
+            let runtime_key =
+                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                    None,
+                    object,
+                    method,
+                    |name| self.is_imported_runtime_std_module(name),
+                );
+            if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &self.signature_registry,
+                &runtime_key,
+                Some(&sig),
+                arg_index,
+            ) {
+                return false;
             }
         }
         // Fresh shared-ref emission (`find_index(key: &str)`) beats same-impl AST Owned.
@@ -7888,6 +7925,32 @@ impl<'ast> CodeGenerator<'ast> {
                 return true;
             }
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, pidx) {
+                return true;
+            }
+            // P3.669: runtime-std baseline (`json::get` `&Value`) beats layered WJ Owned
+            // stubs / bare `get` homonyms that otherwise look like owned emitters.
+            // Prefer module-qualified key — multipass often resolves MethodCall sig.name
+            // as bare `get` with Owned WJ stub.
+            let runtime_key =
+                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                    None,
+                    object,
+                    method,
+                    |name| self.is_imported_runtime_std_module(name),
+                );
+            let runtime_borrow = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &self.signature_registry,
+                &runtime_key,
+                Some(&sig),
+                arg_index,
+            ) || (runtime_key != sig.name
+                && crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &self.signature_registry,
+                    &sig.name,
+                    Some(&sig),
+                    arg_index,
+                ));
+            if runtime_borrow {
                 return true;
             }
             if self.method_call_callee_emits_owned_arg(object, method, arg_index, func) {
@@ -9045,6 +9108,8 @@ impl<'ast> CodeGenerator<'ast> {
                 let same_custom = bare.is_some_and(|t| {
                     matches!(t, Type::Custom(n) if Self::custom_type_names_match(n, custom_name))
                 });
+                // Honor runtime-std baseline even when multipass layers a WJ Owned stub
+                // over `json::get` / peers (same oracle as call-site `&` emission).
                 let shared_ref = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
                     sig, pidx,
                 ) || sig.param_types.get(pidx).is_some_and(|t| {
@@ -9052,6 +9117,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }) || matches!(
                     sig.param_ownership.get(pidx),
                     Some(crate::analyzer::OwnershipMode::Borrowed)
+                ) || crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    &self.signature_registry,
+                    &sig.name,
+                    Some(sig),
+                    arg_index,
                 );
                 if !(same_custom && shared_ref) {
                     all_same_custom_shared_ref = false;
@@ -9064,7 +9134,28 @@ impl<'ast> CodeGenerator<'ast> {
                 &mut visit,
             );
         }
-        saw_site && all_same_custom_shared_ref
+        if saw_site && all_same_custom_shared_ref {
+            return true;
+        }
+        // Multipass may not resolve `json.get` formals during first emit of a
+        // library module — still demote when every forward is a borrowing callee
+        // and nothing consumes the param owned (P3.669 codec_json_merge_overlay).
+        self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
+            && !self.param_passes_to_wj_owned_sibling_call(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
+            && !self.param_passed_to_owned_non_copy_method_arg(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
+            && !self.param_only_forwards_to_emitted_owned_callees(
+                func.body.as_slice(),
+                &param.name,
+                func,
+            )
     }
 
     fn custom_type_names_match(a: &str, b: &str) -> bool {
@@ -11798,7 +11889,18 @@ impl<'ast> CodeGenerator<'ast> {
                             .or_else(|| {
                                 self.global_free_call_signature_fallback_for_method(object, method)
                             });
-                        if let Some(sig) = sig {
+                        if let Some(mut sig) = sig {
+                            // P3.669: rewrite bare `get` → `json::get` for runtime-std
+                            // oracle in demotion visitors (multipass MethodCall resolve).
+                            let qualified = crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                                None,
+                                object,
+                                method,
+                                |name| self.is_imported_runtime_std_module(name),
+                            );
+                            if qualified.contains("::") && sig.name != qualified {
+                                sig.name = qualified;
+                            }
                             visit(&sig, i);
                         }
                     }
@@ -12132,6 +12234,24 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
         func: &FunctionDecl<'ast>,
     ) -> bool {
+        // P3.669: runtime-std shared-ref slots are not owned method args for demotion.
+        if let Some(sig) = self.method_call_signature_for_arg(object, method, arg_index, func) {
+            let runtime_key =
+                crate::codegen::rust::stdlib_method_traits::module_qualified_method_name(
+                    None,
+                    object,
+                    method,
+                    |name| self.is_imported_runtime_std_module(name),
+                );
+            if crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                &self.signature_registry,
+                &runtime_key,
+                Some(&sig),
+                arg_index,
+            ) {
+                return false;
+            }
+        }
         if let Some(rt) = self.mc_infer_method_receiver_type_name(object) {
             let qualified = format!("{rt}::{method}");
             // Field-mutating / emitted `&mut T` slots are not owned contracts
