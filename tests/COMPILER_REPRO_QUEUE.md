@@ -8,10 +8,11 @@ Copy `f32` **indexed field** on return must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-453 MultiFile | ⏳ TDD pending — bare `avg_ms` |
-| WDB-453 tip-out | ⏳ TDD pending — `avg_ms.clone()` in gpu_profiler |
+| WDB-453 MultiFile | ✅ isolate GREEN — `return …avg_ms` (no `.clone()`) |
+| WDB-453 tip-out | ❌ tip RED — `avg_ms.clone()` in `rel_tip_out/rendering/gpu_profiler.rs` |
 
-**Root cause layer:** copy / f32-indexed-field-return — Copy `f32` indexed struct fields returned must not auto-clone.
+**Root cause layer:** copy / f32-indexed-field-return — Copy `f32` indexed struct fields returned must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-439 is i32 indexed **tuple** field return.
@@ -20,9 +21,11 @@ Copy `f32` **indexed field** on return must not `.clone()`; product emits
 
 **What became unnecessary:** `avg_ms.clone()` in GpuProfiler::timing_avg_ms_at.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-05)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb453_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-05).
 
-**Do not steal:** WDB-406/408/411/452–453, P3.508–P3.676, WDB-412–453 (filed).
+**Do not steal:** WDB-406/408/411/452–453, P3.508–P3.677, WDB-412–453 (filed).
+
 
 ## P3.676 (2026-10-05) — HashMap `has` `Some(_)` → `matches!` + DEFER DROP spawn
 
