@@ -33,7 +33,7 @@ Gate asserts extended for `q` / `limit`.
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ tip RED — `"pretty".to_string()` / `"encoding".to_string()` / `"q".to_string()` / `"limit".to_string()` (reconfirmed tip 21:36 after path-dep regen) |
+| `notes_api_product_qs_get_literal_must_not_string_from` | ❌ tip RED — `"pretty".to_string()` / `"encoding".to_string()` / `"q".to_string()` / `"limit".to_string()` (reconfirmed tip 21:42 after path-dep regen) |
 | isolate `qs_get_literal_into_demoted_key_must_not_string_from` | ⏳ recheck with tip |
 
 **Root cause layer:** signature / path-dep ABI → call-site — path-dep `get` metadata is
