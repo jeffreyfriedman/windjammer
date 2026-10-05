@@ -109,21 +109,20 @@ identity interpolation for reuse into owned path-dep formals. Tip emitted
 
 | Gate | Status |
 |------|--------|
-| `notes_api_product_qs_get_query_must_not_format_temp` | ✅ tip GREEN — `qs_get(query.clone(), "q"/"limit")` |
-| `identity_string_interpolation_into_owned_formal_must_not_format` | ✅ tip GREEN — isolate |
+| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip binary RED — agent-tip-session **02:10** still `format!("{}", query)` on `q`/`limit` (WIP cargo-bin claimed GREEN; tip-out lag) |
+| `identity_string_interpolation_into_owned_formal_must_not_format` | ⏳ recheck on tip binary |
 
 **Root cause layer:** coercion/encoding — identity `format!("{}", text)` on
-Windjammer text lowers via `compute_coercion` to owned `String` (Clone for owned
-bindings so reuse analysis stays sound; ToOwnedString for `&str`). Non-text
-Display args still use `format!`.
+Windjammer text should lower to owned `String` (Clone / ToOwnedString), not
+`format!` temps. Tip installed binary lags WIP.
 
 **What became unnecessary:** format-temp hoist for identity `"${s}"` on string;
-no new `ir_call_site` peel / no app reshape.
+no app reshape.
 
-**Gates:**
-- `cargo test --release --test all -- notes_api_product_qs_get_query_must_not_format_temp identity_string_interpolation_into_owned_formal_must_not_format json_get_owned_value_must_auto_borrow_product owned_vec_formal` → **10 passed**
+**Gates:** tip `…/agent-tip-session/release/wj` **02:10** product transpile
+`format!("{}", query)` at `q`/`limit` (2026-10-05 eco dogfood).
 
-**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670 (filed).
+**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670, P3.672–P3.674 (filed).
 
 ## P3.670 (2026-10-04) — TDD WDB-451 (DB agent; no compiler src)
 
