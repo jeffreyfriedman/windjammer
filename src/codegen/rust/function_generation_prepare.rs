@@ -12846,7 +12846,36 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // Drop duplicated tails from a prior buggy append (P3.647c).
-        let expected_param_len = func.parameters.len();
+        // Self-aligned length: user params + optional Self. Implicit `self` (not in
+        // `func.parameters`) still requires the Self slot — truncating to
+        // `func.parameters.len()` dropped item_id's emitted-ref flag and left
+        // `has_item(item_id: String)` instead of `&str` (passthrough RED).
+        let user_param_count = func.parameters.iter().filter(|p| p.name != "self").count();
+        let ast_has_self = func.parameters.iter().any(|p| p.name == "self");
+        let expected_param_len = if updated.has_self_receiver {
+            user_param_count + 1
+        } else {
+            user_param_count
+        };
+        // Implicit self: MethodSignature / registry may be Self-free while
+        // `has_self_receiver` is true — insert the Self slot before indexing +1.
+        if updated.has_self_receiver && !ast_has_self && updated.param_types.len() == user_param_count
+        {
+            updated
+                .param_types
+                .insert(0, Type::Custom("Self".to_string()));
+            updated
+                .formal_param_types
+                .insert(0, Type::Custom("Self".to_string()));
+            updated
+                .param_ownership
+                .insert(0, crate::analyzer::OwnershipMode::Borrowed);
+            if let Some(ref mut fwd) = updated.forwarding_borrow_params {
+                if fwd.len() == user_param_count {
+                    fwd.insert(0, false);
+                }
+            }
+        }
         if updated.param_types.len() > expected_param_len {
             updated.param_types.truncate(expected_param_len);
         }
@@ -12861,9 +12890,27 @@ impl<'ast> CodeGenerator<'ast> {
                 fwd.truncate(expected_param_len);
             }
         }
-        let mut emitted = vec![false; updated.param_ownership.len()];
+        let mut emitted = vec![false; expected_param_len.max(updated.param_ownership.len())];
+        if emitted.len() < expected_param_len {
+            emitted.resize(expected_param_len, false);
+        }
         let mut user_param_idx = 0;
         let mut emitted_idx = 0;
+        // Emitted formals always include `&self` / `&mut self` first when the method
+        // has a receiver — even if the WJ AST omitted explicit `self`.
+        if updated.has_self_receiver
+            && !ast_has_self
+            && emitted_param_strings.first().is_some_and(|s| {
+                s.starts_with("&self")
+                    || s.starts_with("&mut self")
+                    || s.starts_with("&'a self")
+                    || s.starts_with("&'a mut self")
+                    || s == "self"
+                    || s.starts_with("mut self")
+            })
+        {
+            emitted_idx = 1;
+        }
         for param in &func.parameters {
             if param.name == "self" {
                 if emitted_idx < emitted_param_strings.len() {
@@ -13002,7 +13049,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &mut updated,
                 emitted_param_strings,
             );
-            let forwarding_borrow_params: Vec<bool> = func
+            let mut forwarding_borrow_params: Vec<bool> = func
                 .parameters
                 .iter()
                 .filter(|p| p.name != "self")
@@ -13015,6 +13062,10 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                 })
                 .collect();
+            // Self-align: implicit/explicit receiver methods store Self at index 0.
+            if updated.has_self_receiver {
+                forwarding_borrow_params.insert(0, false);
+            }
             if forwarding_borrow_params.iter().any(|&b| b) {
                 updated.forwarding_borrow_params = Some(forwarding_borrow_params);
             }

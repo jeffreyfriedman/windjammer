@@ -1,6 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.673 (2026-10-05) — implicit-self passthrough must demote `item_id: &str`
+
+P3.647c truncate used `func.parameters.len()` which omits implicit `self`, so
+Self-aligned `emitted_rust_ref_params` never recorded `&str` for
+`Merchant::has_item(item_id)` → stayed `String` (passthrough RED). Explicit
+`self` in the AST stayed GREEN.
+
+| Gate | Status |
+|------|--------|
+| `test_passthrough_to_borrowed_param` | ✅ tip GREEN — `has_item(&self, item_id: &str)` |
+| `test_method_passthrough_convergence` | ✅ tip GREEN |
+
+**Root cause layer:** signature — Self-aligned registry length / emitted-ref sync
+for methods whose WJ AST omits `self`; forwarding_borrow_params Self-padded.
+
+**What became unnecessary:** requiring explicit `self` in `.wj` for passthrough
+`&str` demotion.
+
+**Gates:**
+- `cargo test --release --test all -- test_passthrough_to_borrowed_param test_method_passthrough_convergence owned_vec_formal notes_api_product_qs_get_query_must_not_format_temp` → **12 passed**
+
+**Do not steal:** P3.647c / P3.672.
+
 ## P3.672 (2026-10-05) — auto_mut `&mut Vec` must not become `buf.clone()` after P3.647
 
 P3.647 IR-cutover clone path treated WJ AST bare `Vec` as an owned slot even when
