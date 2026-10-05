@@ -34,10 +34,11 @@ Copy `bool` **formal** into field assign must not `.clone()`; product emits
 
 | Gate | Status |
 |------|--------|
-| WDB-449 MultiFile | ⏳ TDD pending — bare `enabled` |
-| WDB-449 tip-out | ⏳ TDD pending — `enabled.clone()` in ui/slider + ui/button |
+| WDB-449 MultiFile | ✅ isolate GREEN — `self.enabled = enabled` (no `.clone()`) |
+| WDB-449 tip-out | ❌ tip RED — `enabled.clone()` in `rel_tip_out/ui/slider.rs` + `ui/button.rs` |
 
-**Root cause layer:** copy / bool-formal-field-assign — Copy `bool` formals assigned into fields must not auto-clone.
+**Root cause layer:** copy / bool-formal-field-assign — Copy `bool` formals assigned into fields must not auto-clone
+(product tip-out lag / multipass path; isolate already correct).
 
 **Why this is a new class:**
 - WDB-393 is i32 **formal** into field assign.
@@ -46,9 +47,11 @@ Copy `bool` **formal** into field assign must not `.clone()`; product emits
 
 **What became unnecessary:** `enabled.clone()` in Slider/Button::set_enabled.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-04)
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb449_` — **1 passed / 1 failed**
+(isolate GREEN, tip RED; 2026-10-04).
 
-**Do not steal:** WDB-406/408/411/448–449, P3.508–P3.664, WDB-412–449 (filed).
+**Do not steal:** WDB-406/408/411/448–449, P3.508–P3.665, WDB-412–449 (filed).
+
 
 ## P3.664 (2026-10-04) — TDD WDB-448 (DB agent; no compiler src)
 
