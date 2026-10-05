@@ -1,6 +1,41 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.676 (2026-10-05) — HashMap `has` `Some(_)` → `matches!` + DEFER DROP spawn
+
+Owned `HashMap` helper:
+```wj
+pub fn has(map: HashMap<string, string>, key: string) -> bool {
+    match map.get(key) {
+        Some(_) => true,
+        None => false,
+    }
+}
+```
+Tip collapses to `matches!(map.get(key), Some(_))` then splices
+`// DEFER DROP` + `std::thread::spawn(move || drop(map));` **after** it →
+missing `;` / function returns `()` (E0308). Binding `Some(v)` keeps a real
+`match` and cargo-checks. Product: `wj-dotenv::has`. Do not reshape with
+`Some(v)` peels — tip must green `Some(_)` / `matches!` + defer-drop.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_owned_get_some_wildcard_bool_must_not_defer_drop_after_matches` | ❌ tip RED — tip-session 02:10 (filed + eco dogfood) |
+
+**Root cause layer:** defer-drop / matches! — P3.267 skipped mid-`match` bodies;
+`matches!` macro form still gets a post-expression defer-drop that is not a
+fn-tail after a returned bool.
+
+**Why this is a new class:**
+- P3.267 / P3.278 greened mid-`match map.get` defer-drop for full match expr.
+- Distinct: `Some(_)` → `matches!` + spawn after bool expr.
+
+**What became unnecessary:** package `Some(v)` / `if let` peels for `has`.
+
+**Gates:** tip-session 02:10 isolate transpile + cargo check E0308; test filed.
+
+**Do not steal:** P3.267/P3.278, P3.671–P3.675 (filed).
+
 ## P3.675 (2026-10-05) — TDD WDB-452 (DB agent; no compiler src)
 
 Copy `f32` **formal** into **local reassignment** must not `.clone()`; product emits
