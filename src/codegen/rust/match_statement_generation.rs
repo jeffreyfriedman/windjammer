@@ -12,24 +12,146 @@ use crate::parser::*;
 use super::{pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// P3.642: walk nested `Match` / `Let` / `If` / loops — export nests
+    /// `decode_store(snapshot)` under `match todos_to_json` inside the Ok arm;
+    /// skipping those stmts left first-use move + late `.clone()` (E0382).
     fn match_arm_body_uses_binding(body: &Expression, name: &str) -> bool {
         match body {
-            Expression::Block { statements, .. } => statements.iter().any(|s| match s {
-                Statement::Return { value: Some(e), .. }
-                | Statement::Expression { expr: e, .. } => {
-                    Self::match_arm_body_uses_binding(e, name)
-                }
-                _ => false,
-            }),
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| Self::match_arm_statement_uses_binding(s, name)),
             Expression::Identifier { name: id, .. } => id == name,
-            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-                arguments
-                    .iter()
-                    .any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::match_arm_body_uses_binding(function, name)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
             }
-            Expression::Tuple { elements, .. } => elements
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                Self::match_arm_body_uses_binding(object, name)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|e| Self::match_arm_body_uses_binding(e, name)),
+            Expression::Binary { left, right, .. } | Expression::Range { start: left, end: right, .. } => {
+                Self::match_arm_body_uses_binding(left, name)
+                    || Self::match_arm_body_uses_binding(right, name)
+            }
+            Expression::Unary { operand, .. } => Self::match_arm_body_uses_binding(operand, name),
+            Expression::FieldAccess { object, .. } => {
+                Self::match_arm_body_uses_binding(object, name)
+            }
+            Expression::Index { object, index, .. } => {
+                Self::match_arm_body_uses_binding(object, name)
+                    || Self::match_arm_body_uses_binding(index, name)
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, e)| Self::match_arm_body_uses_binding(e, name)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                Self::match_arm_body_uses_binding(k, name)
+                    || Self::match_arm_body_uses_binding(v, name)
+            }),
+            Expression::Closure { body, .. } => Self::match_arm_body_uses_binding(body, name),
+            Expression::Cast { expr, .. }
+            | Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. }
+            | Expression::AsyncCall { expr, .. }
+            | Expression::SpawnCall { expr, .. }
+            | Expression::ChannelRecv { channel: expr, .. } => {
+                Self::match_arm_body_uses_binding(expr, name)
+            }
+            Expression::ChannelSend {
+                channel, value, ..
+            } => {
+                Self::match_arm_body_uses_binding(channel, name)
+                    || Self::match_arm_body_uses_binding(value, name)
+            }
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|e| Self::match_arm_body_uses_binding(e, name)),
+            Expression::Literal { .. } => false,
+        }
+    }
+
+    fn match_arm_statement_uses_binding(stmt: &Statement, name: &str) -> bool {
+        match stmt {
+            Statement::Return { value: Some(e), .. }
+            | Statement::Expression { expr: e, .. }
+            | Statement::Const { value: e, .. }
+            | Statement::Static { value: e, .. } => Self::match_arm_body_uses_binding(e, name),
+            Statement::Let {
+                value,
+                else_block,
+                ..
+            } => {
+                Self::match_arm_body_uses_binding(value, name)
+                    || else_block.as_ref().is_some_and(|stmts| {
+                        stmts
+                            .iter()
+                            .any(|s| Self::match_arm_statement_uses_binding(s, name))
+                    })
+            }
+            Statement::Assignment { target, value, .. } => {
+                Self::match_arm_body_uses_binding(target, name)
+                    || Self::match_arm_body_uses_binding(value, name)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::match_arm_body_uses_binding(condition, name)
+                    || then_block
+                        .iter()
+                        .any(|s| Self::match_arm_statement_uses_binding(s, name))
+                    || else_block.as_ref().is_some_and(|stmts| {
+                        stmts
+                            .iter()
+                            .any(|s| Self::match_arm_statement_uses_binding(s, name))
+                    })
+            }
+            Statement::Match { value, arms, .. } => {
+                Self::match_arm_body_uses_binding(value, name)
+                    || arms.iter().any(|arm| {
+                        arm.guard
+                            .is_some_and(|g| Self::match_arm_body_uses_binding(g, name))
+                            || Self::match_arm_body_uses_binding(arm.body, name)
+                    })
+            }
+            Statement::For {
+                iterable, body, ..
+            }
+            | Statement::While {
+                condition: iterable,
+                body,
+                ..
+            } => {
+                Self::match_arm_body_uses_binding(iterable, name)
+                    || body
+                        .iter()
+                        .any(|s| Self::match_arm_statement_uses_binding(s, name))
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => body
+                .iter()
+                .any(|s| Self::match_arm_statement_uses_binding(s, name)),
+            Statement::Defer { statement, .. } => {
+                Self::match_arm_statement_uses_binding(statement, name)
+            }
             _ => false,
         }
     }

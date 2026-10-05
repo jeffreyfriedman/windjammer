@@ -590,9 +590,67 @@ impl AutoCloneAnalysis {
 
     fn statement_uses_binding(stmt: &Statement, name: &str) -> bool {
         match stmt {
-            Statement::Return { value: Some(e), .. } => Self::expression_uses_binding(e, name),
-            Statement::Expression { expr, .. } => Self::expression_uses_binding(expr, name),
-            Statement::Let { value, .. } => Self::expression_uses_binding(value, name),
+            Statement::Return { value: Some(e), .. }
+            | Statement::Expression { expr: e, .. }
+            | Statement::Const { value: e, .. }
+            | Statement::Static { value: e, .. } => Self::expression_uses_binding(e, name),
+            Statement::Let {
+                value,
+                else_block,
+                ..
+            } => {
+                Self::expression_uses_binding(value, name)
+                    || else_block.as_ref().is_some_and(|stmts| {
+                        stmts.iter().any(|s| Self::statement_uses_binding(s, name))
+                    })
+            }
+            Statement::Assignment { target, value, .. } => {
+                Self::expression_uses_binding(target, name)
+                    || Self::expression_uses_binding(value, name)
+            }
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
+                Self::expression_uses_binding(condition, name)
+                    || then_block
+                        .iter()
+                        .any(|s| Self::statement_uses_binding(s, name))
+                    || else_block.as_ref().is_some_and(|stmts| {
+                        stmts.iter().any(|s| Self::statement_uses_binding(s, name))
+                    })
+            }
+            // P3.642: nested match in Ok arm reuses scrutinee call args
+            // (`match decode_store(snapshot)` under `match todos_to_json`).
+            Statement::Match { value, arms, .. } => {
+                Self::expression_uses_binding(value, name)
+                    || arms.iter().any(|arm| {
+                        arm.guard
+                            .is_some_and(|g| Self::expression_uses_binding(g, name))
+                            || Self::match_arm_reuses_binding(arm.body, name)
+                    })
+            }
+            Statement::For {
+                iterable, body, ..
+            }
+            | Statement::While {
+                condition: iterable,
+                body,
+                ..
+            } => {
+                Self::expression_uses_binding(iterable, name)
+                    || body
+                        .iter()
+                        .any(|s| Self::statement_uses_binding(s, name))
+            }
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                body.iter().any(|s| Self::statement_uses_binding(s, name))
+            }
+            Statement::Defer { statement, .. } => Self::statement_uses_binding(statement, name),
             _ => false,
         }
     }
@@ -600,26 +658,166 @@ impl AutoCloneAnalysis {
     fn expression_uses_binding(expr: &Expression, name: &str) -> bool {
         match expr {
             Expression::Identifier { name: id, .. } => id == name,
-            Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
-                arguments
-                    .iter()
-                    .any(|(_, a)| Self::expression_uses_binding(a, name))
+            Expression::Block { statements, .. } => statements
+                .iter()
+                .any(|s| Self::statement_uses_binding(s, name)),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                Self::expression_uses_binding(function, name)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| Self::expression_uses_binding(a, name))
             }
-            Expression::Tuple { elements, .. } => elements
+            Expression::MethodCall {
+                object,
+                arguments,
+                ..
+            } => {
+                Self::expression_uses_binding(object, name)
+                    || arguments
+                        .iter()
+                        .any(|(_, a)| Self::expression_uses_binding(a, name))
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|e| Self::expression_uses_binding(e, name)),
+            Expression::Binary { left, right, .. }
+            | Expression::Range {
+                start: left,
+                end: right,
+                ..
+            } => {
+                Self::expression_uses_binding(left, name)
+                    || Self::expression_uses_binding(right, name)
+            }
+            Expression::Unary { operand, .. } => Self::expression_uses_binding(operand, name),
             Expression::FieldAccess { object, .. } => Self::expression_uses_binding(object, name),
-            _ => false,
+            Expression::Index { object, index, .. } => {
+                Self::expression_uses_binding(object, name)
+                    || Self::expression_uses_binding(index, name)
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, e)| Self::expression_uses_binding(e, name)),
+            Expression::MapLiteral { pairs, .. } => pairs.iter().any(|(k, v)| {
+                Self::expression_uses_binding(k, name) || Self::expression_uses_binding(v, name)
+            }),
+            Expression::Closure { body, .. } => Self::expression_uses_binding(body, name),
+            Expression::Cast { expr, .. }
+            | Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. }
+            | Expression::AsyncCall { expr, .. }
+            | Expression::SpawnCall { expr, .. }
+            | Expression::ChannelRecv { channel: expr, .. } => {
+                Self::expression_uses_binding(expr, name)
+            }
+            Expression::ChannelSend {
+                channel, value, ..
+            } => {
+                Self::expression_uses_binding(channel, name)
+                    || Self::expression_uses_binding(value, name)
+            }
+            Expression::MacroInvocation { args, .. } => {
+                args.iter().any(|e| Self::expression_uses_binding(e, name))
+            }
+            Expression::Literal { .. } => false,
         }
     }
 
     fn detect_match_scrutinee_reuse(statements: &[&Statement], analysis: &mut AutoCloneAnalysis) {
         let mut counter: usize = 0;
         for stmt in statements {
-            let idx = counter;
-            counter += 1;
-            if let Statement::Match { value, arms, .. } = stmt {
-                if let Expression::Identifier { name, .. } = value {
+            Self::detect_match_scrutinee_reuse_stmt(stmt, &mut counter, analysis);
+        }
+    }
+
+    /// P3.642: also walk Matches nested under `If` / arm blocks (todo-cli export/stats).
+    fn detect_match_scrutinee_reuse_stmt(
+        stmt: &Statement,
+        counter: &mut usize,
+        analysis: &mut AutoCloneAnalysis,
+    ) {
+        let idx = *counter;
+        *counter += 1;
+        if let Statement::Match { value, arms, .. } = stmt {
+            Self::record_match_scrutinee_arg_clones(value, arms, idx, analysis);
+            for arm in arms {
+                if let Expression::Block { statements, .. } = arm.body {
+                    for s in statements {
+                        Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
+                    }
+                }
+            }
+            return;
+        }
+        match stmt {
+            Statement::If {
+                then_block,
+                else_block,
+                ..
+            } => {
+                for s in then_block {
+                    Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
+                }
+                if let Some(e) = else_block {
+                    for s in e {
+                        Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
+                    }
+                }
+            }
+            Statement::While { body, .. }
+            | Statement::For { body, .. }
+            | Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => {
+                for s in body {
+                    Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
+                }
+            }
+            Statement::Let {
+                value,
+                else_block,
+                ..
+            } => {
+                if let Expression::Block { statements, .. } = value {
+                    for s in statements {
+                        Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
+                    }
+                }
+                if let Some(e) = else_block {
+                    for s in e {
+                        Self::detect_match_scrutinee_reuse_stmt(s, counter, analysis);
+                    }
+                }
+            }
+            Statement::Defer { statement, .. } => {
+                Self::detect_match_scrutinee_reuse_stmt(statement, counter, analysis);
+            }
+            _ => {}
+        }
+    }
+
+    fn record_match_scrutinee_arg_clones(
+        value: &Expression,
+        arms: &[crate::parser::MatchArm],
+        idx: usize,
+        analysis: &mut AutoCloneAnalysis,
+    ) {
+        if let Expression::Identifier { name, .. } = value {
+            let reused = arms
+                .iter()
+                .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
+            if reused {
+                analysis
+                    .clone_sites
+                    .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
+            }
+        } else if let Expression::Call { arguments, .. } = value {
+            for (_label, arg) in arguments {
+                if let Expression::Identifier { name, .. } = arg {
                     let reused = arms
                         .iter()
                         .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
@@ -628,95 +826,21 @@ impl AutoCloneAnalysis {
                             .clone_sites
                             .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
                     }
-                } else if let Expression::Call { arguments, .. } = value {
-                    for (_label, arg) in arguments {
-                        if let Expression::Identifier { name, .. } = arg {
-                            let reused = arms
-                                .iter()
-                                .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
-                            if reused {
-                                analysis
-                                    .clone_sites
-                                    .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
-                            }
-                        }
-                    }
-                } else if let Expression::MethodCall { arguments, .. } = value {
-                    for (_label, arg) in arguments {
-                        if let Expression::Identifier { name, .. } = arg {
-                            let reused = arms
-                                .iter()
-                                .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
-                            if reused {
-                                analysis
-                                    .clone_sites
-                                    .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
-                            }
-                        }
+                }
+            }
+        } else if let Expression::MethodCall { arguments, .. } = value {
+            for (_label, arg) in arguments {
+                if let Expression::Identifier { name, .. } = arg {
+                    let reused = arms
+                        .iter()
+                        .any(|arm| Self::match_arm_reuses_binding(arm.body, name));
+                    if reused {
+                        analysis
+                            .clone_sites
+                            .insert((name.clone(), idx), CloneReason::MovedButUsedLater);
                     }
                 }
             }
-            Self::walk_stmt_for_counter(stmt, &mut counter);
-        }
-    }
-
-    fn walk_stmt_for_counter(stmt: &Statement, counter: &mut usize) {
-        match stmt {
-            Statement::If {
-                then_block,
-                else_block,
-                ..
-            } => {
-                for s in then_block {
-                    Self::collect_usages_from_statement(
-                        s,
-                        counter,
-                        false,
-                        &mut HashMap::new(),
-                        None,
-                    );
-                }
-                if let Some(e) = else_block {
-                    for s in e {
-                        Self::collect_usages_from_statement(
-                            s,
-                            counter,
-                            false,
-                            &mut HashMap::new(),
-                            None,
-                        );
-                    }
-                }
-            }
-            Statement::While { body, .. }
-            | Statement::For { body, .. }
-            | Statement::Loop { body, .. } => {
-                for s in body {
-                    Self::collect_usages_from_statement(
-                        s,
-                        counter,
-                        false,
-                        &mut HashMap::new(),
-                        None,
-                    );
-                }
-            }
-            Statement::Match { arms, .. } => {
-                for arm in arms {
-                    if let Expression::Block { statements, .. } = arm.body {
-                        for s in statements {
-                            Self::collect_usages_from_statement(
-                                s,
-                                counter,
-                                false,
-                                &mut HashMap::new(),
-                                None,
-                            );
-                        }
-                    }
-                }
-            }
-            _ => {}
         }
     }
 
@@ -2158,6 +2282,140 @@ mod tests {
         assert!(
             analysis.needs_clone_anywhere("expr"),
             "P3.574: Ok(expr) arm reuse must schedule clone; sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn p3642_nested_match_scrutinee_arg_reuse_under_if_needs_clone() {
+        // export shape: if … { let snapshot = …; match decode(snapshot) { Ok => {
+        //   match other { Ok => { match decode(snapshot) … } } } } }
+        let inner_decode = test_alloc_stmt(Statement::Match {
+            value: test_alloc_expr(Expression::Call {
+                function: test_alloc_expr(Expression::Identifier {
+                    name: "decode_store".to_string(),
+                    location: None,
+                }),
+                arguments: vec![(
+                    None,
+                    test_alloc_expr(Expression::Identifier {
+                        name: "snapshot".to_string(),
+                        location: None,
+                    }),
+                )],
+                location: None,
+            }),
+            arms: vec![crate::parser::MatchArm {
+                pattern: Pattern::EnumVariant(
+                    "Ok".to_string(),
+                    crate::parser::EnumPatternBinding::Wildcard,
+                ),
+                guard: None,
+                body: test_alloc_expr(Expression::Literal {
+                    value: Literal::Bool(true),
+                    location: None,
+                }),
+            }],
+            location: None,
+        });
+        let middle_match = test_alloc_stmt(Statement::Match {
+            value: test_alloc_expr(Expression::Call {
+                function: test_alloc_expr(Expression::Identifier {
+                    name: "todos_to_json".to_string(),
+                    location: None,
+                }),
+                arguments: vec![],
+                location: None,
+            }),
+            arms: vec![crate::parser::MatchArm {
+                pattern: Pattern::EnumVariant(
+                    "Ok".to_string(),
+                    crate::parser::EnumPatternBinding::Single("body".to_string()),
+                ),
+                guard: None,
+                body: test_alloc_expr(Expression::Block {
+                    statements: vec![inner_decode],
+                    location: None,
+                    is_unsafe: false,
+                }),
+            }],
+            location: None,
+        });
+        let outer_match = test_alloc_stmt(Statement::Match {
+            value: test_alloc_expr(Expression::Call {
+                function: test_alloc_expr(Expression::Identifier {
+                    name: "decode_store".to_string(),
+                    location: None,
+                }),
+                arguments: vec![(
+                    None,
+                    test_alloc_expr(Expression::Identifier {
+                        name: "snapshot".to_string(),
+                        location: None,
+                    }),
+                )],
+                location: None,
+            }),
+            arms: vec![crate::parser::MatchArm {
+                pattern: Pattern::EnumVariant(
+                    "Ok".to_string(),
+                    crate::parser::EnumPatternBinding::Single("copy".to_string()),
+                ),
+                guard: None,
+                body: test_alloc_expr(Expression::Block {
+                    statements: vec![middle_match],
+                    location: None,
+                    is_unsafe: false,
+                }),
+            }],
+            location: None,
+        });
+        let func = FunctionDecl {
+            name: "export".to_string(),
+            is_pub: false,
+            is_extern: false,
+            parameters: vec![],
+            return_type: None,
+            return_decorators: Vec::new(),
+            type_params: vec![],
+            where_clause: vec![],
+            decorators: vec![],
+            is_async: false,
+            parent_type: None,
+            impl_trait: None,
+            doc_comment: None,
+            body: vec![
+                test_alloc_stmt(Statement::Let {
+                    pattern: Pattern::Identifier("snapshot".to_string()),
+                    mutable: false,
+                    type_: Some(Type::String),
+                    value: test_alloc_expr(Expression::Call {
+                        function: test_alloc_expr(Expression::Identifier {
+                            name: "encode_store".to_string(),
+                            location: None,
+                        }),
+                        arguments: vec![],
+                        location: None,
+                    }),
+                    else_block: None,
+                    location: None,
+                }),
+                test_alloc_stmt(Statement::If {
+                    condition: test_alloc_expr(Expression::Literal {
+                        value: Literal::Bool(true),
+                        location: None,
+                    }),
+                    then_block: vec![outer_match],
+                    else_block: None,
+                    location: None,
+                }),
+            ],
+        };
+
+        let analysis = AutoCloneAnalysis::analyze_function(&func);
+        assert!(
+            analysis.needs_clone_anywhere("snapshot"),
+            "P3.642: first decode_store(snapshot) under nested match must clone; sites={:?}",
             analysis.clone_sites
         );
     }
