@@ -1,6 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.677 (2026-10-05) — TDD WDB-453 (DB agent; no compiler src)
+
+Copy `f32` **indexed field** on return must not `.clone()`; product emits
+`return self.pass_timings[index].avg_ms.clone()` in gpu_profiler.
+
+| Gate | Status |
+|------|--------|
+| WDB-453 MultiFile | ⏳ TDD pending — bare `avg_ms` |
+| WDB-453 tip-out | ⏳ TDD pending — `avg_ms.clone()` in gpu_profiler |
+
+**Root cause layer:** copy / f32-indexed-field-return — Copy `f32` indexed struct fields returned must not auto-clone.
+
+**Why this is a new class:**
+- WDB-439 is i32 indexed **tuple** field return.
+- WDB-435 is u32 **field** return (non-indexed).
+- WDB-346 is f32 field in expr (camera), not indexed return.
+
+**What became unnecessary:** `avg_ms.clone()` in GpuProfiler::timing_avg_ms_at.
+
+**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` (2026-10-05)
+
+**Do not steal:** WDB-406/408/411/452–453, P3.508–P3.676, WDB-412–453 (filed).
+
 ## P3.676 (2026-10-05) — HashMap `has` `Some(_)` → `matches!` + DEFER DROP spawn
 
 Owned `HashMap` helper:
