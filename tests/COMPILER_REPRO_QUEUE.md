@@ -1,6 +1,38 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.680 (2026-10-05) — TDD WDB-454 (DB agent; no compiler src)
+
+Copy `f32` **local** into **local reassignment** must not `.clone()`.
+
+Product `frame_analysis.rs` histogram:
+```wj
+let lum = luminance(...)
+if lum < min_val { min_val = lum }
+```
+Tip-out emits `min_val = lum.clone()` / `max_val = lum.clone()`.
+WJ source uses bare `lum`.
+
+| Gate | Status |
+|------|--------|
+| WDB-454 MultiFile | ✅ isolate GREEN — `min_val = lum` (no `.clone()`) |
+| WDB-454 tip-out | ❌ tip RED — `lum.clone()` in `rel_tip_out/frame_analysis.rs` (+ object_pool) |
+
+**Root cause layer:** Copy peel / local-reassign — f32 **local** (not formal) assigned into another local must stay bare Copy.
+
+**Why this is a new class:**
+- WDB-452 is f32 **formal** into local reassign (`content_x.clone()`).
+- WDB-445 is f32 **formal** into **let**.
+- WDB-440 is f32 local into **struct literal**.
+- WDB-448 is f32 formal into **field**.
+- This is f32 **local** into **local reassignment**.
+
+**What became unnecessary:** rewriting extrema loops to avoid local reassignment.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb454_` — isolate GREEN / tip RED (2026-10-05).
+
+**Do not steal:** WDB-406/408/411/453–454, P3.508–P3.680, WDB-412–454 (filed).
+
 ## P3.679 (2026-10-05) — `while i < 64` literal + substring must unify int/usize
 
 `wj-sha` fixed-width hex scan:
