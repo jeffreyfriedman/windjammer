@@ -102,6 +102,27 @@ impl<'ast> CodeGenerator<'ast> {
                         .or(method_signature.as_ref());
                     if let Some(sig) = sig {
                         let pidx = sig.arg_param_index(i);
+                        // P3.312 / auto_mut: MutBorrowed / `&mut Vec` must stay `&mut buf`.
+                        // WJ AST still says bare `Vec` — do not treat that as an owned slot
+                        // (P3.647 clone path was rewriting `&mut buf` → `buf.clone()`).
+                        let mut_ref_slot = matches!(
+                            sig.param_ownership.get(pidx),
+                            Some(OwnershipMode::MutBorrowed)
+                        ) || sig.formal_param_type(pidx).is_some_and(|t| {
+                            matches!(t, Type::MutableReference(_))
+                        }) || sig.param_types.get(pidx).is_some_and(|t| {
+                            matches!(t, Type::MutableReference(_))
+                        });
+                        if mut_ref_slot {
+                            let base =
+                                crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                    &arg_str,
+                                );
+                            if !arg_str.starts_with("&mut ") {
+                                return format!("&mut {base}");
+                            }
+                            return arg_str;
+                        }
                         let ast_owned_vec_or_custom = receiver_type_name.as_ref().is_some_and(|rt| {
                             self.struct_method_ast_formal_param_types
                                 .get(rt.as_str())
@@ -171,6 +192,10 @@ impl<'ast> CodeGenerator<'ast> {
                                         &p.type_,
                                     )
                             });
+                            // Never rewrite an already-correct `&mut` arg into `.clone()`.
+                            if arg_str.starts_with("&mut ") {
+                                return arg_str;
+                            }
                             if clone_required
                                 || (arg_str.starts_with('&')
                                     && !arg_str.starts_with("&mut ")
