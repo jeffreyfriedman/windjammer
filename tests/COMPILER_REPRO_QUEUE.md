@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.668 (2026-10-04) — multipass `json::is_array`/`len` must not `&v.clone()`
+
+Multipass `json.is_array(v)` / `json.len(v)` on owned `Value` emitted
+`&v.clone()` into `&Value` formals (single-file already `&v`). WJ owned stubs
+made auto_clone treat args as Move; runtime-std baseline is Borrowed.
+
+| Gate | Status |
+|------|--------|
+| `json_get_owned_value_multipass_must_cargo_check` | ✅ tip GREEN — `is_array(&v)` / `len(&v)` |
+| `json_is_array_len_owned_value_multipass_must_cargo_check` | ✅ tip GREEN — `is_array(&root)` / `len(&root)` |
+
+**Root cause layer:** constraint/reuse — `auto_clone` Call/MethodCall arg usage
+must resolve `json::is_array` via runtime-std borrow baseline (not WJ Owned stub)
+so reuse is Read, not Move→`.clone()`.
+
+**What became unnecessary:** `&v.clone()` / `&root.clone()` at shared `&Value` slots;
+no new `ir_call_site` peel.
+
+**Gates:**
+- `CARGO_TARGET_DIR=…/.cargo-target-p3642-json cargo test --release --test all --features integration_tests -- json_get_owned_value_multipass_must_cargo_check json_is_array_len_owned_value_multipass_must_cargo_check reused_owned_string_into_owned_formal_must_clone_first_use` → **3 passed**
+
+**Do not steal:** P3.666 notes qs_get (other agent WIP); WDB tip-out Copy-clone lag.
+
 ## P3.667 (2026-10-04) — TDD WDB-450 (DB agent; no compiler src)
 
 Copy `u32` **formal** into **indexed field** assign must not `.clone()`; product emits

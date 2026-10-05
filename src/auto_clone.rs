@@ -526,7 +526,16 @@ impl AutoCloneAnalysis {
             }
             saw_candidate = true;
             let pidx = sig.arg_param_index(arg_index);
-            if Self::sig_arg_is_shared_borrow_formal(sig, pidx) {
+            // Runtime-std baseline (`json::is_array` `&Value`) beats WJ owned stubs so
+            // reuse analysis records Read — not Move → `&v.clone()` (json multipass).
+            if Self::sig_arg_is_shared_borrow_formal(sig, pidx)
+                || crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                    registry,
+                    &sig.name,
+                    Some(sig),
+                    arg_index,
+                )
+            {
                 continue;
             }
             any_owned_move = true;
@@ -555,10 +564,19 @@ impl AutoCloneAnalysis {
         let Some(callee_name) = Self::callee_name_from_call_function(function) else {
             return UsageKind::Move;
         };
-        let simple = callee_name.rsplit("::").next().unwrap_or(&callee_name);
+        Self::free_call_arg_usage_kind_by_name(&callee_name, arg_index, arg_count, registry)
+    }
+
+    fn free_call_arg_usage_kind_by_name(
+        callee_name: &str,
+        arg_index: usize,
+        arg_count: usize,
+        registry: &crate::analyzer::SignatureRegistry,
+    ) -> UsageKind {
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         let Some(sig) = registry
-            .get_signature(&callee_name)
-            .or_else(|| registry.lookup_method(&callee_name))
+            .get_signature(callee_name)
+            .or_else(|| registry.lookup_method(callee_name))
             .or_else(|| registry.find_signature_ending_with(simple))
         else {
             return UsageKind::Move;
@@ -572,7 +590,14 @@ impl AutoCloneAnalysis {
             return UsageKind::Move;
         }
         let pidx = sig.arg_param_index(arg_index);
-        if Self::sig_arg_is_shared_borrow_formal(sig, pidx) {
+        if Self::sig_arg_is_shared_borrow_formal(sig, pidx)
+            || crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
+                registry,
+                callee_name,
+                Some(sig),
+                arg_index,
+            )
+        {
             UsageKind::Read
         } else {
             UsageKind::Move
@@ -967,8 +992,21 @@ impl AutoCloneAnalysis {
                         registry,
                     );
                     for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
-                        let arg_kind =
-                            Self::method_call_arg_usage_kind(method, i, arguments.len(), registry);
+                        // Prefer `json::is_array` over bare method-name homonyms so
+                        // runtime-std `&Value` wins over WJ owned stubs (json multipass).
+                        let arg_kind = if let (Some(registry), Expression::Identifier { name: module, .. }) =
+                            (registry, &**object)
+                        {
+                            let qualified = format!("{module}::{method}");
+                            Self::free_call_arg_usage_kind_by_name(
+                                &qualified,
+                                i,
+                                arguments.len(),
+                                registry,
+                            )
+                        } else {
+                            Self::method_call_arg_usage_kind(method, i, arguments.len(), registry)
+                        };
                         Self::collect_usages_from_expression(
                             arg_expr, idx, arg_kind, in_loop, map, registry,
                         );
@@ -1040,10 +1078,21 @@ impl AutoCloneAnalysis {
                 );
                 for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
                     // Signature-driven: owned formals move (need `.clone()` on reuse).
-                    // Do NOT treat every method named `get`/`remove` as a HashMap key borrow —
-                    // trait methods like `StorageEngine::get(txn: Txn, key)` take owned args.
-                    let arg_kind =
-                        Self::method_call_arg_usage_kind(method, i, arguments.len(), registry);
+                    // Module-qualified `json.is_array(v)` must use `json::is_array` so
+                    // runtime-std `&Value` beats WJ owned stubs (multipass clone bug).
+                    let arg_kind = if let (Some(registry), Expression::Identifier { name: module, .. }) =
+                        (registry, &**object)
+                    {
+                        let qualified = format!("{module}::{method}");
+                        Self::free_call_arg_usage_kind_by_name(
+                            &qualified,
+                            i,
+                            arguments.len(),
+                            registry,
+                        )
+                    } else {
+                        Self::method_call_arg_usage_kind(method, i, arguments.len(), registry)
+                    };
                     Self::collect_usages_from_expression(
                         arg_expr, idx, arg_kind, in_loop, map, registry,
                     );
