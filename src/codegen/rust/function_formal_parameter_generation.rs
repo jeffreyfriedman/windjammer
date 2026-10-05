@@ -4500,6 +4500,11 @@ impl<'ast> CodeGenerator<'ast> {
         if !func.is_pub || param.name == "self" || func.parent_type.is_some() {
             return false;
         }
+        // P3.669: pure Custom→same-type shared-ref forwarders (`take_field` →
+        // `json.get(&Value)`) demote even when multipass promotes the helper to pub.
+        if self.param_pure_custom_same_type_shared_ref_should_demote(param, func) {
+            return false;
+        }
         // WDB-175/190: pub `Vec` wire/decode/on_startup APIs stay owned when multipass
         // `restore_pub_owned_non_copy_api_formals` locked the registry to Owned.
         // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry

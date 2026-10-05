@@ -43,6 +43,10 @@ impl<'ast> CodeGenerator<'ast> {
             if self.non_copy_types_registry.contains(name.as_str())
                 || self.non_copy_types_registry.contains(base)
                 || self.signature_registry.runtime_type_is_non_copy(name)
+                // Stdlib baseline: `pub use serde_json::Value` is non-Copy even when a
+                // layered registry / empty WJ stub has not merged that fact (P3.669).
+                || crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_copy(name)
+                || crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_copy(base)
             {
                 return false;
             }

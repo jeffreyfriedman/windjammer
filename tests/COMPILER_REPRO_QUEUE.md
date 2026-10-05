@@ -1,6 +1,33 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.671 (2026-10-04) — notes-api qs_get query must not `format!("{}", query)`
+
+Product `wj-notes-api` tip shared 23:55: `pretty`/`encoding` pass demoted `query`
+bare into `qs_get`, but `q`/`limit` still emit
+`{ let _temp0 = format!("{}", query); qs_get(_temp0, "q") }`. Do not reshape
+the app with manual clones / rebinds.
+
+| Gate | Status |
+|------|--------|
+| `notes_api_product_qs_get_query_must_not_format_temp` | ❌ tip RED — `format!("{}", query)` on `q`/`limit` sites (tip 23:55) |
+
+**Root cause layer:** ownership / demoted-string call-site — reused demoted
+`&str`/`string` formal into owned `string` path-dep param should borrow or
+`.to_string()` once; must not insert `format!("{}", …)` identity temps on some
+sites only.
+
+**Why this is a new class:**
+- P3.666 greened key literals (`"pretty"` not `.to_string()`).
+- Distinct: first-arg `query` ownership still inconsistent across sibling calls.
+
+**What became unnecessary:** app-side `own(query)` / `format!("{}", query)`.
+
+**Gates:** tip shared 23:55 product transpile shows format temps on `q`/`limit`
+only; gate asserts no `format!("{}", query)` in `domain/api.rs`.
+
+**Do not steal:** P3.666, P3.486/P3.489, P3.642, P3.660, P3.669–P3.670 (filed).
+
 ## P3.670 (2026-10-04) — TDD WDB-451 (DB agent; no compiler src)
 
 Copy `i64` **formal** into field assign must not `.clone()`; product emits
@@ -38,17 +65,20 @@ while-loop where `take_field(value: Value, …)` stayed owned (body only
 | isolate `json_merge_overlay_loop_reuse_must_cargo_check` | ✅ tip GREEN — `take_field(value: &Value)` |
 | product `json_util_product_merge_values_must_cargo_check` | ✅ tip GREEN — demoted formal + `&overlay` |
 
-**Root cause layer:** signature / formal demotion — WDB-101 cross-module keep-owned
-+ WDB-102 `forces_owned` treated `Value`→`json.get(&Value)` like Vec→`&[T]`. Pure
-Custom→same-type shared-ref forwarders now demote; `forces_owned` narrowed to
-Vec/map/set containers only.
+**Root cause layer:** signature — `pub use serde_json::Value` was exported but not
+registered non-Copy; empty WJ `struct Value {}` won Copy inference and blocked
+borrow-delegation (`is_type_copy(Value)`). Multipass also resolved MethodCall
+`json.get` as bare `get` Owned stub, so demotion missed the `json::get` runtime
+baseline until module-qualified `runtime_std_param_needs_auto_borrow_resolved`.
 
-**What became unnecessary:** package-local `overlay.clone()` / loop peels;
-no new `ir_call_site` reconcile.
+**What became unnecessary:** overlay move / loop peels; no new `ir_call_site`
+reconcile. Payload-store false positive on bare `get` Owned stub narrowed via
+runtime-std key.
 
 **Gates:**
-- `cargo test --release --test all --features integration_tests -- json_merge_overlay_loop_reuse json_util_product_merge` → **2 passed**
-- Related: `json_get_owned_value_multipass` / `json_is_array_len_owned_value_multipass` → **passed** (P3.668 hold)
+- `cargo test --release --test all --features integration_tests -- json_merge_overlay_loop_reuse` → **2 passed** (isolate + product)
+- `cargo test --release -p windjammer --lib -- csv_wj_name_maps_to_csv_mod_rust_stem` → **ok** (Value non-Copy)
+- Related: `json_is_array_len_owned_value_multipass` → **passed** (P3.668 hold)
 
 **Do not steal:** P3.661/P3.668, P3.666–P3.668, WDB-448–450 (filed).
 
@@ -595,8 +625,9 @@ had `forwarding_borrow` forcing `&clips` into owned formals.
 | unit `p3647_recursive_owned_vec_param_needs_clone` | ✅ GREEN |
 | unit `p3647_parsed_source_needs_clone_on_first_recursive_clips` | ✅ GREEN |
 | MultiFile `reused_owned_vec_formal_must_not_reborrow_recursive` | ✅ tip GREEN — `clips.clone()` |
-| product `owned_vec_formal_beats_forwarding_borrow_product_blend_tree` | ✅ tip GREEN (P3.647b) |
-| tip `animation/blend_tree` evaluate_node | ⏳ tip rebuild |
+| isolate `owned_vec_formal_with_forwarding_borrow_must_not_reborrow` | ✅ tip GREEN |
+| product tip `blend_tree` evaluate_node (P3.647b/c) | ❌ tip RED — owned formal + `&clips` call sites; metadata params duplicated (9≠5) |
+| tip `animation/blend_tree` evaluate_node | ❌ tip RED (same) |
 
 **Root cause layer:** constraint/reuse — `self.evaluate_node` parses as
 `Call(FieldAccess)`; `runtime_std_param_needs_auto_borrow_resolved` flipped bare

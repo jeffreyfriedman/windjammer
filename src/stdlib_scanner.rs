@@ -199,6 +199,12 @@ fn scan_rust_file(
         if brace_depth == 0 {
             if let Some(type_name) = parse_exported_type_name(trimmed) {
                 registry.register_runtime_exported_type(module_name, &type_name);
+                // `pub use serde_json::Value` (and similar re-exports) are not Copy.
+                // Without this, empty WJ stubs (`struct Value {}` in std/json.wj) win
+                // empty-struct Copy inference and block `&Value` demotion (P3.669).
+                if trimmed.starts_with("pub use ") {
+                    registry.register_runtime_non_copy_type(&type_name);
+                }
             }
             if current_struct.is_none() {
                 if let Some(struct_name) = parse_named_struct_start(trimmed) {
@@ -1447,6 +1453,10 @@ mod tests {
         assert!(
             json_types.iter().any(|t| *t == "Value"),
             "json pub use Value must be a scanned export, got {json_types:?}"
+        );
+        assert!(
+            crate::analyzer::SignatureRegistry::stdlib().runtime_type_is_non_copy("Value"),
+            "P3.669: json::Value re-export must be non-Copy (not empty WJ stub Copy)"
         );
         let http_types =
             crate::analyzer::SignatureRegistry::stdlib().runtime_exported_types_for_module("http");
