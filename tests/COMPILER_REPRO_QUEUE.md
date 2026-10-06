@@ -1,3 +1,25 @@
+## P3.686 (2026-10-05) — method `&mut` passthrough must not stack `&mut`
+
+`Host::run(csr: &mut DenseCsr)` calling `self.take_edges(csr)` emitted
+`self.take_edges(&mut csr)` (`&&mut DenseCsr`, E0308). Free-fn passthrough
+already bare. IR MutBorrow + finalize mut_ref_slot prefixed despite already-mut formal.
+
+| Gate | Status |
+|------|--------|
+| `mut_param_method_passthrough_must_not_prefix_shared_amp` | ✅ tip GREEN — `self.take_edges(csr)` |
+| `mut_param_passthrough_must_not_prefix_shared_amp` | ✅ tip GREEN — free-fn hold |
+
+**Root cause layer:** coercion/encoding + temporary reconcile narrow —
+IR MutBorrow→Identity when `identifier_already_mut_ref`; finalize mut_ref_slot
+peels stacked `&mut` on already-mut bindings.
+
+**What became unnecessary:** `&mut csr` into method MutBorrowed formals that already
+emit `&mut DenseCsr`.
+
+**Gates:** `CARGO_TARGET_DIR=…/target-agent-tip-p3681` → `mut_param_*passthrough*` — **2 passed**.
+
+**Do not steal:** P3.676–P3.686 (filed).
+
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
@@ -31,6 +53,59 @@ WJ source uses bare `min_y` / `max_y`.
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb456_` — isolate GREEN / tip RED (2026-10-05).
 
 **Do not steal:** WDB-406/408/411/455–456, P3.508–P3.685, WDB-412–456 (filed).
+
+## P3.684 (2026-10-05) — owned `+ ""` into demoted `&str` formal must borrow
+
+LedgerKit `payload(id + "", ref + "")` where tip demotes `string` formals to
+`&str` passes owned `String` temps → E0308. Tip must auto-borrow.
+
+| Gate | Status |
+|------|--------|
+| `owned_plus_empty_into_demoted_str_formal_must_borrow` | ❌ tip RED — filing |
+
+**Root cause layer:** call-site / demotion — owned `+ ""` temps into demoted
+`&str` formals need IR Borrow.
+
+**What became unnecessary:** dropping `+ ""` at LedgerKit journal/audit call sites.
+
+**Gates:** `bug_owned_plus_empty_into_demoted_str_formal_must_borrow_test`.
+
+**Do not steal:** P3.178/P3.179, P3.681–P3.683 (filed).
+
+## P3.683 (2026-10-05) — `vec[i]` into owned struct formal must clone
+
+LedgerKit `less(out[j], out[j+1])` moves non-Copy index elems → E0507.
+Tip must clone into owned formals (P3.575 is owned-let reuse, not call-arg).
+
+| Gate | Status |
+|------|--------|
+| `vec_index_into_owned_struct_formal_must_clone` | ❌ tip RED — filing |
+
+**Root cause layer:** ownership / index — non-Copy `vec[i]` into owned call formal.
+
+**What became unnecessary:** reshaping sort to field-rank compares (product interim).
+
+**Gates:** `bug_vec_index_into_owned_struct_formal_must_clone_test`.
+
+**Do not steal:** P3.575, P3.682/P3.684 (filed).
+
+## P3.682 (2026-10-05) — `int` formal `==` HTTP status lit must not emit `_i32`
+
+LedgerKit `json_cors_error(status: int)` with `status == 401` emits
+`status: i64` vs `401_i32` (E0277). Tip must unify lit peers with the formal.
+
+| Gate | Status |
+|------|--------|
+| `int_formal_eq_http_status_lit_must_unify_width` | ❌ tip RED — filing |
+
+**Root cause layer:** int-width / compare — HTTP status lit peers of `int` formal.
+
+**What became unnecessary:** `http_status_eq(status, code)` helper (product interim).
+
+**Gates:** `bug_int_formal_eq_status_lit_must_not_emit_i32_test`.
+
+**Do not steal:** WDB-328/P3.403, P3.679–P3.681, P3.683–P3.684 (filed).
+
 
 ## WDB-455 (2026-10-05) — Copy i32 local into field assign must not `.clone()`
 
