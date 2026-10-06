@@ -50,14 +50,18 @@ impl<'ast> CodeGenerator<'ast> {
         if let Expression::Binary { left, right, .. } = condition {
             for id_expr in [left, right] {
                 if let Expression::Identifier { name, .. } = id_expr {
-                    let is_i32_local = matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Int32)
-                    ) || matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Custom(n)) if n == "i32"
-                    );
+                    let is_i32_local = self.codegen_i32_binding_names.contains(name.as_str())
+                        || matches!(
+                            self.local_var_types.get(name.as_str()),
+                            Some(Type::Int32)
+                        )
+                        || matches!(
+                            self.local_var_types.get(name.as_str()),
+                            Some(Type::Custom(n)) if n == "i32"
+                        );
                     if is_i32_local {
+                        // P3.679: index-prepass may stash `Custom("usize")` on the same
+                        // binding that let-emit chose as i32 — trust codegen_i32 / i32 local.
                         self.assignment_int_target_type = Some(Type::Int32);
                         break;
                     }

@@ -1505,12 +1505,28 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(Type::Int32);
         }
         if let Expression::Identifier { name, .. } = expr {
+            // P3.679: i32 / WJ-int loop counters beat stale `usize_variables` from
+            // substring/index formals — else `while i < 64` emits `64_usize` vs `i: i32`.
+            if self.codegen_i32_binding_names.contains(name) {
+                return Some(Type::Int32);
+            }
+            if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                matches!(t, Type::Int32)
+                    || matches!(t, Type::Custom(n) if n == "i32")
+            }) {
+                return Some(Type::Int32);
+            }
+            if self.literal_init_wj_int_loop_counters.contains(name)
+                && self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Int)
+                        || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                })
+            {
+                return Some(Type::Int);
+            }
             // usize index/len counters beat return-inferred Int32 (P3.311/P3.314).
             if self.usize_variables.contains(name) {
                 return Some(Type::Custom("usize".into()));
-            }
-            if self.codegen_i32_binding_names.contains(name) {
-                return Some(Type::Int32);
             }
             if let Some(w) = self.local_int_rust_type_name_excluding_ambiguous_int(name) {
                 return Self::parser_type_from_rust_int_name(w);
