@@ -78,17 +78,23 @@ LedgerKit `payload(id + "", ref + "")` where tip demotes `string` formals to
 
 LedgerKit `less(out[j], out[j+1])` moves non-Copy index elems → E0507.
 Tip must clone into owned formals (P3.575 is owned-let reuse, not call-arg).
-Swap path already clones; **call-arg** index still bare move.
 
 | Gate | Status |
 |------|--------|
-| `vec_index_into_owned_struct_formal_must_clone` | ❌ tip RED — `item_less((out[j]), (out[j+1]))` no `.clone()` |
+| `vec_index_into_owned_struct_formal_must_clone` | ✅ tip GREEN — `item_less((out[(j as usize)]).clone(), …)` |
 
-**Root cause layer:** ownership / index — non-Copy `vec[i]` into owned call formal.
+**Root cause layer:** (temporary) reconcile sanitize — `is_copy_scalar_numeric_cast`
+used `contains(" as usize")`, so `out[(j as usize)].clone()` was peeled as a
+Copy scalar cast (WDB-343 over-apply). Index emit already cloned; terminal
+sanitize dropped it. Narrowed to outermost `… as T` only. Also ordered
+`ensure_owned` Index clone before Borrowed→shared-ref early return.
 
-**What became unnecessary:** reshaping sort to field-rank compares (product interim).
+**What became unnecessary:** bare `item_less(out[j], out[j+1])` move; product
+field-rank compare reshape.
 
-**Gates:** `bug_vec_index_into_owned_struct_formal_must_clone_test` — **1 failed**.
+**Gates:** `bug_vec_index_into_owned_struct_formal_must_clone_test` +
+`codegen::rust::expression_utilities::tests::append_rust_clone_parenthesizes_casts`
+— **passed** (fixture `cargo check` clean).
 
 **Do not steal:** P3.575, P3.682/P3.684 (filed).
 

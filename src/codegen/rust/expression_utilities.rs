@@ -170,6 +170,9 @@ pub fn sanitize_mut_borrow_clone_temp(expr_str: &mut String) {
 /// attaches `.clone()` to the type name. Call this as a terminal sanitize.
 ///
 /// WDB-343: Copy scalar casts (`as i32` / `as usize` / …) never keep `.clone()`.
+///
+/// P3.683: must not treat nested casts inside indexing (`out[(j as usize)].clone()`)
+/// as scalar-cast clones — that wrongly peels the Index element clone (E0507).
 pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
     let t = expr.trim();
     if !t.ends_with(".clone()") || !t.contains(" as ") {
@@ -186,9 +189,10 @@ pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
         // Already parenthesized cast clone, or other `(…).clone()`.
         return t.to_string();
     }
-    // `n as usize` / `n as i64` / `(a + b) as f64` — whole-string cast.
-    if without_clone.contains(" as ") && !without_clone.ends_with(')') {
-        if is_copy_scalar_numeric_cast(&format!("({without_clone})")) {
+    // Outer cast only (`n as T` / `(a + b) as T`). Nested casts inside Index
+    // (`out[(j as usize)]`) must keep `.clone()` untouched (P3.683).
+    if is_outer_as_cast(without_clone) && !without_clone.ends_with(')') {
+        if is_copy_scalar_numeric_cast(without_clone) {
             return format!("({without_clone})");
         }
         return format!("({without_clone}).clone()");
@@ -196,23 +200,66 @@ pub fn sanitize_cast_trailing_clone(expr: &str) -> String {
     t.to_string()
 }
 
+/// True when the outermost form is `… as Type` (not a cast nested in Index/call).
+fn is_outer_as_cast(expr: &str) -> bool {
+    let t = peel_balanced_outer_parens(expr.trim());
+    let Some(idx) = t.rfind(" as ") else {
+        return false;
+    };
+    let rhs = t[idx + 4..].trim();
+    !rhs.is_empty()
+        && rhs
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':')
+}
+
+const COPY_SCALAR_CAST_TYPES: &[&str] = &[
+    "i32", "i64", "u32", "u64", "usize", "isize", "f32", "f64", "bool", "u8", "i8", "u16", "i16",
+];
+
+/// Peel balanced outer `(…)` layers. Stops when parens are not a matching wrapper.
+fn peel_balanced_outer_parens(expr: &str) -> &str {
+    let mut t = expr.trim();
+    while t.starts_with('(') && t.ends_with(')') {
+        let inner = &t[1..t.len() - 1];
+        let mut depth = 0i32;
+        let mut balanced = true;
+        for ch in inner.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth < 0 {
+                        balanced = false;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !balanced || depth != 0 {
+            break;
+        }
+        t = inner.trim();
+    }
+    t
+}
+
 /// True when `expr` is a numeric/`bool` cast whose result is always Copy.
+///
+/// Only outermost casts count: `n as usize` / `(n as i32)` yes;
+/// `out[(j as usize)]` no (cast is nested inside Index — P3.683).
 pub fn is_copy_scalar_numeric_cast(expr: &str) -> bool {
-    let t = expr.trim();
-    t.contains(" as ")
-        && (t.contains(" as i32")
-            || t.contains(" as i64")
-            || t.contains(" as u32")
-            || t.contains(" as u64")
-            || t.contains(" as usize")
-            || t.contains(" as isize")
-            || t.contains(" as f32")
-            || t.contains(" as f64")
-            || t.contains(" as bool")
-            || t.contains(" as u8")
-            || t.contains(" as i8")
-            || t.contains(" as u16")
-            || t.contains(" as i16"))
+    let t = peel_balanced_outer_parens(expr.trim());
+    for ty in COPY_SCALAR_CAST_TYPES {
+        let suffix = format!(" as {ty}");
+        if let Some(prefix) = t.strip_suffix(suffix.as_str()) {
+            if !prefix.trim_end().is_empty() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Append `.clone()` for owned pass, parenthesizing casts/compounds.
@@ -400,6 +447,17 @@ mod tests {
             sanitize_cast_trailing_clone("(n as i32).clone()"),
             "(n as i32)"
         );
+        // P3.683: nested index cast must keep the element `.clone()`.
+        assert_eq!(
+            sanitize_cast_trailing_clone("out[(j as usize)].clone()"),
+            "out[(j as usize)].clone()"
+        );
+        assert!(
+            !is_copy_scalar_numeric_cast("out[(j as usize)]"),
+            "Index with cast index is not a scalar cast"
+        );
+        assert!(is_copy_scalar_numeric_cast("j as usize"));
+        assert!(is_copy_scalar_numeric_cast("(j as usize)"));
     }
 
     #[test]
