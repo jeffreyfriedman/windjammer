@@ -88,6 +88,21 @@ impl<'ast> CodeGenerator<'ast> {
                     let Expression::Identifier { name, .. } = arg_expr else {
                         return arg_str;
                     };
+                    // WDB-367: unit constructors are never bindings — do not re-clone
+                    // after IR peel (`None` / `Value::None`).
+                    if name == "None"
+                        || name == "true"
+                        || name == "false"
+                        || name.ends_with("::None")
+                        || crate::type_classification::is_enum_variant_constructor_path(name)
+                        || crate::codegen::rust::expression_utilities::is_unit_constructor_rust_text(
+                            &arg_str,
+                        )
+                    {
+                        return crate::codegen::rust::expression_utilities::strip_unit_constructor_clone(
+                            &arg_str,
+                        );
+                    }
                     // P3.647: IR cutover skips the legacy ownership rewrite below.
                     // Still clone multi-use owned formals into owned slots here.
                     // Prefer codegen-refreshed Type::method / AST formals over a stale
@@ -1256,13 +1271,23 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(ownership, OwnershipMode::Owned) || callee_arg_emits_owned {
                         if let Some((_, arg_expr)) = arguments.get(i) {
                             if let Expression::Identifier { name, .. } = arg_expr {
-                                let auto_clone = self.auto_clone_analysis.as_ref().is_some_and(
-                                    |a| {
+                                let unit_ctor = name == "None"
+                                    || name == "true"
+                                    || name == "false"
+                                    || name.ends_with("::None")
+                                    || crate::type_classification::is_enum_variant_constructor_path(
+                                        name,
+                                    )
+                                    || crate::codegen::rust::expression_utilities::is_unit_constructor_rust_text(
+                                        &arg_str,
+                                    );
+                                let auto_clone = !unit_ctor
+                                    && self.auto_clone_analysis.as_ref().is_some_and(|a| {
                                         a.needs_clone(name, self.current_statement_idx).is_some()
                                             || a.needs_clone_anywhere(name)
-                                    },
-                                );
-                                let demoted_owned_outer = self.emitted_rust_ref_formals.contains(name)
+                                    });
+                                let demoted_owned_outer = !unit_ctor
+                                    && self.emitted_rust_ref_formals.contains(name)
                                     && self
                                         .current_function_params
                                         .iter()
@@ -1273,6 +1298,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 {
                                     arg_str =
                                         format!("{}.clone()", arg_str.trim_start_matches('&'));
+                                }
+                                if unit_ctor {
+                                    arg_str = crate::codegen::rust::expression_utilities::strip_unit_constructor_clone(
+                                        &arg_str,
+                                    );
                                 }
                             }
                         }

@@ -1,3 +1,29 @@
+## P3.690 (2026-10-06) — unit `None` / Copy field / owned-self move (no spurious `.clone()`)
+
+Tip-live isolates still cloned:
+- `tiles.push(None.clone())` / `Value::None.clone()` — finalize IR cutover re-cloned
+  after peel when `needs_clone_anywhere("None")` (WDB-367).
+- `out.push(self.vertices[i].position.clone())` — Copy Vec3 field (WDB-371).
+- `Vox::new(self.scene.clone())` with owned `mut self` — emit-owned self treated as
+  behind-ref via stale inferred mut-borrow / OwnershipHint::Mut (WDB-414).
+
+| Gate | Status |
+|------|--------|
+| `wdb367_module_file_none_must_not_emit_clone` | ✅ tip GREEN |
+| `wdb371_module_file_copy_vec3_field_must_not_double_clone` | ✅ tip GREEN |
+| `wdb414_module_file_ctor_must_move_self_field` | ✅ tip GREEN — `Vox::new(self.scene)` |
+
+**Root cause layer:** coercion/encoding + emit-truth — unit constructors never clone;
+Copy field/formal Identity strips `.clone()`; owned `self` emit allows field move.
+
+**What became unnecessary:** finalize re-clone of `None`; Copy index/field `.clone()`;
+`self.scene.clone()` under owned `mut self`.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
+`cargo test --release --test all -- wdb367_module_file_none_must_not_emit_clone wdb371_module_file_copy_vec3 wdb414_module_file_ctor_must_move` → **3 passed**.
+
+**Do not steal:** WDB-367/371/414 tip-out (stale product), P3.676–P3.690.
+
 ## P3.689 (2026-10-06) — owned `String` emit beats Borrowed WJ for lit `.to_string()`
 
 `parse_rows(json: string)` emits `json: String` (body moves into `vec![json]`) but

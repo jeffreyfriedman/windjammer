@@ -848,6 +848,27 @@ impl<'ast> CodeGenerator<'ast> {
                         {
                             coerced = format!("&{coerced}");
                         }
+                        // Terminal: unit constructors / Copy args never keep `.clone()`
+                        // (WDB-367 `None.clone()`, WDB-371 Copy field `.clone()`).
+                        coerced = crate::codegen::rust::expression_utilities::strip_unit_constructor_clone(
+                            &coerced,
+                        );
+                        if coerced.ends_with(".clone()")
+                            && (self.expression_is_copy(arg_to_generate)
+                                || {
+                                    let pidx = contract_sig.arg_param_index(i);
+                                    self.call_arg_is_copy_identity(
+                                        arg_to_generate,
+                                        contract_sig
+                                            .formal_param_type(pidx)
+                                            .or_else(|| contract_sig.param_types.get(pidx)),
+                                    )
+                                })
+                        {
+                            if let Some(base) = coerced.strip_suffix(".clone()") {
+                                coerced = base.to_string();
+                            }
+                        }
                         return coerced;
                     }
                     debug_assert!(

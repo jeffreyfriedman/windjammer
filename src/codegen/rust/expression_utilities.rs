@@ -268,10 +268,31 @@ pub fn is_copy_scalar_numeric_cast(expr: &str) -> bool {
 /// emit `(x as T).clone()` when `as` is present (WDB-300).
 ///
 /// WDB-343: never clone a Copy scalar cast — `(x as i32)` is already pass-by-value.
+/// True for unit constructors that must never grow `.clone()` (WDB-367).
+pub fn is_unit_constructor_rust_text(expr: &str) -> bool {
+    let t = expr.trim();
+    t == "None"
+        || t == "true"
+        || t == "false"
+        || t.ends_with("::None")
+        || t.ends_with(".None")
+}
+
+/// Peel spurious `.clone()` from unit constructors / already-Copy text.
+pub fn strip_unit_constructor_clone(expr: &str) -> String {
+    let t = expr.trim();
+    if let Some(base) = t.strip_suffix(".clone()") {
+        if is_unit_constructor_rust_text(base) {
+            return base.trim().to_string();
+        }
+    }
+    t.to_string()
+}
+
 pub fn append_rust_clone(expr: &str) -> String {
     let t = expr.trim();
-    // WDB-367: unit keywords are constructors, not bindings — never `None.clone()`.
-    if t == "None" || t == "true" || t == "false" {
+    // WDB-367: unit keywords / `Value::None` are constructors — never `.clone()`.
+    if is_unit_constructor_rust_text(t) {
         return t.to_string();
     }
     // Never `&mut place.clone()` — mut places are lvalues (WDB-336/337).
@@ -421,6 +442,17 @@ mod tests {
         assert_eq!(s, r#""</div>""#);
         assert!(is_rust_string_literal_text(r#""hi""#));
         assert!(is_rust_string_literal_text(r#"r"raw""#));
+    }
+
+    #[test]
+    fn unit_constructor_never_gets_clone() {
+        assert_eq!(append_rust_clone("None"), "None");
+        assert_eq!(append_rust_clone("Value::None"), "Value::None");
+        assert_eq!(strip_unit_constructor_clone("None.clone()"), "None");
+        assert_eq!(
+            strip_unit_constructor_clone("Value::None.clone()"),
+            "Value::None"
+        );
     }
 
     #[test]

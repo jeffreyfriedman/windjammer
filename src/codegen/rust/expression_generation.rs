@@ -1207,7 +1207,19 @@ impl<'ast> CodeGenerator<'ast> {
                 self.field_access_root_is_behind_reference(object)
             }
             Expression::Identifier { name, .. } => {
+                // WDB-414: owned `mut self` is not behind a reference — only `&self` /
+                // `&mut self` emit. Prefer emit/type truth over OwnershipHint::Mut alone.
+                let self_emits_owned = name == "self"
+                    && !self.emitted_rust_ref_formals.contains("self")
+                    && !self.current_function_params.iter().any(|p| {
+                        p.name == "self"
+                            && matches!(
+                                p.type_,
+                                Type::Reference(_) | Type::MutableReference(_)
+                            )
+                    });
                 if name == "self"
+                    && !self_emits_owned
                     && (self.inferred_borrowed_params.contains("self")
                         || self.inferred_mut_borrowed_params.contains("self")
                         || self.emitted_rust_ref_formals.contains("self")

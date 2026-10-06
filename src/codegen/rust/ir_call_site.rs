@@ -1971,23 +1971,35 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // WDB-367: unit keywords are constructors, not bindings — never `None.clone()`.
+        // WDB-367: unit keywords / `Value::None` are constructors — never `.clone()`.
         if matches!(kind, CoercionKind::Clone)
-            && matches!(
+            && (matches!(
                 arg_expr,
                 Expression::Identifier { name, .. }
-                    if name == "None" || name == "true" || name == "false"
-            )
+                    if name == "None"
+                        || name == "true"
+                        || name == "false"
+                        || name.ends_with("::None")
+                        || crate::type_classification::is_enum_variant_constructor_path(name)
+            ) || crate::codegen::rust::expression_utilities::is_unit_constructor_rust_text(
+                prepared_arg.as_str(),
+            ))
         {
             kind = CoercionKind::Identity;
+            if let Some(base) = prepared_arg.strip_suffix(".clone()") {
+                prepared_arg = base.to_string();
+            }
         }
         // WDB-343: Copy cast targets must not receive trailing `.clone()` at call sites.
         if matches!(kind, CoercionKind::Clone)
             && matches!(arg_expr, Expression::Cast { type_, .. } if self.is_type_copy(type_))
         {
             kind = CoercionKind::Identity;
+            if let Some(base) = prepared_arg.strip_suffix(".clone()") {
+                prepared_arg = base.to_string();
+            }
         }
-        // Copy scalars *and* aggregates (BatchHandle): Clone is never required.
+        // Copy scalars *and* aggregates (BatchHandle / Vec3): Clone is never required.
         if matches!(kind, CoercionKind::Clone)
             && self.call_arg_is_copy_identity(
                 arg_expr,
@@ -1996,6 +2008,9 @@ impl<'ast> CodeGenerator<'ast> {
             )
         {
             kind = CoercionKind::Identity;
+            if let Some(base) = prepared_arg.strip_suffix(".clone()") {
+                prepared_arg = base.to_string();
+            }
         }
         // WDB-170 / eco wj-toml: demoted `&str` into owned `String` must `.to_string()`, not `.clone()`.
         if matches!(kind, CoercionKind::Clone)
@@ -2339,6 +2354,9 @@ impl<'ast> CodeGenerator<'ast> {
             if formal_ty.is_some_and(|t| self.is_type_copy(t)) {
                 // Owned Copy formal: `&T` auto-copies at the call site — no `.clone()`.
                 kind = CoercionKind::Identity;
+                if let Some(base) = prepared_arg.strip_suffix(".clone()") {
+                    prepared_arg = base.to_string();
+                }
             } else if let Some(ty) = self.infer_expression_type(arg_expr) {
                 let pointee = match &ty {
                     Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -2346,6 +2364,9 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 if self.is_type_copy(pointee) {
                     kind = CoercionKind::Identity;
+                    if let Some(base) = prepared_arg.strip_suffix(".clone()") {
+                        prepared_arg = base.to_string();
+                    }
                 }
             } else if let Expression::Unary {
                 op: crate::parser::UnaryOp::Deref,
@@ -3539,6 +3560,21 @@ impl<'ast> CodeGenerator<'ast> {
             callee_name,
             arg_index,
         );
+        // ensure_owned can re-append `.clone()` after Identity — peel unit/Copy (WDB-367/371).
+        coerced =
+            crate::codegen::rust::expression_utilities::strip_unit_constructor_clone(&coerced);
+        if coerced.ends_with(".clone()")
+            && (self.expression_is_copy(arg_expr)
+                || self.call_arg_is_copy_identity(
+                    arg_expr,
+                    sig.formal_param_type(param_idx)
+                        .or_else(|| sig.param_types.get(param_idx)),
+                ))
+        {
+            if let Some(base) = coerced.strip_suffix(".clone()") {
+                coerced = base.to_string();
+            }
+        }
         crate::codegen::rust::expression_utilities::collapse_redundant_clones(&mut coerced);
         let callee_accepts_str_ref =
             crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
@@ -4584,7 +4620,7 @@ impl<'ast> CodeGenerator<'ast> {
                     return arg_str.to_string();
                 }
                 let needs_clone = match self.infer_expression_type(arg_expr) {
-                    None => true,
+                    None => !self.expression_is_copy(arg_expr),
                     Some(t) => {
                         let bare = match &t {
                             Type::Reference(inner) | Type::MutableReference(inner) => {
@@ -4592,7 +4628,8 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             other => other,
                         };
-                        !self.is_type_copy(bare) || matches!(bare, Type::Custom(_))
+                        // Copy Custom aggregates (Vec3) must not clone (WDB-371).
+                        !self.is_type_copy(bare)
                     }
                 };
                 if needs_clone {
@@ -4884,6 +4921,9 @@ impl<'ast> CodeGenerator<'ast> {
                     || name == "false"
                     || name.ends_with("::None")
                     || crate::type_classification::is_enum_variant_constructor_path(name)
+                    || crate::codegen::rust::expression_utilities::is_unit_constructor_rust_text(
+                        arg_str,
+                    )
                 {
                     false
                 } else {
@@ -4909,21 +4949,44 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
-                Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
-                    if path == "None" || path.ends_with(".None") || path.ends_with("::None") {
-                        return false;
-                    }
-                    let local = analysis
-                        .needs_clone(&path, self.current_statement_idx)
-                        .is_some();
-                    // Statement-idx drift under multipass / nested blocks: same
-                    // owned-formal fallback as bare identifiers (field multi-use).
-                    let anywhere =
-                        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                            sig, param_idx,
-                        ) && analysis.needs_clone_anywhere(&path);
-                    local || anywhere
-                })
+                // WDB-414: owned/by-value `self` (`mut self`, not `&mut self`) can
+                // partial-move fields into owned formals. Prefer emit truth over
+                // stale inferred_* mut-borrow flags from later field writes.
+                if matches!(arg_expr, Expression::FieldAccess { .. })
+                    && self.extract_root_identifier(arg_expr).as_deref() == Some("self")
+                    && !self.emitted_rust_ref_formals.contains("self")
+                    && !self.current_function_params.iter().any(|p| {
+                        p.name == "self"
+                            && matches!(
+                                p.type_,
+                                Type::Reference(_) | Type::MutableReference(_)
+                            )
+                    })
+                {
+                    false
+                } else {
+                    Self::auto_clone_expr_path(arg_expr).is_some_and(|path| {
+                        if path == "None"
+                            || path.ends_with(".None")
+                            || path.ends_with("::None")
+                            || crate::codegen::rust::expression_utilities::is_unit_constructor_rust_text(
+                                arg_str,
+                            )
+                        {
+                            return false;
+                        }
+                        let local = analysis
+                            .needs_clone(&path, self.current_statement_idx)
+                            .is_some();
+                        // Statement-idx drift under multipass / nested blocks: same
+                        // owned-formal fallback as bare identifiers (field multi-use).
+                        let anywhere =
+                            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                sig, param_idx,
+                            ) && analysis.needs_clone_anywhere(&path);
+                        local || anywhere
+                    })
+                }
             }
             _ => false,
         };
@@ -4946,13 +5009,23 @@ impl<'ast> CodeGenerator<'ast> {
                             .get(name)
                             .is_some_and(|t| self.is_type_copy(t))
                 }
-                _ => self.infer_expression_type(arg_expr).is_some_and(|t| {
-                    let bare = match &t {
-                        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-                        other => other,
-                    };
-                    self.is_type_copy(bare)
-                }),
+                _ => {
+                    self.expression_is_copy(arg_expr)
+                        || self.call_arg_is_copy_identity(
+                            arg_expr,
+                            sig.formal_param_type(param_idx)
+                                .or_else(|| sig.param_types.get(param_idx)),
+                        )
+                        || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                            let bare = match &t {
+                                Type::Reference(inner) | Type::MutableReference(inner) => {
+                                    inner.as_ref()
+                                }
+                                other => other,
+                            };
+                            self.is_type_copy(bare)
+                        })
+                }
             };
             if skip_clone {
                 arg_str.to_string()
