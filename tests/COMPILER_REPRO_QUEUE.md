@@ -1,3 +1,27 @@
+## P3.696 (2026-10-06) — WDB-423: Copy i32 tuple array index must not `.clone()`
+
+Product `tps_camera` / `fps_camera`: `let (ox, oz) = offsets[(i as usize)].clone()`
+because `[(-1, 0), …]` failed element-type inference — `UnaryOp::Neg` had no
+`infer_expression_type` arm, so Index emit fell through to unknown→`.clone()`.
+
+| Gate | Status |
+|------|--------|
+| `wdb423_module_file_copy_tuple_index_must_not_clone` | ✅ tip GREEN (f32 + i32 product shape) |
+| `wdb423_tip_out_game_core_offsets_index_must_not_clone` | ✅ tip GREEN after camera multipass regen |
+
+**Root cause layer:** constraint/type inference — `Neg`/`Not` unary keep operand
+type so `(-1, 0)` tuples type as Copy and index destructure skips clone.
+
+**What became unnecessary:** `offsets[…].clone()` on Copy `(i32,i32)` / `(f32,…)`
+array indexes; no `ir_call_site` peel; Index unknown→clone path no longer hit for
+this product shape.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3693` →
+`cargo test --release --test all -- wdb423_` → **2 passed**;
+`wdb423_ wdb425_ wdb422_ wdb432_` → **8 passed**.
+
+**Do not steal:** remaining tip-out lag / suite triage.
+
 ## P3.695 (2026-10-06) — WDB-425: negated range `for dx in -2..3` Copy counter (no `.clone()`)
 
 Product `component_viewer_controls`: `if dx < 0 { -dx } else { dx.clone() }` because

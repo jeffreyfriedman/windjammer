@@ -11,11 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-423: Copy `(f32, f32, f32)` array index destructure must not `.clone()`.
+//! WDB-423: Copy tuple array index destructure must not `.clone()`.
 //!
 //! Product `fps_camera.rs` / `tps_camera.rs`:
-//!   `let (ox, oy, oz) = offsets[(i) as usize].clone();`
-//! WJ is `let (ox, oy, oz) = offsets[i]`.
+//!   `let (ox, oz) = offsets[(i as usize)].clone();`
+//! WJ is `let (ox, oz) = offsets[i]`.
+//! First array element may be `(-1, 0)` — Neg must not break Copy inference.
 //! Distinct from WDB-363 (indexed tuple **field**), WDB-422 (f32 arith),
 //! and WDB-393 (local i32).
 
@@ -33,6 +34,22 @@ pub fn pick(i: i32) -> f32 {
     ]
     let (ox, oy, oz) = offsets[i]
     ox + oy + oz
+}
+
+/// Product shape (tps_camera): i32 neighbor offsets with leading Neg literal.
+pub fn collides(cx: i32, cz: i32) -> bool {
+    let offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    let mut i = 0
+    while i < 4 {
+        let (ox, oz) = offsets[i]
+        let check_x = cx + ox
+        let check_z = cz + oz
+        if check_x == 0 && check_z == 0 {
+            return true
+        }
+        i = i + 1
+    }
+    false
 }
 "#;
 

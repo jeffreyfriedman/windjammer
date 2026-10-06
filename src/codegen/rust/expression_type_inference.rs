@@ -366,6 +366,14 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Reference(inner) | Type::MutableReference(inner) => *inner,
                 _ => t,
             }),
+            // WDB-423: `-1` / `!flag` keep the operand's type so
+            // `[(-1, 0), …]` infers as `[(i64,i64); N]` (Copy) and index
+            // destructure does not fall through to `.clone()`.
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Neg | crate::parser::UnaryOp::Not,
+                operand,
+                ..
+            } => self.infer_expression_type(operand),
             // Method calls: look up return type from method_return_types registry
             // and signature registry (for cross-file method resolution)
             Expression::MethodCall {
