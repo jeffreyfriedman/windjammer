@@ -53,6 +53,54 @@ impl Demo {
 }
 "#;
 
+/// Product shape: MutBorrowed helpers before `Vox::new(self.scene)` must not
+/// demote `initialize` to `&mut self` (which forces `.clone()`).
+const SRC_WITH_HELPERS: &str = r#"
+pub struct Scene {
+    pub label: string,
+}
+
+impl Scene {
+    pub fn touch(self) {
+        // no-op
+    }
+}
+
+pub struct Vox {
+    pub scene: Scene,
+}
+
+impl Vox {
+    pub fn new(scene: Scene) -> Vox {
+        Vox { scene: scene }
+    }
+}
+
+pub struct Demo {
+    pub scene: Scene,
+    pub grid: i32,
+    pub ready: bool,
+}
+
+impl Demo {
+    pub fn setup_materials(self) {
+        self.ready = true
+    }
+
+    pub fn build_scene(self) {
+        self.scene.touch()
+    }
+
+    pub fn initialize(self) {
+        self.setup_materials()
+        self.build_scene()
+        let v = Vox::new(self.scene)
+        self.grid = 1
+        self.ready = true
+    }
+}
+"#;
+
 #[test]
 fn wdb414_module_file_ctor_must_move_self_field() {
     let mut test = MultiFileTest::new();
@@ -66,6 +114,28 @@ fn wdb414_module_file_ctor_must_move_self_field() {
         "WDB-414 RED: constructor cloned self.scene:\n{rs}"
     );
     test.cargo_check().expect("WDB-414 cargo-check");
+}
+
+#[test]
+fn wdb414_module_file_ctor_after_mut_helpers_must_move_self_field() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_WITH_HELPERS);
+    let map = test.compile().expect("WDB-414 helpers compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-414 helpers MultiFile lib.rs:\n{rs}");
+    assert!(
+        rs.contains("pub fn initialize(mut self)") || rs.contains("pub fn initialize(self)"),
+        "WDB-414 RED: initialize demoted away from owned self:\n{rs}"
+    );
+    assert!(
+        !rs.contains("self.scene.clone()"),
+        "WDB-414 RED: helpers path cloned self.scene:\n{rs}"
+    );
+    assert!(
+        !rs.contains("pub fn initialize(&mut self)"),
+        "WDB-414 RED: initialize forced to &mut self by MutBorrowed helpers:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-414 helpers cargo-check");
 }
 
 fn wdb414_search_roots() -> Vec<PathBuf> {

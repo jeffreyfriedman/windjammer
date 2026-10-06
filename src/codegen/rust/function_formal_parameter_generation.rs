@@ -1396,6 +1396,21 @@ impl<'ast> CodeGenerator<'ast> {
                         OwnershipMode::MutBorrowed,
                     )
                 {
+                    // WDB-414: MutBorrowed sibling helpers (`setup_materials` /
+                    // `build_scene`) must not force `&mut self` when the body still
+                    // partial-moves a field into an owned ctor then assigns another.
+                    if super::self_analysis::function_partial_moves_self_field_then_assigns_other(
+                        &analyzed.decl,
+                    ) {
+                        self.inferred_borrowed_params.remove("self");
+                        self.inferred_mut_borrowed_params.remove("self");
+                        self.record_self_receiver_upgrade(
+                            &func.name,
+                            self.get_param_ownership("self", analyzed),
+                            "mut self",
+                        );
+                        return "mut self".to_string();
+                    }
                     self.inferred_mut_borrowed_params.insert("self".to_string());
                     self.inferred_borrowed_params.remove("self");
                     self.record_self_receiver_upgrade(

@@ -1,3 +1,31 @@
+## P3.691 (2026-10-06) — WDB-414: MutBorrowed helpers must not block owned partial-move `self`
+
+Product `initialize` called `setup_materials` / `build_scene` (`&mut self`) then
+`CsgVoxelizer::new(self.scene)`. An early formal path forced `&mut self` whenever any
+MutBorrowed sibling was recorded — **before** the WDB-414
+`function_partial_moves_self_field_then_assigns_other` exception — so tip emitted
+`self.scene.clone()` under `&mut self`.
+
+| Gate | Status |
+|------|--------|
+| `wdb414_module_file_ctor_must_move_self_field` | ✅ tip GREEN |
+| `wdb414_module_file_ctor_after_mut_helpers_must_move_self_field` | ✅ tip GREEN — owned `mut self` + move |
+| `wdb414_tip_out_game_core_ctor_must_not_clone_self_scene` | ✅ tip GREEN after tip regen |
+| `wdb367_module_file_none_*` + tip-out | ✅ tip GREEN (tip-out/gen synced) |
+
+**Root cause layer:** constraint/self-receiver formal selection — MutBorrowed sibling
+delegation must yield to partial-move owned `mut self` (same exception as
+`self_receiver_upgrades` path).
+
+**What became unnecessary:** product `self.scene.clone()` under demoted `&mut self`
+for rifter/cathedral `initialize`; no new `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
+`cargo test --release --test all -- wdb414_ wdb367_` → **5 passed**;
+`wdb407_module_file_*` / `wdb410_module_file_*` tip-live ✅ (tip-out still product lag).
+
+**Do not steal:** WDB-407/410 tip-out lag; other Copy-clone tip-out rows; full suite triage.
+
 ## P3.690 (2026-10-06) — unit `None` / Copy field / owned-self move (no spurious `.clone()`)
 
 Tip-live isolates still cloned:
@@ -22,7 +50,7 @@ Copy field/formal Identity strips `.clone()`; owned `self` emit allows field mov
 **Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
 `cargo test --release --test all -- wdb367_module_file_none_must_not_emit_clone wdb371_module_file_copy_vec3 wdb414_module_file_ctor_must_move` → **3 passed**.
 
-**Do not steal:** WDB-367/371/414 tip-out (stale product), P3.676–P3.690.
+**Superseded tip-out lag:** P3.691 (helpers demotion + tip-out sync).
 
 ## P3.689 (2026-10-06) — owned `String` emit beats Borrowed WJ for lit `.to_string()`
 
