@@ -703,21 +703,29 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                 }
             })
             .collect();
+        // usize (`.len()`) into `Option<int>` / `Result<int, _>` payloads (P3.681).
+        // `Some` already cast; `Ok` must share the same width encode (not method names).
         let cast_suffix = gen.current_function_return_type.as_ref().and_then(|t| {
-            if let Type::Option(inner) = t {
-                match inner.as_ref() {
-                    Type::Int => Some(" as i64"),
-                    Type::Int32 => Some(" as i32"),
-                    Type::Custom(n) if n == "int" || n == "i64" => Some(" as i64"),
-                    Type::Custom(n) if n == "i32" => Some(" as i32"),
-                    _ => None,
-                }
-            } else {
-                None
+            let inner = match (t, func_name) {
+                (Type::Option(inner), "Some") => Some(inner.as_ref()),
+                (Type::Result(ok, _), "Ok") => Some(ok.as_ref()),
+                _ => None,
+            }?;
+            match inner {
+                Type::Int => Some(" as i64"),
+                Type::Int32 => Some(" as i32"),
+                Type::Custom(n) if n == "int" || n == "i64" => Some(" as i64"),
+                Type::Custom(n) if n == "i32" => Some(" as i32"),
+                _ => None,
             }
         });
         let args = if let Some(suffix) = cast_suffix {
-            if func_str.starts_with("Some::<") && arguments.len() == 1 {
+            let is_int_payload_ctor = arguments.len() == 1
+                && (func_str == "Some"
+                    || func_str.starts_with("Some::<")
+                    || func_str == "Ok"
+                    || func_str.starts_with("Ok::<"));
+            if is_int_payload_ctor {
                 let (_, inner) = &arguments[0];
                 if gen.expression_produces_usize(inner) || gen.infer_expression_type_is_usize(inner)
                 {

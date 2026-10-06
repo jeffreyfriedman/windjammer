@@ -147,22 +147,18 @@ wrapping the same expression in `Ok(...)` loses the coercion.
 
 | Gate | Status |
 |------|--------|
-| `ok_vec_len_into_result_int_must_coerce_usize` | ❌ tip RED — `Ok(hits.len())` usize into `Result<i64, _>` |
+| `ok_vec_len_into_result_int_must_coerce_usize` | ✅ tip GREEN — `Ok(items.len() as i64)` |
 
-**Root cause layer:** encoding / return-type coercion — `Vec::len()` (usize) inside
-`Ok(...)` for `Result<int, _>` must cast or lower as i64 the same way a bare
-`int` return does.
-
-**Why this is a new class:**
-- P3.322 / bare `len() > 0` is compare-site uint/int mix.
-- Glob `match_count` returns bare `.len()` as `int` (GREEN).
-- This is specifically **`Ok(len)`** into `Result<int, E>`.
+**Root cause layer:** coercion/encoding — `Some(len)` already cast usize→int for
+`Option<int>`; `Ok(len)` into `Result<int, _>` skipped that encode. Unified
+payload-ctor cast for `Some`/`Ok` (+ `maybe_cast_usize_to_int_target` Ok peel).
 
 **What became unnecessary:** counting-loop interim in `wj-regex::match_count`.
 
-**Gates:** `bug_ok_vec_len_into_result_int_must_coerce_usize_test` — tip RED (2026-10-05).
+**Gates:** `cargo test --release --test all -- bug_ok_vec_len_into_result_int_must_coerce_usize`
+— **passed**.
 
-**Do not steal:** P3.322, P3.679–P3.681, WDB-452–454 (filed).
+**Do not steal:** P3.322, P3.679–P3.680, WDB-452–454 (filed).
 
 ## P3.680 (2026-10-05) — TDD WDB-454 (DB agent; no compiler src)
 

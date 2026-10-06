@@ -442,29 +442,41 @@ impl<'ast> CodeGenerator<'ast> {
                 } = expr
                 {
                     if arguments.len() == 1 {
-                        let is_some = matches!(
-                            &**function,
+                        // Language-level int payloads: `Some(len)` / `Ok(len)` (P3.681).
+                        let payload_ctor = match &**function {
                             Expression::Identifier { name, .. }
-                                if name == "Some" || name.ends_with("::Some")
-                        );
-                        if is_some {
+                                if name == "Some" || name.ends_with("::Some") =>
+                            {
+                                Some("Some")
+                            }
+                            Expression::Identifier { name, .. }
+                                if name == "Ok" || name.ends_with("::Ok") =>
+                            {
+                                Some("Ok")
+                            }
+                            _ => None,
+                        };
+                        if let Some(ctor) = payload_ctor {
                             let (_, inner) = &arguments[0];
                             let inner_is_usize = self.expression_produces_usize(inner)
                                 || self.infer_expression_type_is_usize(inner);
                             if inner_is_usize {
                                 let cast_suffix = if t == "i32" { " as i32" } else { " as i64" };
-                                if expr_str.starts_with("Some(") && expr_str.ends_with(')') {
-                                    let inner_part =
-                                        expr_str[5..expr_str.len().saturating_sub(1)].trim();
+                                let bare_prefix = format!("{ctor}(");
+                                if expr_str.starts_with(&bare_prefix) && expr_str.ends_with(')') {
+                                    let inner_part = expr_str
+                                        [bare_prefix.len()..expr_str.len().saturating_sub(1)]
+                                        .trim();
                                     let base = inner_part
                                         .strip_suffix(".clone()")
                                         .unwrap_or(inner_part)
                                         .trim();
-                                    *expr_str = format!("Some({base}{cast_suffix})");
+                                    *expr_str = format!("{ctor}({base}{cast_suffix})");
                                     return;
                                 }
-                                // E0282 turbofish: `Some::<i64>(i)` when `i: usize` (e.g. find index).
-                                if expr_str.starts_with("Some::<") {
+                                // E0282 turbofish: `Some::<i64>(i)` / `Ok::<i64>(i)`.
+                                let turbo_prefix = format!("{ctor}::<");
+                                if expr_str.starts_with(&turbo_prefix) {
                                     if let Some(open_paren) = expr_str.rfind('(') {
                                         if expr_str.ends_with(')') {
                                             let inner_part =
