@@ -1,3 +1,27 @@
+## P3.699 (2026-10-06) — WDB-407: associated `new(Vec)` payload store must stay owned
+
+Product `VoxParser::new(data: Vec<u8>)` (private in WJ) demoted to
+`pub fn new(data: &Vec<u8>)` + `data.clone()` / `VoxParser::new(&data)`.
+FABRIK `new(Vec<Vec3>)` was already owned; VoxParser missed keep-owned because
+`is_public_owned_non_copy_formal_api` required `pub`.
+
+| Gate | Status |
+|------|--------|
+| `wdb407_module_file_owned_vec_new_must_not_demote` | ✅ tip GREEN |
+| `wdb407_module_file_private_associated_vec_new_must_not_demote` | ✅ tip GREEN (product shape) |
+| `wdb407_tip_out_game_core_owned_vec_new_must_not_demote` | ✅ tip GREEN after tip-out/gen sync |
+
+**Root cause layer:** signature — associated constructors that store `Vec` into a
+field keep Owned even without WJ `pub`; restore covers associated Vec payload formals.
+
+**What became unnecessary:** tip/product `&Vec` + `.clone()` for `VoxParser::new`;
+no `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb407_ wdb398_` → **6 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383/410/416 + wave).
+
 ## P3.698 (2026-10-06) — WDB-398: owned `new(MaterialPalette)` must not get `&palette.copy()`
 
 Product `VoxelMaterialEditor::new(palette: MaterialPalette)` kept emitting owned

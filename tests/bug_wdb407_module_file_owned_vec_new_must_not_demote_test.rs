@@ -44,6 +44,26 @@ pub fn make() -> Chain {
 }
 "#;
 
+/// Product shape: private associated `VoxParser::new(data: Vec<u8>)` stored into a
+/// field was demoted to `pub fn new(data: &Vec<u8>)` + `.clone()`.
+const PRODUCT_VOX: &str = r#"
+struct VoxParser {
+    data: Vec<u8>,
+    pos: int,
+}
+
+impl VoxParser {
+    fn new(data: Vec<u8>) -> VoxParser {
+        VoxParser { data: data, pos: 0 }
+    }
+}
+
+pub fn parse(data: Vec<u8>) -> int {
+    let parser = VoxParser::new(data)
+    parser.pos
+}
+"#;
+
 #[test]
 fn wdb407_module_file_owned_vec_new_must_not_demote() {
     let mut test = MultiFileTest::new();
@@ -62,6 +82,24 @@ fn wdb407_module_file_owned_vec_new_must_not_demote() {
         "WDB-407 RED: owned Vec new() demoted to &Vec + clone:\n{rs}"
     );
     test.cargo_check().expect("WDB-407 cargo-check");
+}
+
+#[test]
+fn wdb407_module_file_private_associated_vec_new_must_not_demote() {
+    let mut test = MultiFileTest::new();
+    test.add_file("vox.wj", PRODUCT_VOX);
+    let map = test.compile().expect("WDB-407 product-shape compile");
+    let rs = map.get("vox.rs").expect("vox.rs");
+    eprintln!("WDB-407 product-shape vox.rs:\n{rs}");
+    assert!(
+        !rs.contains("fn new(data: &Vec") && !rs.contains("VoxParser::new(&data)"),
+        "WDB-407 RED: private associated Vec new demoted:\n{rs}"
+    );
+    assert!(
+        !rs.contains("data: data.clone()"),
+        "WDB-407 RED: demoted Vec new cloned into field:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-407 product-shape cargo-check");
 }
 
 fn wdb407_search_roots() -> Vec<PathBuf> {

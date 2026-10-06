@@ -4514,7 +4514,7 @@ impl<'ast> CodeGenerator<'ast> {
         param: &Parameter,
         func: &FunctionDecl<'_>,
     ) -> bool {
-        if !func.is_pub || param.name == "self" {
+        if param.name == "self" {
             return false;
         }
         // Instance methods (`fn foo(self, …)`) still demote freely. Associated functions
@@ -4525,7 +4525,7 @@ impl<'ast> CodeGenerator<'ast> {
         if func.parent_type.is_some() && !is_associated_fn {
             return false;
         }
-        // WDB-398: pub associated `new(T)` with owned Custom formal — keep owned before
+        // WDB-398: associated `new(T)` with owned Custom formal — keep owned before
         // pure-forward / registry / delegation-emit demotion. Do not use the field-proj
         // exclusion here: `palette.copy()` is currently classified as field-proj and would
         // wrongly demote MaterialPalette (Vec-backed) constructors.
@@ -4535,6 +4535,17 @@ impl<'ast> CodeGenerator<'ast> {
             && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func)
         {
             return true;
+        }
+        // WDB-407: associated `new(data: Vec<u8>)` stored into a field must stay owned
+        // even when WJ omits `pub` (codegen may emit `pub fn`; `&Vec` + `.clone()` is wrong).
+        if is_associated_fn
+            && Self::param_type_is_owned_forward_container(&param.type_)
+            && self.param_stored_in_owned_payload(func.body.as_slice(), &param.name)
+        {
+            return true;
+        }
+        if !func.is_pub {
+            return false;
         }
         // P3.669: pure Custom→same-type shared-ref forwarders (`take_field` →
         // `json.get(&Value)`) demote even when multipass promotes the helper to pub.

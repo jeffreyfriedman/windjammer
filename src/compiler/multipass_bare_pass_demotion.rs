@@ -440,8 +440,8 @@ fn registry_key_is_type_qualified_method(registry_key: &str) -> bool {
     })
 }
 
-/// WDB-398: pub associated `Type::new(palette: MaterialPalette)` (no `self`) must
-/// restore Owned like pub free Custom APIs. Instance methods stay demotable.
+/// WDB-398/407: associated `Type::new(…)` (no `self`) must restore Owned for
+/// owned Custom / payload-stored Vec formals. Instance methods stay demotable.
 fn associated_pub_owned_custom_formal_should_restore(
     sig: &FunctionSignature,
     programs: &[&Program],
@@ -453,12 +453,11 @@ fn associated_pub_owned_custom_formal_should_restore(
     if sig.has_self_receiver {
         return false;
     }
-    let Type::Custom(name) = formal_ty else {
-        return false;
-    };
-    if crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
-        || is_copy_formal_name(name, &std::collections::HashSet::new())
-    {
+    let is_owned_custom = matches!(formal_ty, Type::Custom(name)
+        if !crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
+            && !is_copy_formal_name(name, &std::collections::HashSet::new()));
+    let is_owned_vec = is_vec_container_type(formal_ty);
+    if !is_owned_custom && !is_owned_vec {
         return false;
     }
     let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
@@ -491,17 +490,27 @@ fn associated_pub_owned_custom_formal_should_restore(
     let Some(decl) = decl else {
         return false;
     };
-    if !decl.is_pub || decl.parameters.iter().any(|p| p.name == "self") {
+    if decl.parameters.iter().any(|p| p.name == "self") {
         return false;
     }
-    non_self_param(&decl.parameters, param_idx).is_some_and(|p| {
-        matches!(&p.type_, Type::Custom(_))
-            && !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
-            && !matches!(
-                &p.type_,
-                Type::Reference(_) | Type::MutableReference(_)
-            )
-    })
+    let Some(param) = non_self_param(&decl.parameters, param_idx) else {
+        return false;
+    };
+    if matches!(
+        &param.type_,
+        Type::Reference(_) | Type::MutableReference(_)
+    ) {
+        return false;
+    }
+    // WDB-398: pub associated Custom. WDB-407: Vec stored into a field may be
+    // private in WJ (`fn new(data: Vec<u8>)`) while codegen emits `pub`.
+    if is_owned_custom {
+        return decl.is_pub
+            && matches!(&param.type_, Type::Custom(_))
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_);
+    }
+    is_vec_container_type(&param.type_)
+        && param_stored_in_struct_literal(decl.body.as_slice(), param.name.as_str())
 }
 
 /// Fallback when no `ProgramLookup` is available. Hot paths must use
