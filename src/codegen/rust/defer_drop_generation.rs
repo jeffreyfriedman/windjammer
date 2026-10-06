@@ -30,15 +30,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let insert_before = Self::function_level_tail_line_index(&lines);
 
-        let mut new_body = String::new();
-
-        for (i, line) in lines.iter().enumerate() {
-            if i < insert_before {
-                new_body.push_str(line);
-                new_body.push('\n');
-            }
-        }
-
+        let mut defer_lines = String::new();
         for opt in optimizations {
             if lines[insert_before..]
                 .iter()
@@ -46,26 +38,44 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 continue;
             }
-            // Owned map/collection helpers that tail-match on `.get` borrow the param —
-            // defer-drop must not splice inside the match (wj-notes-api int_from_map).
-            if body.contains("match ")
-                && (body.contains(&format!("{}.get(", opt.variable))
-                    || body.contains(&format!("{}.get(&", opt.variable)))
+            // Owned map/collection helpers that tail-match / `matches!` on `.get`
+            // borrow the param — defer-drop must not splice (wj-notes-api
+            // int_from_map; P3.676 Some(_)→matches! + spawn).
+            let get_borrow = body.contains(&format!("{}.get(", opt.variable))
+                || body.contains(&format!("{}.get(&", opt.variable));
+            if get_borrow
+                && (body.contains("match ")
+                    || body.contains("matches!(")
+                    || body.contains("!matches!("))
             {
                 continue;
             }
-            new_body.push_str(&self.indent());
-            new_body.push_str(&format!(
+            defer_lines.push_str(&self.indent());
+            defer_lines.push_str(&format!(
                 "// DEFER DROP: Deallocate {} ({:?}) in background thread for faster return\n",
                 opt.variable, opt.estimated_size
             ));
-            new_body.push_str(&self.indent());
-            new_body.push_str(&format!(
+            defer_lines.push_str(&self.indent());
+            defer_lines.push_str(&format!(
                 "std::thread::spawn(move || drop({}));\n",
                 opt.variable
             ));
         }
 
+        // All opts skipped (e.g. single-line `matches!(map.get…)`): keep the
+        // original body so we do not strip the trailing newline before `}`.
+        if defer_lines.is_empty() {
+            return body;
+        }
+
+        let mut new_body = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i < insert_before {
+                new_body.push_str(line);
+                new_body.push('\n');
+            }
+        }
+        new_body.push_str(&defer_lines);
         for line in &lines[insert_before..] {
             new_body.push_str(line);
             if *line != lines[lines.len() - 1] {
@@ -98,9 +108,12 @@ impl<'ast> CodeGenerator<'ast> {
                 break;
             }
         }
-        if insert == lines.len() && lines.len() >= 2 {
+        // Single-line expression bodies (`matches!(map.get(…), …)`) have no
+        // braces — treat the sole line as the return expression so the
+        // variable-in-tail check can skip defer-drop (P3.676).
+        if insert == lines.len() && !lines.is_empty() {
             let last = lines.last().map(|s| s.trim()).unwrap_or("");
-            if !last.starts_with('}') && !last.ends_with('{') {
+            if !last.is_empty() && !last.starts_with('}') && !last.ends_with('{') {
                 insert = lines.len().saturating_sub(1);
             }
         }

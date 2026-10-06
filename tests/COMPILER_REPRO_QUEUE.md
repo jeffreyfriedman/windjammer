@@ -1,6 +1,54 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+
+## WDB-455 (2026-10-05) — Copy i32 local into field assign must not `.clone()`
+
+Product `csg/scene.rs` `add_*`: `self.root_id = id.clone()` where `let id = self.next_id`.
+
+| Gate | Status |
+|------|--------|
+| `wdb455_module_file_copy_i32_local_field_assign_must_not_clone` | ✅ isolate GREEN |
+| `wdb455_tip_out_game_core_csg_scene_i32_local_field_assign_must_not_clone` | ❌ tip RED (product emit still clones) |
+
+**Root cause layer:** codegen Copy local → field assign still emits `.clone()`.
+
+**Do not steal:** WDB-393 (i32 formal field), WDB-446 (i32 local typed let), WDB-437 (i32 formal let).
+
+**Gates:** `bug_wdb455_module_file_copy_i32_local_field_assign_must_not_clone_test`.
+
+## P3.681 (2026-10-05) — `Ok(vec.len())` into `Result<int, _>` must coerce usize→i64
+
+`wj-regex::match_count`:
+```wj
+match find_all(pattern, text) {
+    Ok(hits) => Ok(hits.len()),
+    Err(e) => Err(e),
+}
+```
+Tip emits bare `Ok(hits.len())` → `expected i64, found usize` (E0308).
+Bare `.len()` as `int` return is already GREEN (`wj-glob::match_count`);
+wrapping the same expression in `Ok(...)` loses the coercion.
+
+| Gate | Status |
+|------|--------|
+| `ok_vec_len_into_result_int_must_coerce_usize` | ❌ tip RED — `Ok(hits.len())` usize into `Result<i64, _>` |
+
+**Root cause layer:** encoding / return-type coercion — `Vec::len()` (usize) inside
+`Ok(...)` for `Result<int, _>` must cast or lower as i64 the same way a bare
+`int` return does.
+
+**Why this is a new class:**
+- P3.322 / bare `len() > 0` is compare-site uint/int mix.
+- Glob `match_count` returns bare `.len()` as `int` (GREEN).
+- This is specifically **`Ok(len)`** into `Result<int, E>`.
+
+**What became unnecessary:** counting-loop interim in `wj-regex::match_count`.
+
+**Gates:** `bug_ok_vec_len_into_result_int_must_coerce_usize_test` — tip RED (2026-10-05).
+
+**Do not steal:** P3.322, P3.679–P3.681, WDB-452–454 (filed).
+
 ## P3.680 (2026-10-05) — TDD WDB-454 (DB agent; no compiler src)
 
 Copy `f32` **local** into **local reassignment** must not `.clone()`.
