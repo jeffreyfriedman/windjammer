@@ -156,29 +156,28 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.identifier_is_wj_int_i64_binding(name) {
                     return false;
                 }
-                // Binding width beats `.len()`/index promotion into `usize_variables`
-                // (`let mut i = 0` → i32 + `while i < 64` must not peer `64_usize` — P3.679).
-                if self.codegen_i32_binding_names.contains(name)
-                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                        matches!(t, Type::Int | Type::Int32)
-                            || matches!(
-                                t,
-                                Type::Custom(n)
-                                    if matches!(
-                                        n.as_str(),
-                                        "int" | "i64" | "i32" | "u32" | "u64"
-                                    )
-                            )
-                    })
-                {
-                    return false;
-                }
                 // P3.373: `let v2 = i2 * 3` (usize) in i32-param files may still have return-width
                 // `Int32` on `local_var_types` — trust `usize_variables` unless this is an explicit
                 // i32 loop counter (P3.335 / P3.299).
                 if self.usize_variables.contains(name)
+                    && !self.codegen_i32_binding_names.contains(name)
                     && !self.literal_init_wj_int_loop_counters.contains(name)
                 {
+                    return true;
+                }
+                // Binding width beats `.len()`-compare promotion into `usize_variables`
+                // (`let mut i = 0` under `-> int` stays i64; cast `strings::len` instead — P3.299).
+                if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                    matches!(t, Type::Int | Type::Int32)
+                        || matches!(
+                            t,
+                            Type::Custom(n)
+                                if matches!(n.as_str(), "int" | "i64" | "i32" | "u32" | "u64")
+                        )
+                }) {
+                    return false;
+                }
+                if self.usize_variables.contains(name) {
                     return true;
                 }
 
