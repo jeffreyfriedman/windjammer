@@ -314,29 +314,34 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
             crate::codegen::rust::expression_utilities::append_rust_clone(core)
         }
         (Target::Rust, CoercionKind::Deref) => {
+            // Never `*x.clone()`: Deref is only for Copy pointees (WDB-344).
+            let peel = |s: &str| {
+                let mut core = s
+                    .trim()
+                    .strip_prefix('(')
+                    .and_then(|inner| inner.strip_suffix(')'))
+                    .unwrap_or(s)
+                    .trim()
+                    .to_string();
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut core);
+                core
+            };
             if expr.starts_with('*') {
-                expr.to_string()
+                let inner = peel(expr.trim().trim_start_matches('*'));
+                format!("*{inner}")
             } else if expr.trim().starts_with('&')
                 || (expr.trim().starts_with('(') && expr.contains('&'))
             {
                 // `&x` / `(&x)` → owned Copy: strip borrow (auto-copy), do not `*x`.
-                let core = expr
-                    .trim()
-                    .strip_prefix('(')
-                    .and_then(|s| s.strip_suffix(')'))
-                    .unwrap_or(expr)
-                    .trim()
+                let core = peel(expr);
+                let core = core
                     .trim_start_matches("&mut ")
-                    .trim_start_matches('&');
-                core.to_string()
+                    .trim_start_matches('&')
+                    .to_string();
+                core
             } else {
-                // Bare `&T` binding name → `*name`.
-                let core = expr
-                    .trim()
-                    .strip_prefix('(')
-                    .and_then(|s| s.strip_suffix(')'))
-                    .unwrap_or(expr)
-                    .trim();
+                // Bare `&T` binding name → `*name` (strip stale auto-clone first).
+                let core = peel(expr);
                 format!("*{core}")
             }
         }

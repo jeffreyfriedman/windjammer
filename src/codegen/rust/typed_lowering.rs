@@ -72,8 +72,14 @@ impl ArgCoercion {
                 }
             }
             ArgCoercion::Deref => {
-                if !expr.starts_with('*') {
-                    *expr = format!("*{}", expr);
+                // Copy pointee only — strip stale auto-clone (`*w1.clone()`, WDB-344).
+                crate::codegen::rust::expression_utilities::strip_trailing_clone(expr);
+                if expr.starts_with('*') {
+                    let mut inner = expr.trim_start_matches('*').to_string();
+                    crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut inner);
+                    *expr = format!("*{inner}");
+                } else {
+                    *expr = format!("*{expr}");
                 }
             }
             ArgCoercion::ToOwnedString => {

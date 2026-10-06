@@ -305,6 +305,12 @@ pub fn append_rust_clone(expr: &str) -> String {
     if t.starts_with('&') {
         return append_rust_clone(borrow_base_expr(t));
     }
+    // IR Deref of `&Copy` yields `*binding` (owned Copy). Appending `.clone()` would
+    // produce `*binding.clone()` (WDB-344 collision2d match payloads) — E0614 / noise.
+    // Non-Copy `&T` uses CoercionKind::Clone, not Deref, so this never drops a needed clone.
+    if t.starts_with('*') {
+        return t.to_string();
+    }
     if is_copy_scalar_numeric_cast(t) {
         return t.to_string();
     }
@@ -462,6 +468,11 @@ mod tests {
         assert_eq!(append_rust_clone("(n as i32)"), "(n as i32)");
         assert_eq!(append_rust_clone("n"), "n.clone()");
         assert_eq!(append_rust_clone("n.clone()"), "n.clone()");
+        assert_eq!(
+            append_rust_clone("*w1"),
+            "*w1",
+            "WDB-344: never *w1.clone() after IR Deref of &Copy match payload"
+        );
         assert_eq!(
             append_rust_clone("&conn"),
             "conn.clone()",

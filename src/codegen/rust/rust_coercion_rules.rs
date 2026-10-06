@@ -87,7 +87,13 @@ impl Coercion {
         match self {
             Coercion::None => {}
             Coercion::Deref => {
-                if !expr_str.starts_with('*') {
+                // Deref is Copy-only — never keep a stale `.clone()` (`*w1.clone()`, WDB-344).
+                super::expression_utilities::strip_trailing_clone(expr_str);
+                if expr_str.starts_with('*') {
+                    let mut inner = expr_str.trim_start_matches('*').to_string();
+                    super::expression_utilities::strip_trailing_clone(&mut inner);
+                    *expr_str = format!("*{inner}");
+                } else {
                     let core = super::expression_utilities::borrow_base_expr(expr_str);
                     *expr_str = format!("*{core}");
                 }

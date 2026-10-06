@@ -1,3 +1,30 @@
+## P3.697 (2026-10-06) — WDB-344/346: Copy f32 match deref + tip-out camera sync
+
+Product `collision2d`: demoted `&RigidBody2D` → `match &a.collider` binds `&f32`,
+IR Deref emits `*w1`, then `append_rust_clone` wrongly produced `*w1.clone()`.
+Camera tip-out `self.pivot.z.clone()` was stale multipass lag (fresh tip already clean).
+
+| Gate | Status |
+|------|--------|
+| `wdb344_module_file_copy_f32_must_not_emit_clone` | ✅ tip GREEN |
+| `wdb344_module_file_match_ref_copy_f32_must_not_star_clone` | ✅ tip GREEN (product shape) |
+| `wdb344_tip_out_game_core_collision2d_must_not_clone_f32` | ✅ tip GREEN after tip-out/gen sync |
+| `wdb346_module_file_copy_f32_field_must_not_emit_clone` | ✅ tip GREEN |
+| `wdb346_tip_out_game_core_camera_must_not_clone_f32_fields` | ✅ tip GREEN after tip-out/gen sync |
+
+**Root cause layer:** coercion/encoding — `append_rust_clone` no-ops on `*…`
+(IR Deref of `&Copy`); `apply_coercion(Deref)` / `Coercion::Deref` /
+`ArgCoercion::Deref` strip trailing `.clone()` before/after `*`.
+
+**What became unnecessary:** `*w1.clone()` / `*h1.clone()` on Copy match payloads;
+no new `ir_call_site` peel. Tip-out/gen sync cleared WDB-346 camera field clones.
+
+**Gates:** `CARGO_TARGET_DIR="$(wj cache path)"` →
+`cargo test --release --test all -- wdb344_ wdb346_` → **5 passed**;
+`cargo test --release -p windjammer --lib append_rust_clone_parenthesizes` → **1 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–358/364–366/368/374/383/398/407/410/416 + wave tip_outs).
+
 ## P3.696 (2026-10-06) — WDB-423: Copy i32 tuple array index must not `.clone()`
 
 Product `tps_camera` / `fps_camera`: `let (ox, oz) = offsets[(i as usize)].clone()`
