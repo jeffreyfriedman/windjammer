@@ -70,9 +70,11 @@ pub fn f(items: Vec<i32>, i: i32) -> bool {
 "#;
 
     let out = test_utils::compile_single(source);
+    // P3.338: cast `.len()` to i32 (peer width), never `i as usize` (negative wrap).
     assert!(
-        out.contains(".len() as i64") || out.contains(".len()) as i64"),
-        "expected .len() cast to i64 for safe comparison with signed int, got:\n{}",
+        (out.contains(".len() as i32") || out.contains(".len()) as i32"))
+            && !out.contains("i as usize"),
+        "expected .len() cast to i32 for safe comparison with signed i32, got:\n{}",
         out
     );
 }

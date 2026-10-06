@@ -1,3 +1,35 @@
+## P3.688 (2026-10-06) — bare `*_usize` local into Owned usize + i32 vs `.len()`
+
+`Vec::remove(sparse_idx_usize)` re-wrapped already-usize locals whose **names**
+end in `_usize` as `(sparse_idx_usize) as usize` (E0605 / double cast). Cause:
+`coerce_arg_str_for_usize_formal` treated any string ending in `_usize` as an
+embedded `N_usize` literal suffix before honoring `arg_already_usize`.
+
+Separately, `items.len() > i` with `i: i32` emitted `i as usize` because the
+WDB-081 “narrow unsigned → cast counter to usize” path incorrectly included
+signed `i32` (negative wrap). Prefer casting `.len()` to `i32` peer width
+(P3.338); keep u32/u64 → `as usize`.
+
+| Gate | Status |
+|------|--------|
+| `vec_remove_with_local_usize_cast` / `ownership_field_test::test_vec_remove_usize_variable` | ✅ tip GREEN — bare `sparse_idx_usize` |
+| `coerce_usize_formal_keeps_bare_usize_local_named_with_usize_suffix` | ✅ lib GREEN |
+| `test_len_compared_to_i32_variable` | ✅ tip GREEN — `(items.len() as i32) > i` |
+| `i32_while_len_and_literal_bound` / `i32_loop_arith_and_len_compare` | ✅ tip GREEN (no regress) |
+
+**Root cause layer:** coercion/encoding — usize-formal rewrite must only normalize
+true embedded `N_usize` literal suffixes (`strip_embedded` actually changes the
+string); signed i32 vs `.len()` uses peer-width cast, not counter→usize.
+
+**What became unnecessary:** `(sparse_idx_usize) as usize` double cast; unsafe
+`i as usize` for signed i32 vs `.len()`.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
+`cargo test --release --test all -- test_len_compared_to_i32_variable test_vec_remove_with_local_usize_cast i32_while_len_and_literal i32_loop_arith_and_len` → **4 passed**;
+`cargo test --release -p windjammer --lib coerce_usize_formal` → **3 passed**.
+
+**Do not steal:** P3.676–P3.688.
+
 ## P3.687 (2026-10-06) — `wj test` Doc-tests E0463 under shared verify cache (eco)
 
 After unit tests **pass**, `cargo test` still runs `Doc-tests windjammer_tests` and
@@ -60,7 +92,7 @@ WJ source uses bare `min_y` / `max_y`.
 | Gate | Status |
 |------|--------|
 | WDB-456 MultiFile | ✅ isolate GREEN — `let feet_y = min_y` (no `.clone()`) |
-| WDB-456 tip-out | ❌ tip RED — `min_y.clone()` in `rel_tip_out/physics/physics_body.rs` |
+| WDB-456 tip-out | ❌ tip RED — `min_y.clone()` in `rel_tip_out/physics/physics_body.rs` (stale tip-out; isolate GREEN) |
 
 **Root cause layer:** Copy peel / local-let — i32 **local** into untyped `let` must stay bare Copy.
 
@@ -146,13 +178,14 @@ Product `csg/scene.rs` `add_*`: `self.root_id = id.clone()` where `let id = self
 | Gate | Status |
 |------|--------|
 | `wdb455_module_file_copy_i32_local_field_assign_must_not_clone` | ✅ isolate GREEN |
-| `wdb455_tip_out_game_core_csg_scene_i32_local_field_assign_must_not_clone` | ❌ tip RED (product emit still clones) |
+| `wdb455_tip_out_game_core_csg_scene_i32_local_field_assign_must_not_clone` | ✅ tip GREEN after tip-out regen (P3.688) — isolate was already clean; stale `rel_tip_out` had `id.clone()` |
 
-**Root cause layer:** codegen Copy local → field assign still emits `.clone()`.
+**Root cause layer:** tip-live Copy local → field assign already bare (isolate GREEN);
+tip-out was stale product lag until `rel_tip_out/csg/scene.rs` regen (P3.688).
 
 **Do not steal:** WDB-393 (i32 formal field), WDB-446 (i32 local typed let), WDB-437 (i32 formal let).
 
-**Gates:** `bug_wdb455_module_file_copy_i32_local_field_assign_must_not_clone_test`.
+**Gates:** `bug_wdb455_module_file_copy_i32_local_field_assign_must_not_clone_test` → **2 passed**.
 
 ## P3.681 (2026-10-05) — `Ok(vec.len())` into `Result<int, _>` must coerce usize→i64
 

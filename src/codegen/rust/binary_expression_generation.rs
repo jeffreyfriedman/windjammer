@@ -571,15 +571,17 @@ impl<'ast> CodeGenerator<'ast> {
         // - int < items.len()       →  int < (items.len() as i64)
         // - (done * 100) / total    →  (done * 100) / (total as i64)  when total is usize
         // - usize < items.len()     →  no cast (both usize)
-        // u32/i32 vs `.len()`/usize: cast the counter to `usize`, not len to i64 (WDB-081).
+        // u32/u64 vs `.len()`/usize: cast the *unsigned* counter to `usize` (WDB-081).
+        // Signed i32 must NOT go this path — negatives wrap on `as usize`. Prefer
+        // casting `.len()` to `i32` via `expression_narrow_signed_width_for_len_compare`
+        // (P3.338 / `test_len_compared_to_i32_variable`).
         let mut skip_mixed_int_promotion = false;
         if is_comparison {
             let narrow_unsigned = |expr: &Expression<'ast>| {
-                self.expression_is_codegen_i32(expr)
-                    || self.infer_expression_type(expr).is_some_and(|t| {
-                        matches!(t, Type::Int32)
-                            || matches!(t, Type::Custom(n) if n == "u32" || n == "i32" || n == "u64")
-                    })
+                self.infer_expression_type(expr).is_some_and(|t| {
+                    matches!(t, Type::Uint)
+                        || matches!(t, Type::Custom(n) if n == "u32" || n == "u64")
+                })
             };
             let right_is_len_bound = matches!(
                 right,
@@ -609,7 +611,8 @@ impl<'ast> CodeGenerator<'ast> {
             } else if narrow_unsigned(right) && (left_is_usize || left_is_len_bound) {
                 right_str = format!("{right_str} as usize");
                 skip_mixed_int_promotion = true;
-            } else if right_is_usize && !left_is_usize {
+            } else if !skip_mixed_int_promotion && right_is_usize && !left_is_usize {
+                // Skip when loop-scan already chose `i as usize` vs bare `.len()`.
                 if let Some(width) = self.expression_narrow_signed_width_for_len_compare(left) {
                     right_str = format!("({right_str} as {width})");
                     skip_mixed_int_promotion = true;
@@ -617,7 +620,7 @@ impl<'ast> CodeGenerator<'ast> {
                     right_str = format!("({right_str} as {width})");
                     skip_mixed_int_promotion = true;
                 }
-            } else if left_is_usize && !right_is_usize {
+            } else if !skip_mixed_int_promotion && left_is_usize && !right_is_usize {
                 if let Some(width) = self.expression_narrow_signed_width_for_len_compare(right) {
                     left_str = format!("({left_str} as {width})");
                     skip_mixed_int_promotion = true;

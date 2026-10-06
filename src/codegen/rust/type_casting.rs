@@ -429,6 +429,9 @@ pub fn coerce_arg_str_for_usize_formal(
     // usize — that mixes i64 counters with a usize literal suffix (haystack / LedgerKit).
     // Must run *before* `arg_already_usize`: loop-vs-`.len()` inference can mark the
     // Binary usize while identifiers still emit i64.
+    // Only rewrite when `strip_embedded_usize_literal_suffixes` actually removes a
+    // numeric `N_usize` suffix. Bare locals whose *names* end in `_usize`
+    // (`sparse_idx_usize`) must fall through — they are not literal suffixes.
     if !arg_str.contains(" as usize") && arg_str.ends_with("_usize") {
         if !matches!(
             arg,
@@ -438,8 +441,10 @@ pub fn coerce_arg_str_for_usize_formal(
             }
         ) {
             let cleaned = strip_embedded_usize_literal_suffixes(arg_str);
-            *arg_str = format!("({cleaned}) as usize");
-            return;
+            if cleaned != *arg_str {
+                *arg_str = format!("({cleaned}) as usize");
+                return;
+            }
         }
     }
     if arg_already_usize {
@@ -634,6 +639,25 @@ mod tests {
             true,
         );
         assert_eq!(s, "(i + j + 1) as usize");
+    }
+
+    #[test]
+    fn coerce_usize_formal_keeps_bare_usize_local_named_with_usize_suffix() {
+        // Variable name ends in `_usize` but is already typed usize — must not become
+        // `(sparse_idx_usize) as usize` (Vec::remove / ownership_field_test).
+        let arg = Expression::Identifier {
+            name: "sparse_idx_usize".into(),
+            location: Default::default(),
+        };
+        let mut s = "sparse_idx_usize".to_string();
+        coerce_arg_str_for_usize_formal(
+            None,
+            &arg,
+            &mut s,
+            Some(&Type::Custom("usize".into())),
+            true,
+        );
+        assert_eq!(s, "sparse_idx_usize");
     }
 
     #[test]
