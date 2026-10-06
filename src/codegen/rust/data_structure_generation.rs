@@ -929,6 +929,18 @@ impl<'ast> CodeGenerator<'ast> {
                 // Unit Option::None is Copy when the field payload is Copy.
                 if let Expression::Identifier { name: id, .. } = expr {
                     let is_unit_keyword = id == "None" || id == "true" || id == "false";
+                    // WDB-440: Copy struct fields auto-copy — strip / skip `.clone()` even
+                    // when if/else float locals were not yet in `local_var_types`.
+                    let field_is_copy = self
+                        .lookup_struct_field_types(name)
+                        .and_then(|ft| ft.get(field_name))
+                        .is_some_and(|t| self.is_type_copy(t));
+                    if field_is_copy && expr_str.ends_with(".clone()") {
+                        expr_str = expr_str
+                            .strip_suffix(".clone()")
+                            .unwrap_or(&expr_str)
+                            .to_string();
+                    }
                     if !is_unit_keyword {
                         if let Some(ref analysis) = self.auto_clone_analysis {
                             let needs_reuse_clone = analysis
@@ -939,20 +951,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !expr_str.ends_with(".clone()")
                                 && !expr_str.ends_with(".to_string()")
                             {
-                                let is_copy = self
-                                    .local_var_types
-                                    .get(id)
-                                    .is_some_and(|t| self.is_type_copy(t))
-                                    || self
-                                        .current_function_params
-                                        .iter()
-                                        .find(|p| p.name == *id)
-                                        .is_some_and(|p| self.is_type_copy(&p.type_))
-                                    || self
-                                        .infer_expression_type(expr)
-                                        .as_ref()
-                                        .is_some_and(|t| self.is_type_copy(t));
-                                if !is_copy {
+                                if !field_is_copy && !self.ident_skips_auto_clone_as_copy(id, expr)
+                                {
                                     expr_str = format!("{}.clone()", expr_str);
                                 }
                             }
@@ -1014,12 +1014,13 @@ impl<'ast> CodeGenerator<'ast> {
                             .get(id)
                             .is_some_and(|count| *count > 1);
                         if used_multiple_times {
-                            let is_copy = self
-                                .current_function_params
-                                .iter()
-                                .find(|p| p.name == *id)
-                                .is_some_and(|p| self.is_type_copy(&p.type_));
-                            if !is_copy {
+                            // WDB-440: Copy locals (if/else float) and Copy fields must
+                            // not re-clone — formals-only was too narrow.
+                            let field_is_copy = self
+                                .lookup_struct_field_types(name)
+                                .and_then(|ft| ft.get(field_name))
+                                .is_some_and(|t| self.is_type_copy(t));
+                            if !field_is_copy && !self.ident_skips_auto_clone_as_copy(id, expr) {
                                 return format!("{}: {}.clone()", field_name, field_name);
                             }
                         }

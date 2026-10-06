@@ -1174,6 +1174,58 @@ impl<'ast> CodeGenerator<'ast> {
         self.if_branch_is_i32_width(then_branch) && self.if_branch_is_i32_width(else_branch)
     }
 
+    /// WDB-440: `let mse = if count > 0 { sum / count } else { 0.0 }` must type as
+    /// `f32` so struct-lit reuse does not emit `mse.clone()` (Copy auto-copy).
+    pub(in crate::codegen::rust) fn if_else_binding_should_be_float(
+        &self,
+        then_branch: &Expression<'ast>,
+        else_branch: &Expression<'ast>,
+    ) -> bool {
+        self.if_branch_is_float(then_branch) && self.if_branch_is_float(else_branch)
+    }
+
+    fn if_branch_is_float(&self, expr: &Expression<'ast>) -> bool {
+        match expr {
+            Expression::Literal {
+                value: Literal::Float(_),
+                ..
+            } => true,
+            Expression::Identifier { name, .. } => {
+                self.local_var_types.get(name).is_some_and(|t| {
+                    matches!(t, Type::Float) || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
+                }) || self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && (matches!(p.type_, Type::Float)
+                            || matches!(&p.type_, Type::Custom(n) if n == "f32" || n == "f64"))
+                })
+            }
+            Expression::Cast { type_, .. } => {
+                matches!(type_, Type::Float)
+                    || matches!(type_, Type::Custom(n) if n == "f32" || n == "f64")
+            }
+            Expression::Binary {
+                left, right, op, ..
+            } if matches!(
+                op,
+                crate::parser::BinaryOp::Add
+                    | crate::parser::BinaryOp::Sub
+                    | crate::parser::BinaryOp::Mul
+                    | crate::parser::BinaryOp::Div
+                    | crate::parser::BinaryOp::Mod
+            ) =>
+            {
+                self.if_branch_is_float(left) || self.if_branch_is_float(right)
+            }
+            _ => self
+                .infer_expression_type(expr)
+                .as_ref()
+                .is_some_and(|t| {
+                    matches!(t, Type::Float)
+                        || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
+                }),
+        }
+    }
+
     fn if_branch_is_i32_width(&self, expr: &Expression<'ast>) -> bool {
         match expr {
             Expression::Literal {

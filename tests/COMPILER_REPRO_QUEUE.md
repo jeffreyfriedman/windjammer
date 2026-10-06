@@ -1,3 +1,28 @@
+## P3.692 (2026-10-06) — WDB-440: Copy f32 if/else local into struct lit (no `.clone()`)
+
+Product `let mse = if … { sum / count } else { 0.0 }` then
+`ComparisonResult { mse: mse, …, pass: … && mse < 0.01 }` cloned because struct-lit
+shorthand only treated **formals** as Copy on multi-use — locals were forced to
+`mse: mse.clone()`.
+
+| Gate | Status |
+|------|--------|
+| `wdb440_module_file_copy_f32_local_into_struct_lit_must_not_clone` | ✅ tip GREEN |
+| `wdb440_module_file_if_let_f32_into_struct_lit_must_not_clone` | ✅ tip GREEN |
+| `wdb440_tip_out_game_core_frame_analysis_mse_must_not_clone` | ✅ tip GREEN |
+
+**Root cause layer:** coercion/encoding — Copy destination field +
+`ident_skips_auto_clone_as_copy` for shorthand multi-use (not formals-only);
+also record `Type::Float` for if/else float blocks in `local_var_types`.
+
+**What became unnecessary:** `mse.clone()` in frame_analysis ComparisonResult lit;
+no `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
+`cargo test --release --test all -- wdb440_` → **3 passed**.
+
+**Do not steal:** WDB-429/432/444 tip multipass Copy clones (still tip-live product RED).
+
 ## P3.691 (2026-10-06) — WDB-414: MutBorrowed helpers must not block owned partial-move `self`
 
 Product `initialize` called `setup_materials` / `build_scene` (`&mut self`) then

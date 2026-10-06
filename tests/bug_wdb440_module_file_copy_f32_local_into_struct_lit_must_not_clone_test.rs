@@ -41,6 +41,29 @@ pub fn finish(ssim_val: f32, mse: f32) -> ComparisonResult {
 }
 "#;
 
+/// Product shape: `let mse = if count > 0 { sum / count } else { 0.0 }` then
+/// struct lit + compare reuse — must not `mse.clone()`.
+const SRC_IF_LET: &str = r#"
+pub struct ComparisonResult {
+    pub ssim: f32,
+    pub mse: f32,
+    pub peak_diff: f32,
+    pub diff_pixel_count: u32,
+    pub pass: bool,
+}
+
+pub fn finish(ssim_val: f32, sum_diff_sq: f32, count: f32, peak_diff: f32, diff_count: u32) -> ComparisonResult {
+    let mse = if count > 0.0 { sum_diff_sq / count } else { 0.0 }
+    ComparisonResult {
+        ssim: ssim_val,
+        mse: mse,
+        peak_diff: peak_diff,
+        diff_pixel_count: diff_count,
+        pass: ssim_val > 0.95 && mse < 0.01,
+    }
+}
+"#;
+
 #[test]
 fn wdb440_module_file_copy_f32_local_into_struct_lit_must_not_clone() {
     let mut test = MultiFileTest::new();
@@ -54,6 +77,20 @@ fn wdb440_module_file_copy_f32_local_into_struct_lit_must_not_clone() {
         "WDB-440 RED: Copy f32 local cloned into struct lit:\n{rs}"
     );
     // Codegen gate is the contract; cargo-check can time out under shared-cache contention.
+    let _ = test.cargo_check();
+}
+
+#[test]
+fn wdb440_module_file_if_let_f32_into_struct_lit_must_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_IF_LET);
+    let map = test.compile().expect("WDB-440 if-let compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-440 if-let MultiFile lib.rs:\n{rs}");
+    assert!(
+        !rs.contains("mse.clone()"),
+        "WDB-440 RED: if/else f32 local cloned into struct lit:\n{rs}"
+    );
     let _ = test.cargo_check();
 }
 

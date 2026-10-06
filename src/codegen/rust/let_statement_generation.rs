@@ -374,7 +374,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if use_site.is_some() {
                             use_site
                         } else {
-                            let if_i32 = statements.last().and_then(|last_stmt| {
+                            let if_scalar = statements.last().and_then(|last_stmt| {
                                 let Statement::If {
                                     then_block,
                                     else_block,
@@ -393,10 +393,17 @@ impl<'ast> CodeGenerator<'ast> {
                                         _ => None,
                                     })
                                 })?;
-                                self.if_else_binding_should_be_i32(then_expr, else_expr)
-                                    .then_some(Type::Int32)
+                                if self.if_else_binding_should_be_i32(then_expr, else_expr) {
+                                    Some(Type::Int32)
+                                } else if self.if_else_binding_should_be_float(then_expr, else_expr)
+                                {
+                                    // WDB-440: float if/else block → f32 local (no .clone()).
+                                    Some(Type::Float)
+                                } else {
+                                    None
+                                }
                             });
-                            if_i32.or_else(|| self.infer_expression_type(value))
+                            if_scalar.or_else(|| self.infer_expression_type(value))
                         }
                     }
                     _ => {
