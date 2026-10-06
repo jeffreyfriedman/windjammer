@@ -1,3 +1,25 @@
+## P3.687 (2026-10-06) — `wj test` Doc-tests E0463 under shared verify cache (eco)
+
+After unit tests **pass**, `cargo test` still runs `Doc-tests windjammer_tests` and
+rustdoc fails with `error[E0463]: can't find crate for windjammer_runtime` /
+package lib despite `--extern` paths into
+`~/Library/Caches/windjammer/cargo-target/verify/…`.
+
+| Gate | Status |
+|------|--------|
+| eco `wj-csv` unit tests | ✅ 10 passed |
+| Doc-tests on shared verify | ❌ intermittent E0463 |
+| Same package with isolated `CARGO_TARGET_DIR` | ✅ All tests passed |
+
+**Repro (eco):** concurrent agents + `wj cache prune` / shared verify while
+`packages/wj-csv` `$WJ test`. Unit harness green; doc-tests abort → overall exit 1.
+
+**Workaround (eco only):** isolate `CARGO_TARGET_DIR` for the package test run.
+**Compiler fix needed?:** harness should skip empty doc-tests or pin rlib paths
+against verify GC; not an app reshape.
+
+**Do not steal:** P3.676–P3.687.
+
 ## P3.686 (2026-10-05) — method `&mut` passthrough must not stack `&mut`
 
 `Host::run(csr: &mut DenseCsr)` calling `self.take_edges(csr)` emitted
