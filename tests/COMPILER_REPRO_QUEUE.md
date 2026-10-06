@@ -1,6 +1,36 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.685 (2026-10-05) — TDD WDB-456 (DB agent; no compiler src)
+
+Copy `i32` **local** into untyped `let` must not `.clone()`.
+
+Product `physics/physics_body.rs` check_collision:
+```wj
+let feet_y = min_y
+let head_y = max_y
+```
+Tip-out emits `let feet_y = min_y.clone()` / `let head_y = max_y.clone()`.
+WJ source uses bare `min_y` / `max_y`.
+
+| Gate | Status |
+|------|--------|
+| WDB-456 MultiFile | ✅ isolate GREEN — `let feet_y = min_y` (no `.clone()`) |
+| WDB-456 tip-out | ❌ tip RED — `min_y.clone()` in `rel_tip_out/physics/physics_body.rs` |
+
+**Root cause layer:** Copy peel / local-let — i32 **local** into untyped `let` must stay bare Copy.
+
+**Why this is a new class:**
+- WDB-446 is i32 local into **typed** let (`let mut x: i32 = u.clone()`).
+- WDB-437 is i32 **formal** into let.
+- WDB-455 is i32 local into **field** assign.
+- This is i32 local into **untyped** let.
+
+**What became unnecessary:** rewriting collision probes to avoid local copies.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb456_` — isolate GREEN / tip RED (2026-10-05).
+
+**Do not steal:** WDB-406/408/411/455–456, P3.508–P3.685, WDB-412–456 (filed).
 
 ## WDB-455 (2026-10-05) — Copy i32 local into field assign must not `.clone()`
 
