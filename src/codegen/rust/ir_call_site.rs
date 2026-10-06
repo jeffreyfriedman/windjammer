@@ -2172,6 +2172,18 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Identity;
         }
+        // Already-emitted `&mut T` formals reborrow into MutBorrowed slots as
+        // Identity — never stack `&mut csr` (`&&mut T`, P3.681 method passthrough).
+        if matches!(kind, CoercionKind::MutBorrow) {
+            if let Expression::Identifier { name, .. } = arg_expr {
+                if self.identifier_already_mut_ref(name) {
+                    kind = CoercionKind::Identity;
+                    if let Some(bare) = prepared_arg.strip_prefix("&mut ") {
+                        prepared_arg = bare.to_string();
+                    }
+                }
+            }
+        }
         if matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow) {
             if let Expression::Identifier { name, .. } = arg_expr {
                 let caller_copy_aggregate = self.current_function_params.iter().any(|p| {

@@ -114,6 +114,15 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(t, Type::MutableReference(_))
                         });
                         if mut_ref_slot {
+                            // Already `&mut T` formals reborrow bare — do not stack
+                            // `&mut csr` → `&&mut DenseCsr` (P3.681 method passthrough).
+                            // Peel IR MutBorrow that prefixed despite MutRef actual.
+                            if self.identifier_already_mut_ref(name) {
+                                if let Some(bare) = arg_str.strip_prefix("&mut ") {
+                                    return bare.to_string();
+                                }
+                                return arg_str;
+                            }
                             let base =
                                 crate::codegen::rust::expression_utilities::borrow_base_expr(
                                     &arg_str,
