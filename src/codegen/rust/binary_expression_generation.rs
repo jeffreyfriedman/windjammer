@@ -323,6 +323,9 @@ impl<'ast> CodeGenerator<'ast> {
                 expr,
                 Expression::Identifier { name, .. }
                     if self.usize_variables.contains(name)
+                        // P3.679: i32 let-emit counters beat stale index-usize marks
+                        // (local_var_types may still say Custom("usize") from prepass).
+                        && !self.codegen_i32_binding_names.contains(name.as_str())
                         && !self.local_var_types.get(name.as_str()).is_some_and(|t| {
                             matches!(t, Type::Int | Type::Int32)
                                 || matches!(
@@ -447,7 +450,17 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 // WDB-315: `pos + 4 + 2` (usize accum) must keep `_usize` literals.
                 // Do not let coord-builder i32 peer overwrite a true usize operand / assign slot.
-                if assign_slot_is_usize || left_is_usize || right_is_usize {
+                // P3.679: while-condition pin to i32 (`let mut i: i32`) must not be overwritten
+                // by stale index-`usize_variables` when the body calls substring formals.
+                // P3.679: while-condition pin to i32 must not be overwritten by stale
+                // index-`usize_variables` when the body calls substring formals.
+                let while_pin_i32 = prev_bin_int.as_ref().is_some_and(|t| {
+                    matches!(t, Type::Int32)
+                        || matches!(t, Type::Custom(n) if n == "i32")
+                });
+                if while_pin_i32 {
+                    self.assignment_int_target_type = prev_bin_int.clone();
+                } else if assign_slot_is_usize || left_is_usize || right_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 } else {
                     let peer = if right_is_int_literal {

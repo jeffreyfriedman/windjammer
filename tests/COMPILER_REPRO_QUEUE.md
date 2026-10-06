@@ -232,18 +232,17 @@ Len-driven loops (`while i < strings.len(s)`) already GREEN (P3.300/P3.452);
 
 | Gate | Status |
 |------|--------|
-| `while_lit_bound_substring_int_must_unify_usize` | ❌ tip RED — game tip **18:38** `64_usize` + uncast `i` |
+| `while_lit_bound_substring_int_must_unify_usize` | ✅ tip GREEN — `while i < 64_i32` + `i as usize` into substring |
 
-**Root cause layer:** loop-bound / index-width — literal int compare must not
-stamp bound as `usize` while leaving the induction var `i32` for substring formals.
-
-**Why this is a new class:**
-- P3.300 / P3.315 / P3.452 are `i+1` / len-driven substring unify.
-- This is a **literal** `while i < N` bound (N not `.len()`).
+**Root cause layer:** constraint/solver-adjacent width tracking — index prepass
+stashed `local_var_types[i]=usize` while let-emit kept `codegen_i32`; while-pin
+only looked at local Int32, and `ident_in_usize_vars` / `identifier_emits_as_usize`
+trusted the stale usize mark → `64_usize` + bare `i` into substring.
 
 **What became unnecessary:** reshaping fixed-width scans away from indexed substring.
 
-**Gates:** tip 18:38 cargo-check of isolate — **failing** (2026-10-05).
+**Gates:** `cargo test --release --test all -- while_lit_bound_substring_int_must_unify_usize`
+— **passed**.
 
 **Do not steal:** P3.300/P3.315/P3.452/P3.454, P3.671–P3.678 (filed).
 
