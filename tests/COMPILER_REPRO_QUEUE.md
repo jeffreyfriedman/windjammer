@@ -184,21 +184,22 @@ missing `;` / function returns `()` (E0308). Binding `Some(v)` keeps a real
 
 | Gate | Status |
 |------|--------|
-| `hashmap_owned_get_some_wildcard_bool_must_not_defer_drop_after_matches` | ❌ tip RED — game tip **18:38** still `matches!` + DEFER DROP (reconfirmed) |
+| `hashmap_owned_get_some_wildcard_bool_must_not_defer_drop_after_matches` | ✅ tip GREEN — `matches!(map.get…)` only (no DEFER DROP) |
+| `hashmap_owned_get_helper_must_not_inject_mid_match_defer_drop` | ✅ tip GREEN — P3.267 hold |
 
-**Root cause layer:** defer-drop / matches! — P3.267 skipped mid-`match` bodies;
-`matches!` macro form still gets a post-expression defer-drop that is not a
-fn-tail after a returned bool.
+**Root cause layer:** temporary reconcile (defer-drop wrap) —
+`function_level_tail_line_index` treated single-line expression bodies as
+insert-after-end so the variable-in-tail check missed `map`; P3.267 `match `
+skip did not cover `matches!(`. Skip when `.get` + `matches!`/`match`; return
+original body when all opts skipped.
 
-**Why this is a new class:**
-- P3.267 / P3.278 greened mid-`match map.get` defer-drop for full match expr.
-- Distinct: `Some(_)` → `matches!` + spawn after bool expr.
+**What became unnecessary:** `matches!` + post-expr `thread::spawn(drop(map))`;
+package `Some(v)` peels for `has`.
 
-**What became unnecessary:** package `Some(v)` / `if let` peels for `has`.
+**Gates:** `CARGO_TARGET_DIR=…/target-agent-tip-p3676` → P3.676 + P3.267 —
+**2 passed** (2026-10-05).
 
-**Gates:** tip-session 02:10 isolate transpile + cargo check E0308; test filed.
-
-**Do not steal:** P3.267/P3.278, P3.671–P3.675 (filed).
+**Do not steal:** P3.267/P3.278, P3.671–P3.678 (filed).
 
 ## P3.675 (2026-10-05) — TDD WDB-452 (DB agent; no compiler src)
 
