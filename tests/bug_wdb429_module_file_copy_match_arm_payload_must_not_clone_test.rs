@@ -54,6 +54,39 @@ pub fn get_flag(c: Cell) -> Option<bool> {
         _ => None,
     }
 }
+
+// Product shape (state_machine/state.rs): Map.get → nested enum payload.
+pub enum StateDataValue {
+    Int(i32),
+    Float(f32),
+    Bool(bool),
+    String(string),
+}
+
+pub struct State {
+    pub data: Map<string, StateDataValue>,
+}
+
+impl State {
+    pub fn get_data_int(self, key: string) -> Option<i32> {
+        match self.data.get(key) {
+            Some(StateDataValue::Int(value)) => Some(value),
+            _ => None,
+        }
+    }
+    pub fn get_data_float(self, key: string) -> Option<f32> {
+        match self.data.get(key) {
+            Some(StateDataValue::Float(value)) => Some(value),
+            _ => None,
+        }
+    }
+    pub fn get_data_bool(self, key: string) -> Option<bool> {
+        match self.data.get(key) {
+            Some(StateDataValue::Bool(value)) => Some(value),
+            _ => None,
+        }
+    }
+}
 "#;
 
 #[test]

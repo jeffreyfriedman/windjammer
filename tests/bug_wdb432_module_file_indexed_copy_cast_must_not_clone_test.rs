@@ -39,6 +39,52 @@ pub fn sum_cast(children: Vec<u64>) -> u64 {
     }
     total
 }
+
+// Product shape (scene_graph_state): index+cast into method call args.
+pub struct Node {
+    pub children: Vec<u64>,
+}
+
+pub struct Graph {
+    pub nodes: Map<u64, Node>,
+}
+
+impl Graph {
+    fn update_node_recursive(self, child: u64, pos: Option<f32>) {
+        let _ = child
+        let _ = pos
+    }
+
+    fn count_descendants(self, node_id: u64) -> u32 {
+        0u32
+    }
+
+    pub fn visit(self, id: u64) {
+        let children_copy = match self.nodes.get(id) {
+            Some(n) => n.children,
+            None => return,
+        }
+        let mut c: usize = 0
+        while c < children_copy.len() {
+            self.update_node_recursive(children_copy[c] as u64, Some(1.0))
+            c = c + 1
+        }
+    }
+
+    pub fn count_all(self, id: u64) -> u32 {
+        let children_copy = match self.nodes.get(id) {
+            Some(n) => n.children,
+            None => return 0u32,
+        }
+        let mut count: u32 = (children_copy.len() as u32)
+        let mut i: usize = 0
+        while i < children_copy.len() {
+            count = count + self.count_descendants(children_copy[i] as u64)
+            i = i + 1
+        }
+        count
+    }
+}
 "#;
 
 #[test]
