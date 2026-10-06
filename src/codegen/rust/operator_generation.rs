@@ -41,12 +41,15 @@ impl<'ast> CodeGenerator<'ast> {
         self.in_struct_literal_field = prev_in_struct_field;
         // WDB-329: Copy cast targets must not keep a stale shared borrow on the operand
         // (`&idx as usize` → E0606). Strip leading `&` before composing the cast.
+        // WDB-432: also strip operand `.clone()` — Copy cast results never need it
+        // (`children_copy[c].clone() as u64` → `children_copy[c] as u64`).
         if self.is_type_copy(type_) {
             if let Some(rest) = expr_str.strip_prefix('&') {
                 if !rest.starts_with("mut ") {
                     expr_str = rest.to_string();
                 }
             }
+            crate::codegen::rust::expression_utilities::strip_trailing_clone(&mut expr_str);
         }
         // E0606 FIX: Cannot cast &T as U (e.g. &i32 as usize).
         // When the cast source is a borrowed parameter or a borrowed match arm

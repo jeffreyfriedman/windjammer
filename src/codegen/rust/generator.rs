@@ -2933,6 +2933,7 @@ impl<'ast> CodeGenerator<'ast> {
                 && !self.emitted_rust_ref_formals.contains(name)
                 && !self.caller_formal_emitted_shared_ref(name)
                 && !self.is_type_copy(&p.type_)
+                && !matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
         })
     }
 
@@ -3525,6 +3526,25 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = arg_expr else {
             return;
         };
+        // WDB-444: Copy formals/locals auto-copy — peel stale `&x` into owned slots,
+        // never invent `.clone()` from owned-outer / reuse finalize.
+        if self.binding_name_is_copy(name)
+            || self.call_arg_is_copy_identity(arg_expr, None)
+            || self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
+            })
+        {
+            if callee_wants_owned
+                && !callee_wants_shared_borrow
+                && coerced.starts_with('&')
+                && !coerced.starts_with("&mut ")
+            {
+                *coerced = crate::codegen::rust::expression_utilities::borrow_base_expr(coerced)
+                    .to_string();
+            }
+            return;
+        }
         if !self.caller_keeps_owned_outer_formal(name)
             && !self.local_binding_is_owned_non_copy(name)
         {
@@ -4363,6 +4383,17 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return arg_str.to_string();
         }
+        // WDB-444: Copy unit-enum formals/locals never need reuse `.clone()`.
+        if self.binding_name_is_copy(name)
+            || self.current_function_params.iter().any(|p| {
+                p.name == name && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
+            })
+            || self.local_var_types.get(name).is_some_and(|t| {
+                matches!(t, Type::Custom(n) if self.enum_is_unit_copy(n))
+            })
+        {
+            return arg_str.to_string();
+        }
         // P3.574 / WDB-347: owned non-Copy match payloads (`Ok(expr)`) still move at
         // owned formals and need analysis-driven `.clone()` on reuse. Skip only Copy
         // payloads (`r: f32`) — blanket skip caused E0382 in wj-cron.
@@ -4512,8 +4543,55 @@ impl<'ast> CodeGenerator<'ast> {
             if self.binding_name_is_copy(name) || self.copy_match_payload_binding(name) {
                 return true;
             }
+            // WDB-444: unit-enum formals may miss registry during early call emit;
+            // empty-payload enums in the variant registry are still Copy.
+            if self.current_function_params.iter().any(|p| p.name == *name) {
+                if let Some(Type::Custom(ty_name)) = self
+                    .current_function_params
+                    .iter()
+                    .find(|p| p.name == *name)
+                    .map(|p| &p.type_)
+                {
+                    if self.enum_is_unit_copy(ty_name) {
+                        return true;
+                    }
+                }
+            }
         }
         false
+    }
+
+    /// True when `name` is a known unit-only (hence Copy) enum.
+    ///
+    /// Accepts bare enum names (`WeatherType`) or variant paths (`WeatherType::Clear`).
+    pub(crate) fn enum_is_unit_copy(&self, name: &str) -> bool {
+        let enum_name = if crate::type_classification::is_enum_variant_constructor_path(name) {
+            name.rsplit_once("::")
+                .map(|(e, _)| e)
+                .unwrap_or(name)
+        } else {
+            name
+        };
+        let base = enum_name.rsplit("::").next().unwrap_or(enum_name);
+        if self.copy_types_registry.contains(name)
+            || self.copy_types_registry.contains(enum_name)
+            || self.copy_types_registry.contains(base)
+        {
+            return true;
+        }
+        // Key form is `Enum::Variant` — all payloads empty ⇒ unit-only Copy enum.
+        let mut saw = false;
+        for (key, payloads) in &self.enum_variant_types {
+            let key_enum = key.rsplit_once("::").map(|(e, _)| e).unwrap_or(key.as_str());
+            let key_base = key_enum.rsplit("::").next().unwrap_or(key_enum);
+            if key_base == base || key_enum == enum_name || key_enum == name {
+                saw = true;
+                if !payloads.is_empty() {
+                    return false;
+                }
+            }
+        }
+        saw
     }
 
     /// True when `name` is a scalar Copy pass-by-value binding (`i64`, `bool`, …),

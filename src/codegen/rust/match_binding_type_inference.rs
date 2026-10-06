@@ -23,6 +23,8 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 !self.is_type_copy(elem)
             }
+            // WDB-429: `HashMap`/`Map::get` → `Option<&V>`; nested enum payloads bind as refs.
+            Expression::MethodCall { .. } => self.match_expression_binds_refs(scrutinee),
             _ => false,
         }
     }
@@ -86,6 +88,23 @@ impl<'ast> CodeGenerator<'ast> {
             _ => scrutinee_type.clone(),
         };
 
+        self.infer_match_bound_types_for_container(&inner_type, pattern, yields_refs)
+    }
+
+    /// Bind match-arm variables given the (peeled) container type of the scrutinee.
+    ///
+    /// WDB-429: also used to recurse into nested `Some(Enum::Variant(payload))`.
+    fn infer_match_bound_types_for_container(
+        &self,
+        container: &Type,
+        pattern: &Pattern,
+        yields_refs: bool,
+    ) -> Vec<(String, Type)> {
+        let inner_type = match container {
+            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref().clone(),
+            other => other.clone(),
+        };
+
         let mut out = Vec::new();
 
         // `Ok(mut app)` / `Some(mut x)` parse as Tuple([MutBinding]) — not Single —
@@ -125,6 +144,42 @@ impl<'ast> CodeGenerator<'ast> {
                         out.push((var_name.to_string(), ty));
                     }
                     return out;
+                }
+            }
+            // WDB-429: nested `Some(StateDataValue::Int(value))` on `Map.get` —
+            // recurse into the inner enum pattern with the Option payload type.
+            if (variant == "Some" || variant.ends_with("::Some"))
+                || (variant == "Ok" || variant.ends_with("::Ok"))
+            {
+                let nested_container = if variant == "Some" || variant.ends_with("::Some") {
+                    match &inner_type {
+                        Type::Option(inner_t) => Some(inner_t.as_ref()),
+                        _ => None,
+                    }
+                } else {
+                    match &inner_type {
+                        Type::Result(ok, _) => Some(ok.as_ref()),
+                        _ => None,
+                    }
+                };
+                if let Some(container) = nested_container {
+                    if let EnumPatternBinding::Tuple(pats) = binding {
+                        if pats.len() == 1 {
+                            if matches!(&pats[0], Pattern::EnumVariant(..)) {
+                                // Nested enum behind `Option<&Enum>` still yields ref payloads.
+                                let nested_yields = yields_refs
+                                    || matches!(
+                                        container,
+                                        Type::Reference(_) | Type::MutableReference(_)
+                                    );
+                                return self.infer_match_bound_types_for_container(
+                                    container,
+                                    &pats[0],
+                                    nested_yields,
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }

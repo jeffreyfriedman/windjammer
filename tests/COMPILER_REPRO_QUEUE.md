@@ -1,3 +1,31 @@
+## P3.693 (2026-10-06) — WDB-444: Copy unit-enum formal reuse must not `.clone()`
+
+Product `WeatherSystem::set_weather`: after field assigns, reuse into
+`weather_to_atmosphere_bundle(weather, intensity)` cloned `weather` because
+`finalize_owned_outer_formal_call_arg` / forwarder reuse treated owned Copy
+unit-enum formals like non-Copy moves (`&weather` → `weather.clone()`).
+
+| Gate | Status |
+|------|--------|
+| `wdb444_module_file_copy_unit_enum_formal_assign_must_not_clone` | ✅ tip GREEN — bare `weather` / `intensity` |
+| `wdb444_tip_out_game_core_weather_system_enum_must_not_clone` | ✅ tip GREEN after tip-out regen |
+
+**Root cause layer:** signature/registry + temporary reconcile narrow —
+`copy_types_registry` / `enum_is_unit_copy` (variant-path peel + collect on
+`generate_enum`); early-return in `finalize_owned_outer_formal_call_arg` for
+Copy identity; forwarder reuse / demoted / amp-reuse / owned-vec peel skip
+`call_arg_is_copy_identity` / unit-enum Copy. Let-binding CamelCase
+`Enum::Variant` types as the enum (not the variant path).
+
+**What became unnecessary:** `weather.clone()` on reused Copy unit-enum formals
+into owned callees; no new method-name lists.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3693` →
+`cargo test --release --test all -- wdb444_` → **2 passed**;
+`wdb429_` / `wdb432_` isolates ✅ (tip-out still product lag until regen).
+
+**Do not steal:** WDB-429/432 tip-out multipass Copy clones (isolate GREEN).
+
 ## P3.692 (2026-10-06) — WDB-440: Copy f32 if/else local into struct lit (no `.clone()`)
 
 Product `let mse = if … { sum / count } else { 0.0 }` then
@@ -21,7 +49,7 @@ no `ir_call_site` peel.
 **Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
 `cargo test --release --test all -- wdb440_` → **3 passed**.
 
-**Do not steal:** WDB-429/432/444 tip multipass Copy clones (still tip-live product RED).
+**Do not steal:** WDB-429/432 tip-out multipass Copy clones (isolate GREEN; tip-out lag).
 
 ## P3.691 (2026-10-06) — WDB-414: MutBorrowed helpers must not block owned partial-move `self`
 
@@ -966,10 +994,10 @@ product emits `weather.clone()` / `intensity.clone()` in weather_system.
 | Gate | Status |
 |------|--------|
 | WDB-444 MultiFile | ✅ isolate GREEN — bare `weather` / `intensity` (no `.clone()`) |
-| WDB-444 tip-out | ❌ tip RED — `weather.clone()` / `intensity.clone()` in weather_system |
+| WDB-444 tip-out | ✅ tip GREEN (P3.693) — tip-out regen + Copy finalize/forwarder skip |
 
 **Root cause layer:** copy / unit-enum — Copy unit enums as formals/locals must not auto-clone into assigns
-(product tip-out lag / multipass path; isolate already correct).
+(fixed P3.693: registry + finalize early-return + forwarder Copy skip).
 
 **Why this is a new class:**
 - WDB-384/392 are `Direction::Variant.clone()` **path** exprs.
@@ -978,10 +1006,9 @@ product emits `weather.clone()` / `intensity.clone()` in weather_system.
 
 **What became unnecessary:** `weather.clone()` / `intensity.clone()` in WeatherSystem.
 
-**Gates:** `CARGO_TARGET_DIR=…/agent-tdd-wdb435` → `wdb444_` — **1 passed / 1 failed**
-(isolate GREEN, tip RED; 2026-10-04).
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3693` → `wdb444_` — **2 passed** (P3.693).
 
-**Do not steal:** WDB-406/408/411/443–444, P3.508–P3.658, WDB-412–444 (filed).
+**Do not steal:** WDB-429/432 tip-out (isolate GREEN).
 
 ## P3.655 (2026-10-04) — product wj-regex owned args into regex must auto-borrow
 

@@ -142,6 +142,13 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     return Some(Type::Custom(prim.to_string()));
                 }
+                // WDB-444: `WeatherType::Clear` is a unit-enum constructor — type is the enum.
+                if crate::type_classification::is_enum_variant_constructor_path(name) {
+                    if let Some((ty, _)) = name.rsplit_once("::") {
+                        let ty = ty.rsplit("::").next().unwrap_or(ty);
+                        return Some(Type::Custom(ty.to_string()));
+                    }
+                }
                 // Check function parameters
                 for param in &self.current_function_params {
                     if param.name == *name {

@@ -1477,7 +1477,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// When match ergonomics bind `x` as `&T` but the arm returns `Some(x)` expecting
-    /// `Option<T>`, emit `Some(x.clone())` or `Some(*x)` for `Copy` `T`.
+    /// `Option<T>`, emit `Some(*x)` for `Copy` `&T`, bare `Some(x)` for owned Copy, else clone.
     pub(in crate::codegen::rust) fn rewrite_some_wrapper_for_ref_match_binding(
         &self,
         arm_body: &'ast Expression<'ast>,
@@ -1492,16 +1492,7 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .find(|(n, _)| n == inner)
             .map(|(_, t)| t);
-        let inner_type = binding_type.map(|bt| match bt {
-            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-            other => other,
-        });
-        let is_copy = inner_type.is_some_and(|t| self.is_type_copy(t));
-        let inner_expr = if is_copy {
-            format!("*{}", inner)
-        } else {
-            format!("{}.clone()", inner)
-        };
+        let inner_expr = Self::some_wrapper_payload_rust(self, inner, binding_type)?;
         Some(format!("Some({})", inner_expr))
     }
 
@@ -1519,24 +1510,35 @@ impl<'ast> CodeGenerator<'ast> {
             return None;
         }
         let inner = s[PREFIX.len()..s.len().saturating_sub(1)].trim();
-        if !Self::looks_like_simple_binding_ident(inner)
-            || !added_borrowed.iter().any(|n| n == inner)
+        // Allow rewriting `Some(value.clone())` once binding types are known (WDB-429).
+        let bare = inner.strip_suffix(".clone()").unwrap_or(inner).trim();
+        if !Self::looks_like_simple_binding_ident(bare)
+            || !added_borrowed.iter().any(|n| n == bare)
         {
             return None;
         }
         let binding_type = match_bound_type_entries
             .iter()
-            .find(|(n, _)| n == inner)
+            .find(|(n, _)| n == bare)
             .map(|(_, t)| t);
-        let inner_ty = binding_type.map(|bt| match bt {
-            Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
-            other => other,
-        });
-        let is_copy = inner_ty.is_some_and(|t| self.is_type_copy(t));
-        if is_copy {
-            Some(format!("Some(*{})", inner))
-        } else {
-            Some(format!("Some({}.clone())", inner))
+        let inner_expr = Self::some_wrapper_payload_rust(self, bare, binding_type)?;
+        Some(format!("Some({})", inner_expr))
+    }
+
+    fn some_wrapper_payload_rust(
+        &self,
+        binding: &str,
+        binding_type: Option<&Type>,
+    ) -> Option<String> {
+        match binding_type {
+            Some(Type::Reference(inner) | Type::MutableReference(inner))
+                if self.is_type_copy(inner.as_ref()) =>
+            {
+                Some(format!("*{binding}"))
+            }
+            Some(t) if self.is_type_copy(t) => Some(binding.to_string()),
+            Some(_) => Some(format!("{binding}.clone()")),
+            None => None,
         }
     }
 

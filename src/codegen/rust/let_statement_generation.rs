@@ -187,10 +187,20 @@ impl<'ast> CodeGenerator<'ast> {
                     } => Some(Type::Custom(struct_name.to_string())),
                     // Unit-struct / type-path values: `let r = Renderer` (no braces).
                     // CamelCase identifiers are type constructors, not locals.
+                    // WDB-444: `WeatherType::Clear` is an enum variant — bind the enum type,
+                    // not the variant path (variant paths break Copy registry lookups).
                     Expression::Identifier { name, .. }
                         if name.starts_with(|c: char| c.is_ascii_uppercase()) =>
                     {
-                        Some(Type::Custom(name.to_string()))
+                        if crate::type_classification::is_enum_variant_constructor_path(name) {
+                            let enum_ty = name
+                                .rsplit_once("::")
+                                .map(|(e, _)| e.rsplit("::").next().unwrap_or(e))
+                                .unwrap_or(name.as_str());
+                            Some(Type::Custom(enum_ty.to_string()))
+                        } else {
+                            Some(Type::Custom(name.to_string()))
+                        }
                     }
                     // P3.329: `let mut i = clock_end` when binding/RHS is a usize index counter.
                     Expression::Identifier { name: rhs_name, .. } => {

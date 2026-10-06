@@ -434,6 +434,10 @@ impl<'ast> CodeGenerator<'ast> {
     pub(super) fn generate_enum(&mut self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
+        // WDB-444: register variant payload shapes before Copy/unit-enum decisions at
+        // call sites that may emit later in the same program pass.
+        self.collect_enum_variant_types(e);
+
         // WINDJAMMER PHILOSOPHY: Auto-derive common traits for enums
         // All enums get Clone, Debug by default
         // Only add PartialEq if ALL variants support it

@@ -435,6 +435,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             &gen.emitted_rust_ref_formals,
                             &gen.current_function_params,
                         );
+
                     if let Some(ref sig) = peel_sig {
                         coerced = crate::codegen::rust::call_site_borrow::reconcile_explicit_user_clone_into_owned_vec_formal(
                             gen,
@@ -508,7 +509,8 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 gen.append_clone_for_owned_non_copy_binding(name, base);
                         }
                         }
-                    } else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
+                    }
+ else if matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. })
                         && !coerced.ends_with(".clone()")
                         && peel_sig.as_ref().is_some_and(|sig| {
                             crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
@@ -874,6 +876,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             gen.maybe_clone_index_for_owned_param(arg, &mut coerced);
                         }
                     }
+
                     // Absolute terminal: never emit `n as usize.clone()` (WDB-300).
                     coerced =
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(

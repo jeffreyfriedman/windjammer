@@ -4836,12 +4836,18 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             {
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
-                let skip = match arg_expr {
-                    Expression::Identifier { name, .. } => {
-                        self.binding_is_copy_pass_by_value_scalar(name)
-                    }
-                    _ => false,
-                };
+                // WDB-444: Copy unit enums / aggregates auto-copy — do not `.clone()`
+                // after peeling a stale shared-borrow prefix (`&weather` → `weather`).
+                let formal_ty = sig
+                    .formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx));
+                let skip = self.call_arg_is_copy_identity(arg_expr, formal_ty)
+                    || matches!(
+                        arg_expr,
+                        Expression::Identifier { name, .. }
+                            if self.binding_is_copy_pass_by_value_scalar(name)
+                                || self.binding_name_is_copy(name)
+                    );
                 if !skip {
                     return format!("{base}.clone()");
                 }
@@ -4875,12 +4881,17 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             {
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
-                let skip = match arg_expr {
-                    Expression::Identifier { name, .. } => {
-                        self.binding_is_copy_pass_by_value_scalar(name)
-                    }
-                    _ => false,
-                };
+                // WDB-444: same Copy skip as the reuse branch above.
+                let formal_ty = sig
+                    .formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx));
+                let skip = self.call_arg_is_copy_identity(arg_expr, formal_ty)
+                    || matches!(
+                        arg_expr,
+                        Expression::Identifier { name, .. }
+                            if self.binding_is_copy_pass_by_value_scalar(name)
+                                || self.binding_name_is_copy(name)
+                    );
                 if !skip {
                     return format!("{base}.clone()");
                 }
@@ -5030,7 +5041,29 @@ impl<'ast> CodeGenerator<'ast> {
             if skip_clone {
                 arg_str.to_string()
             } else {
-                format!("{arg_str}.clone()")
+                // WDB-444: Copy unit enums skip reuse clone even when copy_types_registry
+                // lagged (analyzer `copy_structs` historically omitted enums).
+                let unit_enum_copy = match arg_expr {
+                    Expression::Identifier { name, .. } => self
+                        .current_function_params
+                        .iter()
+                        .find(|p| p.name == *name)
+                        .is_some_and(|p| {
+                            matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
+                        })
+                        || self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                            matches!(t, Type::Custom(n) if self.enum_is_unit_copy(n))
+                        }),
+                    _ => false,
+                } || sig
+                    .formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| matches!(t, Type::Custom(n) if self.enum_is_unit_copy(n)));
+                if unit_enum_copy {
+                    arg_str.to_string()
+                } else {
+                    format!("{arg_str}.clone()")
+                }
             }
         } else if let Expression::Identifier { name, .. } = arg_expr {
             if self.caller_demoted_non_copy_formal_into_owned_callee(name)
@@ -5958,12 +5991,35 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => false,
                 };
-                *coerced = if needs_clone
+                // WDB-444: Copy identity (unit enums / aggregates) auto-copies — peel
+                // stale `&weather` to `weather`, never `weather.clone()`. Only non-Copy
+                // reuse needs `.clone()` here (scalar Copy already skipped below).
+                let formal_ty = text_sig
+                    .formal_param_type(owned_pidx)
+                    .or_else(|| text_sig.param_types.get(owned_pidx));
+                let copy_identity = self.call_arg_is_copy_identity(arg_expr, formal_ty)
+                    || matches!(
+                        arg_expr,
+                        Expression::Identifier { name, .. }
+                            if self.binding_is_copy_pass_by_value_scalar(name)
+                                || self.binding_name_is_copy(name)
+                                || self.current_function_params.iter().any(|p| {
+                                    p.name == *name
+                                        && matches!(
+                                            &p.type_,
+                                            Type::Custom(n) if self.enum_is_unit_copy(n)
+                                        )
+                                })
+                    );
+                *coerced = if copy_identity {
+                    base
+                } else if needs_clone
                     && !matches!(
                         arg_expr,
                         Expression::Identifier { name, .. }
                             if self.binding_is_copy_pass_by_value_scalar(name)
-                    ) {
+                    )
+                {
                     format!("{base}.clone()")
                 } else {
                     // `&Vec` into an owned/`Vec` formal is never valid; clone mut locals.
@@ -7540,7 +7596,22 @@ impl<'ast> CodeGenerator<'ast> {
                             object,
                         )
                     });
-                    if needs_reuse_clone && self.caller_owned_non_copy_formal(name) && !skip_self {
+                    // WDB-444: Copy unit enums are not `caller_owned_non_copy_formal`
+                    // when registry/unit detection is live; belt-and-suspenders skip.
+                    let copy_identity = self.call_arg_is_copy_identity(arg_expr, None)
+                        || self.binding_name_is_copy(name)
+                        || self.current_function_params.iter().any(|p| {
+                            p.name == *name
+                                && matches!(
+                                    &p.type_,
+                                    Type::Custom(n) if self.enum_is_unit_copy(n)
+                                )
+                        });
+                    if needs_reuse_clone
+                        && self.caller_owned_non_copy_formal(name)
+                        && !copy_identity
+                        && !skip_self
+                    {
                         if wants_ref
                             && !wants_owned
                             && !coerced.starts_with('&')
@@ -7551,6 +7622,7 @@ impl<'ast> CodeGenerator<'ast> {
                             *coerced = format!("{coerced}.clone()");
                         }
                     } else if self.caller_demoted_non_copy_formal_into_owned_callee(name)
+                        && !copy_identity
                         && !coerced.ends_with(".clone()")
                         && !coerced.ends_with(".to_string()")
                         && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
@@ -8010,7 +8082,21 @@ impl<'ast> CodeGenerator<'ast> {
                         self.is_type_copy(pointee)
                     })
                     || Self::arg_str_is_copy_scalar_numeric_cast(&s);
-                if !formal_is_copy && !arg_is_copy {
+                // WDB-444: unit-enum Copy formals/args must not clone into owned slots.
+                let unit_enum_copy = match arg_expr {
+                    Expression::Identifier { name, .. } => self
+                        .current_function_params
+                        .iter()
+                        .find(|p| p.name == *name)
+                        .is_some_and(|p| {
+                            matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
+                        }),
+                    _ => false,
+                } || sig
+                    .formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| matches!(t, Type::Custom(n) if self.enum_is_unit_copy(n)));
+                if !formal_is_copy && !arg_is_copy && !unit_enum_copy {
                     s = crate::codegen::rust::expression_utilities::append_rust_clone(&s);
                 }
             }
@@ -9179,9 +9265,15 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 // P3.574: owned non-Copy match payloads participate in auto-clone;
                 // Copy match payloads (WDB-347) still skip.
+                // WDB-444: unit-enum formals/locals are Copy even when copy_structs lagged.
                 if self.copy_match_payload_binding(name)
                     || self.expression_is_copy(arg_expr)
                     || self.binding_name_is_copy(name)
+                    || self.call_arg_is_copy_identity(arg_expr, None)
+                    || self.current_function_params.iter().any(|p| {
+                        p.name == *name
+                            && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
+                    })
                 {
                     return arg_str.to_string();
                 }

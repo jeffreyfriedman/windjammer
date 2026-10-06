@@ -393,7 +393,7 @@ impl CodeGenerator<'_> {
     }
 
     /// Collect field types for each enum variant into the enum_variant_types registry.
-    fn collect_enum_variant_types(&mut self, e: &crate::parser::EnumDecl) {
+    pub(super) fn collect_enum_variant_types(&mut self, e: &crate::parser::EnumDecl) {
         use crate::parser::EnumVariantData;
         for variant in &e.variants {
             let key = format!("{}::{}", e.name, variant.name);

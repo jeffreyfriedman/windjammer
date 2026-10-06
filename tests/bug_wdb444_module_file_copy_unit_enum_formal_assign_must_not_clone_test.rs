@@ -38,9 +38,14 @@ pub enum WeatherIntensity {
     Heavy,
 }
 
+pub fn weather_to_atmosphere_bundle(weather: WeatherType, intensity: WeatherIntensity) -> i32 {
+    0
+}
+
 pub struct WeatherSystem {
     pub current_weather: WeatherType,
     pub intensity: WeatherIntensity,
+    pub atmosphere: i32,
 }
 
 impl WeatherSystem {
@@ -50,12 +55,18 @@ impl WeatherSystem {
         WeatherSystem {
             current_weather: weather,
             intensity: intensity,
+            atmosphere: weather_to_atmosphere_bundle(weather, intensity),
         }
     }
 
     pub fn set_weather(self, weather: WeatherType, intensity: WeatherIntensity) {
         self.current_weather = weather
         self.intensity = intensity
+        self.atmosphere = weather_to_atmosphere_bundle(weather, intensity)
+        // Product: weather reused after the call (comparisons) — still must not clone.
+        if weather == WeatherType::Fog {
+            let _ = intensity
+        }
     }
 }
 "#;

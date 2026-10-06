@@ -1154,12 +1154,11 @@ impl<'ast> CodeGenerator<'ast> {
                 .as_ref()
                 .and_then(|t| Self::peeled_collection_element_type(t))
                 .cloned();
+            // WDB-432: Copy elements (incl. `u64` / unit enums as Custom) pass by value.
+            // Do not force-clone all Custom — that heuristic cloned `Vec<u64>` indexes.
             let needs_clone = match et.as_ref() {
                 None => true,
-                Some(t) => {
-                    !self.is_type_copy(t)
-                        || matches!(t, Type::Custom(_))
-                }
+                Some(t) => !self.is_type_copy(t),
             };
             if needs_clone {
                 return format!("{}.clone()", base_expr);

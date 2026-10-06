@@ -57,21 +57,32 @@ impl<'ast> CodeGenerator<'ast> {
         match ty {
             Type::Option(inner) => self.is_type_copy(inner),
             Type::Custom(name) => {
-                if self.copy_types_registry.contains(name.as_str()) {
+                // WDB-444: `WeatherType::Clear` is a variant path — Copy lives on the enum.
+                let enum_name = if crate::type_classification::is_enum_variant_constructor_path(name)
+                {
+                    name.rsplit_once("::")
+                        .map(|(e, _)| e)
+                        .unwrap_or(name.as_str())
+                } else {
+                    name.as_str()
+                };
+                let base = enum_name.rsplit("::").next().unwrap_or(enum_name);
+                if self.copy_types_registry.contains(name.as_str())
+                    || self.copy_types_registry.contains(enum_name)
+                    || self.copy_types_registry.contains(base)
+                {
                     return true;
                 }
-                if name
-                    .rsplit("::")
-                    .next()
-                    .is_some_and(|base| self.copy_types_registry.contains(base))
-                {
+                // WDB-444: unit-only enums are Copy even when analyzer `copy_structs`
+                // was empty (single-file) or registry lag before pre-pass insert.
+                if self.enum_is_unit_copy(name) || self.enum_is_unit_copy(enum_name) {
                     return true;
                 }
                 // Fall back: all-Copy fields of a known struct (WDB-356 Mat4 before
                 // registry convergence, or mid-impl emission order).
-                let base = name.rsplit("::").next().unwrap_or(name.as_str());
                 if let Some(fields) = self
                     .lookup_struct_field_types(name)
+                    .or_else(|| self.lookup_struct_field_types(enum_name))
                     .or_else(|| self.lookup_struct_field_types(base))
                 {
                     if !fields.is_empty()
@@ -83,6 +94,8 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 crate::codegen::rust::type_analysis::is_known_copy_type(name.as_str())
+                    || crate::codegen::rust::type_analysis::is_known_copy_type(enum_name)
+                    || crate::codegen::rust::type_analysis::is_known_copy_type(base)
             }
             _ => false,
         }
