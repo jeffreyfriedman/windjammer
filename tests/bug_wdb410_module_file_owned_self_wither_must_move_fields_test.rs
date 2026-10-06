@@ -50,6 +50,30 @@ impl Builder {
 }
 "#;
 
+/// Product shape: owned-self wither that only reconstructs via struct lit (no
+/// intermediate `let x = self.field`) — PassBuilder::shader / dispatch.
+const PRODUCT_SHADER_WITHER: &str = r#"
+pub struct Graph {
+    pub n: i32,
+}
+
+pub struct Builder {
+    pub graph: Graph,
+    pub items: Vec<i32>,
+    pub label: string,
+}
+
+impl Builder {
+    pub fn with_label(self, label: string) -> Builder {
+        Builder {
+            graph: self.graph,
+            items: self.items,
+            label: label,
+        }
+    }
+}
+"#;
+
 #[test]
 fn wdb410_module_file_owned_self_wither_must_move_fields() {
     let mut test = MultiFileTest::new();
@@ -65,6 +89,21 @@ fn wdb410_module_file_owned_self_wither_must_move_fields() {
         "WDB-410 RED: owned-self wither cloned fields instead of moving:\n{rs}"
     );
     test.cargo_check().expect("WDB-410 cargo-check");
+}
+
+#[test]
+fn wdb410_module_file_struct_lit_only_wither_must_move_fields() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", PRODUCT_SHADER_WITHER);
+    let map = test.compile().expect("WDB-410 struct-lit wither compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-410 struct-lit wither lib.rs:\n{rs}");
+    assert!(
+        !rs.contains("self.graph.clone()") && !rs.contains("self.items.clone()"),
+        "WDB-410 RED: struct-lit-only owned-self wither cloned fields:\n{rs}"
+    );
+    test.cargo_check()
+        .expect("WDB-410 struct-lit wither cargo-check");
 }
 
 fn wdb410_search_roots() -> Vec<PathBuf> {

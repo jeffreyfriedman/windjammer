@@ -1623,15 +1623,19 @@ impl AutoCloneAnalysis {
                 // - extract-assign: `let mut x = self.f; …; self.f = x` (regression-042)
                 // - call-arg writeback: `let r = f(self.f); …; self.f = r.remaining`
                 // Exception: owned-self wither (`let mut items = self.items` then
-                // reconstruct `Builder { graph: self.graph, … }`) — analyzer 2.5
-                // keeps `self` Owned; distinct fields may move (WDB-410).
+                // reconstruct `Builder { graph: self.graph, … }`, or struct-lit-only
+                // `PassBuilder { graph: self.graph, … }`) — analyzer 2.5 keeps `self`
+                // Owned; distinct fields may move (WDB-410).
                 if root == "self"
                     && Self::self_field_has_writeback(statements, path, field_move.statement_idx)
                 {
                     continue;
                 }
-                let self_always_clone =
-                    root == "self" && !Self::stmts_contain_self_field_move_let(statements);
+                // Only force-clone every `self.field` when there is no owned-self field
+                // move in the body. Struct-lit withers count as moves (WDB-410 product
+                // `PassBuilder::shader`) — previously only `let x = self.field` did.
+                let self_always_clone = root == "self"
+                    && !Self::stmts_contain_owned_self_field_move(statements);
                 if self_always_clone || root_used_later || field_used_later {
                     self.clone_sites.insert(
                         (path.clone(), field_move.statement_idx),
@@ -1640,6 +1644,11 @@ impl AutoCloneAnalysis {
                 }
             }
         }
+    }
+
+    /// Owned-self field moves in the body (`let` or struct-lit wither).
+    fn stmts_contain_owned_self_field_move(statements: &[&Statement]) -> bool {
+        Self::stmts_contain_self_field_move_let(statements)
     }
 
     /// `let x = self.field` (one-level) is an owned-self field move (analyzer 2.5).
@@ -1702,7 +1711,8 @@ impl AutoCloneAnalysis {
         )
     }
 
-    /// `Vox::new(self.scene)` is an owned-self field move (WDB-414), same as a let.
+    /// `Vox::new(self.scene)` / `Builder { graph: self.graph }` are owned-self
+    /// field moves (WDB-414 / WDB-410), same as a let.
     fn expr_contains_self_field_move(expr: &Expression) -> bool {
         if Self::expr_is_self_field_move(expr) {
             return true;
@@ -1712,6 +1722,12 @@ impl AutoCloneAnalysis {
                 arguments
                     .iter()
                     .any(|(_, arg)| Self::expr_contains_self_field_move(arg))
+            }
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, value)| Self::expr_contains_self_field_move(value)),
+            Expression::Block { statements, .. } => {
+                Self::stmts_contain_self_field_move_let(statements)
             }
             Expression::Binary { left, right, .. } => {
                 Self::expr_contains_self_field_move(left)

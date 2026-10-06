@@ -1,3 +1,26 @@
+## P3.700 (2026-10-06) — WDB-410: owned-self struct-lit wither must move fields
+
+Product `PassBuilder::shader` / `dispatch` / `critical` cloned every
+`self.field` because auto-clone `self_always_clone` only exempted bodies with
+`let x = self.field`, not struct-lit-only withers.
+
+| Gate | Status |
+|------|--------|
+| `wdb410_module_file_owned_self_wither_must_move_fields` | ✅ tip GREEN |
+| `wdb410_module_file_struct_lit_only_wither_must_move_fields` | ✅ tip GREEN (product shape) |
+| `wdb410_tip_out_game_core_owned_self_wither_must_move_fields` | ✅ tip GREEN after tip-out/gen sync |
+
+**Root cause layer:** constraint/auto-clone — treat `StructLiteral { … self.field … }`
+as an owned-self field move so partial-move detection does not force-clone.
+
+**What became unnecessary:** tip/product `self.graph.clone()` / `self.bindings.clone()`
+on owned-self withers; no `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb410_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383/416 + wave).
+
 ## P3.699 (2026-10-06) — WDB-407: associated `new(Vec)` payload store must stay owned
 
 Product `VoxParser::new(data: Vec<u8>)` (private in WJ) demoted to
@@ -20,7 +43,7 @@ no `ir_call_site` peel.
 **Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
 `cargo test --release --test all -- wdb407_ wdb398_` → **6 passed**.
 
-**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383/410/416 + wave).
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383/416 + wave).
 
 ## P3.698 (2026-10-06) — WDB-398: owned `new(MaterialPalette)` must not get `&palette.copy()`
 
@@ -48,7 +71,7 @@ to 1× Owned + `emitted=[false]`.
 **Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
 `cargo test --release --test all -- wdb398_` → **3 passed**.
 
-**Do not steal:** remaining tip REDs (WDB-340/349/353–358/364–366/368/374/383/407/410/416 + wave).
+**Do not steal:** remaining tip REDs (WDB-340/349/353–358/364–366/368/374/383/410/416 + wave).
 
 ## P3.697 (2026-10-06) — WDB-344/346: Copy f32 match deref + tip-out camera sync
 
