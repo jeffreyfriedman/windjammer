@@ -1606,6 +1606,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
+                            && !self.is_public_owned_non_copy_formal_api(param, func)
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && !self.param_only_used_in_discarding_let_binding(
                                 func.body.as_slice(),
@@ -2027,6 +2028,7 @@ impl<'ast> CodeGenerator<'ast> {
                             && !asref_runtime_keep_owned
                             && !cross_module_borrow_keep_owned
                             && !payload_forces_owned
+                            && !self.is_public_owned_non_copy_formal_api(param, func)
                             && !self.pub_module_api_keeps_owned_string_formal(func, param)
                             && !param.decorators.iter().any(|d| d.name == "string_ref")
                             && !self.param_must_not_demote_to_shared_borrow(&param.name, analyzed, None)
@@ -4512,8 +4514,27 @@ impl<'ast> CodeGenerator<'ast> {
         param: &Parameter,
         func: &FunctionDecl<'_>,
     ) -> bool {
-        if !func.is_pub || param.name == "self" || func.parent_type.is_some() {
+        if !func.is_pub || param.name == "self" {
             return false;
+        }
+        // Instance methods (`fn foo(self, …)`) still demote freely. Associated functions
+        // (`impl T { pub fn new(palette: MaterialPalette) }`) are public API like free
+        // functions — keep owned non-Copy formals (WDB-398 VoxelMaterialEditor::new).
+        let is_associated_fn = func.parent_type.is_some()
+            && !func.parameters.iter().any(|p| p.name == "self");
+        if func.parent_type.is_some() && !is_associated_fn {
+            return false;
+        }
+        // WDB-398: pub associated `new(T)` with owned Custom formal — keep owned before
+        // pure-forward / registry / delegation-emit demotion. Do not use the field-proj
+        // exclusion here: `palette.copy()` is currently classified as field-proj and would
+        // wrongly demote MaterialPalette (Vec-backed) constructors.
+        if is_associated_fn
+            && matches!(&param.type_, Type::Custom(_))
+            && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
+            && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func)
+        {
+            return true;
         }
         // P3.669: pure Custom→same-type shared-ref forwarders (`take_field` →
         // `json.get(&Value)`) demote even when multipass promotes the helper to pub.
@@ -4620,7 +4641,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .position(|p| p.name == param.name)
                 .unwrap_or(0);
-            return self.global_signature_for_function(func).is_some_and(|sig| {
+            if self.global_signature_for_function(func).is_some_and(|sig| {
                 matches!(
                     sig.param_ownership.get(param_idx),
                     Some(OwnershipMode::Owned)
@@ -4629,7 +4650,17 @@ impl<'ast> CodeGenerator<'ast> {
                     .get(param_idx)
                     .or_else(|| sig.param_types.get(param_idx))
                     .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
-            });
+            }) {
+                return true;
+            }
+            // WDB-398: pub associated `new(palette: MaterialPalette)` — source declared
+            // owned; keep it even when registry has not locked Owned and body only calls
+            // `palette.copy()` (owning-method detection may lag on same-crate methods).
+            if func.parent_type.is_some() {
+                return true;
+            }
+            return self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
+                || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
         }
         // WDB-191: multipass restore keeps pub `string` owned when stored in payload
         // (`pg_wire_parse` name/sql) even if per-file payload walk misses loop assignments.

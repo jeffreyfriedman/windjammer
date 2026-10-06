@@ -440,6 +440,70 @@ fn registry_key_is_type_qualified_method(registry_key: &str) -> bool {
     })
 }
 
+/// WDB-398: pub associated `Type::new(palette: MaterialPalette)` (no `self`) must
+/// restore Owned like pub free Custom APIs. Instance methods stay demotable.
+fn associated_pub_owned_custom_formal_should_restore(
+    sig: &FunctionSignature,
+    programs: &[&Program],
+    callee_key: &str,
+    param_idx: usize,
+    lookup: Option<&ProgramLookup<'_>>,
+    formal_ty: &Type,
+) -> bool {
+    if sig.has_self_receiver {
+        return false;
+    }
+    let Type::Custom(name) = formal_ty else {
+        return false;
+    };
+    if crate::codegen::rust::types::is_windjammer_text_type(formal_ty)
+        || is_copy_formal_name(name, &std::collections::HashSet::new())
+    {
+        return false;
+    }
+    let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
+    let parent_leaf = callee_key
+        .rsplit_once("::")
+        .map(|(p, _)| p.rsplit("::").next().unwrap_or(p))
+        .unwrap_or(callee_key);
+    let decl = if let Some(lookup) = lookup {
+        lookup
+            .methods
+            .get(&(parent_leaf.to_string(), simple.to_string()))
+            .copied()
+    } else {
+        programs.iter().find_map(|program| {
+            program.items.iter().find_map(|item| {
+                let Item::Impl { block, .. } = item else {
+                    return None;
+                };
+                if block.type_name != parent_leaf {
+                    return None;
+                }
+                block
+                    .functions
+                    .iter()
+                    .find(|m| m.name == simple)
+                    .map(|m| m as &FunctionDecl<'_>)
+            })
+        })
+    };
+    let Some(decl) = decl else {
+        return false;
+    };
+    if !decl.is_pub || decl.parameters.iter().any(|p| p.name == "self") {
+        return false;
+    }
+    non_self_param(&decl.parameters, param_idx).is_some_and(|p| {
+        matches!(&p.type_, Type::Custom(_))
+            && !crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
+            && !matches!(
+                &p.type_,
+                Type::Reference(_) | Type::MutableReference(_)
+            )
+    })
+}
+
 /// Fallback when no `ProgramLookup` is available. Hot paths must use
 /// `ProgramLookup::declares_pub_owned_custom_formal_at` instead (P3.622).
 fn programs_declare_pub_free_fn_owned_custom_formal_at(
@@ -557,13 +621,30 @@ pub fn restore_pub_owned_non_copy_api_formals(
         for idx in 0..n {
             // Defining-module / dependency demotion (`emitted_rust_ref_params[idx]=true`)
             // must not be undone by importer-crate bare-pass restores (WDB-244).
-            if new_sig
+            // WDB-398: pub associated owned Custom formals may clear a stale true when
+            // codegen will emit owned `T` (VoxelMaterialEditor::new).
+            let emitted_shared = new_sig
                 .emitted_rust_ref_params
                 .as_ref()
                 .and_then(|flags| flags.get(idx))
                 .copied()
-                == Some(true)
-            {
+                == Some(true);
+            let formal_ty = new_sig
+                .formal_param_types
+                .get(idx)
+                .or_else(|| new_sig.param_types.get(idx));
+            let associated_owned_restore = emitted_shared
+                && formal_ty.is_some_and(|ty| {
+                    associated_pub_owned_custom_formal_should_restore(
+                        &new_sig,
+                        programs,
+                        &key,
+                        idx,
+                        Some(&lookup),
+                        ty,
+                    )
+                });
+            if emitted_shared && !associated_owned_restore {
                 continue;
             }
             if !callee_pub_owned_formal_skip_bare_pass(
@@ -2774,9 +2855,18 @@ fn callee_pub_owned_formal_skip_bare_pass(
         return false;
     }
     let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
-    // Type::method keys are not free functions — never treat them as pub free APIs.
+    // Type::method keys are not free functions. Pub associated functions (no `self`)
+    // with owned non-Copy Custom formals still restore Owned (WDB-398
+    // `VoxelMaterialEditor::new(palette: MaterialPalette)`).
     if registry_key_is_type_qualified_method(callee_key) {
-        return false;
+        return associated_pub_owned_custom_formal_should_restore(
+            sig,
+            programs,
+            callee_key,
+            param_idx,
+            lookup,
+            formal_ty,
+        );
     }
     let is_pub_free_fn = if let Some(lookup) = lookup {
         lookup.is_pub_free_fn(callee_key)

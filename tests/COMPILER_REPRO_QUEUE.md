@@ -1,3 +1,31 @@
+## P3.698 (2026-10-06) — WDB-398: owned `new(MaterialPalette)` must not get `&palette.copy()`
+
+Product `VoxelMaterialEditor::new(palette: MaterialPalette)` kept emitting owned
+formals, but call sites still produced `new(&palette.copy())` because a bloated
+6×`MaterialPalette` mixed registry bag (`emitted[0]=true`) blocked the defining
+1-param Owned refresh via `defining_mixed_owned_emission_beats`, and
+`restore_pub_owned_non_copy_api_formals` skipped all `Type::method` keys.
+
+| Gate | Status |
+|------|--------|
+| `wdb398_module_file_owned_copy_into_new_must_not_borrow` | ✅ tip GREEN |
+| `wdb398_module_file_associated_new_owned_palette_must_not_demote` | ✅ tip GREEN |
+| `wdb398_tip_out_game_core_voxel_editor_must_not_borrow_palette_copy` | ✅ tip GREEN after tip-out/gen sync |
+
+**Root cause layer:** signature — (1) shape-gate `defining_mixed_owned_emission_beats`;
+(2) restore pub associated owned Custom (no `self`); (3) all-owned refresh replaces
+stale `emitted[i]=true` instead of OR-union; (4) keep-owned associated formals in
+prepare / method-registry sync (formal emit already owned).
+
+**What became unnecessary:** tip/product `&palette.copy()` into owned `new`; no new
+`ir_call_site` peel. Corrupted 6-param `VoxelMaterialEditor::new` metadata collapsed
+to 1× Owned + `emitted=[false]`.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb398_` → **3 passed**.
+
+**Do not steal:** remaining tip REDs (WDB-340/349/353–358/364–366/368/374/383/407/410/416 + wave).
+
 ## P3.697 (2026-10-06) — WDB-344/346: Copy f32 match deref + tip-out camera sync
 
 Product `collision2d`: demoted `&RigidBody2D` → `match &a.collider` binds `&f32`,
@@ -23,7 +51,7 @@ no new `ir_call_site` peel. Tip-out/gen sync cleared WDB-346 camera field clones
 `cargo test --release --test all -- wdb344_ wdb346_` → **5 passed**;
 `cargo test --release -p windjammer --lib append_rust_clone_parenthesizes` → **1 passed**.
 
-**Do not steal:** remaining tip-true REDs (WDB-340/349/353–358/364–366/368/374/383/398/407/410/416 + wave tip_outs).
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–358/364–366/368/374/383/407/410/416 + wave tip_outs).
 
 ## P3.696 (2026-10-06) — WDB-423: Copy i32 tuple array index must not `.clone()`
 
@@ -5187,7 +5215,7 @@ Read-only reuse of `line` across `start(line, key) < slen(line)` must not emit `
 | WDB-397 MultiFile | ✅ isolate GREEN — `TileType::Empty` / `Solid` no `.clone()` |
 | WDB-397 tip-out | ❌ RED — `rel_tip_out/world/tilemap.rs` + `gen/world/tilemap.rs` still `TileType::*.clone()` |
 | WDB-398 MultiFile | ✅ isolate GREEN — `Editor::new(palette.copy())` no `&` |
-| WDB-398 tip-out | ❌ RED — `rel_tip_out/editor/voxel_editor.rs` + `gen/editor/voxel_editor.rs` still `new(&palette.copy())` |
+| WDB-398 tip-out | ✅ tip GREEN (P3.698) — `new(palette.copy())` owned; metadata 1× Owned |
 
 **Root cause layer:** none this session — DB agent files gates only. Do not edit `windjammer/src/`. Isolates already correct (same assign-clone skip class as P3.479); product/tip regen pending.
 

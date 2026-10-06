@@ -798,13 +798,28 @@ pub(crate) fn merge_codegen_refresh_metadata(
         return;
     }
     let replacing_with_mixed = from_mixed && defining_mixed_owned_emission_beats(from, into);
+    // WDB-398: same-shape all-owned refresh must replace stale `emitted[i]=true`
+    // instead of OR-union (which permanently poisons owned formals).
+    let replacing_with_owned_refresh = signature_param_shapes_compatible(into, from)
+        && from_flags.iter().all(|&f| !f)
+        && method_registry_reflects_emitted_owned(from)
+        && into
+            .emitted_rust_ref_params
+            .as_ref()
+            .is_some_and(|flags| flags.iter().any(|&f| f));
     let prior_flags = into.emitted_rust_ref_params.clone();
-    let merged_flags: Vec<bool> = if replacing_with_mixed {
+    let merged_flags: Vec<bool> = if replacing_with_mixed || replacing_with_owned_refresh {
         from_flags.clone()
     } else {
         match &prior_flags {
             Some(existing) => {
-                let n = from_flags.len().max(existing.len());
+                // Cap OR-union to param arity so flags cannot grow past types (WDB-398).
+                let n = into
+                    .param_types
+                    .len()
+                    .max(from.param_types.len())
+                    .min(from_flags.len().max(existing.len()));
+                let n = n.min(into.param_types.len().max(from.param_types.len()));
                 (0..n)
                     .map(|idx| {
                         from_flags.get(idx).copied().unwrap_or(false)
@@ -824,8 +839,10 @@ pub(crate) fn merge_codegen_refresh_metadata(
         match flags.get(idx).copied() {
             Some(false) => {
                 // Keep a prior shared-ref unless we are replacing an importer stub
-                // with defining-module mixed formals (`[true, true]` → `[true, false]`).
+                // with defining-module mixed formals (`[true, true]` → `[true, false]`)
+                // or an all-owned refresh (WDB-398).
                 if !replacing_with_mixed
+                    && !replacing_with_owned_refresh
                     && prior_flags.as_ref().and_then(|f| f.get(idx)).copied() == Some(true)
                 {
                     continue;
@@ -1557,11 +1574,16 @@ pub(crate) fn owned_emission_slot_count(sig: &FunctionSignature) -> usize {
 /// The candidate must itself be mixed (at least one shared-ref slot *and* one
 /// owned-emission slot). An all-owned importer stub must not "win" just because
 /// it has more `false` flags than a correctly demoted mixed API.
+///
+/// WDB-398: arity / shape must match. A corrupted longer mixed signature
+/// (`VoxelMaterialEditor::new` with 6× `MaterialPalette` slots) must not block a
+/// correct one-param owned refresh via `owned_emission_slot_count` alone.
 pub(crate) fn defining_mixed_owned_emission_beats(
     candidate: &FunctionSignature,
     incumbent: &FunctionSignature,
 ) -> bool {
-    signature_has_mixed_shared_and_owned_emission(candidate)
+    signature_param_shapes_compatible(candidate, incumbent)
+        && signature_has_mixed_shared_and_owned_emission(candidate)
         && owned_emission_slot_count(candidate) > owned_emission_slot_count(incumbent)
 }
 
@@ -3046,7 +3068,14 @@ mod prefer_shared_runtime_tests {
             1,
             "emitted=false String slot counts as owned even if analyzer is Borrowed"
         );
-        assert!(defining_mixed_owned_emission_beats(&borrowed_emit, &std));
+        // WDB-398: shape-mismatched mixed must not beat a different API via slot counts.
+        assert!(!defining_mixed_owned_emission_beats(&borrowed_emit, &std));
+        let mut same_shape_owned = borrowed_emit.clone();
+        same_shape_owned.emitted_rust_ref_params = Some(vec![false, false]);
+        assert!(defining_mixed_owned_emission_beats(
+            &borrowed_emit,
+            &same_shape_owned
+        ));
         assert!(
             emitted_owned_arg_contract(&merged, 1),
             "relative must stay owned-emission, got {:?}",

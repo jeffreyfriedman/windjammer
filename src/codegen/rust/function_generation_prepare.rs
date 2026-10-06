@@ -3014,6 +3014,11 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .filter(|p| p.name != "self")
             .map(|param| {
+                // WDB-398: pub associated owned Custom formals stay Owned in the
+                // method registry so call sites do not see stale Borrowed.
+                if self.is_public_owned_non_copy_formal_api(param, func) {
+                    return false;
+                }
                 if self.is_type_copy(&param.type_)
                     && !crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                 {
@@ -8200,6 +8205,11 @@ impl<'ast> CodeGenerator<'ast> {
         // Copy scalars (`usize`/`i32`/…) always pass by value — never demote to `&T`
         // for Vec::contains forwarding (auto_ref_deref_copy).
         if crate::type_classification::is_copy_pass_by_value_formal(&param.type_) {
+            return false;
+        }
+        // WDB-398: pub associated `new(palette: MaterialPalette)` must stay owned —
+        // delegation demotion would force `&palette.copy()` at call sites.
+        if self.is_public_owned_non_copy_formal_api(param, func) {
             return false;
         }
         // WDB-101/102 keep-owned: opaque cross-module `&T` wrappers and Vec→`&[T]`

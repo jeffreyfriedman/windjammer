@@ -52,6 +52,52 @@ pub fn make() -> Editor {
 }
 "#;
 
+/// Product shape: cross-module associated `VoxelMaterialEditor::new(palette: MaterialPalette)`
+/// was demoted to `&MaterialPalette`, forcing `&palette.copy()` at the call site.
+const PRODUCT_PALETTE: &str = r#"
+pub struct MaterialPalette {
+    pub n: i32,
+    pub tags: Vec<string>,
+}
+
+impl MaterialPalette {
+    pub fn new() -> MaterialPalette {
+        MaterialPalette { n: 0, tags: Vec::new() }
+    }
+    pub fn copy(self) -> MaterialPalette {
+        MaterialPalette { n: self.n, tags: self.tags }
+    }
+}
+
+pub struct VoxelMaterialEditor {
+    pub palette: MaterialPalette,
+}
+
+impl VoxelMaterialEditor {
+    pub fn new(palette: MaterialPalette) -> VoxelMaterialEditor {
+        let current = palette.copy()
+        VoxelMaterialEditor { palette: current }
+    }
+}
+"#;
+
+const PRODUCT_EDITOR: &str = r#"
+use crate::material::MaterialPalette
+use crate::material::VoxelMaterialEditor
+
+pub struct VoxelEditor {
+    material_editor: VoxelMaterialEditor,
+}
+
+impl VoxelEditor {
+    pub fn new(grid_size: i32) -> VoxelEditor {
+        let palette = MaterialPalette::new()
+        let material_editor = VoxelMaterialEditor::new(palette.copy())
+        VoxelEditor { material_editor: material_editor }
+    }
+}
+"#;
+
 #[test]
 fn wdb398_module_file_owned_copy_into_new_must_not_borrow() {
     let mut test = MultiFileTest::new();
@@ -65,6 +111,32 @@ fn wdb398_module_file_owned_copy_into_new_must_not_borrow() {
         "WDB-398 RED: owned copy() into new() was borrowed:\n{rs}"
     );
     test.cargo_check().expect("WDB-398 cargo-check");
+}
+
+#[test]
+fn wdb398_module_file_associated_new_owned_palette_must_not_demote() {
+    let mut test = MultiFileTest::new();
+    test.add_file("material.wj", PRODUCT_PALETTE);
+    test.add_file("editor.wj", PRODUCT_EDITOR);
+    let map = test.compile().expect("WDB-398 product-shape compile");
+    let material = map.get("material.rs").expect("material.rs");
+    let editor = map.get("editor.rs").expect("editor.rs");
+    eprintln!("WDB-398 material.rs:\n{material}\n--- editor.rs:\n{editor}");
+    assert!(
+        material.contains("new(palette: MaterialPalette)")
+            || material.contains("new(palette: crate::material::MaterialPalette)"),
+        "WDB-398 RED: associated new demoted owned MaterialPalette:\n{material}"
+    );
+    assert!(
+        !material.contains("new(palette: &MaterialPalette)")
+            && !material.contains("new(palette: &crate::material::MaterialPalette)"),
+        "WDB-398 RED: associated new formal is shared-ref:\n{material}"
+    );
+    assert!(
+        !editor.contains("&palette.copy()"),
+        "WDB-398 RED: call site borrowed palette.copy():\n{editor}"
+    );
+    test.cargo_check().expect("WDB-398 product-shape cargo-check");
 }
 
 #[test]
