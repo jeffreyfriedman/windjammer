@@ -34,6 +34,22 @@ pub fn abs_sum(n: i32) -> i32 {
     }
     total
 }
+
+/// Product shape (component_viewer_controls): negative literal range + multi-use
+/// after abs if/else — must not clone the loop counter in the else arm or later arith.
+pub fn rib(cx: i32, cz: i32) -> i32 {
+    let mut hits = 0
+    for dx in -2..3 {
+        for dz in -2..3 {
+            let adx = if dx < 0 { -dx } else { dx }
+            let adz = if dz < 0 { -dz } else { dz }
+            if adx + adz <= 3 && adx + adz > 0 {
+                hits = hits + cx + dx + cz + dz
+            }
+        }
+    }
+    hits
+}
 "#;
 
 #[test]
@@ -43,7 +59,10 @@ fn wdb425_module_file_copy_i32_abs_else_must_not_clone() {
     let map = test.compile().expect("WDB-425 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     eprintln!("WDB-425 MultiFile lib.rs:\n{rs}");
-    let cloned = rs.contains(".clone()");
+    let cloned = rs.lines().any(|line| {
+        let t = line.trim_start();
+        !t.starts_with("//") && !t.starts_with("///") && t.contains(".clone()")
+    });
     assert!(
         !cloned,
         "WDB-425 RED: Copy i32 abs else-branch cloned:\n{rs}"

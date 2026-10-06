@@ -23,6 +23,10 @@ impl<'ast> CodeGenerator<'ast> {
         if self.binding_is_copy_pass_by_value_scalar(name) {
             return true;
         }
+        // WDB-425: range `for dx in -2..3` counters registered in codegen_i32_binding_names.
+        if self.codegen_i32_binding_names.contains(name) {
+            return true;
+        }
         if self.inferred_borrowed_params.contains(name)
             || self.inferred_mut_borrowed_params.contains(name)
             || self.usize_variables.contains(name)

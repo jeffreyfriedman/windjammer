@@ -1,3 +1,53 @@
+## P3.695 (2026-10-06) — WDB-425: negated range `for dx in -2..3` Copy counter (no `.clone()`)
+
+Product `component_viewer_controls`: `if dx < 0 { -dx } else { dx.clone() }` because
+`-2..3` parses as `Unary(Neg, Range(2, 3))`, so range-loop Int32 registration never
+ran and auto-clone treated `dx` as a non-Copy move.
+
+| Gate | Status |
+|------|--------|
+| `wdb425_module_file_copy_i32_abs_else_must_not_clone` | ✅ tip GREEN (product-shape + abs) |
+| `wdb425_tip_out_game_core_abs_else_must_not_clone` | ✅ tip GREEN after scene multipass regen |
+
+**Root cause layer:** constraint/type registration — peel `Unary(Neg, Range…)` in
+`for_statement_generation` so loop counters register as Copy `i32`; also recognize
+negated small int literals in `range_loop_int_counter_type`; skip auto-clone via
+`codegen_i32_binding_names`.
+
+**What became unnecessary:** `dx.clone()` / `dz.clone()` on multi-use Copy range
+counters in abs if/else and later arith; no `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3693` →
+`cargo test --release --test all -- wdb425_` → **2 passed**.
+
+**Do not steal:** WDB-423 tip-out Copy tuple index (`offsets[i].clone()`); older tip-out lag.
+
+## P3.694 (2026-10-06) — Tip-out regen: WDB-429/432 + Copy-clone lag cluster GREEN
+
+Isolates for WDB-429/432/434–436/438–456 were already tip-GREEN under P3.688–693;
+stale `.agent-wip/rel_tip_out` (and game-core `gen/`) still had `.clone()` on Copy
+identity sites. Tip `wj` (`target-agent-tip-p3693`) regen of product modules —
+no new reconcile peels.
+
+| Gate | Status |
+|------|--------|
+| `wdb429_tip_out_*` / `wdb432_tip_out_*` | ✅ tip GREEN after tip-out regen |
+| `wdb434`–`436` / `438`–`439` tip-out | ✅ tip GREEN |
+| `wdb440`–`456` tip-out Copy-clone cluster | ✅ tip GREEN (19 tip filters) |
+
+**Root cause layer:** none (product tip-out lag) — codegen path already correct;
+artifact sync only.
+
+**What became unnecessary:** tip-out ❌ rows for WDB-429/432/440–456 (and
+434–436/438–439) that were isolate-GREEN / tip-RED solely from stale regen.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3693` →
+`cargo test --release --test all -- wdb429_tip wdb432_tip wdb440_tip … wdb456_tip`
+→ **19 passed**; `wdb434_tip wdb435_tip wdb436_tip wdb438_tip wdb439_tip` → **5 passed**.
+
+**Do not steal:** remaining older tip-out lag (WDB-340+ cluster etc.) until sweep;
+full-suite triage.
+
 ## P3.693 (2026-10-06) — WDB-444: Copy unit-enum formal reuse must not `.clone()`
 
 Product `WeatherSystem::set_weather`: after field assigns, reuse into
@@ -22,9 +72,7 @@ into owned callees; no new method-name lists.
 
 **Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3693` →
 `cargo test --release --test all -- wdb444_` → **2 passed**;
-`wdb429_` / `wdb432_` isolates ✅ (tip-out still product lag until regen).
-
-**Do not steal:** WDB-429/432 tip-out multipass Copy clones (isolate GREEN).
+`wdb429_` / `wdb432_` tip-out ✅ after P3.694 regen.
 
 ## P3.692 (2026-10-06) — WDB-440: Copy f32 if/else local into struct lit (no `.clone()`)
 

@@ -333,7 +333,10 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let is_owned_string_iterator = !is_borrowed_iterator;
+        // Only mark owned *collection* iteration (not ranges / numeric counters).
+        // Range `for dx in -2..3` is Copy i32 — must not join string-iter clone paths.
+        let is_owned_string_iterator = !is_borrowed_iterator
+            && !matches!(iterable, Expression::Range { .. });
         if is_owned_string_iterator {
             if let Some(var) = &loop_var {
                 self.owned_string_iterator_vars.insert(var.clone());
@@ -425,8 +428,22 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // `for i in 0..vec.len()` → Rust `usize`; `for x in (cx - 16)..(cx + 16)` → bound width (e.g. i32).
+        // WDB-425: `-2..3` parses as `Unary(Neg, Range(2, 3))` (neg binds the range),
+        // not `Range(Neg(2), 3)`. Peel so loop counters still register as Copy i32.
         if let Some(var) = &loop_var {
-            if let Expression::Range { start, end, .. } = iterable {
+            let range_bounds: Option<(&Expression<'ast>, &Expression<'ast>)> = match iterable {
+                Expression::Range { start, end, .. } => Some((start, end)),
+                Expression::Unary {
+                    op: UnaryOp::Neg,
+                    operand,
+                    ..
+                } => match *operand {
+                    Expression::Range { start, end, .. } => Some((start, end)),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some((start, end)) = range_bounds {
                 let bind_usize = self.range_loop_should_bind_usize(start, end)
                     && !(self.function_returns_i32_for_loop_scan() && self.end_is_usize_len(end));
                 if bind_usize {
@@ -451,6 +468,21 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(bound_ty, Type::Int32) {
                         self.codegen_i32_binding_names.insert(var.clone());
                     }
+                } else {
+                    // WDB-425: any remaining non-usize integer range (`-2..3`,
+                    // `-n..(n+1)`) still yields a Copy scalar counter — default i32
+                    // so multi-use sites never emit `.clone()`.
+                    self.local_var_types.insert(var.clone(), Type::Int32);
+                    self.codegen_i32_binding_names.insert(var.clone());
+                }
+                // Ensure Copy-scalar skip even if an earlier insert used a weaker type.
+                if !self.usize_variables.contains(var.as_str()) {
+                    if self.local_var_types.get(var.as_str()).is_none_or(|t| {
+                        !crate::type_classification::is_copy_pass_by_value_formal(t)
+                    }) {
+                        self.local_var_types.insert(var.clone(), Type::Int32);
+                    }
+                    self.codegen_i32_binding_names.insert(var.clone());
                 }
             }
         }
@@ -553,14 +585,28 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> Option<Type> {
         use crate::parser::Literal;
         use crate::type_inference::IntType;
-        let small_int_literal = |expr: &Expression<'ast>| {
-            matches!(
-                expr,
+        // WDB-425: include negated small literals (`-2..3`) — previously only
+        // non-negative `0..=4096` matched, so `for dx in -2..3` never registered
+        // `dx: i32` and auto-clone emitted `dx.clone()` on multi-use.
+        let small_int_literal = |expr: &Expression<'ast>| -> bool {
+            match expr {
                 Expression::Literal {
                     value: Literal::Int(n),
                     ..
-                } if (0..=4096).contains(n)
-            )
+                } => (-4096_i64..=4096_i64).contains(&n),
+                Expression::Unary {
+                    op: UnaryOp::Neg,
+                    operand,
+                    ..
+                } => match *operand {
+                    Expression::Literal {
+                        value: Literal::Int(n),
+                        ..
+                    } => (0_i64..=4096_i64).contains(&n),
+                    _ => false,
+                },
+                _ => false,
+            }
         };
         if small_int_literal(start) && small_int_literal(end) {
             return Some(Type::Int32);
