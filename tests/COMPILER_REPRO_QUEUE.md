@@ -61,14 +61,16 @@ LedgerKit `payload(id + "", ref + "")` where tip demotes `string` formals to
 
 | Gate | Status |
 |------|--------|
-| `owned_plus_empty_into_demoted_str_formal_must_borrow` | ❌ tip RED — filing |
+| `owned_plus_empty_into_demoted_str_formal_must_borrow` | ✅ tip GREEN — fresh tip `22:33` |
 
 **Root cause layer:** call-site / demotion — owned `+ ""` temps into demoted
-`&str` formals need IR Borrow.
+`&str` formals need IR Borrow. Game tip **18:38** still RED on product
+`audit_hash` / `journal_post` bare `String` fields into `&str`.
 
-**What became unnecessary:** dropping `+ ""` at LedgerKit journal/audit call sites.
+**What became unnecessary:** dropping `+ ""` at LedgerKit journal/audit call sites
+(keep bare args; refresh tip binary past 18:38).
 
-**Gates:** `bug_owned_plus_empty_into_demoted_str_formal_must_borrow_test`.
+**Gates:** `bug_owned_plus_empty_into_demoted_str_formal_must_borrow_test` — **passed**.
 
 **Do not steal:** P3.178/P3.179, P3.681–P3.683 (filed).
 
@@ -76,16 +78,17 @@ LedgerKit `payload(id + "", ref + "")` where tip demotes `string` formals to
 
 LedgerKit `less(out[j], out[j+1])` moves non-Copy index elems → E0507.
 Tip must clone into owned formals (P3.575 is owned-let reuse, not call-arg).
+Swap path already clones; **call-arg** index still bare move.
 
 | Gate | Status |
 |------|--------|
-| `vec_index_into_owned_struct_formal_must_clone` | ❌ tip RED — filing |
+| `vec_index_into_owned_struct_formal_must_clone` | ❌ tip RED — `item_less((out[j]), (out[j+1]))` no `.clone()` |
 
 **Root cause layer:** ownership / index — non-Copy `vec[i]` into owned call formal.
 
 **What became unnecessary:** reshaping sort to field-rank compares (product interim).
 
-**Gates:** `bug_vec_index_into_owned_struct_formal_must_clone_test`.
+**Gates:** `bug_vec_index_into_owned_struct_formal_must_clone_test` — **1 failed**.
 
 **Do not steal:** P3.575, P3.682/P3.684 (filed).
 
@@ -96,13 +99,14 @@ LedgerKit `json_cors_error(status: int)` with `status == 401` emits
 
 | Gate | Status |
 |------|--------|
-| `int_formal_eq_http_status_lit_must_unify_width` | ❌ tip RED — filing |
+| `int_formal_eq_http_status_lit_must_unify_width` | ✅ tip GREEN — `401_i64` peers (fresh tip `22:33`) |
 
 **Root cause layer:** int-width / compare — HTTP status lit peers of `int` formal.
+Game tip **18:38** still split on product `http_json` before helper.
 
-**What became unnecessary:** `http_status_eq(status, code)` helper (product interim).
+**What became unnecessary:** `http_status_eq(status, code)` helper (can drop after tip refresh).
 
-**Gates:** `bug_int_formal_eq_status_lit_must_not_emit_i32_test`.
+**Gates:** `bug_int_formal_eq_status_lit_must_not_emit_i32_test` — **passed**.
 
 **Do not steal:** WDB-328/P3.403, P3.679–P3.681, P3.683–P3.684 (filed).
 
