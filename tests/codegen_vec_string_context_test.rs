@@ -40,10 +40,14 @@ fn main() {
 
     let rust = test_utils::compile_single(source);
 
-    // Struct field expects String, so need .clone()
+    // Struct field expects String; index is `&String` → `.clone()` or `.to_string()`.
     assert!(
-        rust.contains("names[i as usize].clone()") || rust.contains("names[(i as usize)].clone()"),
-        "Vec<String> index in struct should use .clone()\nGenerated:\n{}",
+        rust.contains("names[i as usize].clone()")
+            || rust.contains("names[(i as usize)].clone()")
+            || rust.contains("(&names[(i as usize)]).to_string()")
+            || rust.contains("names[(i as usize)].to_string()")
+            || rust.contains("names[i as usize].to_string()"),
+        "Vec<String> index in struct should own via .clone()/.to_string()\nGenerated:\n{}",
         rust
     );
 }

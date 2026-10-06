@@ -1,3 +1,30 @@
+## P3.689 (2026-10-06) — owned `String` emit beats Borrowed WJ for lit `.to_string()`
+
+`parse_rows(json: string)` emits `json: String` (body moves into `vec![json]`) but
+call-site treated Borrowed WJ `string` as demoted `&str` and skipped
+`"lit".to_string()` → E0308. `slot_shared` / Borrowed-skip now require emission
+shared-ref (`callee_emits_shared_rust_ref_param` / `emitted_rust_ref_params` /
+`param_is_rust_str_ref`), not ownership alone.
+
+Also: `Vec<String>` index into owned field may emit `.to_string()`; gate accepts it.
+
+| Gate | Status |
+|------|--------|
+| `json_string_field_helper_must_cargo_check` | ✅ tip GREEN — `parse_rows("…".to_string())` |
+| `test_vec_string_index_in_struct_needs_clone` | ✅ tip GREEN — `.to_string()` accepted |
+| `qs_get_literal_into_demoted_key` / `owned_plus_empty_into_demoted_str` | ✅ tip GREEN (no P3.666 regress) |
+
+**Root cause layer:** signature/emission contract — owned String emit must drive
+literal coercion; Borrowed WJ alone must not imply shared-ref skip.
+
+**What became unnecessary:** dual-oracle skip that peeled/blocked `.to_string()` when
+emit stayed `String`.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3683` →
+`cargo test --release --test all -- json_string_field_helper_must_cargo_check test_vec_string_index_in_struct_needs_clone notes_api_qs_get pretty owned_plus_empty` → **8 passed**.
+
+**Do not steal:** P3.666, P3.676–P3.689.
+
 ## P3.688 (2026-10-06) — bare `*_usize` local into Owned usize + i32 vs `.len()`
 
 `Vec::remove(sparse_idx_usize)` re-wrapped already-usize locals whose **names**

@@ -169,6 +169,8 @@ fn apply_owned_string_literal_coercion<'ast>(
         // `coerce_string_literals_to_owned` may have owned the lit before call-site
         // passes, and the old early-continue on `.to_string()` left E0308.
         let lookup = gen.signature_lookup_callee_name(func_name);
+        // Shared-ref emit only — Borrowed WJ `string` alone is not enough when the
+        // callee still emits owned `String` (`parse_rows` moves into `vec![json]`).
         let slot_shared = |sig: &crate::analyzer::FunctionSignature| {
             let pidx = sig.arg_param_index(i);
             crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
@@ -185,12 +187,6 @@ fn apply_owned_string_literal_coercion<'ast>(
                 || sig
                     .formal_param_type(pidx)
                     .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-                || matches!(
-                    sig.param_ownership.get(pidx),
-                    Some(crate::analyzer::OwnershipMode::Borrowed)
-                ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
-                    sig, pidx,
-                )
         };
         let path_dep_shared = signature.as_ref().is_some_and(slot_shared)
             || gen.resolve_cross_crate_dep_signature(func_name)
@@ -278,15 +274,32 @@ fn apply_owned_string_literal_coercion<'ast>(
         if gen.preregistered_free_call_arg_expects_borrow(func_name, i) {
             continue;
         }
+        // Borrowed WJ `string` often demotes to Rust `&str` — skip `.to_string()`.
+        // But when emission keeps owned `String` (e.g. `parse_rows(json: String)` because
+        // the body moves into `vec![json]`), call-site must still own the literal.
         if sig.as_ref().is_some_and(|s| {
             let pidx = s.arg_param_index(i);
-            matches!(
-                s.param_ownership.get(pidx),
-                Some(crate::analyzer::OwnershipMode::Borrowed)
-            ) && s.formal_param_type(pidx).is_some_and(|t| {
-                crate::codegen::rust::types::is_windjammer_text_type(t)
-                    && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            })
+            let emits_shared =
+                crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, pidx)
+                    || s.emitted_rust_ref_params
+                        .as_ref()
+                        .and_then(|f| f.get(pidx))
+                        .copied()
+                        == Some(true)
+                    || s.param_types
+                        .get(pidx)
+                        .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
+                    || s.formal_param_type(pidx)
+                        .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref);
+            emits_shared
+                && matches!(
+                    s.param_ownership.get(pidx),
+                    Some(crate::analyzer::OwnershipMode::Borrowed)
+                )
+                && s.formal_param_type(pidx).is_some_and(|t| {
+                    crate::codegen::rust::types::is_windjammer_text_type(t)
+                        && !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                })
         }) {
             continue;
         }
