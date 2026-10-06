@@ -4537,6 +4537,71 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return arg_str.to_string();
         }
+        if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
+            return arg_str.to_string();
+        }
+        if arg_str.contains("std::mem::take(") {
+            return arg_str.to_string();
+        }
+        // Indexing a non-Copy element into an emitted-owned formal is always an
+        // invalid move (E0507). Must run *before* the analyzer-Borrowed →
+        // `rust_shared_borrow` early return: Borrowed+owned-emit peel would leave
+        // a bare `out[j]` move (P3.683 `item_less(out[j], out[j+1])`).
+        if matches!(arg_expr, Expression::Index { .. }) {
+            let emits_shared = [
+                sig.name.as_str(),
+                sig.name.rsplit("::").next().unwrap_or(&sig.name),
+            ]
+            .iter()
+            .find_map(|key| {
+                self.signature_registry
+                    .get_signature(key)
+                    .or_else(|| {
+                        self.global_signature_registry
+                            .as_ref()
+                            .and_then(|g| g.get_signature(key))
+                    })
+                    .and_then(|s| s.emitted_rust_ref_params.as_ref())
+                    .and_then(|flags| flags.get(param_idx).copied())
+            })
+            .unwrap_or_else(|| {
+                sig.emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(param_idx).copied())
+                    .unwrap_or_else(|| {
+                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                            sig, param_idx,
+                        )
+                    })
+            });
+            let emitted_owned =
+                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    sig, param_idx,
+                ) || Self::sig_arg_confirms_owned_emission(sig, arg_index);
+            // Prefer emission contract over stale Borrowed analyzer flags.
+            if !emits_shared || emitted_owned {
+                if self.index_expression_is_copy_scalar(arg_expr) {
+                    return arg_str.to_string();
+                }
+                let needs_clone = match self.infer_expression_type(arg_expr) {
+                    None => true,
+                    Some(t) => {
+                        let bare = match &t {
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                inner.as_ref()
+                            }
+                            other => other,
+                        };
+                        !self.is_type_copy(bare) || matches!(bare, Type::Custom(_))
+                    }
+                };
+                if needs_clone {
+                    let base =
+                        crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
+                    return format!("{base}.clone()");
+                }
+            }
+        }
         let callee_wants_shared_ref = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
             sig, param_idx,
         ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
@@ -4575,12 +4640,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let Some(rewritten) = self.try_self_field_writeback_owned_arg(arg_expr, arg_str) {
             return rewritten;
-        }
-        if arg_str.ends_with(".clone()") || arg_str.starts_with('*') {
-            return arg_str.to_string();
-        }
-        if arg_str.contains("std::mem::take(") {
-            return arg_str.to_string();
         }
         if arg_str.ends_with(".to_string()") {
             let callee_wants_str_ref =
@@ -4623,57 +4682,6 @@ impl<'ast> CodeGenerator<'ast> {
                         .iter()
                         .any(|p| p.name == *name && !self.is_type_copy(&p.type_))
                 {
-                    return format!("{arg_str}.clone()");
-                }
-            }
-        }
-        // Indexing a non-Copy element into a non-shared-ref formal is always an
-        // invalid move (E0507). Analyzer may still mark `(Row, T)` chain helpers
-        // Borrowed while codegen emits owned `Row` — trust shared-ref emission.
-        if matches!(arg_expr, Expression::Index { .. }) {
-            let emits_shared = [
-                sig.name.as_str(),
-                sig.name.rsplit("::").next().unwrap_or(&sig.name),
-            ]
-            .iter()
-            .find_map(|key| {
-                self.signature_registry
-                    .get_signature(key)
-                    .or_else(|| {
-                        self.global_signature_registry
-                            .as_ref()
-                            .and_then(|g| g.get_signature(key))
-                    })
-                    .and_then(|s| s.emitted_rust_ref_params.as_ref())
-                    .and_then(|flags| flags.get(param_idx).copied())
-            })
-            .unwrap_or_else(|| {
-                sig.emitted_rust_ref_params
-                    .as_ref()
-                    .and_then(|flags| flags.get(param_idx).copied())
-                    .unwrap_or_else(|| {
-                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                            sig, param_idx,
-                        )
-                    })
-            });
-            if !emits_shared {
-                if self.index_expression_is_copy_scalar(arg_expr) {
-                    return arg_str.to_string();
-                }
-                let needs_clone = match self.infer_expression_type(arg_expr) {
-                    None => true,
-                    Some(t) => {
-                        let bare = match &t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref()
-                            }
-                            other => other,
-                        };
-                        !self.is_type_copy(bare) || matches!(bare, Type::Custom(_))
-                    }
-                };
-                if needs_clone {
                     return format!("{arg_str}.clone()");
                 }
             }
