@@ -1,6 +1,38 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.706 (2026-10-06) — TDD WDB-460 (DB agent; no compiler src)
+
+Copy `Vec3` into **method** owned formal must not `.clone()`.
+
+Product tip-out:
+```wj
+let uv = qv.cross(vec)
+let uuv = qv.cross(uv)
+// look_at: s.cross(f); s.dot(eye)
+// spatial: is_audible(listener_pos)
+```
+Tip MultiFile emits bare args (isolate GREEN). Tip-out / game-core gen still
+emit `cross(vec.clone())` / `dot(eye.clone())` / `is_audible(listener_pos.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-460 MultiFile | ✅ isolate GREEN — bare `cross(vec)` / `dot(eye)` |
+| WDB-460 tip-out | ❌ tip RED — clones in `rel_tip_out/math/{quat,mat4}.rs` + `audio_3d/spatial.rs` |
+
+**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
+method-call owned formals for Copy `Vec3` still get `.clone()` in stale gen.
+
+**Why this is a new class:**
+- WDB-355 is Copy Vec3 into **free-fn** owned formal (`vertex(p, n)`).
+- WDB-458 is Copy **newtype** into method formal (`has`).
+- WDB-459 is Copy **struct** into Vec::push.
+- This is Copy `Vec3` into **method** owned formal (`cross` / `dot` / `is_audible`).
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb460_` — isolate GREEN / tip RED (2026-10-06).
+
+**Do not steal:** WDB-406/408/411/457–460, P3.508–P3.706, WDB-412–460 (filed). Note: P3.705 reserved by foreign int_eq gate WIP.
+
 ## P3.704 (2026-10-06) — TDD WDB-459 (DB agent; no compiler src)
 
 Copy **struct** local into `Vec::push` must not `.clone()`.
