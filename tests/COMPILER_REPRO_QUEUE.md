@@ -1,6 +1,40 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.703 (2026-10-06) — TDD WDB-458 (DB agent; no compiler src)
+
+Copy **newtype** local into owned method formal must not `.clone()`.
+
+Product `ecs/component_storage.rs` `list_component_ids_for_entity`:
+```wj
+let comp_id = ComponentId::new(i)
+if self.has(entity, comp_id) {
+    result.push(comp_id)
+}
+```
+Tip + MultiFile both emit `has(entity, comp_id.clone())` and
+`result.push(comp_id.clone())` even though `ComponentId` is `Copy` (`u32` newtype).
+
+| Gate | Status |
+|------|--------|
+| WDB-458 MultiFile | ❌ isolate RED — `has(…, comp_id.clone())` |
+| WDB-458 tip-out | ❌ tip RED — same in `rel_tip_out/ecs/component_storage.rs` |
+
+**Root cause layer:** Copy peel / owned formal — Copy newtype locals passed to
+owned formals must stay bare even when later reused for `Vec::push`.
+
+**Why this is a new class:**
+- WDB-457 is Copy newtype into **Vec::push** with field reuse (`LightId`).
+- WDB-431 is Copy u64 **field** into insert/push.
+- WDB-393 is i32 **formal** field assign.
+- This is Copy **newtype local** into owned **method formal** (`has`) + push reuse.
+
+**What became unnecessary:** rewriting ComponentId list loops to avoid has+push.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb458_` — isolate RED / tip RED (2026-10-06).
+
+**Do not steal:** WDB-406/408/411/457–458, P3.508–P3.703, WDB-412–458 (filed).
+
 ## P3.702 (2026-10-06) — TDD WDB-457 (DB agent; no compiler src)
 
 Copy **newtype** local into `Vec::push` must not `.clone()`.
