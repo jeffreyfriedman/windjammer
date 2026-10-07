@@ -646,7 +646,11 @@ impl<'ast> CodeGenerator<'ast> {
                         && (scrutinee_needs_ref
                             || self.match_expression_binds_refs(value)
                             || scrutinee_type_has_ref);
-                    if match_binds_refs && !final_arm_str.ends_with(".clone()") {
+                    // `Ok(stored)` / `Some(value.clone())` do not end in a binding clone.
+                    let arm_already_clones_binding = final_arm_str.ends_with(".clone()")
+                        && !final_arm_str.trim().starts_with("Some(")
+                        && !final_arm_str.trim().starts_with("Ok(");
+                    if match_binds_refs && !arm_already_clones_binding {
                         let mut bound_vars = std::collections::HashSet::new();
                         self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
                         let match_bound_entries = self.infer_match_bound_types(value, &arm.pattern);

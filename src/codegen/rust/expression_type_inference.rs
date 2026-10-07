@@ -521,6 +521,16 @@ impl<'ast> CodeGenerator<'ast> {
                 // Must cover Parameterized/Vec/Option receivers via `type_to_name`.
                 if let Some(obj_type) = obj_ty_early.as_ref() {
                     if let Some(ret) = self.registry_method_return_type(obj_type, method) {
+                        // WJ `Map::get -> Option<V>` is surface sugar. Rust `HashMap::get`
+                        // returns `Option<&V>` — match arms must see the reference so
+                        // non-Copy payloads clone (P3.638).
+                        if let Some(shared) = self.map_shared_get_option_ref_return(
+                            obj_type,
+                            method,
+                            &ret,
+                        ) {
+                            return Some(shared);
+                        }
                         return Some(ret);
                     }
                 }
@@ -767,6 +777,36 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         }
+    }
+
+    /// Rust `HashMap::get` / `BTreeMap::get` yield `Option<&V>` even when the WJ
+    /// registry recorded `Option<V>` (P3.638).
+    fn map_shared_get_option_ref_return(
+        &self,
+        receiver: &Type,
+        method: &str,
+        recorded: &Type,
+    ) -> Option<Type> {
+        if matches!(recorded, Type::Option(inner) if matches!(inner.as_ref(), Type::Reference(_)))
+        {
+            return None;
+        }
+        let Type::Option(inner) = recorded else {
+            return None;
+        };
+        let recv_name = Self::type_to_name(receiver)?;
+        if !crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+            method,
+            Some(&recv_name),
+            &self.signature_registry,
+        ) && !crate::codegen::rust::stdlib_method_traits::is_map_shared_get_call(
+            method,
+            Some(&recv_name),
+            crate::analyzer::SignatureRegistry::stdlib(),
+        ) {
+            return None;
+        }
+        Some(Type::Option(Box::new(Type::Reference(inner.clone()))))
     }
 
     /// Look up a method return type from the signature registry with generic substitution.

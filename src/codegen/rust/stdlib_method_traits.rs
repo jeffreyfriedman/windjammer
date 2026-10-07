@@ -152,9 +152,15 @@ pub fn is_map_shared_get_call(
         let base = rt.split('<').next().unwrap_or(rt);
         is_map_type_name(base)
     });
+    // Project registries often shadow `Map::get -> Option<V>` and omit `HashMap::get`.
+    // The Rust backend contract lives on the stdlib baseline (`Option<&V>`), not the
+    // caller's registry (P3.638 / event `get_data_string`).
+    let stdlib = SignatureRegistry::stdlib();
     let backend_shared_get = ["HashMap", "BTreeMap"].iter().any(|backend| {
+        let key = format!("{backend}::{method}");
         registry
-            .get_signature(&format!("{backend}::{method}"))
+            .get_signature(&key)
+            .or_else(|| stdlib.get_signature(&key))
             .is_some_and(method_returns_option_shared_ref)
     });
     let returns_shared =
@@ -1939,9 +1945,13 @@ mod pattern_registry_tests {
             *ty = Type::Custom("K".to_string());
         }
         reg.add_function("Map::get".to_string(), map_get);
+        // Single-file / multipass registries often never register HashMap::get.
+        reg.signatures.remove("HashMap::get");
+        reg.signatures.remove("BTreeMap::get");
         assert!(
             is_map_shared_get_call("get", Some("Map"), &reg),
-            "P3.638: WJ Map::get Option<V> + Owned key must still classify as shared-ref get"
+            "P3.638: WJ Map::get Option<V> + Owned key must still classify as shared-ref get \
+             even when the project registry has no HashMap::get"
         );
         // remove returns owned Option<V> on HashMap — must not become shared-get
         assert!(!is_map_shared_get_call("remove", Some("Map"), &reg));
