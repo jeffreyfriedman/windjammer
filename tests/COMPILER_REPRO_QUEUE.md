@@ -48,24 +48,22 @@ Tip numeric inference reports `must be U32 … but was U64` on `to_remove` /
 
 | Gate | Status |
 |------|--------|
-| `u32_option_slot_min_untyped_zero_must_not_widen_u64` | ❌ tip RED (isolate MultiFile) |
+| `u32_option_slot_min_untyped_zero_must_not_widen_u64` | ✅ tip GREEN (2026-10-06 recheck; keep as regression) |
 | Typed `let mut removed: u32 = 0u32` same body | ✅ GREEN (control) |
 | Bare `min` without `Option` slots | ✅ GREEN (control) |
+| Inventory multipass + `equipment.wj` | ⚠ intermittent RED (poison twin; re-file if stable) |
 
 **Root cause layer:** numeric inference — untyped `0` under `-> u32` inside
 `Vec<Option<_>>` + `.min(u32)` must stay U32, not widen the u32 chain to U64.
 
 **Why this is a new class:**
 - P3.327 is emit-suffix `_u64` on u32±literal (codegen).
-- This is **analysis** U32/U64 conflict that aborts transpile.
-
-**Product note:** full `inventory/*.wj` alone can GREEN; adding `equipment.wj`
-to the multipass set has also RED'd the same `remove_item` body (poison twin —
-keep isolate A as primary gate).
+- This was an **analysis** U32/U64 conflict that aborts transpile (seen on tip CLI
+  2026-10-05 BP build; isolate GREEN again 2026-10-06 — keep regression gate).
 
 **Do not steal:** P3.327, P3.348.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- u32_option_slot_min_untyped_zero_must_not_widen_u64`.
+**Gates:** `cargo test --release --test all --features integration_tests -- u32_option_slot_min_untyped_zero` → **1 passed**.
 
 ## P3.700 (2026-10-06) — WDB-410: owned-self struct-lit wither must move fields
 
