@@ -4616,6 +4616,26 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// True when binding `name` is a Copy type (scalar or aggregate/newtype).
+    /// WDB-457/458: auto-clone must not emit `id.clone()` for Copy `LightId` /
+    /// `ComponentId` into owned slots — Rust copies implicitly.
+    pub(crate) fn binding_is_copy_type(&self, name: &str) -> bool {
+        if self.binding_is_copy_pass_by_value_scalar(name) {
+            return true;
+        }
+        if let Some(p) = self.current_function_params.iter().find(|p| p.name == name) {
+            return self.is_type_copy(&p.type_);
+        }
+        if let Some(t) = self.local_var_types.get(name) {
+            let bare = match t {
+                Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                other => other,
+            };
+            return self.is_type_copy(bare);
+        }
+        false
+    }
+
     /// Resolve `CONST` or `module::CONST` against library-wide `module_const_types` (P3.280).
     pub(crate) fn module_const_type_for_binding(&self, name: &str) -> Option<&Type> {
         if let Some(t) = self.module_const_types.get(name) {

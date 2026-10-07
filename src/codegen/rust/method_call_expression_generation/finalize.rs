@@ -214,7 +214,7 @@ impl<'ast> CodeGenerator<'ast> {
                         });
                         if owned_slot
                             && !formal_copy
-                            && !self.binding_is_copy_pass_by_value_scalar(name)
+                            && !self.binding_is_copy_type(name)
                         {
                             let base =
                                 crate::codegen::rust::expression_utilities::borrow_base_expr(
@@ -1292,9 +1292,13 @@ impl<'ast> CodeGenerator<'ast> {
                                         .current_function_params
                                         .iter()
                                         .any(|p| p.name == *name);
+                                // Skip Copy bindings even when the callee formal is
+                                // generic `T` (Vec::push) — Rust copies implicitly
+                                // (WDB-457 LightId / WDB-458 ComponentId).
                                 if (auto_clone || demoted_owned_outer)
                                     && !arg_str.ends_with(".clone()")
                                     && !callee_formal_is_copy
+                                    && !self.binding_is_copy_type(name)
                                 {
                                     arg_str =
                                         format!("{}.clone()", arg_str.trim_start_matches('&'));

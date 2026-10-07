@@ -16,11 +16,10 @@ Tip-out + game-core gen still emit `a.clone()` / `fa.clone()` etc.
 
 | Gate | Status |
 |------|--------|
-| WDB-459 MultiFile | ✅ isolate GREEN — bare `push(a/b/c)` |
-| WDB-459 tip-out | ❌ tip RED — `push(a.clone())` in `rel_tip_out/editor/uv_unwrap_algorithm.rs` + packing |
+| WDB-459 MultiFile | ✅ tip GREEN (P3.704) |
+| WDB-459 tip-out | ✅ tip GREEN (P3.704) |
 
-**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
-stale gen keeps Copy struct (`UvCoord`) peel clones on Vec::push.
+**Root cause layer:** fixed in P3.704 (`binding_is_copy_type` skips clone).
 
 **Why this is a new class:**
 - WDB-457 is Copy **newtype** into Vec::push (`LightId`).
@@ -31,6 +30,33 @@ stale gen keeps Copy struct (`UvCoord`) peel clones on Vec::push.
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb459_` — isolate GREEN / tip RED (2026-10-06).
 
 **Do not steal:** WDB-406/408/411/457–459, P3.508–P3.704, WDB-412–459 (filed).
+
+## P3.704 (2026-10-06) — WDB-457/458/459: Copy bindings must not `.clone()` into owned slots
+
+Auto-clone marked reuse of Copy newtypes/structs (`LightId`, `ComponentId`,
+`UvCoord`) and method-arg finalize cloned into owned slots because
+`callee_formal_is_copy` is false for generic `Vec::push(T)` / owned formals.
+
+| Gate | Status |
+|------|--------|
+| `wdb457_module_file_copy_newtype_local_vec_push_must_not_clone` | ✅ tip GREEN |
+| `wdb457_tip_out_game_core_light_manager_copy_newtype_vec_push_must_not_clone` | ✅ tip GREEN after tip-out sync |
+| `wdb458_module_file_copy_newtype_local_owned_formal_must_not_clone` | ✅ tip GREEN |
+| `wdb458_tip_out_game_core_component_storage_copy_newtype_owned_formal_must_not_clone` | ✅ tip GREEN after tip-out sync |
+| `wdb459_module_file_copy_struct_local_vec_push_must_not_clone` | ✅ tip GREEN |
+| `wdb459_tip_out_game_core_uv_unwrap_copy_struct_vec_push_must_not_clone` | ✅ tip GREEN after tip-out sync |
+
+**Root cause layer:** coercion/encoding — skip `.clone()` when the *argument
+binding* is Copy (`binding_is_copy_type`), not only when the callee formal is a
+Copy aggregate.
+
+**What became unnecessary:** `id.clone()` / `comp_id.clone()` / `push(a.clone())`
+on Copy locals; no new `ir_call_site` peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb457_ wdb458_ wdb459_` → **6 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383 + wave).
 
 ## P3.703 (2026-10-06) — TDD WDB-458 (DB agent; no compiler src)
 
@@ -48,11 +74,10 @@ Tip + MultiFile both emit `has(entity, comp_id.clone())` and
 
 | Gate | Status |
 |------|--------|
-| WDB-458 MultiFile | ❌ isolate RED — `has(…, comp_id.clone())` |
-| WDB-458 tip-out | ❌ tip RED — same in `rel_tip_out/ecs/component_storage.rs` |
+| WDB-458 MultiFile | ✅ tip GREEN (P3.704) |
+| WDB-458 tip-out | ✅ tip GREEN (P3.704) |
 
-**Root cause layer:** Copy peel / owned formal — Copy newtype locals passed to
-owned formals must stay bare even when later reused for `Vec::push`.
+**Root cause layer:** fixed in P3.704 (`binding_is_copy_type` skips clone).
 
 **Why this is a new class:**
 - WDB-457 is Copy newtype into **Vec::push** with field reuse (`LightId`).
@@ -94,6 +119,30 @@ must mean shared `&self` only; Owned `self` is consuming.
 WDB-457/458 are DB-agent tip-outs (no compiler src).
 
 
+## P3.703 (2026-10-06) — BP `update_death_state` must emit `&mut self` (tip-out)
+
+Product `breach-protocol/gen/game_state.rs`:
+```rust
+pub fn update_death_state(self, dt: f32) -> bool {
+    self.respawn_timer -= dt; // E0594: self not mutable
+}
+```
+WJ source assigns `self.respawn_timer` / `self.camera` / renderer HUD. Minimal
+MultiFile with the same pattern emits `&mut self` (GREEN). Full product tip-out
+keeps owned immutable `self` → ~46× E0594 in BP game cargo.
+
+| Gate | Status |
+|------|--------|
+| Minimal MultiFile field-assign tick | ✅ tip GREEN (`&mut self`) |
+| `bp_tip_out_update_death_state_must_emit_mut_self` | ❌ tip-out RED (product `self`) |
+
+**Root cause layer:** ownership / mutability inference under large impl + nested
+method calls (`player.respawn`, `upload_camera`, renderer HUD) loses `&mut self`.
+
+**Do not steal:** proxy clear_logs GREEN; P3.702 WDB-457.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bp_tip_out_update_death_state_must_emit_mut_self`.
+
 ## P3.702 (2026-10-06) — TDD WDB-457 (DB agent; no compiler src)
 
 Copy **newtype** local into `Vec::push` must not `.clone()`.
@@ -108,11 +157,10 @@ Tip + MultiFile both emit `self.light_ids.push(id.clone())` even though
 
 | Gate | Status |
 |------|--------|
-| WDB-457 MultiFile | ❌ isolate RED — `light_ids.push(id.clone())` |
-| WDB-457 tip-out | ❌ tip RED — same in `rel_tip_out/lighting2d/light_manager.rs` |
+| WDB-457 MultiFile | ✅ tip GREEN (P3.704) |
+| WDB-457 tip-out | ✅ tip GREEN (P3.704) |
 
-**Root cause layer:** Copy peel / Vec::push — Copy newtype locals must stay bare
-even when later field-read reused (`id.value()`); `.clone()` is unnecessary.
+**Root cause layer:** fixed in P3.704 (`binding_is_copy_type` skips clone).
 
 **Why this is a new class:**
 - WDB-431 is Copy u64 **field** into insert/push.
