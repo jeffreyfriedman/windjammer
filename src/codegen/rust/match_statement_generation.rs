@@ -1161,12 +1161,16 @@ impl<'ast> CodeGenerator<'ast> {
                         .filter(|var| {
                             let is_copy_payload = inferred.iter().any(|(name, ty)| {
                                 name == *var && {
+                                    // `&Note` / `&String` are Copy as references, but match
+                                    // ergonomics still bind `&T` — do not treat them as owned
+                                    // Copy payloads (P3.638 / NoteStore::update).
                                     let inner = match ty {
                                         Type::Reference(inner)
                                         | Type::MutableReference(inner) => inner.as_ref(),
                                         other => other,
                                     };
-                                    self.is_type_copy(inner)
+                                    !matches!(ty, Type::Reference(_) | Type::MutableReference(_))
+                                        && self.is_type_copy(inner)
                                 }
                             });
                             // Copy payloads bind by value on owned scrutinees (BatchHandle).
@@ -1302,9 +1306,13 @@ impl<'ast> CodeGenerator<'ast> {
 
             self.in_match_arm_needing_string = old_in_match_arm;
 
+            // `Some(value.clone())` does not end with `.clone()` — still rewrite
+            // so the payload clone is the one that survives later peels (P3.638).
+            let arm_already_clones_binding = arm_str.ends_with(".clone()")
+                && !arm_str.trim().starts_with("Some(");
             if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
                 && !owned_bindings_from_copy_deref
-                && !arm_str.ends_with(".clone()")
+                && !arm_already_clones_binding
             {
                 // Extract the binding name from either a direct identifier
                 // or a block whose only/last statement is an expression identifier
@@ -1341,7 +1349,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         other => other,
                     };
-                    let is_copy = inner_type.is_some_and(|t| self.is_type_copy(t));
+                    let is_copy = inner_type.is_some_and(|t| {
+                        self.is_type_copy(t)
+                            && !crate::codegen::rust::string_utilities::type_is_owned_string(t)
+                            && !matches!(t, Type::Custom(_))
+                    });
                     // For block bodies, replace the binding name inside the
                     // generated string since we can't prefix the whole block.
                     let deref_expr = if is_copy {
@@ -1474,9 +1486,11 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// `Some(x)` (or a block containing only that expression) where `x` is a match binding
-    /// introduced under ref ergonomics; used to upgrade to owned `Option` for the arm value.
-    fn match_arm_some_call_single_ident<'e>(body: &'e Expression<'e>) -> Option<&'e str> {
+    /// `Some(x)` / `Ok(x)` (or a block containing only that expression) where `x` is a
+    /// match binding under ref ergonomics; used to upgrade to owned `Option`/`Result`.
+    fn match_arm_wrapper_call_single_ident<'e>(
+        body: &'e Expression<'e>,
+    ) -> Option<(&'e str, &'e str)> {
         let expr = match body {
             Expression::Block { statements, .. } => {
                 if statements.len() != 1 {
@@ -1503,14 +1517,23 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name: fname, .. } = &**function else {
             return None;
         };
-        if fname != "Some" && !fname.ends_with("::Some") {
+        let wrapper = if fname == "Some" || fname.ends_with("::Some") {
+            "Some"
+        } else if fname == "Ok" || fname.ends_with("::Ok") {
+            "Ok"
+        } else {
             return None;
-        }
+        };
         let (_, arg) = &arguments[0];
         let Expression::Identifier { name: inner, .. } = &**arg else {
             return None;
         };
-        Some(inner.as_str())
+        Some((wrapper, inner.as_str()))
+    }
+
+    fn match_arm_some_call_single_ident<'e>(body: &'e Expression<'e>) -> Option<&'e str> {
+        let (wrapper, inner) = Self::match_arm_wrapper_call_single_ident(body)?;
+        (wrapper == "Some").then_some(inner)
     }
 
     /// When match ergonomics bind `x` as `&T` but the arm returns `Some(x)` expecting
@@ -1521,7 +1544,7 @@ impl<'ast> CodeGenerator<'ast> {
         match_bound_type_entries: &[(String, Type)],
         added_borrowed: &[String],
     ) -> Option<String> {
-        let inner = Self::match_arm_some_call_single_ident(arm_body)?;
+        let (wrapper, inner) = Self::match_arm_wrapper_call_single_ident(arm_body)?;
         if !added_borrowed.iter().any(|n| n == inner) {
             return None;
         }
@@ -1530,7 +1553,7 @@ impl<'ast> CodeGenerator<'ast> {
             .find(|(n, _)| n == inner)
             .map(|(_, t)| t);
         let inner_expr = Self::some_wrapper_payload_rust(self, inner, binding_type)?;
-        Some(format!("Some({})", inner_expr))
+        Some(format!("{wrapper}({inner_expr})"))
     }
 
     /// Fallback when `infer_match_bound_types` is empty / AST shape misses: `Some(x)` lowering
@@ -1542,11 +1565,17 @@ impl<'ast> CodeGenerator<'ast> {
         added_borrowed: &[String],
     ) -> Option<String> {
         let s = arm_str.trim();
-        const PREFIX: &str = "Some(";
-        if !s.starts_with(PREFIX) || !s.ends_with(')') {
+        let (wrapper, rest) = if let Some(rest) = s.strip_prefix("Some(") {
+            ("Some", rest)
+        } else if let Some(rest) = s.strip_prefix("Ok(") {
+            ("Ok", rest)
+        } else {
+            return None;
+        };
+        if !rest.ends_with(')') {
             return None;
         }
-        let inner = s[PREFIX.len()..s.len().saturating_sub(1)].trim();
+        let inner = rest[..rest.len().saturating_sub(1)].trim();
         // Allow rewriting `Some(value.clone())` once binding types are known (WDB-429).
         let bare = inner.strip_suffix(".clone()").unwrap_or(inner).trim();
         if !Self::looks_like_simple_binding_ident(bare)
@@ -1559,7 +1588,7 @@ impl<'ast> CodeGenerator<'ast> {
             .find(|(n, _)| n == bare)
             .map(|(_, t)| t);
         let inner_expr = Self::some_wrapper_payload_rust(self, bare, binding_type)?;
-        Some(format!("Some({})", inner_expr))
+        Some(format!("{wrapper}({inner_expr})"))
     }
 
     fn some_wrapper_payload_rust(
@@ -1567,16 +1596,24 @@ impl<'ast> CodeGenerator<'ast> {
         binding: &str,
         binding_type: Option<&Type>,
     ) -> Option<String> {
-        match binding_type {
-            Some(Type::Reference(inner) | Type::MutableReference(inner))
-                if self.is_type_copy(inner.as_ref()) =>
-            {
-                Some(format!("*{binding}"))
-            }
-            Some(t) if self.is_type_copy(t) => Some(binding.to_string()),
-            Some(_) => Some(format!("{binding}.clone()")),
-            None => None,
+        let mut ty = binding_type?;
+        while let Type::Reference(inner) | Type::MutableReference(inner) = ty {
+            ty = inner.as_ref();
         }
+        // `&String` / `&Note` (and double-wrapped refs from match ergonomics) are Copy
+        // as references. Owned `String` / struct returns still need `.clone()` (P3.638).
+        if crate::codegen::rust::string_utilities::type_is_owned_string(ty)
+            || matches!(ty, Type::Custom(_))
+        {
+            return Some(format!("{binding}.clone()"));
+        }
+        if self.is_type_copy(ty) {
+            if matches!(binding_type, Some(Type::Reference(_) | Type::MutableReference(_))) {
+                return Some(format!("*{binding}"));
+            }
+            return Some(binding.to_string());
+        }
+        Some(format!("{binding}.clone()"))
     }
 
     fn looks_like_simple_binding_ident(inner: &str) -> bool {

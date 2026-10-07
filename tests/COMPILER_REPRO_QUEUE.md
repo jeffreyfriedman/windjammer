@@ -1,6 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.724 (2026-10-07) — Map::get match payloads clone into owned String/struct
+
+WJ `Map::get -> Option<V>` is surface sugar; Rust `HashMap::get` is `Option<&V>`.
+Match arms (`Some(Enum::String(value)) => Some(value)`, `Some(stored) => Ok(stored)`)
+emitted bare bindings / `*binding` because `&String` and double-wrapped `&Note`
+were treated as Copy.
+
+| Gate | Status |
+|------|--------|
+| `single_file_hashmap_get_string_payload_must_clone` | ✅ tip GREEN |
+| `module_file_map_get_string_payload_must_clone` | ✅ tip GREEN |
+| `hashmap_get_enum_destructure_string_type` | ✅ tip GREEN |
+| `hashmap_get_noncopy_match_not_copied` | ✅ tip GREEN |
+| `tip_out_event_get_data_string_must_clone` | ❌ tip-out lag (regen) |
+| `notes_api_product_config_map_get_string_must_clone` | ❌ for-loop `&Note`/`&String` into `push`/`insert` (not match) |
+| `nested_match_for_push_string_owns_or_clones` | ❌ `for p in &nested { push(p) }` (pre-existing) |
+
+**Root cause layer:** constraint/type — match binding types from shared-ref get;
+wrapper rewrite peels refs before Copy vs clone.
+
+**What became unnecessary:** `Some(value)` / `Ok(*stored)` for non-Copy `HashMap::get` payloads.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_hashmap_get_match_string hashmap_get_noncopy hashmap_get_match_deref` → string/Note match tests GREEN; tip-out and notes-api for-loop still RED.
+
 ## P3.723 (2026-10-07) — WDB-365: nested self-fields must not force `__wj_tmp`
 
 `disjoint_self_field_accesses` only saw top-level `self.field` args, so
