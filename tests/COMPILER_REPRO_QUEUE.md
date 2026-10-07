@@ -1,6 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.713 (2026-10-06) — WDB-353: fold `(e as i32) as usize` → `e as usize`
+
+Product `terrain/terrain.wj` writes nested truncations for grid indices. Tip
+emitted `as i32 as usize`. Collapse the mid-width in `generate_cast` when the
+outer target is `usize` and the inner cast is `i32`.
+
+| Gate | Status |
+|------|--------|
+| `wdb353_module_file_f32_to_usize_must_not_double_cast_via_i32` | ✅ tip GREEN |
+| `wdb353_module_file_nested_i32_usize_cast_must_fold` | ✅ tip GREEN (product shape) |
+| `wdb353_tip_out_game_core_terrain_must_not_double_cast` | ✅ tip GREEN after tip-out regen |
+
+**Root cause layer:** coercion/encoding — nested cast fold in `generate_cast`.
+
+**What became unnecessary:** `as i32 as usize` on terrain grid index emits; no
+reconcile peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb353_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-354/364–366/368/374/383 + wave).
+
 ## P3.712 (2026-10-06) — WDB-349: boolean `matches!` Option presence must not clone
 
 Product `UsdNode::has_mesh`: `match self.mesh { Some(_) => true, None => false }`

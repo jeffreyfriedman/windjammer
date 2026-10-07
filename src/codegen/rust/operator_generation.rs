@@ -16,6 +16,22 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         type_: &Type,
     ) -> String {
+        // WDB-353: collapse `(e as i32) as usize` → `e as usize` for index casts.
+        // Terrain wrote nested truncations; a single `as usize` truncates the same for
+        // non-negative coords and drops the redundant mid-width when `e` is already i32.
+        if Self::cast_target_is_usize(type_) {
+            if let Expression::Cast {
+                expr: inner,
+                type_: mid,
+                ..
+            } = expr
+            {
+                if Self::cast_target_is_i32(mid) {
+                    return self.generate_cast(inner, type_);
+                }
+            }
+        }
+
         // P3.250: outer call-arg / assignment int targets (e.g. `Vec<u8>::push`) must not
         // suffix nested bitop/shift literals as `_u8`. The cast result carries the target
         // width; the operand is typed from its own peers (i64 & 0xff → 255_i64).
@@ -179,5 +195,14 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             format!("{}{}", op_str, operand_str)
         }
+    }
+
+    fn cast_target_is_usize(type_: &Type) -> bool {
+        matches!(type_, Type::Custom(n) if n == "usize")
+    }
+
+    fn cast_target_is_i32(type_: &Type) -> bool {
+        matches!(type_, Type::Int32)
+            || matches!(type_, Type::Custom(n) if n == "i32" || n == "int32")
     }
 }

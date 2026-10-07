@@ -33,6 +33,28 @@ pub fn grid_index(t: Terrain, x: f32) -> usize {
 }
 "#;
 
+/// Product shape (terrain/terrain.wj): nested `(e as i32) as usize` must fold.
+const SRC_NESTED: &str = r#"
+pub struct Terrain {
+    pub scale: f32,
+}
+
+impl Terrain {
+    pub fn get_height(self, x: f32, z: f32) -> usize {
+        let grid_x: usize = (((x / self.scale) as i32) as usize)
+        let grid_z: usize = (((z / self.scale) as i32) as usize)
+        grid_x + grid_z
+    }
+
+    pub fn apply_radius(self, x: f32) {
+        let grid_x = (x / self.scale) as i32
+        let dx = 1
+        let px: usize = ((grid_x + dx) as i32) as usize
+        let _ = px
+    }
+}
+"#;
+
 #[test]
 fn wdb353_module_file_f32_to_usize_must_not_double_cast_via_i32() {
     let mut test = MultiFileTest::new();
@@ -46,6 +68,25 @@ fn wdb353_module_file_f32_to_usize_must_not_double_cast_via_i32() {
         "WDB-353 RED: double cast as i32 as usize:\n{rs}"
     );
     test.cargo_check().expect("WDB-353 cargo-check");
+}
+
+#[test]
+fn wdb353_module_file_nested_i32_usize_cast_must_fold() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_NESTED);
+    let map = test.compile().expect("WDB-353 nested compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-353 nested lib.rs:\n{rs}");
+    let bad = rs.contains("as i32 as usize");
+    assert!(
+        !bad,
+        "WDB-353 RED: nested (e as i32) as usize not folded:\n{rs}"
+    );
+    assert!(
+        rs.contains("as usize"),
+        "WDB-353: expected single as usize. Got:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-353 nested cargo-check");
 }
 
 #[test]
