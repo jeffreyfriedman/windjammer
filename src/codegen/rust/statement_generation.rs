@@ -1401,6 +1401,15 @@ impl<'ast> CodeGenerator<'ast> {
         } else if self.inferred_borrowed_params.contains(root) {
             "&"
         } else if root == "self" {
+            // Prefer analyzer/codegen borrow tracking over OwnershipHint alone —
+            // inferred `&self` may still be OwnershipHint::Inferred while
+            // `inferred_borrowed_params` already knows (WDB-349).
+            if self.inferred_mut_borrowed_params.contains("self") {
+                return "&mut ";
+            }
+            if self.inferred_borrowed_params.contains("self") {
+                return "&";
+            }
             let self_is_mut_borrowed = self.current_function_params.iter().any(|p| {
                 p.name == "self" && matches!(p.ownership, crate::parser::OwnershipHint::Mut)
             });

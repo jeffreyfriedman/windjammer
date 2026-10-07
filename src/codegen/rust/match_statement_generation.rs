@@ -256,7 +256,7 @@ impl<'ast> CodeGenerator<'ast> {
             );
 
             if arm0_is_true && arm1_is_false {
-                let value_str = self.generate_expression(value);
+                let value_str = self.generate_boolean_matches_scrutinee(value, arms);
                 let scrutinee_ty = self.infer_expression_type(value);
                 let pattern_str =
                     self.generate_pattern_with_scrutinee(&arms[0].pattern, scrutinee_ty.as_ref());
@@ -266,7 +266,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
 
             if arm0_is_false && arm1_is_true {
-                let value_str = self.generate_expression(value);
+                let value_str = self.generate_boolean_matches_scrutinee(value, arms);
                 let scrutinee_ty = self.infer_expression_type(value);
                 let pattern_str =
                     self.generate_pattern_with_scrutinee(&arms[0].pattern, scrutinee_ty.as_ref());
@@ -372,6 +372,8 @@ impl<'ast> CodeGenerator<'ast> {
                     // TDD FIX: When scrutinee is a non-Copy Option field on borrowed/mut-borrowed
                     // self, and we stripped the &/&mut prefix (because binding is used as owned),
                     // we need .clone() to avoid moving out of the borrow.
+                    // WDB-349: presence-only `Some(_)` / `None` must borrow (`&place`),
+                    // never clone the Option payload.
                     if self.match_scrutinee_is_self_field(value) {
                         if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
                             if !self.is_type_copy(&inner) {
@@ -382,7 +384,11 @@ impl<'ast> CodeGenerator<'ast> {
                                         || self.inferred_mut_borrowed_params.contains(r)
                                 });
                                 if is_behind_borrow {
-                                    format!("{}.clone()", value_str)
+                                    if Self::option_match_arms_are_presence_only(arms) {
+                                        format!("&{}", value_str)
+                                    } else {
+                                        format!("{}.clone()", value_str)
+                                    }
                                 } else {
                                     value_str
                                 }
@@ -1551,5 +1557,94 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         ch.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    }
+
+    /// Boolean `matches!(scrutinee, Some(_))` path: presence-only Option on a
+    /// borrowed place must not clone (WDB-349 / usd `has_mesh`).
+    fn generate_boolean_matches_scrutinee(
+        &mut self,
+        value: &'ast Expression<'ast>,
+        arms: &[MatchArm<'ast>],
+    ) -> String {
+        let presence = Self::option_match_arms_are_presence_only(arms)
+            || Self::boolean_matches_arm0_is_option_presence(&arms[0].pattern);
+        let prev = self.suppress_borrowed_clone;
+        // Always suppress for boolean `matches!` — discriminant checks never need
+        // an owned clone of the scrutinee.
+        self.suppress_borrowed_clone = true;
+        let mut value_str = self.generate_expression(value);
+        self.suppress_borrowed_clone = prev;
+        while value_str.ends_with(".clone()") {
+            value_str.truncate(value_str.len() - ".clone()".len());
+        }
+        if presence && !value_str.starts_with('&') {
+            // Prefer `&place` when Option lives behind `&self` / borrowed root.
+            let behind_self = matches!(
+                value,
+                Expression::FieldAccess { object, .. }
+                    if matches!(&**object, Expression::Identifier { name, .. } if name == "self")
+            );
+            let root = self.root_identifier_of_field_or_index_chain(value);
+            let behind = behind_self
+                || root.is_some_and(|r| {
+                    self.inferred_borrowed_params.contains(r)
+                        || self.inferred_mut_borrowed_params.contains(r)
+                })
+                || self.option_scrutinee_ref_prefix(value) != "";
+            if behind {
+                return format!("&{}", value_str);
+            }
+        }
+        value_str
+    }
+
+    fn boolean_matches_arm0_is_option_presence(pattern: &Pattern<'ast>) -> bool {
+        matches!(
+            pattern,
+            Pattern::EnumVariant(name, binding)
+                if (name == "Some" || name.ends_with("::Some"))
+                    && matches!(
+                        binding,
+                        crate::parser::EnumPatternBinding::Wildcard
+                            | crate::parser::EnumPatternBinding::None
+                    )
+        )
+    }
+
+    /// `Some(_)` / `None` / `_` only — no payload bindings (WDB-349 presence checks).
+    fn option_match_arms_are_presence_only(arms: &[MatchArm<'ast>]) -> bool {
+        if arms.is_empty() {
+            return false;
+        }
+        let mut saw_some_wildcard = false;
+        for arm in arms {
+            match &arm.pattern {
+                Pattern::EnumVariant(name, binding)
+                    if name == "Some" || name.ends_with("::Some") =>
+                {
+                    match binding {
+                        crate::parser::EnumPatternBinding::Wildcard
+                        | crate::parser::EnumPatternBinding::None => {
+                            saw_some_wildcard = true;
+                        }
+                        _ => return false,
+                    }
+                }
+                Pattern::EnumVariant(name, binding)
+                    if name == "None" || name.ends_with("::None") =>
+                {
+                    if !matches!(
+                        binding,
+                        crate::parser::EnumPatternBinding::None
+                            | crate::parser::EnumPatternBinding::Wildcard
+                    ) {
+                        return false;
+                    }
+                }
+                Pattern::Wildcard => {}
+                _ => return false,
+            }
+        }
+        saw_some_wildcard
     }
 }

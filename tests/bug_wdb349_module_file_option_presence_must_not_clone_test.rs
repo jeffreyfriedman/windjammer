@@ -40,6 +40,28 @@ pub fn has_mesh(prim: Prim) -> bool {
 }
 "#;
 
+/// Product shape (dcc_pipeline/usd `UsdNode::has_mesh`): `&self` + non-Copy
+/// `Option` presence check. Tip emitted `matches!(self.mesh.clone(), Some(_))`.
+const SRC_SELF_PRESENCE: &str = r#"
+pub struct UsdMesh {
+    pub vertex_count: i32,
+    pub name: string,
+}
+
+pub struct UsdNode {
+    pub mesh: Option<UsdMesh>,
+}
+
+impl UsdNode {
+    pub fn has_mesh(self) -> bool {
+        match self.mesh {
+            Some(_) => true,
+            None => false,
+        }
+    }
+}
+"#;
+
 #[test]
 fn wdb349_module_file_option_presence_must_not_clone() {
     let mut test = MultiFileTest::new();
@@ -53,6 +75,30 @@ fn wdb349_module_file_option_presence_must_not_clone() {
         "WDB-349 RED: Option presence check cloned:\n{rs}"
     );
     test.cargo_check().expect("WDB-349 cargo-check");
+}
+
+#[test]
+fn wdb349_module_file_self_option_presence_must_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_SELF_PRESENCE);
+    let map = test.compile().expect("WDB-349 self presence compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-349 self-presence lib.rs:\n{rs}");
+    let bad = rs.lines().any(|line| {
+        line.contains("matches!(") && line.contains(".clone()") && line.contains("Some")
+    });
+    assert!(
+        !bad,
+        "WDB-349 RED: &self Option presence cloned:\n{rs}"
+    );
+    assert!(
+        rs.contains("has_mesh")
+            && (rs.contains("is_some()")
+                || rs.contains("matches!(&self.mesh")
+                || rs.contains("matches!(self.mesh, Some")),
+        "WDB-349: expected presence check without clone. Got:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-349 self presence cargo-check");
 }
 
 #[test]

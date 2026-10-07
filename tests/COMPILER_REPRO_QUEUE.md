@@ -1,6 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.712 (2026-10-06) — WDB-349: boolean `matches!` Option presence must not clone
+
+Product `UsdNode::has_mesh`: `match self.mesh { Some(_) => true, None => false }`
+lowered via the boolean→`matches!` fast path with `self.mesh.clone()`. Presence
+checks never need an owned Option clone; prefer `matches!(&self.mesh, Some(_))`.
+
+| Gate | Status |
+|------|--------|
+| `wdb349_module_file_option_presence_must_not_clone` | ✅ tip GREEN |
+| `wdb349_module_file_self_option_presence_must_not_clone` | ✅ tip GREEN (product shape) |
+| `wdb349_tip_out_game_core_usd_must_not_matches_clone` | ✅ tip GREEN after tip-out regen |
+
+**Root cause layer:** match encoding — boolean `matches!` scrutinee suppresses
+borrowed clone, strips stacked `.clone()`, and borrows Option behind `&self`.
+Also teach `option_scrutinee_ref_prefix` to honor `inferred_borrowed_params` for
+`self` (OwnershipHint may still be Inferred).
+
+**What became unnecessary:** `matches!(self.mesh.clone(), Some(_))` on presence
+checks; clone fallback when ref-prefix was empty for inferred `&self`.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb349_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-353–354/364–366/368/374/383 + wave).
+
 ## P3.711 (2026-10-06) — WDB-340: demoted `&str` → String assign must not double `.to_string()`
 
 Product `AssetBrowser::search` / `list_assets`: demoted `&str` formal reused then
@@ -260,6 +285,24 @@ must mean shared `&self` only; Owned `self` is consuming.
 **Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383 + wave);
 WDB-457/458 are DB-agent tip-outs (no compiler src).
 
+
+## P3.706 (2026-10-06) — directory package must emit `mod.rs` + re-exports into `--output`
+
+Breach Protocol `src/inventory/` (directory module) tip-transpile to `gen/` writes
+`gen/inventory/{item,item_id,…}.rs` but **omits** `gen/inventory/mod.rs`.
+Root `lib.rs` then hits E0583; thin synthesized decls miss `pub use ItemId`
+(cascading E0425).
+
+| Gate | Status |
+|------|--------|
+| `directory_module_must_emit_mod_rs_with_reexports` | ❌ tip RED (or missing key) — file this session |
+
+**Root cause layer:** multipass / `--module-file` emit for directory packages into
+`--output gen` must write `gen/<pkg>/mod.rs` with child `pub mod` + public re-exports.
+
+**Do not steal:** wj-game restore-from-`build/` is a host workaround, not a tip fix.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- directory_module_must_emit_mod_rs_with_reexports`.
 
 ## P3.706 (2026-10-06) — directory package must emit `mod.rs` + re-exports into `--output`
 
