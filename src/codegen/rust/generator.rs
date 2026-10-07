@@ -4334,11 +4334,14 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return true;
         }
-        if self
-            .local_var_types
-            .get(name)
-            .is_some_and(|t| self.is_type_copy(t))
-        {
+        if self.local_var_types.get(name).is_some_and(|t| {
+            // `&Note` is Copy as a reference. The binding is Copy only when the
+            // pointee is Copy — otherwise owned formals must clone (P3.725).
+            match t {
+                Type::Reference(_) | Type::MutableReference(_) => false,
+                other => self.is_type_copy(other),
+            }
+        }) {
             return true;
         }
         if self.local_var_types.get(name).is_some_and(|t| {
@@ -4526,6 +4529,16 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
                 other => other,
             };
+            // Unsubstituted stdlib params (`Vec::push` formal `T`) are not Copy.
+            // A poisoned `copy_types` entry for `T` must not erase Clone of `&Note`.
+            if let Type::Custom(name) = bare {
+                if self.lookup_struct_field_types(name).is_none()
+                    && !crate::type_classification::is_copy_primitive(name)
+                    && !self.enum_is_unit_copy(name)
+                {
+                    return false;
+                }
+            }
             self.is_type_copy(bare)
         }) {
             return true;

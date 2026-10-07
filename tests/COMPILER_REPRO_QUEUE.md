@@ -1,6 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.725 (2026-10-07) — borrowed map/vec loop values clone into owned push/insert
+
+`for (id, note) in &self.notes { result.push(note) }` left `&Note` in `Vec::push`.
+Solver `compute_coercion` already returned `Clone` (`Ref(Note)` → owned `T`).
+`call_arg_is_copy_identity` then forced Identity because `&T` is Copy as a
+reference, and because unsubstituted formal `T` can sit in the copy registry.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_field_iter_push_clones_noncopy_value` | ✅ tip GREEN |
+| `nested_match_for_push_string_owns_or_clones` | ✅ tip GREEN |
+| `notes_api_product_config_map_get_string_must_clone` | ✅ tip GREEN |
+
+**Root cause layer:** constraint/Copy classification. Borrowed iterator text is
+`SafetyType::borrowed` (not owned). Clone stays unless the formal is a shared
+borrow. Copy identity ignores ref wrappers and unsubstituted generic formals.
+
+**What became unnecessary:** treating every `&T` loop binding as a Copy move into
+`Vec::push` / `HashMap::insert`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- hashmap_field_iter_push nested_match_for_push notes_api_product_config` → **4 passed**.
+
 ## P3.724 (2026-10-07) — Map::get match payloads clone into owned String/struct
 
 WJ `Map::get -> Option<V>` is surface sugar; Rust `HashMap::get` is `Option<&V>`.
@@ -15,8 +37,9 @@ were treated as Copy.
 | `hashmap_get_enum_destructure_string_type` | ✅ tip GREEN |
 | `hashmap_get_noncopy_match_not_copied` | ✅ tip GREEN |
 | `tip_out_event_get_data_string_must_clone` | ❌ tip-out lag (regen) |
-| `notes_api_product_config_map_get_string_must_clone` | ❌ for-loop `&Note`/`&String` into `push`/`insert` (not match) |
-| `nested_match_for_push_string_owns_or_clones` | ❌ `for p in &nested { push(p) }` (pre-existing) |
+| `notes_api_product_config_map_get_string_must_clone` | ✅ tip GREEN (P3.725) |
+| `nested_match_for_push_string_owns_or_clones` | ✅ tip GREEN (P3.725) |
+| `hashmap_field_iter_push_clones_noncopy_value` | ✅ tip GREEN (P3.725) |
 
 **Root cause layer:** constraint/type — match binding types from shared-ref get;
 wrapper rewrite peels refs before Copy vs clone.
