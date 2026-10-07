@@ -1,3 +1,37 @@
+## P3.701 (2026-10-06) — u32 Option-slot `min` + untyped `0` must not widen to U64
+
+Breach Protocol `inventory::remove_item`:
+```wj
+pub fn remove_item(self, quantity: u32) -> u32 {
+    let mut removed = 0
+    let mut remaining = quantity
+    // … Vec<Option<Stack>> + remaining.min(stack.quantity()) …
+}
+```
+Tip numeric inference reports `must be U32 … but was U64` on `to_remove` /
+`remaining` / `min()` return (analysis hard-fail).
+
+| Gate | Status |
+|------|--------|
+| `u32_option_slot_min_untyped_zero_must_not_widen_u64` | ❌ tip RED (isolate MultiFile) |
+| Typed `let mut removed: u32 = 0u32` same body | ✅ GREEN (control) |
+| Bare `min` without `Option` slots | ✅ GREEN (control) |
+
+**Root cause layer:** numeric inference — untyped `0` under `-> u32` inside
+`Vec<Option<_>>` + `.min(u32)` must stay U32, not widen the u32 chain to U64.
+
+**Why this is a new class:**
+- P3.327 is emit-suffix `_u64` on u32±literal (codegen).
+- This is **analysis** U32/U64 conflict that aborts transpile.
+
+**Product note:** full `inventory/*.wj` alone can GREEN; adding `equipment.wj`
+to the multipass set has also RED'd the same `remove_item` body (poison twin —
+keep isolate A as primary gate).
+
+**Do not steal:** P3.327, P3.348.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- u32_option_slot_min_untyped_zero_must_not_widen_u64`.
+
 ## P3.700 (2026-10-06) — WDB-410: owned-self struct-lit wither must move fields
 
 Product `PassBuilder::shader` / `dispatch` / `critical` cloned every

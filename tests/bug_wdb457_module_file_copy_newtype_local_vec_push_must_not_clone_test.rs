@@ -16,6 +16,7 @@
 //! Product `lighting2d/light_manager.rs` add_light:
 //!   `self.light_ids.push(id.clone())`
 //! WJ uses bare `id` (`let id = LightId::new(self.next_id)`).
+//! MultiFile isolate is also RED (not tip-lag only).
 //! Distinct from WDB-431 (Copy u64 **field** into insert/push), WDB-438 (Copy i32
 //! formal into **tuple** lit for push), and WDB-455 (i32 local into **field**).
 
