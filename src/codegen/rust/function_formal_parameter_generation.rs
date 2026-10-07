@@ -1838,7 +1838,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Inferred => {
                         if param.name == "self" {
-                            // P3.705: early owned-sibling path used to require
+                            // P3.707: early owned-sibling path used to require
                             // `returns_impl_struct` for `mut self`, so BP
                             // `update_death_state` (returns bool + field assigns +
                             // owned `upload_camera`) emitted bare immutable `self`.

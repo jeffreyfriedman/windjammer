@@ -23,7 +23,7 @@ callers (`update_death_state`, `update_camera_movement`); no new reconcile peel.
 `cargo test --release --test all -- bp_module_file_update_death_state bp_tip_out_update_death_state`
 → **2 passed**. Related: notes-api / check_rate / WDB-414 MultiFile ✅.
 
-**Do not steal:** WDB-460/461 tip-out Copy lag; remaining tip-true REDs (WDB-340+).
+**Do not steal:** remaining tip-true REDs (WDB-340+ cluster); WDB-460/461 tip-out GREEN.
 
 ## P3.706 (2026-10-06) — TDD WDB-461 (DB agent; no compiler src)
 
@@ -41,11 +41,11 @@ emit `cross(vec.clone())` / `dot(eye.clone())` / `is_audible(listener_pos.clone(
 
 | Gate | Status |
 |------|--------|
-| WDB-461 MultiFile | ✅ isolate GREEN — bare `cross(vec)` / `dot(eye)` |
-| WDB-461 tip-out | ❌ tip RED — clones in `rel_tip_out/math/{quat,mat4}.rs` + `audio_3d/spatial.rs` |
+| WDB-461 MultiFile | ✅ tip GREEN |
+| WDB-461 tip-out | ✅ tip GREEN after math/audio_3d tip-out regen (P3.704 `binding_is_copy_type`) |
 
-**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
-method-call owned formals for Copy `Vec3` still get `.clone()` in stale gen.
+**Root cause layer:** tip-out lag cleared — tip already correct via P3.704 Copy
+binding skip; multipass regen of `math/` + `audio_3d/` synced tip-out/gen.
 
 **Why this is a new class:**
 - WDB-355 is Copy Vec3 into **free-fn** owned formal (`vertex(p, n)`).
