@@ -14,8 +14,10 @@
 //! WDB-416: owned enum formal must not `a.clone().as_float()` when WJ is `a.as_float()`.
 //!
 //! Product `visual_scripting/runtime.rs`:
-//!   `let fa = a.clone().as_float();`
-//! WJ is `let fa = a.as_float()` — `as_float(self)` consumes once.
+//!   `pub fn evaluate(&self, …, a: &Value, b: &Value)` + `a.clone().as_float()`
+//! WJ is `evaluate(self, …, a: Value, b: Value)` + `a.as_float()` — `as_float(self)`
+//! consumes once. Non-Copy payload (`string` variant) is required: Copy-only enums
+//! stay owned by pass-by-value and hide the demotion.
 //! Distinct from WDB-358 (`self.clone().method()`), WDB-362 (`].clone().method()`),
 //! and WDB-409 (`set(name: &str)`).
 
@@ -25,7 +27,8 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
-const SRC: &str = r#"
+/// Copy-only enum (legacy isolate) — still must not clone.
+const SRC_COPY: &str = r#"
 pub enum Val {
     F(f32),
     I(i32),
@@ -45,19 +48,88 @@ pub fn add(a: Val, b: Val) -> f32 {
 }
 "#;
 
+/// Product shape: non-Copy enum + method + exclusive match arms.
+const SRC_PRODUCT: &str = r#"
+pub enum Val {
+    F(f32),
+    S(string),
+}
+
+impl Val {
+    pub fn as_float(self) -> f32 {
+        match self {
+            Val::F(v) => v,
+            Val::S(_) => 0.0,
+        }
+    }
+}
+
+pub enum Op {
+    Add,
+    Sub,
+    Neg,
+}
+
+pub struct Eval {
+    pub last: f32,
+}
+
+impl Eval {
+    pub fn evaluate(self, op: Op, a: Val, b: Val) -> f32 {
+        match op {
+            Op::Add => {
+                let fa = a.as_float()
+                let fb = b.as_float()
+                fa + fb
+            },
+            Op::Sub => {
+                let fa = a.as_float()
+                let fb = b.as_float()
+                fa - fb
+            },
+            Op::Neg => {
+                -a.as_float()
+            },
+        }
+    }
+}
+"#;
+
+fn assert_no_clone_before_as_float(rs: &str, label: &str) {
+    let demoted = rs.contains("a: &Val") || rs.contains("b: &Val");
+    let cloned = rs.contains(".clone().as_float()")
+        || rs.contains("a.clone()")
+        || rs.contains("b.clone()");
+    assert!(
+        !demoted && !cloned,
+        "WDB-416 RED ({label}): owned enum demoted/cloned before as_float:\n{rs}"
+    );
+}
+
 #[test]
 fn wdb416_module_file_owned_enum_must_not_clone_before_as_float() {
     let mut test = MultiFileTest::new();
-    test.add_file("lib.wj", SRC);
+    test.add_file("lib.wj", SRC_COPY);
     let map = test.compile().expect("WDB-416 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("WDB-416 MultiFile lib.rs:\n{rs}");
-    let cloned = rs.contains(".clone().as_float()") || rs.contains("a.clone()") || rs.contains("b.clone()");
-    assert!(
-        !cloned,
-        "WDB-416 RED: owned enum cloned before as_float:\n{rs}"
-    );
+    eprintln!("WDB-416 MultiFile (copy) lib.rs:\n{rs}");
+    assert_no_clone_before_as_float(rs, "copy-only");
     test.cargo_check().expect("WDB-416 cargo-check");
+}
+
+#[test]
+fn wdb416_module_file_noncopy_enum_match_must_not_demote_before_as_float() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_PRODUCT);
+    let map = test.compile().expect("WDB-416 product compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-416 MultiFile (product) lib.rs:\n{rs}");
+    assert_no_clone_before_as_float(rs, "noncopy+match");
+    assert!(
+        rs.contains("a: Val") && rs.contains("b: Val"),
+        "WDB-416 RED: evaluate formals must stay owned Val:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-416 product cargo-check");
 }
 
 fn wdb416_search_roots() -> Vec<PathBuf> {

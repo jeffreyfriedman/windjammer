@@ -360,13 +360,14 @@ fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
         )
 }
 
-/// True when the receiver is not `&mut self` (`Owned` and `Borrowed` both count).
+/// Shared `&self` only. Owned `self` consumes the receiver (WDB-416 `as_float(self)`)
+/// and must not classify as readonly — that blocked owning-method formal retention.
 fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
     sig.has_self_receiver
-        && sig
-            .param_ownership
-            .first()
-            .is_some_and(|o| *o != OwnershipMode::MutBorrowed)
+        && matches!(
+            sig.param_ownership.first(),
+            Some(OwnershipMode::Borrowed)
+        )
 }
 
 /// When `::{method}` is registered on many types, true only if every *instance*
@@ -387,8 +388,8 @@ fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> boo
 }
 
 /// When `::{method}` is registered on many types, true only if every *instance*
-/// method match does not take `&mut self` (`Owned` and `Borrowed` both count as
-/// non-mutating-in-place). Free functions that share the suffix are ignored.
+/// method match takes shared `&self` (Borrowed). Owned `self` is consuming, not
+/// readonly. Free functions that share the suffix are ignored.
 fn consensus_readonly_receiver(method: &str, registry: &SignatureRegistry) -> bool {
     let mut any = false;
     for (_key, sig) in registry.signatures_for_method_name(method) {
@@ -1075,5 +1076,24 @@ mod tests {
             reg.add_function(format!("{ty}::size"), sig);
         }
         assert!(consensus_readonly_receiver("size", &reg));
+    }
+
+    #[test]
+    fn owned_self_is_not_readonly_receiver() {
+        // WDB-416: Val::as_float(self) must not classify as readonly — that blocked
+        // owning-method formal retention and forced `&Val` + `.clone().as_float()`.
+        let mut reg = SignatureRegistry::empty();
+        let mut sig = FunctionSignature::default();
+        sig.name = "Val::as_float".into();
+        sig.param_types = vec![Type::Custom("Val".into())];
+        sig.param_ownership = vec![OwnershipMode::Owned];
+        sig.has_self_receiver = true;
+        reg.add_function("Val::as_float".into(), sig);
+        assert!(!is_known_readonly_qualified(
+            "as_float",
+            Some("Val"),
+            &reg
+        ));
+        assert!(!consensus_readonly_receiver("as_float", &reg));
     }
 }
