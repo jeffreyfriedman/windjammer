@@ -302,7 +302,7 @@ impl<'ast> Analyzer<'ast> {
         !self.is_copy_type(&field_ty)
     }
 
-    fn infer_projected_field_type(
+    pub(crate) fn infer_projected_field_type(
         &self,
         param_name: &str,
         param_type: &Type,

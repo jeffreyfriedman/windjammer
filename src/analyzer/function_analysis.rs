@@ -1592,7 +1592,6 @@ impl<'ast> Analyzer<'ast> {
                 .map(|p| func.field_extract_parameters.contains(&p.name))
                 .collect(),
         );
-
         FunctionSignature {
             name: func.decl.name.clone(),
             param_types,
