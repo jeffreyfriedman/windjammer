@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.703: Breach Protocol `GameState::update_death_state` mutates `self.respawn_timer`
+//! P3.704: Breach Protocol `GameState::update_death_state` mutates `self.respawn_timer`
 //! / camera / renderer HUD but tip product emit keeps owned immutable `self`
 //! (`error[E0594]: cannot assign … as self is not declared as mutable`).
 //!
@@ -50,7 +50,7 @@ fn bp_tip_out_update_death_state_must_emit_mut_self() {
     assert!(
         rs.contains("fn update_death_state(&mut self")
             || rs.contains("fn update_death_state(mut self"),
-        "P3.703 tip-out: update_death_state must emit &mut self (or mut self), not owned immutable self. path={} snippet:\n{}",
+        "P3.704 tip-out: update_death_state must emit &mut self (or mut self), not owned immutable self. path={} snippet:\n{}",
         path.display(),
         rs.lines()
             .filter(|l| l.contains("update_death_state") || l.contains("respawn_timer"))

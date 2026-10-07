@@ -119,7 +119,7 @@ must mean shared `&self` only; Owned `self` is consuming.
 WDB-457/458 are DB-agent tip-outs (no compiler src).
 
 
-## P3.703 (2026-10-06) — BP `update_death_state` must emit `&mut self` (tip-out)
+## P3.704 (2026-10-06) — BP `update_death_state` must emit `&mut self` (tip-out)
 
 Product `breach-protocol/gen/game_state.rs`:
 ```rust
