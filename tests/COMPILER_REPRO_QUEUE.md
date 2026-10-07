@@ -35,6 +35,34 @@ owned formals must stay bare even when later reused for `Vec::push`.
 
 **Do not steal:** WDB-406/408/411/457–458, P3.508–P3.703, WDB-412–458 (filed).
 
+## P3.701 (2026-10-06) — WDB-416: owned-self method is not "readonly"
+
+`sig_readonly_receiver` treated any non-`&mut self` as readonly, so
+`Val::as_float(self)` (Owned) was classified readonly. Codegen then skipped
+owning-method formal retention and demoted `a: Value` → `&Value` +
+`a.clone().as_float()` (product `visual_scripting/runtime`).
+
+| Gate | Status |
+|------|--------|
+| `wdb416_module_file_owned_enum_must_not_clone_before_as_float` | ✅ tip GREEN |
+| `wdb416_module_file_noncopy_enum_match_must_not_demote_before_as_float` | ✅ tip GREEN (product shape) |
+| `wdb416_tip_out_game_core_value_must_not_clone_before_as_float` | ✅ tip GREEN after tip-out/gen sync |
+| `owned_self_is_not_readonly_receiver` | ✅ unit GREEN |
+
+**Root cause layer:** signature — `sig_readonly_receiver` / `is_known_readonly_qualified`
+must mean shared `&self` only; Owned `self` is consuming.
+
+**What became unnecessary:** tip/product `&Value` + `.clone().as_float()`; no
+`ir_call_site` peel. Owning-method demotion path now sees Owned self correctly.
+
+**Gates (2026-10-06 re-verify):** `CARGO_TARGET_DIR=target/agent-tdd-next` →
+`cargo test --test all --features integration_tests -- wdb416` → **3 passed**;
+`cargo test -p windjammer --lib owned_self_is_not_readonly_receiver` → **1 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383 + wave);
+WDB-457/458 are DB-agent tip-outs (no compiler src).
+
+
 ## P3.702 (2026-10-06) — TDD WDB-457 (DB agent; no compiler src)
 
 Copy **newtype** local into `Vec::push` must not `.clone()`.

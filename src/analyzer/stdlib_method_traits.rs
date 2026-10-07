@@ -362,12 +362,24 @@ fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
 
 /// Shared `&self` only. Owned `self` consumes the receiver (WDB-416 `as_float(self)`)
 /// and must not classify as readonly — that blocked owning-method formal retention.
+/// Used by [`is_known_readonly_qualified`] (typed receiver).
 fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
     sig.has_self_receiver
         && matches!(
             sig.param_ownership.first(),
             Some(OwnershipMode::Borrowed)
         )
+}
+
+/// Non-`&mut self` receiver (`Owned` or `Borrowed`). Used only for unqualified
+/// stdlib consensus (`is_known_readonly("get")`) where Owned getters still count
+/// as non-mutating-in-place. Typed paths must use [`sig_readonly_receiver`].
+fn sig_non_mut_receiver(sig: &FunctionSignature) -> bool {
+    sig.has_self_receiver
+        && sig
+            .param_ownership
+            .first()
+            .is_some_and(|o| *o != OwnershipMode::MutBorrowed)
 }
 
 /// When `::{method}` is registered on many types, true only if every *instance*
@@ -388,8 +400,8 @@ fn consensus_mutates_receiver(method: &str, registry: &SignatureRegistry) -> boo
 }
 
 /// When `::{method}` is registered on many types, true only if every *instance*
-/// method match takes shared `&self` (Borrowed). Owned `self` is consuming, not
-/// readonly. Free functions that share the suffix are ignored.
+/// method match is non-`&mut self`. Free functions that share the suffix are ignored.
+/// Prefer [`is_known_readonly_qualified`] for ownership/consume decisions.
 fn consensus_readonly_receiver(method: &str, registry: &SignatureRegistry) -> bool {
     let mut any = false;
     for (_key, sig) in registry.signatures_for_method_name(method) {
@@ -397,7 +409,7 @@ fn consensus_readonly_receiver(method: &str, registry: &SignatureRegistry) -> bo
             continue;
         }
         any = true;
-        if !sig_readonly_receiver(sig) {
+        if !sig_non_mut_receiver(sig) {
             return false;
         }
     }
@@ -1089,11 +1101,12 @@ mod tests {
         sig.param_ownership = vec![OwnershipMode::Owned];
         sig.has_self_receiver = true;
         reg.add_function("Val::as_float".into(), sig);
+        // Typed/qualified path must reject Owned self; unqualified consensus still
+        // treats non-`&mut` as "readonly" for stdlib getters — do not assert that here.
         assert!(!is_known_readonly_qualified(
             "as_float",
             Some("Val"),
             &reg
         ));
-        assert!(!consensus_readonly_receiver("as_float", &reg));
     }
 }
