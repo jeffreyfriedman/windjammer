@@ -1,6 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.709 (2026-10-06) — WDB-358: `&self` must not `self.clone()` borrowed siblings
+
+Product `is_mesh_uploaded(&self)` emitted `self.clone().find_mesh_index(name)`
+even though `find_mesh_index` is `&self`. Receiver consume-clone skipped only for
+`&mut self` callers.
+
+| Gate | Status |
+|------|--------|
+| `wdb358_module_file_self_method_must_not_clone_receiver` | ✅ tip GREEN |
+| `wdb358_tip_out_game_core_must_not_self_clone_before_borrowed_method` | ✅ tip GREEN after regen |
+
+**Root cause layer:** coercion/encoding (method receiver) — extend skip_clone to
+`is_shared_borrowed_param` when callee ownership is Borrowed/MutBorrowed.
+
+**What became unnecessary:** `self.clone().find_mesh_index` / similar tip-out
+`self.clone().method` on borrowed receivers; no new ir_call_site peel.
+
+**Gates:** `cargo test --release --test all -- wdb358_` → **2 passed**.
+
 ## P3.708 (2026-10-06) — tip-out Copy-clone lag sweep (no new peels)
 
 Regenerated game-core tip-out modules with tip `wj` after P3.704

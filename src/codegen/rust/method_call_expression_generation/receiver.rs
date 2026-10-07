@@ -183,11 +183,13 @@ impl<'ast> CodeGenerator<'ast> {
                                         .method_requires_consuming_self_receiver(&qualified, sig))
                                 && !obj_str.ends_with(".clone()")
                             {
-                                // From `&mut self`, calling another `&mut self` method
-                                // must reborrow — never `self.clone().method()`.
+                                // From `&mut self` / `&self`, calling another borrowed
+                                // method must reborrow — never `self.clone().method()`
+                                // (WDB-358: `is_mesh_uploaded(&self)` → `find_mesh_index`).
                                 let ownership =
                                     self.effective_method_self_ownership(&qualified, sig);
-                                let skip_clone = is_mut_borrowed_param
+                                let skip_clone = (is_mut_borrowed_param
+                                    || is_shared_borrowed_param)
                                     && matches!(
                                         ownership,
                                         crate::analyzer::OwnershipMode::MutBorrowed
