@@ -1,3 +1,38 @@
+# Compiler repro queue (dogfooding — do not work around in application code)
+
+
+## P3.702 (2026-10-06) — TDD WDB-457 (DB agent; no compiler src)
+
+Copy **newtype** local into `Vec::push` must not `.clone()`.
+
+Product `lighting2d/light_manager.rs` `add_light`:
+```wj
+let id = LightId::new(self.next_id)
+self.light_ids.push(id)
+```
+Tip + MultiFile both emit `self.light_ids.push(id.clone())` even though
+`LightId` is `Copy` (`i32` newtype) and `id` is reused for `id.value()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-457 MultiFile | ❌ isolate RED — `light_ids.push(id.clone())` |
+| WDB-457 tip-out | ❌ tip RED — same in `rel_tip_out/lighting2d/light_manager.rs` |
+
+**Root cause layer:** Copy peel / Vec::push — Copy newtype locals must stay bare
+even when later field-read reused (`id.value()`); `.clone()` is unnecessary.
+
+**Why this is a new class:**
+- WDB-431 is Copy u64 **field** into insert/push.
+- WDB-438 is Copy i32 formal into **tuple** lit for push.
+- WDB-455 is i32 local into **field** assign.
+- This is Copy **newtype local** into bare `Vec::push` with post-push reuse.
+
+**What became unnecessary:** rewriting LightId add paths to avoid push+reuse.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb457_` — isolate RED / tip RED (2026-10-06). Test on tip; this records the dual-RED TDD gate.
+
+**Do not steal:** WDB-406/408/411/456–457, P3.508–P3.702, WDB-412–457 (filed). Note: P3.701 is the unrelated u32 Option-slot min widen gate.
+
 ## P3.701 (2026-10-06) — u32 Option-slot `min` + untyped `0` must not widen to U64
 
 Breach Protocol `inventory::remove_item`:
