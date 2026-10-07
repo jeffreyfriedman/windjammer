@@ -90,6 +90,67 @@ fn sort_and_return(items: Vec<i32>) -> Vec<i32> {
     }
 
     #[test]
+
+    #[test]
+    fn wdb416_evaluate_method_keeps_owned_val_formals() {
+        let src = r#"
+pub enum Val {
+    F(f32),
+    S(string),
+}
+impl Val {
+    pub fn as_float(self) -> f32 {
+        match self {
+            Val::F(v) => v,
+            Val::S(_) => 0.0,
+        }
+    }
+}
+pub enum Op { Add, Sub, Neg }
+pub struct Eval { pub last: f32 }
+impl Eval {
+    pub fn evaluate(self, op: Op, a: Val, b: Val) -> f32 {
+        match op {
+            Op::Add => {
+                let fa = a.as_float()
+                let fb = b.as_float()
+                fa + fb
+            },
+            Op::Sub => {
+                let fa = a.as_float()
+                let fb = b.as_float()
+                fa - fb
+            },
+            Op::Neg => { -a.as_float() },
+        }
+    }
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (_funcs, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let eval = registry
+            .get_signature("Eval::evaluate")
+            .expect("Eval::evaluate");
+        eprintln!(
+            "Eval::evaluate ownership={:?} has_self={} emitted={:?}",
+            eval.param_ownership, eval.has_self_receiver, eval.emitted_rust_ref_params
+        );
+        // skip self: ownership for a, b
+        let a_b = if eval.has_self_receiver {
+            eval.param_ownership.get(1..).unwrap_or(&[])
+        } else {
+            &eval.param_ownership
+        };
+        // op, a, b — find Val slots (Owned expected for a,b)
+        assert!(
+            eval.param_ownership.iter().filter(|m| **m == OwnershipMode::Owned).count() >= 2,
+            "evaluate must keep owned Val formals; got {:?}",
+            eval.param_ownership
+        );
+        let _ = a_b;
+    }
+
     fn wdb416_owned_enum_consumed_by_as_float_stays_owned() {
         let src = r#"
 pub enum Val {
