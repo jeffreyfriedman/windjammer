@@ -1,6 +1,37 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.704 (2026-10-06) — TDD WDB-459 (DB agent; no compiler src)
+
+Copy **struct** local into `Vec::push` must not `.clone()`.
+
+Product `editor/uv_unwrap_algorithm.rs` / `uv_island_packing.rs`:
+```wj
+let a = tri_norm.a
+all_corners.push(a)
+uvs.push(a)
+```
+Tip MultiFile emits bare `push(a)` / `push(b)` / `push(c)` (isolate GREEN).
+Tip-out + game-core gen still emit `a.clone()` / `fa.clone()` etc.
+
+| Gate | Status |
+|------|--------|
+| WDB-459 MultiFile | ✅ isolate GREEN — bare `push(a/b/c)` |
+| WDB-459 tip-out | ❌ tip RED — `push(a.clone())` in `rel_tip_out/editor/uv_unwrap_algorithm.rs` + packing |
+
+**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
+stale gen keeps Copy struct (`UvCoord`) peel clones on Vec::push.
+
+**Why this is a new class:**
+- WDB-457 is Copy **newtype** into Vec::push (`LightId`).
+- WDB-458 is Copy newtype into owned **method formal** (`has`) + push.
+- WDB-440 is f32 local into **struct lit**.
+- This is Copy **struct** local (`UvCoord`) into Vec::push with field peel + reuse.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb459_` — isolate GREEN / tip RED (2026-10-06).
+
+**Do not steal:** WDB-406/408/411/457–459, P3.508–P3.704, WDB-412–459 (filed).
+
 ## P3.703 (2026-10-06) — TDD WDB-458 (DB agent; no compiler src)
 
 Copy **newtype** local into owned method formal must not `.clone()`.
