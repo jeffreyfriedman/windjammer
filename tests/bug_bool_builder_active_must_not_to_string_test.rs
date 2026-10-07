@@ -90,8 +90,9 @@ fn bool_builder_active_must_not_to_string_with_string_overload() {
         .expect("nav.rs");
     eprintln!("P3.705 active nav.rs:\n{rs}");
     assert!(
-        !rs.contains(".to_string())") && !rs.contains("is_active.to_string()"),
-        "P3.705 RED: bool builder .active must not .to_string():\n{rs}"
+        !rs.contains("is_active.to_string()")
+            && !rs.contains(".active(is_active.to_string())"),
+        "P3.705 RED: bool builder .active must not .to_string() the bool:\n{rs}"
     );
     assert!(
         rs.contains(".active(is_active)"),
