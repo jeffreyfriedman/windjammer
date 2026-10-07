@@ -17,6 +17,9 @@
 //!   `tick_node(tree.clone(), cid, …)` / `tick_decorator_*(tree.clone(), …)`
 //!   with `tick_node(tree: BehaviorTree, …)` owned — read-only walk should borrow.
 //! Prefer `tree: &BehaviorTree` + `tick_node(tree, …)`. Twin of WDB-360 (encode owned).
+//!
+//! Isolate must use a **non-Copy** tree (Vec nodes) + string field let
+//! (`let name = tree.nodes[i].name`) + mutual recursion through a composite helper.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -25,18 +28,84 @@ use integration_test_helpers::MultiFileTest;
 use std::path::PathBuf;
 
 const SRC: &str = r#"
+pub struct Node {
+    pub id: i32,
+    pub name: string,
+    pub kids: Vec<i32>,
+    pub kind: i32,
+}
+
 pub struct Tree {
+    pub nodes: Vec<Node>,
     pub root: i32,
 }
 
-pub fn tick_node(tree: Tree, node_id: i32) -> i32 {
-    tree.root + node_id
+pub enum Status {
+    Ok,
+    Fail,
+    Run,
 }
 
-pub fn tick_children(tree: Tree, a: i32, b: i32) -> i32 {
-    let x = tick_node(tree, a)
-    let y = tick_node(tree, b)
-    x + y
+fn leaf_read(tree: Tree, idx: i32) -> i32 {
+    tree.nodes[idx as usize].id
+}
+
+pub fn tick_action(tree: Tree, name: string) -> Status {
+    if tree.nodes.len() > 0 {
+        Status::Ok
+    } else {
+        Status::Fail
+    }
+}
+
+pub fn tick_decorator(tree: Tree, parent_idx: i32, child_count: usize, active: Vec<i32>) -> Status {
+    if child_count == 0 {
+        return Status::Fail
+    }
+    let cid = leaf_read(tree, parent_idx)
+    let s = tick_node(tree, cid, active)
+    match s {
+        Status::Ok => Status::Fail,
+        Status::Fail => Status::Ok,
+        Status::Run => Status::Run,
+    }
+}
+
+pub fn tick_seq(tree: Tree, parent_idx: i32, child_count: usize, active: Vec<i32>) -> Status {
+    let mut i = 0
+    while i < child_count as i32 {
+        let cid = leaf_read(tree, parent_idx)
+        let s = tick_node(tree, cid, active)
+        match s {
+            Status::Fail => return Status::Fail,
+            Status::Run => return Status::Run,
+            Status::Ok => {},
+        }
+        i = i + 1
+    }
+    Status::Ok
+}
+
+pub fn tick_node(tree: Tree, node_id: i32, active: Vec<i32>) -> Status {
+    let idx = leaf_read(tree, node_id)
+    if idx < 0 {
+        return Status::Fail
+    }
+    let child_count = tree.nodes[idx as usize].kids.len()
+    let name = tree.nodes[idx as usize].name
+    let kind = tree.nodes[idx as usize].kind
+    let status = match kind {
+        0 => tick_action(tree, name),
+        1 => tick_decorator(tree, idx, child_count, active),
+        _ => tick_seq(tree, idx, child_count, active),
+    }
+    active.push(node_id)
+    status
+}
+
+pub fn tick(tree: Tree) -> Status {
+    let mut active: Vec<i32> = Vec::new()
+    tick_node(tree, tree.root, active)
 }
 "#;
 
@@ -51,6 +120,25 @@ fn wdb366_module_file_bt_tick_must_not_force_tree_clone() {
     assert!(
         !bad,
         "WDB-366 RED: tick path forced tree.clone():\n{rs}"
+    );
+    assert!(
+        rs.contains("fn tick_node(tree: &Tree")
+            || rs.contains("fn tick_node(tree: & Tree"),
+        "WDB-366 RED: tick_node must demote to &Tree:\n{rs}"
+    );
+    assert!(
+        rs.contains("fn tick_seq(tree: &Tree") || rs.contains("fn tick_seq(tree: & Tree"),
+        "WDB-366 RED: tick_seq must demote to &Tree:\n{rs}"
+    );
+    assert!(
+        rs.contains("fn tick_action(tree: &Tree")
+            || rs.contains("fn tick_action(tree: & Tree"),
+        "WDB-366 RED: tick_action must demote to &Tree:\n{rs}"
+    );
+    assert!(
+        rs.contains("fn tick_decorator(tree: &Tree")
+            || rs.contains("fn tick_decorator(tree: & Tree"),
+        "WDB-366 RED: tick_decorator must demote to &Tree:\n{rs}"
     );
     test.cargo_check().expect("WDB-366 cargo-check");
 }

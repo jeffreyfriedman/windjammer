@@ -4,7 +4,15 @@
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::{Expression, FunctionDecl, Item, Pattern, Program, Statement, Type};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+
+thread_local! {
+    /// Memoize `callee_arg_is_hard_owned` during a promote/restore pass — wdb-layers
+    /// has ~16k sigs; uncached body walks are pathological.
+    static HARD_OWNED_CACHE: RefCell<Option<HashMap<(String, usize), bool>>> =
+        RefCell::new(None);
+}
 
 /// Precomputed AST indexes for bare-pass restore (P3.585).
 ///
@@ -134,6 +142,21 @@ pub fn promote_callees_from_bare_pass_callers(
     programs: &[&Program],
     copy_types: &std::collections::HashSet<String>,
 ) {
+    HARD_OWNED_CACHE.with(|c| *c.borrow_mut() = Some(HashMap::new()));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        promote_callees_from_bare_pass_callers_inner(registry, programs, copy_types);
+    }));
+    HARD_OWNED_CACHE.with(|c| *c.borrow_mut() = None);
+    if let Err(payload) = result {
+        std::panic::resume_unwind(payload);
+    }
+}
+
+fn promote_callees_from_bare_pass_callers_inner(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+    copy_types: &std::collections::HashSet<String>,
+) {
     let mut hints: Vec<(String, usize, OwnershipMode)> = Vec::new();
     for program in programs {
         collect_bare_pass_hints(program, programs, registry, copy_types, &mut hints);
@@ -141,7 +164,14 @@ pub fn promote_callees_from_bare_pass_callers(
     hints.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     hints.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
     for (callee_key, param_idx, mode) in hints {
-        if bare_pass_hint_should_skip(programs, registry, &callee_key, param_idx, mode) {
+        if bare_pass_hint_should_skip(
+            programs,
+            registry,
+            &callee_key,
+            param_idx,
+            mode,
+            copy_types,
+        ) {
             continue;
         }
         apply_bare_pass_hint(registry, &callee_key, param_idx, mode);
@@ -226,6 +256,13 @@ pub fn restore_owned_formals_forwarded_to_owned_callees(
     registry: &mut SignatureRegistry,
     programs: &[&Program],
 ) {
+    // Ensure cache exists when called outside `promote_callees` (library_multipass
+    // invokes this a second time after promote).
+    HARD_OWNED_CACHE.with(|c| {
+        if c.borrow().is_none() {
+            *c.borrow_mut() = Some(HashMap::new());
+        }
+    });
     let keys: Vec<String> = registry.signatures.keys().cloned().collect();
     for key in keys {
         let Some(sig) = registry.get_signature(&key).cloned() else {
@@ -246,7 +283,14 @@ pub fn restore_owned_formals_forwarded_to_owned_callees(
             else {
                 continue;
             };
-            if !param_forwarded_bare_into_owned_callee(body, param_name, registry, programs) {
+            // WDB-366: soft AST-Custom "owned" peers (mutual BT ticks) must not undo
+            // analyzer Borrowed — only extern / Vec / consuming-body Custom are hard.
+            if !param_forwarded_bare_into_hard_owned_callee(
+                body,
+                param_name,
+                registry,
+                programs,
+            ) {
                 continue;
             }
             new_sig.param_ownership[idx] = OwnershipMode::Owned;
@@ -837,12 +881,15 @@ pub fn restore_owned_field_forward_formals(
             else {
                 continue;
             };
+            // Do not restore from Let field moves alone (`let name = tree.nodes[i].name`).
+            // Analyzer already keeps Owned for consuming field moves; text field lets are
+            // cloned from `&T` (WDB-366). Using Let moves here undid Borrowed BT ticks.
             if !(param_forwards_fields_in_call_args_only(body, param_name)
                 || param_stored_in_struct_literal(body, param_name)
                 || param_whole_binding_returned(body, param_name)
                 || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
-                || param_has_field_or_index_move_binding(body, param_name))
+                || param_has_non_let_field_or_index_move(body, param_name))
             {
                 continue;
             }
@@ -2157,10 +2204,15 @@ fn bare_pass_hint_should_skip(
     callee_key: &str,
     param_idx: usize,
     mode: OwnershipMode,
+    copy_types: &HashSet<String>,
 ) -> bool {
     let Some(sig) = registry.get_signature(callee_key) else {
         return false;
     };
+    let formal_ty = sig
+        .formal_param_types
+        .get(param_idx)
+        .or_else(|| sig.param_types.get(param_idx));
     // WDB-216/275/276: `extern fn` formals are the C/FFI boundary — bare-pass must never
     // demote them to Borrowed/`&Vec`. Doing so makes wrappers that forward bare into FFI
     // look like borrow-passthrough delegates and emit `&Vec` + bare into `Vec` (E0308).
@@ -2206,39 +2258,34 @@ fn bare_pass_hint_should_skip(
     else {
         return false;
     };
-    match mode {
+    let skip = match mode {
         // WDB-155: non-Copy Custom bare-pass targets MutBorrowed, but read-only
         // `Some(Emit { table: ast.table })` field projection must stay owned (same
         // skip as Borrowed). Asymmetric skip caused `&mut SqlAst` + E0596.
-        OwnershipMode::MutBorrowed => {
-            param_stored_in_struct_literal(body, param_name)
-                || param_forwards_fields_in_call_args_only(body, param_name)
-                || param_whole_binding_returned(body, param_name)
-                // WDB-164: `let mut out = store` consumes owned `store` — cannot be `&mut Store`.
-                || param_moved_into_let_binding(body, param_name)
-                // WDB-158: compare helpers that only `match` the formal must stay owned
-                // (not `&mut Cell` / `&mut Value`).
-                || param_used_only_as_match_scrutinee(body, param_name)
-                || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
-                // P3.582: `csr.neighbors` / `let n = csr.offsets` moves — not `&DenseCsr`.
-                || param_has_field_or_index_move_binding(body, param_name)
-                // P3.614: `for pair in headers { let key = pair.0 }` — keep Owned Vec.
-                || param_for_in_moves_element_fields(body, param_name)
-        }
-        OwnershipMode::Borrowed => {
+        OwnershipMode::MutBorrowed | OwnershipMode::Borrowed => {
             param_stored_in_struct_literal(body, param_name)
                 || param_forwards_fields_in_call_args_only(body, param_name)
                 || param_whole_binding_returned(body, param_name)
                 || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
-                || param_forwarded_bare_into_owned_callee(body, param_name, registry, programs)
-                // P3.582: returning/moving `param.field` must keep owned Custom (library multipass).
-                || param_has_field_or_index_move_binding(body, param_name)
-                // P3.614: for-in field moves must not demote `Vec` to `&Vec` (E0507).
+                || param_forwarded_bare_into_hard_owned_callee(
+                    body,
+                    param_name,
+                    registry,
+                    programs,
+                )
+                || param_has_consuming_field_or_index_move(
+                    body,
+                    param_name,
+                    formal_ty,
+                    programs,
+                    copy_types,
+                )
                 || param_for_in_moves_element_fields(body, param_name)
         }
         OwnershipMode::Owned => false,
-    }
+    };
+    skip
 }
 
 /// WDB-158: formals used only as `match` scrutinees (equality/discriminant compare)
@@ -2464,9 +2511,11 @@ fn expr_forwards_bare_into_owned_callee(
             if let Some(name) = callee_name_from_expr(function) {
                 for (arg_i, (_, arg)) in arguments.iter().enumerate() {
                     if expr_is_bare_param(arg, param_name) {
-                        // Registry shared-ref beats AST Custom-as-owned fallback
-                        // (`out_degree` → demoted `vertex_index(&view)`).
-                        if callee_arg_expects_shared_ref(registry, &name, arg_i) {
+                        // Registry Borrowed/shared-ref beats AST Custom-as-owned fallback
+                        // (`out_degree` → demoted `vertex_index(&view)`; WDB-366 BT peers).
+                        if callee_arg_expects_shared_ref(registry, &name, arg_i)
+                            || callee_arg_registry_is_borrowed(registry, &name, arg_i)
+                        {
                             continue;
                         }
                         if callee_arg_expects_owned(registry, &name, arg_i)
@@ -2490,7 +2539,9 @@ fn expr_forwards_bare_into_owned_callee(
         } => {
             for (arg_i, (_, arg)) in arguments.iter().enumerate() {
                 if expr_is_bare_param(arg, param_name) {
-                    if callee_arg_expects_shared_ref(registry, method, arg_i) {
+                    if callee_arg_expects_shared_ref(registry, method, arg_i)
+                        || callee_arg_registry_is_borrowed(registry, method, arg_i)
+                    {
                         continue;
                     }
                     if callee_arg_expects_owned(registry, method, arg_i)
@@ -2557,6 +2608,28 @@ fn callee_arg_expects_owned(
             if sig.is_extern {
                 return true;
             }
+        }
+    }
+    false
+}
+
+/// Registry already converged this arg to Borrowed (even if types are still bare Custom).
+/// Beats AST `Custom` ⇒ Owned fallback so mutual read-only peers stay demoted (WDB-366).
+fn callee_arg_registry_is_borrowed(
+    registry: &SignatureRegistry,
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    for key in callee_registry_keys(callee_name, registry) {
+        let Some(sig) = registry.get_signature(&key) else {
+            continue;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(OwnershipMode::Borrowed)
+        ) {
+            return true;
         }
     }
     false
@@ -2904,8 +2977,10 @@ fn callee_pub_owned_formal_skip_bare_pass(
         find_function_body_for_registry_key(programs, callee_key, param_idx)
     };
     if let Some((param_name, body)) = body_info {
-        // WDB-216/275/276: bare forward into owned FFI / owned peer formals.
-        if param_forwarded_bare_into_owned_callee(body, param_name, registry, programs) {
+        // WDB-216/275/276: bare forward into hard Owned (extern / Vec / consuming
+        // Custom). Soft Owned AST peers that are themselves readonly walks must not
+        // lock the formal — WDB-366 mutual BT ticks converge to Borrowed.
+        if param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs) {
             return true;
         }
     }
@@ -2936,6 +3011,22 @@ fn callee_pub_owned_formal_skip_bare_pass(
             // siblings (`out_degree` → `vertex_index(&view)`). Positive allowlist —
             // mutating method receivers / owned peers stay locked Owned.
             if param_readonly_custom_borrow_passthrough(body, param_name, registry, programs) {
+                return false;
+            }
+            // WDB-366: pub BT `tick_node` ↔ `tick_decorator_*` — mutual recursion keeps
+            // AST peers looking Owned, so the passthrough check above fails on
+            // `param_forwarded_bare_into_owned_callee`. Allow demotion when this body
+            // is a read-only walk and bare forwards do not target hard Owned formals
+            // (extern / Vec / consuming-body Custom). Peer readonly walks may still
+            // look Owned from AST stubs — those are not hard consumes.
+            if param_is_readonly_custom_walk_body(body, param_name)
+                && !param_forwarded_bare_into_hard_owned_callee(
+                    body,
+                    param_name,
+                    registry,
+                    programs,
+                )
+            {
                 return false;
             }
         }
@@ -3169,13 +3260,342 @@ fn param_readonly_field_projection_only(body: &[&Statement], param_name: &str) -
 
 /// WDB-081: pub Custom formal used only via field/index projection and/or bare
 /// forwards into callees that already emit shared `&T` (CSR out_degree → vertex_index).
+/// True when `param` is only read via field/index projection, text field lets, or
+/// bare-forwarded — no store / whole-binding return / non-let field move.
+fn param_is_readonly_custom_walk_body(body: &[&Statement], param_name: &str) -> bool {
+    !param_has_non_let_field_or_index_move(body, param_name)
+        && !param_stored_in_struct_literal(body, param_name)
+        && !param_moved_into_let_binding(body, param_name)
+        && !param_whole_binding_returned(body, param_name)
+        && body
+            .iter()
+            .any(|stmt| statement_mentions_param_name(stmt, param_name))
+}
+
+/// Bare forward into extern / Vec / consuming-body Custom — real Owned contracts.
+/// Peer free-fns that are themselves readonly walks are excluded (WDB-366).
+fn param_forwarded_bare_into_hard_owned_callee(
+    body: &[&Statement],
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    body.iter().any(|stmt| {
+        stmt_forwards_bare_into_hard_owned_callee(stmt, param_name, registry, programs)
+    })
+}
+
+fn stmt_forwards_bare_into_hard_owned_callee(
+    stmt: &Statement,
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    match stmt {
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Assignment { value: expr, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(expr, param_name, registry, programs)
+        }
+        Statement::Let { value, else_block, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs)
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                    })
+                })
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            condition,
+            ..
+        } => {
+            expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs)
+                || then_block.iter().any(|s| {
+                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                })
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter().any(|s| {
+                        stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                    })
+                })
+        }
+        Statement::While { body, condition, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs)
+                || body.iter().any(|s| {
+                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                })
+        }
+        Statement::For { body, iterable, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(iterable, param_name, registry, programs)
+                || body.iter().any(|s| {
+                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                })
+        }
+        Statement::Match { value, arms, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs)
+                || arms.iter().any(|arm| {
+                    expr_forwards_bare_into_hard_owned_callee(
+                        &arm.body,
+                        param_name,
+                        registry,
+                        programs,
+                    )
+                })
+        }
+        _ => false,
+    }
+}
+
+fn expr_forwards_bare_into_hard_owned_callee(
+    expr: &Expression,
+    param_name: &str,
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+) -> bool {
+    match expr {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
+            if let Some(name) = callee_name_from_expr(function) {
+                for (arg_i, (_, arg)) in arguments.iter().enumerate() {
+                    if expr_is_bare_param(arg, param_name)
+                        && callee_arg_is_hard_owned(registry, programs, &name, arg_i)
+                    {
+                        return true;
+                    }
+                }
+            }
+            expr_forwards_bare_into_hard_owned_callee(function, param_name, registry, programs)
+                || arguments.iter().any(|(_, arg)| {
+                    expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs)
+                })
+        }
+        Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } => {
+            for (arg_i, (_, arg)) in arguments.iter().enumerate() {
+                if expr_is_bare_param(arg, param_name)
+                    && callee_arg_is_hard_owned(registry, programs, method, arg_i)
+                {
+                    return true;
+                }
+            }
+            expr_forwards_bare_into_hard_owned_callee(object, param_name, registry, programs)
+                || arguments.iter().any(|(_, arg)| {
+                    expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs)
+                })
+        }
+        Expression::Block { statements, .. } => statements.iter().any(|s| {
+            stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+        }),
+        Expression::Binary { left, right, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(left, param_name, registry, programs)
+                || expr_forwards_bare_into_hard_owned_callee(right, param_name, registry, programs)
+        }
+        Expression::Unary { operand, .. }
+        | Expression::FieldAccess { object: operand, .. }
+        | Expression::Index { object: operand, .. }
+        | Expression::TryOp { expr: operand, .. }
+        | Expression::Await { expr: operand, .. } => {
+            expr_forwards_bare_into_hard_owned_callee(operand, param_name, registry, programs)
+        }
+        Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
+            .iter()
+            .any(|e| expr_forwards_bare_into_hard_owned_callee(e, param_name, registry, programs)),
+        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| {
+            expr_forwards_bare_into_hard_owned_callee(e, param_name, registry, programs)
+        }),
+        _ => false,
+    }
+}
+
+fn callee_arg_is_hard_owned(
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    let cache_key = (callee_name.to_string(), arg_index);
+    if let Some(hit) = HARD_OWNED_CACHE.with(|c| {
+        c.borrow()
+            .as_ref()
+            .and_then(|m| m.get(&cache_key).copied())
+    }) {
+        return hit;
+    }
+    let result = callee_arg_is_hard_owned_uncached(registry, programs, callee_name, arg_index);
+    HARD_OWNED_CACHE.with(|c| {
+        if let Some(m) = c.borrow_mut().as_mut() {
+            m.insert(cache_key, result);
+        }
+    });
+    result
+}
+
+fn callee_arg_is_hard_owned_uncached(
+    registry: &SignatureRegistry,
+    programs: &[&Program],
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    if callee_arg_expects_shared_ref(registry, callee_name, arg_index)
+        || callee_arg_registry_is_borrowed(registry, callee_name, arg_index)
+    {
+        return false;
+    }
+    for key in callee_registry_keys(callee_name, registry) {
+        let Some(sig) = registry.get_signature(&key) else {
+            continue;
+        };
+        let pidx = sig.arg_param_index(arg_index);
+        if sig.is_extern {
+            return true;
+        }
+        let formal = sig
+            .formal_param_types
+            .get(pidx)
+            .or_else(|| sig.param_types.get(pidx));
+        if formal.is_some_and(is_vec_container_type) {
+            return true;
+        }
+        // Custom formal: hard Owned only when the callee body consumes the binding.
+        if formal.is_some_and(|t| {
+            matches!(t, Type::Custom(_))
+                && !crate::codegen::rust::types::is_windjammer_text_type(t)
+        }) {
+            if let Some((pname, body)) =
+                find_function_body_for_registry_key(programs, &key, pidx)
+            {
+                if !param_is_readonly_custom_walk_body(body, pname) {
+                    return true;
+                }
+                // Readonly-walk peer — not a hard consume (mutual BT ticks).
+                continue;
+            }
+            // No body: treat Custom AST Owned as hard only when registry says Owned.
+            if matches!(
+                sig.param_ownership.get(pidx),
+                Some(OwnershipMode::Owned)
+            ) {
+                return true;
+            }
+        }
+    }
+    // Registry may omit extern stubs during bare-pass (WDB-216/275/276) — AST
+    // fallback for extern / Vec only (not all Custom — that re-broke WDB-366).
+    callee_arg_is_hard_owned_in_programs(programs, callee_name, arg_index)
+}
+
+/// AST fallback: `extern fn` / owned `Vec` formals when registry stubs are missing.
+fn callee_arg_is_hard_owned_in_programs(
+    programs: &[&Program],
+    callee_name: &str,
+    arg_index: usize,
+) -> bool {
+    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+    for program in programs {
+        for item in &program.items {
+            let Item::Function { decl, .. } = item else {
+                continue;
+            };
+            if decl.name != simple && decl.name != callee_name {
+                continue;
+            }
+            let params: Vec<_> = decl
+                .parameters
+                .iter()
+                .filter(|p| p.name != "self")
+                .collect();
+            let Some(param) = params.get(arg_index) else {
+                continue;
+            };
+            if matches!(
+                &param.type_,
+                Type::Reference(_) | Type::MutableReference(_)
+            ) {
+                continue;
+            }
+            if decl.is_extern || is_vec_container_type(&param.type_) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn statement_mentions_param_name(stmt: &Statement, param_name: &str) -> bool {
+    match stmt {
+        Statement::Let { value, else_block, .. } => {
+            expr_mentions_param(value, param_name)
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| statement_mentions_param_name(s, param_name))
+                })
+        }
+        Statement::Expression { expr, .. }
+        | Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Assignment { value: expr, .. } => expr_mentions_param(expr, param_name),
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+            ..
+        } => {
+            expr_mentions_param(condition, param_name)
+                || then_block
+                    .iter()
+                    .any(|s| statement_mentions_param_name(s, param_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| statement_mentions_param_name(s, param_name))
+                })
+        }
+        Statement::While { body, condition, .. } => {
+            expr_mentions_param(condition, param_name)
+                || body
+                    .iter()
+                    .any(|s| statement_mentions_param_name(s, param_name))
+        }
+        Statement::For { body, iterable, .. } => {
+            expr_mentions_param(iterable, param_name)
+                || body
+                    .iter()
+                    .any(|s| statement_mentions_param_name(s, param_name))
+        }
+        Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| statement_mentions_param_name(s, param_name)),
+        Statement::Match { value, arms, .. } => {
+            expr_mentions_param(value, param_name)
+                || arms
+                    .iter()
+                    .any(|arm| expr_mentions_param(&arm.body, param_name))
+        }
+        _ => false,
+    }
+}
+
 fn param_readonly_custom_borrow_passthrough(
     body: &[&Statement],
     param_name: &str,
     registry: &SignatureRegistry,
     programs: &[&Program],
 ) -> bool {
-    if param_has_field_or_index_move_binding(body, param_name)
+    // Text/Copy field lets (`let name = tree.nodes[i].name`) are readable from `&T`
+    // and must not block pub Custom demotion (WDB-366 product BT `tick_node`).
+    // Consuming non-let field moves still disqualify.
+    if param_has_non_let_field_or_index_move(body, param_name)
         || param_stored_in_struct_literal(body, param_name)
         || param_moved_into_let_binding(body, param_name)
         || param_whole_binding_returned(body, param_name)
@@ -3599,6 +4019,271 @@ fn param_has_field_or_index_move_binding(body: &[&Statement], param_name: &str) 
         .any(|stmt| stmt_has_field_move_binding(stmt, param_name))
 }
 
+/// Field/index moves that must keep Owned: non-let projections, or Let bindings of
+/// non-Copy / non-text fields. Text/Copy Lets alone do not block bare-pass demotion
+/// (WDB-366 BT `let name = tree.nodes[i].name`).
+fn param_has_consuming_field_or_index_move(
+    body: &[&Statement],
+    param_name: &str,
+    formal_ty: Option<&Type>,
+    programs: &[&Program],
+    copy_types: &HashSet<String>,
+) -> bool {
+    if param_has_non_let_field_or_index_move(body, param_name) {
+        return true;
+    }
+    if !param_has_field_or_index_move_binding(body, param_name) {
+        return false;
+    }
+    let Some(formal_ty) = formal_ty else {
+        // No type info — fail closed (keep Owned / skip demotion).
+        return true;
+    };
+    !param_let_field_moves_are_only_copy_or_text(
+        body,
+        param_name,
+        formal_ty,
+        programs,
+        copy_types,
+    )
+}
+
+fn param_let_field_moves_are_only_copy_or_text(
+    body: &[&Statement],
+    param_name: &str,
+    formal_ty: &Type,
+    programs: &[&Program],
+    copy_types: &HashSet<String>,
+) -> bool {
+    let mut saw = false;
+    for stmt in body {
+        if !stmt_let_field_moves_are_only_copy_or_text(
+            stmt,
+            param_name,
+            formal_ty,
+            programs,
+            copy_types,
+            &mut saw,
+        ) {
+            return false;
+        }
+    }
+    saw
+}
+
+fn stmt_let_field_moves_are_only_copy_or_text(
+    stmt: &Statement,
+    param_name: &str,
+    formal_ty: &Type,
+    programs: &[&Program],
+    copy_types: &HashSet<String>,
+    saw: &mut bool,
+) -> bool {
+    match stmt {
+        Statement::Let { value, else_block, .. } => {
+            if expr_is_field_move_from_param(param_name, value) {
+                match resolve_projected_expr_type(formal_ty, value, programs) {
+                    Some(ty)
+                        if crate::codegen::rust::types::is_windjammer_text_type(&ty)
+                            || type_is_copy_for_bare_pass(&ty, copy_types) =>
+                    {
+                        *saw = true;
+                    }
+                    _ => return false,
+                }
+            }
+            else_block.as_ref().is_none_or(|b| {
+                b.iter().all(|s| {
+                    stmt_let_field_moves_are_only_copy_or_text(
+                        s,
+                        param_name,
+                        formal_ty,
+                        programs,
+                        copy_types,
+                        saw,
+                    )
+                })
+            })
+        }
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block.iter().all(|s| {
+                stmt_let_field_moves_are_only_copy_or_text(
+                    s,
+                    param_name,
+                    formal_ty,
+                    programs,
+                    copy_types,
+                    saw,
+                )
+            }) && else_block.as_ref().is_none_or(|b| {
+                b.iter().all(|s| {
+                    stmt_let_field_moves_are_only_copy_or_text(
+                        s,
+                        param_name,
+                        formal_ty,
+                        programs,
+                        copy_types,
+                        saw,
+                    )
+                })
+            })
+        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body.iter().all(|s| {
+            stmt_let_field_moves_are_only_copy_or_text(
+                s,
+                param_name,
+                formal_ty,
+                programs,
+                copy_types,
+                saw,
+            )
+        }),
+        Statement::Match { arms, .. } => arms.iter().all(|arm| {
+            // Match arm bodies that are field moves are non-let consumes.
+            if expr_is_field_move_from_param(param_name, &arm.body) {
+                return false;
+            }
+            true
+        }),
+        _ => true,
+    }
+}
+
+fn type_is_copy_for_bare_pass(ty: &Type, copy_types: &HashSet<String>) -> bool {
+    match ty {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool => true,
+        Type::Custom(name) => is_copy_formal_name(name, copy_types),
+        Type::Reference(inner) | Type::MutableReference(inner) => {
+            type_is_copy_for_bare_pass(inner, copy_types)
+        }
+        _ => false,
+    }
+}
+
+fn resolve_projected_expr_type(
+    root_ty: &Type,
+    expr: &Expression,
+    programs: &[&Program],
+) -> Option<Type> {
+    match expr {
+        Expression::Identifier { name, .. } => {
+            // Should not resolve bare param as a "field move type", but allow root.
+            let _ = name;
+            Some(strip_ref_type(root_ty).clone())
+        }
+        Expression::FieldAccess { object, field, .. } => {
+            let obj_ty = resolve_projected_expr_type(root_ty, object, programs)?;
+            resolve_struct_field_type(&obj_ty, field, programs)
+        }
+        Expression::Index { object, .. } => {
+            let obj_ty = resolve_projected_expr_type(root_ty, object, programs)?;
+            element_type_of_container(&obj_ty)
+        }
+        _ => None,
+    }
+}
+
+fn strip_ref_type(ty: &Type) -> &Type {
+    match ty {
+        Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+        other => other,
+    }
+}
+
+fn element_type_of_container(ty: &Type) -> Option<Type> {
+    match strip_ref_type(ty) {
+        Type::Vec(inner) => Some((**inner).clone()),
+        Type::Array(inner, _) => Some((**inner).clone()),
+        Type::Parameterized(name, args) if name == "Vec" || name == "Array" => {
+            args.first().cloned()
+        }
+        Type::Custom(name) if name.starts_with("Vec<") => {
+            // Best-effort parse `Vec<Foo>` custom encoding.
+            let inner = name
+                .strip_prefix("Vec<")
+                .and_then(|s| s.strip_suffix('>'))?;
+            Some(Type::Custom(inner.trim().to_string()))
+        }
+        _ => None,
+    }
+}
+
+fn resolve_struct_field_type(
+    owner_ty: &Type,
+    field: &str,
+    programs: &[&Program],
+) -> Option<Type> {
+    let owner = strip_ref_type(owner_ty);
+    let type_name = match owner {
+        Type::Custom(name) => name.rsplit("::").next().unwrap_or(name),
+        _ => return None,
+    };
+    for program in programs {
+        for item in &program.items {
+            let Item::Struct { decl, .. } = item else {
+                continue;
+            };
+            if decl.name != type_name {
+                continue;
+            }
+            for f in &decl.fields {
+                if f.name == field {
+                    return Some(f.field_type.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Field/index moves in return/expression position (not `let` bindings).
+/// Used by `restore_owned_field_forward_formals` so text field lets do not undo Borrowed.
+fn param_has_non_let_field_or_index_move(body: &[&Statement], param_name: &str) -> bool {
+    body.iter()
+        .any(|stmt| stmt_has_non_let_field_move(stmt, param_name))
+}
+
+fn stmt_has_non_let_field_move(stmt: &Statement, param_name: &str) -> bool {
+    match stmt {
+        Statement::Let { else_block, .. } => else_block.as_ref().is_some_and(|b| {
+            b.iter()
+                .any(|s| stmt_has_non_let_field_move(s, param_name))
+        }),
+        Statement::Return {
+            value: Some(expr), ..
+        }
+        | Statement::Expression { expr, .. } => expr_is_field_move_from_param(param_name, expr),
+        Statement::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            then_block
+                .iter()
+                .any(|s| stmt_has_non_let_field_move(s, param_name))
+                || else_block.as_ref().is_some_and(|b| {
+                    b.iter()
+                        .any(|s| stmt_has_non_let_field_move(s, param_name))
+                })
+        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| stmt_has_non_let_field_move(s, param_name)),
+        Statement::Match { arms, .. } => arms
+            .iter()
+            .any(|arm| expr_is_field_move_from_param(param_name, &arm.body)),
+        _ => false,
+    }
+}
+
 fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
     match stmt {
         Statement::Let { value, else_block, .. } => {
@@ -3918,7 +4603,10 @@ fn call_arg_param_usage(expr: &Expression, param_name: &str) -> ParamUsage {
         {
             ParamUsage::FieldInCallArg
         }
-        Expression::Identifier { name, .. } if name == param_name => ParamUsage::FieldInCallArg,
+        // Bare `f(param)` is a whole-binding forward — not a field projection
+        // (`f(param.field)`). Misclassifying bare as FieldInCallArg made every
+        // BT tick helper look field-forward-only and re-Owned Borrowed formals (WDB-366).
+        Expression::Identifier { name, .. } if name == param_name => ParamUsage::Other,
         _ => expr_param_usage(expr, param_name),
     }
 }
@@ -3974,18 +4662,18 @@ fn expr_stores_param_in_struct_literal(expr: &Expression, param_name: &str) -> b
         Expression::StructLiteral { fields, .. } => fields
             .iter()
             .any(|(_, v)| expr_mentions_param(v, param_name)),
-        Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
-            expr_stores_param_in_struct_literal(arg, param_name)
-                || matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-        }),
+        // Recurse for nested `Foo { x: param }` inside call args — do NOT treat bare
+        // `callee(param)` as a struct-literal store (WDB-366 BT ticks).
+        Expression::Call { arguments, .. } => arguments
+            .iter()
+            .any(|(_, arg)| expr_stores_param_in_struct_literal(arg, param_name)),
         Expression::MethodCall {
             object, arguments, ..
         } => {
             expr_stores_param_in_struct_literal(object, param_name)
-                || arguments.iter().any(|(_, arg)| {
-                    expr_stores_param_in_struct_literal(arg, param_name)
-                        || matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                })
+                || arguments
+                    .iter()
+                    .any(|(_, arg)| expr_stores_param_in_struct_literal(arg, param_name))
         }
         Expression::Block { statements, .. } => statements
             .iter()

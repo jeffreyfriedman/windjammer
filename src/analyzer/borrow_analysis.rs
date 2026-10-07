@@ -138,7 +138,8 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                // Handle Call(FieldAccess) pattern: param.method(args)
+                // Handle Call(FieldAccess) pattern: param.method(args) where the
+                // receiver is `param` and the method takes owned `self`.
                 if let Expression::FieldAccess { object, field, .. } = &**function {
                     if self.is_direct_receiver(param_name, object) {
                         if let Some(sig) = registry.get_signature(field) {
@@ -152,65 +153,11 @@ impl<'ast> Analyzer<'ast> {
                         }
                     }
                 }
-                // Extract function name for signature lookup
-                let func_name = match &**function {
-                    Expression::Identifier { name, .. } => Some(name.as_str()),
-                    Expression::FieldAccess {
-                        object: obj, field, ..
-                    } => {
-                        if let Expression::Identifier { name: _, .. } = &**obj {
-                            None // Will try qualified name below
-                        } else {
-                            Some(field.as_str())
-                        }
-                    }
-                    _ => None,
-                };
-                // Check if param is passed as an owned argument
-                let mut names: Vec<&str> = Vec::new();
-                if let Some(n) = func_name {
-                    names.push(n);
-                }
-                if let Expression::FieldAccess {
-                    object: obj, field, ..
-                } = &**function
-                {
-                    if let Expression::Identifier { name, .. } = &**obj {
-                        // For qualified calls like Type::method(param)
-                        // We can't easily push a formatted string as &str, so just check directly
-                        let qualified = format!("{}::{}", name, field);
-                        if let Some(sig) = registry.get_signature(&qualified) {
-                            let param_offset = if sig.has_self_receiver { 1 } else { 0 };
-                            for (i, (_, arg)) in arguments.iter().enumerate() {
-                                if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                                {
-                                    let sig_idx = i + param_offset;
-                                    if let Some(mode) = sig.param_ownership.get(sig_idx) {
-                                        if matches!(mode, OwnershipMode::Owned) {
-                                            return true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                for name in &names {
-                    if let Some(sig) = registry.get_signature(name) {
-                        let param_offset = if sig.has_self_receiver { 1 } else { 0 };
-                        for (i, (_, arg)) in arguments.iter().enumerate() {
-                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                            {
-                                let sig_idx = i + param_offset;
-                                if let Some(mode) = sig.param_ownership.get(sig_idx) {
-                                    if matches!(mode, OwnershipMode::Owned) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Do NOT treat "passed to a free/associated function whose formal is
+                // currently Owned" as a consuming method. That duplicated passthrough,
+                // and mutual recursion (`tick_node` ↔ `tick_seq`) kept both Owned forever
+                // — forcing `tree.clone()` on read-only BT walks (WDB-366). True consumes
+                // are covered by is_stored / is_returned / passthrough strength.
                 for (_, arg) in arguments {
                     if self.expr_calls_consuming_method(param_name, arg, registry) {
                         return true;

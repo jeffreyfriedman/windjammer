@@ -180,7 +180,12 @@ impl<'ast> Analyzer<'ast> {
 
         // 2.5 Field/index move: `let x = param.field` moves the field out — keep Owned
         // (`MemoryEngine::get` → `let bytes = key.bytes`, not `&Key`).
-        if self.param_has_field_or_index_move_binding(param_name, body) {
+        // WDB-366: text field lets (`let name = tree.nodes[i].name`) are cloned from `&T`,
+        // and Copy field lets (`let kind = tree.nodes[i].kind`) copy from `&T` — neither
+        // pins the parent Owned.
+        if self.param_has_field_or_index_move_binding(param_name, body)
+            && !self.param_field_move_bindings_are_only_copy_or_text(param_name, param_type, body)
+        {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -262,10 +267,18 @@ impl<'ast> Analyzer<'ast> {
                 // `strings::len(s: string)` Owned while Rust is AsRef. Returning Owned
                 // here wiped Phase-2 `str_ref` demotion (demoted_str / parse_body).
                 // Defer to the text-specific block below.
-                if !(Self::is_windjammer_text_param_type(param_type)
+                let defer_string_owned = Self::is_windjammer_text_param_type(param_type)
                     && func.parent_type.is_none()
-                    && matches!(mode, OwnershipMode::Owned))
-                {
+                    && matches!(mode, OwnershipMode::Owned);
+                // WDB-366: Custom free-fn peers (`tick_node` ↔ `tick_decorator`) inherit
+                // Owned from each other with no local consume. Earlier steps already
+                // returned Owned for real stores/field-moves/consuming methods. Prefer
+                // Borrowed so mutual read-only walks converge; multipass restore still
+                // re-Owns wrappers that forward into true Owned Vec/extern/Custom stores.
+                let defer_custom_owned_cycle = matches!(mode, OwnershipMode::Owned)
+                    && matches!(param_type, Type::Custom(_))
+                    && !Self::is_windjammer_text_param_type(param_type);
+                if !defer_string_owned && !defer_custom_owned_cycle {
                     // Passthrough to a borrowed callee: wrapper keeps Borrowed so signatures
                     // chain (`fn wrapper(items: &Vec<T>) { process(items) }`).
                     // Extern FFI callees still surface Borrowed for `string` wrappers via
@@ -353,7 +366,16 @@ impl<'ast> Analyzer<'ast> {
                     }
                     return Ok(OwnershipMode::MutBorrowed);
                 }
-                OwnershipMode::Owned => return Ok(OwnershipMode::Owned),
+                OwnershipMode::Owned => {
+                    // WDB-366: same Custom mutual-recursion defer as step 6d.
+                    if matches!(param_type, Type::Custom(_))
+                        && !Self::is_windjammer_text_param_type(param_type)
+                    {
+                        // fall through to default Borrowed
+                    } else {
+                        return Ok(OwnershipMode::Owned);
+                    }
+                }
             }
         }
 

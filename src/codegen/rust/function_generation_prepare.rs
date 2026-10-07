@@ -1411,6 +1411,16 @@ impl<'ast> CodeGenerator<'ast> {
             if self.is_type_copy(&other.type_) {
                 return false;
             }
+            // Completely unused siblings (e.g. unused `name: string` beside readonly
+            // `tree.nodes.len()`) are not store/move partners — do not keep the
+            // projection param Owned (WDB-366 BT tick_action).
+            if !func
+                .body
+                .iter()
+                .any(|stmt| Self::statement_mentions_identifier(stmt, &other.name))
+            {
+                return false;
+            }
             !self.param_only_used_via_field_or_index_projection(func.body.as_slice(), &other.name)
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &other.name)
                 || self.param_has_field_or_index_move_binding(func.body.as_slice(), &other.name)
@@ -7844,6 +7854,26 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return false;
         }
+        // Converged Borrowed / MutBorrowed / `&T` / `&mut T` beats AST `Custom` ⇒ owned
+        // (WDB-366 BT peers `tick_decorator` → `tick_node`: source still says `tree: Tree`
+        // while analyzer/multipass demoted both — often to MutBorrowed for non-Copy Custom).
+        // Treating AST bare as owned froze mutual recursion as Owned + `tree.clone()`.
+        if matches!(
+            sig.param_ownership.get(pidx),
+            Some(
+                crate::analyzer::OwnershipMode::Borrowed
+                    | crate::analyzer::OwnershipMode::MutBorrowed
+            )
+        ) || sig
+            .param_types
+            .get(pidx)
+            .or_else(|| sig.formal_param_types.get(pidx))
+            .is_some_and(|t| {
+                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+            })
+        {
+            return false;
+        }
         // Multipass: when emission flags are unset/false, WJ AST bare owned Custom/Vec
         // and registry bare slots defeat stale Borrowed stubs.
         if !callee_name.is_empty()
@@ -9821,7 +9851,12 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn stmt_has_field_move_binding(&self, stmt: &Statement<'ast>, param_name: &str) -> bool {
         match stmt {
-            Statement::Let { value, .. } => Self::expr_is_field_move_from_param(param_name, value),
+            // Text/Copy field lets are readable from `&T` (clone/copy) — do not treat
+            // as Owned-forcing moves (WDB-366).
+            Statement::Let { value, .. } => {
+                Self::expr_is_field_move_from_param(param_name, value)
+                    && !self.expr_field_move_is_copy_or_text(param_name, value)
+            }
             // P3.582: `fn consume(csr) { csr.neighbors }` / `return csr.offsets`.
             Statement::Return {
                 value: Some(expr), ..
@@ -9856,6 +9891,78 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expr_is_field_move_from_param(param_name: &str, expr: &Expression<'ast>) -> bool {
         Self::expr_has_field_move_from_param(param_name, expr, true)
+    }
+
+    /// Resolve whether a field/index move chain from `param` lands on Copy or text.
+    fn expr_field_move_is_copy_or_text(
+        &self,
+        param_name: &str,
+        expr: &Expression<'ast>,
+    ) -> bool {
+        let Some(param_ty) = self
+            .current_function_params
+            .iter()
+            .find(|p| p.name == param_name)
+            .map(|p| p.type_.clone())
+        else {
+            return false;
+        };
+        self.codegen_infer_projected_field_type(param_name, &param_ty, expr)
+            .is_some_and(|ty| {
+                crate::codegen::rust::types::is_windjammer_text_type(&ty) || self.is_type_copy(&ty)
+            })
+    }
+
+    fn codegen_infer_projected_field_type(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        expr: &Expression<'ast>,
+    ) -> Option<Type> {
+        match expr {
+            Expression::FieldAccess { object, field, .. } => {
+                let base_ty = if matches!(
+                    &**object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    param_type.clone()
+                } else {
+                    self.codegen_infer_projected_field_type(param_name, param_type, object)?
+                };
+                let type_name = match &base_ty {
+                    Type::Custom(n) => n.as_str(),
+                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                        match inner.as_ref() {
+                            Type::Custom(n) => n.as_str(),
+                            _ => return None,
+                        }
+                    }
+                    _ => return None,
+                };
+                self.lookup_struct_field_types(type_name)?
+                    .get(field.as_str())
+                    .cloned()
+            }
+            Expression::Index { object, .. } => {
+                let base_ty = if matches!(
+                    &**object,
+                    Expression::Identifier { name, .. } if name == param_name
+                ) {
+                    param_type.clone()
+                } else {
+                    self.codegen_infer_projected_field_type(param_name, param_type, object)?
+                };
+                match &base_ty {
+                    Type::Vec(inner) => Some((**inner).clone()),
+                    Type::Array(inner, _) => Some((**inner).clone()),
+                    Type::Parameterized(name, args) if name == "Vec" && args.len() == 1 => {
+                        Some(args[0].clone())
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
     }
 
     /// `value_position`: field used as a value (return/let/call arg) → move.

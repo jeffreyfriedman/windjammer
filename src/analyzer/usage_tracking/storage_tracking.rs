@@ -137,6 +137,15 @@ impl<'ast> Analyzer<'ast> {
         if Self::is_language_level_call_payload_store(function) {
             return true;
         }
+        // Bare free-function calls (`tick_node(tree)`) must not treat Owned formals +
+        // an unrelated composite/enum return (`-> Status`) as payload stores. That false
+        // positive pinned recursive read-only walks as Owned and forced `tree.clone()`
+        // (WDB-366). Associated constructors (`ItemStack::new(item)`) still use the
+        // Owned + composite-return heuristic below; real free-fn stores are caught by
+        // body walks (struct-literal fields / enum payloads).
+        if matches!(function, Expression::Identifier { .. }) {
+            return false;
+        }
         let Some(name) = Self::extract_call_target_name(function) else {
             return false;
         };
