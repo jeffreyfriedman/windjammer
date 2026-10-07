@@ -1145,16 +1145,95 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Collect root `self.<field>` names reachable from `expr`.
+    ///
+    /// Returns `false` when a bare `self` appears (overlaps every field). Used so
+    /// `self.recording.add_event(InputEvent::key_down(self.current_frame, …))` sees
+    /// nested `current_frame` inside the call (WDB-365).
+    pub(in crate::codegen::rust) fn collect_self_access_root_fields<'a>(
+        expr: &'a Expression<'a>,
+        out: &mut std::collections::HashSet<&'a str>,
+    ) -> bool {
+        match expr {
+            Expression::Identifier { name, .. } if name == "self" => false,
+            Expression::FieldAccess { .. } | Expression::Index { .. } => {
+                if let Some(f) = Self::self_access_root_field(expr) {
+                    out.insert(f);
+                }
+                true
+            }
+            Expression::Unary {
+                op: UnaryOp::Ref | UnaryOp::MutRef,
+                operand,
+                ..
+            } => Self::collect_self_access_root_fields(operand, out),
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                if !Self::collect_self_access_root_fields(function, out) {
+                    return false;
+                }
+                for (_, arg) in arguments {
+                    if !Self::collect_self_access_root_fields(arg, out) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
+                if !Self::collect_self_access_root_fields(object, out) {
+                    return false;
+                }
+                for (_, arg) in arguments {
+                    if !Self::collect_self_access_root_fields(arg, out) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Expression::Binary { left, right, .. } => {
+                Self::collect_self_access_root_fields(left, out)
+                    && Self::collect_self_access_root_fields(right, out)
+            }
+            Expression::StructLiteral { fields, .. } => {
+                for (_, e) in fields {
+                    if !Self::collect_self_access_root_fields(e, out) {
+                        return false;
+                    }
+                }
+                true
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                for e in elements {
+                    if !Self::collect_self_access_root_fields(e, out) {
+                        return false;
+                    }
+                }
+                true
+            }
+            _ => true,
+        }
+    }
+
     /// Rust split-borrow: `self.a.method(self.b)` on different fields needs no temp extraction.
+    /// Also covers nested self-fields inside call args (WDB-365).
     pub(in crate::codegen::rust) fn disjoint_self_field_accesses(
         &self,
         receiver: &Expression,
         arg: &Expression,
     ) -> bool {
-        match (Self::self_access_root_field(receiver), Self::self_access_root_field(arg)) {
-            (Some(r), Some(a)) if r != a => true,
-            _ => false,
+        let Some(r) = Self::self_access_root_field(receiver) else {
+            return false;
+        };
+        let mut fields = std::collections::HashSet::new();
+        if !Self::collect_self_access_root_fields(arg, &mut fields) {
+            return false;
         }
+        !fields.is_empty() && fields.iter().all(|a| *a != r)
     }
 
     /// Check if an expression involves borrowing `self` — including method calls on self.

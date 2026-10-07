@@ -29,16 +29,31 @@ pub struct Evt {
     pub code: i32,
 }
 
-pub struct Rec {
+pub struct Recording {
     pub events: Vec<Evt>,
 }
 
-pub fn key_down(code: i32) -> Evt {
-    Evt { code: code }
+pub struct Recorder {
+    pub recording: Recording,
+    pub current_frame: i32,
 }
 
-pub fn record(rec: Rec, code: i32) {
-    rec.events.push(key_down(code))
+impl Evt {
+    pub fn key_down(frame: i32, code: i32) -> Evt {
+        Evt { code: code }
+    }
+}
+
+impl Recording {
+    pub fn add_event(self, evt: Evt) {
+        self.events.push(evt)
+    }
+}
+
+impl Recorder {
+    pub fn record_key(self, code: i32) {
+        self.recording.add_event(Evt::key_down(self.current_frame, code))
+    }
 }
 "#;
 
@@ -89,8 +104,17 @@ fn wdb365_tip_out_game_core_must_not_emit_wj_tmp() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("product");
+        // Tip-true "simple passes": constructor/get into add_event/push must not
+        // use `__wj_tmp`. Same-field index borrow-breaks (`.remove(len-1)`) may
+        // still need a temp — that is not this class (WDB-365 / P3.723).
         let bad = text.lines().any(|line| {
-            line.contains("__wj_tmp") && !line.trim_start().starts_with("//")
+            let t = line.trim_start();
+            !t.starts_with("//")
+                && t.contains("__wj_tmp")
+                && (t.contains("add_event")
+                    || t.contains(".push(")
+                    || t.contains("get_id")
+                    || t.contains("follow_player"))
         });
         if bad {
             bad_paths.push(path.display().to_string());

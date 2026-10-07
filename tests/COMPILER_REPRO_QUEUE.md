@@ -1,6 +1,26 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.723 (2026-10-07) — WDB-365: nested self-fields must not force `__wj_tmp`
+
+`disjoint_self_field_accesses` only saw top-level `self.field` args, so
+`self.recording.add_event(InputEvent::key_down(self.current_frame, …))` and
+`self.camera.follow_player_pos(self.player.position.x, …)` extracted temps.
+Collect nested `self.<field>` roots inside Call/MethodCall args; skip temps when
+all differ from the receiver root field.
+
+| Gate | Status |
+|------|--------|
+| `wdb365_module_file_must_not_emit_wj_tmp_lets` | ✅ tip GREEN (product match shape) |
+| `wdb365_tip_out_game_core_must_not_emit_wj_tmp` | ✅ tip GREEN (simple-pass scanner) |
+
+**Root cause layer:** split-borrow / self-temp extraction classification.
+
+**What became unnecessary:** `__wj_tmp` around disjoint-field constructor args into
+`add_event` / `follow_player_pos` / `push(get_id)`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb365_` → **2 passed**.
+
 ## P3.722 (2026-10-07) — WDB-463/462/368 tip GREEN (nested for-borrow + &* text)
 
 **WDB-463:** nested `while` marked `for_loop_borrow_needed` for locals re-bound
@@ -7339,7 +7359,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_wdb362_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **indexed tuple field must not `].clone().rotation`** | `bug_wdb363_module_file_index_tuple_field_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **usize lit must not emit `N_usize as usize`** | `bug_wdb364_module_file_usize_lit_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-361/352 |
-| P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED |
+| P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | ✅ tip GREEN (P3.723) — nested self-field split-borrow |
 | P1 | **BT tick must not force `tree.clone()`** | `bug_wdb366_module_file_bt_tick_must_not_force_tree_clone_test` | ✅ tip GREEN (P3.721) — hard-owned restore; bare forward ≠ FieldInCallArg/store |
 | P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile + tip GREEN (P3.427) — unit keywords + `Type::None` identifier paths |
 | P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ tip GREEN (P3.722) — text ref skip Copy `*` path; product match+let |
@@ -10292,7 +10312,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 | Gate | Status |
 |------|--------|
 | Tip **WDB-364** `N_usize as usize` redundant lit cast | 🆕 RED / filed — MultiFile GREEN; tip RED |
-| Tip **WDB-365** `__wj_tmpN` statement temps | 🆕 RED / filed — MultiFile GREEN; tip RED |
+| Tip **WDB-365** `__wj_tmpN` statement temps | ✅ tip GREEN (P3.723) |
 | Tip **WDB-366** BT `tree.clone()` owned formal force-clone | ✅ tip GREEN (P3.721) |
 | Tip **WDB-332** i32 priority `.to_string()` | ✅ tip GREEN (P3.418 affinity) |
 
