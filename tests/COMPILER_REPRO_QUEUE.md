@@ -1,6 +1,38 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.719 (2026-10-07) — TDD WDB-463 (DB agent; no compiler src)
+
+Owned `Vec<Copy>` for-loop must not demote to `&` + `.clone()` into `Vec::push`.
+
+Product `scene_graph/scene_graph_state.rs` `remove_node`:
+```wj
+let children_copy = node.children
+for child_id in children_copy {
+    to_remove.push(child_id)
+}
+```
+Tip MultiFile keeps owned for + bare `push(child_id)` (isolate GREEN). Tip-out
+emits `for child_id in &children_copy` + `to_remove.push(child_id.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-463 MultiFile | ✅ isolate GREEN — owned for + bare push |
+| WDB-463 tip-out | ❌ tip RED — `&children_copy` + `child_id.clone()` in `rel_tip_out/scene_graph/scene_graph_state.rs` |
+
+**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
+owned `Vec<u64>` for-loops still demoted to borrowed + Copy `.clone()` into push.
+
+**Why this is a new class:**
+- WDB-462 is Copy newtype from **HashMap.keys()** (inherently borrowed).
+- WDB-457 is owned Copy **newtype local** into push.
+- WDB-431 is Copy u64 **field** into insert/push.
+- This is owned `Vec<Copy>` for-loop demoted to `&` + `.clone()` into push.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb463_` — isolate GREEN / tip RED (2026-10-07).
+
+**Do not steal:** WDB-406/408/411/457–463, P3.508–P3.719, WDB-412–463 (filed).
+
 ## P3.718 (2026-10-07) — TDD WDB-462 (DB agent; no compiler src)
 
 Copy **newtype** from `HashMap.keys()` into `Vec::push` must not `.clone()`.
