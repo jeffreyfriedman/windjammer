@@ -1463,6 +1463,19 @@ impl<'ast> CodeGenerator<'ast> {
                             let eff_ownership =
                                 self.get_effective_self_ownership(&func.name, analyzed);
                             let self_str = if let Some(ownership_mode) = eff_ownership {
+                                if std::env::var("WJ_DEBUG_SELF_RECV").is_ok()
+                                    && func.name.contains("update_death")
+                                {
+                                    eprintln!(
+                                        "[SELF-RECV] fn={} eff={:?} body_modifies={} consumes={} returns_impl={} owned_recv={}",
+                                        func.name,
+                                        ownership_mode,
+                                        body_modifies,
+                                        consumes_self,
+                                        self.method_returns_impl_struct(func),
+                                        self.owned_self_receiver(&analyzed.decl),
+                                    );
+                                }
                                 match ownership_mode {
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
@@ -1475,6 +1488,10 @@ impl<'ast> CodeGenerator<'ast> {
                                     {
                                         "mut self"
                                     }
+                                    // P3.707: Borrowed + consumes (e.g. owned
+                                    // `upload_camera`) must not drop `mut` when the
+                                    // body also assigns `self.field` — bare `self`
+                                    // → E0594 (BP `update_death_state`).
                                     OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
                                         if !self.in_trait_impl
                                             && consumes_self
@@ -1483,7 +1500,11 @@ impl<'ast> CodeGenerator<'ast> {
                                                 OwnershipMode::MutBorrowed
                                             ) =>
                                     {
-                                        "self"
+                                        if body_modifies {
+                                            self.owned_self_receiver(&analyzed.decl)
+                                        } else {
+                                            "self"
+                                        }
                                     }
                                     OwnershipMode::MutBorrowed => {
                                         // P3.584: MutBorrowed upgrade / inference must not
@@ -1688,7 +1709,15 @@ impl<'ast> CodeGenerator<'ast> {
                                             "&self"
                                         }
                                     }
-                                    OwnershipMode::Owned => "self",
+                                    // P3.707: Ref hint + Owned (consumes via owned sibling)
+                                    // must still honor field assigns → mut/&mut self.
+                                    OwnershipMode::Owned => {
+                                        if !self.in_trait_impl && body_modifies {
+                                            self.owned_self_receiver(&analyzed.decl)
+                                        } else {
+                                            "self"
+                                        }
+                                    }
                                 }
                             } else if !self.in_trait_impl && body_modifies {
                                 "&mut self"
@@ -1809,6 +1838,10 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     OwnershipHint::Inferred => {
                         if param.name == "self" {
+                            // P3.705: early owned-sibling path used to require
+                            // `returns_impl_struct` for `mut self`, so BP
+                            // `update_death_state` (returns bool + field assigns +
+                            // owned `upload_camera`) emitted bare immutable `self`.
                             if !self.in_trait_impl
                                 && super::self_analysis::function_calls_owned_self_method(
                                     &analyzed.decl,
@@ -1821,11 +1854,31 @@ impl<'ast> CodeGenerator<'ast> {
                                     && self.method_returns_impl_struct(func)
                                 {
                                     "mut self"
+                                } else if body_modifies {
+                                    self.owned_self_receiver(&analyzed.decl)
                                 } else {
                                     "self"
                                 };
-                                self.inferred_borrowed_params.remove("self");
-                                self.inferred_mut_borrowed_params.remove("self");
+                                match self_str {
+                                    "&self" => {
+                                        self.inferred_borrowed_params.insert("self".to_string());
+                                        self.inferred_mut_borrowed_params.remove("self");
+                                    }
+                                    "&mut self" => {
+                                        self.inferred_mut_borrowed_params
+                                            .insert("self".to_string());
+                                        self.inferred_borrowed_params.remove("self");
+                                    }
+                                    _ => {
+                                        self.inferred_borrowed_params.remove("self");
+                                        self.inferred_mut_borrowed_params.remove("self");
+                                    }
+                                }
+                                self.record_self_receiver_upgrade(
+                                    &func.name,
+                                    Some(OwnershipMode::Owned),
+                                    self_str,
+                                );
                                 return self_str.to_string();
                             }
                             if !self.in_trait_impl

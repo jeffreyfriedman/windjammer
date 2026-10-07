@@ -1,6 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.707 (2026-10-06) — BP `update_death_state` bare `self` → `mut self`
+
+Product `BreachProtocolGame::update_death_state` assigns fields then calls owned
+`upload_camera`. Tip emitted immutable `self` → E0594.
+
+| Gate | Status |
+|------|--------|
+| `bp_module_file_update_death_state_must_emit_mut_self` | ✅ tip GREEN — `mut self` |
+| `bp_tip_out_update_death_state_must_emit_mut_self` | ✅ tip GREEN after BP tip regen |
+
+**Root cause layer:** constraint/self-receiver formal — `OwnershipHint::Inferred`
+early path for `function_calls_owned_self_method` only upgraded to `mut self`
+when `returns_impl_struct`; bool-returning mutators got bare `self`. Also
+`OwnershipHint::Ref` + `Owned` skipped `owned_self_receiver` when `body_modifies`.
+
+**What became unnecessary:** bare immutable `self` on field-assign + owned-sibling
+callers (`update_death_state`, `update_camera_movement`); no new reconcile peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- bp_module_file_update_death_state bp_tip_out_update_death_state`
+→ **2 passed**. Related: notes-api / check_rate / WDB-414 MultiFile ✅.
+
+**Do not steal:** WDB-460/461 tip-out Copy lag; remaining tip-true REDs (WDB-340+).
+
 ## P3.706 (2026-10-06) — TDD WDB-461 (DB agent; no compiler src)
 
 Copy `Vec3` into **method** owned formal must not `.clone()`.
@@ -172,27 +196,13 @@ Root `lib.rs` then hits E0583; thin synthesized decls miss `pub use ItemId`
 
 ## P3.704 (2026-10-06) — BP `update_death_state` must emit `&mut self` (tip-out)
 
-Product `breach-protocol/gen/game_state.rs`:
-```rust
-pub fn update_death_state(self, dt: f32) -> bool {
-    self.respawn_timer -= dt; // E0594: self not mutable
-}
-```
-WJ source assigns `self.respawn_timer` / `self.camera` / renderer HUD. Minimal
-MultiFile with the same pattern emits `&mut self` (GREEN). Full product tip-out
-keeps owned immutable `self` → ~46× E0594 in BP game cargo.
+**Superseded by P3.707** — tip GREEN (`mut self`) after Inferred/Ref self-receiver fix.
 
 | Gate | Status |
 |------|--------|
-| Minimal MultiFile field-assign tick | ✅ tip GREEN (`&mut self`) |
-| `bp_tip_out_update_death_state_must_emit_mut_self` | ❌ tip-out RED (product `self`) |
-
-**Root cause layer:** ownership / mutability inference under large impl + nested
-method calls (`player.respawn`, `upload_camera`, renderer HUD) loses `&mut self`.
-
-**Do not steal:** proxy clear_logs GREEN; P3.702 WDB-457.
-
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bp_tip_out_update_death_state_must_emit_mut_self`.
+| Minimal MultiFile field-assign tick | ✅ tip GREEN |
+| `bp_module_file_update_death_state_must_emit_mut_self` | ✅ tip GREEN (P3.707) |
+| `bp_tip_out_update_death_state_must_emit_mut_self` | ✅ tip GREEN (P3.707) |
 
 ## P3.702 (2026-10-06) — TDD WDB-457 (DB agent; no compiler src)
 
