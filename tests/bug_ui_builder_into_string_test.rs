@@ -11,8 +11,9 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — owned `string` builder formals must emit `impl Into<String>` so Rust
-//! consumers can pass `&str` (windjammer-ui StatusChip / AuthFetch). Tip emits bare `String`.
+//! Owned `string` **self** builder formals (`StatusChip::label`) emit `impl Into<String>`
+//! so Rust consumers can pass `&str`. Associated constructors without `self`
+//! (`StatusChip::new`) stay concrete `String` (WDB-157 / WDB-357).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -28,16 +29,14 @@ use tempfile::TempDir;
 const CHIP: &str = include_str!("fixtures/library_multipass/ui_builder_into_string.wj");
 
 fn assert_into_string_formals(rs: &str) {
+    // WDB-357: associated `new` (no self) is concrete String, not Into.
     assert!(
-        rs.contains("impl Into<String>"),
-        "RED: owned string builder formals must emit impl Into<String> (windjammer-ui). Got:\n{rs}"
+        rs.contains("fn new")
+            && (rs.contains("status: String") || rs.contains("status: string"))
+            && !rs.contains("status: impl Into<String>"),
+        "RED: StatusChip::new must take concrete String (WDB-357). Got:\n{rs}"
     );
-    // Both constructor and setter must accept Rust `&str` (P3.589: `label` used to
-    // early-demote to `&str` before the Into upgrade, while `new` already emitted Into).
-    assert!(
-        rs.contains("fn new") && rs.contains("status: impl Into<String>"),
-        "RED: StatusChip::new must take impl Into<String>. Got:\n{rs}"
-    );
+    // Self-receiver withers still accept Rust `&str` via Into (P3.598 / WDB-157).
     assert!(
         rs.contains("fn label") && rs.contains("label: impl Into<String>"),
         "RED: StatusChip::label must take impl Into<String>. Got:\n{rs}"
@@ -98,7 +97,8 @@ fn ui_builder_string_formal_rust_str_call_site_must_cargo_check() {
         r#"
 use into_string_repro::StatusChip;
 fn main() {
-    let _ = StatusChip::new("paid").label("Paid");
+    // Associated `new` is concrete String (WDB-357); self-wither `.label` is Into.
+    let _ = StatusChip::new("paid".to_string()).label("Paid");
 }
 "#,
     )
@@ -130,6 +130,6 @@ path = "caller_main.rs"
         .expect("spawn cargo check");
     assert!(
         status.success(),
-        "RED: Rust &str call sites on WJ string builders must cargo-check (impl Into<String>)"
+        "RED: Rust call sites — String for new, &str Into for label — must cargo-check"
     );
 }

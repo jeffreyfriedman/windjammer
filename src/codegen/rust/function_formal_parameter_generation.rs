@@ -3833,26 +3833,12 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return false;
         }
-        // WDB-157: free functions (`pg_wire_parse`, etc.) keep concrete `String`.
-        // `impl Into<String>` is for impl builders/constructors so Rust callers can
-        // pass `&str` (windjammer-ui StatusChip::new / .label).
+        // WDB-157 / WDB-357: `impl Into<String>` is only for `self` methods
+        // (builders like `StatusChip::label`). Associated constructors
+        // (`ConsoleCommand::new` / `StatusChip::new` without `self`) keep concrete
+        // `String` — Rust callers use `.to_string()` / `.into()` at the call site.
         if !has_self_receiver {
-            if !self.in_impl_block {
-                return false;
-            }
-            let Some(ret) = func.return_type.as_ref() else {
-                return false;
-            };
-            let returns_impl_type = matches!(
-                ret,
-                Type::Custom(name) if self
-                    .current_struct_name
-                    .as_deref()
-                    .is_some_and(|sn| sn == name.as_str())
-            );
-            if !returns_impl_type {
-                return false;
-            }
+            return false;
         }
         // `impl Into<String>` cannot participate in `==` / ordering against `&str`
         // (WDB-139). Keep a concrete `String` formal when the body compares the param.

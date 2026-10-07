@@ -30,10 +30,14 @@ pub struct ConsoleCommand {
     pub description: string,
 }
 
-pub fn new(name: string, description: string) -> ConsoleCommand {
-    ConsoleCommand {
-        name: name,
-        description: description,
+// Product shape: associated constructor (no self receiver). Free-fn `new` already
+// stays concrete String; tip still emitted `impl Into<String>` for associated `new`.
+impl ConsoleCommand {
+    pub fn new(name: string, description: string) -> ConsoleCommand {
+        ConsoleCommand {
+            name: name,
+            description: description,
+        }
     }
 }
 "#;

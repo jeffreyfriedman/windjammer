@@ -1,6 +1,34 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.710 (2026-10-06) — WDB-357: associated `new` must not emit `impl Into<String>`
+
+Product `ConsoleCommand::new` / `DialogueHistoryEntry::new` / `*Data::new` are
+associated constructors (no `self`). Tip emitted `impl Into<String>` + `.into()`
+because Into eligibility treated `in_impl_block` + returns-impl-type as builders.
+Self-withers (`StatusChip::label`) still need Into for Rust `&str` callers.
+
+| Gate | Status |
+|------|--------|
+| `wdb357_module_file_owned_string_must_not_emit_into` | ✅ tip GREEN — associated `new` → `String` |
+| `wdb357_tip_out_game_core_must_not_emit_into_string` | ✅ tip GREEN after tip-out regen |
+| `ui_builder_string_formal_*` (3) | ✅ tip GREEN — `new: String`, `label: impl Into<String>` |
+| `wdb157_module_file_string_formal_must_not_emit_impl_into_string_with_clone` | ✅ tip GREEN |
+
+**Root cause layer:** formal encoding — Into only when `has_self_receiver`
+(builders/withers). Dropped the associated-constructor exception that upgraded
+`ConsoleCommand::new` / `StatusChip::new` to Into.
+
+**What became unnecessary:** `impl Into<String>` + `.into()` on associated
+constructors without `self`; tip-out lag on console/dialogue/scene_serializer.
+Narrowed Into path (net −14 LOC in formal eligibility). No ir_call_site peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- ui_builder_into_string wdb357_ wdb157_`
+→ **6 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/364–366/368/374/383 + wave).
+
 ## P3.709 (2026-10-06) — WDB-358: `&self` must not `self.clone()` borrowed siblings
 
 Product `is_mesh_uploaded(&self)` emitted `self.clone().find_mesh_index(name)`
@@ -2969,12 +2997,12 @@ and counts as readonly use — returning before the late Into upgrade.
 
 | Gate | Status |
 |------|--------|
-| `ui_builder_string_formal_must_emit_impl_into_string` | ✅ tip GREEN — `new` + `label` both `impl Into<String>` |
+| `ui_builder_string_formal_must_emit_impl_into_string` | ✅ tip GREEN — `label: impl Into<String>` (`new` concrete String per P3.710) |
 | `hexagonal_ui_builder_string_formal_must_emit_impl_into_string` | ✅ tip GREEN |
-| `ui_builder_string_formal_rust_str_call_site_must_cargo_check` | ✅ tip GREEN — `.new("paid").label("Paid")` |
+| `ui_builder_string_formal_rust_str_call_site_must_cargo_check` | ✅ tip GREEN — `.new("paid".to_string()).label("Paid")` |
 | notes-api `handle_forward` / `handle_request` empty-lits | ✅ tip GREEN (no free-fn Into on `&str` forwards) |
-| WDB-357 MultiFile | ✅ tip GREEN |
-| WDB-357 tip-out/gen | ❌ still tip-out lag (stale product Into in game-core gen) |
+| WDB-357 MultiFile | ✅ tip GREEN (P3.710) |
+| WDB-357 tip-out/gen | ✅ tip GREEN (P3.710 tip-out regen) |
 
 **Root cause layer:** formal encoding — Into eligibility for Self-returning builders
 with bare text field assign; emit before early `&str` demotion. Free-fn Into only via
