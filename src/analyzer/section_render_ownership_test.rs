@@ -88,4 +88,49 @@ fn sort_and_return(items: Vec<i32>) -> Vec<i32> {
             f.inferred_ownership
         );
     }
+
+    #[test]
+    fn wdb416_owned_enum_consumed_by_as_float_stays_owned() {
+        let src = r#"
+pub enum Val {
+    F(f32),
+    S(string),
+}
+impl Val {
+    pub fn as_float(self) -> f32 {
+        match self {
+            Val::F(v) => v,
+            Val::S(_) => 0.0,
+        }
+    }
+}
+pub fn add(a: Val, b: Val) -> f32 {
+    a.as_float() + b.as_float()
+}
+"#;
+        let program = parse_program(src);
+        let mut analyzer = Analyzer::new();
+        let (funcs, registry, _) = analyzer.analyze_program(&program).expect("analyze");
+        let as_float = registry
+            .get_signature("Val::as_float")
+            .expect("Val::as_float");
+        eprintln!(
+            "Val::as_float ownership={:?} has_self={}",
+            as_float.param_ownership, as_float.has_self_receiver
+        );
+        eprintln!(
+            "bare as_float={:?}",
+            registry.get_signature("as_float").map(|s| &s.param_ownership)
+        );
+        let add = funcs.iter().find(|f| f.decl.name == "add").expect("add");
+        eprintln!("add inferred={:?}", add.inferred_ownership);
+        let add_sig = registry.get_signature("add").expect("add sig");
+        eprintln!("add registry ownership={:?}", add_sig.param_ownership);
+        assert_eq!(
+            add_sig.param_ownership,
+            vec![OwnershipMode::Owned, OwnershipMode::Owned],
+            "add must keep owned Val formals; got {:?}",
+            add_sig.param_ownership
+        );
+    }
 }

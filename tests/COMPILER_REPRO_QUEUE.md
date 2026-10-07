@@ -71,7 +71,7 @@ to 1× Owned + `emitted=[false]`.
 **Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
 `cargo test --release --test all -- wdb398_` → **3 passed**.
 
-**Do not steal:** remaining tip REDs (WDB-340/349/353–358/364–366/368/374/383/410/416 + wave).
+**Do not steal:** remaining tip REDs (WDB-340/349/353–358/364–366/368/374/383/416 + wave).
 
 ## P3.697 (2026-10-06) — WDB-344/346: Copy f32 match deref + tip-out camera sync
 
@@ -98,7 +98,7 @@ no new `ir_call_site` peel. Tip-out/gen sync cleared WDB-346 camera field clones
 `cargo test --release --test all -- wdb344_ wdb346_` → **5 passed**;
 `cargo test --release -p windjammer --lib append_rust_clone_parenthesizes` → **1 passed**.
 
-**Do not steal:** remaining tip-true REDs (WDB-340/349/353–358/364–366/368/374/383/407/410/416 + wave tip_outs).
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–358/364–366/368/374/383/416 + wave tip_outs).
 
 ## P3.696 (2026-10-06) — WDB-423: Copy i32 tuple array index must not `.clone()`
 
@@ -251,7 +251,7 @@ for rifter/cathedral `initialize`; no new `ir_call_site` peel.
 `cargo test --release --test all -- wdb414_ wdb367_` → **5 passed**;
 `wdb407_module_file_*` / `wdb410_module_file_*` tip-live ✅ (tip-out still product lag).
 
-**Do not steal:** WDB-407/410 tip-out lag; other Copy-clone tip-out rows; full suite triage.
+**Do not steal:** remaining tip-true REDs (WDB-340/349/353–358/364–366/368/374/383/416 + wave); full suite triage.
 
 ## P3.690 (2026-10-06) — unit `None` / Copy field / owned-self move (no spurious `.clone()`)
 
