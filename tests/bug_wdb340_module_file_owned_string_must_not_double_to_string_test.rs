@@ -37,6 +37,26 @@ pub fn update_params(value: string) -> Rec {
 }
 "#;
 
+/// Product shape (editor/asset_browser): demoted `&str` formal reused in `.contains`
+/// then assigned into owned `string` field — tip emitted `query.to_string().to_string()`.
+const SRC_DEMOTED_ASSIGN: &str = r#"
+pub struct AssetBrowser {
+    pub search_query: string,
+}
+
+impl AssetBrowser {
+    pub fn search(self, query: string) {
+        self.search_query = query
+        let _ = "name".contains(query)
+    }
+
+    pub fn list_assets(self, root_path: string) {
+        self.search_query = root_path
+        let _ = root_path.len()
+    }
+}
+"#;
+
 #[test]
 fn wdb340_module_file_owned_string_must_not_double_to_string() {
     let mut test = MultiFileTest::new();
@@ -50,6 +70,25 @@ fn wdb340_module_file_owned_string_must_not_double_to_string() {
         "WDB-340 RED: owned String store emitted double to_string:\n{rs}"
     );
     test.cargo_check().expect("WDB-340 cargo-check");
+}
+
+#[test]
+fn wdb340_module_file_demoted_str_assign_must_not_double_to_string() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_DEMOTED_ASSIGN);
+    let map = test.compile().expect("WDB-340 demoted assign compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-340 demoted-assign lib.rs:\n{rs}");
+    let bad = rs.contains(".to_string().to_string()");
+    assert!(
+        !bad,
+        "WDB-340 RED: demoted &str → String field double to_string:\n{rs}"
+    );
+    assert!(
+        rs.contains(".to_string()") || rs.contains(".into()") || rs.contains("search_query ="),
+        "WDB-340: expected owned coerce into search_query. Got:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-340 demoted assign cargo-check");
 }
 
 #[test]

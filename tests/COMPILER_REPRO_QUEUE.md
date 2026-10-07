@@ -1,6 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.711 (2026-10-06) — WDB-340: demoted `&str` → String assign must not double `.to_string()`
+
+Product `AssetBrowser::search` / `list_assets`: demoted `&str` formal reused then
+assigned into owned `string` field. Tip emitted `query.to_string().to_string()`
+because P3.418 demoted-formal coerce and auto_clone reuse both appended
+`.to_string()` (second path unchecked).
+
+| Gate | Status |
+|------|--------|
+| `wdb340_module_file_owned_string_must_not_double_to_string` | ✅ tip GREEN |
+| `wdb340_module_file_demoted_str_assign_must_not_double_to_string` | ✅ tip GREEN (product shape) |
+| `wdb340_tip_out_game_core_must_not_double_to_string` | ✅ tip GREEN after tip-out regen |
+
+**Root cause layer:** assignment coercion — idempotent auto_clone path for demoted
+text formals (skip when already `.to_string()` / `.into()` / owned).
+
+**What became unnecessary:** stacked `.to_string().to_string()` on demoted formal
+→ String field assign; dual-oracle re-apply in auto_clone branch. No ir_call_site peel.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb340_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-349/353–354/364–366/368/374/383 + wave).
+
 ## P3.710 (2026-10-06) — WDB-357: associated `new` must not emit `impl Into<String>`
 
 Product `ConsoleCommand::new` / `DialogueHistoryEntry::new` / `*Data::new` are

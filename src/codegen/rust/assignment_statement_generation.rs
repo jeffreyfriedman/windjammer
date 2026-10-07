@@ -590,8 +590,19 @@ impl<'ast> CodeGenerator<'ast> {
                         // on field assign (WDB-391 helper u32, WDB-393 i32 formals, WDB-394 usize).
                         let skip_copy =
                             target_is_copy || self.ident_skips_auto_clone_as_copy(name, value);
+                        // WDB-340: demoted `&str` → owned String already got
+                        // `.to_string()` above (P3.418). Do not stack a second
+                        // `.to_string()` / `.clone()` from auto_clone reuse.
                         if owned_string_field && self.inferred_borrowed_params.contains(name) {
-                            value_str = format!("{}.to_string()", value_str);
+                            if !value_str.ends_with(".to_string()")
+                                && !value_str.ends_with(".clone()")
+                                && !value_str.ends_with(".into()")
+                                && !crate::codegen::rust::literals::is_already_owned_string(
+                                    &value_str,
+                                )
+                            {
+                                value_str = format!("{}.to_string()", value_str);
+                            }
                         } else if !skip_copy {
                             value_str = format!("{}.clone()", value_str);
                         }
