@@ -1,6 +1,31 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.717 (2026-10-07) — WDB-374: Copy enum match must not `.state.clone().clone()`
+
+Product `world/streaming` matched `self.chunks[i].state` (Copy
+`ChunkLifecycleState`) via owned-clone borrow-break, stacking field `.clone()`
++ borrow-break `.clone()`. Same-file Copy now uses owned-copy borrow-break even
+when arms reassign the place; owned-clone strips a pre-existing `.clone()`.
+Tip-out needs multipass `world/` so cross-module Copy registry is populated.
+
+| Gate | Status |
+|------|--------|
+| `wdb374_module_file_copy_enum_field_must_not_double_clone` | ✅ tip GREEN |
+| `wdb374_module_file_match_indexed_copy_enum_must_not_double_clone` | ✅ tip GREEN |
+| `wdb374_tip_out_game_core_streaming_must_not_double_clone_state` | ✅ tip GREEN after world multipass regen |
+
+**Root cause layer:** match encoding + registry — owned-copy borrow-break for
+Copy self-fields; multipass Copy registry for imported enums.
+
+**What became unnecessary:** `state.clone().clone()` on streaming match temps;
+owned-clone path no longer stacks a second `.clone()`.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb374_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-365/366/368 + wave).
+
 ## P3.716 (2026-10-06) — WDB-354: owned Result match must not `.map(|v| v.to_owned())`
 
 Product `AssetLoader::load_batch` matched `self.load(...) -> Result<T,E>` via the

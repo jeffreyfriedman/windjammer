@@ -1829,10 +1829,26 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if self.match_scrutinee_option_yields_copy(expr)
             || self.match_borrow_break_yields_owned_copy_option(expr)
+            || self.match_borrow_break_yields_owned_copy(expr)
         {
             return false;
         }
         true
+    }
+
+    /// WDB-374: Copy self-field / indexed field (`chunks[i].state`) — bind by value,
+    /// never `.clone().clone()` via owned-clone borrow-break.
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_copy(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        let Some(ty) = self.infer_expression_type(expr) else {
+            return false;
+        };
+        if matches!(ty, Type::Option(_) | Type::Result(_, _)) {
+            return false;
+        }
+        self.is_type_copy(&ty)
     }
 
     /// True when matching on `Option<&T>` where `T: Copy` (e.g. `map.get(&key)` → use `.copied()`).

@@ -879,11 +879,15 @@ impl<'ast> CodeGenerator<'ast> {
         let use_cloned_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && self.match_borrow_break_yields_cloned_option(value);
+        // WDB-374: Copy enum/scalar self-field (`chunks[i].state`) may reassign the
+        // place in an arm — still bind by value (Copy); do not force owned-clone.
+        let use_owned_copy_field = self.match_borrow_break_yields_owned_copy(value);
         let use_owned_copy_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && !use_cloned_borrow_break
-            && !option_reassigns
-            && self.match_borrow_break_yields_owned_copy_option(value);
+            && (use_owned_copy_field
+                || (!option_reassigns
+                    && self.match_borrow_break_yields_owned_copy_option(value)));
         // Owned-option borrow-break is for method returns (`self.network.poll()` →
         // `Option<T>`). Self-field / index Option must clone into an owned temp so
         // mut / ref-mut arms and scrutinee reassignment do not overlap borrows.
@@ -959,12 +963,23 @@ impl<'ast> CodeGenerator<'ast> {
                 || use_owned_option_borrow_break
                 || use_owned_result_borrow_break
             {
-                output.push_str(&format!("{} = {};\n", borrow_break_let, value_str));
+                // WDB-374: field emit may have appended `.clone()` before we chose the
+                // Copy borrow-break path — strip so we never get `.clone().clone()`.
+                let mut owned = value_str.clone();
+                while owned.ends_with(".clone()") {
+                    owned.truncate(owned.len() - ".clone()".len());
+                }
+                output.push_str(&format!("{} = {};\n", borrow_break_let, owned));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
             } else if use_owned_clone_borrow_break {
                 let expr = self.generate_expression(value);
-                let raw = self.strip_leading_borrow_prefix(&expr);
+                let mut raw = self.strip_leading_borrow_prefix(&expr);
+                // Field emit may already have `.clone()` — do not stack another
+                // (WDB-374 cross-module Copy lag / double-clone).
+                while raw.ends_with(".clone()") {
+                    raw.truncate(raw.len() - ".clone()".len());
+                }
                 output.push_str(&format!("{} = {}.clone();\n", borrow_break_let, raw));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");

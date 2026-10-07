@@ -52,6 +52,35 @@ impl World {
 }
 "#;
 
+/// Product shape (world/streaming): match indexed Copy enum + arm mutates self.
+const SRC_MATCH: &str = r#"
+pub enum ChunkLifecycleState {
+    Unloaded,
+    Loading,
+    Loaded,
+}
+
+pub struct Chunk {
+    pub state: ChunkLifecycleState,
+    pub name: string,
+}
+
+pub struct World {
+    pub chunks: Vec<Chunk>,
+}
+
+impl World {
+    pub fn tick_unload(self, i: usize) {
+        match self.chunks[i].state {
+            ChunkLifecycleState::Loaded => {
+                self.chunks[i].state = ChunkLifecycleState::Unloaded
+            },
+            _ => {},
+        }
+    }
+}
+"#;
+
 #[test]
 fn wdb374_module_file_copy_enum_field_must_not_double_clone() {
     let mut test = MultiFileTest::new();
@@ -65,6 +94,21 @@ fn wdb374_module_file_copy_enum_field_must_not_double_clone() {
         "WDB-374 RED: indexed Copy enum field cloned:\n{rs}"
     );
     test.cargo_check().expect("WDB-374 cargo-check");
+}
+
+#[test]
+fn wdb374_module_file_match_indexed_copy_enum_must_not_double_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_MATCH);
+    let map = test.compile().expect("WDB-374 match compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-374 match lib.rs:\n{rs}");
+    let bad = rs.contains(".state.clone()") || rs.contains("].clone().state");
+    assert!(
+        !bad,
+        "WDB-374 RED: match indexed Copy enum cloned:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-374 match cargo-check");
 }
 
 #[test]
