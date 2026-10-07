@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-460: Copy `Vec3` into **method** owned formal must not `.clone()`.
+//! WDB-461: Copy `Vec3` into **method** owned formal must not `.clone()`.
 //!
 //! Product tip-out:
 //! - `math/quat.rs` `rotate_vec3`: `qv.cross(vec.clone())` / `qv.cross(uv.clone())`
@@ -76,24 +76,24 @@ pub fn look_at_helper(eye: Vec3, f: Vec3, s: Vec3) -> f32 {
 "#;
 
 #[test]
-fn wdb460_module_file_copy_vec3_method_formal_must_not_clone() {
+fn wdb461_module_file_copy_vec3_method_formal_must_not_clone() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("WDB-460 compile");
+    let map = test.compile().expect("WDB-461 compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("WDB-460 MultiFile lib.rs:\n{rs}");
+    eprintln!("WDB-461 MultiFile lib.rs:\n{rs}");
     let bad = rs.contains("vec.clone()")
         || rs.contains("uv.clone()")
         || rs.contains("f.clone()")
         || rs.contains("eye.clone()");
     assert!(
         !bad,
-        "WDB-460 RED: Copy Vec3 cloned into method owned formal:\n{rs}"
+        "WDB-461 RED: Copy Vec3 cloned into method owned formal:\n{rs}"
     );
     let _ = test.cargo_check();
 }
 
-fn wdb460_search_roots() -> Vec<PathBuf> {
+fn wdb461_search_roots() -> Vec<PathBuf> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut roots = vec![manifest.clone()];
     let git = manifest.join(".git");
@@ -123,9 +123,9 @@ fn wdb460_search_roots() -> Vec<PathBuf> {
 }
 
 #[test]
-fn wdb460_tip_out_game_core_vec3_method_formal_must_not_clone() {
+fn wdb461_tip_out_game_core_vec3_method_formal_must_not_clone() {
     let mut paths = Vec::new();
-    for dir in wdb460_search_roots() {
+    for dir in wdb461_search_roots() {
         paths.push(dir.join(".agent-wip/rel_tip_out/math/quat.rs"));
         paths.push(dir.join(".agent-wip/rel_tip_out/math/mat4.rs"));
         paths.push(dir.join(".agent-wip/rel_tip_out/audio_3d/spatial.rs"));
@@ -154,10 +154,10 @@ fn wdb460_tip_out_game_core_vec3_method_formal_must_not_clone() {
             bad_paths.push(path.display().to_string());
         }
     }
-    assert!(saw, "WDB-460: quat/mat4/spatial product files missing");
+    assert!(saw, "WDB-461: quat/mat4/spatial product files missing");
     assert!(
         bad_paths.is_empty(),
-        "WDB-460 RED: tip/product Copy Vec3 into method owned formal clone:\n  {}",
+        "WDB-461 RED: tip/product Copy Vec3 into method owned formal clone:\n  {}",
         bad_paths.join("\n  ")
     );
 }

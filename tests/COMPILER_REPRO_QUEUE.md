@@ -1,7 +1,7 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
-## P3.706 (2026-10-06) — TDD WDB-460 (DB agent; no compiler src)
+## P3.706 (2026-10-06) — TDD WDB-461 (DB agent; no compiler src)
 
 Copy `Vec3` into **method** owned formal must not `.clone()`.
 
@@ -17,8 +17,8 @@ emit `cross(vec.clone())` / `dot(eye.clone())` / `is_audible(listener_pos.clone(
 
 | Gate | Status |
 |------|--------|
-| WDB-460 MultiFile | ✅ isolate GREEN — bare `cross(vec)` / `dot(eye)` |
-| WDB-460 tip-out | ❌ tip RED — clones in `rel_tip_out/math/{quat,mat4}.rs` + `audio_3d/spatial.rs` |
+| WDB-461 MultiFile | ✅ isolate GREEN — bare `cross(vec)` / `dot(eye)` |
+| WDB-461 tip-out | ❌ tip RED — clones in `rel_tip_out/math/{quat,mat4}.rs` + `audio_3d/spatial.rs` |
 
 **Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
 method-call owned formals for Copy `Vec3` still get `.clone()` in stale gen.
@@ -27,11 +27,12 @@ method-call owned formals for Copy `Vec3` still get `.clone()` in stale gen.
 - WDB-355 is Copy Vec3 into **free-fn** owned formal (`vertex(p, n)`).
 - WDB-458 is Copy **newtype** into method formal (`has`).
 - WDB-459 is Copy **struct** into Vec::push.
+- WDB-460 (parallel) is Copy **unit enum** into Vec::push (`Key`).
 - This is Copy `Vec3` into **method** owned formal (`cross` / `dot` / `is_audible`).
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb460_` — isolate GREEN / tip RED (2026-10-06).
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb461_` — isolate GREEN / tip RED (2026-10-06).
 
-**Do not steal:** WDB-406/408/411/457–460, P3.508–P3.706, WDB-412–460 (filed). Note: P3.705 reserved by foreign int_eq gate WIP.
+**Do not steal:** WDB-406/408/411/457–461, P3.508–P3.706, WDB-412–461 (filed). Note: P3.705 is LedgerKit/int_eq (foreign).
 
 ## P3.704 (2026-10-06) — TDD WDB-459 (DB agent; no compiler src)
 
@@ -150,6 +151,24 @@ must mean shared `&self` only; Owned `self` is consuming.
 **Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383 + wave);
 WDB-457/458 are DB-agent tip-outs (no compiler src).
 
+
+## P3.706 (2026-10-06) — directory package must emit `mod.rs` + re-exports into `--output`
+
+Breach Protocol `src/inventory/` (directory module) tip-transpile to `gen/` writes
+`gen/inventory/{item,item_id,…}.rs` but **omits** `gen/inventory/mod.rs`.
+Root `lib.rs` then hits E0583; thin synthesized decls miss `pub use ItemId`
+(cascading E0425).
+
+| Gate | Status |
+|------|--------|
+| `directory_module_must_emit_mod_rs_with_reexports` | ❌ tip RED (or missing key) — file this session |
+
+**Root cause layer:** multipass / `--module-file` emit for directory packages into
+`--output gen` must write `gen/<pkg>/mod.rs` with child `pub mod` + public re-exports.
+
+**Do not steal:** wj-game restore-from-`build/` is a host workaround, not a tip fix.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- directory_module_must_emit_mod_rs_with_reexports`.
 
 ## P3.704 (2026-10-06) — BP `update_death_state` must emit `&mut self` (tip-out)
 
