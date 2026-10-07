@@ -46,6 +46,33 @@ impl Streamer {
         !self.is_tile_active(center_id)
     }
 }
+
+// Product MeshRenderer shape: &self caller + &self sibling + later field index.
+pub struct MeshEntry {
+    pub uploaded: bool,
+}
+
+pub struct MeshRenderer {
+    pub mesh_registry: Vec<MeshEntry>,
+}
+
+impl MeshRenderer {
+    pub fn find_mesh_index(self, name: string) -> i32 {
+        let mut i: i32 = 0
+        while (i as usize) < self.mesh_registry.len() {
+            i = i + 1
+        }
+        -1
+    }
+
+    pub fn is_mesh_uploaded(self, name: string) -> bool {
+        let idx = self.find_mesh_index(name)
+        if idx < 0 {
+            return false
+        }
+        self.mesh_registry[idx as usize].uploaded
+    }
+}
 "#;
 
 #[test]
