@@ -16,9 +16,9 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         type_: &Type,
     ) -> String {
-        // WDB-353: collapse `(e as i32) as usize` → `e as usize` for index casts.
-        // Terrain wrote nested truncations; a single `as usize` truncates the same for
-        // non-negative coords and drops the redundant mid-width when `e` is already i32.
+        // WDB-353 / WDB-383: collapse `(e as i32|i64) as usize` → `e as usize`.
+        // Terrain / frame_analysis wrote mid-width truncations; a single `as usize`
+        // is enough for non-negative index coords (and drops redundant mid casts).
         if Self::cast_target_is_usize(type_) {
             if let Expression::Cast {
                 expr: inner,
@@ -26,7 +26,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } = expr
             {
-                if Self::cast_target_is_i32(mid) {
+                if Self::cast_target_is_i32(mid) || Self::cast_target_is_i64(mid) {
                     return self.generate_cast(inner, type_);
                 }
             }
@@ -204,5 +204,10 @@ impl<'ast> CodeGenerator<'ast> {
     fn cast_target_is_i32(type_: &Type) -> bool {
         matches!(type_, Type::Int32)
             || matches!(type_, Type::Custom(n) if n == "i32" || n == "int32")
+    }
+
+    fn cast_target_is_i64(type_: &Type) -> bool {
+        matches!(type_, Type::Int)
+            || matches!(type_, Type::Custom(n) if n == "i64" || n == "int")
     }
 }

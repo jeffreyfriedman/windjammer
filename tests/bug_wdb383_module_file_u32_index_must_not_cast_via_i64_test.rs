@@ -29,6 +29,13 @@ pub fn bump(bins: Vec<u32>, clamped: u32) {
 }
 "#;
 
+/// Product shape (frame_analysis): `bins[clamped as i64]` → tip stacked `as usize`.
+const SRC_VIA_I64: &str = r#"
+pub fn bump(bins: Vec<u32>, clamped: u32) {
+    bins[clamped as i64] = bins[clamped as i64] + 1
+}
+"#;
+
 #[test]
 fn wdb383_module_file_u32_index_must_not_cast_via_i64() {
     let mut test = MultiFileTest::new();
@@ -42,6 +49,25 @@ fn wdb383_module_file_u32_index_must_not_cast_via_i64() {
         "WDB-383 RED: u32 index double-cast via i64/i32:\n{rs}"
     );
     test.cargo_check().expect("WDB-383 cargo-check");
+}
+
+#[test]
+fn wdb383_module_file_index_as_i64_must_fold_to_usize() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_VIA_I64);
+    let map = test.compile().expect("WDB-383 via-i64 compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-383 via-i64 lib.rs:\n{rs}");
+    let bad = rs.contains("as i64 as usize");
+    assert!(
+        !bad,
+        "WDB-383 RED: index as i64 as usize not folded:\n{rs}"
+    );
+    assert!(
+        rs.contains("as usize") || rs.contains("bins[clamped]"),
+        "WDB-383: expected usize index. Got:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-383 via-i64 cargo-check");
 }
 
 #[test]

@@ -683,6 +683,14 @@ impl<'ast> CodeGenerator<'ast> {
             *idx_str = idx_str.replace(" as f64", " as usize");
             return;
         }
+        // WDB-383 / WDB-353: user wrote `as i64` / `as i32` on an index place —
+        // retarget the cast to usize instead of stacking (`clamped as i64 as usize`).
+        for mid in [" as i64", " as i32", " as int"] {
+            if let Some(base) = idx_str.strip_suffix(mid) {
+                *idx_str = format!("{base} as usize");
+                return;
+            }
+        }
         // WDB-308 / WDB-303: u32 (and i32) locals — including `i + 1` binaries — must index as usize.
         // Do this before expression_produces_usize early-return (binary peers often look like usize).
         // Binaries: `({}) as usize` so `as` does not bind tighter than `+`.

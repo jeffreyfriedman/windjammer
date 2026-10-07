@@ -1,6 +1,29 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.715 (2026-10-06) — WDB-383: index `as i64` must retarget to `as usize`
+
+Product `frame_analysis` wrote `bins[clamped as i64]`; index lowering stacked
+`as usize` → `clamped as i64 as usize`. Retarget mid-width casts on index
+places; also fold nested AST `(e as i64) as usize` in `generate_cast`.
+
+| Gate | Status |
+|------|--------|
+| `wdb383_module_file_u32_index_must_not_cast_via_i64` | ✅ tip GREEN |
+| `wdb383_module_file_index_as_i64_must_fold_to_usize` | ✅ tip GREEN (product shape) |
+| `wdb383_tip_out_game_core_frame_analysis_must_not_cast_via_i64` | ✅ tip GREEN after tip-out regen |
+| `wdb353_*` (3) | ✅ tip GREEN (no regression) |
+
+**Root cause layer:** coercion/encoding — `maybe_cast_index_to_usize` retargets
+trailing `as i64`/`as i32`; `generate_cast` folds nested i64→usize.
+
+**What became unnecessary:** `as i64 as usize` on frame_analysis bins index.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb383_ wdb353_` → **6 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-354/365–366/368/374 + wave).
+
 ## P3.714 (2026-10-06) — WDB-364: range start must not emit `_usize as usize`
 
 Product `physics_world` nested `for j in (i + 1)..bodies.len()` emitted
