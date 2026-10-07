@@ -1,6 +1,35 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.722 (2026-10-07) — WDB-463/462/368 tip GREEN (nested for-borrow + &* text)
+
+**WDB-463:** nested `while` marked `for_loop_borrow_needed` for locals re-bound
+each iteration (`children_copy`). Only mark when the iterable lives outside the
+outer loop (`decl_depth < loop_depth`).
+
+**WDB-462:** tip-out lag — fresh multipass emits `result.push(*id)` for Copy
+`StateId` from `.keys()`.
+
+**WDB-368:** `finalize_ir_call_arg` treated `&String` match payloads as Copy
+(`&flag` → `*flag`), then shared-ref reconcile re-borrowed → `&*flag`. Skip
+Copy deref for text ref bindings; strip residual `&*ident` after method reconcile.
+
+| Gate | Status |
+|------|--------|
+| `wdb463_` MultiFile + tip-out | ✅ tip GREEN |
+| `wdb462_` MultiFile + tip-out | ✅ tip GREEN |
+| `wdb368_` MultiFile + tip-out | ✅ tip GREEN |
+
+**Root cause layer:** for-loop borrow classification (463); tip-out regen (462);
+call-site finalize / text vs Copy (368) — not new peels without type fix.
+
+**What became unnecessary:** `&children_copy` + `child_id.clone()`; `id.clone()`
+on Copy keys; `&*flag` into `&str`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb463_ wdb462_ wdb368_` → **6 passed**.
+
+**Do not steal:** WDB-365 `__wj_tmp` tip-out + remaining wave.
+
 ## P3.721 (2026-10-07) — WDB-366: BT tick must not force `tree.clone()`
 
 `BehaviorTree` formals stayed Borrowed from analyzer, but multipass
@@ -60,7 +89,7 @@ emits `for child_id in &children_copy` + `to_remove.push(child_id.clone())`.
 | Gate | Status |
 |------|--------|
 | WDB-463 MultiFile | ✅ isolate GREEN — owned for + bare push |
-| WDB-463 tip-out | ❌ tip RED — `&children_copy` + `child_id.clone()` in `rel_tip_out/scene_graph/scene_graph_state.rs` |
+| WDB-463 tip-out | ✅ tip GREEN (P3.722) — owned `for child_id in children_copy` + bare push |
 
 **Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
 owned `Vec<u64>` for-loops still demoted to borrowed + Copy `.clone()` into push.
@@ -91,7 +120,7 @@ Tip MultiFile emits bare `push(id)` (isolate GREEN). Tip-out still has
 | Gate | Status |
 |------|--------|
 | WDB-462 MultiFile | ✅ isolate GREEN — bare `push(id)` |
-| WDB-462 tip-out | ❌ tip RED — `result.push(id.clone())` in `rel_tip_out/state_machine/machine.rs` |
+| WDB-462 tip-out | ✅ tip GREEN (P3.722) — `result.push(*id)` / no `.clone()` |
 
 **Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
 Copy newtype bindings from `.keys()` still get `.clone()` into owned `Vec::push`.
@@ -7313,7 +7342,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED |
 | P1 | **BT tick must not force `tree.clone()`** | `bug_wdb366_module_file_bt_tick_must_not_force_tree_clone_test` | ✅ tip GREEN (P3.721) — hard-owned restore; bare forward ≠ FieldInCallArg/store |
 | P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile + tip GREEN (P3.427) — unit keywords + `Type::None` identifier paths |
-| P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ MultiFile GREEN (P3.419+); tip-out pending regen |
+| P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ tip GREEN (P3.722) — text ref skip Copy `*` path; product match+let |
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
 | P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429) — `is_type_copy` skip on Copy aggregates; tip-out pending regen |
 | P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429); tip-out pending regen; twin WDB-370/355 |

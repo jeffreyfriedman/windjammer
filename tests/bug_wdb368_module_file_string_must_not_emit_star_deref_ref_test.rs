@@ -28,12 +28,25 @@ pub struct World {
     pub ok: bool,
 }
 
-pub fn get_flag(world: World, flag: string) -> bool {
-    world.ok
+impl World {
+    pub fn get_flag(self, flag: string) -> bool {
+        self.ok
+    }
 }
 
-pub fn check(world: World, flag: string) -> bool {
-    get_flag(world, flag)
+pub enum Condition {
+    QuestFlag { flag: string, required: bool },
+}
+
+impl Condition {
+    pub fn evaluate(self, world: World) -> bool {
+        match self {
+            Condition::QuestFlag { flag, required } => {
+                let flag_value = world.get_flag(flag)
+                flag_value == required
+            },
+        }
+    }
 }
 "#;
 

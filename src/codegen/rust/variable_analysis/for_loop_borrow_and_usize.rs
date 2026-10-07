@@ -9,8 +9,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// Pre-scan a function body (recursively) for `for x in iterable` patterns.
     ///
     /// Insert `iterable` into `for_loop_borrow_needed` when:
-    /// - The `for` is nested inside another `for` / `while` / `loop`, so the outer body runs
-    ///   multiple times and must not consume the same collection each time (E0382).
+    /// - The `for` is nested inside another `for` / `while` / `loop` **and** the iterable
+    ///   binding lives across outer iterations (declared outside that outer loop). Locals
+    ///   re-bound each outer iteration (`let children_copy = …` inside `while`) may be
+    ///   consumed (WDB-463).
     /// - The same identifier appears as a `for` iterable two or more times anywhere in the
     ///   function (sequential loops), so the first loop must not move it (E0382).
     ///
@@ -20,7 +22,8 @@ impl<'ast> CodeGenerator<'ast> {
         self.for_loop_field_owner_borrow_needed.clear();
         let mut counts: HashMap<String, usize> = HashMap::new();
         Self::count_for_loop_iterable_identifiers(body, &mut counts);
-        self.precompute_for_loop_borrows_walk(body, 0, &counts);
+        let mut decl_loop_depth: HashMap<String, usize> = HashMap::new();
+        self.precompute_for_loop_borrows_walk(body, 0, &counts, &mut decl_loop_depth);
         self.mark_for_loop_borrow_when_iterable_used_after_siblings(body);
         self.mark_for_loop_borrow_when_iterable_reused_in_body(body);
     }
@@ -238,9 +241,17 @@ impl<'ast> CodeGenerator<'ast> {
         stmts: &[&'ast Statement<'ast>],
         loop_depth: usize,
         counts: &HashMap<String, usize>,
+        decl_loop_depth: &mut HashMap<String, usize>,
     ) {
         for stmt in stmts {
             match stmt {
+                Statement::Let { pattern, .. } => {
+                    if let Pattern::Identifier(name) = pattern {
+                        // Innermost binding wins (shadowing). Depth is the enclosing
+                        // for/while/loop nest level at the let site.
+                        decl_loop_depth.insert(name.clone(), loop_depth);
+                    }
+                }
                 Statement::For {
                     iterable,
                     pattern,
@@ -251,30 +262,60 @@ impl<'ast> CodeGenerator<'ast> {
                         let pattern_name = pattern_analysis::extract_pattern_identifier(pattern);
                         if pattern_name.as_deref() != Some(name.as_str()) {
                             let n = counts.get(name).copied().unwrap_or(0);
-                            if loop_depth > 0 || n >= 2 {
+                            // Params / outer locals: decl depth 0 (or missing). Fresh locals
+                            // declared inside this outer loop share `loop_depth` and may move.
+                            let decl_depth = decl_loop_depth.get(name).copied().unwrap_or(0);
+                            let nested_reuses_outer_binding =
+                                loop_depth > 0 && decl_depth < loop_depth;
+                            if nested_reuses_outer_binding || n >= 2 {
                                 self.for_loop_borrow_needed.insert(name.clone());
                             }
                         }
                     }
-                    self.precompute_for_loop_borrows_walk(body, loop_depth + 1, counts);
+                    self.precompute_for_loop_borrows_walk(
+                        body,
+                        loop_depth + 1,
+                        counts,
+                        decl_loop_depth,
+                    );
                 }
                 Statement::While { body, .. } | Statement::Loop { body, .. } => {
-                    self.precompute_for_loop_borrows_walk(body, loop_depth + 1, counts);
+                    self.precompute_for_loop_borrows_walk(
+                        body,
+                        loop_depth + 1,
+                        counts,
+                        decl_loop_depth,
+                    );
                 }
                 Statement::If {
                     then_block,
                     else_block,
                     ..
                 } => {
-                    self.precompute_for_loop_borrows_walk(then_block, loop_depth, counts);
+                    self.precompute_for_loop_borrows_walk(
+                        then_block,
+                        loop_depth,
+                        counts,
+                        decl_loop_depth,
+                    );
                     if let Some(e) = else_block {
-                        self.precompute_for_loop_borrows_walk(e, loop_depth, counts);
+                        self.precompute_for_loop_borrows_walk(
+                            e,
+                            loop_depth,
+                            counts,
+                            decl_loop_depth,
+                        );
                     }
                 }
                 Statement::Match { arms, .. } => {
                     for arm in arms {
                         if let Expression::Block { statements, .. } = arm.body {
-                            self.precompute_for_loop_borrows_walk(statements, loop_depth, counts);
+                            self.precompute_for_loop_borrows_walk(
+                                statements,
+                                loop_depth,
+                                counts,
+                                decl_loop_depth,
+                            );
                         }
                     }
                 }

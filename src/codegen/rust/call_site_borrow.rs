@@ -568,6 +568,13 @@ pub(crate) fn reconcile_method_call_owned_copy_scalar_identifier_arg(
         } else {
             *coerced = base;
         }
+        // WDB-368: never leave `&*ident` for text into `&str` — bare/`&ident` coerces.
+        if coerced.starts_with("&*") {
+            let rest = coerced["&*".len()..].trim();
+            if rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                *coerced = rest.to_string();
+            }
+        }
     }
     if gen.local_should_move_into_owned_text_formal(name, contract_sig, user_arg_index)
         && coerced.starts_with('&')

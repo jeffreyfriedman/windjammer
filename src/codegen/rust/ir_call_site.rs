@@ -8881,14 +8881,25 @@ impl<'ast> CodeGenerator<'ast> {
             if self.copy_match_payload_binding(name) {
                 return coerced[1..].to_string();
             }
-            let is_copy = self
-                .local_var_types
-                .get(name)
-                .is_some_and(|t| self.is_type_copy(t))
-                || self
-                    .infer_expression_type(arg_expr)
-                    .is_some_and(|t| self.is_type_copy(&t))
-                || self.binding_is_copy_pass_by_value_scalar(name);
+            // WDB-368: `&String` / text match payloads must not take the Copy
+            // `&binding` → `*binding` path (later shared-ref re-borrow yields `&*ident`).
+            let text_ref_binding = self.local_var_types.get(name).is_some_and(|t| {
+                let inner = match t {
+                    Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
+                    other => other,
+                };
+                crate::codegen::rust::string_utilities::type_is_owned_string(inner)
+                    || matches!(inner, Type::Custom(n) if n == "str" || n == "&str")
+            });
+            let is_copy = !text_ref_binding
+                && (self
+                    .local_var_types
+                    .get(name)
+                    .is_some_and(|t| self.is_type_copy(t))
+                    || self
+                        .infer_expression_type(arg_expr)
+                        .is_some_and(|t| self.is_type_copy(&t))
+                    || self.binding_is_copy_pass_by_value_scalar(name));
             if is_copy {
                 // `&binding.clone()` → `*binding` (never `*binding.clone()`, E0614 on Copy).
                 let mut core = coerced[1..].to_string();
