@@ -1,6 +1,20 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.708 (2026-10-06) — tip-out Copy-clone lag sweep (no new peels)
+
+Regenerated game-core tip-out modules with tip `wj` after P3.704
+`binding_is_copy_type`: physics, rendering, ui, voxel, scripting, game_framework,
+ffi_tilemap, terrain, ai, world, ecs, frame_analysis (+ prior math/audio/input).
+
+| Gate | Status |
+|------|--------|
+| `wdb438_`…`wdb456_` tip-out filters (17) | ✅ tip GREEN |
+
+**Root cause layer:** tip-out lag — tip already correct; multipass sync only.
+
+**Gates:** `cargo test --release --test all -- wdb456_tip_out … wdb438_tip_out` → **17 passed**.
+
 ## P3.707 (2026-10-06) — BP `update_death_state` bare `self` → `mut self`
 
 Product `BreachProtocolGame::update_death_state` assigns fields then calls owned
@@ -669,7 +683,7 @@ WJ source uses bare `min_y` / `max_y`.
 | Gate | Status |
 |------|--------|
 | WDB-456 MultiFile | ✅ isolate GREEN — `let feet_y = min_y` (no `.clone()`) |
-| WDB-456 tip-out | ❌ tip RED — `min_y.clone()` in `rel_tip_out/physics/physics_body.rs` (stale tip-out; isolate GREEN) |
+| WDB-456 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** Copy peel / local-let — i32 **local** into untyped `let` must stay bare Copy.
 
@@ -807,7 +821,7 @@ WJ source uses bare `lum`.
 | Gate | Status |
 |------|--------|
 | WDB-454 MultiFile | ✅ isolate GREEN — `min_val = lum` (no `.clone()`) |
-| WDB-454 tip-out | ❌ tip RED — `lum.clone()` in `rel_tip_out/frame_analysis.rs` (+ object_pool) |
+| WDB-454 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** Copy peel / local-reassign — f32 **local** (not formal) assigned into another local must stay bare Copy.
 
@@ -889,7 +903,7 @@ Copy `f32` **indexed field** on return must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-453 MultiFile | ✅ isolate GREEN — `return …avg_ms` (no `.clone()`) |
-| WDB-453 tip-out | ❌ tip RED — `avg_ms.clone()` in `rel_tip_out/rendering/gpu_profiler.rs` |
+| WDB-453 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / f32-indexed-field-return — Copy `f32` indexed struct fields returned must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -951,7 +965,7 @@ Copy `f32` **formal** into **local reassignment** must not `.clone()`; product e
 | Gate | Status |
 |------|--------|
 | WDB-452 MultiFile | ✅ isolate GREEN — `current_x = content_x` (no `.clone()`) |
-| WDB-452 tip-out | ❌ tip RED — `content_x.clone()` in `rel_tip_out/ui/layout.rs` |
+| WDB-452 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / f32-formal-local-reassign — Copy `f32` formals reassigned into locals must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1077,7 +1091,7 @@ Copy `i64` **formal** into field assign must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-451 MultiFile | ✅ isolate GREEN — `self.last_poll_time = current_time` (no `.clone()`) |
-| WDB-451 tip-out | ❌ tip RED — `current_time.clone()` in `rel_tip_out/scripting/live_reload.rs` |
+| WDB-451 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / i64-formal-field-assign — Copy `i64` formals assigned into fields must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1154,7 +1168,7 @@ Copy `u32` **formal** into **indexed field** assign must not `.clone()`; product
 | Gate | Status |
 |------|--------|
 | WDB-450 MultiFile | ✅ isolate GREEN — `chunks[…].gpu_buffer_id = buffer_id` (no `.clone()`) |
-| WDB-450 tip-out | ❌ tip RED — `buffer_id.clone()` in `rel_tip_out/voxel/chunk_manager.rs` |
+| WDB-450 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / u32-formal-indexed-field-assign — Copy `u32` formals assigned into indexed struct fields must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1207,7 +1221,7 @@ Copy `bool` **formal** into field assign must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-449 MultiFile | ✅ isolate GREEN — `self.enabled = enabled` (no `.clone()`) |
-| WDB-449 tip-out | ❌ tip RED — `enabled.clone()` in `rel_tip_out/ui/slider.rs` + `ui/button.rs` |
+| WDB-449 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / bool-formal-field-assign — Copy `bool` formals assigned into fields must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1233,7 +1247,7 @@ Copy `f32` **formal** into field assign must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-448 MultiFile | ✅ isolate GREEN — `self.delta_time = actual_dt` (no `.clone()`) |
-| WDB-448 tip-out | ❌ tip RED — `actual_dt.clone()` in `rel_tip_out/game_framework/game_loop.rs` |
+| WDB-448 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / f32-formal-field-assign — Copy `f32` formals assigned into fields must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1258,7 +1272,7 @@ Copy `u32` **formal** into indexed assign must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-447 MultiFile | ✅ isolate GREEN — `self.tiles[…] = tile_id` (no `.clone()`) |
-| WDB-447 tip-out | ❌ tip RED — `tile_id.clone()` in `rel_tip_out/ffi_tilemap/tilemap.rs` |
+| WDB-447 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / u32-formal-index-assign — Copy `u32` formals assigned into Vec slots must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1284,7 +1298,7 @@ Copy `i32` **local** into typed `let` must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-446 MultiFile | ✅ isolate GREEN — `let mut slice_count: i32 = gd` / `let mut x: i32 = u` |
-| WDB-446 tip-out | ❌ tip RED — `gd.clone()` / `u.clone()` in `rel_tip_out/voxel/meshing.rs` |
+| WDB-446 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / i32-local-typed-let — Copy `i32` locals into typed lets must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1364,7 +1378,7 @@ Copy `f32` formal into `let` must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-445 MultiFile | ✅ isolate GREEN — `let mut x = start_x` (no `.clone()`) |
-| WDB-445 tip-out | ❌ tip RED — `start_x.clone()` in `rel_tip_out/terrain/vegetation.rs` |
+| WDB-445 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / f32-formal-let — Copy `f32` formals bound into locals must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1515,7 +1529,7 @@ Copy `i32` formals into HashMap key tuple must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-443 MultiFile | ✅ isolate GREEN — `insert((start_x, start_y), …)` (no `.clone()`) |
-| WDB-443 tip-out | ❌ tip RED — `start_x.clone()` / `nx.clone()` in `rel_tip_out/ai/astar_grid.rs` |
+| WDB-443 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / hashmap-key-tuple — Copy formals as HashMap key tuple elems must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1541,7 +1555,7 @@ Copy `u32` local into `let` must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-442 MultiFile | ✅ isolate GREEN — `let mut step = budget` (no `.clone()`) |
-| WDB-442 tip-out | ❌ tip RED — `budget.clone()` in `rel_tip_out/world/async_loader.rs` |
+| WDB-442 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / local-let — Copy `u32` locals bound into locals must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1743,7 +1757,7 @@ Copy `i64` local into indexed assign must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-441 MultiFile | ✅ isolate GREEN — `entities[i] = swapped_entity` (no `.clone()`) |
-| WDB-441 tip-out | ❌ tip RED — `swapped_entity.clone()` in `rel_tip_out/ecs/component_storage.rs` |
+| WDB-441 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / index-assign — Copy `i64` locals assigned into `Vec` slots must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1793,7 +1807,7 @@ Copy `f32` local into struct literal field must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-440 MultiFile | ✅ isolate GREEN — `ComparisonResult { … mse, … }` (no `mse.clone()`) |
-| WDB-440 tip-out | ❌ tip RED — `mse: mse.clone()` in `rel_tip_out/frame_analysis.rs` |
+| WDB-440 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / struct-lit — Copy `f32` locals as struct fields must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1818,7 +1832,7 @@ product emits `return self.nodes[index as usize].0.clone()`.
 | Gate | Status |
 |------|--------|
 | WDB-439 MultiFile | ✅ isolate GREEN — `return self.nodes[index as usize].0` (no `.clone()`) |
-| WDB-439 tip-out | ❌ tip RED — `.0.clone()` / `.1.clone()` in `rel_tip_out/ai/astar_grid.rs` |
+| WDB-439 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** copy / index-tuple-field — Copy `i32` via `nodes[i].0` must not auto-clone
 (product tip-out lag / multipass path; isolate already correct).
@@ -1958,7 +1972,7 @@ Copy `i32` formal into tuple literal must not `.clone()`; product emits
 | Gate | Status |
 |------|--------|
 | WDB-438 MultiFile | ✅ isolate GREEN — product-shaped `CostGrid::get_neighbors` emits bare `push((x, y + 1, self.get_cost(…)))` |
-| WDB-438 tip-out | ❌ tip RED — `x.clone()` / `y.clone()` in `rel_tip_out/ai/astar_grid.rs` neighbor pushes |
+| WDB-438 tip-out | ✅ tip GREEN after tip-out sweep (P3.704/P3.707)
 
 **Root cause layer:** codegen identifier auto-clone — `ident_skips_auto_clone_as_copy` missed Copy pass-by-value formals when inference was thin; tuple literals set `in_owned_value_context`, so analysis `.clone()` stuck before tuple slot cleanup.
 
