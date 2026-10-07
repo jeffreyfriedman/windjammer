@@ -1,6 +1,37 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.718 (2026-10-07) — TDD WDB-462 (DB agent; no compiler src)
+
+Copy **newtype** from `HashMap.keys()` into `Vec::push` must not `.clone()`.
+
+Product `state_machine/machine.rs` `all_state_ids`:
+```wj
+for id in self.states.keys() {
+    result.push(id)
+}
+```
+Tip MultiFile emits bare `push(id)` (isolate GREEN). Tip-out still has
+`result.push(id.clone())` for Copy `StateId` (`u32` newtype).
+
+| Gate | Status |
+|------|--------|
+| WDB-462 MultiFile | ✅ isolate GREEN — bare `push(id)` |
+| WDB-462 tip-out | ❌ tip RED — `result.push(id.clone())` in `rel_tip_out/state_machine/machine.rs` |
+
+**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
+Copy newtype bindings from `.keys()` still get `.clone()` into owned `Vec::push`.
+
+**Why this is a new class:**
+- WDB-457 is owned Copy newtype **local** into Vec::push (`LightId`).
+- WDB-459 is Copy **struct** local into Vec::push (`UvCoord`).
+- WDB-431 is Copy u64 **field** into insert/push.
+- This is Copy newtype from **HashMap.keys()** iterator into Vec::push (`StateId`).
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb462_` — isolate GREEN / tip RED (2026-10-07).
+
+**Do not steal:** WDB-406/408/411/457–462, P3.508–P3.718, WDB-412–462 (filed).
+
 ## P3.717 (2026-10-07) — WDB-374: Copy enum match must not `.state.clone().clone()`
 
 Product `world/streaming` matched `self.chunks[i].state` (Copy
