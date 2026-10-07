@@ -33,6 +33,23 @@ pub fn clamp_idx(i: usize, parent: usize) -> bool {
 }
 "#;
 
+/// Product shape (physics_world): nested for-range `(i + 1)..bodies.len()`.
+const SRC_RANGE: &str = r#"
+pub struct World {
+    pub bodies: Vec<i32>,
+}
+
+impl World {
+    pub fn step(self) {
+        for i in 0..self.bodies.len() {
+            for j in (i + 1)..self.bodies.len() {
+                let _ = self.bodies[j]
+            }
+        }
+    }
+}
+"#;
+
 #[test]
 fn wdb364_module_file_usize_lit_must_not_cast_as_usize() {
     let mut test = MultiFileTest::new();
@@ -46,6 +63,21 @@ fn wdb364_module_file_usize_lit_must_not_cast_as_usize() {
         "WDB-364 RED: usize lit emitted as usize:\n{rs}"
     );
     test.cargo_check().expect("WDB-364 cargo-check");
+}
+
+#[test]
+fn wdb364_module_file_range_start_must_not_cast_usize_lit() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_RANGE);
+    let map = test.compile().expect("WDB-364 range compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-364 range lib.rs:\n{rs}");
+    let bad = rs.contains("_usize as usize");
+    assert!(
+        !bad,
+        "WDB-364 RED: range start `_usize as usize`:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-364 range cargo-check");
 }
 
 #[test]

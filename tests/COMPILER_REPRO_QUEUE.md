@@ -1,6 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.714 (2026-10-06) — WDB-364: range start must not emit `_usize as usize`
+
+Product `physics_world` nested `for j in (i + 1)..bodies.len()` emitted
+`(i + 1_usize as usize)` — peer suffix already made the bound usize, then
+range codegen stacked `as usize` with wrong `as`/`+` precedence.
+
+| Gate | Status |
+|------|--------|
+| `wdb364_module_file_usize_lit_must_not_cast_as_usize` | ✅ tip GREEN |
+| `wdb364_module_file_range_start_must_not_cast_usize_lit` | ✅ tip GREEN (product shape) |
+| `wdb364_tip_out_game_core_must_not_cast_usize_lit` | ✅ tip GREEN after tip-out regen |
+
+**Root cause layer:** coercion/encoding — skip range-start `as usize` when the
+bound already contains `_usize` or `expression_produces_usize`; fix binary cast
+parens to `(expr) as usize`.
+
+**What became unnecessary:** `1_usize as usize` / `(i + 1_usize as usize)` on
+`.len()` ranges.
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb364_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-354/365–366/368/374/383 + wave).
+
 ## P3.713 (2026-10-06) — WDB-353: fold `(e as i32) as usize` → `e as usize`
 
 Product `terrain/terrain.wj` writes nested truncations for grid indices. Tip

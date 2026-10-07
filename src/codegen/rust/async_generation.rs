@@ -153,11 +153,16 @@ impl<'ast> CodeGenerator<'ast> {
             } else if matches!(
                 start,
                 Expression::Identifier { .. } | Expression::Binary { .. }
-            ) && !start_str.contains("as usize")
+            ) && !start_str.contains(" as usize")
+                // WDB-364: peer-driven `1_usize` / usize-typed `(i + 1)` must not
+                // become `1_usize as usize` / `(i + 1_usize as usize)`.
+                && !start_str.contains("_usize")
+                && !self.expression_produces_usize(start)
             {
-                // Add cast for identifiers or expressions without existing cast
+                // Cast the whole bound — `as` binds tighter than `+`, so
+                // `(i + 1 as usize)` is wrong; use `(i + 1) as usize`.
                 if matches!(start, Expression::Binary { .. }) {
-                    start_str = format!("({} as usize)", start_str);
+                    start_str = format!("({}) as usize", start_str);
                 } else {
                     start_str = format!("{} as usize", start_str);
                 }
