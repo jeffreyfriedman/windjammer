@@ -2310,7 +2310,13 @@ impl<'ast> CodeGenerator<'ast> {
                     && self.local_var_types.get(name).is_some_and(|t| {
                         matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     }));
-            if is_borrowed_loop_elem && matches!(kind, CoercionKind::Clone) {
+            // `&T` loop elems into an owned formal must keep Clone (`Vec::push`,
+            // `HashMap::insert`). Drop Clone only when the formal is already a
+            // shared borrow — the binding is `&T` and another `&` would double-borrow.
+            if is_borrowed_loop_elem
+                && matches!(kind, CoercionKind::Clone)
+                && self.ir_sig_arg_expects_shared_borrow(&sig, arg_index)
+            {
                 kind = CoercionKind::Identity;
             }
             if matches!(kind, CoercionKind::Clone) {
@@ -9035,19 +9041,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
             if self.borrowed_iterator_vars.contains(name) && !self.match_arm_bindings.contains(name)
             {
-                if self.local_binding_is_windjammer_text(name) {
-                    let base = self
-                        .infer_expression_type(arg_expr)
-                        .as_ref()
-                        .map(|ty| match ty {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                crate::ir::node::parser_type_to_base_type(inner)
-                            }
-                            other => crate::ir::node::parser_type_to_base_type(other),
-                        })
-                        .unwrap_or(BaseType::Inferred);
-                    return SafetyType::owned(base);
-                }
+                // `&String` from `for p in &vec` is a shared ref, not an owned move.
+                // Owned formals (`Vec::push`) then clone; `&str` formals stay a borrow.
                 let base = self
                     .infer_expression_type(arg_expr)
                     .as_ref()

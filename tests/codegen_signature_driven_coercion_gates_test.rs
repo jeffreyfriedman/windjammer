@@ -116,3 +116,34 @@ fn collect_names(names: Vec<string>) -> Vec<string> {
         "expected push call:\n{rust}"
     );
 }
+
+#[test]
+fn hashmap_field_iter_push_clones_noncopy_value() {
+    let rust = compile_to_rust(
+        r#"
+pub struct Note {
+    pub id: int,
+    pub title: string,
+}
+
+pub struct Store {
+    notes: Map<int, Note>,
+}
+
+impl Store {
+    pub fn list(self) -> Vec<Note> {
+        let mut result = Vec::new()
+        for (_id, note) in self.notes {
+            result.push(note)
+        }
+        result
+    }
+}
+"#,
+        "note_iter.wj",
+    );
+    assert!(
+        rust.contains("note.clone()") || rust.contains("(*note).clone()"),
+        "borrowed map value must clone into Vec::push:\n{rust}"
+    );
+}
