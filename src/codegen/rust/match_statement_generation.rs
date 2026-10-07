@@ -894,17 +894,28 @@ impl<'ast> CodeGenerator<'ast> {
             && !option_reassigns
             && !self.match_scrutinee_is_self_field(value)
             && self.match_borrow_break_yields_owned_option(value);
+        // WDB-354: owned `Result<T, E>` method returns — same as owned Option.
+        let use_owned_result_borrow_break = needs_borrow_break
+            && !use_copied_borrow_break
+            && !use_cloned_borrow_break
+            && !use_owned_copy_borrow_break
+            && !use_owned_option_borrow_break
+            && !option_reassigns
+            && !self.match_scrutinee_is_self_field(value)
+            && self.match_borrow_break_yields_owned_result(value);
         let use_owned_clone_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && !use_cloned_borrow_break
             && !use_owned_copy_borrow_break
             && !use_owned_option_borrow_break
+            && !use_owned_result_borrow_break
             && (self.match_borrow_break_yields_owned_clone(value) || option_reassigns);
         let borrow_break_as_ref = needs_borrow_break
             && !use_copied_borrow_break
             && !use_cloned_borrow_break
             && !use_owned_copy_borrow_break
             && !use_owned_option_borrow_break
+            && !use_owned_result_borrow_break
             && !use_owned_clone_borrow_break;
 
         let mut output = self.indent();
@@ -913,7 +924,9 @@ impl<'ast> CodeGenerator<'ast> {
         // bindings, write back the scrutinee, or move non-Copy payloads out of
         // the cloned value (blend-tree / inventory patterns).
         let owned_break_needs_mut = use_owned_clone_borrow_break
-            || ((use_owned_copy_borrow_break || use_owned_option_borrow_break)
+            || ((use_owned_copy_borrow_break
+                || use_owned_option_borrow_break
+                || use_owned_result_borrow_break)
                 && self.match_borrow_break_temp_needs_mut(arms, value));
         let borrow_break_let = if owned_break_needs_mut {
             "let mut __match_borrow_break"
@@ -942,7 +955,10 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str(&format!("let __match_borrow_break = {};\n", borrowed));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");
-            } else if use_owned_copy_borrow_break || use_owned_option_borrow_break {
+            } else if use_owned_copy_borrow_break
+                || use_owned_option_borrow_break
+                || use_owned_result_borrow_break
+            {
                 output.push_str(&format!("{} = {};\n", borrow_break_let, value_str));
                 output.push_str(&self.indent());
                 output.push_str("match __match_borrow_break");

@@ -1,6 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.716 (2026-10-06) — WDB-354: owned Result match must not `.map(|v| v.to_owned())`
+
+Product `AssetLoader::load_batch` matched `self.load(...) -> Result<T,E>` via the
+borrow-break fallback `.map(|__v| __v.to_owned()).as_ref()`. Owned Result Ok
+payloads need the same by-value temp path as owned Option.
+
+| Gate | Status |
+|------|--------|
+| `wdb354_module_file_result_ok_must_not_to_owned_borrow_break` | ✅ tip GREEN |
+| `wdb354_module_file_self_load_result_must_not_to_owned_borrow_break` | ✅ tip GREEN (product shape) |
+| `wdb354_tip_out_game_core_loader_must_not_to_owned_borrow_break` | ✅ tip GREEN after tip-out regen |
+
+**Root cause layer:** match encoding — `match_borrow_break_yields_owned_result`
++ owned-result borrow-break branch (mirror owned Option).
+
+**What became unnecessary:** `.map(|__v| __v.to_owned())` + `.as_ref()` on owned
+`Result` method returns. (Note: `name.clone().clone()` on the same call site is
+a separate reuse bug.)
+
+**Gates:** `CARGO_TARGET_DIR=target-agent-tip-p3698` →
+`cargo test --release --test all -- wdb354_` → **3 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-365–366/368/374 + wave).
+
 ## P3.715 (2026-10-06) — WDB-383: index `as i64` must retarget to `as usize`
 
 Product `frame_analysis` wrote `bins[clamped as i64]`; index lowering stacked
@@ -354,6 +378,24 @@ must mean shared `&self` only; Owned `self` is consuming.
 **Do not steal:** remaining tip-true REDs (WDB-340/349/353–354/357–358/364–366/368/374/383 + wave);
 WDB-457/458 are DB-agent tip-outs (no compiler src).
 
+
+## P3.706 (2026-10-06) — directory package must emit `mod.rs` + re-exports into `--output`
+
+Breach Protocol `src/inventory/` (directory module) tip-transpile to `gen/` writes
+`gen/inventory/{item,item_id,…}.rs` but **omits** `gen/inventory/mod.rs`.
+Root `lib.rs` then hits E0583; thin synthesized decls miss `pub use ItemId`
+(cascading E0425).
+
+| Gate | Status |
+|------|--------|
+| `directory_module_must_emit_mod_rs_with_reexports` | ❌ tip RED (or missing key) — file this session |
+
+**Root cause layer:** multipass / `--module-file` emit for directory packages into
+`--output gen` must write `gen/<pkg>/mod.rs` with child `pub mod` + public re-exports.
+
+**Do not steal:** wj-game restore-from-`build/` is a host workaround, not a tip fix.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- directory_module_must_emit_mod_rs_with_reexports`.
 
 ## P3.706 (2026-10-06) — directory package must emit `mod.rs` + re-exports into `--output`
 

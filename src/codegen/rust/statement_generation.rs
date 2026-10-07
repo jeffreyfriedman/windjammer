@@ -2107,6 +2107,24 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
+    /// WDB-354: `self.load(...) -> Result<T, E>` already owns the Ok payload —
+    /// bind by value; never `.map(|v| v.to_owned()).as_ref()`.
+    pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_result(
+        &self,
+        expr: &Expression,
+    ) -> bool {
+        let Some(ty) = self.infer_expression_type(expr) else {
+            return false;
+        };
+        let Type::Result(ok, _) = ty else {
+            return false;
+        };
+        !matches!(
+            ok.as_ref(),
+            Type::Reference(_) | Type::MutableReference(_)
+        )
+    }
+
     pub(in crate::codegen::rust) fn get_assignment_target_type(
         &self,
         target: &Expression,

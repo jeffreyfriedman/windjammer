@@ -37,6 +37,33 @@ pub fn load_owned(name: string) -> Result<Asset, string> {
 }
 "#;
 
+/// Product shape (assets/loader load_batch): match self.load(...) Ok/Err + push.
+const SRC_SELF_LOAD: &str = r#"
+pub struct LoadedAsset {
+    pub name: string,
+}
+
+pub struct AssetLoader {
+    pub count: i32,
+}
+
+impl AssetLoader {
+    pub fn load(self, name: string, path: string, size: usize) -> Result<LoadedAsset, string> {
+        self.count = self.count + 1
+        Ok(LoadedAsset { name: name })
+    }
+
+    pub fn load_batch(self, name: string, path: string, size: usize) {
+        let mut successes = Vec::new()
+        match self.load(name, path, size) {
+            Ok(asset) => successes.push(asset),
+            Err(_) => {},
+        }
+        let _ = successes
+    }
+}
+"#;
+
 #[test]
 fn wdb354_module_file_result_ok_must_not_to_owned_borrow_break() {
     let mut test = MultiFileTest::new();
@@ -50,6 +77,21 @@ fn wdb354_module_file_result_ok_must_not_to_owned_borrow_break() {
         "WDB-354 RED: Result Ok emitted to_owned borrow-break:\n{rs}"
     );
     test.cargo_check().expect("WDB-354 cargo-check");
+}
+
+#[test]
+fn wdb354_module_file_self_load_result_must_not_to_owned_borrow_break() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_SELF_LOAD);
+    let map = test.compile().expect("WDB-354 self-load compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-354 self-load lib.rs:\n{rs}");
+    let bad = rs.contains(".to_owned()") || rs.contains("to_owned()");
+    assert!(
+        !bad,
+        "WDB-354 RED: self.load Result match used to_owned:\n{rs}"
+    );
+    test.cargo_check().expect("WDB-354 self-load cargo-check");
 }
 
 #[test]
