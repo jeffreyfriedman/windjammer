@@ -2,6 +2,35 @@
 
 
 
+## P3.736 (2026-10-07) — TDD WDB-467 (DB agent; no compiler src)
+
+Copy `[u8; 4]` from `to_le_bytes` reused in `from_le_bytes` must not `.clone()`.
+
+Product `rendering/hybrid_renderer.rs`:
+```wj
+let zero_bits = 0u32.to_le_bytes()
+data.push(f32::from_le_bytes(zero_bits))
+data.push(f32::from_le_bytes(zero_bits))
+```
+MultiFile emits `from_le_bytes(zero_bits.clone())` on the first use (isolate RED).
+Tip-out does the same in `pack_visibility_params` / `pack_expansion_params`.
+Minimal fixture also emits `compile_error!("missing boundary signature for f32::from_le_bytes")`.
+
+| Gate | Status |
+|------|--------|
+| WDB-467 MultiFile | ❌ isolate RED — `zero_bits.clone()` |
+| WDB-467 tip-out | ❌ tip RED — `from_le_bytes(zero_bits.clone())` in `rel_tip_out/rendering/hybrid_renderer.rs` |
+
+**Root cause layer:** Copy array reuse — `[u8; N]` from `to_le_bytes` is cloned into the first `from_le_bytes` when the binding is used again.
+
+**Why this is a new class:**
+- WDB-464 indexes individual Copy `u8` elements into `Vec::push`.
+- This passes the whole Copy byte array into `from_le_bytes` twice.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb467_` — isolate RED / tip RED (2026-10-07).
+
+**Do not steal:** WDB-406/408/411/457–467, P3.508–P3.736, WDB-412–467 (filed).
+
 ## P3.735 (2026-10-07) — TDD WDB-466 (DB agent; no compiler src)
 
 Indexed Copy tuple **field** into `Vec::push` / compare must not `.clone()`.
