@@ -14,6 +14,16 @@
 
 **Gates:** `cargo test --release --test all -- copy_struct_arg_not_borrowed quest_id` — 7 passed (copy struct + quest id regressions).
 
+## P3.744 (2026-10-08) — `vec![1, 2, 3]` and `push(4)` disagree on int width
+
+Conformance `test_conformance_vec_push_len` emits `vec![1_i32, 2_i32, 3_i32]` then `v.push(4_i64)` (E0308). Untyped integer literals in one `Vec` and a later `push` must share a width.
+
+| Gate | Status |
+|------|--------|
+| `test_conformance_vec_push_len` | ❌ tip RED |
+
+**Root cause layer:** constraint — vec-element width and `Vec::push` argument width are inferred separately.
+
 ## P3.742 (2026-10-08) — function-local `use std::strings`
 
 `wj test` emits a function-body `use std::strings` as Rust `use std::strings` (E0432: no `strings` in the root; rustc suggests `std::string`). The same import at file scope binds the Windjammer strings module.
@@ -1672,17 +1682,13 @@ Len-driven loops (`while i < strings.len(s)`) already GREEN (P3.300/P3.452);
 
 | Gate | Status |
 |------|--------|
-| `while_lit_bound_substring_int_must_unify_usize` | ❌ tip RED (2026-10-08) — `while i < 64_usize` with `i: i32` (substring args already `as usize`) |
+| `while_lit_bound_substring_int_must_unify_usize` | ✅ tip GREEN (2026-10-08) — `while i < 64_i32` with `i: i32`; substring indexes `as usize` |
 
-**Root cause layer:** constraint/solver-adjacent width tracking — index prepass
-stashed `local_var_types[i]=usize` while let-emit kept `codegen_i32`; while-pin
-only looked at local Int32, and `ident_in_usize_vars` / `identifier_emits_as_usize`
-trusted the stale usize mark → `64_usize` + bare `i` into substring.
+**Root cause layer:** constraint/width sync. Let-emit chose `i: i32` / `0_i32` from the literal while-bound, then `reconcile_ambiguous_int_local_after_let` repainted the binding as `usize` because mixed-int inference saw the later substring index. The comparison then suffixed `64_usize`. Emitted `_i32` now wins over that usize repaint, and `expression_produces_usize` honors `codegen_i32_binding_names`.
 
-**What became unnecessary:** reshaping fixed-width scans away from indexed substring.
+**What became unnecessary:** treating a stale index-usize mark as the comparison width after the counter was already emitted i32.
 
-**Gates:** `cargo test --release --test all -- while_lit_bound_substring_int_must_unify_usize`
-— **failed** on tip 2026-10-08 (bound suffix `64_usize` vs counter `i: i32`).
+**Gates:** `cargo test --release --test all -- while_lit_bound_substring i32_while_compare wdb121_module_file_annotated_usize` — 3 passed.
 
 **Do not steal:** P3.300/P3.315/P3.452/P3.454, P3.671–P3.678 (filed).
 

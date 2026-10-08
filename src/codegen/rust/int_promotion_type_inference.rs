@@ -433,6 +433,17 @@ impl<'ast> CodeGenerator<'ast> {
         // WDB-327: do NOT use `contains("_usize")` — identifiers like `best_idx_usize`
         // inside `open_set[best_idx_usize].x` falsely widened i32 field loads to usize
         // (`current_x == goal_x as usize`). Only real usize *literal* suffixes / casts.
+        // P3.679: an emitted `_i32` suffix is the width rustc sees (`let mut i: i32 = 0_i32`).
+        // Mixed-int Usize inference from a later substring/index use must not repaint
+        // that binding, or `while i < 64` emits `64_usize`.
+        if emitted_rhs.ends_with("_i32")
+            && !Self::emitted_rhs_indicates_usize_literal_width(emitted_rhs)
+        {
+            self.local_var_types.insert(name.to_string(), Type::Int32);
+            self.codegen_i32_binding_names.insert(name.to_string());
+            self.usize_variables.remove(name);
+            return;
+        }
         if Self::emitted_rhs_indicates_usize_literal_width(emitted_rhs)
             || self.int_type_for_mixed_int_codegen(value) == IntType::Usize
         {

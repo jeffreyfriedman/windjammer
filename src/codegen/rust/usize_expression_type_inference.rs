@@ -178,6 +178,11 @@ impl<'ast> CodeGenerator<'ast> {
                     return false;
                 }
                 if self.usize_variables.contains(name) {
+                    // P3.679: let-emit recorded this counter as i32. A later index
+                    // formal must not make `while i < 64` suffix the bound `64_usize`.
+                    if self.codegen_i32_binding_names.contains(name) {
+                        return false;
+                    }
                     return true;
                 }
 
