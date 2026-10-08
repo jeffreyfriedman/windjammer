@@ -2,6 +2,20 @@
 
 
 
+## P3.742 (2026-10-08) — function-local `use std::strings`
+
+`wj test` emits a function-body `use std::strings` as Rust `use std::strings` (E0432: no `strings` in the root; rustc suggests `std::string`). The same import at file scope binds the Windjammer strings module.
+
+Product: `apps/wj-proxy/tests/config_test.wj` inner import while adding `require_upstream`. File-scope import is the existing test style, so the app stays on that import. The function-local form is still the bug.
+
+| Gate | Status |
+|------|--------|
+| `fn_local_std_strings_use_must_cargo_check` | ❌ tip RED — `cargo test --test bug_fn_local_std_strings_use_test` |
+
+**Root cause layer:** codegen — function-local `use std::…` is not rewritten to the Windjammer std path.
+
+**Do not steal:** compiler `src/` (other agent).
+
 ## P3.741 (2026-10-08) — TDD WDB-469 (no compiler src)
 
 Indexed Copy tuple **swap** must not `.clone()`.
@@ -7670,7 +7684,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`int` `while n>0` `n % 10` / `digit == 0` must not split i64 vs i32 (LedgerKit)** | `bug_int_mod_literal_zero_compare_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.336); LedgerKit `make api-check` GREEN |
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (P3.300 isolate + P3.315 nested) |
 | P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | ✅ tip GREEN (P3.316) — tip demotes to `&DenseCsr` |
-| P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (P3.316) — `&key` |
+| P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (2026-10-08) — `get(&key)`; `let mut updated = neighbors.clone()` cargo-check |
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | ✅ tip GREEN (P3.316) — `len() as u64` |
 | P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | ✅ tip GREEN (P3.364); twin module-file gate |
 | P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | ✅ tip GREEN (P3.383) — tip demotes `left_table: &str` + bare lit |
@@ -9111,7 +9125,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 |------|--------|
 | Fresh `cargo check --lib` | ⚠️ residual elsewhere |
 | Tip **WDB-235** distances_to_map | ✅ tip-out GREEN (2026-09-16) — tip demotes formal to `&DenseCsr`; `&mut`→`&` reborrow |
-| Tip **WDB-236** HashMap String `contains_key`/`get` | ✅ tip-out GREEN — `&key` |
+| Tip **WDB-236** HashMap String `contains_key`/`get` | ✅ codegen GREEN (2026-10-08) — `get(&key)` and owned clone of `&Vec` (`neighbors.clone()`); cargo-check |
 | Tip **WDB-237** `len() as u64` (no `as i64`) | ✅ tip-out GREEN |
 | Tip **WDB-238** frame_total_len | ✅ tip-out GREEN — tip keeps owned `Vec` formal + clone |
 | Multipass codegen gates | ✅ WDB-235/236/237 codegen GREEN |

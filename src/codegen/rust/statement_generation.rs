@@ -897,6 +897,12 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}.clone()", value_str);
                 }
             }
+            // `if let Some(v) = map.get(k)` binds `&V` in Rust. A later
+            // `let mut owned = v` must clone: `&V` is Copy as a reference, so
+            // the binding does not move, and `owned.push` needs `V`.
+            if self.mut_let_rhs_is_shared_non_copy_binding(name) {
+                return format!("{}.clone()", value_str);
+            }
         }
         let Some(ty) = self.infer_expression_type(value) else {
             return value_str.to_string();
@@ -911,6 +917,44 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => value_str.to_string(),
         }
+    }
+
+    /// Shared match / loop binding whose pointee is not Copy.
+    ///
+    /// `HashMap::get` is `Option<&V>` even when a project skeleton recorded
+    /// `Option<V>`. The if-let name is then a Rust `&V` (`match_arm_bindings`)
+    /// while `local_var_types` may still say owned `V`.
+    fn mut_let_rhs_is_shared_non_copy_binding(&self, name: &str) -> bool {
+        if self.binding_name_is_copy(name) {
+            return false;
+        }
+        let ty = self.local_var_types.get(name);
+        let pointee_is_copy = ty.is_some_and(|t| {
+            let mut cur = t;
+            while let Type::Reference(inner) | Type::MutableReference(inner) = cur {
+                cur = inner.as_ref();
+            }
+            self.is_type_copy(cur)
+        });
+        if pointee_is_copy {
+            return false;
+        }
+        if self.borrowed_iterator_vars.contains(name) {
+            return true;
+        }
+        if matches!(ty, Some(Type::Reference(_) | Type::MutableReference(_))) {
+            return true;
+        }
+        if self.match_arm_bindings.contains(name) {
+            return match ty {
+                Some(Type::Vec(_)) | Some(Type::Parameterized(_, _)) | None => true,
+                Some(Type::Reference(inner) | Type::MutableReference(inner)) => {
+                    !self.is_type_copy(inner)
+                }
+                _ => false,
+            };
+        }
+        false
     }
 
     /// E0507 / E0382: field extract from a parameter.
@@ -2135,10 +2179,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Type::Result(ok, _) = ty else {
             return false;
         };
-        !matches!(
-            ok.as_ref(),
-            Type::Reference(_) | Type::MutableReference(_)
-        )
+        !matches!(ok.as_ref(), Type::Reference(_) | Type::MutableReference(_))
     }
 
     pub(in crate::codegen::rust) fn get_assignment_target_type(

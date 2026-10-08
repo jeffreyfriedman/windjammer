@@ -313,12 +313,10 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(t, Type::Int)
                                 || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
                         };
-                        let is_usize_ty = |t: &Type| {
-                            crate::codegen::rust::type_casting::type_is_usize(t)
-                        };
+                        let is_usize_ty =
+                            |t: &Type| crate::codegen::rust::type_casting::type_is_usize(t);
                         let is_u32_ty = |t: &Type| {
-                            matches!(t, Type::Uint)
-                                || matches!(t, Type::Custom(n) if n == "u32")
+                            matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
                         };
                         let untyped_int_lit = |e: &Expression<'_>| {
                             matches!(
@@ -634,7 +632,8 @@ impl<'ast> CodeGenerator<'ast> {
                     // emit `let mut i: i32 = 0` — while-compare peer was previously u32-only.
                     let while_i32_peer = var_name.is_some_and(|n| {
                         !crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
-                            && self.let_binding_int_width_from_later_while_compare(n)
+                            && self
+                                .let_binding_int_width_from_later_while_compare(n)
                                 .is_some_and(|t| {
                                     matches!(t, Type::Int32)
                                         || matches!(t, Type::Custom(ref w) if w == "i32")
@@ -747,8 +746,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let rhs_is_ref = matches!(
                         value,
                         Expression::Unary {
-                            op: crate::parser::UnaryOp::Ref
-                                | crate::parser::UnaryOp::MutRef,
+                            op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
                             ..
                         }
                     ) || matches!(
@@ -756,8 +754,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(Type::Reference(_) | Type::MutableReference(_))
                     );
                     if !rhs_is_ref {
-                        if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn)
-                        {
+                        if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
                             self.assignment_int_target_type = Some(peer.clone());
                             self.local_var_types.insert(vn.to_string(), peer.clone());
                             if matches!(peer, Type::Int32) {
@@ -791,7 +788,8 @@ impl<'ast> CodeGenerator<'ast> {
                             && !crate::codegen::rust::type_casting::expression_is_negative_int_init(
                                 value,
                             )
-                            && self.let_binding_int_width_from_later_while_compare(n)
+                            && self
+                                .let_binding_int_width_from_later_while_compare(n)
                                 .is_some_and(|t| {
                                     matches!(t, Type::Int32)
                                         || matches!(t, Type::Custom(ref w) if w == "i32")
@@ -882,38 +880,38 @@ impl<'ast> CodeGenerator<'ast> {
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
                         self.assignment_int_target_type = Some(Type::Int);
                     } else {
-                    let bare_int_lit_init = matches!(
-                        value,
-                        Expression::Literal {
-                            value: crate::parser::Literal::Int(_),
-                            ..
-                        }
-                    ) || matches!(
-                        value,
-                        Expression::Unary {
-                            op: crate::parser::UnaryOp::Neg,
-                            operand,
-                            ..
-                        } if matches!(
-                            &**operand,
+                        let bare_int_lit_init = matches!(
+                            value,
                             Expression::Literal {
                                 value: crate::parser::Literal::Int(_),
                                 ..
                             }
-                        )
-                    );
-                    let wj_int_slot = !bare_int_lit_init
-                        && var_name.is_some_and(|vn| {
-                            if self.explicit_wj_int_annotated_locals.contains(vn) {
-                                return true;
-                            }
-                            matches!(self.local_var_types.get(vn), Some(Type::Int))
-                                || matches!(
-                                    self.local_var_types.get(vn),
-                                    Some(Type::Custom(n)) if n == "int" || n == "i64"
-                                )
-                        });
-                    let peer = if wj_int_slot {
+                        ) || matches!(
+                            value,
+                            Expression::Unary {
+                                op: crate::parser::UnaryOp::Neg,
+                                operand,
+                                ..
+                            } if matches!(
+                                &**operand,
+                                Expression::Literal {
+                                    value: crate::parser::Literal::Int(_),
+                                    ..
+                                }
+                            )
+                        );
+                        let wj_int_slot = !bare_int_lit_init
+                            && var_name.is_some_and(|vn| {
+                                if self.explicit_wj_int_annotated_locals.contains(vn) {
+                                    return true;
+                                }
+                                matches!(self.local_var_types.get(vn), Some(Type::Int))
+                                    || matches!(
+                                        self.local_var_types.get(vn),
+                                        Some(Type::Custom(n)) if n == "int" || n == "i64"
+                                    )
+                            });
+                        let peer = if wj_int_slot {
                         Type::Int
                     } else if var_name.is_some_and(|vn| {
                         self.local_var_types.get(vn).is_some_and(|t| {
@@ -944,7 +942,7 @@ impl<'ast> CodeGenerator<'ast> {
                             })
                             .unwrap_or(Type::Int32)
                     };
-                    self.assignment_int_target_type = Some(peer);
+                        self.assignment_int_target_type = Some(peer);
                     }
                 }
 
@@ -1023,31 +1021,6 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    // Shared `&V` from HashMap::get is Copy as a reference. `let mut
-                    // updated = neighbors` then `updated.push` needs an owned `V`.
-                    if mutable && !value_str.ends_with(".clone()") {
-                        let rhs_ty = self.local_var_types.get(name.as_str()).cloned();
-                        let borrowed_iter = self.borrowed_iterator_vars.contains(name.as_str());
-                        let pointee = rhs_ty.as_ref().map(|t| match t {
-                            Type::Reference(inner) | Type::MutableReference(inner) => {
-                                inner.as_ref().clone()
-                            }
-                            other => other.clone(),
-                        });
-                        let from_shared_ref = matches!(rhs_ty, Some(Type::Reference(_)))
-                            || (borrowed_iter
-                                && pointee.as_ref().is_some_and(|t| !self.is_type_copy(t)));
-                        if from_shared_ref {
-                            if let Some(inner) = pointee {
-                                if !self.is_type_copy(&inner) {
-                                    value_str = format!("{value_str}.clone()");
-                                    if let Some(vn) = var_name {
-                                        self.local_var_types.insert(vn.to_string(), inner);
-                                    }
-                                }
-                            }
-                        }
-                    }
                     // P3.325: demoted `&str` formal `.clone()` is still `&str` — own it.
                     string_utilities::rewrite_borrowed_str_clone_to_to_string(
                         &mut value_str,
@@ -1058,11 +1031,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
-                    mutable,
+                    mutable || matches!(pattern, Pattern::MutBinding(_)),
                     value,
                     needs_mut_ref,
                     &value_str,
                 );
+                self.note_owned_local_after_ref_clone(var_name, value, &value_str);
 
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
@@ -1246,11 +1220,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
-                    mutable,
+                    mutable || matches!(pattern, Pattern::MutBinding(_)),
                     value,
                     needs_mut_ref,
                     &value_str,
                 );
+                self.note_owned_local_after_ref_clone(var_name, value, &value_str);
 
                 output.push_str(&value_str);
 
@@ -1454,6 +1429,30 @@ impl<'ast> CodeGenerator<'ast> {
                 .any(|s| self.stmt_has_mutating_method_on_var(s, var_name)),
             _ => false,
         }
+    }
+
+    /// After `let mut owned = ref_binding.clone()`, the local is `V`, not `&V`.
+    fn note_owned_local_after_ref_clone(
+        &mut self,
+        var_name: Option<&str>,
+        value: &Expression<'ast>,
+        value_str: &str,
+    ) {
+        if !value_str.ends_with(".clone()") {
+            return;
+        }
+        let Expression::Identifier { name, .. } = value else {
+            return;
+        };
+        let Some(vn) = var_name else { return };
+        let Some(rhs) = self.local_var_types.get(name.as_str()).cloned() else {
+            return;
+        };
+        let owned = match rhs {
+            Type::Reference(inner) | Type::MutableReference(inner) => *inner,
+            other => other,
+        };
+        self.local_var_types.insert(vn.to_string(), owned);
     }
 
     /// Register types for bindings in `let Type { field, mut other } = …` so later

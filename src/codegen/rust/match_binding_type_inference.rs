@@ -138,11 +138,12 @@ impl<'ast> CodeGenerator<'ast> {
                     None
                 };
                 if let Some(ty) = payload {
-                    if yields_refs {
-                        out.push((var_name.to_string(), Type::Reference(Box::new(ty))));
+                    let bound = if yields_refs {
+                        Self::shared_ref_binding_type(ty)
                     } else {
-                        out.push((var_name.to_string(), ty));
-                    }
+                        ty
+                    };
+                    out.push((var_name.to_string(), bound));
                     return out;
                 }
             }
@@ -199,7 +200,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if yields_refs {
                                 out.push((
                                     binding_name.to_string(),
-                                    Type::Reference(Box::new(ft.clone())),
+                                    Self::shared_ref_binding_type(ft.clone()),
                                 ));
                             } else {
                                 out.push((binding_name.to_string(), ft.clone()));
@@ -224,7 +225,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if types.len() == 1 {
                     let ty = &types[0];
                     if yields_refs {
-                        out.push((var_name.clone(), Type::Reference(Box::new(ty.clone()))));
+                        out.push((var_name.clone(), Self::shared_ref_binding_type(ty.clone())));
                     } else {
                         out.push((var_name.clone(), ty.clone()));
                     }
@@ -243,8 +244,9 @@ impl<'ast> CodeGenerator<'ast> {
                 for (pat, ty) in pats.iter().zip(types.iter()) {
                     if let Some(name) = Self::pattern_simple_binding_name(pat) {
                         if yields_refs {
-                            // Match scrutinee is borrowed, bindings are refs
-                            out.push((name.to_string(), Type::Reference(Box::new(ty.clone()))));
+                            // Match scrutinee is borrowed, bindings are refs.
+                            // `Option<&V>` payloads are already references — do not wrap twice.
+                            out.push((name.to_string(), Self::shared_ref_binding_type(ty.clone())));
                         } else {
                             // Match scrutinee is owned, bindings are owned
                             out.push((name.to_string(), ty.clone()));
@@ -256,6 +258,16 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         out
+    }
+
+    /// `Option<&V>` is already a shared payload. Wrapping again yields `&&V`,
+    /// which `is_type_copy` treats as Copy (references are Copy) and skips the
+    /// owned clone a `let mut` needs (WDB-236).
+    fn shared_ref_binding_type(ty: Type) -> Type {
+        match ty {
+            Type::Reference(_) | Type::MutableReference(_) => ty,
+            other => Type::Reference(Box::new(other)),
+        }
     }
 
     /// Identifier / `mut x` / `ref x` / `ref mut x` binding names in enum payloads.
@@ -298,7 +310,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let ty = types[0].clone();
         if yields_refs {
-            vec![(var_name.to_string(), Type::Reference(Box::new(ty)))]
+            vec![(var_name.to_string(), Self::shared_ref_binding_type(ty))]
         } else {
             vec![(var_name.to_string(), ty)]
         }
@@ -318,7 +330,9 @@ impl<'ast> CodeGenerator<'ast> {
         // `crate::handle::Data::Arrow` vs registry `Data::Arrow` (and the reverse).
         let suffix = format!("::{variant_name}");
         self.enum_variant_types.iter().find_map(|(k, types)| {
-            if k == variant_name || k.ends_with(&suffix) || variant_name.ends_with(&format!("::{k}"))
+            if k == variant_name
+                || k.ends_with(&suffix)
+                || variant_name.ends_with(&format!("::{k}"))
             {
                 Some(types)
             } else {
