@@ -516,6 +516,215 @@ impl<'ast> CodeGenerator<'ast> {
     /// Int width from a later call that passes `name` into a typed formal
     /// (`let status = if … { 404 } else { 400 }` then `error_from_message(status, …)`
     /// where the formal is `u16`).
+    /// Unsuffixed `vec![1, 2, 3]` / `[1, 2, 3]` — Windjammer `int` elements, not coordinates.
+    pub(in crate::codegen::rust) fn unsuffixed_int_collection_rhs(
+        &self,
+        value: &Expression<'ast>,
+    ) -> bool {
+        let elems: &[&Expression<'ast>] = match value {
+            Expression::MacroInvocation {
+                name,
+                args,
+                is_repeat,
+                ..
+            } if name == "vec" && !*is_repeat => args,
+            Expression::Array { elements, .. } => elements,
+            _ => return false,
+        };
+        !elems.is_empty()
+            && elems.iter().all(|e| {
+                matches!(
+                    e,
+                    Expression::Literal {
+                        value: Literal::Int(_),
+                        ..
+                    }
+                )
+            })
+    }
+
+    /// `-> Vec<i32>` (and other narrow element returns) keep the i32 coord paint.
+    pub(in crate::codegen::rust) fn return_type_fixes_narrow_collection_element(&self) -> bool {
+        let Some(rt) = &self.current_function_return_type else {
+            return false;
+        };
+        let Some(elem) = Self::peeled_collection_element_type(rt) else {
+            return false;
+        };
+        match elem {
+            Type::Int32 | Type::Uint => true,
+            Type::Custom(n)
+                if matches!(
+                    n.as_str(),
+                    "i32" | "u32" | "i16" | "u16" | "i8" | "u8" | "u64" | "usize" | "isize"
+                ) =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Later `v.push(4)` / `insert` generic element slot (`T`), signature-driven.
+    /// Unsuffixed args are WJ `int` (i64). A suffixed arg keeps that width.
+    pub(in crate::codegen::rust) fn generic_element_slot_peer_for_binding(
+        &self,
+        name: &str,
+    ) -> Option<Type> {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        let mut peer = None;
+        self.scan_stmts_for_generic_element_slot(&body, name, &mut peer);
+        peer
+    }
+
+    fn scan_stmts_for_generic_element_slot(
+        &self,
+        stmts: &[&crate::parser::Statement<'ast>],
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        use crate::parser::Statement;
+        for stmt in stmts {
+            if peer.is_some() {
+                return;
+            }
+            match stmt {
+                Statement::Expression { expr, .. }
+                | Statement::Return {
+                    value: Some(expr), ..
+                } => self.scan_expr_for_generic_element_slot(expr, name, peer),
+                Statement::Let { value, .. } | Statement::Assignment { value, .. } => {
+                    self.scan_expr_for_generic_element_slot(value, name, peer);
+                }
+                Statement::While { body, .. } | Statement::For { body, .. } => {
+                    self.scan_stmts_for_generic_element_slot(body, name, peer);
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    condition,
+                    ..
+                } => {
+                    self.scan_expr_for_generic_element_slot(condition, name, peer);
+                    self.scan_stmts_for_generic_element_slot(then_block, name, peer);
+                    if let Some(eb) = else_block {
+                        self.scan_stmts_for_generic_element_slot(eb, name, peer);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn scan_expr_for_generic_element_slot(
+        &self,
+        expr: &Expression<'ast>,
+        name: &str,
+        peer: &mut Option<Type>,
+    ) {
+        if peer.is_some() {
+            return;
+        }
+        match expr {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
+                if let Expression::Identifier { name: recv, .. } = object {
+                    if recv == name {
+                        if let Some(ty) = self.generic_element_arg_int_peer(method, arguments) {
+                            *peer = Some(ty);
+                            return;
+                        }
+                    }
+                }
+                self.scan_expr_for_generic_element_slot(object, name, peer);
+                for (_, arg) in arguments {
+                    self.scan_expr_for_generic_element_slot(arg, name, peer);
+                    if peer.is_some() {
+                        return;
+                    }
+                }
+            }
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                self.scan_expr_for_generic_element_slot(function, name, peer);
+                for (_, arg) in arguments {
+                    self.scan_expr_for_generic_element_slot(arg, name, peer);
+                    if peer.is_some() {
+                        return;
+                    }
+                }
+            }
+            Expression::Binary { left, right, .. } => {
+                self.scan_expr_for_generic_element_slot(left, name, peer);
+                if peer.is_none() {
+                    self.scan_expr_for_generic_element_slot(right, name, peer);
+                }
+            }
+            Expression::Unary { operand, .. } => {
+                self.scan_expr_for_generic_element_slot(operand, name, peer);
+            }
+            Expression::Index { object, index, .. } => {
+                self.scan_expr_for_generic_element_slot(object, name, peer);
+                if peer.is_none() {
+                    self.scan_expr_for_generic_element_slot(index, name, peer);
+                }
+            }
+            Expression::Block { statements, .. } => {
+                self.scan_stmts_for_generic_element_slot(statements, name, peer);
+            }
+            _ => {}
+        }
+    }
+
+    fn generic_element_arg_int_peer(
+        &self,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+    ) -> Option<Type> {
+        let key = format!("Vec::{method}");
+        let sig = self.signature_registry.get_signature(&key)?;
+        for (i, (_, arg)) in arguments.iter().enumerate() {
+            let pidx = sig.arg_param_index(i);
+            let ty = sig
+                .formal_param_type(pidx)
+                .or_else(|| sig.param_types.get(pidx))?;
+            if !Self::type_is_unsubstituted_generic_slot(ty) {
+                continue;
+            }
+            return Some(match arg {
+                Expression::Literal {
+                    value: Literal::IntSuffixed(_, suffix),
+                    ..
+                } => Type::Custom(suffix.clone()),
+                _ => Type::Int,
+            });
+        }
+        None
+    }
+
+    fn type_is_unsubstituted_generic_slot(ty: &Type) -> bool {
+        match ty {
+            Type::Custom(n) => {
+                n.len() == 1 && n.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::type_is_unsubstituted_generic_slot(inner)
+            }
+            _ => false,
+        }
+    }
+
     pub(in crate::codegen::rust) fn let_binding_int_width_from_later_call_formals(
         &self,
         name: &str,

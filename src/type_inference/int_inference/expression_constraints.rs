@@ -30,12 +30,121 @@ impl IntInference {
     ) {
         if let Some(int_ty) = return_type.and_then(|t| self.extract_int_type(t)) {
             let id = self.get_expr_id(expr);
-            self.constraints.push(IntConstraint::MustBe(
-                id,
-                int_ty,
-                reason.to_string(),
-            ));
+            self.constraints
+                .push(IntConstraint::MustBe(id, int_ty, reason.to_string()));
         }
+    }
+
+    /// `vec![…]` / `[…]` element expressions. Macro name `vec` is the parser's macro
+    /// form, not an ownership decision.
+    fn collection_element_exprs<'a>(value: &'a Expression<'a>) -> Option<Vec<&'a Expression<'a>>> {
+        match value {
+            Expression::MacroInvocation {
+                name,
+                args,
+                is_repeat,
+                ..
+            } if name == "vec" && !*is_repeat => Some(args.to_vec()),
+            Expression::Array { elements, .. } => Some(elements.to_vec()),
+            _ => None,
+        }
+    }
+
+    /// Unsuffixed int literals are Windjammer `int` (i64). Suffixed literals keep their suffix.
+    fn collection_literal_element_type(value: &Expression<'_>) -> Option<Type> {
+        let elems = Self::collection_element_exprs(value)?;
+        let first = elems.first()?;
+        match first {
+            Expression::Literal {
+                value: crate::parser::Literal::Int(_),
+                ..
+            } => Some(Type::Int),
+            Expression::Literal {
+                value: crate::parser::Literal::IntSuffixed(_, suffix),
+                ..
+            } => Some(Type::Custom(suffix.clone())),
+            _ => None,
+        }
+    }
+
+    /// Generic element slots (`push(T)` after the receiver is `Vec<int>`) must share
+    /// width with the initializer literals. Concrete slots (`insert` index `usize`) stay put.
+    fn unify_generic_element_arg_with_collection<'ast>(
+        &mut self,
+        object: &Expression<'ast>,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        return_type: Option<&Type>,
+    ) {
+        let Expression::Identifier { name, .. } = object else {
+            return;
+        };
+        let Some(elem_ids) = self.var_collection_elements.get(name.as_str()).cloned() else {
+            return;
+        };
+        let Some(&elem_id) = elem_ids.first() else {
+            return;
+        };
+        let Some((raw_params, _)) = self.raw_method_param_types(object, method, arguments.len())
+        else {
+            return;
+        };
+        let offset = if raw_params.len() == arguments.len() + 1 {
+            1
+        } else {
+            0
+        };
+        let _ = return_type;
+        for (i, (_label, arg)) in arguments.iter().enumerate() {
+            let Some(raw) = raw_params.get(i + offset) else {
+                continue;
+            };
+            if !Self::type_is_unsubstituted_generic(raw) {
+                continue;
+            }
+            let arg_id = self.get_expr_id(arg);
+            if arg_id != elem_id {
+                self.constraints.push(IntConstraint::MustMatch(
+                    arg_id,
+                    elem_id,
+                    "collection element argument shares initializer integer width".to_string(),
+                ));
+            }
+        }
+    }
+
+    fn type_is_unsubstituted_generic(ty: &Type) -> bool {
+        match ty {
+            Type::Custom(n) => {
+                n.len() == 1 && n.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+            }
+            Type::Reference(inner) | Type::MutableReference(inner) => {
+                Self::type_is_unsubstituted_generic(inner)
+            }
+            _ => false,
+        }
+    }
+
+    /// Registry params before `T`/`V` substitution, so a generic element slot is
+    /// distinguishable from a concrete `usize` index.
+    fn raw_method_param_types<'ast>(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arg_count: usize,
+    ) -> Option<(Vec<Type>, Option<Type>)> {
+        let receiver_type = self.infer_type_from_expression(object)?;
+        let (qualified, _) = self.qualified_method_key_and_generics(&receiver_type, method);
+        if let Some(sig) = self.function_signatures.get(&qualified) {
+            return Some(sig.clone());
+        }
+        self.function_signatures
+            .iter()
+            .find(|(func_name, (params, _))| {
+                func_name.split("::").last() == Some(method)
+                    && (params.len() == arg_count + 1 || params.len() == arg_count)
+            })
+            .map(|(_, sig)| sig.clone())
     }
 
     fn collect_expression_constraints<'ast>(
@@ -191,11 +300,7 @@ impl IntInference {
                             }
                         }
                     }
-                    self.constrain_call_result_int_type(
-                        expr,
-                        ret.as_ref(),
-                        "function call return",
-                    );
+                    self.constrain_call_result_int_type(expr, ret.as_ref(), "function call return");
                 } else {
                     for (i, (_label, arg)) in arguments.iter().enumerate() {
                         let arg_ty: Option<&Type> = if i == 0 {
@@ -241,6 +346,12 @@ impl IntInference {
                         expr,
                         ret.as_ref(),
                         &format!("{method}() return"),
+                    );
+                    self.unify_generic_element_arg_with_collection(
+                        object,
+                        method,
+                        arguments,
+                        return_type,
                     );
                 } else {
                     for (_label, arg) in arguments {

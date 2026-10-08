@@ -932,6 +932,18 @@ impl<'ast> CodeGenerator<'ast> {
                         // `let clock_hi = clock_seq >> 8 & 0x3F` as i32 when
                         // `clock_seq: int` / `intervals: i64` are concrete peers.
                         Type::Int
+                    } else if let Some(peer) = var_name.and_then(|vn| {
+                        // P3.744: void-fn i32 coord paint must not split
+                        // `vec![1, 2, 3]` (i32) from `v.push(4)` (WJ `int` / i64).
+                        if self.unsuffixed_int_collection_rhs(value)
+                            && !self.return_type_fixes_narrow_collection_element()
+                        {
+                            self.generic_element_slot_peer_for_binding(vn)
+                        } else {
+                            None
+                        }
+                    }) {
+                        peer
                     } else {
                         self.current_function_return_type
                             .as_ref()

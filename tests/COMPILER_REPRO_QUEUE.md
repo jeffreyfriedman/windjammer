@@ -16,13 +16,17 @@
 
 ## P3.744 (2026-10-08) — `vec![1, 2, 3]` and `push(4)` disagree on int width
 
-Conformance `test_conformance_vec_push_len` emits `vec![1_i32, 2_i32, 3_i32]` then `v.push(4_i64)` (E0308). Untyped integer literals in one `Vec` and a later `push` must share a width.
+Conformance `test_conformance_vec_push_len` emitted `vec![1_i32, 2_i32, 3_i32]` then `v.push(4_i64)` (E0308). Untyped integer literals in one `Vec` and a later generic element argument must share a width.
 
 | Gate | Status |
 |------|--------|
-| `test_conformance_vec_push_len` | ❌ tip RED |
+| `test_conformance_vec_push_len` | ✅ tip GREEN |
 
-**Root cause layer:** constraint — vec-element width and `Vec::push` argument width are inferred separately.
+**Root cause layer:** coercion/encoding. Void functions paint unsuffixed locals as i32 coordinates. That paint covered `vec![1, 2, 3]` while `Vec::push`'s generic `T` slot stayed Windjammer `int` (i64).
+
+**What became unnecessary:** the i32 coordinate default on an unsuffixed int collection that is later stored through a generic element slot (`T`). `-> Vec<i32>` still keeps the narrow paint. Int inference also MustMatch's that generic slot to the initializer literals.
+
+**Gates:** `cargo test --release --test all -- test_conformance_vec_push_len` — passed. Related filter `vec_push vec_macro test_vec_push_i64 int_inference_generic while_lit_bound copy_struct_arg_not_borrowed` — 68 passed; 3 failures are stale tip-out scanners (WDB-464/465/466), and their in-process module-file gates passed.
 
 ## P3.742 (2026-10-08) — function-local `use std::strings`
 

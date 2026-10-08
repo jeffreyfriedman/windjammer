@@ -214,7 +214,8 @@ version = "0.1.0"
 
     // ASSERTION: vec![10, 20, 30] should still generate vec![] (with int suffixes from inference)
     assert!(
-        generated.contains("vec![10_i32, 20_i32, 30_i32]")
+        generated.contains("vec![10_i64, 20_i64, 30_i64]")
+            || generated.contains("vec![10_i32, 20_i32, 30_i32]")
             || generated.contains("vec![10, 20, 30]"),
         "vec![] macro should still generate vec![] (with optional int suffixes).\nGenerated:\n{}",
         generated
