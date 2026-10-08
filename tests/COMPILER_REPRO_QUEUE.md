@@ -31,6 +31,25 @@ Tip MultiFile emits bare `types[i]` (isolate GREEN). Tip-out still has
 
 **Do not steal:** WDB-406/408/411/457–468, P3.508–P3.739, WDB-412–468 (filed).
 
+## P3.739 (2026-10-07) — demoted `&Vec` formals must borrow every call arg
+
+`half_edge.wj` `from_triangle_mesh(positions: Vec<Vec3>, indices: Vec<u32>)`.
+Tip-out signature is `&Vec<Vec3>, &Vec<u32>` but `mesh_ops.rs` calls
+`from_triangle_mesh(positions, &indices)` (expected `&Vec<Vec3>`, found `Vec<Vec3>`).
+
+| Gate | Status |
+|------|--------|
+| `owned_vec_formals_must_borrow_both_call_args` | filed this session |
+| `owned_vec_formals_tip_out_mesh_ops` | filed this session |
+
+**Root cause layer:** call-arg ownership — when both owned `Vec` formals are demoted
+to shared refs, every argument is borrowed, not only the later ones.
+
+**Do not steal:** P3.732 (Copy `Vec3` local), P3.731–P3.738, other-agent WJ `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- owned_vec_formals`.
+
+
 ## P3.736 (2026-10-07) — TDD WDB-467 (DB agent; no compiler src)
 
 Copy `[u8; 4]` from `to_le_bytes` reused in `from_le_bytes` must not `.clone()`.
@@ -41,22 +60,22 @@ let zero_bits = 0u32.to_le_bytes()
 data.push(f32::from_le_bytes(zero_bits))
 data.push(f32::from_le_bytes(zero_bits))
 ```
-MultiFile emits `from_le_bytes(zero_bits.clone())` on the first use (isolate RED).
-Tip-out does the same in `pack_visibility_params` / `pack_expansion_params`.
-Minimal fixture also emits `compile_error!("missing boundary signature for f32::from_le_bytes")`.
+`u32::to_le_bytes` / `f32::from_le_bytes` are registry signatures returning `[u8; 4]`.
+`[T; N]` is Copy when `T` is, so the first reuse no longer emits `.clone()`.
+Tip-out still has the old clone until product gen is regenerated.
 
 | Gate | Status |
 |------|--------|
-| WDB-467 MultiFile | ❌ isolate RED — `zero_bits.clone()` |
-| WDB-467 tip-out | ❌ tip RED — `from_le_bytes(zero_bits.clone())` in `rel_tip_out/rendering/hybrid_renderer.rs` |
+| WDB-467 MultiFile | ✅ isolate GREEN — bare `zero_bits` (2026-10-07) |
+| WDB-467 tip-out | ❌ tip-out lag — `from_le_bytes(zero_bits.clone())` in `rel_tip_out/rendering/hybrid_renderer.rs` |
 
-**Root cause layer:** Copy array reuse — `[u8; N]` from `to_le_bytes` is cloned into the first `from_le_bytes` when the binding is used again.
+**Root cause layer:** signature + Copy classification — endian methods return `[u8; N]`; arrays of Copy elements are Copy.
 
 **Why this is a new class:**
 - WDB-464 indexes individual Copy `u8` elements into `Vec::push`.
 - This passes the whole Copy byte array into `from_le_bytes` twice.
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb467_` — isolate RED / tip RED (2026-10-07).
+**Gates:** `CARGO_TARGET_DIR=…/shared-p3728 cargo test --release --test all -- wdb467_module_file_copy_byte_array_reuse_must_not_clone` → **ok** (2026-10-07). Tip-out scanner still RED on stale gen.
 
 **Do not steal:** WDB-406/408/411/457–467, P3.508–P3.736, WDB-412–467 (filed).
 
@@ -218,14 +237,15 @@ Indexed **Copy `u8`** into `Vec::push` must not `.clone()`.
 let x_bits = x.to_le_bytes()
 bytes.push(x_bits[0])
 ```
-Tip emits `bytes.push(x_bits[0].clone())`.
+`f32::to_le_bytes` returns `[u8; 4]`, so `x_bits[i]` is Copy `u8` and `Vec::push` does not clone.
+Tip-out still has the old clone until product gen is regenerated.
 
 | Gate | Status |
 |------|--------|
-| WDB-464 MultiFile | ❌ isolate RED — `x_bits[0].clone()` |
-| WDB-464 tip-out | ❌ tip RED — same in game-core serialize |
+| WDB-464 MultiFile | ✅ isolate GREEN — bare `x_bits[i]` (2026-10-07) |
+| WDB-464 tip-out | ❌ tip-out lag — `x_bits[i].clone()` in `rel_tip_out/ecs/world.rs` |
 
-**Gates:** `cargo test --test all --features integration_tests,codegen_tests -- wdb464_` — **0 passed / 2 failed** (2026-10-07).
+**Gates:** `CARGO_TARGET_DIR=…/shared-p3728 cargo test --release --test all -- wdb464_module_file_indexed_copy_u8_vec_push_must_not_clone` → **ok** (2026-10-07). Tip-out scanner still RED on stale gen.
 
 **Do not steal:** compiler `src/` (other agent).
 

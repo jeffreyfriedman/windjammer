@@ -56,16 +56,19 @@ impl<'ast> CodeGenerator<'ast> {
         }
         match ty {
             Type::Option(inner) => self.is_type_copy(inner),
+            // `[T; N]` is Copy iff `T` is (Rust). Primitive arrays hit
+            // `type_analysis::is_copy_type` first; registry Copy structs need this arm.
+            Type::Array(inner, _) => self.is_type_copy(inner),
             Type::Custom(name) => {
                 // WDB-444: `WeatherType::Clear` is a variant path — Copy lives on the enum.
-                let enum_name = if crate::type_classification::is_enum_variant_constructor_path(name)
-                {
-                    name.rsplit_once("::")
-                        .map(|(e, _)| e)
-                        .unwrap_or(name.as_str())
-                } else {
-                    name.as_str()
-                };
+                let enum_name =
+                    if crate::type_classification::is_enum_variant_constructor_path(name) {
+                        name.rsplit_once("::")
+                            .map(|(e, _)| e)
+                            .unwrap_or(name.as_str())
+                    } else {
+                        name.as_str()
+                    };
                 let base = enum_name.rsplit("::").next().unwrap_or(enum_name);
                 if self.copy_types_registry.contains(name.as_str())
                     || self.copy_types_registry.contains(enum_name)
