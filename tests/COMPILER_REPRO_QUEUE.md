@@ -44,7 +44,8 @@ while `collides_aabb(..., pos: Vec3, ...)`. Source passes `test_x` by value
 
 | Gate | Status |
 |------|--------|
-| `owned_vec3_formal_must_not_borrow_local` | filed this session |
+| `owned_vec3_formal_must_not_borrow_local` | ✅ isolate GREEN — no `&test_x` |
+| `owned_vec3_formal_tip_out_fps_camera_must_not_borrow_local` | ❌ tip-out RED — `&test_x` in `gen/camera/fps_camera.rs` |
 
 **Root cause layer:** call-arg ownership — Copy struct local into an owned formal
 must move or copy, not emit `&local`.
