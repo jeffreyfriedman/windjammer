@@ -15,7 +15,26 @@ Slice/range bounds now pin an ambient usize slot before emitting the end literal
 **Gates:** `CARGO_TARGET_DIR=target/agent-tdd-slice` →
 `cargo test --test all --features integration_tests,codegen_tests -- substring_usize_plus_one_must_not_emit_i32` → **1 passed**.
 
-**Do not steal:** remaining tip-true REDs (WDB-464 product tip-out if RED).
+**Do not steal:** remaining tip-true REDs.
+
+## P3.733 (2026-10-07) — TDD WDB-464 (no compiler src)
+
+Indexed **Copy `u8`** into `Vec::push` must not `.clone()`.
+
+```wj
+let x_bits = x.to_le_bytes()
+bytes.push(x_bits[0])
+```
+Tip emits `bytes.push(x_bits[0].clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-464 MultiFile | ❌ isolate RED — `x_bits[0].clone()` |
+| WDB-464 tip-out | ❌ tip RED — same in game-core serialize |
+
+**Gates:** `cargo test --test all --features integration_tests,codegen_tests -- wdb464_` — **0 passed / 2 failed** (2026-10-07).
+
+**Do not steal:** compiler `src/` (other agent).
 
 ## P3.732 (2026-10-07) — owned `Vec3` formal must not borrow a local
 
