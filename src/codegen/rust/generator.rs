@@ -4359,19 +4359,12 @@ impl<'ast> CodeGenerator<'ast> {
         if self.local_var_types.get(name).is_some_and(|t| {
             // `&Note` is Copy as a reference. The binding is Copy only when the
             // pointee is Copy — otherwise owned formals must clone (P3.725).
-            match t {
-                Type::Reference(_) | Type::MutableReference(_) => false,
-                other => self.is_type_copy(other),
+            // Peel every ref layer: `&&Vec` is not Copy just because `&T` is.
+            let mut cur = t;
+            while let Type::Reference(inner) | Type::MutableReference(inner) = cur {
+                cur = inner.as_ref();
             }
-        }) {
-            return true;
-        }
-        if self.local_var_types.get(name).is_some_and(|t| {
-            matches!(
-                t,
-                Type::Reference(inner) | Type::MutableReference(inner)
-                    if self.is_type_copy(inner.as_ref())
-            )
+            self.is_type_copy(cur)
         }) {
             return true;
         }
