@@ -1023,6 +1023,31 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+                    // Shared `&V` from HashMap::get is Copy as a reference. `let mut
+                    // updated = neighbors` then `updated.push` needs an owned `V`.
+                    if mutable && !value_str.ends_with(".clone()") {
+                        let rhs_ty = self.local_var_types.get(name.as_str()).cloned();
+                        let borrowed_iter = self.borrowed_iterator_vars.contains(name.as_str());
+                        let pointee = rhs_ty.as_ref().map(|t| match t {
+                            Type::Reference(inner) | Type::MutableReference(inner) => {
+                                inner.as_ref().clone()
+                            }
+                            other => other.clone(),
+                        });
+                        let from_shared_ref = matches!(rhs_ty, Some(Type::Reference(_)))
+                            || (borrowed_iter
+                                && pointee.as_ref().is_some_and(|t| !self.is_type_copy(t)));
+                        if from_shared_ref {
+                            if let Some(inner) = pointee {
+                                if !self.is_type_copy(&inner) {
+                                    value_str = format!("{value_str}.clone()");
+                                    if let Some(vn) = var_name {
+                                        self.local_var_types.insert(vn.to_string(), inner);
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // P3.325: demoted `&str` formal `.clone()` is still `&str` — own it.
                     string_utilities::rewrite_borrowed_str_clone_to_to_string(
                         &mut value_str,

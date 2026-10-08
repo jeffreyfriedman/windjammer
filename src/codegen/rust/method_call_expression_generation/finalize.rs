@@ -117,6 +117,24 @@ impl<'ast> CodeGenerator<'ast> {
                         .or(method_signature.as_ref());
                     if let Some(sig) = sig {
                         let pidx = sig.arg_param_index(i);
+                        // Map/set key lookups are `&Q`. A poisoned owned skeleton must
+                        // not turn IR `&key` into `key.clone()` (WDB-236).
+                        if self.is_collection_key_lookup_at_site(
+                            sig,
+                            i,
+                            receiver_type_name.as_deref(),
+                        ) {
+                            if arg_str.starts_with("&mut ") {
+                                return arg_str;
+                            }
+                            if arg_str.starts_with('&') {
+                                return arg_str;
+                            }
+                            let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
+                                &arg_str,
+                            );
+                            return format!("&{base}");
+                        }
                         // P3.312 / auto_mut: MutBorrowed / `&mut Vec` must stay `&mut buf`.
                         // WJ AST still says bare `Vec` — do not treat that as an owned slot
                         // (P3.647 clone path was rewriting `&mut buf` → `buf.clone()`).
@@ -356,9 +374,16 @@ impl<'ast> CodeGenerator<'ast> {
                         return arg_str;
                     }
                     let sig_param_idx = sig.arg_param_index(i);
-                    if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                        &sig, sig_param_idx,
-                    ) && arg_str.starts_with('&')
+                    let collection_key_slot = self.is_collection_key_lookup_at_site(
+                        sig,
+                        i,
+                        receiver_type_name.as_deref(),
+                    );
+                    if !collection_key_slot
+                        && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                            &sig, sig_param_idx,
+                        )
+                        && arg_str.starts_with('&')
                         && !arg_str.starts_with("&mut ")
                     {
                         return arg_str.trim_start_matches('&').to_string();
@@ -1295,7 +1320,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 // Skip Copy bindings even when the callee formal is
                                 // generic `T` (Vec::push) — Rust copies implicitly
                                 // (WDB-457 LightId / WDB-458 ComponentId).
-                                if (auto_clone || demoted_owned_outer)
+                                if !is_collection_key
+                                    && (auto_clone || demoted_owned_outer)
                                     && !arg_str.ends_with(".clone()")
                                     && !callee_formal_is_copy
                                     && !self.binding_is_copy_type(name)

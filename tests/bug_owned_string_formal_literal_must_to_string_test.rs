@@ -28,17 +28,28 @@ fn owned_string_formal_literal_must_to_string() {
         "mod.wj",
         r#"
 pub mod plugin
+pub mod boot
 "#,
     );
     test.add_file(
         "plugin.wj",
         r#"
-pub struct Ctx {}
-impl Ctx {
+pub struct App {
+    pub resources: Vec<string>,
+}
+impl App {
     pub fn record_resource(self, name: string) {
+        self.resources.push(name)
     }
 }
-pub fn boot(ctx: Ctx) {
+"#,
+    );
+    test.add_file(
+        "boot.wj",
+        r#"
+use crate::plugin::App
+
+pub fn boot(ctx: App) {
     ctx.record_resource("audio_initialized")
 }
 "#,
@@ -47,9 +58,9 @@ pub fn boot(ctx: Ctx) {
         .compile()
         .expect("P3.731: owned string formal fixture must transpile");
     let body = map
-        .get("plugin.rs")
-        .or_else(|| map.get("plugin/mod.rs"))
-        .unwrap_or_else(|| panic!("plugin.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
+        .get("boot.rs")
+        .or_else(|| map.get("boot/mod.rs"))
+        .unwrap_or_else(|| panic!("boot.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
     assert!(
         body.contains("audio_initialized") && body.contains("to_string()"),
         "literal into owned String formal must .to_string(); got:\n{body}"
