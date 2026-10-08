@@ -1,6 +1,39 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+
+## P3.705 (2026-10-07) — substring `i + 1` stays `_usize` (re-verify)
+
+`section.substring(i, i + 1)` with `i: usize` emitted `i + 1_i32` (E0277).
+Slice/range bounds now pin an ambient usize slot before emitting the end literal.
+
+| Gate | Status |
+|------|--------|
+| `substring_usize_plus_one_must_not_emit_i32` | ✅ tip GREEN — `i + 1_usize` (2026-10-07) |
+| `int_eq_one_with_vec_push_must_not_emit_i32` | ✅ tip GREEN (P3.727) |
+
+**Gates:** `CARGO_TARGET_DIR=target/agent-tdd-slice` →
+`cargo test --test all --features integration_tests,codegen_tests -- substring_usize_plus_one_must_not_emit_i32` → **1 passed**.
+
+**Do not steal:** remaining tip-true REDs (WDB-464 product tip-out if RED).
+
+## P3.732 (2026-10-07) — owned `Vec3` formal must not borrow a local
+
+Engine tip-out `gen/camera/fps_camera.rs` `collides_aabb(grid.clone(), &test_x, scale)`
+while `collides_aabb(..., pos: Vec3, ...)`. Source passes `test_x` by value
+(`fps_camera.wj`). Cargo: expected `Vec3`, found `&Vec3` (13 of 272 E0308).
+
+| Gate | Status |
+|------|--------|
+| `owned_vec3_formal_must_not_borrow_local` | filed this session |
+
+**Root cause layer:** call-arg ownership — Copy struct local into an owned formal
+must move or copy, not emit `&local`.
+
+**Do not steal:** P3.731 (`String`/`&str`), other-agent WJ `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- owned_vec3_formal_must_not_borrow_local`.
+
 ## P3.731 (2026-10-07) — owned `String` formal must `.to_string()` a string literal
 
 Engine tip-out cargo (`windjammer_game_core`, skip-transpile, 2026-10-07): **381**
