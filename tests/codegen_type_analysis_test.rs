@@ -103,10 +103,9 @@ fn test_is_copy_type_tuple_empty() {
 
 #[test]
 fn test_is_copy_type_array() {
-    // Current implementation: Array is conservatively treated as non-Copy
-    // Note: In Rust, [T; N] is Copy if T is Copy and N <= 32, but we're being conservative
-    assert!(!is_copy_type(&Type::Array(Box::new(Type::Int), 10)));
-    assert!(!is_copy_type(&Type::Array(Box::new(Type::Bool), 5)));
+    // `[T; N]` is Copy when `T` is Copy (endian `[u8; N]`, P3.736).
+    assert!(is_copy_type(&Type::Array(Box::new(Type::Int), 10)));
+    assert!(is_copy_type(&Type::Array(Box::new(Type::Bool), 5)));
     assert!(!is_copy_type(&Type::Array(Box::new(Type::String), 10)));
 }
 
