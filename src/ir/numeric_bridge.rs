@@ -133,6 +133,10 @@ impl UnifiedNumericInference {
         self.int_collector.set_module_re_exports(re_exports);
     }
 
+    pub fn register_string_const(&mut self, name: &str) {
+        self.int_collector.register_string_const(name.to_string());
+    }
+
     pub fn set_external_crate_metadata_paths(&mut self, paths: &HashMap<String, PathBuf>) {
         self.float_collector
             .set_external_crate_metadata_paths(paths);
