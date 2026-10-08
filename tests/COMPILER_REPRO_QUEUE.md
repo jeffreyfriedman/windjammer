@@ -2,6 +2,31 @@
 
 
 
+## P3.741 (2026-10-08) — TDD WDB-469 (no compiler src)
+
+Indexed Copy tuple **swap** must not `.clone()`.
+
+Product `scene_graph/scene_graph_state.rs` `sort_by_distance`:
+```wj
+let tmp = sorted[i]
+sorted[i] = sorted[j]
+sorted[j] = tmp
+```
+Tip MultiFile emits bare `sorted[i as usize]` (isolate GREEN). Tip-out still has
+`sorted[i].clone()` / `sorted[j].clone()` for Copy `(u64, f32)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-469 MultiFile | ✅ isolate GREEN — bare index assignment |
+| WDB-469 tip-out | ❌ tip RED — clones in `rel_tip_out/scene_graph/scene_graph_state.rs` and `windjammer-game-core/gen/scene_graph/scene_graph_state.rs` |
+
+**Root cause layer:** tip-out lag. Distinct from WDB-465 (whole tuple into `Vec::push`) and WDB-466 (tuple field `.0` / `.1`).
+
+**Do not steal:** compiler `src/` (other agent).
+
+**Gates:** `cargo test --test all --features integration_tests -- wdb469_` — isolate GREEN / tip RED (2026-10-08).
+
+
 ## P3.740 (2026-10-07) — `wj test` const string into owned formal
 
 Library `pub const string` passed from `tests/*_test.wj` into an owned `string` formal (body uses `strings.split`) emits bare `&str` in the test crate (E0308). Same-module `take_owned(CONST)` is a different gate.
