@@ -2,6 +2,35 @@
 
 
 
+## P3.734 (2026-10-07) — TDD WDB-465 (DB agent; no compiler src)
+
+Indexed Copy **tuple** into `Vec::push` must not `.clone()`.
+
+Product `ai/astar_grid.rs`:
+```wj
+rev.push(path[k])
+```
+Tip MultiFile emits bare `push(path[k])` (isolate GREEN). Tip-out still has
+`rev.push(path[k as usize].clone())` for Copy `(i32, i32)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-465 MultiFile | ✅ isolate GREEN — bare `push(path[k])` |
+| WDB-465 tip-out | ❌ tip RED — `path[…].clone()` in `rel_tip_out/ai/astar_grid.rs` |
+
+**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
+indexed Copy tuples still `.clone()` into owned `Vec::push`.
+
+**Why this is a new class:**
+- WDB-423 is indexed tuple **destructure** (`let (ox, oz) = offsets[i]`).
+- WDB-438 is Copy i32 into **tuple lit** for push.
+- WDB-464 is indexed Copy **u8** into push (`x_bits[0]`).
+- This is indexed Copy **tuple** into `Vec::push`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb465_` — isolate GREEN / tip RED (2026-10-07).
+
+**Do not steal:** WDB-406/408/411/457–465, P3.508–P3.734, WDB-412–465 (filed).
+
 ## P3.705 (2026-10-07) — substring `i + 1` stays `_usize` (re-verify)
 
 `section.substring(i, i + 1)` with `i: usize` emitted `i + 1_i32` (E0277).
