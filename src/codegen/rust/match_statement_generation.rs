@@ -32,9 +32,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .any(|(_, a)| Self::match_arm_body_uses_binding(a, name))
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 Self::match_arm_body_uses_binding(object, name)
                     || arguments
@@ -44,7 +42,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
                 .iter()
                 .any(|e| Self::match_arm_body_uses_binding(e, name)),
-            Expression::Binary { left, right, .. } | Expression::Range { start: left, end: right, .. } => {
+            Expression::Binary { left, right, .. }
+            | Expression::Range {
+                start: left,
+                end: right,
+                ..
+            } => {
                 Self::match_arm_body_uses_binding(left, name)
                     || Self::match_arm_body_uses_binding(right, name)
             }
@@ -72,9 +75,7 @@ impl<'ast> CodeGenerator<'ast> {
             | Expression::ChannelRecv { channel: expr, .. } => {
                 Self::match_arm_body_uses_binding(expr, name)
             }
-            Expression::ChannelSend {
-                channel, value, ..
-            } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 Self::match_arm_body_uses_binding(channel, name)
                     || Self::match_arm_body_uses_binding(value, name)
             }
@@ -92,9 +93,7 @@ impl<'ast> CodeGenerator<'ast> {
             | Statement::Const { value: e, .. }
             | Statement::Static { value: e, .. } => Self::match_arm_body_uses_binding(e, name),
             Statement::Let {
-                value,
-                else_block,
-                ..
+                value, else_block, ..
             } => {
                 Self::match_arm_body_uses_binding(value, name)
                     || else_block.as_ref().is_some_and(|stmts| {
@@ -131,9 +130,7 @@ impl<'ast> CodeGenerator<'ast> {
                             || Self::match_arm_body_uses_binding(arm.body, name)
                     })
             }
-            Statement::For {
-                iterable, body, ..
-            }
+            Statement::For { iterable, body, .. }
             | Statement::While {
                 condition: iterable,
                 body,
@@ -162,44 +159,46 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression,
         arms: &[crate::parser::MatchArm],
     ) -> String {
-        let patch_match_scrutinee_call_args = |value_str: &mut String,
-                                               arguments: &[(Option<String>, &Expression)],
-                                               callee: Option<&str>,
-                                               is_method: bool| {
-            for (i, (_label, arg)) in arguments.iter().enumerate() {
-                let Expression::Identifier { name, .. } = arg else {
-                    continue;
-                };
-                let arm_reuses = arms
-                    .iter()
-                    .any(|arm| Self::match_arm_body_uses_binding(arm.body, name));
-                let analysis_wants = self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                    a.needs_clone(name, self.current_statement_idx).is_some()
-                });
-                let callee_shared = if is_method {
-                    false
-                } else {
-                    callee.is_some_and(|c| {
-                        self.preregistered_free_call_arg_expects_borrow(c, i)
-                            || self.callee_arg_expects_borrow_at_call(c, i)
-                    })
-                };
-                if (arm_reuses || analysis_wants)
-                    && !value_str.contains(&format!("{name}.clone()"))
-                    && !self.binding_is_runtime_non_clone(name)
-                    && !self.ident_skips_auto_clone_as_copy(name, arg)
-                    && !callee_shared
-                    && !value_str.contains(&format!("&{name}"))
-                    && !value_str.contains(&format!("&mut {name}"))
-                {
-                    *value_str = string_utilities::replace_ident_token(
-                        value_str,
-                        name,
-                        &format!("{name}.clone()"),
-                    );
+        let patch_match_scrutinee_call_args =
+            |value_str: &mut String,
+             arguments: &[(Option<String>, &Expression)],
+             callee: Option<&str>,
+             is_method: bool| {
+                for (i, (_label, arg)) in arguments.iter().enumerate() {
+                    let Expression::Identifier { name, .. } = arg else {
+                        continue;
+                    };
+                    let arm_reuses = arms
+                        .iter()
+                        .any(|arm| Self::match_arm_body_uses_binding(arm.body, name));
+                    let analysis_wants = self
+                        .auto_clone_analysis
+                        .as_ref()
+                        .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some());
+                    let callee_shared = if is_method {
+                        false
+                    } else {
+                        callee.is_some_and(|c| {
+                            self.preregistered_free_call_arg_expects_borrow(c, i)
+                                || self.callee_arg_expects_borrow_at_call(c, i)
+                        })
+                    };
+                    if (arm_reuses || analysis_wants)
+                        && !value_str.contains(&format!("{name}.clone()"))
+                        && !self.binding_is_runtime_non_clone(name)
+                        && !self.ident_skips_auto_clone_as_copy(name, arg)
+                        && !callee_shared
+                        && !value_str.contains(&format!("&{name}"))
+                        && !value_str.contains(&format!("&mut {name}"))
+                    {
+                        *value_str = string_utilities::replace_ident_token(
+                            value_str,
+                            name,
+                            &format!("{name}.clone()"),
+                        );
+                    }
                 }
-            }
-        };
+            };
         if let Expression::Call {
             function,
             arguments,
@@ -775,13 +774,15 @@ impl<'ast> CodeGenerator<'ast> {
                     let field_path_reused = matches!(
                         value,
                         Expression::FieldAccess { .. } | Expression::Index { .. }
-                    ) && super::ast_utilities::extract_field_access_path(value)
-                        .is_some_and(|path| {
-                            self.auto_clone_analysis.as_ref().is_some_and(|a| {
-                                a.needs_clone(&path, self.current_statement_idx).is_some()
-                                    || a.needs_clone_anywhere(&path)
-                            })
-                        });
+                    ) && super::ast_utilities::extract_field_access_path(
+                        value,
+                    )
+                    .is_some_and(|path| {
+                        self.auto_clone_analysis.as_ref().is_some_and(|a| {
+                            a.needs_clone(&path, self.current_statement_idx).is_some()
+                                || a.needs_clone_anywhere(&path)
+                        })
+                    });
                     let behind_borrow = self.inferred_borrowed_params.contains(root_name)
                         || self.inferred_mut_borrowed_params.contains(root_name);
                     // WDB-424: prefer `match &place` over `.clone()` for reused /
@@ -886,8 +887,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !use_copied_borrow_break
             && !use_cloned_borrow_break
             && (use_owned_copy_field
-                || (!option_reassigns
-                    && self.match_borrow_break_yields_owned_copy_option(value)));
+                || (!option_reassigns && self.match_borrow_break_yields_owned_copy_option(value)));
         // Owned-option borrow-break is for method returns (`self.network.poll()` →
         // `Option<T>`). Self-field / index Option must clone into an owned temp so
         // mut / ref-mut arms and scrutinee reassignment do not overlap borrows.
@@ -1142,21 +1142,20 @@ impl<'ast> CodeGenerator<'ast> {
             let mut bound_vars = std::collections::HashSet::new();
             self.extract_pattern_bindings(&arm.pattern, &mut bound_vars);
 
-            let added_borrowed: Vec<String> = if (match_binds_refs
-                || scrutinee_type_has_ref
-                || scrutinee_prefix_binds_refs)
-                && !owned_bindings_from_copy_deref
-            {
-                let inferred = self.infer_match_bound_types(value, &arm.pattern);
-                let struct_enum_fields = matches!(
-                    &arm.pattern,
-                    Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _))
-                );
-                let match_self_ref = matches!(
-                    value,
-                    Expression::Identifier { name, .. } if name == "self"
-                ) && match_binds_refs;
-                bound_vars
+            let added_borrowed: Vec<String> =
+                if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
+                    && !owned_bindings_from_copy_deref
+                {
+                    let inferred = self.infer_match_bound_types(value, &arm.pattern);
+                    let struct_enum_fields = matches!(
+                        &arm.pattern,
+                        Pattern::EnumVariant(_, EnumPatternBinding::Struct(_, _))
+                    );
+                    let match_self_ref = matches!(
+                        value,
+                        Expression::Identifier { name, .. } if name == "self"
+                    ) && match_binds_refs;
+                    bound_vars
                         .iter()
                         .filter(|var| {
                             let is_copy_payload = inferred.iter().any(|(name, ty)| {
@@ -1165,8 +1164,9 @@ impl<'ast> CodeGenerator<'ast> {
                                     // ergonomics still bind `&T` — do not treat them as owned
                                     // Copy payloads (P3.638 / NoteStore::update).
                                     let inner = match ty {
-                                        Type::Reference(inner)
-                                        | Type::MutableReference(inner) => inner.as_ref(),
+                                        Type::Reference(inner) | Type::MutableReference(inner) => {
+                                            inner.as_ref()
+                                        }
                                         other => other,
                                     };
                                     !matches!(ty, Type::Reference(_) | Type::MutableReference(_))
@@ -1216,9 +1216,9 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                         .cloned()
                         .collect()
-            } else {
-                Vec::new()
-            };
+                } else {
+                    Vec::new()
+                };
             for var in &added_borrowed {
                 self.borrowed_iterator_vars.insert(var.clone());
             }
@@ -1308,8 +1308,8 @@ impl<'ast> CodeGenerator<'ast> {
 
             // `Some(value.clone())` does not end with `.clone()` — still rewrite
             // so the payload clone is the one that survives later peels (P3.638).
-            let arm_already_clones_binding = arm_str.ends_with(".clone()")
-                && !arm_str.trim().starts_with("Some(");
+            let arm_already_clones_binding =
+                arm_str.ends_with(".clone()") && !arm_str.trim().starts_with("Some(");
             if (match_binds_refs || scrutinee_type_has_ref || scrutinee_prefix_binds_refs)
                 && !owned_bindings_from_copy_deref
                 && !arm_already_clones_binding
@@ -1578,8 +1578,7 @@ impl<'ast> CodeGenerator<'ast> {
         let inner = rest[..rest.len().saturating_sub(1)].trim();
         // Allow rewriting `Some(value.clone())` once binding types are known (WDB-429).
         let bare = inner.strip_suffix(".clone()").unwrap_or(inner).trim();
-        if !Self::looks_like_simple_binding_ident(bare)
-            || !added_borrowed.iter().any(|n| n == bare)
+        if !Self::looks_like_simple_binding_ident(bare) || !added_borrowed.iter().any(|n| n == bare)
         {
             return None;
         }
@@ -1603,12 +1602,15 @@ impl<'ast> CodeGenerator<'ast> {
         // `&String` / `&Note` (and double-wrapped refs from match ergonomics) are Copy
         // as references. Owned `String` / struct returns still need `.clone()` (P3.638).
         if crate::codegen::rust::string_utilities::type_is_owned_string(ty)
-            || matches!(ty, Type::Custom(_))
+            || (matches!(ty, Type::Custom(_)) && !self.is_type_copy(ty))
         {
             return Some(format!("{binding}.clone()"));
         }
         if self.is_type_copy(ty) {
-            if matches!(binding_type, Some(Type::Reference(_) | Type::MutableReference(_))) {
+            if matches!(
+                binding_type,
+                Some(Type::Reference(_) | Type::MutableReference(_))
+            ) {
                 return Some(format!("*{binding}"));
             }
             return Some(binding.to_string());

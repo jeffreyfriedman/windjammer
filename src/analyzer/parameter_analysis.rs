@@ -196,10 +196,7 @@ impl<'ast> Analyzer<'ast> {
         // of the field, not a consume of `store`.
         if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body)
             && !self.param_field_projections_only_into_borrowed_formals(
-                param_name,
-                param_type,
-                body,
-                registry,
+                param_name, param_type, body, registry,
             )
         {
             return Ok(OwnershipMode::Owned);
@@ -245,7 +242,13 @@ impl<'ast> Analyzer<'ast> {
         // When `a.as_float()` is called and `as_float` takes owned `self`, `a` is consumed
         // and must be owned. Without this check, `a` defaults to Borrowed (&a), producing
         // E0507 errors because you can't move out of a shared reference.
-        if self.calls_consuming_method(param_name, body, registry) {
+        let receiver_type = match param_type {
+            Type::Custom(name) | Type::Generic(name) => {
+                Some(name.split('<').next().unwrap_or(name.as_str()))
+            }
+            _ => None,
+        };
+        if self.calls_consuming_method(param_name, body, registry, receiver_type) {
             return Ok(OwnershipMode::Owned);
         }
 
@@ -551,17 +554,19 @@ impl<'ast> Analyzer<'ast> {
                     }
                     let discard_ok = match value {
                         Expression::Identifier { name, .. } => name == param_name,
-                        Expression::Tuple { elements, .. } => elements.iter().all(|el| {
-                            matches!(
-                                el,
-                                Expression::Identifier { name, .. } if name == param_name
-                            ) || !self.expression_uses_identifier(param_name, el)
-                        }) && elements.iter().any(|el| {
-                            matches!(
-                                el,
-                                Expression::Identifier { name, .. } if name == param_name
-                            )
-                        }),
+                        Expression::Tuple { elements, .. } => {
+                            elements.iter().all(|el| {
+                                matches!(
+                                    el,
+                                    Expression::Identifier { name, .. } if name == param_name
+                                ) || !self.expression_uses_identifier(param_name, el)
+                            }) && elements.iter().any(|el| {
+                                matches!(
+                                    el,
+                                    Expression::Identifier { name, .. } if name == param_name
+                                )
+                            })
+                        }
                         _ => false,
                     };
                     if !discard_ok {

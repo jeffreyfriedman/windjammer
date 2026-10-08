@@ -15,9 +15,10 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         statements: &[&'ast Statement<'ast>],
         registry: &SignatureRegistry,
+        receiver_type: Option<&str>,
     ) -> bool {
         for stmt in statements {
-            if self.stmt_calls_consuming_method(param_name, stmt, registry) {
+            if self.stmt_calls_consuming_method(param_name, stmt, registry, receiver_type) {
                 return true;
             }
         }
@@ -29,31 +30,33 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         stmt: &Statement<'ast>,
         registry: &SignatureRegistry,
+        receiver_type: Option<&str>,
     ) -> bool {
         match stmt {
             Statement::Expression { expr, .. } => {
-                self.expr_calls_consuming_method(param_name, expr, registry)
+                self.expr_calls_consuming_method(param_name, expr, registry, receiver_type)
             }
             Statement::Let { value, .. } => {
-                self.expr_calls_consuming_method(param_name, value, registry)
+                self.expr_calls_consuming_method(param_name, value, registry, receiver_type)
             }
             Statement::Return {
                 value: Some(expr), ..
-            } => self.expr_calls_consuming_method(param_name, expr, registry),
+            } => self.expr_calls_consuming_method(param_name, expr, registry, receiver_type),
             Statement::If {
                 condition,
                 then_block,
                 else_block,
                 ..
             } => {
-                if self.expr_calls_consuming_method(param_name, condition, registry) {
+                if self.expr_calls_consuming_method(param_name, condition, registry, receiver_type)
+                {
                     return true;
                 }
-                if self.calls_consuming_method(param_name, then_block, registry) {
+                if self.calls_consuming_method(param_name, then_block, registry, receiver_type) {
                     return true;
                 }
                 if let Some(else_b) = else_block {
-                    if self.calls_consuming_method(param_name, else_b, registry) {
+                    if self.calls_consuming_method(param_name, else_b, registry, receiver_type) {
                         return true;
                     }
                 }
@@ -62,17 +65,26 @@ impl<'ast> Analyzer<'ast> {
             Statement::While {
                 condition, body, ..
             } => {
-                self.expr_calls_consuming_method(param_name, condition, registry)
-                    || self.calls_consuming_method(param_name, body, registry)
+                self.expr_calls_consuming_method(param_name, condition, registry, receiver_type)
+                    || self.calls_consuming_method(param_name, body, registry, receiver_type)
             }
-            Statement::Loop { body, .. } => self.calls_consuming_method(param_name, body, registry),
-            Statement::For { body, .. } => self.calls_consuming_method(param_name, body, registry),
+            Statement::Loop { body, .. } => {
+                self.calls_consuming_method(param_name, body, registry, receiver_type)
+            }
+            Statement::For { body, .. } => {
+                self.calls_consuming_method(param_name, body, registry, receiver_type)
+            }
             Statement::Match { value, arms, .. } => {
-                if self.expr_calls_consuming_method(param_name, value, registry) {
+                if self.expr_calls_consuming_method(param_name, value, registry, receiver_type) {
                     return true;
                 }
                 for arm in arms {
-                    if self.expr_calls_consuming_method(param_name, arm.body, registry) {
+                    if self.expr_calls_consuming_method(
+                        param_name,
+                        arm.body,
+                        registry,
+                        receiver_type,
+                    ) {
                         return true;
                     }
                 }
@@ -82,11 +94,34 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    fn method_consumes_this_receiver(
+        method: &str,
+        receiver_type: Option<&str>,
+        registry: &SignatureRegistry,
+    ) -> bool {
+        let owned_self = |sig: &super::FunctionSignature| {
+            sig.has_self_receiver
+                && matches!(sig.param_ownership.first(), Some(OwnershipMode::Owned))
+        };
+        if let Some(sig) =
+            super::stdlib_method_traits::lookup_method_signature(method, receiver_type, registry)
+        {
+            return owned_self(sig);
+        }
+        // Bare `get_signature("as_float")` misses `Val::as_float` and can hit a
+        // different type. Only an unambiguous unqualified key may decide.
+        if registry.has_method_name_collision(method) {
+            return false;
+        }
+        registry.get_signature(method).is_some_and(owned_self)
+    }
+
     pub(crate) fn expr_calls_consuming_method(
         &self,
         param_name: &str,
         expr: &Expression<'ast>,
         registry: &SignatureRegistry,
+        receiver_type: Option<&str>,
     ) -> bool {
         match expr {
             Expression::MethodCall {
@@ -95,20 +130,23 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                // Check if param is the direct receiver of a consuming method
-                if self.is_direct_receiver(param_name, object) {
-                    if let Some(sig) = registry.get_signature(method) {
-                        if sig.has_self_receiver {
-                            if let Some(mode) = sig.param_ownership.first() {
-                                if matches!(mode, OwnershipMode::Owned) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
+                // Direct receiver: `Val::as_float`, not a colliding bare `as_float`.
+                if self.is_direct_receiver(param_name, object)
+                    && Self::method_consumes_this_receiver(method, receiver_type, registry)
+                {
+                    return true;
                 }
                 // Check if param is passed as an owned argument to the method
-                if let Some(sig) = registry.get_signature(method) {
+                if let Some(sig) =
+                    super::stdlib_method_traits::lookup_method_signature(method, None, registry)
+                        .or_else(|| {
+                            if registry.has_method_name_collision(method) {
+                                None
+                            } else {
+                                registry.get_signature(method)
+                            }
+                        })
+                {
                     let param_offset = if sig.has_self_receiver { 1 } else { 0 };
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
@@ -123,11 +161,11 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
                 // Recurse into arguments and object
-                if self.expr_calls_consuming_method(param_name, object, registry) {
+                if self.expr_calls_consuming_method(param_name, object, registry, receiver_type) {
                     return true;
                 }
                 for (_, arg) in arguments {
-                    if self.expr_calls_consuming_method(param_name, arg, registry) {
+                    if self.expr_calls_consuming_method(param_name, arg, registry, receiver_type) {
                         return true;
                     }
                 }
@@ -141,16 +179,10 @@ impl<'ast> Analyzer<'ast> {
                 // Handle Call(FieldAccess) pattern: param.method(args) where the
                 // receiver is `param` and the method takes owned `self`.
                 if let Expression::FieldAccess { object, field, .. } = &**function {
-                    if self.is_direct_receiver(param_name, object) {
-                        if let Some(sig) = registry.get_signature(field) {
-                            if sig.has_self_receiver {
-                                if let Some(mode) = sig.param_ownership.first() {
-                                    if matches!(mode, OwnershipMode::Owned) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
+                    if self.is_direct_receiver(param_name, object)
+                        && Self::method_consumes_this_receiver(field, receiver_type, registry)
+                    {
+                        return true;
                     }
                 }
                 // Do NOT treat "passed to a free/associated function whose formal is
@@ -159,21 +191,24 @@ impl<'ast> Analyzer<'ast> {
                 // — forcing `tree.clone()` on read-only BT walks (WDB-366). True consumes
                 // are covered by is_stored / is_returned / passthrough strength.
                 for (_, arg) in arguments {
-                    if self.expr_calls_consuming_method(param_name, arg, registry) {
+                    if self.expr_calls_consuming_method(param_name, arg, registry, receiver_type) {
                         return true;
                     }
                 }
                 false
             }
             Expression::Block { statements, .. } => {
-                self.calls_consuming_method(param_name, statements, registry)
+                self.calls_consuming_method(param_name, statements, registry, receiver_type)
             }
             Expression::Binary { left, right, .. } => {
-                self.expr_calls_consuming_method(param_name, left, registry)
-                    || self.expr_calls_consuming_method(param_name, right, registry)
+                self.expr_calls_consuming_method(param_name, left, registry, receiver_type)
+                    || self.expr_calls_consuming_method(param_name, right, registry, receiver_type)
+            }
+            Expression::Unary { operand, .. } => {
+                self.expr_calls_consuming_method(param_name, operand, registry, receiver_type)
             }
             Expression::TryOp { expr, .. } => {
-                self.expr_calls_consuming_method(param_name, expr, registry)
+                self.expr_calls_consuming_method(param_name, expr, registry, receiver_type)
             }
             _ => false,
         }

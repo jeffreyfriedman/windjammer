@@ -1,6 +1,32 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.726 (2026-10-07) — owned enum formals stay owned when the method consumes self
+
+`evaluate(self, op, a: Val, b: Val) { a.as_float() }` emitted `a: &Val` and
+`a.clone().as_float()`. `calls_consuming_method` looked up bare `as_float`, which
+misses `Val::as_float` (and can collide with other types). Copy match payloads
+(`i32`/`f32`/`bool`, including `Custom` spellings that are Copy) no longer clone
+just because the type is `Custom`.
+
+| Gate | Status |
+|------|--------|
+| `wdb416_module_file_owned_enum_must_not_clone_before_as_float` | ✅ tip GREEN |
+| `wdb416_module_file_noncopy_enum_match_must_not_demote_before_as_float` | ✅ tip GREEN |
+| `wdb416_tip_out_game_core_value_must_not_clone_before_as_float` | ❌ tip-out lag (regen) |
+| `wdb429_module_file_copy_match_arm_payload_must_not_clone` | ✅ tip GREEN |
+| `hashmap_get_noncopy_match_not_copied` | ✅ tip GREEN |
+| `module_file_map_get_string_payload_must_clone` | ✅ tip GREEN |
+
+**Root cause layer:** signature — qualified `Type::method` receiver ownership.
+Copy vs clone for match payloads is type classification (Copy `Custom` is not a move).
+
+**What became unnecessary:** cloning every `Custom` match payload / owned-context
+`&Custom` pointee; treating a missing bare method key as “not consuming”.
+
+**Gates:** `cargo test --release --lib -- wdb416_` → 2 passed.
+`cargo test --release --test all --features integration_tests,codegen_tests -- wdb416_module_file wdb429_module_file hashmap_get_noncopy module_file_map_get_string hashmap_field_iter` → module-file GREEN; tip-out scanner still RED.
+
 ## P3.725 (2026-10-07) — borrowed map/vec loop values clone into owned push/insert
 
 `for (id, note) in &self.notes { result.push(note) }` left `&Note` in `Vec::push`.
