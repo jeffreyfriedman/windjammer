@@ -1,5 +1,30 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.745 (2026-10-08) — TDD WDB-470 (DB agent; no compiler src)
+
+An owned `Vec` return passed straight into an owned formal must not `.clone()`.
+
+Product `editor/csg.rs` `csg_union` / `csg_subtract` / `csg_intersect`:
+```wj
+let mut ta = build_bsp_from_polygons(clone_polygons(a))
+```
+`clone_polygons` returns `Vec<CsgPolygon>`. Tip MultiFile emits the call without cloning the return (isolate GREEN). Tip-out still has `build_bsp_from_polygons(clone_polygons(&a).clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-470 MultiFile | ✅ isolate GREEN — no `.clone()` on the `clone_polys(...)` call |
+| WDB-470 tip-out | ❌ tip RED — `clone_polygons(&a).clone()` in `rel_tip_out/editor/csg.rs` and `windjammer-game-core/gen/editor/csg.rs` |
+
+**Root cause layer:** tip-out lag — the owned return is cloned again at the call.
+
+**Why this is a new class:**
+- WDB-464 through WDB-469 clone Copy elements (bytes, tuples, i64).
+- This clones a non-Copy `Vec` that the callee already returned by value.
+
+**Do not steal:** WDB-406/408/411/457–470, P3.508–P3.745, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb470_` — isolate GREEN / tip RED (2026-10-08).
+
 ## P3.743 (2026-10-08) — Copy struct formal must not be re-borrowed at the call site
 
 `find_index(self, id: NodeId)` emits `id: NodeId`, then `has_item` / `remove_item` called `self.find_index(&id)`.
