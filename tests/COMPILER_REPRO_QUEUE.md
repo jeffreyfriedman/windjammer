@@ -2,6 +2,36 @@
 
 
 
+## P3.735 (2026-10-07) — TDD WDB-466 (DB agent; no compiler src)
+
+Indexed Copy tuple **field** into `Vec::push` / compare must not `.clone()`.
+
+Product `scene_graph/scene_graph_state.rs` `sort_by_distance`:
+```wj
+let a_dist = sorted[i].1
+self.sorted_nodes.push(sorted[k].0)
+```
+Tip MultiFile emits bare `.0` / `.1` (isolate GREEN). Tip-out still has
+`sorted[k].0.clone()` and `sorted[i].1.clone()` (`u64` / `f32`).
+
+| Gate | Status |
+|------|--------|
+| WDB-466 MultiFile | ✅ isolate GREEN — bare `.0` / `.1` |
+| WDB-466 tip-out | ❌ tip RED — field clones in `rel_tip_out/scene_graph/scene_graph_state.rs` |
+
+**Root cause layer:** tip-out / product multipass lag — isolate tip already correct;
+indexed Copy tuple fields still `.clone()` into push and locals.
+
+**Why this is a new class:**
+- WDB-439 is indexed tuple field on **return** (`nodes[i].0.clone()`).
+- WDB-465 clones the **whole** indexed Copy tuple into push.
+- WDB-363 clones the **element** then reads a field.
+- This is `.0` / `.1` of an indexed Copy tuple into `Vec::push` and compare.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb466_` — isolate GREEN / tip RED (2026-10-07).
+
+**Do not steal:** WDB-406/408/411/457–466, P3.508–P3.735, WDB-412–466 (filed).
+
 ## P3.734 (2026-10-07) — multi-arm `json.clone()` into demoted `&str` (no compiler src)
 
 LedgerKit `render_read_model` keeps `json: String` (most arms pass it to owned parsers).
