@@ -275,12 +275,47 @@ fn rust_mut_borrow(expr: &str) -> String {
     }
 }
 
+/// Rust `as` binds tighter than `*`, `+`, and shifts. Cast the whole expression.
+pub fn rust_numeric_cast(expr: &str, cast: &str) -> String {
+    let t = expr.trim();
+    if needs_cast_operand_parens(t) {
+        format!("({t}) as {cast}")
+    } else {
+        format!("{t} as {cast}")
+    }
+}
+
+fn needs_cast_operand_parens(expr: &str) -> bool {
+    if is_parenthesized_group(expr) {
+        return false;
+    }
+    needs_borrow_parentheses(expr)
+}
+
+fn is_parenthesized_group(expr: &str) -> bool {
+    let bytes = expr.trim().as_bytes();
+    if bytes.first() != Some(&b'(') || bytes.last() != Some(&b')') {
+        return false;
+    }
+    let mut depth = 0i32;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i + 1 == bytes.len();
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 fn needs_borrow_parentheses(expr: &str) -> bool {
     let t = expr.trim();
-    if t.starts_with("move ||")
-        || t.starts_with("||")
-        || (t.starts_with('|') && t.contains('|'))
-    {
+    if t.starts_with("move ||") || t.starts_with("||") || (t.starts_with('|') && t.contains('|')) {
         return true;
     }
     t.contains(" as ")
@@ -292,9 +327,7 @@ fn needs_borrow_parentheses(expr: &str) -> bool {
         || t.contains(" << ")
         || t.contains(" >> ")
         || t.contains(" && ")
-        || (!t.starts_with("move ||")
-            && !t.starts_with("||")
-            && t.contains(" || "))
+        || (!t.starts_with("move ||") && !t.starts_with("||") && t.contains(" || "))
 }
 
 /// Apply a target-agnostic coercion to a generated expression string.
@@ -379,7 +412,7 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
             }
         }
         (Target::Rust, CoercionKind::NumericCast(base)) => {
-            format!("{} as {}", expr, base_type_rust_cast(base))
+            rust_numeric_cast(expr, base_type_rust_cast(base))
         }
         // Go/JS/WASM: pass-through for now; IR encodings expand in phase 3.
         (_, CoercionKind::Borrow | CoercionKind::MutBorrow | CoercionKind::StripBorrow) => {
@@ -515,6 +548,19 @@ pub fn standard_equivalence_tests() -> Vec<SemanticEquivalenceTest> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numeric_cast_parenthesizes_product() {
+        assert_eq!(
+            rust_numeric_cast("max_triangles * 48_i32", "u32"),
+            "(max_triangles * 48_i32) as u32"
+        );
+        assert_eq!(rust_numeric_cast("n", "u32"), "n as u32");
+        assert_eq!(
+            rust_numeric_cast("(max_triangles * 48_i32)", "u32"),
+            "(max_triangles * 48_i32) as u32"
+        );
+    }
 
     #[test]
     fn test_rust_owned_encoding() {

@@ -16,8 +16,8 @@ use crate::codegen::rust::call_signature_resolution::effective_param_ownership;
 use crate::codegen::rust::string_utilities;
 use crate::codegen::rust::types;
 use crate::ir::coercion::{compute_coercion, CoercionKind};
-use crate::ir::signature_bridge::safety_type_from_signature_param;
 use crate::ir::safety_type::{BaseType, Region, SafetyType};
+use crate::ir::signature_bridge::safety_type_from_signature_param;
 use crate::parser::{Expression, Literal, Type};
 
 /// What coercion to apply to a generated argument expression.
@@ -98,7 +98,7 @@ impl ArgCoercion {
                 }
             }
             ArgCoercion::CastNumeric(target) => {
-                *expr = format!("{} as {}", expr, target);
+                *expr = crate::ir::target_encodings::rust_numeric_cast(expr, target);
             }
         }
     }
@@ -168,7 +168,9 @@ fn safety_type_from_arg_context(ctx: &ArgContext) -> SafetyType {
             _ => SafetyType::owned(BaseType::Inferred),
         },
         Expression::Identifier { .. } => SafetyType::owned(BaseType::Inferred),
-        Expression::FieldAccess { .. } => SafetyType::borrowed(BaseType::Inferred, Region::fresh(1)),
+        Expression::FieldAccess { .. } => {
+            SafetyType::borrowed(BaseType::Inferred, Region::fresh(1))
+        }
         _ => SafetyType::owned(BaseType::Inferred),
     }
 }
@@ -200,11 +202,10 @@ pub fn compute_arg_coercion(ctx: &ArgContext) -> ArgCoercion {
     let converged_type = ctx.sig.param_types.get(param_idx);
 
     let formal_is_text = formal_type.is_some_and(types::is_windjammer_text_type);
-    let formal_is_ref = formal_type
-        .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
+    let formal_is_ref =
+        formal_type.is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)));
     let formal_is_str_ref = formal_type.is_some_and(string_utilities::param_is_rust_str_ref);
-    let converged_is_str_ref = converged_type
-        .is_some_and(string_utilities::param_is_rust_str_ref);
+    let converged_is_str_ref = converged_type.is_some_and(string_utilities::param_is_rust_str_ref);
     let callee_expects_str_ref = formal_is_str_ref || converged_is_str_ref;
 
     // Rule 0: Copy literals (int/float/bool) never need coercion.
@@ -222,7 +223,13 @@ pub fn compute_arg_coercion(ctx: &ArgContext) -> ArgCoercion {
 
     // Rule 2: String literal handling.
     if ctx.is_string_literal {
-        return coerce_string_literal(ctx, effective, formal_is_text, callee_expects_str_ref, formal_is_ref);
+        return coerce_string_literal(
+            ctx,
+            effective,
+            formal_is_text,
+            callee_expects_str_ref,
+            formal_is_ref,
+        );
     }
 
     // Rule 3: Copy formal types pass by value — strip spurious &, never add &.
@@ -379,7 +386,10 @@ mod tests {
     fn owned_string_to_borrowed_str_ref_adds_borrow() {
         let sig = make_sig(
             "SceneManager::is_registered",
-            vec![Type::Custom("Self".into()), Type::Reference(Box::new(Type::Custom("str".into())))],
+            vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
             vec![Type::Custom("Self".into()), Type::String],
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             true,
@@ -398,8 +408,11 @@ mod tests {
             method_name: "is_registered",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::BorrowString,
-            "owned String to &str param should borrow, not clone");
+        assert_eq!(
+            coercion,
+            ArgCoercion::BorrowString,
+            "owned String to &str param should borrow, not clone"
+        );
     }
 
     // --- Class 2: Excessive & — ref where owned expected ---
@@ -408,8 +421,14 @@ mod tests {
     fn owned_param_with_ref_arg_passes_through_for_copy() {
         let sig = make_sig(
             "Renderer::upload",
-            vec![Type::Custom("Self".into()), Type::Custom("VoxelWorldData".into())],
-            vec![Type::Custom("Self".into()), Type::Custom("VoxelWorldData".into())],
+            vec![
+                Type::Custom("Self".into()),
+                Type::Custom("VoxelWorldData".into()),
+            ],
+            vec![
+                Type::Custom("Self".into()),
+                Type::Custom("VoxelWorldData".into()),
+            ],
             vec![OwnershipMode::MutBorrowed, OwnershipMode::Owned],
             true,
         );
@@ -427,8 +446,11 @@ mod tests {
             method_name: "upload",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::StripRef,
-            "Copy formal with & arg should strip the &");
+        assert_eq!(
+            coercion,
+            ArgCoercion::StripRef,
+            "Copy formal with & arg should strip the &"
+        );
     }
 
     // --- Class 3: String literal missing .to_string() ---
@@ -456,8 +478,11 @@ mod tests {
             method_name: "set_name",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::ToOwnedString,
-            "string literal to owned String param needs .to_string()");
+        assert_eq!(
+            coercion,
+            ArgCoercion::ToOwnedString,
+            "string literal to owned String param needs .to_string()"
+        );
     }
 
     // --- Class 4: Copy type over-borrowed ---
@@ -485,8 +510,11 @@ mod tests {
             method_name: "render_voxels",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::PassThrough,
-            "Copy type with owned formal should pass through");
+        assert_eq!(
+            coercion,
+            ArgCoercion::PassThrough,
+            "Copy type with owned formal should pass through"
+        );
     }
 
     // --- Class 5: Inverse string coercion ---
@@ -495,7 +523,10 @@ mod tests {
     fn string_literal_to_str_ref_passes_through() {
         let sig = make_sig(
             "contains",
-            vec![Type::Custom("Self".into()), Type::Reference(Box::new(Type::Custom("str".into())))],
+            vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
             vec![Type::Custom("Self".into()), Type::Custom("string".into())],
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             true,
@@ -514,8 +545,11 @@ mod tests {
             method_name: "contains",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::PassThrough,
-            "string literal to &str should pass through (Rust auto-coerces)");
+        assert_eq!(
+            coercion,
+            ArgCoercion::PassThrough,
+            "string literal to &str should pass through (Rust auto-coerces)"
+        );
     }
 
     // --- Collection key: HashMap::get needs & ---
@@ -524,7 +558,10 @@ mod tests {
     fn collection_key_adds_borrow() {
         let sig = make_sig(
             "HashMap::get",
-            vec![Type::Custom("Self".into()), Type::Reference(Box::new(Type::Custom("str".into())))],
+            vec![
+                Type::Custom("Self".into()),
+                Type::Reference(Box::new(Type::Custom("str".into()))),
+            ],
             vec![Type::Custom("Self".into()), Type::String],
             vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
             true,
@@ -543,8 +580,11 @@ mod tests {
             method_name: "get",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::BorrowString,
-            "collection key lookup should borrow the string");
+        assert_eq!(
+            coercion,
+            ArgCoercion::BorrowString,
+            "collection key lookup should borrow the string"
+        );
     }
 
     // --- Int literal passes through ---
@@ -582,12 +622,14 @@ mod tests {
         // Free function (not type-qualified) with Vec<String> param that converged to Borrowed
         let sig = make_sig(
             "check_collisions",
-            vec![
-                Type::Parameterized("Vec".into(), vec![Type::Custom("AABB".into())]),
-            ],
-            vec![
-                Type::Parameterized("Vec".into(), vec![Type::Custom("AABB".into())]),
-            ],
+            vec![Type::Parameterized(
+                "Vec".into(),
+                vec![Type::Custom("AABB".into())],
+            )],
+            vec![Type::Parameterized(
+                "Vec".into(),
+                vec![Type::Custom("AABB".into())],
+            )],
             vec![OwnershipMode::Borrowed],
             false,
         );
@@ -605,7 +647,10 @@ mod tests {
             method_name: "check_collisions",
         };
         let coercion = compute_arg_coercion(&ctx);
-        assert_eq!(coercion, ArgCoercion::Borrow,
-            "borrowed Vec param should add &");
+        assert_eq!(
+            coercion,
+            ArgCoercion::Borrow,
+            "borrowed Vec param should add &"
+        );
     }
 }
