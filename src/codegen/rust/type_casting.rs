@@ -100,9 +100,9 @@ pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
     if formal.is_some_and(type_is_wj_i64) {
         return Some(Type::Int);
     }
-    if formal.is_some_and(|ty| {
-        matches!(ty, Type::Uint) || matches!(ty, Type::Custom(n) if n == "u32")
-    }) {
+    if formal
+        .is_some_and(|ty| matches!(ty, Type::Uint) || matches!(ty, Type::Custom(n) if n == "u32"))
+    {
         return Some(Type::Uint);
     }
     // Signature width for `u64`/`usize`/narrow ints — `vec![10]` into `Vec<u64>` (WDB-127).
@@ -223,11 +223,17 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
     }
     // Always wrap the cast so a later `.clone()` cannot bind tighter than `as`
     // (`pz as i32.clone()` is invalid — must be `(pz as i32).clone()`, P3.372).
+    // `as` also binds tighter than `*` (`(n * 48_i32 as u32)` is `n * (48 as u32)`).
     let core = arg_str
         .strip_suffix(".clone()")
         .map(str::trim)
         .unwrap_or(arg_str.as_str());
-    *arg_str = format!("({core} as {suffix})");
+    let casted = crate::ir::target_encodings::rust_numeric_cast(core, suffix);
+    *arg_str = if casted.starts_with('(') {
+        casted
+    } else {
+        format!("({casted})")
+    };
 }
 
 /// P3.368: i32-coord locals/literals into `i64` / WJ `int` formals (ECS entity ids).
@@ -301,7 +307,6 @@ pub fn coerce_struct_field_numeric(
         coerce_arg_str_for_i64_formal(arg, expr_str, Some(field_type), arg_type, None);
     }
 }
-
 
 /// Coerce a call argument to match a `usize` formal (Rust collection capacity/index).
 ///
@@ -415,10 +420,7 @@ pub fn coerce_arg_str_for_usize_formal(
     // WDB-329: stale `&idx as usize` (borrow prefixed without parens onto a cast) — peel
     // so Owned usize formals receive `idx as usize`.
     if let Some(rest) = arg_str.strip_prefix('&') {
-        if !rest.starts_with("mut ")
-            && rest.contains(" as usize")
-            && !rest.starts_with('(')
-        {
+        if !rest.starts_with("mut ") && rest.contains(" as usize") && !rest.starts_with('(') {
             *arg_str = rest.to_string();
         }
     }
@@ -500,8 +502,8 @@ pub fn coerce_arg_str_for_usize_formal(
             // True ref locals (`let ri = &i`) need `*ri as usize` — Rust does not
             // auto-copy `&T` into owned usize. Only when emit-truth says shared ref
             // (`identifier_already_ref`); for-loop Copy values stay bare.
-            let needs_deref = gen.is_some_and(|g| g.identifier_already_ref(name))
-                && !base.starts_with('*');
+            let needs_deref =
+                gen.is_some_and(|g| g.identifier_already_ref(name)) && !base.starts_with('*');
             // Auto-clone may already be present (`n.clone()`); cast yields Copy usize —
             // drop the clone (WDB-343). Never `n as usize.clone()` (WDB-300).
             if let Some(inner) = base.strip_suffix(".clone()") {
@@ -710,6 +712,9 @@ mod tests {
             None,
             Some(crate::type_inference::IntType::I32),
         );
-        assert_eq!(s, "*r", "mixed-int I32 pointee must not cast after autoderef");
+        assert_eq!(
+            s, "*r",
+            "mixed-int I32 pointee must not cast after autoderef"
+        );
     }
 }

@@ -35,7 +35,7 @@ pub fn create_empty_storage_buffer(size: u32) -> u32 {
     size
 }
 pub fn alloc() -> u32 {
-    let max_triangles = 100000
+    let max_triangles: i32 = 100000
     create_empty_storage_buffer(max_triangles * 48)
 }
 "#,

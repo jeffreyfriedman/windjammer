@@ -2,6 +2,18 @@
 
 
 
+## P3.740 (2026-10-07) — `wj test` const string into owned formal
+
+Library `pub const string` passed from `tests/*_test.wj` into an owned `string` formal (body uses `strings.split`) emits bare `&str` in the test crate (E0308). Same-module `take_owned(CONST)` is a different gate.
+
+Product: `wj-uuid` `hyphen_count(NIL)` from `tests/uuid_test.wj` on tip `wj` 0.50.0.
+
+| Gate | Status |
+|------|--------|
+| `bug_wj_test_lib_const_into_owned_formal_test` | ❌ tip RED — `hyphen_count(NIL)` expected `String`, found `&str` |
+
+**Do not steal:** compiler `src/`.
+
 ## P3.739 (2026-10-07) — TDD WDB-468 (DB agent; no compiler src)
 
 Indexed Copy `i64` into a local `let` must not `.clone()`.
@@ -107,11 +119,12 @@ hides the bug; the repro pins `max_triangles: i32`.
 
 | Gate | Status |
 |------|--------|
-| `int_mul_into_u32_formal_must_cast_product` | ❌ isolate RED — `(max_triangles * 48_i32 as u32)` |
-| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | ❌ tip-out RED — `48_i32 as u32` |
+| `int_mul_into_u32_formal_must_cast_product` | ✅ isolate GREEN — `(max_triangles * 48_i32) as u32` |
+| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | ❌ tip-out lag — stale `gen/` still has `48_i32 as u32` until regen |
 
-**Root cause layer:** cast insertion / precedence — coercion to a `u32` formal
-must wrap `(expr) as u32`, not suffix `as` onto the right-hand literal.
+**Root cause layer:** coercion/encoding — `as` binds tighter than `*`.
+`rust_numeric_cast` parenthesizes the product (`(max_triangles * 48_i32) as u32`).
+What became unnecessary: a bare `(expr as u32)` wrap that left `as` on the literal.
 
 **Do not steal:** P3.731/P3.732, other-agent WJ `src/`.
 
