@@ -1,5 +1,37 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.746 (2026-10-08) — Logger owned string literal re-borrowed after homonym refresh
+
+`logger.info("a")` / `logger.warn("b")` emit `message: String`, then the call site
+was `&String::from("a")` (E0308). IR saw the codegen-refreshed owned contract
+(`emitted=[false, false]`, ownership Owned). `prefer_shared_ref_signature` then
+let an analysis-only `&mut self` stub (`[MutBorrowed, Borrowed]`, no emit flags)
+replace that contract, and a later pass prefixed `&`.
+
+| Gate | Status |
+|------|--------|
+| `regression_logger_owned_passthrough` | ✅ tip GREEN |
+| string-literal / passthrough peers | ✅ 19 GREEN (filter below) |
+
+**Root cause layer:** signature. `mut_borrow_emission_beats` must not replace a
+codegen-confirmed owned `String` slot with an analysis `&mut self` stub.
+Collision strip no longer peels `.to_string()` when `emitted_owned_arg_contract`
+is true.
+
+**What remains temporary:** method-arg emit still strips a leading `&` from
+`String::from` / `.to_string()` when the method-registry or contract signature
+already expects an owned string. Delete that peel once the homonym refresh
+stops emitting the borrow.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR="$HOME/Library/Caches/windjammer/cargo-target/shared-p3728"
+cargo test --release --test all -- regression_logger_owned_passthrough \
+  codegen_string_param owned_string_formal_literal passthrough_to_owned \
+  string_literal_to_string bug_is_stored_enum_option
+```
+→ 19 passed.
+
 ## P3.745 (2026-10-08) — TDD WDB-470 (DB agent; no compiler src)
 
 An owned `Vec` return passed straight into an owned formal must not `.clone()`.

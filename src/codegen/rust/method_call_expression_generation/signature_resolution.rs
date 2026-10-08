@@ -207,6 +207,9 @@ impl<'ast> CodeGenerator<'ast> {
                     ) || crate::codegen::rust::signature_promotion::emitted_owned_beats_stale_global_borrow(
                         &method_reg.sig,
                         &reg.sig,
+                    ) || crate::codegen::rust::signature_promotion::owned_user_refresh_beats_stdlib_shared_ref(
+                        &method_reg.sig,
+                        &reg.sig,
                     );
                     if prefer_method {
                         method_reg

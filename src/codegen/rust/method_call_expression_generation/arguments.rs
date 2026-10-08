@@ -869,6 +869,30 @@ impl<'ast> CodeGenerator<'ast> {
                                 coerced = base.to_string();
                             }
                         }
+                        // Method-registry owned `String` (`Logger::info`) must not keep
+                        // a homonym re-borrow (`&String::from("a")`).
+                        if matches!(
+                            arg_to_generate,
+                            Expression::Literal {
+                                value: Literal::String(_),
+                                ..
+                            }
+                        ) && coerced.starts_with('&')
+                            && !coerced.starts_with("&mut ")
+                            && (coerced.contains("String::from(")
+                                || coerced.contains("String::new()")
+                                || coerced.ends_with(".to_string()")
+                                || coerced.ends_with(".to_owned()"))
+                            && (sig_for_effective.is_some_and(|sig| {
+                                crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                    sig, i,
+                                )
+                            }) || crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+                                &contract_sig, i,
+                            ))
+                        {
+                            coerced = coerced.trim_start_matches('&').to_string();
+                        }
                         return coerced;
                     }
                     debug_assert!(
