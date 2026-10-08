@@ -31,6 +31,46 @@ Minimal fixture also emits `compile_error!("missing boundary signature for f32::
 
 **Do not steal:** WDB-406/408/411/457–467, P3.508–P3.736, WDB-412–467 (filed).
 
+## P3.738 (2026-10-07) — `Option<string>` field match must clone into owned Option
+
+`animation/controller.wj` `current_animation` matches `self.current_animation` and
+returns `Some(s)`. Tip-out emits `match &self.current_animation { Some(s) => Some(s) }`,
+so the payload is `&String` (expected `String`, found `&String`).
+
+| Gate | Status |
+|------|--------|
+| `option_string_field_match_must_clone_into_owned` | ✅ isolate GREEN |
+| `option_string_field_match_tip_out_animation_controller` | ❌ tip-out RED — `match &self.current_animation { Some(s) => Some(s) }` |
+
+**Root cause layer:** match encoding — a borrowed `Option<String>` arm returned as
+owned `Option<String>` must `clone` the payload.
+
+**Do not steal:** P3.724 (Map::get payloads), P3.730 (identity interp), P3.731–P3.735.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- option_string_field_match`.
+
+## P3.735 (2026-10-07) — `i32 * 48` into `u32` must cast the product
+
+`hybrid_renderer.wj` calls `create_empty_storage_buffer(max_triangles * 48)`
+(`size: u32`, `max_triangles` an `i32` local). Tip-out emits
+`(max_triangles * 48_i32 as u32)`, so `as` binds only to `48` and the multiply
+is `i32 * u32`. An untyped `let max_triangles = 100000` widens to `u32` and
+hides the bug; the repro pins `max_triangles: i32`.
+
+| Gate | Status |
+|------|--------|
+| `int_mul_into_u32_formal_must_cast_product` | ❌ isolate RED — `(max_triangles * 48_i32 as u32)` |
+| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | ❌ tip-out RED — `48_i32 as u32` |
+
+**Root cause layer:** cast insertion / precedence — coercion to a `u32` formal
+must wrap `(expr) as u32`, not suffix `as` onto the right-hand literal.
+
+**Do not steal:** P3.731/P3.732, other-agent WJ `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- int_mul_into_u32_formal`.
+
+
+
 ## P3.735 (2026-10-07) — TDD WDB-466 (DB agent; no compiler src)
 
 Indexed Copy tuple **field** into `Vec::push` / compare must not `.clone()`.
@@ -60,27 +100,6 @@ indexed Copy tuple fields still `.clone()` into push and locals.
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb466_` — isolate GREEN / tip RED (2026-10-07).
 
 **Do not steal:** WDB-406/408/411/457–466, P3.508–P3.735, WDB-412–466 (filed).
-
-## P3.735 (2026-10-07) — `i32 * 48` into `u32` must cast the product
-
-`hybrid_renderer.wj` calls `create_empty_storage_buffer(max_triangles * 48)`
-(`size: u32`, `max_triangles` an `i32` local). Tip-out emits
-`(max_triangles * 48_i32 as u32)`, so `as` binds only to `48` and the multiply
-is `i32 * u32`. An untyped `let max_triangles = 100000` widens to `u32` and
-hides the bug; the repro pins `max_triangles: i32`.
-
-| Gate | Status |
-|------|--------|
-| `int_mul_into_u32_formal_must_cast_product` | ❌ isolate RED — `(max_triangles * 48_i32 as u32)` |
-| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | ❌ tip-out RED — `48_i32 as u32` |
-
-**Root cause layer:** cast insertion / precedence — coercion to a `u32` formal
-must wrap `(expr) as u32`, not suffix `as` onto the right-hand literal.
-
-**Do not steal:** P3.731/P3.732, other-agent WJ `src/`.
-
-**Gates:** `cargo test --release --test all --features integration_tests -- int_mul_into_u32_formal`.
-
 
 ## P3.734 (2026-10-07) — multi-arm `json.clone()` into demoted `&str` (no compiler src)
 
