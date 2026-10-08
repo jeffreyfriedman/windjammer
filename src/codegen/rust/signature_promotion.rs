@@ -1342,7 +1342,7 @@ fn sig_simple_name(name: &str) -> &str {
 /// (`run_parquet_load` all-false) must not beat defining-module crate-prefix
 /// demotion (`sf1_cli::run_parquet_load` `[true, true, false, …]`) just because
 /// the names differ.
-fn owned_user_refresh_beats_stdlib_shared_ref(
+pub(crate) fn owned_user_refresh_beats_stdlib_shared_ref(
     owned: &FunctionSignature,
     shared: &FunctionSignature,
 ) -> bool {
@@ -1599,6 +1599,26 @@ pub(crate) fn signature_has_mixed_shared_and_owned_emission(sig: &FunctionSignat
             .emitted_rust_ref_params
             .as_ref()
             .is_some_and(|flags| flags.iter().any(|&f| f))
+}
+
+/// Codegen already confirmed this slot is an owned `String` (emit flags present,
+/// slot not lowered to `&str`). An analysis-only `&mut self` stub must not win
+/// the call-site signature and peel `.to_string()`.
+fn codegen_owned_string_slot_beats_mut_self_stub(
+    preferred: &FunctionSignature,
+    param_idx: usize,
+) -> bool {
+    if preferred.emitted_rust_ref_params.is_none() {
+        return false;
+    }
+    let arg_index = if preferred.has_self_receiver_slot() && param_idx > 0 {
+        param_idx - 1
+    } else {
+        param_idx
+    };
+    crate::codegen::rust::string_utilities::call_site_param_expects_owned_string(
+        preferred, arg_index,
+    ) || emitted_owned_arg_contract(preferred, param_idx)
 }
 
 /// True when `preferred` recorded at least one `&mut T` formal and `other` did not.
@@ -2131,7 +2151,12 @@ pub(crate) fn prefer_shared_ref_signature(
     }
     if !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(challenger, param_idx) {
         if let Some(ref pref) = preferred {
-            if mut_borrow_emission_beats(challenger, pref) {
+            // `&mut self` typing on an analysis stub must not replace a
+            // codegen-refreshed owned `String` formal (`Logger::info` emit
+            // `[false, false]` vs a Borrowed + MutableReference self leaf).
+            if mut_borrow_emission_beats(challenger, pref)
+                && !codegen_owned_string_slot_beats_mut_self_stub(pref, param_idx)
+            {
                 return Some(challenger.clone());
             }
         }

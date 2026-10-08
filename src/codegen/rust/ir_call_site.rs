@@ -5289,6 +5289,9 @@ impl<'ast> CodeGenerator<'ast> {
                 &sig, param_idx,
             )
             && !global_confirms_shared_ref(param_idx)
+            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, param_idx,
+            )
         {
             crate::codegen::rust::call_signature_resolution::strip_collision_blocked_call_site_coercions(
                 coerced,
@@ -6208,6 +6211,9 @@ impl<'ast> CodeGenerator<'ast> {
                 &sig, param_idx,
             )
             && !global_confirms_shared_ref(param_idx)
+            && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                &sig, param_idx,
+            )
             && matches!(
                 arg_expr,
                 Expression::Identifier { .. } | Expression::Literal { .. }
