@@ -1,6 +1,44 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.731 (2026-10-07) — owned `String` formal must `.to_string()` a string literal
+
+Engine tip-out cargo (`windjammer_game_core`, skip-transpile, 2026-10-07): **381**
+errors, **272** E0308. Dominant class is **expected `String`, found `&str` (46)** —
+`record_resource("audio_initialized")` / `add_dependency("math.wj")` where the
+formal is owned `String`.
+
+| Gate | Status |
+|------|--------|
+| `owned_string_formal_literal_must_to_string` | ❌ tip RED — formal demoted to `&str` (no `.to_string()`) |
+
+**Root cause layer:** call-arg coercion — string literal into owned `string` formal
+must emit `.to_string()` (signature-driven, not a hardcoded method list).
+
+**Do not steal:** other-agent WJ `src/` work. No game-source workaround.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- owned_string_formal_literal_must_to_string`.
+
+## P3.730 (2026-10-07) — REGRESSION: notes-api + auth-api HashMap get identity `"${v}"`
+
+**Product (tip `wj` 0.50.0, `windjammer-game/.cargo-target-wj`):**
+`apps/wj-notes-api` `notes_config_from_map` and `apps/wj-auth-api` `auth_config_from_map`
+`match map.get(...) { Some(v) => "${v}", … }` emit bare `Some(v) => v`
+(`expected String, found &String`). Isolate
+`hashmap_get_identity_interp_into_owned_string_must_clone` is GREEN (`v.clone()`);
+product `$WJ test` is RED (notes E0308 ×8, auth E0308 ×13). Apps left idiomatic.
+
+**Expected:** owned string (`v.clone()`), as P3.678.
+
+**Actual:** identity interp lowered to a move of `&String` on the product multipass path.
+
+| Gate | Status |
+|------|--------|
+| `hashmap_get_identity_interp_into_owned_string_must_clone` | ✅ tip GREEN (2026-10-07) |
+| product `wj-notes-api` / `wj-auth-api` `$WJ test` | ❌ tip RED (2026-10-07) |
+
+**Do not steal:** other-agent WJ `src/`; P3.678/P3.725 product-gate claims.
+
 ## P3.727 (2026-10-07) — `int == 1` keeps i64 beside Vec::push
 
 `tasks_from_kpis(unmatched_bank_lines: int)` emitted `== 1_i32` while `> 0`
