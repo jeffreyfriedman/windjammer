@@ -49,7 +49,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Set flag to enable implicit return for last statement
         let old_in_function_body = self.in_function_body;
         self.in_function_body = true;
+        let import_scope = self.push_function_local_import_scope(&func.body);
         let mut body_code = self.generate_block(&func.body);
+        self.pop_function_local_import_scope(import_scope);
         self.in_function_body = old_in_function_body;
 
         // PHASE 6 OPTIMIZATION: Add defer drop logic before function returns
@@ -64,4 +66,72 @@ impl<'ast> CodeGenerator<'ast> {
         self.indent_level -= 1;
         output.push('}');
     }
+
+    /// File-scope `use std::strings` is recorded before any body runs. A
+    /// function-local import is only in scope for that body, so call sites
+    /// (`strings.len`) see the module and emit `strings::len`.
+    fn push_function_local_import_scope(
+        &mut self,
+        body: &[&Statement<'ast>],
+    ) -> FunctionLocalImportScope {
+        let mut added_modules = Vec::new();
+        let mut added_alias_keys = Vec::new();
+        let mut added_roots = Vec::new();
+        for stmt in body {
+            let Statement::Use { path, alias, .. } = stmt else {
+                continue;
+            };
+            if let Some(alias_name) = alias {
+                if self.module_alias_map.get(alias_name).is_none() {
+                    if let Some(last) = path.last() {
+                        self.module_alias_map
+                            .insert(alias_name.clone(), last.clone());
+                        added_alias_keys.push(alias_name.clone());
+                    }
+                }
+            }
+            if path.first().is_some_and(|p| p == "std") {
+                if path.len() >= 2 {
+                    let module = &path[1];
+                    if module
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_ascii_lowercase())
+                        && self.runtime_std_module_imports.insert(module.clone())
+                    {
+                        added_modules.push(module.clone());
+                    }
+                }
+            } else if let Some(first) = path.first() {
+                if !matches!(first.as_str(), "crate" | "super" | "self")
+                    && self.imported_path_roots.insert(first.clone())
+                {
+                    added_roots.push(first.clone());
+                }
+            }
+        }
+        FunctionLocalImportScope {
+            added_modules,
+            added_alias_keys,
+            added_roots,
+        }
+    }
+
+    fn pop_function_local_import_scope(&mut self, scope: FunctionLocalImportScope) {
+        for name in scope.added_modules {
+            self.runtime_std_module_imports.remove(&name);
+        }
+        for name in scope.added_alias_keys {
+            self.module_alias_map.remove(&name);
+        }
+        for name in scope.added_roots {
+            self.imported_path_roots.remove(&name);
+        }
+    }
+}
+
+struct FunctionLocalImportScope {
+    added_modules: Vec<String>,
+    added_alias_keys: Vec<String>,
+    added_roots: Vec<String>,
 }

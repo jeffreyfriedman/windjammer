@@ -762,16 +762,25 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_for_statement(pattern, iterable, body, location),
             Statement::Break { .. } => self.generate_break_statement(),
             Statement::Continue { .. } => self.generate_continue_statement(),
-            Statement::Use { path, alias, .. } => {
-                let mut output = self.indent();
-                output.push_str("use ");
-                output.push_str(&path.join("::"));
-                if let Some(alias_name) = alias {
-                    output.push_str(" as ");
-                    output.push_str(alias_name);
+            Statement::Use {
+                path,
+                alias,
+                is_pub,
+                ..
+            } => {
+                // Same rewrite as file-scope `use` (`std::strings` → runtime stem).
+                // A raw `path.join("::")` emits Rust `use std::strings` (E0432).
+                let generated = self.generate_use(path, alias.as_deref(), *is_pub);
+                if generated.is_empty() {
+                    String::new()
+                } else {
+                    let pad = self.indent();
+                    generated
+                        .lines()
+                        .filter(|line| !line.is_empty())
+                        .map(|line| format!("{pad}{line}\n"))
+                        .collect()
                 }
-                output.push_str(";\n");
-                output
             }
             Statement::Assignment {
                 target,

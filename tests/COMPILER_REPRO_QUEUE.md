@@ -93,11 +93,13 @@ Product: `apps/wj-proxy/tests/config_test.wj` inner import while adding `require
 
 | Gate | Status |
 |------|--------|
-| `fn_local_std_strings_use_must_cargo_check` | ❌ tip RED — `cargo test --test bug_fn_local_std_strings_use_test` |
+| `fn_local_std_strings_use_must_cargo_check` | ✅ tip GREEN (2026-10-08) |
 
-**Root cause layer:** codegen — function-local `use std::…` is not rewritten to the Windjammer std path.
+**Root cause layer:** codegen import path. Function-body `Statement::Use` joined the path raw (`use std::strings`) and never recorded the module, so `strings.len` stayed a method call. It now uses the same `generate_use` rewrite as file scope, and the function body temporarily registers that std module so the call emits `strings::len`.
 
-**Do not steal:** compiler `src/` (other agent).
+**What became unnecessary:** a second, unscoped import emitter for statement-level `use`.
+
+**Gates:** `cargo test --release --test all -- fn_local_std_strings_use_must_cargo_check user_join_name_clash_strings std_strings_contains package_flat_lib_wj_test_exports` — 4 passed.
 
 ## P3.741 (2026-10-08) — TDD WDB-469 (no compiler src)
 
