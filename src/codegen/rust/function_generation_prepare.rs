@@ -12783,13 +12783,11 @@ impl<'ast> CodeGenerator<'ast> {
                             sig.param_ownership[param_idx] =
                                 crate::analyzer::OwnershipMode::MutBorrowed;
                         }
-                    } else if self.emitted_rust_ref_formals.contains(&param.name) || emitted_shared {
-                        // P3.637: trust emitted `password: &str` even when the formal path
-                        // forgot to seed `emitted_rust_ref_formals` (username got the set,
-                        // password only the string).
-                        if emitted_shared {
-                            self.emitted_rust_ref_formals.insert(param.name.clone());
-                        }
+                    } else if emitted_shared {
+                        // Emitted `password: &str` is the contract. A stale
+                        // `emitted_rust_ref_formals` entry must not mark an owned
+                        // Copy formal (`id: NodeId`) as borrowed.
+                        self.emitted_rust_ref_formals.insert(param.name.clone());
                         let inner = Self::demoted_shared_ref_inner_type(&param.type_);
                         if !matches!(&sig.param_types[param_idx], Type::Reference(_))
                             || (crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
@@ -12806,9 +12804,11 @@ impl<'ast> CodeGenerator<'ast> {
                                 crate::analyzer::OwnershipMode::Borrowed;
                         }
                     } else {
-                        // Emitted owned Rust formal (including Copy aggregates whose
-                        // analyzer ownership stayed Borrowed from field reads — regression-060
-                        // `other: Lsn`). Align registry so call sites strip `&through`.
+                        // Emitted owned Rust formal (Copy aggregates included). Analyzer
+                        // ownership may still be Borrowed from field reads (regression-060
+                        // `other: Lsn`). Drop a stale shared-ref mark and align the
+                        // registry to owned so call sites do not prefix `&`.
+                        self.emitted_rust_ref_formals.remove(&param.name);
                         if matches!(sig.param_types[param_idx], Type::Reference(_)) {
                             sig.param_types[param_idx] = param.type_.clone();
                         }
@@ -12850,8 +12850,7 @@ impl<'ast> CodeGenerator<'ast> {
                         let from_string = emitted_param_strings
                             .get(emitted_idx)
                             .is_some_and(|s| emitted_formal_is_shared_ref(s));
-                        ms_emitted[user_param_idx] = (from_string
-                            || self.emitted_rust_ref_formals.contains(&param.name))
+                        ms_emitted[user_param_idx] = from_string
                             && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;

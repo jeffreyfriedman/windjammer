@@ -958,7 +958,20 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
         let owned_vec_emit = codegen_not_shared_ref
             && !mut_borrow_slot
             && crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, param_idx);
-        if !owned_text_emit && !owned_vec_emit {
+        // Copy / owned Custom formals emit `id: NodeId`, not `&NodeId`.
+        // `forwarding_borrow_params` is for Vec facades whose Rust API takes `&T`
+        // while the WJ formal stays owned. It must not borrow a pass-by-value struct
+        // (`find_index(&id)` when the formal is `id: NodeId`).
+        let owned_custom_emit = codegen_not_shared_ref
+            && !mut_borrow_slot
+            && sig
+                .formal_param_type(param_idx)
+                .or_else(|| sig.param_types.get(param_idx))
+                .is_some_and(|t| {
+                    matches!(t, Type::Custom(_))
+                        && !crate::codegen::rust::types::is_windjammer_text_type(t)
+                });
+        if !owned_text_emit && !owned_vec_emit && !owned_custom_emit {
             return true;
         }
     }

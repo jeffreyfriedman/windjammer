@@ -185,11 +185,15 @@ pub(crate) fn param_is_stale_engine_owned_stub(sig: &FunctionSignature, param_id
     if sig.has_self_receiver && param_idx == 0 {
         return false;
     }
+    // Defining-module codegen already recorded this slot (`true` = `&T`, `false` =
+    // owned `T`). A stale engine Owned stub is the one with no emission flag
+    // (`Owned QuestId` vs a later `&QuestId` refresh). `Some(false)` is the
+    // pass-by-value formal (`find_index(id: NodeId)`), not a stub to re-borrow.
     if sig
         .emitted_rust_ref_params
         .as_ref()
-        .and_then(|flags| flags.get(param_idx).copied())
-        == Some(true)
+        .and_then(|flags| flags.get(param_idx))
+        .is_some()
     {
         return false;
     }
