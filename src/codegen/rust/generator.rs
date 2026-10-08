@@ -1001,6 +1001,29 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
+            // Stdlib map/set key methods borrow (`HashMap::get(&K)`). A project
+            // skeleton from `std/collections.wj` (`key: K` owned) must not replace
+            // that contract — P3.647 would then clone the key into `&Q`.
+            if crate::type_classification::is_map_type_name(receiver_type)
+                || crate::type_classification::is_set_type_name(receiver_type)
+            {
+                if let Some(std_sig) =
+                    crate::analyzer::SignatureRegistry::stdlib().get_signature(&qualified)
+                {
+                    let user_idx = usize::from(std_sig.has_self_receiver);
+                    let std_borrowed = std_sig
+                        .param_ownership
+                        .get(user_idx)
+                        .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Borrowed));
+                    let resolved_owned = resolved
+                        .param_ownership
+                        .get(resolved.arg_param_index(0))
+                        .is_some_and(|o| matches!(o, crate::analyzer::OwnershipMode::Owned));
+                    if std_borrowed && resolved_owned {
+                        return Some(finalize(std_sig.clone()));
+                    }
+                }
+            }
             return Some(resolved);
         }
 
