@@ -203,8 +203,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // `&Note` / `&String` are Copy as references. Owned context still
                     // needs `.clone()` unless the pointee itself is Copy (P3.638).
                     let pointee_copy = self.is_type_copy(inner)
-                        && !crate::codegen::rust::string_utilities::type_is_owned_string(inner)
-                        && !matches!(inner.as_ref(), Type::Custom(_));
+                        && !crate::codegen::rust::string_utilities::type_is_owned_string(inner);
                     if pointee_copy {
                         return format!("*{}", base_name);
                     }
