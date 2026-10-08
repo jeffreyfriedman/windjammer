@@ -87,12 +87,10 @@ pub struct CodeGenerator<'ast> {
     pub(crate) struct_method_ast_formal_param_types:
         std::collections::HashMap<String, std::collections::HashMap<String, Vec<Type>>>,
     /// WJ source formal types per free function (authoritative before registry convergence).
-    pub(crate) free_function_ast_formal_param_types:
-        std::collections::HashMap<String, Vec<Type>>,
+    pub(crate) free_function_ast_formal_param_types: std::collections::HashMap<String, Vec<Type>>,
     /// Parallel to `free_function_ast_formal_param_types`: true when the WJ body assigns
     /// through that param's fields/indexes (take/restore → emit `&mut`, not owned).
-    pub(crate) free_function_ast_param_field_written:
-        std::collections::HashMap<String, Vec<bool>>,
+    pub(crate) free_function_ast_param_field_written: std::collections::HashMap<String, Vec<bool>>,
     /// Structs with ≥1 method that field-reads an owned non-Copy custom formal (lookup facade).
     pub(crate) struct_has_owned_key_field_lookup: std::collections::HashSet<String>,
     /// Structs with ≥1 method that only forwards an owned custom formal to a self sibling.
@@ -717,7 +715,9 @@ impl<'ast> CodeGenerator<'ast> {
             current_fn_emitted_mut_arg_indices: std::collections::HashSet::new(),
             current_fn_mixed_forwarder_params: std::collections::HashSet::new(),
             current_fn_forward_ref_if_params: std::collections::HashSet::new(),
-            borrow_delegation_formal_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            borrow_delegation_formal_cache: std::cell::RefCell::new(
+                std::collections::HashMap::new(),
+            ),
             borrow_delegation_formal_in_progress: std::cell::RefCell::new(
                 std::collections::HashSet::new(),
             ),
@@ -1274,6 +1274,11 @@ impl<'ast> CodeGenerator<'ast> {
         inference: &crate::ir::numeric_bridge::UnifiedNumericInference,
     ) {
         for (name, ty) in inference.export_const_types() {
+            if crate::codegen::rust::types::is_windjammer_text_type(&ty) {
+                // `const string` lowers to `&'static str`. Call sites in other
+                // modules must own it into `String` formals (P3.740).
+                self.module_string_consts.insert(name.clone());
+            }
             self.module_const_types.entry(name).or_insert(ty);
         }
     }
@@ -1543,9 +1548,8 @@ impl<'ast> CodeGenerator<'ast> {
         // name (`AuthApp::dispatch` → bare `dispatch`). MutBorrowed self would demote
         // the free formal (`req: &mut ServerRequest`) and call site (`dispatch(&mut req)`).
         let free_fn = !func.parameters.iter().any(|p| p.name == "self");
-        let sig_ok = |sig: &crate::analyzer::FunctionSignature| {
-            !(free_fn && sig.has_self_receiver_slot())
-        };
+        let sig_ok =
+            |sig: &crate::analyzer::FunctionSignature| !(free_fn && sig.has_self_receiver_slot());
         if let Some(sig) = global.get_signature(&func.name).filter(|s| sig_ok(s)) {
             return Some(sig);
         }
@@ -1585,9 +1589,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.library_source_root.is_none() {
             return false;
         }
-        if func.parameters.get(param_idx).is_some_and(|p| {
-            self.is_public_owned_non_copy_formal_api(p, func)
-        }) {
+        if func
+            .parameters
+            .get(param_idx)
+            .is_some_and(|p| self.is_public_owned_non_copy_formal_api(p, func))
+        {
             return false;
         }
         let Some(sig) = self.global_signature_for_function(func) else {
@@ -1619,14 +1625,15 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: &str,
         arg_index: usize,
     ) -> Option<FunctionSignature> {
-        let mut sig = crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
-            initial,
-            callee_name,
-            arg_index,
-            self.global_signature_registry.as_deref(),
-            &self.signature_registry,
-            &self.import_fn_alias_map,
-        )?;
+        let mut sig =
+            crate::codegen::rust::signature_promotion::refresh_call_site_signature_for_arg(
+                initial,
+                callee_name,
+                arg_index,
+                self.global_signature_registry.as_deref(),
+                &self.signature_registry,
+                &self.import_fn_alias_map,
+            )?;
         // Same-file demotion (`encode_line(todo: Todo)` → `todo: &Todo`) lives on
         // preregistered emitted formals, not the AST/registry signature. Write it
         // back so IR expected + force_owned see Ref, not a stale owned Custom.
@@ -1770,8 +1777,10 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         if sig.formal_param_type(pidx).is_some_and(|t| {
-            !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_))
-                && crate::type_classification::is_copy_pass_by_value_formal(t)
+            !matches!(
+                t,
+                crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)
+            ) && crate::type_classification::is_copy_pass_by_value_formal(t)
         }) {
             return false;
         }
@@ -2193,11 +2202,7 @@ impl<'ast> CodeGenerator<'ast> {
             Some((h, t)) => (h, Some(t)),
             None => (normalized.as_str(), None),
         };
-        if !head
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_uppercase())
-        {
+        if !head.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
             return name.to_string();
         }
         // P3.530: local `struct Url` after `use std::url` must not become
@@ -2206,11 +2211,14 @@ impl<'ast> CodeGenerator<'ast> {
             return name.to_string();
         }
         let fq = self.fq_path_for_imported_stdlib_type(head).or_else(|| {
-            self.stdlib_type_rust_paths.get(head).cloned().filter(|path| {
-                // Runtime `collections` only re-exports Rust std HashMap/HashSet —
-                // never rewrite those constructors to the runtime crate path.
-                !path.starts_with("windjammer_runtime::collections::")
-            })
+            self.stdlib_type_rust_paths
+                .get(head)
+                .cloned()
+                .filter(|path| {
+                    // Runtime `collections` only re-exports Rust std HashMap/HashSet —
+                    // never rewrite those constructors to the runtime crate path.
+                    !path.starts_with("windjammer_runtime::collections::")
+                })
         });
         let Some(fq) = fq else {
             return name.to_string();
@@ -2521,8 +2529,7 @@ impl<'ast> CodeGenerator<'ast> {
         // `&mut T` formals: peel stacked shared `&` (`take_edges(&csr)` → `&&mut T`).
         if self.identifier_already_mut_ref(name) {
             if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
-                let base =
-                    crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
+                let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
                 if base == name.as_str() {
                     *arg_str = name.clone();
                 }
@@ -2599,10 +2606,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Non-param names in borrow-flow analysis are not automatically emitted `&T`.
             // Owned `let` bindings (P3.526) and untyped match arms must not peel `&t`.
-            return matches!(
-                self.local_var_types.get(name),
-                Some(Type::Reference(_))
-            ) || self.borrowed_iterator_vars.contains(name);
+            return matches!(self.local_var_types.get(name), Some(Type::Reference(_)))
+                || self.borrowed_iterator_vars.contains(name);
         }
         // method_param_ownership is keyed by method name — only honor params for the
         // function currently being codegen'd (not sibling methods with the same param name).
@@ -2658,9 +2663,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// `inferred_borrowed_params` for callee-flow analysis without being emitted as `&` in Rust.
     /// `let x = …` rebinds the same name as an outer formal with an owned local type.
     pub(crate) fn local_owned_binding_shadows_formal(&self, name: &str) -> bool {
-        self.local_var_types.get(name).is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        }) && self.current_function_params.iter().any(|p| p.name == name)
+        self.local_var_types
+            .get(name)
+            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+            && self.current_function_params.iter().any(|p| p.name == name)
     }
 
     /// Owned `let` binding (including one that shadows a formal). Not an emitted Rust `&T`.
@@ -2669,9 +2675,10 @@ impl<'ast> CodeGenerator<'ast> {
     /// put `t` in `inferred_borrowed_params` because later callees take `&str` — that is
     /// not emit-truth. Call sites must pass `&t` into AsRef/`&str`, not peel to a move.
     pub(crate) fn binding_is_owned_local(&self, name: &str) -> bool {
-        let owned_local_ty = self.local_var_types.get(name).is_some_and(|t| {
-            !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-        });
+        let owned_local_ty = self
+            .local_var_types
+            .get(name)
+            .is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)));
         if !owned_local_ty {
             return false;
         }
@@ -2711,8 +2718,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .filter(|p| p.name != "self")
                 .position(|p| p.name == name);
-            if user_idx.is_some_and(|idx| self.current_fn_emitted_mut_arg_indices.contains(&idx))
-            {
+            if user_idx.is_some_and(|idx| self.current_fn_emitted_mut_arg_indices.contains(&idx)) {
                 return true;
             }
         }
@@ -2967,9 +2973,10 @@ impl<'ast> CodeGenerator<'ast> {
             || self.inferred_borrowed_params.contains(name)
             || self.str_ref_optimized_params.contains(name)
             || self.current_fn_emitted_formal_is_shared_ref(name))
-            && self.current_function_params.iter().any(|p| {
-                p.name == name && !self.is_type_copy(&p.type_)
-            })
+            && self
+                .current_function_params
+                .iter()
+                .any(|p| p.name == name && !self.is_type_copy(&p.type_))
     }
 
     /// Local `let` bindings that hold owned non-Copy values (not outer formals).
@@ -3020,14 +3027,13 @@ impl<'ast> CodeGenerator<'ast> {
                 !matches!(t, Type::Reference(_) | Type::MutableReference(_))
                     && crate::codegen::rust::types::is_windjammer_text_type(t)
             });
-        let callee_owned_text = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-            sig, param_idx,
-        )
-            || (bare_wj_text_formal
-                && (!is_caller_formal
-                    || !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
-                        sig, param_idx,
-                    )));
+        let callee_owned_text =
+            crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, param_idx)
+                || (bare_wj_text_formal
+                    && (!is_caller_formal
+                        || !crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
+                            sig, param_idx,
+                        )));
         if !callee_owned_text {
             return false;
         }
@@ -3041,10 +3047,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Loop/match locals that are WJ text (possibly mis-tagged as `&string` in `local_var_types`).
-    pub(in crate::codegen::rust) fn local_binding_is_windjammer_text(
-        &self,
-        binding: &str,
-    ) -> bool {
+    pub(in crate::codegen::rust) fn local_binding_is_windjammer_text(&self, binding: &str) -> bool {
         self.local_var_types.get(binding).is_some_and(|t| {
             let bare = match t {
                 Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -3105,17 +3108,17 @@ impl<'ast> CodeGenerator<'ast> {
             arg_index,
             None,
             None,
-        ) || self
-            .global_signature_registry
-            .as_ref()
-            .is_some_and(|g| {
-                self.ir_callee_arg_emits_owned_contract(g, callee_name, arg_index, None, None)
-            })
+        ) || self.global_signature_registry.as_ref().is_some_and(|g| {
+            self.ir_callee_arg_emits_owned_contract(g, callee_name, arg_index, None, None)
+        })
     }
 
     pub(in crate::codegen::rust) fn caller_emits_mut_ref_formal(&self, param_name: &str) -> bool {
         self.emitted_rust_ref_formals.contains(param_name)
-            && self.current_function_params.iter().any(|p| p.name == param_name)
+            && self
+                .current_function_params
+                .iter()
+                .any(|p| p.name == param_name)
             && !self.str_ref_optimized_params.contains(param_name)
             && !self
                 .current_function_params
@@ -3131,15 +3134,11 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         for key in [callee_name, simple] {
-            if let Some(sig) = self
-                .signature_registry
-                .get_signature(key)
-                .or_else(|| {
-                    self.global_signature_registry
-                        .as_ref()
-                        .and_then(|g| g.get_signature(key))
-                })
-            {
+            if let Some(sig) = self.signature_registry.get_signature(key).or_else(|| {
+                self.global_signature_registry
+                    .as_ref()
+                    .and_then(|g| g.get_signature(key))
+            }) {
                 let pidx = sig.arg_param_index(arg_index);
                 if matches!(
                     sig.param_ownership.get(pidx),
@@ -3281,9 +3280,11 @@ impl<'ast> CodeGenerator<'ast> {
         if self.current_stmt_restores_binding_after_move(name) {
             return false;
         }
-        if self.auto_clone_analysis.as_ref().is_some_and(|a| {
-            a.needs_clone(name, self.current_statement_idx).is_some()
-        }) {
+        if self
+            .auto_clone_analysis
+            .as_ref()
+            .is_some_and(|a| a.needs_clone(name, self.current_statement_idx).is_some())
+        {
             return true;
         }
         // `current_block_local_idx` is the index within `current_function_body`;
@@ -3531,8 +3532,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.binding_name_is_copy(name)
             || self.call_arg_is_copy_identity(arg_expr, None)
             || self.current_function_params.iter().any(|p| {
-                p.name == *name
-                    && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
+                p.name == *name && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
             })
         {
             if callee_wants_owned
@@ -3740,10 +3740,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .filter_map(|k| *k)
                 .find_map(|key| self.preregistered_free_function_emitted_params.get(key))
-                .or_else(|| {
-                    self.preregistered_free_function_emitted_params
-                        .get(simple)
-                })
+                .or_else(|| self.preregistered_free_function_emitted_params.get(simple))
             {
                 if formals.get(arg_idx).is_some_and(|f| {
                     !f.contains(": &") && !f.contains(": &mut ") && !f.contains(": &'a ")
@@ -3903,24 +3900,24 @@ impl<'ast> CodeGenerator<'ast> {
                                     .and_then(|g| g.get_signature(simple).cloned()),
                             ],
                         );
-                if let Some(sig) = sig.as_ref() {
-                    for (i, (_, arg)) in arguments.iter().enumerate() {
-                        if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
-                        {
-                            let refreshed = self
-                                .refresh_call_site_signature_for_arg(
-                                    Some(sig.clone()),
-                                    fname,
-                                    i,
-                                )
-                                .unwrap_or_else(|| sig.clone());
-                            let pidx = refreshed.arg_param_index(i);
-                            if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                                &refreshed, pidx,
-                            ) {
-                                continue;
-                            }
-                            if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                    if let Some(sig) = sig.as_ref() {
+                        for (i, (_, arg)) in arguments.iter().enumerate() {
+                            if matches!(arg, Expression::Identifier { name, .. } if name == param_name)
+                            {
+                                let refreshed = self
+                                    .refresh_call_site_signature_for_arg(
+                                        Some(sig.clone()),
+                                        fname,
+                                        i,
+                                    )
+                                    .unwrap_or_else(|| sig.clone());
+                                let pidx = refreshed.arg_param_index(i);
+                                if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                                    &refreshed, pidx,
+                                ) {
+                                    continue;
+                                }
+                                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
                                 &refreshed, pidx,
                             ) || crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(
                                 &refreshed, pidx,
@@ -3930,13 +3927,14 @@ impl<'ast> CodeGenerator<'ast> {
                             ) {
                                 return true;
                             }
+                            }
                         }
                     }
                 }
-                }
-                arguments.iter().any(|(_, arg)| {
-                    self.expr_call_expects_owned_formal_for_param(arg, param_name)
-                }) || self.expr_call_expects_owned_formal_for_param(function, param_name)
+                arguments
+                    .iter()
+                    .any(|(_, arg)| self.expr_call_expects_owned_formal_for_param(arg, param_name))
+                    || self.expr_call_expects_owned_formal_for_param(function, param_name)
             }
             Expression::MethodCall {
                 object,
@@ -3976,9 +3974,10 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                arguments.iter().any(|(_, arg)| {
-                    self.expr_call_expects_owned_formal_for_param(arg, param_name)
-                }) || self.expr_call_expects_owned_formal_for_param(object, param_name)
+                arguments
+                    .iter()
+                    .any(|(_, arg)| self.expr_call_expects_owned_formal_for_param(arg, param_name))
+                    || self.expr_call_expects_owned_formal_for_param(object, param_name)
             }
             Expression::Binary { left, right, .. } => {
                 self.expr_call_expects_owned_formal_for_param(left, param_name)
@@ -4391,9 +4390,10 @@ impl<'ast> CodeGenerator<'ast> {
             || self.current_function_params.iter().any(|p| {
                 p.name == name && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
             })
-            || self.local_var_types.get(name).is_some_and(|t| {
-                matches!(t, Type::Custom(n) if self.enum_is_unit_copy(n))
-            })
+            || self
+                .local_var_types
+                .get(name)
+                .is_some_and(|t| matches!(t, Type::Custom(n) if self.enum_is_unit_copy(n)))
         {
             return arg_str.to_string();
         }
@@ -4457,8 +4457,7 @@ impl<'ast> CodeGenerator<'ast> {
         // must not get `.clone()` — IR deref (`*post`) owns the value; `*post.clone()`
         // is E0614 because `&T::clone` autoderefs to owned T.
         if self.borrowed_iterator_vars.contains(name)
-            && (self.binding_is_copy_pass_by_value_scalar(name)
-                || self.binding_name_is_copy(name))
+            && (self.binding_is_copy_pass_by_value_scalar(name) || self.binding_name_is_copy(name))
         {
             return arg_str.to_string();
         }
@@ -4579,9 +4578,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Accepts bare enum names (`WeatherType`) or variant paths (`WeatherType::Clear`).
     pub(crate) fn enum_is_unit_copy(&self, name: &str) -> bool {
         let enum_name = if crate::type_classification::is_enum_variant_constructor_path(name) {
-            name.rsplit_once("::")
-                .map(|(e, _)| e)
-                .unwrap_or(name)
+            name.rsplit_once("::").map(|(e, _)| e).unwrap_or(name)
         } else {
             name
         };
@@ -4595,7 +4592,10 @@ impl<'ast> CodeGenerator<'ast> {
         // Key form is `Enum::Variant` — all payloads empty ⇒ unit-only Copy enum.
         let mut saw = false;
         for (key, payloads) in &self.enum_variant_types {
-            let key_enum = key.rsplit_once("::").map(|(e, _)| e).unwrap_or(key.as_str());
+            let key_enum = key
+                .rsplit_once("::")
+                .map(|(e, _)| e)
+                .unwrap_or(key.as_str());
             let key_base = key_enum.rsplit("::").next().unwrap_or(key_enum);
             if key_base == base || key_enum == enum_name || key_enum == name {
                 saw = true;
@@ -4799,15 +4799,13 @@ impl<'ast> CodeGenerator<'ast> {
             if !super::string_utilities::already_owned_string_expr(expr_str) {
                 if let crate::parser::Expression::FieldAccess { field, .. } = expr {
                     if self.module_string_consts.contains(field) {
-                        *expr_str =
-                            super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                        *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);
                         return;
                     }
                 }
                 if let crate::parser::Expression::Identifier { name, .. } = expr {
                     if self.module_string_consts.contains(name) {
-                        *expr_str =
-                            super::string_utilities::coerce_expr_to_owned_string(expr_str);
+                        *expr_str = super::string_utilities::coerce_expr_to_owned_string(expr_str);
                         return;
                     }
                     let is_ref_text = self.infer_expression_type(expr).as_ref().is_some_and(|t| {
@@ -4997,18 +4995,21 @@ impl<'ast> CodeGenerator<'ast> {
                 return false;
             }
             let string_range_slice = matches!(index, crate::parser::Expression::Range { .. })
-                && self.infer_expression_type(object).as_ref().is_some_and(|t| {
-                    let bare = match t {
-                        crate::parser::Type::Reference(inner)
-                        | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
-                        other => other,
-                    };
-                    matches!(bare, crate::parser::Type::String)
-                        || matches!(
-                            bare,
-                            crate::parser::Type::Custom(n) if n == "String" || n == "str"
-                        )
-                });
+                && self
+                    .infer_expression_type(object)
+                    .as_ref()
+                    .is_some_and(|t| {
+                        let bare = match t {
+                            crate::parser::Type::Reference(inner)
+                            | crate::parser::Type::MutableReference(inner) => inner.as_ref(),
+                            other => other,
+                        };
+                        matches!(bare, crate::parser::Type::String)
+                            || matches!(
+                                bare,
+                                crate::parser::Type::Custom(n) if n == "String" || n == "str"
+                            )
+                    });
             // Clone when non-Copy, or for Custom elements (empty WJ std stubs may be mis-
             // classified Copy while runtime types are Clone-only — E0507 on `rows[0]`).
             let needs_clone = string_range_slice

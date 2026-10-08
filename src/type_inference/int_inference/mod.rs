@@ -187,10 +187,7 @@ impl IntInference {
 
     /// Register external crate metadata roots so imported callees (e.g. `use lib::double`
     /// with `double(x: i32)`) constrain int literals via `metadata.json`.
-    pub fn set_external_crate_metadata_paths(
-        &mut self,
-        paths: &HashMap<String, PathBuf>,
-    ) {
+    pub fn set_external_crate_metadata_paths(&mut self, paths: &HashMap<String, PathBuf>) {
         self.external_crate_metadata_paths = paths.clone();
     }
 
@@ -327,6 +324,11 @@ impl IntInference {
     /// peers range literals correctly (P3.280).
     pub fn export_const_types(&self) -> HashMap<String, Type> {
         self.const_types.clone()
+    }
+
+    /// Imported `const string` (metadata) lowers to `&'static str`.
+    pub fn register_string_const(&mut self, name: String) {
+        self.const_types.insert(name, Type::String);
     }
 
     /// TDD FIX: Substitute generic type parameters with concrete types
@@ -671,9 +673,15 @@ impl IntInference {
                         return true;
                     }
                 }
-                Statement::While { body: while_body, .. }
-                | Statement::For { body: while_body, .. }
-                | Statement::Loop { body: while_body, .. } => {
+                Statement::While {
+                    body: while_body, ..
+                }
+                | Statement::For {
+                    body: while_body, ..
+                }
+                | Statement::Loop {
+                    body: while_body, ..
+                } => {
                     if Self::body_has_len_while_counter(while_body.as_slice(), name) {
                         return true;
                     }
@@ -958,8 +966,7 @@ impl IntInference {
                                 "compound pattern RHS must match LHS operand width".to_string(),
                             ));
                             if int_ty_from_target.is_none() {
-                                int_ty_from_target =
-                                    self.resolve_expression_int_type(left);
+                                int_ty_from_target = self.resolve_expression_int_type(left);
                             }
                             if let Some(int_ty) = int_ty_from_target {
                                 self.constraints.push(IntConstraint::MustBe(

@@ -10,7 +10,10 @@ Product: `wj-uuid` `hyphen_count(NIL)` from `tests/uuid_test.wj` on tip `wj` 0.5
 
 | Gate | Status |
 |------|--------|
-| `bug_wj_test_lib_const_into_owned_formal_test` | ❌ tip RED — `hyphen_count(NIL)` expected `String`, found `&str` |
+| `cross_module_string_const_into_owned_formal_must_own` | ✅ isolate GREEN — `NIL.to_string()` |
+| `external_metadata_string_const_into_owned_formal_must_own` | ✅ isolate GREEN — metadata `string_consts` → `NIL.to_string()` |
+
+**Root cause layer:** signature — library `const string` is `&'static str`, but only the defining file was in `module_string_consts`. Imported consts now come from shared numeric-inference const types and `metadata.json` `string_consts`.
 
 **Do not steal:** compiler `src/`.
 

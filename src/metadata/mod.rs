@@ -18,9 +18,9 @@ pub use signature_filters::{
 };
 
 pub use crate_metadata::{
-    find_project_root, load_function_signatures_from_metadata,
+    collect_string_const_names, find_project_root, load_function_signatures_from_metadata,
     load_merged_external_function_signatures, load_merged_external_struct_fields,
-    load_struct_field_types_from_file, meta_cache_path, meta_cache_root,
+    load_string_const_names, load_struct_field_types_from_file, meta_cache_path, meta_cache_root,
     resolve_metadata_json_path, CrateMetadata,
 };
 pub use function_metadata::{
@@ -472,6 +472,11 @@ pub fn merge_file_skeleton_into_crate(
         .unwrap_or("")
         .to_string();
     crate_metadata.merge_module(&module_meta);
+    crate_metadata
+        .string_consts
+        .extend(crate_metadata::collect_string_const_names(program));
+    crate_metadata.string_consts.sort();
+    crate_metadata.string_consts.dedup();
 }
 
 /// Build a ModuleMetadata from analyzed program items and a converged signature registry.
@@ -490,15 +495,13 @@ pub fn collect_analyzed_module_metadata(
         match item {
             Item::Function { decl, .. } => {
                 let module_recv = (!module_name.is_empty()).then_some(module_name);
-                let sig = registry
-                    .get_signature(&decl.name)
-                    .or_else(|| {
-                        crate::analyzer::stdlib_method_traits::lookup_method_signature(
-                            &decl.name,
-                            module_recv,
-                            registry,
-                        )
-                    });
+                let sig = registry.get_signature(&decl.name).or_else(|| {
+                    crate::analyzer::stdlib_method_traits::lookup_method_signature(
+                        &decl.name,
+                        module_recv,
+                        registry,
+                    )
+                });
                 if let Some(sig) = sig {
                     let key = if registry.get_signature(&decl.name).is_some() {
                         decl.name.clone()
@@ -550,11 +553,8 @@ pub fn collect_analyzed_module_metadata(
                             registry,
                         )
                     {
-                        let mut meta_sig = metadata_function_sig_from_analyzer(
-                            sig,
-                            true,
-                            Some(decl.name.clone()),
-                        );
+                        let mut meta_sig =
+                            metadata_function_sig_from_analyzer(sig, true, Some(decl.name.clone()));
                         meta_sig.is_trait_method = true;
                         meta.functions.insert(full_name, meta_sig);
                     }

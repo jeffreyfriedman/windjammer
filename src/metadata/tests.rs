@@ -242,6 +242,7 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
         },
         version: "0.1.0".to_string(),
         copy_structs: Vec::new(),
+        string_consts: Vec::new(),
     };
     std::fs::write(
         proj.join("metadata.json"),
@@ -263,7 +264,6 @@ fn test_project_root_metadata_overrides_stale_wj_cache() {
     );
     assert!(sig.has_self_receiver);
 }
-
 
 #[test]
 fn stdlib_meta_string_file_deserializes_without_trait_impls_or_version() {

@@ -251,6 +251,11 @@ pub fn build_project_ext(
         let mut numeric_inference = crate::ir::numeric_bridge::UnifiedNumericInference::new();
         if !external_paths.is_empty() {
             numeric_inference.set_external_crate_metadata_paths(&external_paths);
+            for dir in external_paths.values() {
+                for name in crate::metadata::load_string_const_names(dir) {
+                    numeric_inference.register_string_const(&name);
+                }
+            }
         }
         numeric_inference.infer_program(&program);
         super::bail_on_inference_errors(&numeric_inference.errors, "Numeric", Some(file))?;
@@ -275,8 +280,7 @@ pub fn build_project_ext(
         // Single-file builds skip compiling `std::` modules; still register their
         // struct/enum shapes so string→unit-enum field coercion works (HttpMethod).
         if let Ok(source_text) = std::fs::read_to_string(file) {
-            let std_mods =
-                super::library_copy_registry::stdlib_modules_from_source(&source_text);
+            let std_mods = super::library_copy_registry::stdlib_modules_from_source(&source_text);
             if !std_mods.is_empty() {
                 let (std_fields, std_variants, std_paths) =
                     super::library_copy_registry::collect_stdlib_api_types_for_modules(&std_mods);
@@ -467,9 +471,14 @@ mod tests {
             structs: HashMap::new(),
             functions,
             copy_structs: Vec::new(),
+            string_consts: Vec::new(),
             version: "0.1.0".to_string(),
         };
-        std::fs::write(dep.join("metadata.json"), serde_json::to_string(&meta).unwrap()).unwrap();
+        std::fs::write(
+            dep.join("metadata.json"),
+            serde_json::to_string(&meta).unwrap(),
+        )
+        .unwrap();
 
         let app = tmp.path().join("app");
         std::fs::create_dir_all(app.join("src")).unwrap();
@@ -569,10 +578,7 @@ pub fn parse_level(text: &str) -> Option<u8> { None }
             Some(&[false, true][..]),
             "key must be shared &str: {sig:#?}"
         );
-        assert_eq!(
-            sig.param_ownership.get(1),
-            Some(&OwnershipMode::Borrowed)
-        );
+        assert_eq!(sig.param_ownership.get(1), Some(&OwnershipMode::Borrowed));
     }
 
     #[test]

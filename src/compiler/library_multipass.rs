@@ -726,8 +726,8 @@ pub(crate) fn build_library_multipass(
         }
 
         for program in &parsed_programs {
-            if let Err(e) = shared_analyzer
-                .infer_trait_signatures_from_impls(program, global_registry.as_ref())
+            if let Err(e) =
+                shared_analyzer.infer_trait_signatures_from_impls(program, global_registry.as_ref())
             {
                 eprintln!("Cross-file trait inference warning: {}", e);
             }
@@ -870,25 +870,20 @@ pub(crate) fn build_library_multipass(
                     if sig.param_ownership.is_empty() {
                         continue;
                     }
-                    let is_local = crate::metadata::signature_targets_local_struct(
-                        name,
-                        &local_struct_names,
-                    ) || (!name.contains("::")
-                        && crate_metadata.functions.contains_key(name));
+                    let is_local =
+                        crate::metadata::signature_targets_local_struct(name, &local_struct_names)
+                            || (!name.contains("::")
+                                && crate_metadata.functions.contains_key(name));
                     if !is_local {
                         continue;
                     }
                     // Install under all key variants: short, file-stem-qualified,
                     // and module-path-qualified.
                     let mut keys = vec![name.clone()];
-                    if !file_stem.is_empty()
-                        && !name.starts_with(&format!("{}::", file_stem))
-                    {
+                    if !file_stem.is_empty() && !name.starts_with(&format!("{}::", file_stem)) {
                         keys.push(format!("{}::{}", file_stem, name));
                     }
-                    if !module_path.is_empty()
-                        && !name.starts_with(&format!("{}::", module_path))
-                    {
+                    if !module_path.is_empty() && !name.starts_with(&format!("{}::", module_path)) {
                         keys.push(format!("{}::{}", module_path, name));
                         keys.push(format!("crate::{}::{}", module_path, name));
                     }
@@ -991,10 +986,8 @@ pub(crate) fn build_library_multipass(
             {
                 local_converged_sigs.insert(name.clone(), sig.clone());
                 if !name.contains("::") && !analysis.file_stem.is_empty() {
-                    local_converged_sigs.insert(
-                        format!("{}::{}", analysis.file_stem, name),
-                        sig.clone(),
-                    );
+                    local_converged_sigs
+                        .insert(format!("{}::{}", analysis.file_stem, name), sig.clone());
                 }
             }
         }
@@ -1133,9 +1126,8 @@ pub(crate) fn build_library_multipass(
             }
             // Per-file import aliases (`qs_get` → `wj_querystring::get`) must
             // overwrite analyzer Owned stubs before IR expected types are set.
-            let mut ir_reg = SignatureRegistry::layered(std::sync::Arc::clone(
-                &final_global_registry,
-            ));
+            let mut ir_reg =
+                SignatureRegistry::layered(std::sync::Arc::clone(&final_global_registry));
             crate::codegen::rust::program_generation::install_program_import_alias_signatures(
                 &mut ir_reg,
                 &parsed_programs[i],
@@ -1147,11 +1139,7 @@ pub(crate) fn build_library_multipass(
             );
             for diag in &module.diagnostics {
                 if matches!(diag.severity, DiagnosticSeverity::Error) {
-                    eprintln!(
-                        "[IR ERROR] {}: {}",
-                        sources[i].0.display(),
-                        diag.message
-                    );
+                    eprintln!("[IR ERROR] {}: {}", sources[i].0.display(), diag.message);
                 }
             }
             crate::ir::signature_bridge::sync_ir_ownership_to_registry(
@@ -1307,8 +1295,8 @@ pub(crate) fn build_library_multipass(
         // in the same library build (MemoryEngine::range_scan → LsmEngine call sites).
         for i in batch {
             let file = &sources[*i].0;
-            let file_progress = total_codegen > 50
-                || std::env::var_os("WJ_DEBUG_CODEGEN_FILE").is_some();
+            let file_progress =
+                total_codegen > 50 || std::env::var_os("WJ_DEBUG_CODEGEN_FILE").is_some();
             let file_start = Instant::now();
             if file_progress {
                 let rel = file
@@ -1332,10 +1320,9 @@ pub(crate) fn build_library_multipass(
 
             // Layered local registry: O(|local|) overlay + Arc global fallback.
             // Never copy the full global map (~10k–20k+ keys) into each file.
-            let mut full_registry =
-                crate::analyzer::SignatureRegistry::layered(std::sync::Arc::clone(
-                    &final_global_registry,
-                ));
+            let mut full_registry = crate::analyzer::SignatureRegistry::layered(
+                std::sync::Arc::clone(&final_global_registry),
+            );
             for (name, sig) in analysis.registry.signatures.iter() {
                 if let Some(existing) = full_registry.get_signature(name) {
                     if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
@@ -1348,9 +1335,7 @@ pub(crate) fn build_library_multipass(
                         continue;
                     }
                 }
-                full_registry
-                    .signatures
-                    .insert(name.clone(), sig.clone());
+                full_registry.signatures.insert(name.clone(), sig.clone());
             }
             // Prefer post-bare-pass / field-forward restored ownership over stale
             // per-file analysis MutBorrowed so preregistered formals and call sites agree.
@@ -1402,8 +1387,7 @@ pub(crate) fn build_library_multipass(
             codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
             codegen.merge_function_emitted_mut_arg_indices(&accumulated_emitted_mut_arg_indices);
             codegen.set_copy_types_registry((*global_copy_structs).clone());
-            codegen
-                .set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
+            codegen.set_explicit_copy_types_registry((*global_explicit_copy_structs_arc).clone());
             codegen.set_non_copy_types_registry((*global_non_copy_types_arc).clone());
             codegen.set_global_struct_field_types((*global_struct_fields).clone());
             codegen.set_global_enum_variant_types((*global_enum_variant_types).clone());
@@ -1455,8 +1439,7 @@ pub(crate) fn build_library_multipass(
             // Skip when there is no configured package name (temp/integration trees keep
             // `use crate::` for single-crate cargo-check harnesses).
             if is_crate_root_main {
-                if let Some(lib_name) =
-                    crate::cargo_toml::infer_configured_package_name(&src_base)
+                if let Some(lib_name) = crate::cargo_toml::infer_configured_package_name(&src_base)
                 {
                     let lib_name = lib_name.replace('-', "_");
                     rewrite_bin_crate_imports_to_lib(&analysis.output_file, &lib_name)?;
@@ -1563,6 +1546,14 @@ pub(crate) fn build_library_multipass(
         }
         crate_metadata.copy_structs = global_copy_structs.iter().cloned().collect::<Vec<_>>();
         crate_metadata.copy_structs.sort();
+        crate_metadata.string_consts.clear();
+        for program in &parsed_programs {
+            crate_metadata
+                .string_consts
+                .extend(crate::metadata::collect_string_const_names(program));
+        }
+        crate_metadata.string_consts.sort();
+        crate_metadata.string_consts.dedup();
         if !crate_metadata.structs.is_empty() || !crate_metadata.functions.is_empty() {
             super::write_crate_metadata_json(output, &crate_metadata)?;
         }
@@ -1729,6 +1720,11 @@ fn run_parallel_numeric_inference(
     let mut global = UnifiedNumericInference::new();
     if !external_paths.is_empty() {
         global.set_external_crate_metadata_paths(external_paths);
+        for dir in external_paths.values() {
+            for name in crate::metadata::load_string_const_names(dir) {
+                global.register_string_const(&name);
+            }
+        }
     }
     global.set_global_function_signatures(global_float_signatures);
     global.set_global_struct_field_types(global_struct_fields);

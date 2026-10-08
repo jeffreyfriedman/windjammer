@@ -119,6 +119,9 @@ pub struct CrateMetadata {
     /// Structs that implement Copy (enables cross-crate Copy detection)
     #[serde(default)]
     pub copy_structs: Vec<String>,
+    /// `const string` names that lower to `&'static str` (cross-crate owned formals).
+    #[serde(default)]
+    pub string_consts: Vec<String>,
     /// Version for compatibility
     pub version: String,
 }
@@ -135,6 +138,7 @@ impl CrateMetadata {
             structs: HashMap::new(),
             functions: HashMap::new(),
             copy_structs: Vec::new(),
+            string_consts: Vec::new(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
@@ -218,6 +222,57 @@ pub fn resolve_metadata_json_path(path: &Path) -> Option<PathBuf> {
     } else {
         None
     }
+}
+
+/// `const string` literal names from a crate `metadata.json` (file or directory).
+pub fn load_string_const_names(meta_dir_or_file: &Path) -> Vec<String> {
+    let Some(metadata_path) = resolve_metadata_json_path(meta_dir_or_file) else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(&metadata_path) else {
+        return Vec::new();
+    };
+    let Ok(crate_meta) = serde_json::from_str::<CrateMetadata>(&text) else {
+        return Vec::new();
+    };
+    crate_meta.string_consts
+}
+
+/// Names of `const`/`static` string literals in `program` (Rust `&'static str`).
+pub fn collect_string_const_names(program: &crate::parser::Program) -> Vec<String> {
+    fn walk(item: &crate::parser::Item, out: &mut Vec<String>) {
+        match item {
+            crate::parser::Item::Const {
+                name, type_, value, ..
+            }
+            | crate::parser::Item::Static {
+                name, type_, value, ..
+            } => {
+                if crate::codegen::rust::types::is_windjammer_text_type(type_)
+                    && matches!(
+                        value,
+                        crate::parser::Expression::Literal {
+                            value: crate::parser::Literal::String(_),
+                            ..
+                        }
+                    )
+                {
+                    out.push(name.clone());
+                }
+            }
+            crate::parser::Item::Mod { items, .. } => {
+                for sub in items {
+                    walk(sub, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for item in &program.items {
+        walk(item, &mut out);
+    }
+    out
 }
 
 /// Load function signatures from a crate `metadata.json` (file or directory).
