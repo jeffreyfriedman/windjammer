@@ -1349,6 +1349,26 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
         }
     }
 
+    // Codegen-confirmed owned user formals (`emitted_rust_ref_params == false` and
+    // `emitted_owned_arg_contract`) are the call-site contract. A stdlib homonym
+    // baseline must not re-borrow them (`find_index(id: NodeId)` → `find_index(&id)`).
+    if let Some(sig) = signature {
+        let pidx = sig.arg_param_index(arg_index);
+        let codegen_confirmed_owned = sig
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|flags| flags.get(pidx))
+            .copied()
+            == Some(false)
+            && crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx);
+        if codegen_confirmed_owned
+            && !crate::codegen::rust::signature_promotion::signature_is_wj_std_stub_or_runtime_qualified(
+                sig,
+            )
+        {
+            return false;
+        }
+    }
     // Runtime/stdlib scanner baseline wins over layered WJ stubs — including stubs that
     // codegen-confirmed owned emission when analyzing `std/json.wj`
     // (`is_array(value: Value) { false }` → `emitted_rust_ref_params=[false]`).

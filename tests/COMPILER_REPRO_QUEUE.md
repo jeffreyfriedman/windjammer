@@ -1,6 +1,18 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.743 (2026-10-08) — Copy struct formal must not be re-borrowed at the call site
 
+`find_index(self, id: NodeId)` emits `id: NodeId`, then `has_item` / `remove_item` called `self.find_index(&id)`.
+
+| Gate | Status |
+|------|--------|
+| `copy_struct_arg_not_borrowed_at_call_site` | ✅ tip GREEN — `find_index(id)` |
+
+**Root cause layer:** signature. Method-signature refresh treated a stale `emitted_rust_ref_formals` membership as a shared formal even when the emitted string was `id: NodeId`. `param_is_stale_engine_owned_stub` then treated that codegen-confirmed owned `Custom` slot as a stale engine stub, so `emitted_owned_arg_contract` was false and `runtime_std_param_needs_auto_borrow_resolved` prefixed `&`.
+
+**What became unnecessary:** using the stale shared-ref name set to override an owned emitted formal. Forwarding-borrow no longer borrows a codegen-confirmed owned `Custom` formal. Auto-borrow returns before a stdlib homonym baseline when the user formal is codegen-confirmed owned and not a WJ std stub.
+
+**Gates:** `cargo test --release --test all -- copy_struct_arg_not_borrowed quest_id` — 7 passed (copy struct + quest id regressions).
 
 ## P3.742 (2026-10-08) — function-local `use std::strings`
 
@@ -1660,7 +1672,7 @@ Len-driven loops (`while i < strings.len(s)`) already GREEN (P3.300/P3.452);
 
 | Gate | Status |
 |------|--------|
-| `while_lit_bound_substring_int_must_unify_usize` | ✅ tip GREEN — `while i < 64_i32` + `i as usize` into substring |
+| `while_lit_bound_substring_int_must_unify_usize` | ❌ tip RED (2026-10-08) — `while i < 64_usize` with `i: i32` (substring args already `as usize`) |
 
 **Root cause layer:** constraint/solver-adjacent width tracking — index prepass
 stashed `local_var_types[i]=usize` while let-emit kept `codegen_i32`; while-pin
@@ -1670,7 +1682,7 @@ trusted the stale usize mark → `64_usize` + bare `i` into substring.
 **What became unnecessary:** reshaping fixed-width scans away from indexed substring.
 
 **Gates:** `cargo test --release --test all -- while_lit_bound_substring_int_must_unify_usize`
-— **passed**.
+— **failed** on tip 2026-10-08 (bound suffix `64_usize` vs counter `i: i32`).
 
 **Do not steal:** P3.300/P3.315/P3.452/P3.454, P3.671–P3.678 (filed).
 
