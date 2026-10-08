@@ -2,6 +2,35 @@
 
 
 
+## P3.739 (2026-10-07) — TDD WDB-468 (DB agent; no compiler src)
+
+Indexed Copy `i64` into a local `let` must not `.clone()`.
+
+Product `editor/csg.rs` `split_polygon_by_plane`:
+```wj
+let ti = types[i]
+let tj = types[j]
+```
+Tip MultiFile emits bare `types[i]` (isolate GREEN). Tip-out still has
+`types[i].clone()` / `types[j].clone()` (untyped classify codes inferred `i64`).
+
+| Gate | Status |
+|------|--------|
+| WDB-468 MultiFile | ✅ isolate GREEN — bare `types[i]` |
+| WDB-468 tip-out | ❌ tip RED — clones in `rel_tip_out/editor/csg.rs` |
+
+**Root cause layer:** tip-out lag — isolate tip already correct; indexed Copy integers still `.clone()` into locals.
+
+**Why this is a new class:**
+- WDB-464 is indexed Copy `u8` into `Vec::push`.
+- WDB-466 is indexed Copy tuple **field** into push.
+- WDB-456 is a plain i32 local reassign, not an index.
+- This is `Vec<i64>` index into `let ti` / `let tj`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb468_` — isolate GREEN / tip RED (2026-10-07).
+
+**Do not steal:** WDB-406/408/411/457–468, P3.508–P3.739, WDB-412–468 (filed).
+
 ## P3.736 (2026-10-07) — TDD WDB-467 (DB agent; no compiler src)
 
 Copy `[u8; 4]` from `to_le_bytes` reused in `from_le_bytes` must not `.clone()`.
