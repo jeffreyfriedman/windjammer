@@ -195,9 +195,10 @@ impl<'ast> CodeGenerator<'ast> {
                 // `signed_init_type_from_current_body` still sees the AST `0` as WJ `int`
                 // and would force `i == 0_i64`. Emit-truth usize wins over init-literal peer.
                 if self.usize_variables.contains(name)
-                    || self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                        crate::codegen::rust::type_casting::type_is_usize(t)
-                    })
+                    || self
+                        .local_var_types
+                        .get(name.as_str())
+                        .is_some_and(|t| crate::codegen::rust::type_casting::type_is_usize(t))
                 {
                     return None;
                 }
@@ -338,8 +339,7 @@ impl<'ast> CodeGenerator<'ast> {
                         })
             )
         };
-        let mut left_is_usize =
-            self.expression_produces_usize(left) || ident_in_usize_vars(left);
+        let mut left_is_usize = self.expression_produces_usize(left) || ident_in_usize_vars(left);
         let mut right_is_usize =
             self.expression_produces_usize(right) || ident_in_usize_vars(right);
         let signed_zero_sentinel = if is_comparison {
@@ -446,8 +446,7 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                 })
             };
-            if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal)
-            {
+            if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal) {
                 // WDB-315: `pos + 4 + 2` (usize accum) must keep `_usize` literals.
                 // Do not let coord-builder i32 peer overwrite a true usize operand / assign slot.
                 // P3.679: while-condition pin to i32 (`let mut i: i32`) must not be overwritten
@@ -455,8 +454,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // P3.679: while-condition pin to i32 must not be overwritten by stale
                 // index-`usize_variables` when the body calls substring formals.
                 let while_pin_i32 = prev_bin_int.as_ref().is_some_and(|t| {
-                    matches!(t, Type::Int32)
-                        || matches!(t, Type::Custom(n) if n == "i32")
+                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
                 });
                 if while_pin_i32 {
                     self.assignment_int_target_type = prev_bin_int.clone();
@@ -484,7 +482,11 @@ impl<'ast> CodeGenerator<'ast> {
                     // WDB-330: `let bits: u32 = (x >> 16) & 0x7FFF` — keep the annotated
                     // assign slot when a weak/default peer (WJ `int`/i64) would overwrite it
                     // before nested shift/mask literals are emitted.
-                    if Self::narrow_assign_int_slot_beats_weak_peer(&prev_bin_int, &t) {
+                    // Comparisons follow the other operand (`int == 1` stays i64) even when
+                    // an outer i32 slot is live (P3.705).
+                    if !is_comparison
+                        && Self::narrow_assign_int_slot_beats_weak_peer(&prev_bin_int, &t)
+                    {
                         self.assignment_int_target_type = prev_bin_int.clone();
                     } else {
                         self.assignment_int_target_type = Some(t);
@@ -494,7 +496,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if assign_slot_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 } else if let Some(t) = peer_int_type(self, right) {
-                    if Self::narrow_assign_int_slot_beats_weak_peer(&prev_bin_int, &t) {
+                    if !is_comparison
+                        && Self::narrow_assign_int_slot_beats_weak_peer(&prev_bin_int, &t)
+                    {
                         self.assignment_int_target_type = prev_bin_int.clone();
                     } else {
                         self.assignment_int_target_type = Some(t);
@@ -596,9 +600,10 @@ impl<'ast> CodeGenerator<'ast> {
                 && !left_is_usize
             {
                 if let Expression::Identifier { name, .. } = left {
-                    let param_is_wj_int = self.current_function_params.iter().any(|p| {
-                        p.name == *name && matches!(&p.type_, Type::Int)
-                    });
+                    let param_is_wj_int = self
+                        .current_function_params
+                        .iter()
+                        .any(|p| p.name == *name && matches!(&p.type_, Type::Int));
                     if !param_is_wj_int {
                         left_str = format!("{left_str} as usize");
                         skip_mixed_int_promotion = true;
@@ -634,17 +639,11 @@ impl<'ast> CodeGenerator<'ast> {
         if usize_signed_int_cast_will_apply && !skip_mixed_int_promotion {
             if left_is_usize {
                 (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
-                    &left_str,
-                    &right_str,
-                    true,
-                    false,
+                    &left_str, &right_str, true, false,
                 );
             } else {
                 (left_str, right_str) = super::type_casting::cast_for_usize_binary_op(
-                    &left_str,
-                    &right_str,
-                    false,
-                    true,
+                    &left_str, &right_str, false, true,
                 );
             }
         }
@@ -683,9 +682,8 @@ impl<'ast> CodeGenerator<'ast> {
                 && self.infer_expression_type_is_usize(right);
             // Loop counters marked via `.len()` bounds (`usize_variables`) stay usize even when
             // int inference unified the binding as WJ `int` / i64 (wal_layout upsert loops).
-            let skip_int_promotion_both_usize_operands = (is_comparison || is_arithmetic)
-                && left_is_usize
-                && right_is_usize;
+            let skip_int_promotion_both_usize_operands =
+                (is_comparison || is_arithmetic) && left_is_usize && right_is_usize;
             // P3.369: i64 index + literal offset — skip i32 promotion before usize rewrite.
             let skip_int_promotion_index_i64_offset = self.in_index_context
                 && is_arithmetic
@@ -761,7 +759,8 @@ impl<'ast> CodeGenerator<'ast> {
                             let mut promoted = signed_vs_usize(left_ty, right_ty)
                                 .or_else(|| signed_vs_usize(right_ty, left_ty))
                                 .unwrap_or_else(|| promote_types(left_ty, right_ty));
-                            if let Some(forced) = self.promotion_int_type_from_assignment_context() {
+                            if let Some(forced) = self.promotion_int_type_from_assignment_context()
+                            {
                                 let signed = |t: IntType| {
                                     matches!(
                                         t,
@@ -904,28 +903,29 @@ impl<'ast> CodeGenerator<'ast> {
                             if promoted != IntType::Unknown {
                                 // Numeric inference may tag i64 bindings as Usize (index use).
                                 // Only emit `as` when the operand actually produces usize.
-                                let side_needs_cast = |ty: IntType, expr: &Expression<'ast>, flagged_usize: bool| {
-                                    if ty == promoted {
-                                        return false;
-                                    }
-                                    // P3.353: void/i32 builders cast WJ `int`/i64 operands to i32 coords.
-                                    if ty == IntType::I64
-                                        && promoted == IntType::I32
-                                        && self.function_prefers_i32_coord_locals()
-                                    {
-                                        return true;
-                                    }
-                                    if !is_safe_implicit_cast(ty, promoted) {
-                                        return false;
-                                    }
-                                    if ty == IntType::Usize
-                                        && !flagged_usize
-                                        && !self.expression_produces_usize(expr)
-                                    {
-                                        return false;
-                                    }
-                                    true
-                                };
+                                let side_needs_cast =
+                                    |ty: IntType, expr: &Expression<'ast>, flagged_usize: bool| {
+                                        if ty == promoted {
+                                            return false;
+                                        }
+                                        // P3.353: void/i32 builders cast WJ `int`/i64 operands to i32 coords.
+                                        if ty == IntType::I64
+                                            && promoted == IntType::I32
+                                            && self.function_prefers_i32_coord_locals()
+                                        {
+                                            return true;
+                                        }
+                                        if !is_safe_implicit_cast(ty, promoted) {
+                                            return false;
+                                        }
+                                        if ty == IntType::Usize
+                                            && !flagged_usize
+                                            && !self.expression_produces_usize(expr)
+                                        {
+                                            return false;
+                                        }
+                                        true
+                                    };
                                 if side_needs_cast(left_ty, left, left_is_usize) {
                                     let suffix = get_cast_suffix(promoted);
                                     if promoted == IntType::I32
@@ -938,10 +938,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && left_str.ends_with("_i64")
                                     {
-                                        left_str = format!(
-                                            "{}_i32",
-                                            left_str.trim_end_matches("_i64")
-                                        );
+                                        left_str =
+                                            format!("{}_i32", left_str.trim_end_matches("_i64"));
                                     } else if promoted == IntType::U32
                                         && matches!(
                                             left,
@@ -952,10 +950,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && left_str.ends_with("_u64")
                                     {
-                                        left_str = format!(
-                                            "{}_u32",
-                                            left_str.trim_end_matches("_u64")
-                                        );
+                                        left_str =
+                                            format!("{}_u32", left_str.trim_end_matches("_u64"));
                                     } else if promoted == IntType::U32
                                         && matches!(
                                             left,
@@ -966,10 +962,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && left_str.ends_with("_i32")
                                     {
-                                        left_str = format!(
-                                            "{}_u32",
-                                            left_str.trim_end_matches("_i32")
-                                        );
+                                        left_str =
+                                            format!("{}_u32", left_str.trim_end_matches("_i32"));
                                     } else if promoted == IntType::I64
                                         && matches!(
                                             left,
@@ -980,10 +974,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && left_str.ends_with("_i32")
                                     {
-                                        left_str = format!(
-                                            "{}_i64",
-                                            left_str.trim_end_matches("_i32")
-                                        );
+                                        left_str =
+                                            format!("{}_i64", left_str.trim_end_matches("_i32"));
                                     } else {
                                         let needs_inner = matches!(left, Expression::Binary { .. })
                                             || left_str.contains(" as ");
@@ -1006,10 +998,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && right_str.ends_with("_i64")
                                     {
-                                        right_str = format!(
-                                            "{}_i32",
-                                            right_str.trim_end_matches("_i64")
-                                        );
+                                        right_str =
+                                            format!("{}_i32", right_str.trim_end_matches("_i64"));
                                     } else if promoted == IntType::U32
                                         && matches!(
                                             right,
@@ -1020,10 +1010,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && right_str.ends_with("_u64")
                                     {
-                                        right_str = format!(
-                                            "{}_u32",
-                                            right_str.trim_end_matches("_u64")
-                                        );
+                                        right_str =
+                                            format!("{}_u32", right_str.trim_end_matches("_u64"));
                                     } else if promoted == IntType::U32
                                         && matches!(
                                             right,
@@ -1034,10 +1022,8 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && right_str.ends_with("_i32")
                                     {
-                                        right_str = format!(
-                                            "{}_u32",
-                                            right_str.trim_end_matches("_i32")
-                                        );
+                                        right_str =
+                                            format!("{}_u32", right_str.trim_end_matches("_i32"));
                                     } else if promoted == IntType::I64
                                         && matches!(
                                             right,
@@ -1048,13 +1034,12 @@ impl<'ast> CodeGenerator<'ast> {
                                         )
                                         && right_str.ends_with("_i32")
                                     {
-                                        right_str = format!(
-                                            "{}_i64",
-                                            right_str.trim_end_matches("_i32")
-                                        );
+                                        right_str =
+                                            format!("{}_i64", right_str.trim_end_matches("_i32"));
                                     } else {
-                                        let needs_inner = matches!(right, Expression::Binary { .. })
-                                            || right_str.contains(" as ");
+                                        let needs_inner =
+                                            matches!(right, Expression::Binary { .. })
+                                                || right_str.contains(" as ");
                                         right_str = if needs_inner {
                                             format!("({}) as {}", right_str, suffix)
                                         } else {
@@ -1150,23 +1135,24 @@ impl<'ast> CodeGenerator<'ast> {
         // If LEFT side is String and op is Add, RIGHT must be borrowed (unless string literal)
         // Also: if RIGHT produces String (e.g., parts[j].clone()), add & for coercion
         if matches!(op, BinaryOp::Add) {
-            let expr_is_windjammer_string = |expr: &Expression| -> bool {
-                if self
-                    .infer_expression_type(expr)
-                    .as_ref()
-                    .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
-                {
-                    return true;
-                }
-                if let Expression::Identifier { name, .. } = expr {
-                    if self.local_var_types.get(name).is_some_and(|t| {
-                        crate::codegen::rust::types::is_windjammer_text_type(t)
-                    }) {
+            let expr_is_windjammer_string =
+                |expr: &Expression| -> bool {
+                    if self
+                        .infer_expression_type(expr)
+                        .as_ref()
+                        .is_some_and(crate::codegen::rust::types::is_windjammer_text_type)
+                    {
                         return true;
                     }
-                }
-                false
-            };
+                    if let Expression::Identifier { name, .. } = expr {
+                        if self.local_var_types.get(name).is_some_and(|t| {
+                            crate::codegen::rust::types::is_windjammer_text_type(t)
+                        }) {
+                            return true;
+                        }
+                    }
+                    false
+                };
             let left_is_string = expr_is_windjammer_string(left);
             let right_is_string = expr_is_windjammer_string(right);
 
@@ -1481,12 +1467,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-
         // P3.369: i64/i32 index base + literal offset → usize slice index.
-        if self.in_index_context
-            && is_arithmetic
-            && matches!(op, BinaryOp::Add | BinaryOp::Sub)
-        {
+        if self.in_index_context && is_arithmetic && matches!(op, BinaryOp::Add | BinaryOp::Sub) {
             use crate::type_inference::IntType;
             let lt = self.int_type_for_mixed_int_codegen(left);
             let rt = self.int_type_for_mixed_int_codegen(right);

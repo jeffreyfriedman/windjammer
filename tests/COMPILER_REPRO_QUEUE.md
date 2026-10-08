@@ -1,6 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.727 (2026-10-07) — `int == 1` keeps i64 beside Vec::push
+
+`tasks_from_kpis(unmatched_bank_lines: int)` emitted `== 1_i32` while `> 0`
+stayed `0_i64`. An ambient i32 assign slot (coord-builder / Vec return) beat
+the formal `int` peer on comparisons via `narrow_assign_int_slot_beats_weak_peer`.
+
+| Gate | Status |
+|------|--------|
+| `int_eq_one_with_vec_push_must_not_emit_i32` | ✅ tip GREEN |
+
+**Root cause layer:** signature — declared `int`/`i64` formals drive comparison
+literal width. Comparisons follow that peer; annotated bitwise assigns still
+keep a narrow slot (WDB-330).
+
+**What became unnecessary:** letting a live i32 slot retarget `n == 1` when `n`
+is a formal `int`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- int_eq_one_with_vec_push` → 1 passed (includes cargo-check).
+
 ## P3.726 (2026-10-07) — owned enum formals stay owned when the method consumes self
 
 `evaluate(self, op, a: Val, b: Val) { a.as_float() }` emitted `a: &Val` and

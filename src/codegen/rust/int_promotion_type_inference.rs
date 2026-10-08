@@ -376,10 +376,7 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.568: WJ `int` + `strings.len`/`usize` arithmetic keeps i64 even when
         // `int_type_for_mixed_int_codegen` reports Usize for the AST mix.
         if let Expression::Binary {
-            op,
-            left,
-            right,
-            ..
+            op, left, right, ..
         } = value
         {
             if matches!(
@@ -482,7 +479,9 @@ impl<'ast> CodeGenerator<'ast> {
             rest = &rest[idx + "_usize".len()..];
         }
         // Bare copy of a usize-named binding: `let x = best_idx_usize`.
-        let trimmed = without_indexes.trim().trim_matches(|c| c == '(' || c == ')');
+        let trimmed = without_indexes
+            .trim()
+            .trim_matches(|c| c == '(' || c == ')');
         trimmed.ends_with("_usize") && !trimmed.contains('.')
     }
 
@@ -682,7 +681,10 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // P3.578: `let half = n / 2` may still be recorded as WJ `int` while emit uses
         // `2_u32` (u32 peer). Resolve Identifier bounds through their let RHS / params.
-        if let Expression::Identifier { name: bound_name, .. } = bound {
+        if let Expression::Identifier {
+            name: bound_name, ..
+        } = bound
+        {
             let body: Vec<&crate::parser::Statement> =
                 if !self.full_function_body_snapshot.is_empty() {
                     self.full_function_body_snapshot.iter().copied().collect()
@@ -1192,7 +1194,8 @@ impl<'ast> CodeGenerator<'ast> {
             } => true,
             Expression::Identifier { name, .. } => {
                 self.local_var_types.get(name).is_some_and(|t| {
-                    matches!(t, Type::Float) || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
+                    matches!(t, Type::Float)
+                        || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
                 }) || self.current_function_params.iter().any(|p| {
                     p.name == *name
                         && (matches!(p.type_, Type::Float)
@@ -1216,13 +1219,9 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 self.if_branch_is_float(left) || self.if_branch_is_float(right)
             }
-            _ => self
-                .infer_expression_type(expr)
-                .as_ref()
-                .is_some_and(|t| {
-                    matches!(t, Type::Float)
-                        || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
-                }),
+            _ => self.infer_expression_type(expr).as_ref().is_some_and(|t| {
+                matches!(t, Type::Float) || matches!(t, Type::Custom(n) if n == "f32" || n == "f64")
+            }),
         }
     }
 
@@ -1545,6 +1544,19 @@ impl<'ast> CodeGenerator<'ast> {
         if self.expression_produces_usize(expr) {
             return Some(Type::Custom("usize".into()));
         }
+        // Formal `int`/`i64` beats coord-builder i32 (P3.705: `n == 1` beside Vec::push).
+        if let Expression::Identifier { name, .. } = expr {
+            if self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && (matches!(&p.type_, Type::Int)
+                        || matches!(
+                            &p.type_,
+                            Type::Custom(n) if matches!(n.as_str(), "int" | "i64")
+                        ))
+            }) {
+                return Some(Type::Int);
+            }
+        }
         if self.infer_expression_type(expr).is_some_and(|t| {
             matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
         }) {
@@ -1563,8 +1575,7 @@ impl<'ast> CodeGenerator<'ast> {
                 return Some(Type::Int32);
             }
             if self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                matches!(t, Type::Int32)
-                    || matches!(t, Type::Custom(n) if n == "i32")
+                matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
             }) {
                 return Some(Type::Int32);
             }
@@ -1698,6 +1709,18 @@ impl<'ast> CodeGenerator<'ast> {
         };
         match expr {
             Expression::Identifier { name, .. } => {
+                // Declared `int`/`i64` formals stay i64. Coord-builder i32 and stale
+                // usize marks must not narrow `n == 1` (P3.705).
+                if self.current_function_params.iter().any(|p| {
+                    p.name == *name
+                        && (matches!(&p.type_, Type::Int)
+                            || matches!(
+                                &p.type_,
+                                Type::Custom(n) if matches!(n.as_str(), "int" | "i64")
+                            ))
+                }) {
+                    return crate::type_inference::IntType::I64;
+                }
                 if self.usize_variables.contains(name) {
                     return crate::type_inference::IntType::Usize;
                 }
