@@ -141,10 +141,7 @@ fn signature_from_rust_params(
             has_self = true;
             continue;
         }
-        let ty_src = raw
-            .rsplit_once(':')
-            .map(|(_, t)| t.trim())
-            .unwrap_or(raw);
+        let ty_src = raw.rsplit_once(':').map(|(_, t)| t.trim()).unwrap_or(raw);
         let ty = parse_rust_type(ty_src);
         let (own, flag) = ownership_from_type(&ty);
         param_types.push(ty);
@@ -171,10 +168,8 @@ fn signature_from_rust_params(
 }
 
 fn is_self_param(raw: &str) -> bool {
-    matches!(
-        raw.trim(),
-        "self" | "&self" | "&mut self" | "mut self"
-    ) || raw.trim_start().starts_with("self:")
+    matches!(raw.trim(), "self" | "&self" | "&mut self" | "mut self")
+        || raw.trim_start().starts_with("self:")
 }
 
 fn ownership_from_type(ty: &Type) -> (OwnershipMode, bool) {

@@ -202,14 +202,14 @@ pub fn try_analyzer_signature_from_metadata(
                 continue;
             }
             if matches!(bare, Type::Custom(_)) {
-                let is_copy_aggregate = (crate::codegen::rust::type_analysis_pure::is_copy_type(
-                    bare,
-                ) || matches!(
-                    bare,
-                    Type::Custom(name)
-                        if crate::type_classification::is_known_copy_aggregate(name)
-                ))
-                    && !crate::type_classification::is_copy_pass_by_value_formal(bare);
+                let is_copy_aggregate =
+                    (crate::codegen::rust::type_analysis_pure::is_copy_type(bare)
+                        || matches!(
+                            bare,
+                            Type::Custom(name)
+                                if crate::type_classification::is_known_copy_aggregate(name)
+                        ))
+                        && !crate::type_classification::is_copy_pass_by_value_formal(bare);
                 if !is_copy_aggregate {
                     flags[i] = true;
                 }
@@ -249,8 +249,7 @@ pub(in crate::metadata) fn merge_module_metadata_signatures(
             // Always install `module_path::…` aliases. Keys are often already
             // `Type::method` (contain `::`); still need `mod::Type::method` so
             // suffix search / refresh survive bare-key filtering.
-            if !meta.module_path.is_empty()
-                && !name.starts_with(&format!("{}::", meta.module_path))
+            if !meta.module_path.is_empty() && !name.starts_with(&format!("{}::", meta.module_path))
             {
                 let qualified = format!("{}::{}", meta.module_path, name);
                 registry.add_function(qualified, a_sig);

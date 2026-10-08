@@ -216,9 +216,7 @@ fn split_parameterized_debug(inner: &str) -> Option<(String, &str)> {
     let name = rest[..name_end].to_string();
     let after_name = rest[name_end + 1..].trim_start();
     let after_comma = after_name.strip_prefix(',')?.trim_start();
-    let args = after_comma
-        .strip_prefix('[')?
-        .strip_suffix(']')?;
+    let args = after_comma.strip_prefix('[')?.strip_suffix(']')?;
     Some((name, args))
 }
 
@@ -237,7 +235,13 @@ fn split_debug_type_list(s: &str) -> Option<Vec<String>> {
             '(' | '[' => depth += 1,
             ')' | ']' => depth -= 1,
             ',' if depth == 0 => {
-                parts.push(chars[start..i].iter().collect::<String>().trim().to_string());
+                parts.push(
+                    chars[start..i]
+                        .iter()
+                        .collect::<String>()
+                        .trim()
+                        .to_string(),
+                );
                 start = i + 1;
             }
             _ => {}
