@@ -2,6 +2,24 @@
 
 
 
+## P3.734 (2026-10-07) — multi-arm `json.clone()` into demoted `&str` (no compiler src)
+
+LedgerKit `render_read_model` keeps `json: String` (most arms pass it to owned parsers).
+`parse_balance_sheet_fields` / `parse_income_statement_fields` /
+`parse_general_ledger_fields` / `parse_close_checklist_days_to_close` demote to `&str`,
+but the match still emits `json.clone()` (E0308). A two-arm isolate borrows (`&json`).
+`own_string` on the callee keeps the formal `String` and then `escape_html(&str)` rejects
+the owned local — not a product fix.
+
+| Gate | Status |
+|------|--------|
+| `multiarm_owned_json_clone_must_not_feed_demoted_str_parser` | ❌ tip RED — product `build/read_models.rs` |
+
+**Do not steal:** compiler `src/` (other agent).
+
+**Gates:** `cargo test --test all --features integration_tests -- multiarm_owned_json_clone_must_not_feed_demoted_str_parser`.
+
+
 ## P3.734 (2026-10-07) — TDD WDB-465 (DB agent; no compiler src)
 
 Indexed Copy **tuple** into `Vec::push` must not `.clone()`.
@@ -30,6 +48,24 @@ indexed Copy tuples still `.clone()` into owned `Vec::push`.
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb465_` — isolate GREEN / tip RED (2026-10-07).
 
 **Do not steal:** WDB-406/408/411/457–465, P3.508–P3.734, WDB-412–465 (filed).
+
+## P3.734 (2026-10-07) — `n * 48` into `u32` must cast the product
+
+`hybrid_renderer.wj` calls `create_empty_storage_buffer(max_triangles * 48)`
+(`size: u32`). Tip-out emits `(max_triangles * 48_i32 as u32)`, so `as` binds
+only to `48` and the multiply is `i32 * u32`.
+
+| Gate | Status |
+|------|--------|
+| `int_mul_into_u32_formal_must_cast_product` | filed this session |
+| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | filed this session |
+
+**Root cause layer:** cast insertion / precedence — coercion to a `u32` formal
+must wrap `(expr) as u32`, not suffix `as` onto the right-hand literal.
+
+**Do not steal:** P3.731/P3.732, other-agent WJ `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- int_mul_into_u32_formal`.
 
 ## P3.705 (2026-10-07) — substring `i + 1` stays `_usize` (re-verify)
 
