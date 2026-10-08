@@ -1071,10 +1071,26 @@ impl<'ast> CodeGenerator<'ast> {
         } = index
         {
             let prev_index_ctx = self.in_index_context;
+            let prev_index_assign_int = self.assignment_int_target_type.clone();
             self.in_index_context = true;
+            // Slice bounds are usize, same as `a[i + 1]`. An ambient i32 slot must
+            // not suffix the end literal (`section[i..i + 1_i32]`).
+            let bound_is_offset = |expr: &Expression<'ast>| {
+                matches!(
+                    expr,
+                    Expression::Binary {
+                        op: crate::parser::BinaryOp::Add | crate::parser::BinaryOp::Sub,
+                        ..
+                    }
+                )
+            };
+            if bound_is_offset(start) || bound_is_offset(end) {
+                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
+            }
             let mut start_str = self.generate_expression(start);
             let mut end_str = self.generate_expression(end);
             self.in_index_context = prev_index_ctx;
+            self.assignment_int_target_type = prev_index_assign_int;
             self.maybe_cast_index_to_usize(&mut start_str, start);
             self.maybe_cast_index_to_usize(&mut end_str, end);
             let range_op = if *inclusive { "..=" } else { ".." };

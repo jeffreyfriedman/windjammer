@@ -447,34 +447,10 @@ impl<'ast> CodeGenerator<'ast> {
                 })
             };
             if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal) {
-                // WDB-315: `pos + 4 + 2` (usize accum) must keep `_usize` literals.
-                // Do not let coord-builder i32 peer overwrite a true usize operand / assign slot.
-                // P3.679: while-condition pin to i32 (`let mut i: i32`) must not be overwritten
-                // by stale index-`usize_variables` when the body calls substring formals.
-                // P3.679: while-condition pin to i32 must not be overwritten by stale
-                // index-`usize_variables` when the body calls substring formals.
-                let while_pin_i32 = prev_bin_int.as_ref().is_some_and(|t| {
-                    matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
-                });
-                if while_pin_i32 {
-                    self.assignment_int_target_type = prev_bin_int.clone();
-                } else if assign_slot_is_usize || left_is_usize || right_is_usize {
-                    self.assignment_int_target_type = Some(Type::Custom("usize".into()));
-                } else {
-                    let peer = if right_is_int_literal {
-                        peer_int_type(self, left)
-                    } else {
-                        peer_int_type(self, right)
-                    };
-                    if peer.as_ref().is_some_and(|t| {
-                        matches!(t, Type::Int32)
-                            || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
-                    }) {
-                        self.assignment_int_target_type = peer;
-                    } else {
-                        self.assignment_int_target_type = Some(Type::Custom("usize".into()));
-                    }
-                }
+                // WDB-315 / P3.705: a usize operand owns the literal (`i + 1` beside
+                // `i: usize`). An ambient i32 slot must not retarget that literal.
+                // Real i32 counters are excluded from `left_is_usize` (P3.679).
+                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
             } else if right_is_int_literal {
                 if assign_slot_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
