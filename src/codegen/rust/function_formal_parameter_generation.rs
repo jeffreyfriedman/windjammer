@@ -4573,7 +4573,19 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
             && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func)
         {
-            return true;
+            // Readonly field/index scans (`grid.cells.len()`) are `&T`.
+            // A method on the binding itself (`palette.copy()`) stays owned (WDB-398).
+            let readonly_field_scan = self.param_only_used_via_field_or_index_projection(
+                func.body.as_slice(),
+                &param.name,
+            ) && !self.param_binding_is_direct_method_receiver(
+                func.body.as_slice(),
+                &param.name,
+            ) && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
+                && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
+            if !readonly_field_scan {
+                return true;
+            }
         }
         // WDB-407: associated `new(data: Vec<u8>)` stored into a field must stay owned
         // even when WJ omits `pub` (codegen may emit `pub fn`; `&Vec` + `.clone()` is wrong).

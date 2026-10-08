@@ -1,5 +1,33 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.747 (2026-10-08) — Associated readonly Custom formal stayed owned
+
+`FpsCamera::collides_aabb(grid: VoxelGrid)` only reads `grid.cells.len()`, but
+codegen kept the formal owned because associated `pub fn` Custom params were
+treated as public owned API (WDB-398). Both call sites then emitted
+`grid.clone()`.
+
+| Gate | Status |
+|------|--------|
+| `test_static_readonly_voxelgrid_param_no_clone_*` | ✅ tip GREEN — `grid: &VoxelGrid`, no `grid.clone()` |
+| WDB-398 `new(palette.copy())` | ✅ still owned — direct `palette.copy()` is not a field scan |
+
+**Root cause layer:** signature. `is_public_owned_non_copy_formal_api` returned
+true for every associated Custom formal. Readonly field/index scans now fall
+through to the existing `&T` demote. A method on the binding itself
+(`palette.copy()`) still stays owned.
+
+**What became unnecessary:** cloning a readonly `VoxelGrid` into an associated
+helper that only projects fields. No new call-site peel.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR="$HOME/Library/Caches/windjammer/cargo-target/shared"
+cargo test --release --test all -- wdb398_module_file_owned_copy \
+  wdb398_module_file_associated_new test_static_readonly_voxelgrid
+```
+→ 5 passed.
+
 ## P3.746 (2026-10-08) — Logger owned string literal re-borrowed after homonym refresh
 
 `logger.info("a")` / `logger.warn("b")` emit `message: String`, then the call site
