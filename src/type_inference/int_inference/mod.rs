@@ -62,6 +62,8 @@ pub struct IntInference {
     pub errors: Vec<String>,
     function_signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
     var_assignments: HashMap<String, ExprId>,
+    /// Element expr ids of `let v = vec![…]` / `[…]` so later `push`/`insert` args share that width.
+    var_collection_elements: HashMap<String, Vec<ExprId>>,
     var_types: HashMap<String, Type>,
     next_seq_id: usize,
     struct_field_types: HashMap<String, HashMap<String, Type>>,
@@ -98,6 +100,7 @@ impl IntInference {
             errors: Vec::new(),
             function_signatures: HashMap::new(),
             var_assignments: HashMap::new(),
+            var_collection_elements: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1,
             struct_field_types: HashMap::new(),
@@ -541,6 +544,7 @@ impl IntInference {
             Item::Function { decl, .. } => {
                 self.expr_id_cache.clear();
                 self.var_assignments.clear(); // TDD FIX: Clear per-function scope
+                self.var_collection_elements.clear();
                 let saved_var_types = self.var_types.clone(); // TDD FIX: Save for later restore
                 for param in &decl.parameters {
                     self.var_types
@@ -582,6 +586,7 @@ impl IntInference {
                 for func in &block.functions {
                     self.expr_id_cache.clear();
                     self.var_assignments.clear(); // TDD FIX: Clear per-function scope
+                    self.var_collection_elements.clear();
                     let saved_var_types = self.var_types.clone(); // TDD FIX: Save for later restore
                     for param in &func.parameters {
                         self.var_types
@@ -767,14 +772,33 @@ impl IntInference {
                 // Don't pass return_type to let statement values - they have their own types!
                 self.collect_expression_constraints(value, type_.as_ref());
 
-                if let crate::parser::ast::core::Pattern::Identifier(var_name) = pattern {
+                let bound_name = match pattern {
+                    crate::parser::ast::core::Pattern::Identifier(var_name)
+                    | crate::parser::ast::core::Pattern::MutBinding(var_name) => {
+                        Some(var_name.as_str())
+                    }
+                    _ => None,
+                };
+                if let Some(var_name) = bound_name {
                     let value_id = self.get_expr_id(value);
-                    self.var_assignments.insert(var_name.clone(), value_id);
+                    self.var_assignments.insert(var_name.to_string(), value_id);
+                    if let Some(elems) = Self::collection_element_exprs(value) {
+                        let ids: Vec<crate::type_inference::ExprId> =
+                            elems.iter().map(|e| self.get_expr_id(e)).collect();
+                        if !ids.is_empty() {
+                            self.var_collection_elements
+                                .insert(var_name.to_string(), ids);
+                        }
+                    }
                     if let Some(ty) = type_ {
-                        self.var_types.insert(var_name.clone(), ty.clone());
+                        self.var_types.insert(var_name.to_string(), ty.clone());
                     } else if let Some(inferred_ty) = self.infer_type_from_expression(value) {
                         // TDD: Infer var type from StructLiteral, Call, etc. for method receiver resolution
-                        self.var_types.insert(var_name.clone(), inferred_ty);
+                        self.var_types.insert(var_name.to_string(), inferred_ty);
+                    } else if let Some(elem_ty) = Self::collection_literal_element_type(value) {
+                        // `let mut v = vec![1, 2, 3]` is `Vec<int>` so `v.push(4)` shares i64.
+                        self.var_types
+                            .insert(var_name.to_string(), Type::Vec(Box::new(elem_ty)));
                     }
                     if let Some(int_ty) = explicit_type {
                         self.constraints.push(IntConstraint::MustBe(
