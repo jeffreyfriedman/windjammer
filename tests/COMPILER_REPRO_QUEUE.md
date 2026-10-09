@@ -2,6 +2,23 @@
 
 
 
+## P3.758 (2026-10-09) — full suite stopped for disk; five FAILs were flakes
+
+`cargo test --release --test all` was killed when free space fell under 1.5 GiB (exit 2). It had reached the `n*` tests. Tip-out scanners in that log (`i32_binding_compare_zero_tip_out_shader_graph_compiler`, `int_mul_into_u32_formal_tip_out_hybrid_renderer`, `tip_out_event_get_data_string_must_clone`, `tip_out_voxel_gpu_passes_update_all_must_not_borrow_passes`) match existing stale-gen rows. Do not regenerate product `gen/`.
+
+These names printed FAILED before the kill and passed when re-run alone:
+
+| Gate | Isolated re-run |
+|------|-----------------|
+| `app_test_http_method_public_port_must_pass_wj_test` | ✅ |
+| `app_module_file_http_method_public_port_must_pass_wj_test` | ✅ |
+| `plain_struct_auto_derives_serialize` | ✅ |
+| `copy_local_into_owned_f32_formal_must_not_borrow` | ✅ |
+| `bool_builder_active_must_not_to_string_with_string_overload` | ✅ |
+
+**Gates:** `cargo test --release --test all -- app_test_http_method_public_port_must_pass_wj_test app_module_file_http_method_public_port_must_pass_wj_test plain_struct_auto_derives_serialize copy_local_into_owned_f32_formal_must_not_borrow bool_builder_active_must_not_to_string_with_string_overload` — 7 passed (includes two extra name matches).
+
+
 ## P3.757 (2026-10-09) — WDB-204 `u64` tuple field compared to `0` is already `u64` on tip
 
 Same-file `let median = pair.0` from `(u64, bool)` then `median == 0` cargo-checks. The zero on that compare is not `0_usize`. `samples.len() == 0` may still use `usize`.
