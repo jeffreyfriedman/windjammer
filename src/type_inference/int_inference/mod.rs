@@ -713,7 +713,13 @@ impl IntInference {
 
     fn expr_contains_len_call(expr: &Expression<'_>) -> bool {
         match expr {
-            Expression::MethodCall { method, .. } if method == "len" => true,
+            Expression::MethodCall { method, object, .. } => {
+                crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                    method,
+                    None,
+                    &crate::analyzer::SignatureRegistry::stdlib(),
+                ) || Self::expr_contains_len_call(object)
+            }
             Expression::MethodCall { object, .. } => Self::expr_contains_len_call(object),
             Expression::FieldAccess { object, .. } => Self::expr_contains_len_call(object),
             Expression::Call { function, .. } => Self::expr_contains_len_call(function),
