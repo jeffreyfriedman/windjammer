@@ -2,6 +2,20 @@
 
 
 
+## P3.756 (2026-10-09) — two isolates still RED after the aborted full suite
+
+Confirmed again on `1a5bcbc0` after the suite was stopped for disk. Not the P3.755 length-accumulator path.
+
+| Gate | Status |
+|------|--------|
+| `wdb107_same_file_empty_literal_into_demoted_str_formals_cargo_checks` | ❌ `run_parquet_load("", "", 3_u64)` — owned `String` formals still receive `&str` |
+| `wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` | ❌ `vec![30, 40]` emits `30_i64` into `&Vec<u64>` |
+
+**Root cause layer:** signature / constraint (owned string literal; callee `u64` element width). Not investigated past the rustc errors.
+
+**Gates:** `cargo test --release --test all -- u32_option_slot_min_untyped_zero_must_not_widen_u64 std_regex_escape_codegen_resolves wdb107_same_file_empty_literal wdb127_module_file_demoted_vec_formal_must_borrow_bare` — first two GREEN, these two RED.
+
+
 ## P3.755 (2026-10-09) — untyped `0` plus `Vec::len()` must not emit `0_i64`
 
 `shader_graph_executor.wj` writes `let mut total_async = 0` then
