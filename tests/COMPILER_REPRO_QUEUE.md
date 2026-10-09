@@ -1,6 +1,35 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+## P3.751 (2026-10-08) — If-condition reborrow of an owned string formal
+
+`query_wants_base64(query)` emits `query: String` (the formal moves into `own`).
+When that call is the condition of `if`, a later rewrite still turned the
+argument into `&query`.
+
+| Gate | Status |
+|------|--------|
+| `owned_string_formal_must_not_receive_mut_query` | ✅ tip GREEN |
+| `json_tostring_note_must_not_mut_borrow_query` | ❌ still RED — `note: &mut Note` vs caller `&Note` |
+| WDB-218 isolate both formals `&Plan` | ✅ `execute(plan)` accepted |
+
+**Root cause layer:** signature. The if-condition borrow rewrite ignored an
+emitted owned formal. Preregistered `query: String` also blocks the reuse path
+from re-applying a shared borrow.
+
+**What became unnecessary:** `&query` into `query: String` on the if-condition
+path.
+
+**Gates:**
+```bash
+export CARGO_TARGET_DIR="$HOME/Library/Caches/windjammer/cargo-target/shared"
+cargo test --release --test all -- owned_string_formal_must_not_receive_mut_query \
+  wdb218_codegen notes_api_json notes_api_interp notes_api_qs_get
+```
+→ 6 passed; `json_tostring_note_must_not_mut_borrow_query` still failed (`&mut Note`).
+
+
+
 ## P3.749 (2026-10-08) — REGRESSION: engine library transpile SIGKILL (exit 137)
 
 P3.291 recorded full `windjammer-game-core` `--library` transpile EXIT 0 in ~200s

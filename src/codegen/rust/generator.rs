@@ -3805,11 +3805,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
             let if_facade_borrow = self.current_fn_forward_ref_if_params.contains(&param.name)
                 && self.param_used_in_if_with_condition_and_branches(&body, &param.name);
-            // Owned callee formals (Vec consume, …) need `.clone()` in the condition, not
-            // if-facade `&binding` (push_unique → contains(items)).
-            if if_facade_borrow
-                && self.expr_call_expects_owned_formal_for_param(condition, &param.name)
-            {
+            // Owned callee formals (`query: String`) must not become `&query` just
+            // because the call sits in an if condition.
+            if self.expr_call_expects_owned_formal_for_param(condition, &param.name) {
                 continue;
             }
             // Shared-ref callees need explicit `&` in the condition. If-facade forward-ref

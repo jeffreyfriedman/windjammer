@@ -4631,22 +4631,26 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        let callee_wants_shared_ref = crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-            sig, param_idx,
-        ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
-            || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx)
-            || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
-                sig, arg_index,
-            )
-            || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
-            || self.callee_arg_expects_borrow_at_call(callee_name, arg_index)
-            || (sig
-                .formal_param_type(param_idx)
-                .or_else(|| sig.param_types.get(param_idx))
-                .is_some_and(|t| matches!(t, Type::Reference(_)))
-                && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    sig, param_idx,
-                ));
+        let preregistered_owned = self
+            .preregistered_free_call_arg_emits_owned(callee_name, arg_index)
+            || self.preregistered_free_call_arg_emits_owned(&sig.name, arg_index);
+        let callee_wants_shared_ref = !preregistered_owned
+            && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
+                sig, param_idx,
+            ) || crate::ir::signature_bridge::call_site_expects_shared_borrow(sig, param_idx)
+                || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, param_idx)
+                || crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
+                    sig, arg_index,
+                )
+                || self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
+                || self.callee_arg_expects_borrow_at_call(callee_name, arg_index)
+                || (sig
+                    .formal_param_type(param_idx)
+                    .or_else(|| sig.param_types.get(param_idx))
+                    .is_some_and(|t| matches!(t, Type::Reference(_)))
+                    && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        sig, param_idx,
+                    )));
         // Shared-ref formals reborrow — peel stale `.clone()` / `&x.clone()` via the
         // encoding helper (Connection reuse; non-text identifiers used to fall through
         // and preserve `conn.clone()`).
@@ -9745,6 +9749,11 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
+        // Same-file preregister (`query: String`) beats a stale Borrowed/Reference
+        // stub that would re-prefix `&query` into an owned formal (notes-api).
+        if self.preregistered_free_call_arg_emits_owned(&sig.name, arg_index) {
+            return false;
+        }
         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx) {
             return false;
         }

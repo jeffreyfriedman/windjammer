@@ -29,20 +29,22 @@ fn wdb218_codegen_owned_plan_into_demoted_ref_must_borrow() {
     let (rs, ok) = test_utils::compile_single_check(FIXTURE);
     let demoted = rs.contains("fn execute(plan: &GraphSqlQueryPlan")
         || rs.contains("execute(plan: &GraphSqlQueryPlan");
-    let bad = demoted
-        && (rs.contains("execute(plan.clone()") || rs.contains("execute(plan)"))
-        && !rs.contains("execute(&plan")
-        && !rs.contains("execute(&plan.clone()");
-    // If demoted, call must borrow; if owned formal, bare plan is fine.
-    if demoted {
+    let caller_already_ref = rs.contains("fn execute_logical(plan: &GraphSqlQueryPlan");
+    // Both formals `&Plan` → `execute(plan)` is the right Rust. Prefix `&` only when
+    // the caller binding is still owned.
+    if demoted && !caller_already_ref {
         assert!(
             rs.contains("execute(&plan") || rs.contains("execute(&plan.clone()"),
-            "WDB-218: demoted &Plan formal must borrow at call site. Generated:\n{rs}"
+            "WDB-218: demoted &Plan formal must borrow an owned caller binding. Generated:\n{rs}"
         );
-        assert!(!rs.contains("execute(plan.clone()"), "WDB-218: no owned clone into &. Generated:\n{rs}");
+    }
+    if demoted {
+        assert!(
+            !rs.contains("execute(plan.clone()"),
+            "WDB-218: no owned clone into &. Generated:\n{rs}"
+        );
     }
     assert!(ok, "WDB-218 fixture must cargo-check. Generated:\n{rs}");
-    let _ = bad;
 }
 
 use std::path::PathBuf;
