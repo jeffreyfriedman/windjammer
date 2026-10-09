@@ -755,12 +755,19 @@ impl<'ast> CodeGenerator<'ast> {
                     );
                     if !rhs_is_ref {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
-                            self.assignment_int_target_type = Some(peer.clone());
-                            self.local_var_types.insert(vn.to_string(), peer.clone());
-                            if matches!(peer, Type::Int32) {
-                                self.codegen_i32_binding_names.insert(vn.to_string());
-                            } else {
-                                self.codegen_i32_binding_names.remove(vn);
+                            // `Vec<u64>` / `&Vec<u64>` is a collection formal. The integer
+                            // suffix peer is the element; the binding stays `Vec<…>` (WDB-127).
+                            let int_slot = Self::peeled_collection_element_type(&peer)
+                                .cloned()
+                                .unwrap_or_else(|| peer.clone());
+                            self.assignment_int_target_type = Some(int_slot);
+                            if Self::peeled_collection_element_type(&peer).is_none() {
+                                self.local_var_types.insert(vn.to_string(), peer.clone());
+                                if matches!(peer, Type::Int32) {
+                                    self.codegen_i32_binding_names.insert(vn.to_string());
+                                } else {
+                                    self.codegen_i32_binding_names.remove(vn);
+                                }
                             }
                         }
                     }

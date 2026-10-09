@@ -2,18 +2,21 @@
 
 
 
-## P3.756 (2026-10-09) — two isolates still RED after the aborted full suite
-
-Confirmed again on `1a5bcbc0` after the suite was stopped for disk. Not the P3.755 length-accumulator path.
+## P3.756 (2026-10-09) — WDB-107 owned string literal + WDB-127 `Vec<u64>` element
 
 | Gate | Status |
 |------|--------|
-| `wdb107_same_file_empty_literal_into_demoted_str_formals_cargo_checks` | ❌ `run_parquet_load("", "", 3_u64)` — owned `String` formals still receive `&str` |
-| `wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` | ❌ `vec![30, 40]` emits `30_i64` into `&Vec<u64>` |
+| `wdb107_same_file_empty_literal_into_demoted_str_formals_cargo_checks` | ✅ GREEN — `"".to_string()` into preregistered `String` formals |
+| `wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` | ✅ GREEN — `vec![30, 40]` emits `30_u64` into `&Vec<u64>` |
 
-**Root cause layer:** signature / constraint (owned string literal; callee `u64` element width). Not investigated past the rustc errors.
+**Root cause layer:** signature (WDB-107) and constraint (WDB-127).
 
-**Gates:** `cargo test --release --test all -- u32_option_slot_min_untyped_zero_must_not_widen_u64 std_regex_escape_codegen_resolves wdb107_same_file_empty_literal wdb127_module_file_demoted_vec_formal_must_borrow_bare` — first two GREEN, these two RED.
+- WDB-107: AsRef-runtime bodies preregister `path: String`, but a stale analyzer `Reference(str)` still skipped `.to_string()` on `""`.
+- WDB-127: `let_binding_int_width_from_later_call_formals` stored the whole `Vec<u64>` as the integer suffix slot. `int_type_from_assignment_target` ignores `Vec`, so the literals stayed `_i64`. The element `u64` is the suffix peer; the binding stays `Vec`.
+
+**What became unnecessary:** treating a Borrowed WJ `string` as `&str` when the preregistered formal is owned `String`; using a collection formal itself as an integer literal suffix.
+
+**Gates:** `cargo test --release --test all -- wdb107_same_file_empty_literal wdb127_module_file_demoted_vec_formal_must_borrow_bare` — 2 passed. Peers `wdb110`, `wdb111`, `wdb124`, `wdb126`, `qs_get_literal_into_demoted_key` — 8 passed.
 
 
 ## P3.755 (2026-10-09) — untyped `0` plus `Vec::len()` must not emit `0_i64`

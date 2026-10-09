@@ -188,24 +188,29 @@ fn apply_owned_string_literal_coercion<'ast>(
                     .formal_param_type(pidx)
                     .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
         };
-        let path_dep_shared = signature.as_ref().is_some_and(slot_shared)
-            || gen.resolve_cross_crate_dep_signature(func_name)
-                .as_ref()
-                .is_some_and(slot_shared)
-            || gen
-                .global_signature_registry
-                .as_ref()
-                .and_then(|g| {
-                    g.get_signature(lookup.as_ref())
-                        .or_else(|| g.get_signature(func_name))
-                })
-                .is_some_and(slot_shared)
-            || gen
-                .signature_registry
-                .get_signature(lookup.as_ref())
-                .or_else(|| gen.signature_registry.get_signature(func_name))
-                .is_some_and(slot_shared)
-            || gen.cross_crate_dep_arg_confirms_shared(func_name, i);
+        // AsRef-runtime bodies preregister `path: String`. A stale analyzer
+        // `Reference(str)` must not peel the literal (WDB-107).
+        let prereg_owned_string = gen.preregistered_free_call_arg_emits_owned_string(func_name, i);
+        let path_dep_shared = !prereg_owned_string
+            && (signature.as_ref().is_some_and(slot_shared)
+                || gen
+                    .resolve_cross_crate_dep_signature(func_name)
+                    .as_ref()
+                    .is_some_and(slot_shared)
+                || gen
+                    .global_signature_registry
+                    .as_ref()
+                    .and_then(|g| {
+                        g.get_signature(lookup.as_ref())
+                            .or_else(|| g.get_signature(func_name))
+                    })
+                    .is_some_and(slot_shared)
+                || gen
+                    .signature_registry
+                    .get_signature(lookup.as_ref())
+                    .or_else(|| gen.signature_registry.get_signature(func_name))
+                    .is_some_and(slot_shared)
+                || gen.cross_crate_dep_arg_confirms_shared(func_name, i));
         if path_dep_shared {
             if crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr) {
                 crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
@@ -271,6 +276,11 @@ fn apply_owned_string_literal_coercion<'ast>(
             func_name,
             i,
         );
+        if prereg_owned_string {
+            let base = arg_str.trim_start_matches('&');
+            *arg_str = crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(base);
+            continue;
+        }
         if gen.preregistered_free_call_arg_expects_borrow(func_name, i) {
             continue;
         }
@@ -347,12 +357,17 @@ fn apply_owned_string_literal_coercion<'ast>(
             if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(s, idx) {
                 return false;
             }
+            // Analyzer Borrowed on a WJ `string` formal is `&str` only when
+            // emission agrees. AsRef-runtime bodies (`strings::is_empty` + `.len()`)
+            // keep `String` (`emitted_rust_ref_params == false`) — the literal
+            // must still `.to_string()` (WDB-107).
             if matches!(
                 s.param_ownership.get(idx),
                 Some(crate::analyzer::OwnershipMode::Borrowed)
             ) && crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string_for_call_arg(
                 s, i,
-            ) {
+            ) && !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(s, idx)
+            {
                 return false;
             }
             if !crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(s, idx)

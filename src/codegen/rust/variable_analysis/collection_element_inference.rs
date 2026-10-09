@@ -28,6 +28,54 @@ fn sig_stores_element(sig: &FunctionSignature) -> bool {
     }
 }
 
+/// Element of `Vec<T>` / `&Vec<T>`. Prefer the AST formal when emission wrapped
+/// a bare `Vec` and dropped `T` (demoted `&Vec<u64>` still has formal `Vec<u64>`).
+fn concrete_vec_element_from_sig(sig: &FunctionSignature, arg_index: usize) -> Option<Type> {
+    let shifted = sig.arg_param_index(arg_index);
+    // A self-slot flag without a Self param (free fn `bakeoff_run_median`) would
+    // skip the only `Vec<u64>` formal. Use the raw argument index then.
+    let mut indexes = vec![shifted];
+    if shifted != arg_index
+        && sig.param_types.get(shifted).is_none()
+        && sig.formal_param_type(shifted).is_none()
+    {
+        indexes.insert(0, arg_index);
+    }
+    let mut candidates = Vec::new();
+    for pidx in indexes {
+        if let Some(ty) = sig.formal_param_type(pidx) {
+            candidates.push(ty);
+        }
+        if let Some(ty) = sig.param_types.get(pidx) {
+            candidates.push(ty);
+        }
+    }
+    let mut fallback = None;
+    for ty in candidates {
+        let Some(elem) = CodeGenerator::peeled_collection_element_type(ty) else {
+            continue;
+        };
+        if matches!(elem, Type::Float) {
+            continue;
+        }
+        let concrete = matches!(
+            elem,
+            Type::Custom(n)
+                if matches!(
+                    n.as_str(),
+                    "u64" | "u32" | "u16" | "u8" | "i32" | "i16" | "i8" | "usize" | "f32"
+                )
+        ) || matches!(elem, Type::Int32 | Type::Uint);
+        if concrete {
+            return Some(elem.clone());
+        }
+        if fallback.is_none() {
+            fallback = Some(elem.clone());
+        }
+    }
+    fallback
+}
+
 fn method_stores_element_in_registry(method: &str, registry: &SignatureRegistry) -> bool {
     registry
         .signatures_for_method_name(method)
@@ -46,9 +94,12 @@ impl<'ast> CodeGenerator<'ast> {
             return Some(ty);
         }
         // Callee `Vec<u64>` / `&Vec<u64>` beats default `vec![10]` → i32 (WDB-127).
-        if let Some(from_call) =
-            self.infer_vec_element_from_function_call(var_name, &self.current_function_body)
-        {
+        let body: Vec<&Statement<'_>> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        if let Some(from_call) = self.infer_vec_element_from_function_call(var_name, &body) {
             return Some(from_call);
         }
         let push_type =
@@ -76,6 +127,36 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         None
+    }
+
+    /// Defining-module signature and the local stub. An importer stub that dropped
+    /// `Vec<u64>` params must not hide the callee element (WDB-127).
+    fn vec_elem_signature_candidates(&self, fn_name: &str) -> Vec<&FunctionSignature> {
+        let lookup = self.signature_lookup_callee_name(fn_name);
+        let mut out: Vec<&FunctionSignature> = Vec::new();
+        if let Some(g) = self.global_signature_registry.as_ref() {
+            if let Some(sig) = g
+                .get_signature(lookup.as_ref())
+                .or_else(|| g.get_signature(fn_name))
+            {
+                out.push(sig);
+            }
+        }
+        if let Some(sig) = self
+            .signature_registry
+            .get_signature(lookup.as_ref())
+            .or_else(|| self.signature_registry.get_signature(fn_name))
+        {
+            if !out.iter().any(|s| std::ptr::eq(*s, sig)) {
+                out.push(sig);
+            }
+        }
+        if let Some(sig) = self.get_signature_with_global(fn_name) {
+            if !out.iter().any(|s| std::ptr::eq(*s, sig)) {
+                out.push(sig);
+            }
+        }
+        out
     }
 
     fn check_stmt_for_vec_param_type(&self, var_name: &str, stmt: &Statement<'_>) -> Option<Type> {
@@ -127,21 +208,19 @@ impl<'ast> CodeGenerator<'ast> {
                     _ => {}
                 };
                 for fn_name in &names_to_try {
-                    if let Some(sig) = self.get_signature_with_global(fn_name) {
+                    for sig in self.vec_elem_signature_candidates(fn_name) {
                         for (i, (_label, arg)) in arguments.iter().enumerate() {
-                            if matches!(arg, Expression::Identifier { name, .. } if name == var_name)
-                            {
-                                let pidx = sig.arg_param_index(i);
-                                let param_type = sig
-                                    .param_type_for_arg(i)
-                                    .or_else(|| sig.formal_param_type(pidx))
-                                    .or_else(|| sig.param_types.get(pidx));
-                                if let Some(elem) = param_type
-                                    .and_then(CodeGenerator::peeled_collection_element_type)
-                                {
-                                    if !matches!(elem, Type::Float) {
-                                        return Some(elem.clone());
-                                    }
+                            let arg_name = match arg {
+                                Expression::Identifier { name, .. } => Some(name.as_str()),
+                                Expression::Unary { operand, .. } => match &**operand {
+                                    Expression::Identifier { name, .. } => Some(name.as_str()),
+                                    _ => None,
+                                },
+                                _ => None,
+                            };
+                            if arg_name == Some(var_name) {
+                                if let Some(elem) = concrete_vec_element_from_sig(sig, i) {
+                                    return Some(elem);
                                 }
                             }
                         }
@@ -163,17 +242,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(sig) = self.get_signature_with_global(method) {
                     for (i, (_label, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name, .. } if name == var_name) {
-                            let pidx = sig.arg_param_index(i);
-                            let param_type = sig
-                                .param_type_for_arg(i)
-                                .or_else(|| sig.formal_param_type(pidx))
-                                .or_else(|| sig.param_types.get(pidx));
-                            if let Some(elem) = param_type
-                                .and_then(CodeGenerator::peeled_collection_element_type)
-                            {
-                                if !matches!(elem, Type::Float) {
-                                    return Some(elem.clone());
-                                }
+                            if let Some(elem) = concrete_vec_element_from_sig(sig, i) {
+                                return Some(elem);
                             }
                         }
                     }
