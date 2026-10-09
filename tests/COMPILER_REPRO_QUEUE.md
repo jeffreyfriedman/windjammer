@@ -2,6 +2,11 @@
 
 
 
+## P3.760 (2026-10-09) — full suite stopped on ENOSPC again
+
+`cargo test --release --test all` wrote `shared/debug` (hyper, chrono, rayon) until the volume returned os error 28 (`EXIT:101`). Failures from `owned_string_formals_must_not_receive_borrow_at_call_site` through `test_passthrough_borrowed_convergence` are that write failure. Earlier tip-out names in the same log (`tip_out_voxel_gpu_passes_update_all_must_not_borrow_passes`, `tip_out_event_get_data_string_must_clone`, `i32_binding_compare_zero_tip_out_shader_graph_compiler`, `int_mul_into_u32_formal_tip_out_hybrid_renderer`) match existing stale-gen rows. `shared/debug` was removed after the run. Do not regenerate product `gen/`.
+
+
 ## P3.759 (2026-10-09) — field-access owned contract follows the qualified callee
 
 **Root cause layer:** signature. Method-call field arguments re-bound `contract_sig` by matching leaf names `to_string` / `to_string_pretty` and then falling back to those stdlib keys even when the qualified callee was something else.
