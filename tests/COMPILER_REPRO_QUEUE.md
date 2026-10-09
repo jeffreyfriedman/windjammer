@@ -2,6 +2,26 @@
 
 
 
+## P3.753 (2026-10-08) — `u32` product cast to `u32` must not insert `as f32`
+
+`vgs_rasterization.wj` writes
+`create_empty_storage_buffer((self.width * self.height * 16) as u32)` with
+`width` and `height` as `u32`. Tip-out emits
+`(((self.width * self.height) as f32 * 16_u32) as f32) as u32` (`f32 * u32`).
+
+| Gate | Status |
+|------|--------|
+| P3.753 isolate | pending |
+| P3.753 tip-out | ❌ tip RED — `as f32` in `gen/rendering/vgs_rasterization.rs` |
+
+**Root cause layer:** cast insertion on a `u32` product. Distinct from P3.735
+(`i32 * 48 as u32` binds `as` only to the literal).
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --test all --features integration_tests -- u32_product_cast_`
+
+
 ## P3.752 (2026-10-08) — TDD WDB-472 (no compiler src)
 
 Copy `i32` for-range bindings must not `.clone()` at a by-value call.
@@ -47,7 +67,7 @@ argument into `&query`.
 | Gate | Status |
 |------|--------|
 | `owned_string_formal_must_not_receive_mut_query` | ✅ tip GREEN |
-| `json_tostring_note_must_not_mut_borrow_query` | ❌ still RED — `note: &mut Note` vs caller `&Note` |
+| `json_tostring_note_must_not_mut_borrow_query` | ✅ tip GREEN — `note: &Note` |
 | WDB-218 isolate both formals `&Plan` | ✅ `execute(plan)` accepted |
 
 **Root cause layer:** signature. The if-condition borrow rewrite ignored an
@@ -64,6 +84,24 @@ cargo test --release --test all -- owned_string_formal_must_not_receive_mut_quer
   wdb218_codegen notes_api_json notes_api_interp notes_api_qs_get
 ```
 → 6 passed; `json_tostring_note_must_not_mut_borrow_query` still failed (`&mut Note`).
+
+**Follow-up (same row):** `json.to_string(note)` was resolved as the bare
+`to_string` homonym (`param_ownership: [MutBorrowed]`), so the caller formal
+became `&mut Note` while `dispatch` stayed `&Note`.
+
+**Root cause layer:** signature. `resolve_free_call_signature` now prefers the
+stdlib runtime free-fn contract (`json::to_string(value: T)` owned, no `self`)
+when the looked-up sig is a MutBorrowed / `self` homonym.
+
+**What became unnecessary:** treating that homonym as a reason to emit
+`&mut Note`. The analyzer already inferred `Borrowed`.
+
+**Gates:**
+```bash
+cargo test --release --test all -- json_tostring_note_must_not_mut_borrow_query \
+  owned_string_formal_must_not_receive_mut_query
+```
+→ 2 passed.
 
 ## P3.749 (2026-10-08) — REGRESSION: engine library transpile SIGKILL (exit 137)
 

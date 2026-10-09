@@ -1454,9 +1454,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         let mut found = false;
         for stmt in body {
-            match self.statement_param_projection_usage_skipping_bare_call_args(
-                stmt, param_name, func,
-            ) {
+            match self
+                .statement_param_projection_usage_skipping_bare_call_args(stmt, param_name, func)
+            {
                 ProjectionUsage::None => {}
                 ProjectionUsage::FieldOrIndexOnly => found = true,
                 ProjectionUsage::BareOrOther => return false,
@@ -1475,9 +1475,8 @@ impl<'ast> CodeGenerator<'ast> {
             Statement::Expression { expr, .. }
             | Statement::Return {
                 value: Some(expr), ..
-            } => self.expression_param_projection_usage_skipping_bare_call_args(
-                expr, param_name, func,
-            ),
+            } => self
+                .expression_param_projection_usage_skipping_bare_call_args(expr, param_name, func),
             Statement::Return { .. } => ProjectionUsage::None,
             Statement::Let {
                 value, else_block, ..
@@ -1497,12 +1496,12 @@ impl<'ast> CodeGenerator<'ast> {
                 usage
             }
             Statement::Assignment { target, value, .. } => self
-                .expression_param_projection_usage_skipping_bare_call_args(
-                    target, param_name, func,
-                )
-                .merge(self.expression_param_projection_usage_skipping_bare_call_args(
-                    value, param_name, func,
-                )),
+                .expression_param_projection_usage_skipping_bare_call_args(target, param_name, func)
+                .merge(
+                    self.expression_param_projection_usage_skipping_bare_call_args(
+                        value, param_name, func,
+                    ),
+                ),
             Statement::If {
                 condition,
                 then_block,
@@ -1627,9 +1626,7 @@ impl<'ast> CodeGenerator<'ast> {
                 usage
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 let mut usage = self.expression_param_projection_usage_skipping_bare_call_args(
                     object, param_name, func,
@@ -2791,10 +2788,8 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // AST Copy pass-by-value scalars (`i64`, `bool`, …) emit and register as Owned
                 // even when stale body inference borrowed them for inner map-key calls (WDB-134).
-                if !matches!(
-                    param.type_,
-                    Type::Reference(_) | Type::MutableReference(_)
-                ) && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
+                if !matches!(param.type_, Type::Reference(_) | Type::MutableReference(_))
+                    && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                 {
                     ownership = crate::analyzer::OwnershipMode::Owned;
                     p_type = param.type_.clone();
@@ -3260,7 +3255,9 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MethodCall { object, .. } => {
                 Self::expr_moves_for_loop_var_in_object(name, object)
             }
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 // P3.528 / WDB-412: `v == version` / ordering compares Copy or use
                 // PartialEq by shared ref — not a move of the loop binding. Treating
                 // compare ids as moves forced `for v in applied` to keep Owned `Vec`
@@ -3311,7 +3308,9 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Call { arguments, .. } => arguments
                 .iter()
                 .any(|(_, arg)| Self::expr_moves_for_loop_var(name, arg)),
-            Expression::Binary { left, right, op, .. } => {
+            Expression::Binary {
+                left, right, op, ..
+            } => {
                 if matches!(
                     op,
                     crate::parser::BinaryOp::Eq
@@ -3802,9 +3801,9 @@ impl<'ast> CodeGenerator<'ast> {
                         // WJ AST / registry owned formals beat stale shared-ref metadata
                         // (`BasePart::has_key(key: Key)` → `get(&key)` must still move at
                         // `latest.has_key(key)` — WDB-209).
-                        if self.method_call_arg_formal_is_owned_non_copy(
-                            object, method, i, func,
-                        ) || self.method_call_sibling_ast_expects_owned_arg(object, method, i, func)
+                        if self.method_call_arg_formal_is_owned_non_copy(object, method, i, func)
+                            || self
+                                .method_call_sibling_ast_expects_owned_arg(object, method, i, func)
                         {
                             return true;
                         }
@@ -3844,8 +3843,9 @@ impl<'ast> CodeGenerator<'ast> {
                 self.expression_has_owning_method_call_arg_use(object, param_name, func)
                     || self.expression_has_owning_method_call_arg_use(index, param_name, func)
             }
-            Expression::Block { statements, .. } => self
-                .param_has_owning_method_call_arg_use(statements.as_slice(), param_name, func),
+            Expression::Block { statements, .. } => {
+                self.param_has_owning_method_call_arg_use(statements.as_slice(), param_name, func)
+            }
             _ => false,
         }
     }
@@ -4085,9 +4085,9 @@ impl<'ast> CodeGenerator<'ast> {
                         // Owned AST / emitted String formals beat stale borrow flags
                         // (P3.601; WDB-209: `has_key(key: Key)` must count before readonly
                         // `get` convergence marks the slot shared-ref).
-                        if self.method_call_arg_formal_is_owned_non_copy(
-                            object, method, i, func,
-                        ) || self.method_call_sibling_ast_expects_owned_arg(object, method, i, func)
+                        if self.method_call_arg_formal_is_owned_non_copy(object, method, i, func)
+                            || self
+                                .method_call_sibling_ast_expects_owned_arg(object, method, i, func)
                         {
                             return true;
                         }
@@ -7768,6 +7768,42 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Stdlib runtime free-fn contract (`json::to_string(value: T)` owned) beats a
+    /// MutBorrowed `to_string` homonym that multipass stored under the same key.
+    fn prefer_runtime_std_owned_free_fn(
+        receiver: &str,
+        key: &str,
+        resolved: Option<crate::analyzer::FunctionSignature>,
+    ) -> Option<crate::analyzer::FunctionSignature> {
+        let stdlib = crate::analyzer::SignatureRegistry::stdlib();
+        if !stdlib.has_runtime_std_module(receiver) {
+            return resolved;
+        }
+        let Some(boundary) = stdlib.get_signature(key).cloned() else {
+            return resolved;
+        };
+        let boundary_owned_free = !boundary.has_self_receiver
+            && matches!(
+                boundary.param_ownership.first(),
+                Some(crate::analyzer::OwnershipMode::Owned)
+            );
+        if !boundary_owned_free {
+            return resolved;
+        }
+        let collided = resolved.as_ref().is_none_or(|sig| {
+            sig.has_self_receiver
+                || matches!(
+                    sig.param_ownership.first(),
+                    Some(crate::analyzer::OwnershipMode::MutBorrowed)
+                )
+        });
+        if collided {
+            Some(boundary)
+        } else {
+            resolved
+        }
+    }
+
     fn resolve_free_call_signature(
         &self,
         function: &Expression<'ast>,
@@ -7801,14 +7837,18 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 type_or_module.and_then(|receiver| {
                     let key = format!("{receiver}::{field}");
-                    call_arg_count
+                    let resolved = call_arg_count
                         .and_then(|n| {
                             self.find_signature_by_name_and_arg_count_with_global(&key, n)
                                 .cloned()
                         })
                         .or_else(|| self.get_signature_with_global(&key).cloned())
                         .or_else(|| self.signature_registry.get_signature(&key).cloned())
-                        .or_else(|| self.signature_registry.lookup_method(&key).cloned())
+                        .or_else(|| self.signature_registry.lookup_method(&key).cloned());
+                    // Runtime free fns (`json::to_string(value: T)` owned) must beat a
+                    // collided `to_string` homonym (`&mut self`) stored under the same
+                    // key. That homonym made notes-api `note` a `&mut Note`.
+                    Self::prefer_runtime_std_owned_free_fn(receiver, &key, resolved)
                 })
             }
             _ => None,
@@ -7868,9 +7908,7 @@ impl<'ast> CodeGenerator<'ast> {
             .param_types
             .get(pidx)
             .or_else(|| sig.formal_param_types.get(pidx))
-            .is_some_and(|t| {
-                matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            })
+            .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
         {
             return false;
         }
@@ -9089,8 +9127,7 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> bool {
-        if !self.param_only_forwarded_to_runtime_wj_owned_rust_borrowed(body, param_name, func)
-        {
+        if !self.param_only_forwarded_to_runtime_wj_owned_rust_borrowed(body, param_name, func) {
             return false;
         }
         let Some(param) = func.parameters.iter().find(|p| p.name == param_name) else {
@@ -9120,11 +9157,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Prefer pure-forward detection; also accept single-expr bodies that only
         // forward this param into call args (parser may wrap return differently).
         let pure = self.func_is_pure_forwarding_delegate(func);
-        let only_arg = self.param_only_used_as_call_argument(
-            func.body.as_slice(),
-            &param.name,
-            func,
-        );
+        let only_arg =
+            self.param_only_used_as_call_argument(func.body.as_slice(), &param.name, func);
         if !pure && !(only_arg && func.body.len() == 1) {
             return false;
         }
@@ -9181,11 +9215,7 @@ impl<'ast> CodeGenerator<'ast> {
         // library module — still demote when every forward is a borrowing callee
         // and nothing consumes the param owned (P3.669 codec_json_merge_overlay).
         self.param_passed_to_borrowing_callee(func.body.as_slice(), &param.name, func)
-            && !self.param_passes_to_wj_owned_sibling_call(
-                func.body.as_slice(),
-                &param.name,
-                func,
-            )
+            && !self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
             && !self.param_passed_to_owned_non_copy_method_arg(
                 func.body.as_slice(),
                 &param.name,
@@ -9894,11 +9924,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Resolve whether a field/index move chain from `param` lands on Copy or text.
-    fn expr_field_move_is_copy_or_text(
-        &self,
-        param_name: &str,
-        expr: &Expression<'ast>,
-    ) -> bool {
+    fn expr_field_move_is_copy_or_text(&self, param_name: &str, expr: &Expression<'ast>) -> bool {
         let Some(param_ty) = self
             .current_function_params
             .iter()
@@ -9990,14 +10016,12 @@ impl<'ast> CodeGenerator<'ast> {
                 .iter()
                 .any(|(_, arg)| Self::expr_has_field_move_from_param(param_name, arg, true)),
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 Self::expr_has_field_move_from_param(param_name, object, false)
-                    || arguments.iter().any(|(_, arg)| {
-                        Self::expr_has_field_move_from_param(param_name, arg, true)
-                    })
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expr_has_field_move_from_param(param_name, arg, true))
             }
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
@@ -12850,8 +12874,8 @@ impl<'ast> CodeGenerator<'ast> {
                         let from_string = emitted_param_strings
                             .get(emitted_idx)
                             .is_some_and(|s| emitted_formal_is_shared_ref(s));
-                        ms_emitted[user_param_idx] = from_string
-                            && !self.inferred_mut_borrowed_params.contains(&param.name);
+                        ms_emitted[user_param_idx] =
+                            from_string && !self.inferred_mut_borrowed_params.contains(&param.name);
                     }
                     user_param_idx += 1;
                     if emitted_idx < emitted_param_strings.len() {
@@ -12905,9 +12929,7 @@ impl<'ast> CodeGenerator<'ast> {
             // existing Self-aligned registry entry — never append user params again
             // (P3.647c: BlendTree::evaluate_node Self+4 → Self+8).
             if updated.has_self_receiver && updated.param_types.is_empty() {
-                updated
-                    .param_types
-                    .push(Type::Custom("Self".to_string()));
+                updated.param_types.push(Type::Custom("Self".to_string()));
                 updated
                     .formal_param_types
                     .push(Type::Custom("Self".to_string()));
@@ -12975,7 +12997,9 @@ impl<'ast> CodeGenerator<'ast> {
         };
         // Implicit self: MethodSignature / registry may be Self-free while
         // `has_self_receiver` is true — insert the Self slot before indexing +1.
-        if updated.has_self_receiver && !ast_has_self && updated.param_types.len() == user_param_count
+        if updated.has_self_receiver
+            && !ast_has_self
+            && updated.param_types.len() == user_param_count
         {
             updated
                 .param_types
