@@ -660,10 +660,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn end_is_usize_len(&self, end: &Expression<'ast>) -> bool {
-        matches!(
-            end,
-            Expression::MethodCall { method, .. } if method == "len" || method == "capacity"
-        ) || self.expression_produces_usize(end)
+        self.expression_produces_usize(end)
     }
 
     /// Fixed-width loop counter for `for i in start..end` (P3.334 mesh_primitives `0..seg`).

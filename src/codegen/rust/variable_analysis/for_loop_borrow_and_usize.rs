@@ -814,11 +814,6 @@ impl<'ast> CodeGenerator<'ast> {
             || self.infer_expression_type_is_usize(expr)
             || matches!(
                 expr,
-                Expression::MethodCall { method, .. }
-                    if method == "len" || method == "capacity"
-            )
-            || matches!(
-                expr,
                 Expression::Identifier { name, .. } if self.usize_variables.contains(name)
             )
     }
