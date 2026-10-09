@@ -91,6 +91,30 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Copy `self.field` reads (`pos_x: f32` into `Vec3::new`) are not partial moves.
+    /// Missing field types stay moves so non-Copy ctor moves (WDB-414) keep `mut self`.
+    pub(super) fn self_field_partial_move_needs_owned_receiver(
+        &self,
+        func: &FunctionDecl,
+    ) -> bool {
+        let struct_name = self.current_struct_name.clone();
+        super::self_analysis::function_partial_moves_self_field_then_assigns_other_if(
+            func,
+            |field| {
+                let Some(sn) = struct_name.as_deref() else {
+                    return true;
+                };
+                let Some(fields) = self.lookup_struct_field_types(sn) else {
+                    return true;
+                };
+                match fields.get(field) {
+                    Some(ty) => !self.is_type_copy(ty),
+                    None => true,
+                }
+            },
+        )
+    }
+
     /// Resolve the Rust receiver for a method whose analyzer ownership is `Owned`.
     ///
     /// The analyzer sets Owned for several reasons: match-on-self, consuming field
@@ -118,7 +142,7 @@ impl<'ast> CodeGenerator<'ast> {
             // method are Clone under `&mut self` (notes-api `dispatch`).
             // P3.522: thin wrappers (`handle_http` → `handle_method(&mut self)`) are
             // "consuming" only because the callee's WJ source still says `self`.
-            if super::self_analysis::function_partial_moves_self_field_then_assigns_other(func) {
+            if self.self_field_partial_move_needs_owned_receiver(func) {
                 "mut self"
             } else if super::self_analysis::function_writeback_replaces_moved_self_fields(func)
                 || self.function_calls_self_with_recorded_receiver(

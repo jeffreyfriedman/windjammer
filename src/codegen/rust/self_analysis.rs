@@ -390,7 +390,7 @@ pub fn function_writeback_replaces_moved_self_fields(func: &FunctionDecl) -> boo
     let mut moved = std::collections::HashSet::new();
     let mut assigned = std::collections::HashSet::new();
     for stmt in &func.body {
-        collect_moved_self_fields_in_stmt(stmt, &mut moved);
+        collect_moved_self_fields_in_stmt(stmt, &mut moved, &|_| true);
         collect_assigned_self_fields_in_stmt(stmt, &mut assigned);
     }
     !moved.is_empty() && moved.iter().all(|field| assigned.contains(field))
@@ -401,10 +401,20 @@ pub fn function_writeback_replaces_moved_self_fields(func: &FunctionDecl) -> boo
 /// Contrasts with notes-api `dispatch` (field moves into Owned formals + mutate via
 /// field methods) which is `&mut self` + Clone (P3.584 / P3.570).
 pub fn function_partial_moves_self_field_then_assigns_other(func: &FunctionDecl) -> bool {
+    function_partial_moves_self_field_then_assigns_other_if(func, |_| true)
+}
+
+/// Same as [`function_partial_moves_self_field_then_assigns_other`], but Copy
+/// fields (`self.pos_x: f32` passed into `Vec3::new`) are not moves. Unknown
+/// fields stay moves so WDB-414 non-Copy ctor moves still take owned `mut self`.
+pub fn function_partial_moves_self_field_then_assigns_other_if(
+    func: &FunctionDecl,
+    field_is_moved: impl Fn(&str) -> bool,
+) -> bool {
     let mut moved = std::collections::HashSet::new();
     let mut assigned = std::collections::HashSet::new();
     for stmt in &func.body {
-        collect_moved_self_fields_in_stmt(stmt, &mut moved);
+        collect_moved_self_fields_in_stmt(stmt, &mut moved, &field_is_moved);
         collect_assigned_self_fields_in_stmt(stmt, &mut assigned);
     }
     !moved.is_empty()
@@ -413,27 +423,33 @@ pub fn function_partial_moves_self_field_then_assigns_other(func: &FunctionDecl)
         && assigned.iter().any(|field| !moved.contains(field))
 }
 
-fn collect_moved_self_fields_in_stmt(stmt: &Statement, out: &mut std::collections::HashSet<String>) {
+fn collect_moved_self_fields_in_stmt(
+    stmt: &Statement,
+    out: &mut std::collections::HashSet<String>,
+    field_is_moved: &impl Fn(&str) -> bool,
+) {
     match stmt {
         Statement::Let { value, .. }
         | Statement::Expression { expr: value, .. }
         | Statement::Return {
             value: Some(value), ..
-        } => collect_moved_self_fields_in_expr(value, out),
-        Statement::Assignment { value, .. } => collect_moved_self_fields_in_expr(value, out),
+        } => collect_moved_self_fields_in_expr(value, out, field_is_moved),
+        Statement::Assignment { value, .. } => {
+            collect_moved_self_fields_in_expr(value, out, field_is_moved)
+        }
         Statement::If {
             condition,
             then_block,
             else_block,
             ..
         } => {
-            collect_moved_self_fields_in_expr(condition, out);
+            collect_moved_self_fields_in_expr(condition, out, field_is_moved);
             for s in then_block {
-                collect_moved_self_fields_in_stmt(s, out);
+                collect_moved_self_fields_in_stmt(s, out, field_is_moved);
             }
             if let Some(eb) = else_block {
                 for s in eb {
-                    collect_moved_self_fields_in_stmt(s, out);
+                    collect_moved_self_fields_in_stmt(s, out, field_is_moved);
                 }
             }
         }
@@ -441,23 +457,29 @@ fn collect_moved_self_fields_in_stmt(stmt: &Statement, out: &mut std::collection
     }
 }
 
-fn collect_moved_self_fields_in_expr(expr: &Expression, out: &mut std::collections::HashSet<String>) {
+fn collect_moved_self_fields_in_expr(
+    expr: &Expression,
+    out: &mut std::collections::HashSet<String>,
+    field_is_moved: &impl Fn(&str) -> bool,
+) {
     match expr {
         Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
             for (_, arg) in arguments {
                 if let Some(field) = self_field_name(arg) {
-                    out.insert(field);
+                    if field_is_moved(&field) {
+                        out.insert(field);
+                    }
                 } else {
-                    collect_moved_self_fields_in_expr(arg, out);
+                    collect_moved_self_fields_in_expr(arg, out, field_is_moved);
                 }
             }
         }
         Expression::Binary { left, right, .. } => {
-            collect_moved_self_fields_in_expr(left, out);
-            collect_moved_self_fields_in_expr(right, out);
+            collect_moved_self_fields_in_expr(left, out, field_is_moved);
+            collect_moved_self_fields_in_expr(right, out, field_is_moved);
         }
         Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
-            collect_moved_self_fields_in_expr(operand, out);
+            collect_moved_self_fields_in_expr(operand, out, field_is_moved);
         }
         _ => {}
     }

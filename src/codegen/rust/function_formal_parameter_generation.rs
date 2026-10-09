@@ -1399,9 +1399,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // WDB-414: MutBorrowed sibling helpers (`setup_materials` /
                     // `build_scene`) must not force `&mut self` when the body still
                     // partial-moves a field into an owned ctor then assigns another.
-                    if super::self_analysis::function_partial_moves_self_field_then_assigns_other(
-                        &analyzed.decl,
-                    ) {
+                    if self.self_field_partial_move_needs_owned_receiver(&analyzed.decl) {
                         self.inferred_borrowed_params.remove("self");
                         self.inferred_mut_borrowed_params.remove("self");
                         self.record_self_receiver_upgrade(
@@ -1439,9 +1437,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             // WDB-414: stale MutBorrowed upgrade must not beat owned
                             // partial-move receivers.
-                            if super::self_analysis::function_partial_moves_self_field_then_assigns_other(
-                                &analyzed.decl,
-                            ) {
+                            if self.self_field_partial_move_needs_owned_receiver(&analyzed.decl) {
                                 self.inferred_borrowed_params.remove("self");
                                 self.inferred_mut_borrowed_params.remove("self");
                                 return "mut self".to_string();
@@ -1514,7 +1510,7 @@ impl<'ast> CodeGenerator<'ast> {
                                                 && super::self_analysis::function_consumes_self(
                                                     &analyzed.decl,
                                                 )
-                                                || super::self_analysis::function_partial_moves_self_field_then_assigns_other(
+                                                || self.self_field_partial_move_needs_owned_receiver(
                                                     &analyzed.decl,
                                                 ))
                                         {

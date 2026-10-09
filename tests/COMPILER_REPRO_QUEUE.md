@@ -27,17 +27,21 @@ before its callee still sees the emitted `&T` formal.
 and a second `&` at the caller once the caller formal itself is `&VoxelGrid`.
 No new call-site peel.
 
-`test_static_helper_with_instance_method_on_param` still wants
-`update(&mut self, …)` and currently emits `update(mut self, …, grid: &VoxelGrid)`.
-The grid slot is borrowed; the receiver is a separate self-ownership question.
+`test_static_helper_with_instance_method_on_param` emits
+`update(&mut self, dt: f32, grid: &VoxelGrid)`. Copy field reads
+(`self.pos_y: f32` into `Vec3::new`) are no longer partial moves, so the
+receiver stays `&mut self`. Non-Copy ctor moves (WDB-414 `self.scene`) still
+take owned `mut self`. Unknown field types stay moves.
 
 **Gates:**
 ```bash
 export CARGO_TARGET_DIR="$HOME/Library/Caches/windjammer/cargo-target/shared"
-cargo test --release --test all -- wdb398_module_file_owned_copy \
-  wdb398_module_file_associated_new test_static_readonly_voxelgrid
+cargo test --release --test all -- test_static_helper_with_instance_method_on_param \
+  test_static_method_call_not_treated_as_enum_variant \
+  test_multiple_static_calls_with_same_param_still_borrowed \
+  test_static_readonly_voxelgrid wdb398_module_file_associated_new wdb414 update_death
 ```
-→ 5 passed.
+→ 11 passed.
 
 ## P3.746 (2026-10-08) — Logger owned string literal re-borrowed after homonym refresh
 

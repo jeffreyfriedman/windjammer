@@ -1045,9 +1045,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     // WDB-414 / P3.584: move field A into a ctor then assign field B
                     // needs owned `mut self` — do not pre-upgrade to `&mut self`.
-                    if super::self_analysis::function_partial_moves_self_field_then_assigns_other(
-                        func,
-                    ) {
+                    if self.self_field_partial_move_needs_owned_receiver(func) {
                         continue;
                     }
                     let qualified = format!("{}::{}", struct_name, func.name);
