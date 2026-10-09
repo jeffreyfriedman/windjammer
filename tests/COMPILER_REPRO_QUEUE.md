@@ -1,5 +1,32 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+## P3.748 (2026-10-08) — TDD WDB-471 (DB agent; no compiler src)
+
+A reused non-Copy `Vec` passed into an owned formal must not be `.clone().clone()`.
+
+Product `animation/blend_tree.rs` `evaluate_node`:
+```wj
+let pose_a = self.evaluate_node(node_a, clips, time, bone_count)
+let pose_b = self.evaluate_node(node_b, clips, time, bone_count)
+```
+One `.clone()` copies the `Vec` for the second use. Tip-out emits `clips.clone().clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-471 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-471 tip-out | ❌ tip RED — `clips.clone().clone()` in `rel_tip_out/animation/blend_tree.rs` and `windjammer-game-core/gen/animation/blend_tree.rs` |
+
+**Root cause layer:** tip-out lag — a second `.clone()` is applied to a value that is already owned.
+
+**Why this is a new class:**
+- WDB-374 is a Copy enum `.state.clone().clone()` and is tip GREEN.
+- WDB-470 is a single `.clone()` on an owned function return.
+- This is a non-Copy `Vec` argument cloned twice at one call.
+
+**Do not steal:** WDB-406/408/411/457–471, P3.508–P3.748, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb471_` — isolate GREEN / tip RED (2026-10-08).
+
 ## P3.747 (2026-10-08) — Associated readonly Custom formal stayed owned
 
 `FpsCamera::collides_aabb(grid: VoxelGrid)` only reads `grid.cells.len()`, but
