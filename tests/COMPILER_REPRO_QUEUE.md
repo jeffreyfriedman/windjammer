@@ -10,8 +10,8 @@ binding is `i32` (expected `i32`, found `i64`).
 
 | Gate | Status |
 |------|--------|
-| `i32_binding_compare_zero_must_not_emit_i64` | filed this session |
-| `i32_binding_compare_zero_tip_out_shader_graph_compiler` | filed this session |
+| `i32_binding_compare_zero_must_not_emit_i64` | ❌ isolate RED — `existing_group: i32` then `>= 0_i64` |
+| `i32_binding_compare_zero_tip_out_shader_graph_compiler` | ❌ tip-out RED — `existing_group >= 0_i64` |
 
 **Root cause layer:** int width — a comparison literal follows the annotated
 `i32` binding, not an ambient `i64` slot.
