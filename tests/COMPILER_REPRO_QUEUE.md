@@ -1,5 +1,28 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
+
+## P3.749 (2026-10-08) — REGRESSION: engine library transpile SIGKILL (exit 137)
+
+P3.291 recorded full `windjammer-game-core` `--library` transpile EXIT 0 in ~200s
+with `RAYON_NUM_THREADS=1` (2026-09-15). Tonight tip `wj` 0.50.0
+(`windjammer/target/release/wj`, 2026-10-08 19:44) dies **exit 137** during Step 4B
+analyze. Progress logging only prints the first 20 files, so the log always ends at
+`squad_tactics.wj`. That file alone transpiles in ~2s. Peak RSS sampled ~3.8 GB
+before the kill. `RAYON_NUM_THREADS=1` still exits 137 (~66s).
+
+| Gate | Status |
+|------|--------|
+| `squad_tactics.wj` alone `--library --no-cargo` | ✅ ~2s EXIT 0 |
+| full `src/mod.wj` `--library --no-cargo` | ❌ exit 137 (three runs, 2026-10-08) |
+| same with `RAYON_NUM_THREADS=1` | ❌ exit 137 |
+
+**Root cause layer:** Step 4B per-file analyze with the converged global registry
+on ~678 files. Not a panic message (stderr stops at the progress cap).
+
+**Do not steal:** compiler `src/`. No host OOM test in the default suite.
+
+**Evidence:** `/tmp/wj_engine_r21_err.log`, `/tmp/wj_engine_r22_err.log`.
+
 ## P3.748 (2026-10-08) — TDD WDB-471 (DB agent; no compiler src)
 
 A reused non-Copy `Vec` passed into an owned formal must not be `.clone().clone()`.
