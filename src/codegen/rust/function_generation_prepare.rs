@@ -12217,6 +12217,44 @@ impl<'ast> CodeGenerator<'ast> {
         false
     }
 
+    /// Preregistered Rust formal is owned `String` (AsRef-runtime pin), not `&str`.
+    pub(in crate::codegen::rust) fn preregistered_free_call_arg_emits_owned_string(
+        &self,
+        callee_name: &str,
+        arg_index: usize,
+    ) -> bool {
+        if !self.preregistered_free_call_arg_emits_owned(callee_name, arg_index) {
+            return false;
+        }
+        let import_alias = self.import_fn_alias_map.contains_key(callee_name);
+        let lookup = self.signature_lookup_callee_name(callee_name);
+        let lookup_ref = lookup.as_ref();
+        let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
+        let skip_bare_homonym =
+            crate::codegen::rust::call_signature_resolution::qualified_callee_skips_bare_homonym_lookup(
+                callee_name,
+            );
+        let keys: Vec<&str> = if import_alias {
+            vec![lookup_ref, callee_name]
+        } else if skip_bare_homonym {
+            vec![callee_name, lookup_ref]
+        } else {
+            vec![callee_name, simple, lookup_ref]
+        };
+        for key in keys {
+            let Some(formal) = self
+                .preregistered_free_function_emitted_params
+                .get(key)
+                .and_then(|formals| formals.get(arg_index))
+            else {
+                continue;
+            };
+            let ty = formal.split_once(':').map(|(_, t)| t.trim()).unwrap_or("");
+            return ty == "String" || ty.starts_with("String ");
+        }
+        false
+    }
+
     fn free_call_arg_expects_borrow(&self, callee_name: &str, arg_index: usize) -> bool {
         let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
         if !callee_name.contains("::") {
