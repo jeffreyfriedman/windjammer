@@ -1506,23 +1506,25 @@ pub fn is_collection_key_lookup_with_project(
     let registry = SignatureRegistry::stdlib();
     let method = sig.name.rsplit("::").next().unwrap_or(&sig.name);
     if let Some((type_prefix, meth)) = sig.name.rsplit_once("::") {
-        if matches!(meth, "get" | "contains_key" | "get_key_value" | "remove") {
-            let base = type_prefix
-                .rsplit("::")
-                .next()
-                .unwrap_or(type_prefix)
-                .split('<')
-                .next()
-                .unwrap_or(type_prefix);
-            if is_map_type_name(base) || is_set_type_name(base) {
-                return callee_arg_expects_reference_param(sig, arg_index)
-                    || method_is_map_key_qualified_with_project(
-                        meth,
-                        Some(base),
-                        registry,
-                        project_registry,
-                    );
-            }
+        let base = type_prefix
+            .rsplit("::")
+            .next()
+            .unwrap_or(type_prefix)
+            .split('<')
+            .next()
+            .unwrap_or(type_prefix);
+        // Map/set qualification is the type prefix. Borrowed-key vs owned-index
+        // comes from that type's signature, not a leaf-name list.
+        if (is_map_type_name(base) || is_set_type_name(base))
+            && (callee_arg_expects_reference_param(sig, arg_index)
+                || method_is_map_key_qualified_with_project(
+                    meth,
+                    Some(base),
+                    registry,
+                    project_registry,
+                ))
+        {
+            return true;
         }
     }
     let receiver_base = receiver_type
@@ -1570,7 +1572,7 @@ pub fn is_collection_key_lookup_with_project(
     // inferred receiver name is `MapCell` / `MutexGuard<…>` — still a map key lookup.
     // Do not require `has_self_receiver`: multipass stubs sometimes omit it on
     // `HashMap::get` even when the method is map-qualified in `sig.name`.
-    if arg_index == 0 && matches!(method, "get" | "contains_key" | "get_key_value" | "remove") {
+    if arg_index == 0 {
         let from_callee = sig.name.rsplit_once("::").map(|(ty, _)| {
             ty.rsplit("::")
                 .next()
@@ -1579,19 +1581,20 @@ pub fn is_collection_key_lookup_with_project(
                 .next()
                 .unwrap_or(ty)
         });
-        if from_callee.is_some_and(|b| is_map_type_name(b) || is_set_type_name(b)) {
-            return callee_arg_expects_reference_param(sig, arg_index)
+        if from_callee.is_some_and(|b| is_map_type_name(b) || is_set_type_name(b))
+            && (callee_arg_expects_reference_param(sig, arg_index)
                 || method_is_map_key_qualified_with_project(
                     method,
                     from_callee,
                     registry,
                     project_registry,
-                );
+                ))
+        {
+            return true;
         }
-        // WDB-329: `Vec::remove` / `String::remove` are type-qualified with an *Owned*
-        // first arg. Never inherit HashMap::remove Borrowed consensus when receiver_type
-        // is None or a user impl name (`Blackboard`) — that forced `&idx as usize`.
-        // Wrappers like `MapCell::get` (Borrowed) still fall through to consensus below.
+        // WDB-329: a type-qualified owned formal (`Vec::remove`, `String::remove`,
+        // `NoteStore::get`) is not a map key. Borrowed wrappers (`MapCell::get`)
+        // still fall through to consensus below.
         if from_callee.is_some_and(|b| !is_map_type_name(b) && !is_set_type_name(b))
             && !callee_arg_expects_reference_param(sig, arg_index)
         {
@@ -2231,14 +2234,15 @@ mod pattern_registry_tests {
         );
     }
 
-    
     #[test]
-    
     #[test]
     #[test]
     fn debug_get_suffix_conflict() {
         let reg = SignatureRegistry::stdlib();
-        eprintln!("conflict get={}", reg.suffix_has_conflicting_first_arg_ownership("get", 1));
+        eprintln!(
+            "conflict get={}",
+            reg.suffix_has_conflicting_first_arg_ownership("get", 1)
+        );
         let mut owned = vec![];
         let mut borrowed = 0usize;
         for (name, s) in reg.all_signatures() {
@@ -2281,7 +2285,7 @@ mod pattern_registry_tests {
         );
     }
 
-#[test]
+    #[test]
     fn bare_user_get_free_fn_is_not_collection_key_lookup() {
         use crate::parser::Type;
         // Phase 5 / P3.254: free-fn `get(text: string, …)` must not inherit Map::get

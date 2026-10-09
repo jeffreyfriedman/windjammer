@@ -2,6 +2,15 @@
 
 
 
+## P3.766 (2026-10-09) — collection-key lookup follows the map/set signature
+
+**Root cause layer:** signature. `is_collection_key_lookup_with_project` treated a call as a map-key lookup only when the leaf was `get`, `contains_key`, `get_key_value`, or `remove`.
+
+**What became unnecessary:** both of those leaf-name matches in `stdlib_method_traits.rs`. A qualified map or set callee is a key lookup when that type's signature borrows the first argument (`method_is_map_key_qualified_with_project` or a reference formal). A type-qualified owned formal (`Vec::remove`, `NoteStore::get`) stays fail-closed. Borrowed wrappers still fall through to map consensus.
+
+**Gates:** `cargo test --release --test all -- test_vec_get slice_get_usize owned_i64_method_formal mutex_guard_hashmap_string_key_must_borrow shared_map_get_must_borrow hashmap_get_string_key map_get_must_borrow contains_key_borrows` — 9 passed. Full suite not re-run (about 1 GiB free; prior runs died writing `shared/debug`).
+
+
 ## P3.765 (2026-10-09) — `enumerate` index width comes from `Iterator<(usize, T)>`
 
 **Root cause layer:** signature. The `for` loop marked the first tuple binding `usize` and skipped borrowed-iterator tracking when the method was spelled `enumerate`.
