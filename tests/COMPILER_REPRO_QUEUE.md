@@ -2,6 +2,21 @@
 
 
 
+## P3.757 (2026-10-09) — WDB-204 `u64` tuple field compared to `0` is already `u64` on tip
+
+Same-file `let median = pair.0` from `(u64, bool)` then `median == 0` cargo-checks. The zero on that compare is not `0_usize`. `samples.len() == 0` may still use `usize`.
+
+| Gate | Status |
+|------|--------|
+| `wdb204_tuple_u64_field_compare_zero_must_not_emit_usize` | ✅ GREEN |
+| `wdb201_module_file_reused_key_into_owned_entries_push_must_clone` | ✅ GREEN (reconfirmed) |
+| WDB-204 tip-out sysbench | ❌ stale `gen/` / `.agent-wip/rel_tip_out` (not regenerated) |
+
+**Root cause layer:** tip-out lag. No compiler change.
+
+**Gates:** `cargo test --release --test all -- wdb204_tuple_u64_field_compare_zero` — 1 passed. `cargo test --release --test all -- wdb201_module_file_reused_key_into_owned_entries_push` — 1 passed.
+
+
 ## P3.756 (2026-10-09) — WDB-107 owned string literal + WDB-127 `Vec<u64>` element
 
 | Gate | Status |
