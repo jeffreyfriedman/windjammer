@@ -2,6 +2,15 @@
 
 
 
+## P3.767 (2026-10-09) — `len`/`capacity` width follows `usize` returns
+
+**Root cause layer:** signature. Range bounds, comparisons, and `while` conditions treated a call as `usize` whenever the method was spelled `len` or `capacity`.
+
+**What became unnecessary:** those leaf-name matches in `for_statement_generation.rs`, `variable_analysis/for_loop_borrow_and_usize.rs`, `binary_expression_generation.rs`, and `loop_statement_generation.rs`, plus the `condition_str.contains(".len()")` peel in the `while` path. Width now comes from `expression_produces_usize` (`method_returns_usize_qualified` / registry consensus). `method_is_len_like_empty_check` still names `len` and `capacity` because that rewrite emits `is_empty()` only for those Rust methods, and it already requires a `usize` return.
+
+**Gates:** `cargo test --release --test all -- len_compared_to_i32 while_idx_lt_vec_len int_while_le_vec_len wdb361_module_file i32_return_while_len i32_while_len_and_literal int_while_len_as_int int_index_while_len` — 9 passed. Full suite not re-run (about 750 MiB free before the compile; prior runs died writing `shared/debug`).
+
+
 ## P3.766 (2026-10-09) — collection-key lookup follows the map/set signature
 
 **Root cause layer:** signature. `is_collection_key_lookup_with_project` treated a call as a map-key lookup only when the leaf was `get`, `contains_key`, `get_key_value`, or `remove`.

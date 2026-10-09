@@ -51,10 +51,7 @@ impl<'ast> CodeGenerator<'ast> {
             for id_expr in [left, right] {
                 if let Expression::Identifier { name, .. } = id_expr {
                     let is_i32_local = self.codegen_i32_binding_names.contains(name.as_str())
-                        || matches!(
-                            self.local_var_types.get(name.as_str()),
-                            Some(Type::Int32)
-                        )
+                        || matches!(self.local_var_types.get(name.as_str()), Some(Type::Int32))
                         || matches!(
                             self.local_var_types.get(name.as_str()),
                             Some(Type::Custom(n)) if n == "i32"
@@ -65,13 +62,12 @@ impl<'ast> CodeGenerator<'ast> {
                         self.assignment_int_target_type = Some(Type::Int32);
                         break;
                     }
-                    let is_u32_local = matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Uint)
-                    ) || matches!(
-                        self.local_var_types.get(name.as_str()),
-                        Some(Type::Custom(n)) if n == "u32"
-                    );
+                    let is_u32_local =
+                        matches!(self.local_var_types.get(name.as_str()), Some(Type::Uint))
+                            || matches!(
+                                self.local_var_types.get(name.as_str()),
+                                Some(Type::Custom(n)) if n == "u32"
+                            );
                     if is_u32_local {
                         self.assignment_int_target_type = Some(Type::Uint);
                         break;
@@ -82,47 +78,46 @@ impl<'ast> CodeGenerator<'ast> {
 
         let mut condition_str = self.generate_expression(condition);
         self.assignment_int_target_type = prev_while_int;
-        if let Expression::Binary { left, op, right, .. } = condition {
-                if matches!(
-                    op,
-                    BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
-                ) {
-                    let bound_is_len = matches!(
-                        right,
-                        Expression::MethodCall { method, .. }
-                            if method == "len" || method == "capacity"
-                    ) || self.expression_produces_usize(right);
-                    if bound_is_len || condition_str.contains(".len()") {
-                        if let Expression::Identifier { name, .. } = left {
-                            let param_is_wj_int = self.current_function_params.iter().any(|p| {
-                                p.name == *name && matches!(&p.type_, Type::Int)
-                            });
-                            let local_is_i64 = self.local_var_types.get(name).is_some_and(|t| {
-                                matches!(t, Type::Int)
-                                    || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
-                            });
-                            // WDB-361: explicit / inferred usize counters must not get
-                            // `(i as usize)` vs `.len()` — both sides are already usize.
-                            let local_is_usize = self.expression_produces_usize(left)
-                                || self.usize_variables.contains(name)
-                                || self.local_var_types.get(name).is_some_and(|t| {
-                                    matches!(t, Type::Custom(n) if n == "usize")
-                                });
-                            if !param_is_wj_int
-                                && !local_is_i64
-                                && !local_is_usize
-                                && !condition_str.contains(" as usize")
-                            {
-                                let left_str = self.generate_expression(left);
-                                let right_str = self.generate_expression(right);
-                                let op_str = operators::binary_op_to_rust(op);
-                                condition_str =
-                                    format!("({left_str} as usize) {op_str} {right_str}");
-                            }
+        if let Expression::Binary {
+            left, op, right, ..
+        } = condition
+        {
+            if matches!(
+                op,
+                BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+            ) {
+                if self.expression_produces_usize(right) {
+                    if let Expression::Identifier { name, .. } = left {
+                        let param_is_wj_int = self
+                            .current_function_params
+                            .iter()
+                            .any(|p| p.name == *name && matches!(&p.type_, Type::Int));
+                        let local_is_i64 = self.local_var_types.get(name).is_some_and(|t| {
+                            matches!(t, Type::Int)
+                                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                        });
+                        // WDB-361: explicit / inferred usize counters must not get
+                        // `(i as usize)` vs `.len()` — both sides are already usize.
+                        let local_is_usize = self.expression_produces_usize(left)
+                            || self.usize_variables.contains(name)
+                            || self
+                                .local_var_types
+                                .get(name)
+                                .is_some_and(|t| matches!(t, Type::Custom(n) if n == "usize"));
+                        if !param_is_wj_int
+                            && !local_is_i64
+                            && !local_is_usize
+                            && !condition_str.contains(" as usize")
+                        {
+                            let left_str = self.generate_expression(left);
+                            let right_str = self.generate_expression(right);
+                            let op_str = operators::binary_op_to_rust(op);
+                            condition_str = format!("({left_str} as usize) {op_str} {right_str}");
                         }
                     }
                 }
             }
+        }
         output.push_str(&condition_str);
         output.push_str(" {\n");
 

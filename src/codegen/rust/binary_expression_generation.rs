@@ -577,18 +577,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || matches!(t, Type::Custom(n) if n == "u32" || n == "u64")
                 })
             };
-            let right_is_len_bound = matches!(
-                right,
-                Expression::MethodCall { method, .. } if method == "len" || method == "capacity"
-            );
-            let left_is_len_bound = matches!(
-                left,
-                Expression::MethodCall { method, .. } if method == "len" || method == "capacity"
-            );
-            if self.function_returns_i32_for_loop_scan()
-                && (right_is_usize || right_is_len_bound)
-                && !left_is_usize
-            {
+            if self.function_returns_i32_for_loop_scan() && right_is_usize && !left_is_usize {
                 if let Expression::Identifier { name, .. } = left {
                     let param_is_wj_int = self
                         .current_function_params
@@ -600,10 +589,10 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
             }
-            if narrow_unsigned(left) && (right_is_usize || right_is_len_bound) {
+            if narrow_unsigned(left) && right_is_usize {
                 left_str = format!("{left_str} as usize");
                 skip_mixed_int_promotion = true;
-            } else if narrow_unsigned(right) && (left_is_usize || left_is_len_bound) {
+            } else if narrow_unsigned(right) && left_is_usize {
                 right_str = format!("{right_str} as usize");
                 skip_mixed_int_promotion = true;
             } else if !skip_mixed_int_promotion && right_is_usize && !left_is_usize {
