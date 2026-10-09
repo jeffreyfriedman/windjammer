@@ -2,6 +2,15 @@
 
 
 
+## P3.762 (2026-10-09) — trait-call map bridge no longer filters on `get`/`remove`
+
+**Root cause layer:** signature. `trait_call_generation` replaced an owned-Copy homonym with the HashMap key bridge only when the leaf was `get` or `remove`, and a second branch peeled `&` integer literals for those same leaves.
+
+**What became unnecessary:** both `matches!(call_method, "get" | "remove")` branches. The HashMap bridge still comes from `hashmap_key_method_signature_for_wrapper` (map-key trait classification). An owned-Copy formal on an unknown or guard receiver is the homonym signal. The non-map peel uses `callee_user_arg_bare_formal_is_copy_pass_by_value` and skips collection-key sites. The integer-suffix scan is gone.
+
+**Gates:** `cargo test --release --test all -- mutex_guard_hashmap_string_key_must_borrow test_vec_get slice_get_usize owned_i64_method_formal shared_map_get_must_borrow` — 9 passed. Full suite not re-run (about 1.9 GiB free; prior runs died writing `shared/debug`).
+
+
 ## P3.761 (2026-10-09) — copy-index peel follows the formal, not the leaf name
 
 **Root cause layer:** signature. The post-IR peel of a leading `&` on method arguments ran only for `get` / `contains_key` / `get_key_value` / `remove`, and additionally forced `Vec::{method}` / `slice::{method}` for `get` and `remove`.
