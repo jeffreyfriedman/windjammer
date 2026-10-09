@@ -2,6 +2,24 @@
 
 
 
+## P3.755 (2026-10-09) — untyped `0` plus `Vec::len()` must not emit `0_i64`
+
+`shader_graph_executor.wj` writes `let mut total_async = 0` then
+`total_async = total_async + g.len()`. Tip-out emits
+`let mut total_async = 0_i64` and adds a `usize` length.
+
+| Gate | Status |
+|------|--------|
+| P3.755 isolate | ✅ GREEN — `let mut total_async: usize = 0_usize` |
+| P3.755 tip-out | ❌ stale `gen/rendering/shader_graph_executor.rs` still has `0_i64` (not regenerated) |
+
+**Root cause layer:** constraint/solver. `total = total + g.len()` never entered `usize_variables`, so the void-function i32 default (older tip-out: i64) won over the `usize` length.
+
+**What became unnecessary:** leaving an untyped length accumulator on the void-function integer default.
+
+**Gates:** `cargo test --release --test all -- untyped_zero_plus_vec_len_must_not_emit_i64 len_minus_literal_infers_usize len_plus_literal test_len_arithmetic_in_assignment` — 4 passed. Peers `i32_binding_compare_zero_must_not_emit_i64`, `usize_loop_counter_init_zero_must_not_be_i32`, `int_loop_assign_end_bound_must_unify`, `vec_len_eq_zero_must_not_emit_i64_literal`, `i32_return_while_len_counter_must_not_emit_usize` GREEN. Tip-out P3.750 scanner still RED on stale gen.
+
+
 ## P3.754 (2026-10-09) — TDD WDB-473 (DB agent; no compiler src)
 
 A payload enum constructor used once must not `.clone()`.
@@ -15,6 +33,7 @@ Tip MultiFile emits `take(Value::Int(0))` with no clone (isolate GREEN). Tip-out
 | Gate | Status |
 |------|--------|
 | WDB-473 MultiFile | ✅ isolate GREEN — bare `Value::Int(0)` |
+| WDB-473 method, non-Copy `String` payload | ✅ isolate GREEN — `runner.set_variable("score", Value::Int(0))` |
 | WDB-473 tip-out | ❌ tip RED — `Value::Int(0).clone()` in `rel_tip_out/visual_scripting/runtime.rs` and `windjammer-game-core/gen/visual_scripting/runtime.rs` |
 
 **Root cause layer:** tip-out lag — a fresh payload constructor is cloned into an owned formal.

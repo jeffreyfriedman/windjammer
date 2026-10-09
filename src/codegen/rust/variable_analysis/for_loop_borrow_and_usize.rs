@@ -165,8 +165,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if name != "self"
                             && Self::variable_used_in_statements(&stmts[i + 1..], name)
                         {
-                            self.for_loop_field_owner_borrow_needed
-                                .insert(name.clone());
+                            self.for_loop_field_owner_borrow_needed.insert(name.clone());
                         }
                     }
                 }
@@ -526,10 +525,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn prepass_mark_usize_init_sources_in_stmts(
-        &mut self,
-        body: &[&'ast Statement<'ast>],
-    ) -> bool {
+    fn prepass_mark_usize_init_sources_in_stmts(&mut self, body: &[&'ast Statement<'ast>]) -> bool {
         let mut changed = false;
         for stmt in body {
             match stmt {
@@ -541,10 +537,7 @@ impl<'ast> CodeGenerator<'ast> {
                 } => {
                     if let Pattern::Identifier(name) = pattern {
                         if self.usize_variables.contains(name) {
-                            if let Expression::Identifier {
-                                name: src_name, ..
-                            } = value
-                            {
+                            if let Expression::Identifier { name: src_name, .. } = value {
                                 if !self.identifier_is_wj_int_i64_binding(src_name.as_str())
                                     && self.usize_variables.insert(src_name.clone())
                                 {
@@ -587,7 +580,9 @@ impl<'ast> CodeGenerator<'ast> {
                 Statement::Assignment { target, value, .. } => {
                     if let Expression::Identifier { name: dst, .. } = target {
                         if !self.identifier_is_wj_int_i64_binding(dst.as_str())
-                            && self.assign_rhs_is_usize_index_peer(value)
+                            && !self.binding_has_fixed_non_usize_int_width(dst)
+                            && (self.assign_rhs_is_usize_index_peer(value)
+                                || self.assign_rhs_forces_usize_accumulator(value))
                             && self.usize_variables.insert(dst.clone())
                         {
                             changed = true;
@@ -617,10 +612,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // following `while k <= texts.len()` prepass, or `k` is stuffed
                     // into usize_variables and `.len()` stays uncast.
                     if type_.is_none() {
-                        if let Expression::Identifier {
-                            name: src_name, ..
-                        } = value
-                        {
+                        if let Expression::Identifier { name: src_name, .. } = value {
                             if self.identifier_is_wj_int_i64_binding(src_name) {
                                 self.local_var_types.insert(name.clone(), Type::Int);
                             }
@@ -629,16 +621,13 @@ impl<'ast> CodeGenerator<'ast> {
                     // Negative sentinels stay WJ `int` (`colon_at = -1`).
                     // Untyped `let mut idx = 0` is recorded as a literal-init counter so
                     // index sites still emit `as usize` after `.len()` usize promotion.
-                    let annotated_usize = type_.as_ref().is_some_and(|t| {
-                        crate::codegen::rust::type_casting::type_is_usize(t)
-                    });
+                    let annotated_usize = type_
+                        .as_ref()
+                        .is_some_and(|t| crate::codegen::rust::type_casting::type_is_usize(t));
                     if !annotated_usize
-                        && crate::codegen::rust::type_casting::expression_is_int_literal_init(
-                            value,
-                        )
+                        && crate::codegen::rust::type_casting::expression_is_int_literal_init(value)
                     {
-                        self.literal_init_wj_int_loop_counters
-                            .insert(name.clone());
+                        self.literal_init_wj_int_loop_counters.insert(name.clone());
                     }
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
                         && !annotated_usize
@@ -657,7 +646,9 @@ impl<'ast> CodeGenerator<'ast> {
                     self.prepass_mark_loop_counter_usize_variables(b.as_slice());
                 }
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.mark_usize_variables_in_condition(condition);
                 self.prepass_mark_loop_counter_usize_variables(body.as_slice());
             }
@@ -712,6 +703,40 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// Untyped `total = total + g.len()` is a usize accumulator. The destination
+    /// itself is not yet usize, so [`assign_rhs_is_usize_index_peer`] misses it
+    /// and the init stays the void-function `0_i32` (or tip-out `0_i64`).
+    fn assign_rhs_forces_usize_accumulator(&self, value: &Expression) -> bool {
+        match value {
+            Expression::Binary {
+                op, left, right, ..
+            } if matches!(op, BinaryOp::Add | BinaryOp::Sub) => {
+                self.assign_rhs_forces_usize_accumulator(left)
+                    || self.assign_rhs_forces_usize_accumulator(right)
+            }
+            Expression::Identifier { .. } | Expression::Literal { .. } => false,
+            other => self.expression_produces_usize(other),
+        }
+    }
+
+    /// Annotated `i32` / `u32` / WJ `int` locals keep their width. Untyped
+    /// literal inits are not fixed yet.
+    fn binding_has_fixed_non_usize_int_width(&self, name: &str) -> bool {
+        if self.explicit_wj_int_annotated_locals.contains(name)
+            || self.codegen_i32_binding_names.contains(name)
+        {
+            return true;
+        }
+        self.local_var_types.get(name).is_some_and(|t| {
+            matches!(t, Type::Int | Type::Int32 | Type::Uint)
+                || matches!(
+                    t,
+                    Type::Custom(n)
+                        if matches!(n.as_str(), "int" | "i64" | "i32" | "u32" | "u64")
+                )
+        })
+    }
+
     /// RHS that peers a destination with a usize index counter: bare `i`, or
     /// `i + 1` / `1 + i` / `i - 1` with a non-negative int literal.
     fn assign_rhs_is_usize_index_peer(&self, value: &Expression) -> bool {
@@ -744,10 +769,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Windjammer `int` params and i64 locals must not join `usize_variables` via loop bounds
     /// or init back-propagation — codegen keeps them as `i64` and casts `.len()` instead.
-    pub(in crate::codegen::rust) fn identifier_is_wj_int_i64_binding(
-        &self,
-        name: &str,
-    ) -> bool {
+    pub(in crate::codegen::rust) fn identifier_is_wj_int_i64_binding(&self, name: &str) -> bool {
         if self
             .current_function_params
             .iter()
@@ -756,8 +778,7 @@ impl<'ast> CodeGenerator<'ast> {
             return true;
         }
         self.local_var_types.get(name).is_some_and(|t| {
-            matches!(t, Type::Int)
-                || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+            matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
         })
     }
 
@@ -774,13 +795,9 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Inferred `i32` from return-type heuristics must not block usize counters when the
         // bound is already native `usize` (`.len()`, `usize` fields — P3.311 / component_storage).
-        if self
-            .local_var_types
-            .get(name.as_str())
-            .is_some_and(|t| {
-                matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
-            })
-            && !self.expression_is_usize_loop_bound(bound)
+        if self.local_var_types.get(name.as_str()).is_some_and(|t| {
+            matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32" || n == "u32")
+        }) && !self.expression_is_usize_loop_bound(bound)
         {
             return;
         }

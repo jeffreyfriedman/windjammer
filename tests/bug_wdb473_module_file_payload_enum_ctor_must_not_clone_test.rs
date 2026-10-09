@@ -56,6 +56,50 @@ fn wdb473_module_file_payload_enum_ctor_must_not_clone() {
     let _ = test.cargo_check();
 }
 
+const METHOD_SRC: &str = r#"
+pub enum Value {
+    Int(i32),
+    String(string),
+    None,
+}
+
+pub struct Runner {
+    pub n: i32,
+}
+
+impl Runner {
+    pub fn set_variable(self, name: string, value: Value) {
+        match value {
+            Value::Int(v) => {
+                self.n = v
+            },
+            _ => {
+                self.n = 0
+            },
+        }
+    }
+}
+
+pub fn go() -> i32 {
+    let mut runner = Runner { n: 1 }
+    runner.set_variable("score", Value::Int(0))
+    runner.n
+}
+"#;
+
+#[test]
+fn wdb473_method_noncopy_payload_enum_ctor_must_not_clone() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", METHOD_SRC);
+    let map = test.compile().expect("WDB-473 method compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("WDB-473 method lib.rs:\n{rs}");
+    assert!(
+        !rs.contains("Value::Int(0).clone()") && !rs.contains(".clone()"),
+        "WDB-473 RED: method payload enum constructor cloned:\n{rs}"
+    );
+}
+
 fn wdb473_search_roots() -> Vec<PathBuf> {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut roots = vec![manifest.clone()];
