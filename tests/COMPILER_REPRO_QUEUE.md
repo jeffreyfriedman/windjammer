@@ -1,6 +1,25 @@
 # Compiler repro queue (dogfooding — do not work around in application code)
 
 
+
+## P3.750 (2026-10-08) — annotated `i32` compared to `0` must not emit `0_i64`
+
+`shader_graph_compiler.wj` writes `let mut existing_group: i32 = -1` then
+`if existing_group >= 0`. Tip-out emits `existing_group >= 0_i64` while the
+binding is `i32` (expected `i32`, found `i64`).
+
+| Gate | Status |
+|------|--------|
+| `i32_binding_compare_zero_must_not_emit_i64` | filed this session |
+| `i32_binding_compare_zero_tip_out_shader_graph_compiler` | filed this session |
+
+**Root cause layer:** int width — a comparison literal follows the annotated
+`i32` binding, not an ambient `i64` slot.
+
+**Do not steal:** P3.727 (`int == 1` beside Vec::push), P3.749, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- i32_binding_compare_zero`.
+
 ## P3.751 (2026-10-08) — If-condition reborrow of an owned string formal
 
 `query_wants_base64(query)` emits `query: String` (the formal moves into `own`).
@@ -27,8 +46,6 @@ cargo test --release --test all -- owned_string_formal_must_not_receive_mut_quer
   wdb218_codegen notes_api_json notes_api_interp notes_api_qs_get
 ```
 → 6 passed; `json_tostring_note_must_not_mut_borrow_query` still failed (`&mut Note`).
-
-
 
 ## P3.749 (2026-10-08) — REGRESSION: engine library transpile SIGKILL (exit 137)
 
