@@ -2,6 +2,32 @@
 
 
 
+## P3.754 (2026-10-09) — TDD WDB-473 (DB agent; no compiler src)
+
+A payload enum constructor used once must not `.clone()`.
+
+Product `visual_scripting/runtime.rs` `test_graph_runner`:
+```wj
+runner.set_variable("score", Value::Int(0))
+```
+Tip MultiFile emits `take(Value::Int(0))` with no clone (isolate GREEN). Tip-out still has `Value::Int(0).clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-473 MultiFile | ✅ isolate GREEN — bare `Value::Int(0)` |
+| WDB-473 tip-out | ❌ tip RED — `Value::Int(0).clone()` in `rel_tip_out/visual_scripting/runtime.rs` and `windjammer-game-core/gen/visual_scripting/runtime.rs` |
+
+**Root cause layer:** tip-out lag — a fresh payload constructor is cloned into an owned formal.
+
+**Why this is a new class:**
+- WDB-367 is the unit constructor `Value::None`.
+- WDB-416 is `a.clone().as_float()` on a reused formal.
+- This is `Value::Int(0)` built at the call and cloned once.
+
+**Do not steal:** WDB-406/408/411/457–473, P3.508–P3.754, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb473_` — isolate GREEN / tip RED (2026-10-09).
+
 ## P3.753 (2026-10-08) — `u32` product cast to `u32` must not insert `as f32`
 
 `vgs_rasterization.wj` writes
