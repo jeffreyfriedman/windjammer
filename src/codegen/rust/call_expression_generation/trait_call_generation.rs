@@ -133,22 +133,24 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         let base = type_name
             .as_deref()
             .map(|tn| tn.split('<').next().unwrap_or(tn));
-        if base.is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name)
+        if base
+            .is_some_and(crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name)
         {
             return None;
         }
         let suffix = format!("::{call_method}");
         let mut candidates: Vec<Option<crate::analyzer::FunctionSignature>> = Vec::new();
-        let push_matching = |reg: &crate::analyzer::SignatureRegistry,
-                             out: &mut Vec<Option<crate::analyzer::FunctionSignature>>| {
-            for (key, sig) in &reg.signatures {
-                if key.ends_with(&suffix)
-                    && call_signature_resolution::validate_arg_count(sig, arguments.len())
-                {
-                    out.push(Some(sig.clone()));
+        let push_matching =
+            |reg: &crate::analyzer::SignatureRegistry,
+             out: &mut Vec<Option<crate::analyzer::FunctionSignature>>| {
+                for (key, sig) in &reg.signatures {
+                    if key.ends_with(&suffix)
+                        && call_signature_resolution::validate_arg_count(sig, arguments.len())
+                    {
+                        out.push(Some(sig.clone()));
+                    }
                 }
-            }
-        };
+            };
         if let Some(g) = gen.global_signature_registry() {
             push_matching(g, &mut candidates);
         }
@@ -240,27 +242,26 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                             base,
                         )
                 });
-                let poisoned_owned = matches!(
-                    cur.param_ownership.get(pidx),
-                    Some(OwnershipMode::Owned)
-                ) && !matches!(
-                    cur.param_types.get(pidx),
-                    Some(Type::Reference(_)) | Some(Type::MutableReference(_))
-                ) && !owned_copy
-                    && !receiver_is_non_map;
-                // P3.576: `Ok(g) => g.get(key)` often has `rt=None` and suffix-resolves to
-                // `Vec::get` (Owned usize). That is not a map-key site for a real `Vec`, but
-                // for unknown/wrapper receivers it must not beat `HashMap::get` (`&K`).
+                let poisoned_owned =
+                    matches!(cur.param_ownership.get(pidx), Some(OwnershipMode::Owned))
+                        && !matches!(
+                            cur.param_types.get(pidx),
+                            Some(Type::Reference(_)) | Some(Type::MutableReference(_))
+                        )
+                        && !owned_copy
+                        && !receiver_is_non_map;
+                // `Ok(g) => g.get(key)` often has `rt=None` and suffix-resolves to
+                // `Vec::get` (owned Copy index). A known non-map receiver keeps that
+                // formal. An unknown or guard receiver with an owned-Copy homonym
+                // must use the HashMap `&K` bridge. `hashmap_bridge` is already
+                // limited to map-key methods, so the leaf name is not a second filter.
                 let vec_index_homonym = owned_copy
-                    && matches!(call_method, "get" | "remove")
                     && !receiver_is_non_map
-                    && (receiver_base.is_none()
-                        || receiver_base.is_some_and(|base| {
-                            crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
-                                base,
-                            )
-                        })
-                        || cur.name.contains("Vec::")
+                    && (receiver_base.is_none() || receiver_base.is_some_and(|base| {
+                        crate::codegen::rust::stdlib_method_traits::is_map_deref_wrapper_type_name(
+                            base,
+                        )
+                    }) || cur.name.contains("Vec::")
                         || cur.name.contains("slice::"));
                 if poisoned_owned || vec_index_homonym {
                     Some(hashmap)
@@ -358,22 +359,21 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
                     );
                 }
             }
-        } else if matches!(call_method, "get" | "remove") {
-            // Peel stale `&0_usize` when a prior pass over-borrowed into owned Copy.
-            for arg_str in args.iter_mut() {
-                if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
-                    let looks_like_int_lit = arg_str.contains("_usize")
-                        || arg_str.contains("_i64")
-                        || arg_str.contains("_i32")
-                        || arg_str
-                            .trim_start_matches('&')
-                            .chars()
-                            .all(|c| c.is_ascii_digit() || c == '_');
-                    if looks_like_int_lit {
-                        *arg_str =
-                            crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
-                                .to_string();
-                    }
+        } else if let Some(sig) = method_signature.as_ref() {
+            // Non-map receiver: a leading `&` on an owned Copy formal is a stale
+            // map-key borrow. The formal decides; leaf names do not.
+            for (i, arg_str) in args.iter_mut().enumerate() {
+                if !arg_str.starts_with('&') || arg_str.starts_with("&mut ") {
+                    continue;
+                }
+                if gen.is_collection_key_lookup_at_site(sig, i, type_name.as_deref()) {
+                    continue;
+                }
+                if crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
+                    sig, i,
+                ) {
+                    *arg_str = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str)
+                        .to_string();
                 }
             }
         }
