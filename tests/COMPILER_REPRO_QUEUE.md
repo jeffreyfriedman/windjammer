@@ -2,6 +2,32 @@
 
 
 
+## P3.769 (2026-10-09) — TDD WDB-474 (DB agent; no compiler src)
+
+A last-use local struct moved into `Vec::push` must not `.clone()`.
+
+Product `editor/csg.rs` `bsp_build_into`:
+```wj
+let empty = CsgNode { plane_normal: Vec3::zero(), plane_d: 0.0, front: -1, back: -1, polygons: Vec::new() }
+tree.nodes.push(empty)
+```
+`empty` is not used again. Tip MultiFile pushes it bare (isolate GREEN). Tip-out still has `tree.nodes.push(empty.clone())` and `tree.nodes.push(empty.clone().clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-474 MultiFile | ✅ isolate GREEN — `nodes.push(empty)` |
+| WDB-474 tip-out | ❌ tip RED — `push(empty.clone()` in `rel_tip_out/editor/csg.rs` and `windjammer-game-core/gen/editor/csg.rs` |
+
+**Root cause layer:** tip-out lag — a moved local is cloned into `Vec::push`.
+
+**Why this is a new class:**
+- WDB-471 is a reused `Vec` argument written `clips.clone().clone()`.
+- This is a struct local used once.
+
+**Do not steal:** WDB-406/408/411/457–474, P3.508–P3.769, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb474_` — isolate GREEN / tip RED (2026-10-09).
+
 ## P3.768 (2026-10-09) — remaining `len` width checks follow `usize` returns
 
 **Root cause layer:** signature. Let bindings, the loop-counter prepass, vec-index scans, and integer inference still treated a call as a length bound when the method was spelled `len`.
