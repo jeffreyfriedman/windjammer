@@ -8785,7 +8785,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn expression_uses_param_len(&self, expr: &Expression<'ast>, param_name: &str) -> bool {
         match expr {
-            Expression::MethodCall { object, method, .. } if method == "len" => {
+            Expression::MethodCall { object, .. } if self.expression_produces_usize(expr) => {
                 matches!(
                     &**object,
                     Expression::Identifier { name, .. } if name == param_name

@@ -2,6 +2,15 @@
 
 
 
+## P3.768 (2026-10-09) — remaining `len` width checks follow `usize` returns
+
+**Root cause layer:** signature. Let bindings, the loop-counter prepass, vec-index scans, and integer inference still treated a call as a length bound when the method was spelled `len`.
+
+**What became unnecessary:** `method == "len"` in `let_statement_generation.rs` and `variable_analysis/for_loop_borrow_and_usize.rs` (both already consult `expression_produces_usize`). `expression_uses_param_len` in `function_generation_prepare.rs` now requires that same `usize` return on the param receiver. `expr_contains_len_call` in `type_inference/int_inference/mod.rs` uses `method_returns_usize_qualified` against the stdlib registry (unanimous `usize` return when the receiver is unknown). `method_is_len_like_empty_check` still names `len` and `capacity` because that rewrite emits `is_empty()` only for those Rust methods.
+
+**Gates:** `cargo test --release --test all -- len_compared_to_i32 while_idx_lt_vec_len int_while_le_vec_len wdb361_module_file i32_return_while_len i32_while_len_and_literal int_while_len_as_int int_index_while_len usize_loop_counter` — 10 passed. Full suite not re-run in this commit (about 4.8 GiB free at session start; prior runs died writing `shared/debug`).
+
+
 ## P3.767 (2026-10-09) — `len`/`capacity` width follows `usize` returns
 
 **Root cause layer:** signature. Range bounds, comparisons, and `while` conditions treated a call as `usize` whenever the method was spelled `len` or `capacity`.
