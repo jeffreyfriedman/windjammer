@@ -1443,126 +1443,6 @@ impl<'ast> CodeGenerator<'ast> {
         found
     }
 
-    /// `param.method(...)` — the binding itself is the receiver.
-    /// `param.field.method()` is a field scan and does not count.
-    pub(in crate::codegen::rust) fn param_binding_is_direct_method_receiver(
-        &self,
-        body: &[&'ast Statement<'ast>],
-        param_name: &str,
-    ) -> bool {
-        body.iter()
-            .any(|stmt| self.statement_binding_is_direct_method_receiver(stmt, param_name))
-    }
-
-    fn statement_binding_is_direct_method_receiver(
-        &self,
-        stmt: &Statement<'ast>,
-        param_name: &str,
-    ) -> bool {
-        match stmt {
-            Statement::Expression { expr, .. }
-            | Statement::Return {
-                value: Some(expr), ..
-            }
-            | Statement::Let { value: expr, .. } => {
-                self.expression_binding_is_direct_method_receiver(expr, param_name)
-            }
-            Statement::If {
-                condition,
-                then_block,
-                else_block,
-                ..
-            } => {
-                self.expression_binding_is_direct_method_receiver(condition, param_name)
-                    || then_block
-                        .iter()
-                        .any(|s| self.statement_binding_is_direct_method_receiver(s, param_name))
-                    || else_block.as_ref().is_some_and(|b| {
-                        b.iter()
-                            .any(|s| self.statement_binding_is_direct_method_receiver(s, param_name))
-                    })
-            }
-            Statement::While {
-                condition, body, ..
-            }
-            | Statement::For {
-                iterable: condition,
-                body,
-                ..
-            } => {
-                self.expression_binding_is_direct_method_receiver(condition, param_name)
-                    || body
-                        .iter()
-                        .any(|s| self.statement_binding_is_direct_method_receiver(s, param_name))
-            }
-            Statement::Loop { body, .. }
-            | Statement::Thread { body, .. }
-            | Statement::Async { body, .. } => body
-                .iter()
-                .any(|s| self.statement_binding_is_direct_method_receiver(s, param_name)),
-            Statement::Match { value, arms, .. } => {
-                self.expression_binding_is_direct_method_receiver(value, param_name)
-                    || arms.iter().any(|arm| {
-                        self.expression_binding_is_direct_method_receiver(&arm.body, param_name)
-                    })
-            }
-            Statement::Assignment { value, .. } => {
-                self.expression_binding_is_direct_method_receiver(value, param_name)
-            }
-            _ => false,
-        }
-    }
-
-    fn expression_binding_is_direct_method_receiver(
-        &self,
-        expr: &Expression<'ast>,
-        param_name: &str,
-    ) -> bool {
-        match expr {
-            Expression::MethodCall { object, .. }
-                if matches!(
-                    &**object,
-                    Expression::Identifier { name, .. } if name == param_name
-                ) =>
-            {
-                true
-            }
-            Expression::MethodCall {
-                object, arguments, ..
-            }
-            | Expression::Call {
-                function: object,
-                arguments,
-                ..
-            } => {
-                self.expression_binding_is_direct_method_receiver(object, param_name)
-                    || arguments.iter().any(|(_, arg)| {
-                        self.expression_binding_is_direct_method_receiver(arg, param_name)
-                    })
-            }
-            Expression::FieldAccess { object, .. } | Expression::Unary { operand: object, .. } => {
-                self.expression_binding_is_direct_method_receiver(object, param_name)
-            }
-            Expression::Index { object, index, .. } => {
-                self.expression_binding_is_direct_method_receiver(object, param_name)
-                    || self.expression_binding_is_direct_method_receiver(index, param_name)
-            }
-            Expression::Binary { left, right, .. } => {
-                self.expression_binding_is_direct_method_receiver(left, param_name)
-                    || self.expression_binding_is_direct_method_receiver(right, param_name)
-            }
-            Expression::Cast { expr, .. } | Expression::Closure { body: expr, .. } => {
-                self.expression_binding_is_direct_method_receiver(expr, param_name)
-            }
-            Expression::Tuple { elements, .. }
-            | Expression::Array { elements, .. }
-            | Expression::MacroInvocation { args: elements, .. } => elements.iter().any(|elem| {
-                self.expression_binding_is_direct_method_receiver(elem, param_name)
-            }),
-            _ => false,
-        }
-    }
-
     /// Like field/index projection, but bare `param` as a call argument is ignored here
     /// (classified separately via `param_call_sites_expect_borrow`). Used so pub Custom
     /// helpers that both read fields and forward into `&T` callees stay demotable.
@@ -2647,7 +2527,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn param_has_use_outside_call_arguments(
+    pub(in crate::codegen::rust) fn param_has_use_outside_call_arguments(
         &self,
         body: &[&'ast Statement<'ast>],
         param_name: &str,

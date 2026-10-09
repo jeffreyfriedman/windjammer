@@ -168,9 +168,13 @@ impl<'ast> CodeGenerator<'ast> {
                 .insert(impl_type.to_string());
         }
 
-        for af in siblings {
-            self.select_ir_function_for(&af.decl.name);
-            self.preregister_function_formals_in_registry(af);
+        // Two passes: a caller listed before its associated callee (`update` then
+        // `collides`) must see the callee's emitted `&T` formal on the second pass.
+        for _ in 0..2 {
+            for af in &siblings {
+                self.select_ir_function_for(&af.decl.name);
+                self.preregister_function_formals_in_registry(af);
+            }
         }
 
         self.current_struct_name = prev_struct;

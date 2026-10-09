@@ -2830,7 +2830,32 @@ impl<'ast> CodeGenerator<'ast> {
                                     )
                                 },
                             );
-                            let keep_owned_contract = if ir_borrow.is_some()
+                            // Every resolved call site already expects `&T` (associated
+                            // `collides(grid: &VoxelGrid)`). That contract beats a stale
+                            // "stored" / forward-ref Owned guess on the caller formal.
+                            let shared_forward = self.param_call_sites_expect_borrow(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) && !self.param_stored_in_owned_payload(
+                                func.body.as_slice(),
+                                &param.name,
+                            ) && !self.param_has_owning_method_use(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) && (!self.param_has_use_outside_call_arguments(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ) || self.param_non_call_uses_are_field_or_index_only(
+                                func.body.as_slice(),
+                                &param.name,
+                                func,
+                            ));
+                            let keep_owned_contract = if shared_forward {
+                                false
+                            } else if ir_borrow.is_some()
                                 && !discard_keep_owned
                                 && !cross_module_borrow_keep_owned
                                 && !self.is_public_owned_non_copy_formal_api(param, func)
@@ -2889,7 +2914,14 @@ impl<'ast> CodeGenerator<'ast> {
                             let ir_str_ref_hint = self.current_ir_function.as_ref().is_some_and(|ir| {
                                 ir.str_ref_params.contains(&param.name)
                             });
-                            if payload_forces_owned
+                            if shared_forward
+                                && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
+                                && !(analyzed.mutated_parameters.contains(&param.name)
+                                    && !analyzed.returned_parameters.contains(&param.name))
+                            {
+                                ownership_mode = OwnershipMode::Borrowed;
+                                self.inferred_borrowed_params.insert(param.name.clone());
+                            } else if payload_forces_owned
                                 && !ir_str_ref_hint
                                 && !matches!(ownership_mode, OwnershipMode::MutBorrowed)
                                 && !(analyzed.mutated_parameters.contains(&param.name)
@@ -2937,7 +2969,29 @@ impl<'ast> CodeGenerator<'ast> {
                                     && !analyzed.returned_parameters.contains(&param.name))
                                 && (field_proj_readonly
                                     || vec_store_borrow_ok
-                                    || self.inferred_borrowed_params.contains(&param.name))
+                                    || self.inferred_borrowed_params.contains(&param.name)
+                                    || (self.param_call_sites_expect_borrow(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                        func,
+                                    ) && !self.param_stored_in_owned_payload(
+                                        func.body.as_slice(),
+                                        &param.name,
+                                    )
+                                        && !self.param_has_owning_method_use(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        )
+                                        && (self.param_only_used_as_call_argument(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        ) || self.param_non_call_uses_are_field_or_index_only(
+                                            func.body.as_slice(),
+                                            &param.name,
+                                            func,
+                                        ))))
                             {
                                 // Promote-readonly / store-only Vec / field-proj beat analyzer Owned.
                                 // Never demote MutBorrowed / mutated formals (c.value = …, if-let mut).
@@ -3204,6 +3258,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.insert(param.name.clone());
                             }
                             if forwards_to_owned
+                                && !shared_forward
                                 && matches!(
                                     ownership_mode,
                                     OwnershipMode::MutBorrowed | OwnershipMode::Borrowed
@@ -3240,13 +3295,14 @@ impl<'ast> CodeGenerator<'ast> {
                                     self.param_passed_to_owned_self_method_arg(func.body.as_slice(), &param.name, func),
                                 );
                             }
-                            if cross_module_borrow_keep_owned {
+                            if cross_module_borrow_keep_owned && !shared_forward {
                                 ownership_mode = OwnershipMode::Owned;
                                 self.inferred_borrowed_params.remove(&param.name);
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                                 self.emitted_rust_ref_formals.remove(&param.name);
                             }
                             if param.name != "self"
+                                && !shared_forward
                                 && self.param_passed_via_tryop_to_borrowing_callee(
                                     func.body.as_slice(),
                                     &param.name,
@@ -4573,17 +4629,18 @@ impl<'ast> CodeGenerator<'ast> {
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
             && !self.param_pure_custom_same_type_shared_ref_should_demote(param, func)
         {
-            // Readonly field/index scans (`grid.cells.len()`) are `&T`.
-            // A method on the binding itself (`palette.copy()`) stays owned (WDB-398).
-            let readonly_field_scan = self.param_only_used_via_field_or_index_projection(
-                func.body.as_slice(),
-                &param.name,
-            ) && !self.param_binding_is_direct_method_receiver(
-                func.body.as_slice(),
-                &param.name,
-            ) && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
-                && !self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
-            if !readonly_field_scan {
+            // Readonly field/index scans, `&self` methods, and unused bindings are
+            // `&T`. Owned-self methods and stores (`palette.copy()`, field init) stay
+            // owned (WDB-398).
+            let body = func.body.as_slice();
+            let consumed = self.param_has_owning_method_use(body, &param.name, func)
+                || self.param_stored_in_owned_payload(body, &param.name)
+                || self.param_passes_to_wj_owned_sibling_call(body, &param.name, func)
+                || self.param_only_forwards_to_emitted_owned_callees(body, &param.name, func);
+            let shared_only = self.param_only_used_via_field_or_index_projection(body, &param.name)
+                || self.param_call_sites_expect_borrow(body, &param.name, func)
+                || (!consumed && !self.param_passed_as_call_argument(body, &param.name, func));
+            if consumed || !shared_only {
                 return true;
             }
         }

@@ -13,12 +13,23 @@ treated as public owned API (WDB-398). Both call sites then emitted
 | WDB-398 `new(palette.copy())` | ✅ still owned — direct `palette.copy()` is not a field scan |
 
 **Root cause layer:** signature. `is_public_owned_non_copy_formal_api` returned
-true for every associated Custom formal. Readonly field/index scans now fall
-through to the existing `&T` demote. A method on the binding itself
-(`palette.copy()`) still stays owned.
+true for every associated Custom formal, including `&self` scans (`grid.get`)
+and unused bindings. Those now fall through to `&T`. Owned-self methods and
+stores (`palette.copy()`, field init) stay owned (WDB-398).
 
-**What became unnecessary:** cloning a readonly `VoxelGrid` into an associated
-helper that only projects fields. No new call-site peel.
+A caller whose every call site already expects that shared ref
+(`update(grid)` → `collides(grid: &VoxelGrid)`) keeps `grid: &VoxelGrid`.
+Stale “owned sibling” / cross-module keep-owned restores no longer flip that
+contract back to owned. Impl preregister runs a second pass so a caller listed
+before its callee still sees the emitted `&T` formal.
+
+**What became unnecessary:** `grid.clone()` into readonly associated helpers,
+and a second `&` at the caller once the caller formal itself is `&VoxelGrid`.
+No new call-site peel.
+
+`test_static_helper_with_instance_method_on_param` still wants
+`update(&mut self, …)` and currently emits `update(mut self, …, grid: &VoxelGrid)`.
+The grid slot is borrowed; the receiver is a separate self-ownership question.
 
 **Gates:**
 ```bash
