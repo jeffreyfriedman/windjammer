@@ -221,8 +221,8 @@ Tip-out signature is `&Vec<Vec3>, &Vec<u32>` but `mesh_ops.rs` calls
 
 | Gate | Status |
 |------|--------|
-| `owned_vec_formals_must_borrow_both_call_args` | filed this session |
-| `owned_vec_formals_tip_out_mesh_ops` | filed this session |
+| `owned_vec_formals_must_borrow_both_call_args` | ✅ isolate GREEN |
+| `owned_vec_formals_tip_out_mesh_ops` | ❌ tip-out RED — `from_triangle_mesh(positions, &indices)` |
 
 **Root cause layer:** call-arg ownership — when both owned `Vec` formals are demoted
 to shared refs, every argument is borrowed, not only the later ones.
