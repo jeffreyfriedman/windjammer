@@ -544,15 +544,15 @@ only to `48` and the multiply is `i32 * u32`.
 
 | Gate | Status |
 |------|--------|
-| `int_mul_into_u32_formal_must_cast_product` | filed this session |
-| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | filed this session |
+| `int_mul_into_u32_formal_must_cast_product` | ✅ isolate GREEN — annotated `i32` product is cast `as u32` |
+| `untyped_mul_into_u32_formal_uses_u32_literal_width` | ✅ isolate GREEN — untyped `let max_triangles = 100000` emits `100000_u32` and `48_u32` |
+| `int_mul_into_u32_formal_tip_out_hybrid_renderer` | ❌ tip-out RED — stale `gen/rendering/hybrid_renderer.rs` still has `48_i32 as u32` |
 
-**Root cause layer:** cast insertion / precedence — coercion to a `u32` formal
-must wrap `(expr) as u32`, not suffix `as` onto the right-hand literal.
+**Root cause layer:** signature. The `u32` formal sets the literal width. An annotated `i32` binding still casts the product. Untyped `100000` follows the formal as `u32`, so `48 as u32` on only the literal is unnecessary.
 
-**Do not steal:** P3.731/P3.732, other-agent WJ `src/`.
+**Do not steal:** do not regen product `gen/` from this session.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- int_mul_into_u32_formal`.
+**Gates:** `cargo test --release --test all -- int_mul_into_u32_formal_must_cast_product untyped_mul_into_u32_formal_uses_u32_literal_width`.
 
 ## P3.705 (2026-10-07) — substring `i + 1` stays `_usize` (re-verify)
 
@@ -616,7 +616,7 @@ formal is owned `String`.
 
 | Gate | Status |
 |------|--------|
-| `owned_string_formal_literal_must_to_string` | ❌ tip RED — formal demoted to `&str` (no `.to_string()`) |
+| `owned_string_formal_literal_must_to_string` | ✅ isolate GREEN — literal emits `.to_string()` (2026-10-09) |
 
 **Root cause layer:** call-arg coercion — string literal into owned `string` formal
 must emit `.to_string()` (signature-driven, not a hardcoded method list).
