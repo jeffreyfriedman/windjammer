@@ -30,6 +30,26 @@ Tip MultiFile compares `val < 0_i32` (isolate GREEN). Tip-out still has `val < (
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb476_` — isolate GREEN / tip RED (2026-10-09).
 
+## P3.773 (2026-10-09) — `for`-loop counter compared to `.len()` must not be `i64`
+
+`shader_graph_executor.wj` writes `let mut idx = 0` then, inside
+`for pass in sorted`, `idx < barriers.len()` and `barriers[idx]`. Tip-out
+emits `let mut idx = 0_i64` and `barriers[(idx as usize)]`.
+
+| Gate | Status |
+|------|--------|
+| `for_loop_len_counter_must_not_emit_i64` | ❌ isolate RED — `let mut idx = 0_i64`, `barriers: &Vec<Barrier>`, `idx < ((barriers.len() as i64))`, `barriers[(idx as usize)]` |
+| `for_loop_len_counter_tip_out_shader_graph_executor` | ❌ tip-out RED — `gen/rendering/shader_graph_executor.rs` has `let mut idx = 0_i64` |
+
+**Root cause layer:** untyped counter beside a `for` and a `.len()` compare.
+Distinct from P3.755 (`total = total + g.len()`), P3.772 (corner offset added
+to an `i32`), and the `while idx < vec.len()` unify test.
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --release --test all -- for_loop_len_counter_`
+
+
 ## P3.772 (2026-10-09) — TDD WDB-475 untyped corner offset widens to `i64` (no compiler src)
 
 `simplex_noise.wj` writes `let mut i1 = 0` and later adds it to an `i32` index, and also casts that offset with `as f32`. Tip MultiFile and tip-out both emit `let mut i1 = 0_i64`.
