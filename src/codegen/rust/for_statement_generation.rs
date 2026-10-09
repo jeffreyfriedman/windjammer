@@ -105,7 +105,11 @@ impl<'ast> CodeGenerator<'ast> {
                                     // Unsubstituted `&V` must not replace inferred
                                     // map values. Concrete tuples (`(usize, char)`) do.
                                     match &params[0] {
-                                        Type::Tuple(_) => Some(params[0].clone()),
+                                        Type::Tuple(_)
+                                            if Self::tuple_components_are_concrete(&params[0]) =>
+                                        {
+                                            Some(params[0].clone())
+                                        }
                                         _ => None,
                                     }
                                 }
@@ -118,7 +122,10 @@ impl<'ast> CodeGenerator<'ast> {
                             None,
                             method,
                         )
-                        .filter(|item| matches!(item, Type::Tuple(_)))
+                        .filter(|item| {
+                            matches!(item, Type::Tuple(_))
+                                && Self::tuple_components_are_concrete(item)
+                        })
                     }
                 }
                 _ => None,
@@ -365,7 +372,7 @@ impl<'ast> CodeGenerator<'ast> {
                 || iter_expr.starts_with('&')
                 || is_map_shared_ref_iter);
         if tracks_borrowed_loop_var {
-            let enumerate_index_var = Self::extract_enumerate_index_var(iterable, pattern);
+            let enumerate_index_var = self.iterator_leading_usize_binding(iterable, pattern);
             let mut all_bindings = std::collections::HashSet::new();
             self.extract_pattern_bindings(pattern, &mut all_bindings);
             for var in all_bindings {
@@ -395,7 +402,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             self.usize_variables.insert(idx_var);
         }
-        if let Some(idx_var) = Self::extract_enumerate_index_var(iterable, pattern) {
+        if let Some(idx_var) = self.iterator_leading_usize_binding(iterable, pattern) {
             self.usize_variables.insert(idx_var);
         }
 
@@ -597,25 +604,59 @@ impl<'ast> CodeGenerator<'ast> {
         None
     }
 
-    /// If the iterable is `.enumerate()` and the pattern is a tuple, return
-    /// the first binding name (the index variable) which is always `usize`.
-    fn extract_enumerate_index_var(
+    /// Tuple components that are still generic parameters must not replace an
+    /// inferred element (`(usize, T)` from `Iterator::enumerate`).
+    fn tuple_components_are_concrete(ty: &Type) -> bool {
+        fn walk(ty: &Type) -> bool {
+            match ty {
+                Type::Custom(name) => !matches!(name.as_str(), "T" | "K" | "V" | "Self"),
+                Type::Tuple(elements) => elements.iter().all(walk),
+                Type::Reference(inner) | Type::MutableReference(inner) => walk(inner),
+                Type::Parameterized(_, params) => params.iter().all(walk),
+                Type::Option(inner) => walk(inner),
+                _ => true,
+            }
+        }
+        matches!(ty, Type::Tuple(_)) && walk(ty)
+    }
+
+    /// First pattern binding when a recorded `Iterator` item starts with
+    /// `usize` (`char_indices`, `enumerate`). Generic tails still count.
+    fn iterator_leading_usize_binding(
+        &self,
         iterable: &Expression<'ast>,
         pattern: &Pattern<'ast>,
     ) -> Option<String> {
-        let is_enumerate = matches!(
-            iterable,
-            Expression::MethodCall { method, .. } if method == "enumerate"
-        );
-        if !is_enumerate {
+        let Expression::MethodCall { object, method, .. } = iterable else {
             return None;
-        }
-        if let Pattern::Tuple(elements) = pattern {
-            if let Some(Pattern::Identifier(name)) = elements.first() {
-                return Some(name.clone());
-            }
-        }
-        None
+        };
+        let receiver = self
+            .mc_infer_method_receiver_type_name(object)
+            .or_else(|| self.infer_type_name(object));
+        let item = receiver.as_deref().and_then(|rt| {
+            self.lookup_method_signature(rt, method).and_then(|sig| {
+                match sig.return_type.as_ref() {
+                    Some(Type::Parameterized(base, params))
+                        if base == "Iterator" && params.len() == 1 =>
+                    {
+                        match &params[0] {
+                            Type::Tuple(_) => Some(params[0].clone()),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                }
+            })
+        });
+        let item = item.or_else(|| {
+            super::stdlib_method_signatures::iterator_item_type(
+                &self.stdlib_method_signatures,
+                None,
+                method,
+            )
+            .filter(|item| matches!(item, Type::Tuple(_)))
+        });
+        Self::tuple_leading_usize_binding(item.as_ref(), pattern)
     }
 
     fn end_is_usize_len(&self, end: &Expression<'ast>) -> bool {
