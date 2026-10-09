@@ -644,33 +644,17 @@ impl<'ast> CodeGenerator<'ast> {
                         // P3.638: owned String formal must move FieldAccess (`meta.2`), not `&meta.2`.
                         // P3.636: field behind `&mut self` into owned formal must `.clone()`.
                         if matches!(arg_to_generate, Expression::FieldAccess { .. }) {
-                            let pidx = contract_sig.arg_param_index(i);
-                            // Prefer runtime `json::to_string(value: T)` owned contract over
-                            // MutBorrowed `to_string` homonyms (String::to_string).
-                            let std_owned = crate::analyzer::SignatureRegistry::stdlib()
+                            // Runtime-std owned free-fn (`json::to_string(value: T)`) beats a
+                            // MutBorrowed homonym left on `contract_sig`. Lookup is the
+                            // qualified callee key — the same boundary `reconcile_post_ir`
+                            // already applies — so leaf names are not a second oracle.
+                            if let Some(std_sig) = crate::analyzer::SignatureRegistry::stdlib()
                                 .get_signature(&qualified_callee)
-                                .or_else(|| {
-                                    crate::analyzer::SignatureRegistry::stdlib()
-                                        .get_signature("json::to_string")
-                                })
-                                .or_else(|| {
-                                    crate::analyzer::SignatureRegistry::stdlib()
-                                        .get_signature("json::to_string_pretty")
-                                })
-                                .filter(|std_sig| {
-                                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                                        std_sig,
-                                        std_sig.arg_param_index(i),
-                                    )
-                                });
-                            if let Some(std_sig) = std_owned {
-                                if matches!(method, "to_string" | "to_string_pretty")
-                                    && (qualified_callee.contains("json::")
-                                        || matches!(
-                                            object,
-                                            Expression::Identifier { name, .. } if name == "json"
-                                        ))
-                                {
+                            {
+                                let std_idx = std_sig.arg_param_index(i);
+                                if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                                    std_sig, std_idx,
+                                ) {
                                     contract_sig = std_sig.clone();
                                 }
                             }

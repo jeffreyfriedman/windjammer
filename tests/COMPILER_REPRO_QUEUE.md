@@ -2,6 +2,17 @@
 
 
 
+## P3.759 (2026-10-09) — field-access owned contract follows the qualified callee
+
+**Root cause layer:** signature. Method-call field arguments re-bound `contract_sig` by matching leaf names `to_string` / `to_string_pretty` and then falling back to those stdlib keys even when the qualified callee was something else.
+
+**What became unnecessary:** the leaf-name match and the unconditional `json::to_string` / `json::to_string_pretty` fallbacks in `method_call_expression_generation/arguments.rs`. The field-access clone now adopts `SignatureRegistry::stdlib()` only when `qualified_callee` itself has an owned emission contract (the same key `reconcile_post_ir` already uses).
+
+WDB-201/203/206/214–217 isolates reconfirmed GREEN. Tip-out product `gen/` was not regenerated.
+
+**Gates:** `cargo test --release --test all -- json_to_string mut_self_field_into_owned_json notes_api_json to_string_pretty` — 6 passed. `cargo test --release --test all -- wdb201_module_file wdb203_module_file wdb206_ wdb214_codegen wdb215_codegen wdb216_codegen wdb217_codegen` — 9 passed.
+
+
 ## P3.758 (2026-10-09) — full suite stopped for disk; five FAILs were flakes
 
 `cargo test --release --test all` was killed when free space fell under 1.5 GiB (exit 2). It had reached the `n*` tests. Tip-out scanners in that log (`i32_binding_compare_zero_tip_out_shader_graph_compiler`, `int_mul_into_u32_formal_tip_out_hybrid_renderer`, `tip_out_event_get_data_string_must_clone`, `tip_out_voxel_gpu_passes_update_all_must_not_borrow_passes`) match existing stale-gen rows. Do not regenerate product `gen/`.
