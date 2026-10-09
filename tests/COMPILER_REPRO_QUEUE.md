@@ -77,7 +77,8 @@ A small cross-module isolate keeps every formal owned (`String` / `Vec`) and pas
 | Gate | Status |
 |------|--------|
 | `mixed_str_and_owned_vec_call_must_borrow_strings_only` | ✅ isolate GREEN — formals stay owned |
-| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` |
+| `replace_demoted_str_beside_owned_vec_must_borrow_strings_only` | ✅ isolate GREEN — `table_html(&account_code, &as_of, lines)` after `lines.len() == 0` |
+| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` (reconfirmed on 18:36 `wj`) |
 
 **Do not steal:** compiler `src/` (other agent).
 
