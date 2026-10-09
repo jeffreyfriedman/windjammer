@@ -2,6 +2,45 @@
 
 
 
+## P3.771 (2026-10-09) — mixed `&str` and owned `Vec` call borrows the wrong args (no compiler src)
+
+Oct 9 tip `wj` regen of finance-screens (`make build`) is cargo RED on two calls.
+`general_ledger_table_html` is `(&str, &str, i64, Vec<...>)` but the call is
+`general_ledger_table_html(account_code, as_of.clone(), ending, &lines)`.
+`aging_report_html` is `(Vec<...>, Vec<...>, &str, String, &str)` but the call is
+`aging_report_html(&buckets, parties, fallback, title, kind)`.
+
+A small cross-module isolate keeps every formal owned (`String` / `Vec`) and passes them by value (isolate GREEN). The product multipass still demotes some string formals and borrows the `Vec` instead.
+
+| Gate | Status |
+|------|--------|
+| `mixed_str_and_owned_vec_call_must_borrow_strings_only` | ✅ isolate GREEN — formals stay owned |
+| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` |
+
+**Do not steal:** compiler `src/` (other agent).
+
+**Gates:** `cargo test --test all --features integration_tests -- finance_screens_mixed_str_vec mixed_str_and_owned_vec` — isolate GREEN / product RED (2026-10-09).
+
+
+## P3.770 (2026-10-09) — i32 neighbor-offset tuple array must not mix `0_i64`
+
+`tps_camera.wj` writes `[(-1, 0), (1, 0), (0, -1), (0, 1)]` and adds those
+components to `i32` cell coordinates. Tip-out emits
+`[(-1, 0_i64), (1, 0), (0_i64, -1), (0, 1)]`.
+
+| Gate | Status |
+|------|--------|
+| `tuple_i32_offset_array_must_not_mix_i64` | ❌ isolate RED — `[(-1_i32, 0_i64), (1_i32, 0_i32), (0_i64, -1_i32), (0_i32, 1_i32)]` |
+| `tuple_i32_offset_array_tip_out_tps_camera` | ❌ tip-out RED — `(-1, 0_i64)` and `(0_i64, -1)` |
+
+**Root cause layer:** integer suffix on tuple-array literals. Distinct from
+WDB-423 (clone on `offsets[i]`) and P3.403 (neg while counter vs i32 peers).
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --release --test all -- tuple_i32_offset_array_`
+
+
 ## P3.769 (2026-10-09) — TDD WDB-474 (DB agent; no compiler src)
 
 A last-use local struct moved into `Vec::push` must not `.clone()`.
