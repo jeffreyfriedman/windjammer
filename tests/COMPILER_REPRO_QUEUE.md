@@ -2,6 +2,20 @@
 
 
 
+## P3.772 (2026-10-09) — TDD WDB-475 untyped corner offset widens to `i64` (no compiler src)
+
+`simplex_noise.wj` writes `let mut i1 = 0` and later adds it to an `i32` index, and also casts that offset with `as f32`. Tip MultiFile and tip-out both emit `let mut i1 = 0_i64`.
+
+| Gate | Status |
+|------|--------|
+| `wdb475_module_file_untyped_corner_offset_added_to_i32_must_not_be_i64` | ❌ isolate RED — `0_i64` |
+| `wdb475_tip_out_simplex_corner_offset_must_not_be_i64` | ❌ tip RED — `simplex_noise.rs` |
+
+**Do not steal:** compiler `src/`. Distinct from P3.770 (tuple-array `0_i64` beside `i32`).
+
+**Gates:** `cargo test --test all --features integration_tests -- wdb475_` — isolate RED / tip RED (2026-10-09).
+
+
 ## P3.771 (2026-10-09) — mixed `&str` and owned `Vec` call borrows the wrong args (no compiler src)
 
 Oct 9 tip `wj` regen of finance-screens (`make build`) is cargo RED on two calls.
