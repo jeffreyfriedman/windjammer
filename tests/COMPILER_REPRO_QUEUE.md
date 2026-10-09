@@ -2,6 +2,24 @@
 
 
 
+## P3.752 (2026-10-08) — TDD WDB-472 (no compiler src)
+
+Copy `i32` for-range bindings must not `.clone()` at a by-value call.
+
+Product `scene/station_geometry.rs` `carve_room` calls `set_if(grid, x, y, z, 0)` inside `for x` / `for z` / `for y`. Tip-out emits `x.clone()` / `y.clone()` / `z.clone()`. Tip MultiFile emits the bindings bare (isolate GREEN).
+
+| Gate | Status |
+|------|--------|
+| WDB-472 MultiFile | ✅ isolate GREEN |
+| WDB-472 tip-out | ❌ tip RED — range `i32` clones in `rel_tip_out/scene/station_geometry.rs` and `windjammer-game-core/gen/scene/station_geometry.rs` |
+
+**Root cause layer:** tip-out lag. Distinct from WDB-438 (Copy i32 inside a tuple literal) and WDB-456 (Copy i32 locals into `let`).
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --test all --features integration_tests -- wdb472_` — isolate GREEN / tip RED (2026-10-08).
+
+
 ## P3.750 (2026-10-08) — annotated `i32` compared to `0` must not emit `0_i64`
 
 `shader_graph_compiler.wj` writes `let mut existing_group: i32 = -1` then
@@ -63,7 +81,9 @@ before the kill. `RAYON_NUM_THREADS=1` still exits 137 (~66s).
 | same with `RAYON_NUM_THREADS=1` | ❌ exit 137 |
 
 **Root cause layer:** Step 4B per-file analyze with the converged global registry
-on ~678 files. Not a panic message (stderr stops at the progress cap).
+on ~678 files. Not a panic message (stderr stops at the progress cap). Host
+volume later hit **20 MiB free** (2026-10-08 22:50), which also jetsams large
+`wj` processes; the earlier kills were at ~3.8 GB RSS with more free RAM.
 
 **Do not steal:** compiler `src/`. No host OOM test in the default suite.
 
