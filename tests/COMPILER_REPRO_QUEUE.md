@@ -2,6 +2,15 @@
 
 
 
+## P3.763 (2026-10-09) — `values`/`keys` loops follow `Iterator<&T>`
+
+**Root cause layer:** signature. `for` loops forced a borrowed iterator whenever the method was spelled `values` or `keys`.
+
+**What became unnecessary:** `matches!(method, "values" | "keys")` in `for_statement_generation.rs`. A known receiver uses `lookup_method_signature`: the loop is borrowed when that return is `Iterator<&T>` or `Iterator<&mut T>` (`HashMap::values` / `keys` already record that). An unknown receiver is borrowed only when every stdlib row for the method agrees.
+
+**Gates:** `cargo test --release --test all -- hashmap_values_copy_elem hashmap_get_double_ref e0507_final` — 15 passed. Full suite not re-run (free space was ~1.6 GiB before this compile; prior full runs died writing `shared/debug`).
+
+
 ## P3.762 (2026-10-09) — trait-call map bridge no longer filters on `get`/`remove`
 
 **Root cause layer:** signature. `trait_call_generation` replaced an owned-Copy homonym with the HashMap key bridge only when the leaf was `get` or `remove`, and a second branch peeled `&` integer literals for those same leaves.

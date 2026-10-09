@@ -78,9 +78,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         let owned_iter_elem = match iterable {
-            Expression::MethodCall {
-                object, method, ..
-            } => {
+            Expression::MethodCall { object, method, .. } => {
                 let receiver = self
                     .mc_infer_method_receiver_type_name(object)
                     .or_else(|| self.infer_type_name(object));
@@ -197,14 +195,37 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str(" in ");
 
         let mut is_borrowed_iterator = needs_borrow || self.is_iterating_over_borrowed(iterable);
-        // Map `.values()` / `.keys()` yield shared refs — loop vars are `&V` (P3.303 push clone).
-        // Must win over `by_value_owned_iter`: registry Item may look like owned Copy `usize`
-        // while Rust's `Values` iterator still yields `&V` (P3.646 E0606 `count as usize`).
-        let is_map_shared_ref_iter = matches!(
-            iterable,
-            Expression::MethodCall { method, .. }
-                if matches!(method.as_str(), "values" | "keys")
-        );
+        // `HashMap::values` / `keys` record `Iterator<&V>` / `Iterator<&K>`. That return
+        // wins over a registry item that looks like owned Copy (P3.646).
+        let is_map_shared_ref_iter = match iterable {
+            Expression::MethodCall { object, method, .. } => {
+                let receiver = self
+                    .mc_infer_method_receiver_type_name(object)
+                    .or_else(|| self.infer_type_name(object));
+                if let Some(rt) = receiver.as_deref() {
+                    self.lookup_method_signature(rt, method).is_some_and(|sig| {
+                        matches!(
+                            sig.return_type.as_ref(),
+                            Some(Type::Parameterized(base, params))
+                                if base == "Iterator"
+                                    && params.first().is_some_and(|item| {
+                                        matches!(
+                                            item,
+                                            Type::Reference(_) | Type::MutableReference(_)
+                                        )
+                                    })
+                        )
+                    })
+                } else {
+                    super::stdlib_method_signatures::method_return_is_shared_ref_iterator(
+                        &self.stdlib_method_signatures,
+                        None,
+                        method,
+                    )
+                }
+            }
+            _ => false,
+        };
         if is_map_shared_ref_iter {
             is_borrowed_iterator = true;
         } else if by_value_owned_iter {
@@ -286,7 +307,10 @@ impl<'ast> CodeGenerator<'ast> {
         if use_copied_for_copy_elems {
             // `&Vec<T>` / `conditions: &Vec<_>` → `.iter().copied()` yields owned Copy `T`.
             if iter_expr.starts_with('&') {
-                let peeled = iter_expr.trim_start_matches('&').trim_start_matches("mut ").trim();
+                let peeled = iter_expr
+                    .trim_start_matches('&')
+                    .trim_start_matches("mut ")
+                    .trim();
                 iter_expr = format!("{}.iter().copied()", peeled);
             } else {
                 iter_expr = format!("{}.iter().copied()", iter_expr);
@@ -335,8 +359,8 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Only mark owned *collection* iteration (not ranges / numeric counters).
         // Range `for dx in -2..3` is Copy i32 — must not join string-iter clone paths.
-        let is_owned_string_iterator = !is_borrowed_iterator
-            && !matches!(iterable, Expression::Range { .. });
+        let is_owned_string_iterator =
+            !is_borrowed_iterator && !matches!(iterable, Expression::Range { .. });
         if is_owned_string_iterator {
             if let Some(var) = &loop_var {
                 self.owned_string_iterator_vars.insert(var.clone());
@@ -456,9 +480,8 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if self.function_returns_i32_for_loop_scan() {
                     self.local_var_types.insert(var.clone(), Type::Int32);
                     self.codegen_i32_binding_names.insert(var.clone());
-                } else if let Some(bound_ty) = self
-                    .range_loop_int_counter_type(start, end)
-                    .or_else(|| {
+                } else if let Some(bound_ty) =
+                    self.range_loop_int_counter_type(start, end).or_else(|| {
                         self.infer_expression_type(start)
                             .or_else(|| self.infer_expression_type(end))
                             .filter(|t| Self::assignment_target_needs_int_codegen_context(t))
@@ -621,8 +644,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let is_i32 = |expr: &Expression<'ast>| {
             self.infer_expression_type(expr).is_some_and(|t| {
-                matches!(t, Type::Int32)
-                    || matches!(t, Type::Custom(ref n) if n == "i32")
+                matches!(t, Type::Int32) || matches!(t, Type::Custom(ref n) if n == "i32")
             })
         };
         if is_i32(start) || is_i32(end) {
@@ -630,8 +652,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let is_u32 = |expr: &Expression<'ast>| {
             self.infer_expression_type(expr).is_some_and(|t| {
-                matches!(t, Type::Uint)
-                    || matches!(t, Type::Custom(ref n) if n == "u32")
+                matches!(t, Type::Uint) || matches!(t, Type::Custom(ref n) if n == "u32")
             })
         };
         if is_u32(start) || is_u32(end) {
@@ -647,16 +668,16 @@ impl<'ast> CodeGenerator<'ast> {
         end: &Expression<'ast>,
     ) -> bool {
         let end_returns_usize = |expr: &Expression<'ast>| match expr {
-            Expression::MethodCall {
-                object, method, ..
-            } => crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
-                method,
-                self.infer_expression_type(object)
-                    .as_ref()
-                    .and_then(Self::type_to_name)
-                    .as_deref(),
-                &self.signature_registry,
-            ),
+            Expression::MethodCall { object, method, .. } => {
+                crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                    method,
+                    self.infer_expression_type(object)
+                        .as_ref()
+                        .and_then(Self::type_to_name)
+                        .as_deref(),
+                    &self.signature_registry,
+                )
+            }
             _ => false,
         };
         if end_returns_usize(end) || end_returns_usize(start) {

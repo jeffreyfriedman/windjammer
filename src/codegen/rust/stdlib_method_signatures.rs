@@ -308,3 +308,44 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
 
     map
 }
+
+/// `true` when the method's recorded return is `Iterator<&T>` / `Iterator<&mut T>`.
+///
+/// A known receiver uses that type's row. An unknown receiver is a shared-ref
+/// iterator only when every stdlib row for the method agrees.
+pub(in crate::codegen::rust) fn method_return_is_shared_ref_iterator(
+    table: &HashMap<String, HashMap<String, MethodSignature>>,
+    receiver: Option<&str>,
+    method: &str,
+) -> bool {
+    fn item_is_shared_ref(sig: &MethodSignature) -> bool {
+        matches!(
+            sig.return_type.as_ref(),
+            Some(Type::Parameterized(base, params))
+                if base == "Iterator"
+                    && params.first().is_some_and(|item| {
+                        matches!(item, Type::Reference(_) | Type::MutableReference(_))
+                    })
+        )
+    }
+    if let Some(rt) = receiver {
+        let base = rt.split('<').next().unwrap_or(rt);
+        let short = base.rsplit("::").next().unwrap_or(base);
+        for key in [rt, base, short] {
+            if let Some(sig) = table.get(key).and_then(|methods| methods.get(method)) {
+                return item_is_shared_ref(sig);
+            }
+        }
+        return false;
+    }
+    let mut any = false;
+    for methods in table.values() {
+        if let Some(sig) = methods.get(method) {
+            any = true;
+            if !item_is_shared_ref(sig) {
+                return false;
+            }
+        }
+    }
+    any
+}
