@@ -2,6 +2,33 @@
 
 
 
+## P3.776 (2026-10-09) — TDD WDB-477 (DB agent; no compiler src)
+
+A Copy `f32` struct field must not `.clone()` when read into another struct.
+
+Product `voxel/material.rs` `from_material_data`:
+```wj
+color_r: m.albedo.x
+roughness: m.roughness
+```
+`Vec3.x` and `roughness` are `f32`. Tip MultiFile emits them bare (isolate GREEN). Tip-out still has `m.albedo.x.clone()` and `m.roughness.clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-477 MultiFile | ✅ isolate GREEN — no `.clone()` |
+| WDB-477 tip-out | ❌ tip RED — clones in `rel_tip_out/voxel/material.rs` and `windjammer-game-core/gen/voxel/material.rs` |
+
+**Root cause layer:** tip-out lag — Copy `f32` fields are still cloned.
+
+**Why this is a new class:**
+- WDB-466 is a Copy tuple field `.0` / `.1`.
+- WDB-344 is a named `f32` local.
+- This is `m.albedo.x` and `m.roughness` on a struct.
+
+**Do not steal:** WDB-406/408/411/457–477, P3.508–P3.776, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb477_` — isolate GREEN / tip RED (2026-10-09).
+
 ## P3.774 (2026-10-09) — TDD WDB-476 (DB agent; no compiler src)
 
 An `i32` compared with `< 0` must not widen the zero to `i64`.
