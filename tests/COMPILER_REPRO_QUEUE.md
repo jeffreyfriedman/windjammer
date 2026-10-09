@@ -2,6 +2,15 @@
 
 
 
+## P3.764 (2026-10-09) — `char_indices` index width comes from `Iterator<(usize, char)>`
+
+**Root cause layer:** signature. The `for` loop invented `(usize, char)` and marked the first binding `usize` when the method was spelled `char_indices`.
+
+**What became unnecessary:** the `method == "char_indices"` element-type branch and `extract_char_indices_index_var` in `for_statement_generation.rs`. `String::char_indices` is recorded as `Iterator<(usize, char)>`. The loop item comes from that return (or a unanimous stdlib `Iterator<item>` when the receiver is unknown). A tuple item whose first component is `usize` marks that binding. `.enumerate()` still uses its method spelling because iterator adapters are not in the stdlib table yet.
+
+**Gates:** `cargo test --release --test all -- char_indices_slice_must_use_usize enumerate_index_not_dereferenced hashmap_values_copy_elem` — 4 passed. Full suite not re-run (about 1 GiB free before the compile).
+
+
 ## P3.763 (2026-10-09) — `values`/`keys` loops follow `Iterator<&T>`
 
 **Root cause layer:** signature. `for` loops forced a borrowed iterator whenever the method was spelled `values` or `keys`.

@@ -172,6 +172,26 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
             OwnershipMode::Borrowed,
         ),
     );
+    // `str::char_indices` yields `(usize, char)`. The loop index is that
+    // tuple's first component, not a spelling of the method.
+    string_methods.insert(
+        "char_indices".to_string(),
+        MethodSignature::with_self_ownership(
+            "String",
+            "char_indices",
+            vec![],
+            vec![],
+            Some(Type::Parameterized(
+                "Iterator".to_string(),
+                vec![Type::Tuple(vec![
+                    Type::Custom("usize".to_string()),
+                    Type::Custom("char".to_string()),
+                ])],
+            )),
+            true,
+            OwnershipMode::Borrowed,
+        ),
+    );
     map.insert("String".to_string(), string_methods);
 
     // HashMap<K, V> methods
@@ -348,4 +368,47 @@ pub(in crate::codegen::rust) fn method_return_is_shared_ref_iterator(
         }
     }
     any
+}
+
+/// Item type of a recorded `Iterator<item>` return, if the table has one.
+///
+/// A known receiver uses that type's row. An unknown receiver returns the item
+/// only when every stdlib row for the method records the same `Iterator<item>`.
+pub(in crate::codegen::rust) fn iterator_item_type(
+    table: &HashMap<String, HashMap<String, MethodSignature>>,
+    receiver: Option<&str>,
+    method: &str,
+) -> Option<Type> {
+    fn item(sig: &MethodSignature) -> Option<Type> {
+        match sig.return_type.as_ref() {
+            Some(Type::Parameterized(base, params)) if base == "Iterator" && params.len() == 1 => {
+                Some(params[0].clone())
+            }
+            _ => None,
+        }
+    }
+    if let Some(rt) = receiver {
+        let base = rt.split('<').next().unwrap_or(rt);
+        let short = base.rsplit("::").next().unwrap_or(base);
+        for key in [rt, base, short] {
+            if let Some(sig) = table.get(key).and_then(|methods| methods.get(method)) {
+                return item(sig);
+            }
+        }
+        return None;
+    }
+    let mut found: Option<Type> = None;
+    for methods in table.values() {
+        if let Some(sig) = methods.get(method) {
+            let next = item(sig)?;
+            if let Some(prev) = &found {
+                if prev != &next {
+                    return None;
+                }
+            } else {
+                found = Some(next);
+            }
+        }
+    }
+    found
 }

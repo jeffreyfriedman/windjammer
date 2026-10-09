@@ -90,20 +90,43 @@ impl<'ast> CodeGenerator<'ast> {
             }
             _ => None,
         };
-        let loop_element_type = if matches!(
-            iterable,
-            Expression::MethodCall { method, .. } if method == "char_indices"
-        ) {
-            Some(Type::Tuple(vec![
-                Type::Custom("usize".to_string()),
-                Type::Custom("char".to_string()),
-            ]))
-        } else {
-            owned_iter_elem.or_else(|| {
+        let loop_element_type = owned_iter_elem
+            .or_else(|| match iterable {
+                Expression::MethodCall { object, method, .. } => {
+                    let receiver = self
+                        .mc_infer_method_receiver_type_name(object)
+                        .or_else(|| self.infer_type_name(object));
+                    if let Some(rt) = receiver.as_deref() {
+                        self.lookup_method_signature(rt, method).and_then(|sig| {
+                            match sig.return_type.as_ref() {
+                                Some(Type::Parameterized(base, params))
+                                    if base == "Iterator" && params.len() == 1 =>
+                                {
+                                    // Unsubstituted `&V` must not replace inferred
+                                    // map values. Concrete tuples (`(usize, char)`) do.
+                                    match &params[0] {
+                                        Type::Tuple(_) => Some(params[0].clone()),
+                                        _ => None,
+                                    }
+                                }
+                                _ => None,
+                            }
+                        })
+                    } else {
+                        super::stdlib_method_signatures::iterator_item_type(
+                            &self.stdlib_method_signatures,
+                            None,
+                            method,
+                        )
+                        .filter(|item| matches!(item, Type::Tuple(_)))
+                    }
+                }
+                _ => None,
+            })
+            .or_else(|| {
                 self.infer_expression_type(iterable)
                     .and_then(|t| Self::extract_iterator_element_type(&t))
-            })
-        };
+            });
         let copy_element_by_value = loop_element_type
             .as_ref()
             .is_some_and(|e| self.is_type_copy(e));
@@ -367,7 +390,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if let Some(idx_var) = Self::extract_char_indices_index_var(iterable, pattern) {
+        if let Some(idx_var) =
+            Self::tuple_leading_usize_binding(loop_element_type.as_ref(), pattern)
+        {
             self.usize_variables.insert(idx_var);
         }
         if let Some(idx_var) = Self::extract_enumerate_index_var(iterable, pattern) {
@@ -551,17 +576,17 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
-    /// If the iterable is `.char_indices()` and the pattern is a tuple, return
-    /// the first binding name (the byte index), which is always `usize`.
-    fn extract_char_indices_index_var(
-        iterable: &Expression<'ast>,
-        pattern: &Pattern<'ast>,
-    ) -> Option<String> {
-        let is_char_indices = matches!(
-            iterable,
-            Expression::MethodCall { method, .. } if method == "char_indices"
+    /// First tuple binding when the iterator item starts with `usize`
+    /// (`String::char_indices` → `(usize, char)`).
+    fn tuple_leading_usize_binding(elem: Option<&Type>, pattern: &Pattern<'ast>) -> Option<String> {
+        let Type::Tuple(elements_ty) = elem? else {
+            return None;
+        };
+        let leading_usize = matches!(
+            elements_ty.first(),
+            Some(Type::Custom(name)) if name == "usize"
         );
-        if !is_char_indices {
+        if !leading_usize {
             return None;
         }
         if let Pattern::Tuple(elements) = pattern {
