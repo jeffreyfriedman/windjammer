@@ -2,6 +2,15 @@
 
 
 
+## P3.761 (2026-10-09) — copy-index peel follows the formal, not the leaf name
+
+**Root cause layer:** signature. The post-IR peel of a leading `&` on method arguments ran only for `get` / `contains_key` / `get_key_value` / `remove`, and additionally forced `Vec::{method}` / `slice::{method}` for `get` and `remove`.
+
+**What became unnecessary:** both leaf-name matches in `method_call_expression_generation/arguments.rs`. A leading `&` is peeled when the resolved signature (local, or stdlib `{Receiver}::{method}` when that receiver is known and its formal is owned Copy) says the slot is pass-by-value Copy, and the site is not a collection-key lookup. Map/set/wrapper receivers are unchanged. Missing signatures do not invent `Vec::get`.
+
+**Gates:** `cargo test --release --test all -- test_vec_get slice_get_usize owned_i64_method_formal hashmap_get_must_borrow` — 5 passed; `owned_i64_method_formal_must_not_receive_ref_literal` first failed on a missing `cargo-target/verify` directory, then passed alone. `cargo test --release --test all -- hashmap_get_string_key map_get_must_borrow contains_key_borrows` — 2 passed (`sync_shared_map_get` isolate and product scanner). Full suite not re-run: the volume still has about 1.9 GiB free and the last two runs died writing `shared/debug`.
+
+
 ## P3.760 (2026-10-09) — full suite stopped on ENOSPC again
 
 `cargo test --release --test all` wrote `shared/debug` (hyper, chrono, rayon) until the volume returned os error 28 (`EXIT:101`). Failures from `owned_string_formals_must_not_receive_borrow_at_call_site` through `test_passthrough_borrowed_convergence` are that write failure. Earlier tip-out names in the same log (`tip_out_voxel_gpu_passes_update_all_must_not_borrow_passes`, `tip_out_event_get_data_string_must_clone`, `i32_binding_compare_zero_tip_out_shader_graph_compiler`, `int_mul_into_u32_formal_tip_out_hybrid_renderer`) match existing stale-gen rows. `shared/debug` was removed after the run. Do not regenerate product `gen/`.
