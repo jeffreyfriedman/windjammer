@@ -361,12 +361,17 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.454: rustc sees the emitted suffix. Mixed-int inference must not
         // paint `let mut colon_at = -1_i64` as usize (then `colon_at = j` skips
         // the i64 cast). Negative sentinels stay WJ `int`.
+        // P3.750: `let mut existing_group: i32 = -1` emits `-1_i32`. That width
+        // is the annotation rustc sees — do not demote the binding to WJ `int`
+        // or the later `>= 0` literal becomes `0_i64`.
         // P3.568: `let start = i + (marker_len as i64)` emits i64 width without a
         // trailing `_i64` suffix — do not let mixed-int Usize inference repaint the
         // binding as usize (then `let mut j = start` / `j < n` stay broken).
-        if crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
-            || emitted_rhs.ends_with("_i64")
-            || emitted_rhs.contains(" as i64")
+        let emitted_i32_width = emitted_rhs.ends_with("_i32") || emitted_rhs.contains(" as i32");
+        if !emitted_i32_width
+            && (crate::codegen::rust::type_casting::expression_is_negative_int_init(value)
+                || emitted_rhs.ends_with("_i64")
+                || emitted_rhs.contains(" as i64"))
         {
             self.local_var_types.insert(name.to_string(), Type::Int);
             self.codegen_i32_binding_names.remove(name);
