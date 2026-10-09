@@ -41,10 +41,18 @@ impl<'ast> CodeGenerator<'ast> {
                 match stmt {
                     Statement::Let {
                         pattern: Pattern::Identifier(n),
+                        type_,
                         value,
                         else_block,
                         ..
                     } if n == name => {
+                        // Annotated width (`let mut existing_group: i32 = -1`) beats
+                        // inferring the unary `-1` as default WJ `int` (i64).
+                        if let Some(t) = type_ {
+                            if CodeGenerator::type_is_signed_int(t) {
+                                return Some(t.clone());
+                            }
+                        }
                         if let Some(t) = this.infer_expression_type(value) {
                             if CodeGenerator::type_is_signed_int(&t) {
                                 return Some(t);
@@ -121,10 +129,16 @@ impl<'ast> CodeGenerator<'ast> {
                 match stmt {
                     Statement::Let {
                         pattern: Pattern::Identifier(n),
+                        type_,
                         value,
                         else_block,
                         ..
                     } if n == name => {
+                        if let Some(t) = type_ {
+                            if CodeGenerator::type_is_signed_int(t) {
+                                return Some(t.clone());
+                            }
+                        }
                         if matches!(
                             value,
                             Expression::Literal {

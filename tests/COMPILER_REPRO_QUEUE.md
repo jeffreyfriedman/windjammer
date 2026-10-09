@@ -48,15 +48,16 @@ binding is `i32` (expected `i32`, found `i64`).
 
 | Gate | Status |
 |------|--------|
-| `i32_binding_compare_zero_must_not_emit_i64` | ❌ isolate RED — `existing_group: i32` then `>= 0_i64` |
-| `i32_binding_compare_zero_tip_out_shader_graph_compiler` | ❌ tip-out RED — `existing_group >= 0_i64` |
+| `i32_binding_compare_zero_must_not_emit_i64` | ✅ isolate GREEN — comparison is not `0_i64` |
+| `i32_binding_compare_zero_tip_out_shader_graph_compiler` | ❌ tip-out RED — stale `gen/rendering/shader_graph_compiler.rs` still has `>= 0_i64` (not regenerated) |
 
-**Root cause layer:** int width — a comparison literal follows the annotated
-`i32` binding, not an ambient `i64` slot.
+**Root cause layer:** signature of the annotated binding. `let mut existing_group: i32 = -1` stored `Int32`, then `reconcile_ambiguous_int_local_after_let` treated the negative init as a WJ `int` sentinel and rewrote the binding to `i64`. The `>= 0` literal followed that. The zero-sentinel peer also inferred unary `-1` as default `int` before the `Let` annotation.
 
-**Do not steal:** P3.727 (`int == 1` beside Vec::push), P3.749, compiler `src/`.
+**What became unnecessary:** demoting an emitted `-1_i32` binding to WJ `int`; using the unary init's inferred `i64` as the zero-sentinel peer when the let is annotated `i32`.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- i32_binding_compare_zero`.
+**Do not steal:** P3.727 (`int == 1` beside Vec::push) stays i64. Do not regen product `gen/` from this session.
+
+**Gates:** `cargo test --release --test all -- i32_binding_compare_zero_must_not_emit_i64 int_eq_one_with_vec_push usize_loop_counter_init_zero_must_not_be_i32 module_file_usize_index_eq_zero_must_not_emit_i32 wdb395_module_file_i32_i64_compare_zero migrate_string_scan_index_eq_zero migrate_prev_sentinel int_loop_assign_end_bound_must_unify` — isolate and those peers GREEN (2026-10-09). Tip-out scanner still RED on stale gen.
 
 ## P3.751 (2026-10-08) — If-condition reborrow of an owned string formal
 
