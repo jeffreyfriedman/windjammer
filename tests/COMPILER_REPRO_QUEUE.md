@@ -11,15 +11,17 @@
 
 | Gate | Status |
 |------|--------|
-| P3.753 isolate | pending |
-| P3.753 tip-out | ❌ tip RED — `as f32` in `gen/rendering/vgs_rasterization.rs` |
+| `line_col_fallback_does_not_take_another_files_f32` | ✅ lookup GREEN — another file's `f32` at the same line/col is not used |
+| `u32_product_cast_must_not_insert_f32` | ✅ isolate GREEN — same-file `u32` product cast emits no `as f32` |
+| P3.753 tip-out | ❌ tip-out RED — stale `gen/rendering/vgs_rasterization.rs` still has `as f32` (not regenerated) |
 
-**Root cause layer:** cast insertion on a `u32` product. Distinct from P3.735
-(`i32 * 48 as u32` binds `as` only to the literal).
+**Root cause layer:** constraint/solver. `get_float_type` priority 3 matched line and column across files, so a `u32` field could be classified `f32`. An integer formal (`size: u32`) now clears a leaked float assignment slot before the argument is emitted.
 
-**Do not steal:** compiler `src/`.
+**What became unnecessary:** treating another file's `f32` as this file's float type; keeping that slot on a `u32` call argument so `(width * height * 16) as u32` was wrapped `as f32`.
 
-**Gates:** `cargo test --test all --features integration_tests -- u32_product_cast_`
+**Do not steal:** do not regen product `gen/` from this session.
+
+**Gates:** `cargo test --release --lib line_col_fallback` and `cargo test --release --test all -- u32_product_cast_must_not_insert_f32`.
 
 
 ## P3.752 (2026-10-08) — TDD WDB-472 (no compiler src)

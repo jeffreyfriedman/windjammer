@@ -368,6 +368,10 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     if param_ty.as_ref().is_some_and(
+                        crate::codegen::rust::type_classification_utilities::is_integer_type,
+                    ) {
+                        self.assignment_float_target_type = None;
+                    } else if param_ty.as_ref().is_some_and(
                         crate::codegen::rust::type_classification_utilities::is_float_type,
                     ) && self.assignment_float_target_type.is_none()
                     {
@@ -936,9 +940,9 @@ impl<'ast> CodeGenerator<'ast> {
             });
             // Field access with unknown type: still try collection-key finalize when
             // the resolved method signature already looks like a map-key borrow.
-            let sig_looks_like_map_key = method_signature.as_ref().is_some_and(|sig| {
-                self.is_collection_key_lookup_at_site(sig, 0, receiver_rt)
-            });
+            let sig_looks_like_map_key = method_signature
+                .as_ref()
+                .is_some_and(|sig| self.is_collection_key_lookup_at_site(sig, 0, receiver_rt));
             let wrapper_key_sig = crate::codegen::rust::stdlib_method_traits::hashmap_key_method_signature_for_wrapper(
                 method,
                 receiver_rt,

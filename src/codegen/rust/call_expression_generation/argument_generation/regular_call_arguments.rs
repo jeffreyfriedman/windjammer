@@ -67,7 +67,14 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                     .or_else(|| sig.formal_param_type(pidx))
                     .or_else(|| sig.param_types.get(pidx))
                     .cloned();
-                if param_ty.as_ref().is_some_and(
+                if param_ty
+                    .as_ref()
+                    .is_some_and(crate::codegen::rust::type_classification_utilities::is_integer_type)
+                {
+                    // P3.753: a `u32` formal must not keep a leaked f32 slot. That slot
+                    // wrapped `(width * height * 16) as u32` as `as f32` inside the cast.
+                    gen.assignment_float_target_type = None;
+                } else if param_ty.as_ref().is_some_and(
                     crate::codegen::rust::type_classification_utilities::is_float_type,
                 ) && gen.assignment_float_target_type.is_none()
                 {

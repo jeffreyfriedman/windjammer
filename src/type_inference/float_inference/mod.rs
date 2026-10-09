@@ -390,7 +390,21 @@ impl FloatInference {
             .collect()
     }
 
-    /// Get inferred float type for an expression
+    /// Same source file when one path is a prefix spelling of the other
+    /// (`rendering/vgs.wj` vs `/abs/rendering/vgs.wj`). Distinct files do not match.
+    fn expr_file_matches_query(&self, expr_file_id: usize, query_file: &str) -> bool {
+        let Some(stored) = self
+            .file_name_to_id
+            .iter()
+            .find(|(_, id)| **id == expr_file_id)
+            .map(|(name, _)| name.as_str())
+        else {
+            return false;
+        };
+        source_paths_same_file(stored, query_file)
+    }
+
+    /// Get inferred float type for an expression.
     pub fn get_float_type<'ast>(&self, expr: &Expression<'ast>) -> FloatType {
         // TDD FIX: Use file-aware cache lookup to prevent cross-file collisions
         let location = expr.location();
@@ -418,12 +432,19 @@ impl FloatInference {
             }
         }
 
-        // Priority 3: line+column only. Inference records `file_id` from `set_current_file` while
-        // codegen may resolve `SourceLocation::file` to a different string (relative vs absolute), so
-        // `file_id` can disagree even within a single-file compile. Location within the file is stable.
+        // Priority 3: line+column within the same source file. Inference records
+        // `file_id` from `set_current_file` while codegen may resolve
+        // `SourceLocation::file` to a different string (relative vs absolute), so
+        // `file_id` can disagree for one file. Another file's expression at the
+        // same line and column must not win (P3.753: a `u32` field inherited `f32`).
         if line > 0 {
             for (expr_id, float_type) in &self.inferred_types {
-                if expr_id.line == line && expr_id.col == col {
+                if expr_id.line != line || expr_id.col != col {
+                    continue;
+                }
+                if expr_id.file_id == file_id
+                    || self.expr_file_matches_query(expr_id.file_id, &file)
+                {
                     return *float_type;
                 }
             }
@@ -434,11 +455,85 @@ impl FloatInference {
     }
 }
 
+fn source_paths_same_file(a: &str, b: &str) -> bool {
+    let a = a.trim_start_matches("./");
+    let b = b.trim_start_matches("./");
+    if a == b {
+        return true;
+    }
+    let (longer, shorter) = if a.len() >= b.len() { (a, b) } else { (b, a) };
+    longer.ends_with(shorter)
+        && longer
+            .as_bytes()
+            .get(longer.len() - shorter.len() - 1)
+            .copied()
+            == Some(b'/')
+}
+
 #[cfg(test)]
 mod hashmap_match_float_tests {
     use crate::lexer::Lexer;
+    use crate::parser::{Expression, Literal};
     use crate::parser_impl::Parser;
+    use crate::source_map::Location;
     use crate::type_inference::{FloatInference, FloatType};
+    use std::path::PathBuf;
+
+    #[test]
+    fn line_col_fallback_does_not_take_another_files_f32() {
+        let mut fi = FloatInference::new();
+        fi.file_name_to_id
+            .insert("rendering/vgs_rasterization.wj".to_string(), 1);
+        fi.file_name_to_id
+            .insert("rendering/other.wj".to_string(), 2);
+        fi.inferred_types.insert(
+            super::ExprId {
+                seq_id: 1,
+                file_id: 2,
+                line: 37,
+                col: 9,
+            },
+            FloatType::F32,
+        );
+        let expr = Expression::Literal {
+            value: Literal::Int(0),
+            location: Some(Location {
+                file: PathBuf::from("rendering/vgs_rasterization.wj"),
+                line: 37,
+                column: 9,
+            }),
+        };
+        assert_eq!(
+            fi.get_float_type(&expr),
+            FloatType::Unknown,
+            "a u32 field must not inherit another file's f32 at the same line and column"
+        );
+    }
+
+    #[test]
+    fn line_col_fallback_accepts_same_file_path_spelling() {
+        let mut fi = FloatInference::new();
+        fi.file_name_to_id
+            .insert("/abs/rendering/vgs_rasterization.wj".to_string(), 3);
+        fi.inferred_types.insert(
+            super::ExprId {
+                seq_id: 1,
+                file_id: 3,
+                line: 37,
+                col: 9,
+            },
+            FloatType::F32,
+        );
+        let expr = Expression::Literal {
+            value: Literal::Int(0),
+            location: Some(Location {
+                file: PathBuf::from("rendering/vgs_rasterization.wj"),
+                line: 37,
+                column: 9,
+            }),
+        };
+        assert_eq!(fi.get_float_type(&expr), FloatType::F32);
+    }
 
     #[test]
     fn match_on_hashmap_get_unifies_default_literal_to_f32() {
