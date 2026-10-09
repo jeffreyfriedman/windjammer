@@ -326,6 +326,30 @@ pub(in crate::codegen::rust) fn init_stdlib_method_signatures(
     }
     map.insert("HashSet".to_string(), hashset_methods);
 
+    // Iterator adapters. `enumerate` yields `(usize, T)`; the index width is
+    // the tuple's first component. `T` stays unsubstituted so it does not
+    // replace an inferred element type.
+    let mut iterator_methods = HashMap::new();
+    iterator_methods.insert(
+        "enumerate".to_string(),
+        MethodSignature::with_self_ownership(
+            "Iterator",
+            "enumerate",
+            vec![],
+            vec![],
+            Some(Type::Parameterized(
+                "Iterator".to_string(),
+                vec![Type::Tuple(vec![
+                    Type::Custom("usize".to_string()),
+                    Type::Custom("T".to_string()),
+                ])],
+            )),
+            true,
+            OwnershipMode::Borrowed,
+        ),
+    );
+    map.insert("Iterator".to_string(), iterator_methods);
+
     map
 }
 

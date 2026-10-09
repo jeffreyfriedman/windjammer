@@ -2,11 +2,20 @@
 
 
 
+## P3.765 (2026-10-09) — `enumerate` index width comes from `Iterator<(usize, T)>`
+
+**Root cause layer:** signature. The `for` loop marked the first tuple binding `usize` and skipped borrowed-iterator tracking when the method was spelled `enumerate`.
+
+**What became unnecessary:** `extract_enumerate_index_var` (`method == "enumerate"`) in `for_statement_generation.rs`. `Iterator::enumerate` is recorded as `Iterator<(usize, T)>`. A tuple item whose first component is `usize` marks that binding even when the tail is still generic. Unsubstituted `(usize, T)` does not replace an inferred loop element (`HashMap::values` stays on inference).
+
+**Gates:** `cargo test --release --test all -- char_indices_slice_must_use_usize enumerate_index_not_dereferenced hashmap_values_copy_elem` — 4 passed. Full suite not re-run (about 1 GiB free; prior runs died writing `shared/debug`).
+
+
 ## P3.764 (2026-10-09) — `char_indices` index width comes from `Iterator<(usize, char)>`
 
 **Root cause layer:** signature. The `for` loop invented `(usize, char)` and marked the first binding `usize` when the method was spelled `char_indices`.
 
-**What became unnecessary:** the `method == "char_indices"` element-type branch and `extract_char_indices_index_var` in `for_statement_generation.rs`. `String::char_indices` is recorded as `Iterator<(usize, char)>`. The loop item comes from that return (or a unanimous stdlib `Iterator<item>` when the receiver is unknown). A tuple item whose first component is `usize` marks that binding. `.enumerate()` still uses its method spelling because iterator adapters are not in the stdlib table yet.
+**What became unnecessary:** the `method == "char_indices"` element-type branch and `extract_char_indices_index_var` in `for_statement_generation.rs`. `String::char_indices` is recorded as `Iterator<(usize, char)>`. The loop item comes from that return (or a unanimous stdlib `Iterator<item>` when the receiver is unknown). A tuple item whose first component is `usize` marks that binding. `.enumerate()` moved onto `Iterator<(usize, T)>` in P3.765.
 
 **Gates:** `cargo test --release --test all -- char_indices_slice_must_use_usize enumerate_index_not_dereferenced hashmap_values_copy_elem` — 4 passed. Full suite not re-run (about 1 GiB free before the compile).
 
