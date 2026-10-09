@@ -2,6 +2,34 @@
 
 
 
+## P3.774 (2026-10-09) — TDD WDB-476 (DB agent; no compiler src)
+
+An `i32` compared with `< 0` must not widen the zero to `i64`.
+
+Product `procedural/simplex_noise.rs` `new`:
+```wj
+let val = ((seed * (i as i64 + 1)) % 256) as i32
+if val < 0 { -val } else { val }
+```
+Tip MultiFile compares `val < 0_i32` (isolate GREEN). Tip-out still has `val < (0_i64 as i64)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-476 MultiFile | ✅ isolate GREEN — no `0_i64` |
+| WDB-476 tip-out | ❌ tip RED — `val < (0_i64` in `rel_tip_out/procedural/simplex_noise.rs` and `windjammer-game-core/gen/procedural/simplex_noise.rs` |
+
+**Root cause layer:** tip-out lag — a zero compared with an `i32` is still emitted as `i64`.
+
+**Why this is a new class:**
+- WDB-475 infers an untyped corner offset as `i64` before adding it to an `i32`.
+- P3.770 mixes `0_i64` inside an `(i32, i32)` tuple array.
+- P3.773 is an untyped counter compared to `.len()`.
+- This is `if val < 0` after `as i32`.
+
+**Do not steal:** WDB-406/408/411/457–476, P3.508–P3.774, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb476_` — isolate GREEN / tip RED (2026-10-09).
+
 ## P3.772 (2026-10-09) — TDD WDB-475 untyped corner offset widens to `i64` (no compiler src)
 
 `simplex_noise.wj` writes `let mut i1 = 0` and later adds it to an `i32` index, and also casts that offset with `as f32`. Tip MultiFile and tip-out both emit `let mut i1 = 0_i64`.
