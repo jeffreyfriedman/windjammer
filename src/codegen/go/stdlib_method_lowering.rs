@@ -1,6 +1,6 @@
 //! Signature-driven method lowering helpers for the Go backend.
 
-use crate::analyzer::{SignatureRegistry, stdlib_method_traits};
+use crate::analyzer::{stdlib_method_traits, SignatureRegistry};
 
 fn is_string_like_receiver_base(base: &str) -> bool {
     matches!(base, "String" | "string" | "str")

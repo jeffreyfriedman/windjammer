@@ -101,7 +101,8 @@ pub fn all_tool_specs() -> &'static [ToolSpec] {
         },
         ToolSpec {
             name: "query_diagnostics",
-            description: "Query structured compiler diagnostics for a scope (file, function, workspace)",
+            description:
+                "Query structured compiler diagnostics for a scope (file, function, workspace)",
             category: "analyze",
             stability: ToolStability::Beta,
         },
@@ -113,7 +114,8 @@ pub fn all_tool_specs() -> &'static [ToolSpec] {
         },
         ToolSpec {
             name: "insert_statement",
-            description: "Insert a Windjammer statement at a given location with optional validation",
+            description:
+                "Insert a Windjammer statement at a given location with optional validation",
             category: "patch",
             stability: ToolStability::Beta,
         },

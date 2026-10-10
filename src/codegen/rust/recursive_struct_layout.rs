@@ -8,9 +8,7 @@ use crate::parser::Type;
 use std::collections::{HashMap, HashSet};
 
 /// Mutate `struct_fields` in place: wrap one owned field per recursive SCC in `Box<_>`.
-pub fn apply_recursive_struct_boxing(
-    struct_fields: &mut HashMap<String, HashMap<String, Type>>,
-) {
+pub fn apply_recursive_struct_boxing(struct_fields: &mut HashMap<String, HashMap<String, Type>>) {
     if struct_fields.len() < 1 {
         return;
     }
@@ -63,7 +61,9 @@ pub fn apply_recursive_struct_boxing(
         }
         let scc_set: HashSet<&str> = scc.iter().map(|s| s.as_str()).collect();
         let is_self_loop = scc.len() == 1
-            && edges.iter().any(|(f, _, t)| f == t && scc_set.contains(f.as_str()));
+            && edges
+                .iter()
+                .any(|(f, _, t)| f == t && scc_set.contains(f.as_str()));
         let is_multi = scc.len() > 1;
         if !is_self_loop && !is_multi {
             continue;
@@ -318,9 +318,7 @@ mod tests {
         );
         apply_recursive_struct_boxing(&mut map);
         // A.bs is Vec — finite; B.a → A → Vec<B> is also finite. No boxing required.
-        assert!(!type_is_box(
-            map.get("B").and_then(|f| f.get("a")).unwrap()
-        ));
+        assert!(!type_is_box(map.get("B").and_then(|f| f.get("a")).unwrap()));
         assert!(!type_is_box(
             map.get("A").and_then(|f| f.get("bs")).unwrap()
         ));

@@ -10,11 +10,11 @@ use anyhow::Result;
 use std::path::Path;
 
 mod layout_detect;
+mod options;
 mod test_discovery;
 pub mod test_execution;
 mod test_reporting;
 mod util;
-mod options;
 
 pub use options::TestRunOptions;
 pub use test_execution::rewrite_test_crate_imports;
@@ -47,10 +47,7 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     layout_detect::apply_inferred_test_options(&project_root, &mut opts);
 
     // Determine test directory
-    let test_dir = opts
-        .path
-        .as_deref()
-        .unwrap_or_else(|| Path::new("."));
+    let test_dir = opts.path.as_deref().unwrap_or_else(|| Path::new("."));
 
     if !test_dir.exists() {
         anyhow::bail!("Test path does not exist: {:?}", test_dir);
@@ -153,7 +150,13 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     }
 
     // Generate test harness (pass project root for library detection)
-    generate_test_harness(&temp_dir, &all_tests, opts.filter.as_deref(), &project_root, &opts)?;
+    generate_test_harness(
+        &temp_dir,
+        &all_tests,
+        opts.filter.as_deref(),
+        &project_root,
+        &opts,
+    )?;
 
     // Run tests
     if !opts.json {

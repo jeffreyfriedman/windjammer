@@ -693,23 +693,17 @@ impl<'ast> CodeGenerator<'ast> {
             Some(Type::Reference(inner) | Type::MutableReference(inner)) => {
                 self.is_type_copy(inner)
             }
-            Some(t)
-                if self.borrowed_iterator_vars.contains(name) && self.is_type_copy(t) =>
-            {
-                true
-            }
+            Some(t) if self.borrowed_iterator_vars.contains(name) && self.is_type_copy(t) => true,
             None if self.borrowed_iterator_vars.contains(name) => true,
             // Map::values()/keys() always yield shared refs even when element is Copy.
             _ if self.borrowed_iterator_vars.contains(name)
-                && crate::type_classification::is_numeric_type(
-                    &match ty.as_ref() {
-                        Some(Type::Custom(n)) => n.clone(),
-                        Some(Type::Int) => "i64".into(),
-                        Some(Type::Int32) => "i32".into(),
-                        Some(Type::Uint) => "u64".into(),
-                        _ => String::new(),
-                    },
-                ) =>
+                && crate::type_classification::is_numeric_type(&match ty.as_ref() {
+                    Some(Type::Custom(n)) => n.clone(),
+                    Some(Type::Int) => "i64".into(),
+                    Some(Type::Int32) => "i32".into(),
+                    Some(Type::Uint) => "u64".into(),
+                    _ => String::new(),
+                }) =>
             {
                 true
             }

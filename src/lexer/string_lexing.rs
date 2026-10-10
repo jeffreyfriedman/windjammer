@@ -40,42 +40,42 @@ impl Lexer {
                     self.advance();
                     self.advance();
                 } else {
-                // Found interpolation: ${expr}
-                has_interpolation = true;
+                    // Found interpolation: ${expr}
+                    has_interpolation = true;
 
-                // Save current literal part
-                if !current_literal.is_empty() {
-                    parts.push(StringPart::Literal(current_literal.clone()));
-                    current_literal.clear();
-                }
-
-                // Skip ${
-                self.advance();
-                self.advance();
-
-                // Read expression until }
-                let mut expr = String::new();
-                let mut brace_depth = 1;
-                while let Some(expr_ch) = self.current_char {
-                    if expr_ch == '{' {
-                        brace_depth += 1;
-                        expr.push(expr_ch);
-                        self.advance();
-                    } else if expr_ch == '}' {
-                        brace_depth -= 1;
-                        if brace_depth == 0 {
-                            self.advance(); // Skip closing }
-                            break;
-                        }
-                        expr.push(expr_ch);
-                        self.advance();
-                    } else {
-                        expr.push(expr_ch);
-                        self.advance();
+                    // Save current literal part
+                    if !current_literal.is_empty() {
+                        parts.push(StringPart::Literal(current_literal.clone()));
+                        current_literal.clear();
                     }
-                }
 
-                parts.push(StringPart::Expression(expr));
+                    // Skip ${
+                    self.advance();
+                    self.advance();
+
+                    // Read expression until }
+                    let mut expr = String::new();
+                    let mut brace_depth = 1;
+                    while let Some(expr_ch) = self.current_char {
+                        if expr_ch == '{' {
+                            brace_depth += 1;
+                            expr.push(expr_ch);
+                            self.advance();
+                        } else if expr_ch == '}' {
+                            brace_depth -= 1;
+                            if brace_depth == 0 {
+                                self.advance(); // Skip closing }
+                                break;
+                            }
+                            expr.push(expr_ch);
+                            self.advance();
+                        } else {
+                            expr.push(expr_ch);
+                            self.advance();
+                        }
+                    }
+
+                    parts.push(StringPart::Expression(expr));
                 }
             } else {
                 current_literal.push(ch);

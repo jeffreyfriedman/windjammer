@@ -150,11 +150,9 @@ impl<'ast> Analyzer<'ast> {
                     value: Some(value), ..
                 }
                 | Statement::Assignment { value, .. } => {
-                    if self.expr_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        value,
-                    ) {
+                    if self
+                        .expr_projected_field_consumed_in_arithmetic(param_name, param_type, value)
+                    {
                         return true;
                     }
                 }
@@ -165,19 +163,11 @@ impl<'ast> Analyzer<'ast> {
                     ..
                 } => {
                     if self.expr_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        condition,
+                        param_name, param_type, condition,
                     ) || self.param_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        then_block,
+                        param_name, param_type, then_block,
                     ) || else_block.as_ref().is_some_and(|b| {
-                        self.param_projected_field_consumed_in_arithmetic(
-                            param_name,
-                            param_type,
-                            b,
-                        )
+                        self.param_projected_field_consumed_in_arithmetic(param_name, param_type, b)
                     }) {
                         return true;
                     }
@@ -186,23 +176,17 @@ impl<'ast> Analyzer<'ast> {
                     condition, body, ..
                 } => {
                     if self.expr_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        condition,
-                    ) || self.param_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        body,
-                    ) {
+                        param_name, param_type, condition,
+                    ) || self
+                        .param_projected_field_consumed_in_arithmetic(param_name, param_type, body)
+                    {
                         return true;
                     }
                 }
                 Statement::For { body, .. } | Statement::Loop { body, .. } => {
-                    if self.param_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        body,
-                    ) {
+                    if self
+                        .param_projected_field_consumed_in_arithmetic(param_name, param_type, body)
+                    {
                         return true;
                     }
                 }
@@ -227,27 +211,17 @@ impl<'ast> Analyzer<'ast> {
                 // `graph.count + q` reads Copy fields and must not force owned `graph`.
                 if matches!(op, BinaryOp::Add) {
                     if (self.expr_is_param_field_or_index_value(param_name, left)
-                        && self.projected_add_field_consumes_parent(
-                            param_name,
-                            param_type,
-                            left,
-                        ))
+                        && self.projected_add_field_consumes_parent(param_name, param_type, left))
                         || (self.expr_is_param_field_or_index_value(param_name, right)
-                            && self.projected_add_field_consumes_parent(
-                                param_name,
-                                param_type,
-                                right,
-                            ))
+                            && self
+                                .projected_add_field_consumes_parent(param_name, param_type, right))
                     {
                         return true;
                     }
                 }
                 self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, left)
-                    || self.expr_projected_field_consumed_in_arithmetic(
-                        param_name,
-                        param_type,
-                        right,
-                    )
+                    || self
+                        .expr_projected_field_consumed_in_arithmetic(param_name, param_type, right)
             }
             Expression::Unary { operand, .. } | Expression::TryOp { expr: operand, .. } => {
                 self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, operand)
@@ -261,27 +235,20 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, object)
                     || arguments.iter().any(|(_, arg)| {
                         self.expr_projected_field_consumed_in_arithmetic(
-                            param_name,
-                            param_type,
-                            arg,
+                            param_name, param_type, arg,
                         )
                     })
             }
             Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, v)| {
                 self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, v)
             }),
-            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
-                .iter()
-                .any(|e| {
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
+                elements.iter().any(|e| {
                     self.expr_projected_field_consumed_in_arithmetic(param_name, param_type, e)
-                }),
-            Expression::Block { statements, .. } => {
-                self.param_projected_field_consumed_in_arithmetic(
-                    param_name,
-                    param_type,
-                    statements,
-                )
+                })
             }
+            Expression::Block { statements, .. } => self
+                .param_projected_field_consumed_in_arithmetic(param_name, param_type, statements),
             _ => false,
         }
     }

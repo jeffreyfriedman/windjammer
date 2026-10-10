@@ -162,12 +162,11 @@ pub fn wj_type_name_from_metadata(serialized: &str) -> String {
         "Float" => "float".to_string(),
         "Bool" => "bool".to_string(),
         "String" | "string" | "Custom(\"string\")" => "const char*".to_string(),
-        s if s.starts_with("Custom(\"") && s.ends_with("\")") => {
-            s.strip_prefix("Custom(\"")
-                .and_then(|r| r.strip_suffix("\")"))
-                .unwrap_or(s)
-                .to_string()
-        }
+        s if s.starts_with("Custom(\"") && s.ends_with("\")") => s
+            .strip_prefix("Custom(\"")
+            .and_then(|r| r.strip_suffix("\")"))
+            .unwrap_or(s)
+            .to_string(),
         other => other.to_string(),
     }
 }

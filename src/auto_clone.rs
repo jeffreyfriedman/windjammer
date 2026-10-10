@@ -311,11 +311,7 @@ impl AutoCloneAnalysis {
                         }
                         if Self::block_unconditionally_returns(statements) {
                             let region_end = counter.saturating_sub(1);
-                            Self::mark_diverging_early_return_usages(
-                                map,
-                                &lens_before,
-                                region_end,
-                            );
+                            Self::mark_diverging_early_return_usages(map, &lens_before, region_end);
                         }
                     } else {
                         let lens_before: HashMap<String, usize> =
@@ -681,9 +677,7 @@ impl AutoCloneAnalysis {
             | Statement::Const { value: e, .. }
             | Statement::Static { value: e, .. } => Self::expression_uses_binding(e, name),
             Statement::Let {
-                value,
-                else_block,
-                ..
+                value, else_block, ..
             } => {
                 Self::expression_uses_binding(value, name)
                     || else_block.as_ref().is_some_and(|stmts| {
@@ -718,18 +712,14 @@ impl AutoCloneAnalysis {
                             || Self::match_arm_reuses_binding(arm.body, name)
                     })
             }
-            Statement::For {
-                iterable, body, ..
-            }
+            Statement::For { iterable, body, .. }
             | Statement::While {
                 condition: iterable,
                 body,
                 ..
             } => {
                 Self::expression_uses_binding(iterable, name)
-                    || body
-                        .iter()
-                        .any(|s| Self::statement_uses_binding(s, name))
+                    || body.iter().any(|s| Self::statement_uses_binding(s, name))
             }
             Statement::Loop { body, .. }
             | Statement::Thread { body, .. }
@@ -758,9 +748,7 @@ impl AutoCloneAnalysis {
                         .any(|(_, a)| Self::expression_uses_binding(a, name))
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 Self::expression_uses_binding(object, name)
                     || arguments
@@ -800,9 +788,7 @@ impl AutoCloneAnalysis {
             | Expression::ChannelRecv { channel: expr, .. } => {
                 Self::expression_uses_binding(expr, name)
             }
-            Expression::ChannelSend {
-                channel, value, ..
-            } => {
+            Expression::ChannelSend { channel, value, .. } => {
                 Self::expression_uses_binding(channel, name)
                     || Self::expression_uses_binding(value, name)
             }
@@ -864,9 +850,7 @@ impl AutoCloneAnalysis {
                 }
             }
             Statement::Let {
-                value,
-                else_block,
-                ..
+                value, else_block, ..
             } => {
                 if let Expression::Block { statements, .. } = value {
                     for s in statements {
@@ -961,8 +945,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: true,
                         in_exclusive_match_arm: false,
-                    in_diverging_early_return: false,
-                    diverging_region_end: 0,
+                        in_diverging_early_return: false,
+                        diverging_region_end: 0,
                     });
                 }
                 Self::collect_field_projection_parent_usages(object, idx, in_loop, map, registry);
@@ -1011,8 +995,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
-                    in_diverging_early_return: false,
-                    diverging_region_end: 0,
+                        in_diverging_early_return: false,
+                        diverging_region_end: 0,
                     });
                 }
                 // Parent binding uses from `root.field` are not whole-root reuse.
@@ -1055,19 +1039,25 @@ impl AutoCloneAnalysis {
                     for (i, (_label, arg_expr)) in arguments.iter().enumerate() {
                         // Prefer `json::is_array` over bare method-name homonyms so
                         // runtime-std `&Value` wins over WJ owned stubs (json multipass).
-                        let arg_kind = if let (Some(registry), Expression::Identifier { name: module, .. }) =
-                            (registry, &**object)
-                        {
-                            let qualified = format!("{module}::{method}");
-                            Self::free_call_arg_usage_kind_by_name(
-                                &qualified,
-                                i,
-                                arguments.len(),
-                                registry,
-                            )
-                        } else {
-                            Self::method_call_arg_usage_kind(method, i, arguments.len(), registry)
-                        };
+                        let arg_kind =
+                            if let (Some(registry), Expression::Identifier { name: module, .. }) =
+                                (registry, &**object)
+                            {
+                                let qualified = format!("{module}::{method}");
+                                Self::free_call_arg_usage_kind_by_name(
+                                    &qualified,
+                                    i,
+                                    arguments.len(),
+                                    registry,
+                                )
+                            } else {
+                                Self::method_call_arg_usage_kind(
+                                    method,
+                                    i,
+                                    arguments.len(),
+                                    registry,
+                                )
+                            };
                         Self::collect_usages_from_expression(
                             arg_expr, idx, arg_kind, in_loop, map, registry,
                         );
@@ -1125,8 +1115,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
-                    in_diverging_early_return: false,
-                    diverging_region_end: 0,
+                        in_diverging_early_return: false,
+                        diverging_region_end: 0,
                     });
                 }
                 Self::collect_usages_from_expression(
@@ -1141,19 +1131,20 @@ impl AutoCloneAnalysis {
                     // Signature-driven: owned formals move (need `.clone()` on reuse).
                     // Module-qualified `json.is_array(v)` must use `json::is_array` so
                     // runtime-std `&Value` beats WJ owned stubs (multipass clone bug).
-                    let arg_kind = if let (Some(registry), Expression::Identifier { name: module, .. }) =
-                        (registry, &**object)
-                    {
-                        let qualified = format!("{module}::{method}");
-                        Self::free_call_arg_usage_kind_by_name(
-                            &qualified,
-                            i,
-                            arguments.len(),
-                            registry,
-                        )
-                    } else {
-                        Self::method_call_arg_usage_kind(method, i, arguments.len(), registry)
-                    };
+                    let arg_kind =
+                        if let (Some(registry), Expression::Identifier { name: module, .. }) =
+                            (registry, &**object)
+                        {
+                            let qualified = format!("{module}::{method}");
+                            Self::free_call_arg_usage_kind_by_name(
+                                &qualified,
+                                i,
+                                arguments.len(),
+                                registry,
+                            )
+                        } else {
+                            Self::method_call_arg_usage_kind(method, i, arguments.len(), registry)
+                        };
                     Self::collect_usages_from_expression(
                         arg_expr, idx, arg_kind, in_loop, map, registry,
                     );
@@ -1196,8 +1187,8 @@ impl AutoCloneAnalysis {
                         in_loop,
                         is_projection_parent: false,
                         in_exclusive_match_arm: false,
-                    in_diverging_early_return: false,
-                    diverging_region_end: 0,
+                        in_diverging_early_return: false,
+                        diverging_region_end: 0,
                     });
                 }
                 Self::collect_usages_from_expression(
@@ -1654,8 +1645,8 @@ impl AutoCloneAnalysis {
                 // Only force-clone every `self.field` when there is no owned-self field
                 // move in the body. Struct-lit withers count as moves (DB-410 product
                 // `PassBuilder::shader`) — previously only `let x = self.field` did.
-                let self_always_clone = root == "self"
-                    && !Self::stmts_contain_owned_self_field_move(statements);
+                let self_always_clone =
+                    root == "self" && !Self::stmts_contain_owned_self_field_move(statements);
                 if self_always_clone || root_used_later || field_used_later {
                     self.clone_sites.insert(
                         (path.clone(), field_move.statement_idx),
@@ -3309,7 +3300,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn p3647_parsed_source_needs_clone_on_first_recursive_clips() {
         use crate::analyzer::Analyzer;
@@ -3345,12 +3335,7 @@ impl Tree {
         let analysis =
             AutoCloneAnalysis::analyze_function_with_registry(&func.decl, Some(&registry));
         assert_eq!(
-            AutoCloneAnalysis::method_call_arg_usage_kind(
-                "evaluate_node",
-                1,
-                3,
-                Some(&registry),
-            ),
+            AutoCloneAnalysis::method_call_arg_usage_kind("evaluate_node", 1, 3, Some(&registry),),
             UsageKind::Move,
             "P3.647: bare owned Vec formal must Move despite analyzer Borrowed"
         );

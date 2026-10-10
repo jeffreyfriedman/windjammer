@@ -1122,9 +1122,7 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => arguments.iter().enumerate().any(|(i, (_, a))| {
-                self.call_arg_moves_non_copy_self_field_for_method(
-                    a, object, method, i, registry,
-                )
+                self.call_arg_moves_non_copy_self_field_for_method(a, object, method, i, registry)
             }),
             Expression::Binary { left, right, .. } => {
                 self.expression_moves_non_copy_self_field(left, registry)
@@ -1174,20 +1172,18 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&crate::analyzer::SignatureRegistry>,
     ) -> bool {
         if let Some(reg) = registry {
-            if let Some(sig) = reg.lookup_method(method).or_else(|| reg.get_signature(method))
+            if let Some(sig) = reg
+                .lookup_method(method)
+                .or_else(|| reg.get_signature(method))
             {
                 let param_idx = sig.arg_param_index(arg_index);
-                if sig
-                    .param_ownership
-                    .get(param_idx)
-                    .is_some_and(|m| {
-                        matches!(
-                            m,
-                            crate::analyzer::OwnershipMode::Borrowed
-                                | crate::analyzer::OwnershipMode::MutBorrowed
-                        )
-                    })
-                {
+                if sig.param_ownership.get(param_idx).is_some_and(|m| {
+                    matches!(
+                        m,
+                        crate::analyzer::OwnershipMode::Borrowed
+                            | crate::analyzer::OwnershipMode::MutBorrowed
+                    )
+                }) {
                     return false;
                 }
             }
@@ -1470,11 +1466,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when `name` is moved/consumed in `body` before the final statement (e.g. `for x in name`).
-    pub(crate) fn param_consumed_before_return(
-        &self,
-        name: &str,
-        body: &[&Statement],
-    ) -> bool {
+    pub(crate) fn param_consumed_before_return(&self, name: &str, body: &[&Statement]) -> bool {
         if body.len() <= 1 {
             return false;
         }
@@ -1507,9 +1499,9 @@ impl<'ast> Analyzer<'ast> {
             Statement::While { body, .. } => {
                 self.function_body_slice_consumes_identifier(name, body)
             }
-            Statement::Match { arms, .. } => arms.iter().any(|arm| {
-                self.expression_consumes_identifier(name, &arm.body)
-            }),
+            Statement::Match { arms, .. } => arms
+                .iter()
+                .any(|arm| self.expression_consumes_identifier(name, &arm.body)),
             _ => false,
         }
     }
@@ -1528,9 +1520,10 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                arguments.iter().any(|(_, arg)| {
-                    self.expression_consumes_identifier(name, arg)
-                }) || self.expression_consumes_identifier(name, function)
+                arguments
+                    .iter()
+                    .any(|(_, arg)| self.expression_consumes_identifier(name, arg))
+                    || self.expression_consumes_identifier(name, function)
             }
             Expression::MethodCall { arguments, .. } => arguments
                 .iter()

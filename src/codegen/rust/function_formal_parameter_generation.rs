@@ -3866,10 +3866,8 @@ impl<'ast> CodeGenerator<'ast> {
             // `&str` literal call sites (windjammer-ui).
             if has_self_receiver
                 && self.in_impl_block
-                && self.param_assigned_bare_to_self_or_local_field(
-                    func.body.as_slice(),
-                    &param.name,
-                )
+                && self
+                    .param_assigned_bare_to_self_or_local_field(func.body.as_slice(), &param.name)
                 && !Self::param_used_in_binary_comparison(&param.name, &func.body)
                 && func.return_type.as_ref().is_some_and(|t| {
                     matches!(
@@ -3935,7 +3933,11 @@ impl<'ast> CodeGenerator<'ast> {
                     count_expr(left, param_name) + count_expr(right, param_name)
                 }
                 Expression::Unary { operand, .. } => count_expr(operand, param_name),
-                Expression::Call { arguments, function, .. } => {
+                Expression::Call {
+                    arguments,
+                    function,
+                    ..
+                } => {
                     count_expr(function, param_name)
                         + arguments
                             .iter()
@@ -3954,17 +3956,15 @@ impl<'ast> CodeGenerator<'ast> {
                 Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
                     count_expr(object, param_name)
                 }
-                Expression::StructLiteral { fields, .. } => fields
-                    .iter()
-                    .map(|(_, e)| count_expr(e, param_name))
-                    .sum(),
+                Expression::StructLiteral { fields, .. } => {
+                    fields.iter().map(|(_, e)| count_expr(e, param_name)).sum()
+                }
                 Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                     elements.iter().map(|e| count_expr(e, param_name)).sum()
                 }
-                Expression::Block { statements, .. } => statements
-                    .iter()
-                    .map(|s| count_stmt(s, param_name))
-                    .sum(),
+                Expression::Block { statements, .. } => {
+                    statements.iter().map(|s| count_stmt(s, param_name)).sum()
+                }
                 _ => 0,
             }
         }
@@ -3987,20 +3987,21 @@ impl<'ast> CodeGenerator<'ast> {
                             .iter()
                             .map(|s| count_stmt(s, param_name))
                             .sum::<usize>()
-                        + else_block.as_ref().map_or(0, |b| {
-                            b.iter().map(|s| count_stmt(s, param_name)).sum()
-                        })
+                        + else_block
+                            .as_ref()
+                            .map_or(0, |b| b.iter().map(|s| count_stmt(s, param_name)).sum())
                 }
-                Statement::For {
-                    iterable, body, ..
-                }
+                Statement::For { iterable, body, .. }
                 | Statement::While {
                     condition: iterable,
                     body,
                     ..
                 } => {
                     count_expr(iterable, param_name)
-                        + body.iter().map(|s| count_stmt(s, param_name)).sum::<usize>()
+                        + body
+                            .iter()
+                            .map(|s| count_stmt(s, param_name))
+                            .sum::<usize>()
                 }
                 Statement::Loop { body, .. } => {
                     body.iter().map(|s| count_stmt(s, param_name)).sum()
@@ -4010,10 +4011,9 @@ impl<'ast> CodeGenerator<'ast> {
                         + arms
                             .iter()
                             .map(|arm| match &arm.body {
-                                Expression::Block { statements, .. } => statements
-                                    .iter()
-                                    .map(|s| count_stmt(s, param_name))
-                                    .sum(),
+                                Expression::Block { statements, .. } => {
+                                    statements.iter().map(|s| count_stmt(s, param_name)).sum()
+                                }
                                 other => count_expr(other, param_name),
                             })
                             .sum::<usize>()
@@ -4148,9 +4148,7 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'_>,
     ) -> bool {
         let mut saw = false;
-        self.param_call_sites_are_method_or_call_args_walk(
-            body, param_name, func, &mut saw,
-        ) && saw
+        self.param_call_sites_are_method_or_call_args_walk(body, param_name, func, &mut saw) && saw
     }
 
     fn param_call_sites_are_method_or_call_args_walk(
@@ -4611,8 +4609,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Instance methods (`fn foo(self, …)`) still demote freely. Associated functions
         // (`impl T { pub fn new(palette: MaterialPalette) }`) are public API like free
         // functions — keep owned non-Copy formals (DB-398 VoxelMaterialEditor::new).
-        let is_associated_fn = func.parent_type.is_some()
-            && !func.parameters.iter().any(|p| p.name == "self");
+        let is_associated_fn =
+            func.parent_type.is_some() && !func.parameters.iter().any(|p| p.name == "self");
         if func.parent_type.is_some() && !is_associated_fn {
             return false;
         }

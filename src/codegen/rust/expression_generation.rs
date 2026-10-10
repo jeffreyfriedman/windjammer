@@ -126,9 +126,10 @@ impl<'ast> CodeGenerator<'ast> {
                             });
                         let is_borrowed = self.inferred_borrowed_params.contains(name.as_str())
                             || self.borrowed_iterator_vars.contains(name);
-                        let is_local_ref = self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                            matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                        });
+                        let is_local_ref =
+                            self.local_var_types.get(name.as_str()).is_some_and(|t| {
+                                matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                            });
                         if pointee_is_copy && (is_borrowed || is_local_ref) {
                             return format!("*{name}");
                         }
@@ -533,11 +534,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Index { object, index, .. } => {
                 let mut idx_str = self.generate_expression_immut(index);
                 self.maybe_cast_index_to_usize(&mut idx_str, index);
-                format!(
-                    "{}[{}]",
-                    self.generate_expression_immut(object),
-                    idx_str
-                )
+                format!("{}[{}]", self.generate_expression_immut(object), idx_str)
             }
             // For complex expressions, just output a placeholder
             // Decorators are primarily documentation/runtime checks
@@ -598,23 +595,22 @@ impl<'ast> CodeGenerator<'ast> {
             return arg_str;
         }
         let callee_confirmed_shared_ref = method_signature.as_ref().is_some_and(|sig| {
-            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                sig, sig_param_idx,
-            )
+            crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, sig_param_idx)
         });
         if !callee_confirmed_shared_ref
             && method_signature.as_ref().is_some_and(|sig| {
-            sig.formal_param_type(sig_param_idx).is_some_and(|t| {
-                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                    && crate::codegen::rust::types::is_windjammer_text_type(t)
-            }) || matches!(
-                sig.param_ownership.get(sig_param_idx),
-                Some(OwnershipMode::Owned)
-            ) || sig.param_types.get(sig_param_idx).is_some_and(|t| {
-                matches!(t, Type::String)
-                    || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                sig.formal_param_type(sig_param_idx).is_some_and(|t| {
+                    !matches!(t, Type::Reference(_) | Type::MutableReference(_))
+                        && crate::codegen::rust::types::is_windjammer_text_type(t)
+                }) || matches!(
+                    sig.param_ownership.get(sig_param_idx),
+                    Some(OwnershipMode::Owned)
+                ) || sig.param_types.get(sig_param_idx).is_some_and(|t| {
+                    matches!(t, Type::String)
+                        || matches!(t, Type::Custom(n) if n == "string" || n == "String")
+                })
             })
-        }) {
+        {
             return arg_str;
         }
         if arg_str.starts_with('&') {
@@ -855,9 +851,7 @@ impl<'ast> CodeGenerator<'ast> {
                 type_args,
                 arguments,
                 ..
-            } => {
-                self.generate_method_call_expression(object, method, type_args, arguments)
-            }
+            } => self.generate_method_call_expression(object, method, type_args, arguments),
             Expression::FieldAccess { object, field, .. } => {
                 self.generate_field_access(object, field, expr_to_generate)
             }
@@ -987,8 +981,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .is_none_or(|t| !crate::codegen::rust::type_casting::type_is_usize(t))
                 {
                     if self.current_function_return_type.as_ref().is_some_and(|t| {
-                        matches!(t, Type::Int32)
-                            || matches!(t, Type::Custom(n) if n == "i32")
+                        matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
                     }) {
                         IntType::I32
                     } else if self.current_function_return_type.as_ref().is_some_and(|t| {
@@ -1035,9 +1028,11 @@ impl<'ast> CodeGenerator<'ast> {
 
                 // Priority 0: explicit float target from assignment / method-call arg context
                 // (receiver-driven f32 vs f64 for `.clamp(0.0, 1.0)` etc.)
-                if let Some(suffix) = self.assignment_float_target_type.as_ref().and_then(
-                    float_type_utilities::float_literal_suffix_from_assignment_lhs,
-                ) {
+                if let Some(suffix) = self
+                    .assignment_float_target_type
+                    .as_ref()
+                    .and_then(float_type_utilities::float_literal_suffix_from_assignment_lhs)
+                {
                     let s = f.to_string();
                     return if !s.contains('.') && !s.contains('e') && !s.contains('E') {
                         format!("{}.0_{}", s, suffix)
@@ -1292,10 +1287,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && !self.emitted_rust_ref_formals.contains("self")
                     && !self.current_function_params.iter().any(|p| {
                         p.name == "self"
-                            && matches!(
-                                p.type_,
-                                Type::Reference(_) | Type::MutableReference(_)
-                            )
+                            && matches!(p.type_, Type::Reference(_) | Type::MutableReference(_))
                     });
                 if name == "self"
                     && !self_emits_owned
@@ -1324,22 +1316,24 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     return true;
                 }
-                if self.local_var_types.get(name.as_str()).is_some_and(|t| {
-                    matches!(t, Type::Reference(_) | Type::MutableReference(_))
-                }) {
+                if self
+                    .local_var_types
+                    .get(name.as_str())
+                    .is_some_and(|t| matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+                {
                     return true;
                 }
                 // Read-only non-Copy formals are emitted as `&T` even when AST declares owned `T`.
                 if name != "self" {
-                    if let Some(param) = self.current_function_params.iter().find(|p| p.name == *name)
+                    if let Some(param) = self
+                        .current_function_params
+                        .iter()
+                        .find(|p| p.name == *name)
                     {
                         if !self.is_type_copy(&param.type_)
                             && !self.inferred_mut_borrowed_params.contains(name)
                             && (self.inferred_borrowed_params.contains(name.as_str())
-                                || matches!(
-                                    param.ownership,
-                                    crate::parser::OwnershipHint::Ref
-                                ))
+                                || matches!(param.ownership, crate::parser::OwnershipHint::Ref))
                         {
                             return true;
                         }

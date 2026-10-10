@@ -166,13 +166,12 @@ impl CodeGenerator<'_> {
                     })
                 } else {
                     crate::type_classification::is_std_non_auto_debug_clone_type(base)
-                        || args
-                            .iter()
-                            .any(|a| self.type_precludes_auto_debug_clone(a))
+                        || args.iter().any(|a| self.type_precludes_auto_debug_clone(a))
                 }
             }
             Type::Result(ok, err) => {
-                self.type_precludes_auto_debug_clone(ok) || self.type_precludes_auto_debug_clone(err)
+                self.type_precludes_auto_debug_clone(ok)
+                    || self.type_precludes_auto_debug_clone(err)
             }
             Type::Array(inner, _) => self.type_precludes_auto_debug_clone(inner),
             Type::Tuple(types) => types

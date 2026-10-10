@@ -461,14 +461,13 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     Expression::FieldAccess { .. } | Expression::Index { .. }
                 );
-                let field_path_reused = ast_utilities::extract_field_access_path(value).is_some_and(
-                    |path| {
+                let field_path_reused = ast_utilities::extract_field_access_path(value)
+                    .is_some_and(|path| {
                         self.auto_clone_analysis.as_ref().is_some_and(|a| {
                             a.needs_clone(&path, self.current_statement_idx).is_some()
                                 || a.needs_clone_anywhere(&path)
                         })
-                    },
-                );
+                    });
                 let scrutinee_needs_ref = if is_enum_match && is_place {
                     let behind_borrow = self
                         .root_identifier_of_field_or_index_chain(value)

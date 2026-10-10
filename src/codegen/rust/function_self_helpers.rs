@@ -93,10 +93,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Copy `self.field` reads (`pos_x: f32` into `Vec3::new`) are not partial moves.
     /// Missing field types stay moves so non-Copy ctor moves (DB-414) keep `mut self`.
-    pub(super) fn self_field_partial_move_needs_owned_receiver(
-        &self,
-        func: &FunctionDecl,
-    ) -> bool {
+    pub(super) fn self_field_partial_move_needs_owned_receiver(&self, func: &FunctionDecl) -> bool {
         let struct_name = self.current_struct_name.clone();
         super::self_analysis::function_partial_moves_self_field_then_assigns_other_if(
             func,

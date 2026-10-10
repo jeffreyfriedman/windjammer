@@ -66,9 +66,11 @@ impl<'ast> CodeGenerator<'ast> {
             // Missing enclosing formal: fail open to multi-invoke (clone) — safer than a
             // move into `Fn`. FnOnce sites (`thread::spawn`) register FnOnce/fn-ptr.
             self.closure_multi_invoke_captures = match self.call_arg_expected_type.as_ref() {
-                Some(ty) => crate::codegen::rust::stdlib_method_traits::formal_is_multi_invoke_closure_trait(
-                    ty,
-                ),
+                Some(ty) => {
+                    crate::codegen::rust::stdlib_method_traits::formal_is_multi_invoke_closure_trait(
+                        ty,
+                    )
+                }
                 None => captures_outer,
             };
             prev_closure_params = Some(std::mem::take(&mut self.user_closure_params));
@@ -252,9 +254,7 @@ impl<'ast> CodeGenerator<'ast> {
             // P3.297: `spawn(move || { while … { use outer } })` — Without While/Loop,
             // capture analysis misses free ids and codegen drops `move` → E0373.
             Statement::While {
-                condition,
-                body,
-                ..
+                condition, body, ..
             } => {
                 self.expr_has_free_identifier(local_bound, condition)
                     || self.ref_stmts_have_free_identifier(local_bound, body)

@@ -16,9 +16,7 @@ pub fn plain_string_formal_passes_owned_at_call_site(
     sig: &FunctionSignature,
     param_idx: usize,
 ) -> bool {
-    if !formal_is_plain_windjammer_string(
-        sig, param_idx,
-    ) {
+    if !formal_is_plain_windjammer_string(sig, param_idx) {
         return false;
     }
     // Shared-ref emission confirmed → call sites borrow (`&str`), not own.
@@ -62,10 +60,7 @@ fn emitted_shared_ref_flag(sig: &FunctionSignature, param_idx: usize) -> Option<
 ///
 /// Plain WJ `string` formals require `emitted_rust_ref_params` — stale analyzer `Reference(str)`
 /// metadata alone must not force call-site `&` (circular-dep/multipass owned formals).
-pub fn callee_emits_shared_rust_ref_param(
-    sig: &FunctionSignature,
-    param_idx: usize,
-) -> bool {
+pub fn callee_emits_shared_rust_ref_param(sig: &FunctionSignature, param_idx: usize) -> bool {
     // Check emission flags before `emitted_owned_arg_contract` — that helper can call
     // back into this function via `bare_formal_is_owned_user_type` (stack overflow on
     // MutBorrowed collision stubs with no `emitted_rust_ref_params`).
@@ -82,9 +77,7 @@ pub fn callee_emits_shared_rust_ref_param(
     // stale analyzer `Reference(str)` + Borrowed alone must not force call-site `&`
     // (circular-dep / multipass owned formals). Methods and externs may trust
     // registry `&str` contracts without emission flags.
-    if formal_is_plain_windjammer_string(
-        sig, param_idx,
-    ) {
+    if formal_is_plain_windjammer_string(sig, param_idx) {
         // Borrowed ownership alone must not imply shared-ref for bare WJ `string`.
         // Trait-impl discard (`let _ = tenant_id`) keeps emitted `tenant_id: String` while
         // analyzer ownership converges Borrowed — callers must pass owned temps (P3.308).
@@ -114,12 +107,11 @@ pub fn callee_emits_shared_rust_ref_param(
     // with Borrowed ownership. Plain WJ `string` user formals are handled above (return
     // false): stale multipass `Reference(str)` + Borrowed must not force call-site `&`
     // on owned movers like `Objective::talk_to(npc_name: string)`.
-    if !formal_is_plain_windjammer_string(
-        sig, param_idx,
-    ) && sig
-        .param_types
-        .get(param_idx)
-        .is_some_and(param_is_rust_str_ref)
+    if !formal_is_plain_windjammer_string(sig, param_idx)
+        && sig
+            .param_types
+            .get(param_idx)
+            .is_some_and(param_is_rust_str_ref)
         && matches!(
             sig.param_ownership.get(param_idx),
             Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -279,13 +271,14 @@ pub fn callee_emits_shared_rust_ref_param(
                     .copied()
                     != Some(true)
             {
-                let is_copy_aggregate = (crate::codegen::rust::type_analysis_pure::is_copy_type(inner)
-                    || matches!(
-                        inner,
-                        Type::Custom(name)
-                            if crate::type_classification::is_known_copy_aggregate(name)
-                    ))
-                    && !crate::type_classification::is_copy_pass_by_value_formal(inner);
+                let is_copy_aggregate =
+                    (crate::codegen::rust::type_analysis_pure::is_copy_type(inner)
+                        || matches!(
+                            inner,
+                            Type::Custom(name)
+                                if crate::type_classification::is_known_copy_aggregate(name)
+                        ))
+                        && !crate::type_classification::is_copy_pass_by_value_formal(inner);
                 let analyzer_borrows = matches!(
                     sig.param_ownership.get(param_idx),
                     Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
@@ -295,9 +288,7 @@ pub fn callee_emits_shared_rust_ref_param(
                 }
             }
             if param_is_rust_str_ref(t) || param_is_rust_string_ref(t) {
-                if formal_is_plain_windjammer_string(
-                    sig, param_idx,
-                ) {
+                if formal_is_plain_windjammer_string(sig, param_idx) {
                     return false;
                 }
                 return sig

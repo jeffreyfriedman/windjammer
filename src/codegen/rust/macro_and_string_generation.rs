@@ -14,18 +14,18 @@ use crate::parser::{Expression, Type};
 use super::{string_analysis, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
-
     /// P3.368: homogenous int literal suffixes inside `vec![1_u8, 2, 3]`.
     fn vec_macro_int_literal_peer(&self, args: &[&Expression<'ast>]) -> Option<Type> {
         if let Some(elem) = self.vec_macro_expected_element_type() {
             if crate::codegen::rust::type_casting::assignment_int_peer_from_formal(Some(&elem))
                 .is_some()
             {
-                return crate::codegen::rust::type_casting::assignment_int_peer_from_formal(
-                    Some(&elem),
-                );
+                return crate::codegen::rust::type_casting::assignment_int_peer_from_formal(Some(
+                    &elem,
+                ));
             }
-            if matches!(&elem, Type::Custom(n) if matches!(n.as_str(), "u8" | "i16" | "i8" | "u16" | "u64" | "i64")) {
+            if matches!(&elem, Type::Custom(n) if matches!(n.as_str(), "u8" | "i16" | "i8" | "u16" | "u64" | "i64"))
+            {
                 return Some(elem.clone());
             }
         }
@@ -188,10 +188,7 @@ impl<'ast> CodeGenerator<'ast> {
                     out.push(self.generate_expression(e));
                 }
                 out
-            } else if name == "vec"
-                && matches!(delimiter, MacroDelimiter::Brackets)
-                && !is_repeat
-            {
+            } else if name == "vec" && matches!(delimiter, MacroDelimiter::Brackets) && !is_repeat {
                 self.generate_vec_macro_arg_strings(args)
             } else {
                 args.iter().map(|e| self.generate_expression(e)).collect()
@@ -218,10 +215,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if tmpl == "{}" && arg_strs.len() == 2 {
                     if self.expression_is_windjammer_text(args[1]) {
                         let actual = self.infer_actual_safety_type(args[1], &arg_strs[1]);
-                        let expected = safety_type_from_parser_type(
-                            &Type::String,
-                            Some(OwnershipMode::Owned),
-                        );
+                        let expected =
+                            safety_type_from_parser_type(&Type::String, Some(OwnershipMode::Owned));
                         // Identity interp always yields a *fresh* owned `String`
                         // (format! allocation semantics). Never lower to a move of
                         // the operand: multi-use E0382 (P3.671 qs_get) and
@@ -237,7 +232,8 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        if name == "thread_local" && matches!(delimiter, MacroDelimiter::Braces) && args.len() == 1 {
+        if name == "thread_local" && matches!(delimiter, MacroDelimiter::Braces) && args.len() == 1
+        {
             if let Expression::Block { statements, .. } = args[0] {
                 let mut body = String::new();
                 for stmt in statements {

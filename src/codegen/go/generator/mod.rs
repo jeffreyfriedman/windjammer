@@ -160,9 +160,8 @@ impl GoGenerator {
             Expression::Call { function, .. } => match &**function {
                 Expression::Identifier { name, .. } => {
                     // `Vec::new` / `HashMap::with_capacity` → receiver type base
-                    name.rsplit_once("::").map(|(ty, _)| {
-                        ty.split('<').next().unwrap_or(ty).to_string()
-                    })
+                    name.rsplit_once("::")
+                        .map(|(ty, _)| ty.split('<').next().unwrap_or(ty).to_string())
                 }
                 Expression::FieldAccess { object, .. } => {
                     // Desugared `Type::ctor` as FieldAccess

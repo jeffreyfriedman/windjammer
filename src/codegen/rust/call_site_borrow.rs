@@ -547,14 +547,12 @@ pub(crate) fn reconcile_method_call_owned_copy_scalar_identifier_arg(
     let callee_owned_copy_scalar =
         callee_user_arg_bare_formal_is_copy_pass_by_value(contract_sig, user_arg_index);
     let callee_shared = !callee_owned_copy_scalar
-        && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-            contract_sig, pidx,
-        ) || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(
-            contract_sig, pidx,
-        ) || contract_sig
-            .formal_param_type(pidx)
-            .or_else(|| contract_sig.param_types.get(pidx))
-            .is_some_and(string_utilities::param_is_rust_str_ref));
+        && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(contract_sig, pidx)
+            || crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(contract_sig, pidx)
+            || contract_sig
+                .formal_param_type(pidx)
+                .or_else(|| contract_sig.param_types.get(pidx))
+                .is_some_and(string_utilities::param_is_rust_str_ref));
     if callee_shared
         && !gen.binding_is_copy_pass_by_value_scalar(name)
         && !gen.local_should_move_into_owned_text_formal(name, contract_sig, user_arg_index)

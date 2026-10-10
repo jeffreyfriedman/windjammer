@@ -39,8 +39,7 @@ pub fn param_is_rust_string_ref(param_type: &Type) -> bool {
 /// Bare WJ `string` formal (not source-level `&T` / `&mut T`).
 pub fn formal_is_plain_windjammer_string(sig: &FunctionSignature, param_idx: usize) -> bool {
     sig.formal_param_type(param_idx).is_some_and(|t| {
-        !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            && is_windjammer_text_type(t)
+        !matches!(t, Type::Reference(_) | Type::MutableReference(_)) && is_windjammer_text_type(t)
     })
 }
 
@@ -91,15 +90,16 @@ mod tests {
 
     #[test]
     fn explicit_ref_string_formal_is_not_plain() {
-        let sig = sig_with_formal_types(vec![Type::Reference(Box::new(Type::Custom("str".into())))]);
+        let sig =
+            sig_with_formal_types(vec![Type::Reference(Box::new(Type::Custom("str".into())))]);
         assert!(!formal_is_plain_windjammer_string(&sig, 0));
     }
 
     #[test]
     fn param_is_rust_str_ref_detects_converged_str() {
-        assert!(param_is_rust_str_ref(&Type::Reference(Box::new(Type::Custom(
-            "str".into()
-        )))));
+        assert!(param_is_rust_str_ref(&Type::Reference(Box::new(
+            Type::Custom("str".into())
+        ))));
         assert!(!param_is_rust_str_ref(&Type::String));
     }
 

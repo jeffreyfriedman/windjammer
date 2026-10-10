@@ -89,13 +89,19 @@ fn expr_scan_field_enum_match_scrutinee(
         Expression::FieldAccess { object, .. } => {
             expr_scan_field_enum_match_scrutinee(name, object, saw_scrutinee, other_use);
         }
-        Expression::MethodCall { object, arguments, .. } => {
+        Expression::MethodCall {
+            object, arguments, ..
+        } => {
             expr_scan_field_enum_match_scrutinee(name, object, saw_scrutinee, other_use);
             for (_, arg) in arguments {
                 expr_scan_field_enum_match_scrutinee(name, arg, saw_scrutinee, other_use);
             }
         }
-        Expression::Call { function, arguments, .. } => {
+        Expression::Call {
+            function,
+            arguments,
+            ..
+        } => {
             expr_scan_field_enum_match_scrutinee(name, function, saw_scrutinee, other_use);
             for (_, arg) in arguments {
                 expr_scan_field_enum_match_scrutinee(name, arg, saw_scrutinee, other_use);
@@ -227,9 +233,9 @@ fn stmt_has_enum_variant_consuming(name: &str, stmt: &Statement<'_>) -> bool {
         }
         Statement::For { body, .. }
         | Statement::While { body, .. }
-        | Statement::Loop { body, .. } => {
-            body.iter().any(|s| stmt_has_enum_variant_consuming(name, s))
-        }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| stmt_has_enum_variant_consuming(name, s)),
         _ => false,
     }
 }

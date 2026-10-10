@@ -7,6 +7,4 @@ pub mod c_bindings;
 pub mod idl;
 
 pub use c_bindings::generate_c_header;
-pub use idl::{
-    IdlField, IdlFunction, IdlModule, IdlParam, IdlType, IdlTypeKind,
-};
+pub use idl::{IdlField, IdlFunction, IdlModule, IdlParam, IdlType, IdlTypeKind};

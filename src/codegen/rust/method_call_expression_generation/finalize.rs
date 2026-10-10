@@ -1561,12 +1561,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Special case: substring(start, end) -> text[start..end] (or owned String in match arms)
         if method == "substring" && args.len() == 2 {
-            let mut start_str = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
-                &args[0],
-            );
-            let mut end_str = crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(
-                &args[1],
-            );
+            let mut start_str =
+                crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(&args[0]);
+            let mut end_str =
+                crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(&args[1]);
             if let Some((_, start_expr)) = arguments.first() {
                 self.maybe_cast_index_to_usize(&mut start_str, start_expr);
             }
@@ -1736,9 +1734,7 @@ impl<'ast> CodeGenerator<'ast> {
         // bare owned String into crypto/regex/mime `&str` formals.
         if separator == "::" {
             let qualified = format!("{obj_str}::{method}");
-            let sig_for_runtime = resolved_signature
-                .as_ref()
-                .or(method_signature.as_ref());
+            let sig_for_runtime = resolved_signature.as_ref().or(method_signature.as_ref());
             for (i, arg_str) in processed_args.iter_mut().enumerate() {
                 if arg_str.starts_with('&') || arg_str.starts_with("&mut ") {
                     continue;
@@ -1786,11 +1782,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .as_ref()
                     .or(method_signature.as_ref())
                     .is_some_and(|sig| {
-                        self.is_collection_key_lookup_at_site(
-                            sig,
-                            i,
-                            receiver_type_name.as_deref(),
-                        )
+                        self.is_collection_key_lookup_at_site(sig, i, receiver_type_name.as_deref())
                     });
             if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
             // Do not undo IR ToOwnedString on emit-owned `String` slots. `expects_pattern`
@@ -1818,17 +1810,16 @@ impl<'ast> CodeGenerator<'ast> {
             // / Pattern slots still normalize.
             let skip_copy_field_key_norm = expects_collection_key
                 && !expects_pattern
-                && matches!(arg_expr, Expression::FieldAccess { .. } | Expression::Index { .. })
+                && matches!(
+                    arg_expr,
+                    Expression::FieldAccess { .. } | Expression::Index { .. }
+                )
                 && self.expression_is_copy(arg_expr)
                 && !resolved_signature
                     .as_ref()
                     .or(method_signature.as_ref())
                     .is_some_and(|sig| {
-                        self.is_collection_key_lookup_at_site(
-                            sig,
-                            i,
-                            receiver_type_name.as_deref(),
-                        )
+                        self.is_collection_key_lookup_at_site(sig, i, receiver_type_name.as_deref())
                     });
             if (expects_pattern || expects_collection_key)
                 && !emit_owned_string
@@ -1880,18 +1871,17 @@ impl<'ast> CodeGenerator<'ast> {
                     .as_ref()
                     .map(|sig| {
                         let pidx = sig.arg_param_index(i);
-                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-                            sig, pidx,
-                        ) || (sig
-                            .param_types
-                            .get(pidx)
-                            .is_some_and(|t| matches!(t, Type::Reference(_)))
-                            && sig
-                                .emitted_rust_ref_params
-                                .as_ref()
-                                .and_then(|f| f.get(pidx))
-                                .copied()
-                                != Some(false))
+                        crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
+                            || (sig
+                                .param_types
+                                .get(pidx)
+                                .is_some_and(|t| matches!(t, Type::Reference(_)))
+                                && sig
+                                    .emitted_rust_ref_params
+                                    .as_ref()
+                                    .and_then(|f| f.get(pidx))
+                                    .copied()
+                                    != Some(false))
                     })
                     .unwrap_or(false)
                     || self.method_registry_arg_expects_shared_borrow(
@@ -2033,9 +2023,8 @@ impl<'ast> CodeGenerator<'ast> {
                         temp_counter += 1;
                         temp_decls.push_str(&format!("let {} = {}; ", temp_name, inner));
 
-                        let sig_for_format = resolved_signature
-                            .as_ref()
-                            .or(method_signature.as_ref());
+                        let sig_for_format =
+                            resolved_signature.as_ref().or(method_signature.as_ref());
                         // Global registry may mark owned String when local sig is incomplete.
                         if !has_borrow_prefix
                             && self.mc_method_param_expects_owned_string_from_global(

@@ -386,9 +386,7 @@ impl<'ast> CodeGenerator<'ast> {
                         .struct_field_types
                         .get(&s.name)
                         .and_then(|m| m.get(&field.name))
-                        .filter(|t| {
-                            crate::codegen::rust::recursive_struct_layout::type_is_box(t)
-                        })
+                        .filter(|t| crate::codegen::rust::recursive_struct_layout::type_is_box(t))
                         .cloned()
                         .unwrap_or_else(|| field.field_type.clone());
                     field_types.insert(field.name.clone(), ty);
@@ -423,15 +421,14 @@ impl<'ast> CodeGenerator<'ast> {
                         .insert(alias_name.clone(), path.join("::"));
                 }
             }
-            if let Item::Use { path, alias: None, .. } = item {
+            if let Item::Use {
+                path, alias: None, ..
+            } = item
+            {
                 // `use dep::fn` (no `as`): bare `fn(...)` call sites map to `dep::fn` for metadata.
                 if path.len() >= 2 {
                     if let Some(last) = path.last() {
-                        if last
-                            .chars()
-                            .next()
-                            .is_some_and(|c| c.is_ascii_lowercase())
-                        {
+                        if last.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
                             if !path.first().is_some_and(|seg| {
                                 matches!(seg.as_str(), "std" | "crate" | "super" | "self")
                             }) {
@@ -1181,21 +1178,20 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
             // `std::map` / rustc std / WJ-only stubs must not invent `windjammer_runtime::{module}`.
-            let use_line = match crate::codegen::rust::stdlib_method_traits::classify_wj_std_import(
-                module,
-            ) {
-                crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime {
-                    rust_stem,
-                } => self.skip_user_shadowed_runtime_type_uses(
-                    &crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
-                        module, &rust_stem, None,
+            let use_line =
+                match crate::codegen::rust::stdlib_method_traits::classify_wj_std_import(module) {
+                    crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Runtime {
+                        rust_stem,
+                    } => self.skip_user_shadowed_runtime_type_uses(
+                        &crate::codegen::rust::stdlib_method_traits::format_runtime_std_use(
+                            module, &rust_stem, None,
+                        ),
                     ),
-                ),
-                crate::codegen::rust::stdlib_method_traits::WjStdImportKind::RustStd
-                | crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Skip => {
-                    continue;
-                }
-            };
+                    crate::codegen::rust::stdlib_method_traits::WjStdImportKind::RustStd
+                    | crate::codegen::rust::stdlib_method_traits::WjStdImportKind::Skip => {
+                        continue;
+                    }
+                };
             if !use_line.is_empty() && !implicit_imports.contains(&use_line) {
                 implicit_imports.push_str(&use_line);
             }
@@ -1445,19 +1441,12 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
     fn register_module_const_metadata(&mut self, item: &Item<'ast>) {
         match item {
             Item::Const {
-                name,
-                type_,
-                value,
-                ..
+                name, type_, value, ..
             }
             | Item::Static {
-                name,
-                type_,
-                value,
-                ..
+                name, type_, value, ..
             } => {
-                self.module_const_types
-                    .insert(name.clone(), type_.clone());
+                self.module_const_types.insert(name.clone(), type_.clone());
                 if crate::codegen::rust::types::is_windjammer_text_type(type_)
                     && matches!(
                         value,

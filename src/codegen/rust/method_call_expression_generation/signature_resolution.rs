@@ -37,7 +37,12 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         object: &Expression<'ast>,
     ) -> Option<String> {
-        let Expression::FieldAccess { object: base, field, .. } = object else {
+        let Expression::FieldAccess {
+            object: base,
+            field,
+            ..
+        } = object
+        else {
             return None;
         };
         let Expression::Identifier { name, .. } = &**base else {
@@ -253,7 +258,11 @@ impl<'ast> CodeGenerator<'ast> {
                         self.global_signature_registry()
                             .and_then(|g| g.get_fallback_signature(&qualified).cloned())
                     })
-                    .or_else(|| self.signature_registry.get_fallback_signature(&qualified).cloned())
+                    .or_else(|| {
+                        self.signature_registry
+                            .get_fallback_signature(&qualified)
+                            .cloned()
+                    })
                 {
                     if crate::codegen::rust::call_signature_resolution::validate_arg_count(
                         &sig,
@@ -379,27 +388,27 @@ impl<'ast> CodeGenerator<'ast> {
             .filter(|g| is_usable(g))
         });
 
-        let prefer_global_over =
-            |local: &FunctionSignature, better: &FunctionSignature| -> bool {
-                use crate::codegen::rust::signature_promotion::{
-                    codegen_refreshed_beats_analysis_only, emitted_owned_beats_stale_global_borrow,
-                };
-                // Codegen-refreshed Owned String (`Logger::info`) must not lose to an
-                // analysis-only Borrowed + `Reference(str)` leaf (`info`) — that peeled
-                // `String::from("a")` back to bare `"a"` (P3.602).
-                if codegen_refreshed_beats_analysis_only(local, better)
-                    || emitted_owned_beats_stale_global_borrow(local, better)
-                {
-                    return false;
-                }
-                prefer_converged_over_stub(local, better)
-                    || converged_has_reference_params_over_bare(local, better)
+        let prefer_global_over = |local: &FunctionSignature, better: &FunctionSignature| -> bool {
+            use crate::codegen::rust::signature_promotion::{
+                codegen_refreshed_beats_analysis_only, emitted_owned_beats_stale_global_borrow,
             };
+            // Codegen-refreshed Owned String (`Logger::info`) must not lose to an
+            // analysis-only Borrowed + `Reference(str)` leaf (`info`) — that peeled
+            // `String::from("a")` back to bare `"a"` (P3.602).
+            if codegen_refreshed_beats_analysis_only(local, better)
+                || emitted_owned_beats_stale_global_borrow(local, better)
+            {
+                return false;
+            }
+            prefer_converged_over_stub(local, better)
+                || converged_has_reference_params_over_bare(local, better)
+        };
 
         if let Some(ref better) = global_upgraded {
-            if resolved_from_mc.as_ref().is_none_or(|local| {
-                !is_usable(local) || prefer_global_over(local, better)
-            }) {
+            if resolved_from_mc
+                .as_ref()
+                .is_none_or(|local| !is_usable(local) || prefer_global_over(local, better))
+            {
                 if trace {
                     eprintln!(
                         "[wj-sig] call-site {method} arg#{}: global SELECTED ({:?})",

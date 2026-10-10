@@ -96,11 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
                         )
                     })
             }
-            Expression::MethodCall {
-                object,
-                method,
-                ..
-            } => {
+            Expression::MethodCall { object, method, .. } => {
                 let receiver = self
                     .mc_infer_method_receiver_type_name(object)
                     .or_else(|| self.infer_type_name(object));

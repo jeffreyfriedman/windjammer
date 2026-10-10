@@ -1520,11 +1520,7 @@ impl Builder {
             "self.value = val must store val"
         );
         assert!(
-            analyzer.string_param_consumed_owned(
-                "val",
-                with_value.decl.body.as_slice(),
-                &registry
-            ),
+            analyzer.string_param_consumed_owned("val", with_value.decl.body.as_slice(), &registry),
             "stored string param must be consumed-owned"
         );
         assert!(

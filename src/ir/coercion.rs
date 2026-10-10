@@ -73,9 +73,7 @@ pub fn compute_coercion(actual: &SafetyType, expected: &SafetyType) -> CoercionK
     // the Rust binding is already a value (`dirty.push(*pos)` regression).
     // `OwnedType::Copy` is set from the Copy registry (aggregates like BatchHandle),
     // not only primitive `is_copy_base`.
-    if matches!(expected_own, OwnedType::Copy)
-        && matches!(actual_own, OwnedType::Ref(_))
-    {
+    if matches!(expected_own, OwnedType::Copy) && matches!(actual_own, OwnedType::Ref(_)) {
         return CoercionKind::StripBorrow;
     }
     if matches!(expected_own, OwnedType::Copy | OwnedType::Owned)

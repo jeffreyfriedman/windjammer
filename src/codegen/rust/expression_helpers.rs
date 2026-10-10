@@ -58,9 +58,13 @@ pub fn is_explicit_user_clone_call(expr: &Expression) -> bool {
 /// Binding name when [`is_explicit_user_clone_call`] is `ident.clone()`.
 pub fn explicit_user_clone_binding_name<'a>(expr: &'a Expression<'a>) -> Option<&'a str> {
     match expr {
-        Expression::MethodCall { method, object, arguments, .. }
-            if crate::type_classification::is_language_level_explicit_clone(method)
-                && arguments.is_empty() =>
+        Expression::MethodCall {
+            method,
+            object,
+            arguments,
+            ..
+        } if crate::type_classification::is_language_level_explicit_clone(method)
+            && arguments.is_empty() =>
         {
             match &**object {
                 Expression::Identifier { name, .. } => Some(name.as_str()),

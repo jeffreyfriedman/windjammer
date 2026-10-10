@@ -98,12 +98,19 @@ impl Resolver {
     ///
     /// Stub behavior: accepts declared versions as-is without contacting a
     /// registry. Path and git dependencies pass through unchanged.
-    pub fn resolve(&self, manifest: &PackageManifest) -> Result<Vec<ResolvedDependency>, Vec<ResolutionError>> {
+    pub fn resolve(
+        &self,
+        manifest: &PackageManifest,
+    ) -> Result<Vec<ResolvedDependency>, Vec<ResolutionError>> {
         let mut resolved = Vec::new();
         let mut errors = Vec::new();
         let mut seen: HashMap<String, String> = HashMap::new();
 
-        for dep in manifest.dependencies.iter().chain(manifest.dev_dependencies.iter()) {
+        for dep in manifest
+            .dependencies
+            .iter()
+            .chain(manifest.dev_dependencies.iter())
+        {
             if let Some(first) = seen.get(&dep.name) {
                 if first != &dep.version {
                     errors.push(ResolutionError::VersionConflict {

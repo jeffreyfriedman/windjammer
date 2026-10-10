@@ -21,10 +21,13 @@ impl<'ast> CodeGenerator<'ast> {
         type_args: &Option<Vec<Type>>,
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
-        if method == "find" && arguments.len() == 1 {
-        }
+        if method == "find" && arguments.len() == 1 {}
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
-        let method = if method == "string" { "to_string" } else { method };
+        let method = if method == "string" {
+            "to_string"
+        } else {
+            method
+        };
         // Language-level owned conversion must emit `.to_string()` before IR Borrow
         // (`push_str(&self.rows)` is invalid). Not an ownership oracle — syntax sugar.
         if crate::type_classification::is_language_level_owned_string_convert(method)
@@ -101,7 +104,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let effective_method = mut_sibling.as_deref().unwrap_or(method);
 
-        
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
         let method_signature =
             self.mc_resolve_method_call_signature(object, effective_method, arguments);

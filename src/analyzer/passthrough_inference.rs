@@ -738,9 +738,8 @@ impl<'ast> Analyzer<'ast> {
                         // module path, not a typed receiver. Key as `strings::len` (not bare
                         // `len`) so AsRef runtime formals resolve — bare `len` collided with
                         // Owned homonyms and forced Owned (demoted_str / parse_body).
-                        let method_key = self.module_or_type_qualified_callee_key(
-                            object, method, func,
-                        );
+                        let method_key =
+                            self.module_or_type_qualified_callee_key(object, method, func);
                         results.push((method_key, i, is_self_field_call, false));
                     }
                 }
@@ -848,14 +847,12 @@ impl<'ast> Analyzer<'ast> {
                 .iter()
                 .any(|(_, arg)| Self::expr_has_field_move_from_param(param_name, arg, true)),
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 Self::expr_has_field_move_from_param(param_name, object, false)
-                    || arguments.iter().any(|(_, arg)| {
-                        Self::expr_has_field_move_from_param(param_name, arg, true)
-                    })
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| Self::expr_has_field_move_from_param(param_name, arg, true))
             }
             Expression::StructLiteral { fields, .. } => fields
                 .iter()
@@ -1284,9 +1281,9 @@ impl<'ast> Analyzer<'ast> {
                 ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if self.expr_is_non_copy_field_projection_from_param(
-                        param_name, param_type, arg,
-                    ) {
+                    if self
+                        .expr_is_non_copy_field_projection_from_param(param_name, param_type, arg)
+                    {
                         *saw_projection = true;
                         if !self.call_expr_formal_borrows(function, i, registry) {
                             *all_borrowed = false;
@@ -1303,14 +1300,12 @@ impl<'ast> Analyzer<'ast> {
                 }
             }
             Expression::MethodCall {
-                method,
-                arguments,
-                ..
+                method, arguments, ..
             } => {
                 for (i, (_, arg)) in arguments.iter().enumerate() {
-                    if self.expr_is_non_copy_field_projection_from_param(
-                        param_name, param_type, arg,
-                    ) {
+                    if self
+                        .expr_is_non_copy_field_projection_from_param(param_name, param_type, arg)
+                    {
                         *saw_projection = true;
                         let borrowed = registry
                             .lookup_method(method)

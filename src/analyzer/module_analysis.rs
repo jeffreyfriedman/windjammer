@@ -757,9 +757,8 @@ impl<'ast> Analyzer<'ast> {
                                     let qualified_name =
                                         format!("{}::{}", impl_block.type_name, func.name);
                                     if is_trait_impl {
-                                        registry.record_trait_impl_method_key(
-                                            qualified_name.clone(),
-                                        );
+                                        registry
+                                            .record_trait_impl_method_key(qualified_name.clone());
                                         if registry.get_signature(&qualified_name).is_none() {
                                             registry
                                                 .add_function(qualified_name, signature.clone());

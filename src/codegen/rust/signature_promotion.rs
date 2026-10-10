@@ -1407,20 +1407,21 @@ where
             // when this candidate also has MutBorrowed self.
             if let Some(ref flags) = sig.emitted_rust_ref_params {
                 if !flags.iter().any(|&f| f) {
-                    let owned_better = |candidate: &FunctionSignature, incumbent: &FunctionSignature| {
-                        method_registry_reflects_emitted_owned(candidate)
-                            && !method_registry_reflects_emitted_owned(incumbent)
-                            || candidate
-                                .param_ownership
-                                .iter()
-                                .filter(|o| matches!(o, OwnershipMode::Owned))
-                                .count()
-                                > incumbent
+                    let owned_better =
+                        |candidate: &FunctionSignature, incumbent: &FunctionSignature| {
+                            method_registry_reflects_emitted_owned(candidate)
+                                && !method_registry_reflects_emitted_owned(incumbent)
+                                || candidate
                                     .param_ownership
                                     .iter()
                                     .filter(|o| matches!(o, OwnershipMode::Owned))
                                     .count()
-                    };
+                                    > incumbent
+                                        .param_ownership
+                                        .iter()
+                                        .filter(|o| matches!(o, OwnershipMode::Owned))
+                                        .count()
+                        };
                     match refresh_without_shared_ref {
                         None => refresh_without_shared_ref = Some(sig.clone()),
                         Some(ref incumbent) if owned_better(&sig, incumbent) => {
@@ -1640,9 +1641,10 @@ pub(crate) fn defining_text_demotion_beats_owned_string_snapshot(
             .as_ref()
             .and_then(|f| f.get(idx).copied())
             == Some(true)
-            || snapshot.param_types.get(idx).is_some_and(|t| {
-                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-            });
+            || snapshot
+                .param_types
+                .get(idx)
+                .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t));
         !snapshot_shared
     })
 }
@@ -4155,11 +4157,9 @@ pub fn resolve() -> string {
             field_extract_params: None,
             forwarding_borrow_params: None,
         };
-        let picked = pick_codegen_refreshed_signature([
-            Some(analysis_only),
-            Some(codegen_refresh.clone()),
-        ])
-        .expect("pick");
+        let picked =
+            pick_codegen_refreshed_signature([Some(analysis_only), Some(codegen_refresh.clone())])
+                .expect("pick");
         assert_eq!(
             picked.emitted_rust_ref_params.as_deref(),
             Some(&[false, false][..]),
@@ -4169,10 +4169,7 @@ pub fn resolve() -> string {
             picked.param_ownership.get(1).copied(),
             Some(OwnershipMode::Owned)
         );
-        assert!(matches!(
-            picked.param_types.get(1),
-            Some(Type::String)
-        ));
+        assert!(matches!(picked.param_types.get(1), Some(Type::String)));
     }
 
     #[test]

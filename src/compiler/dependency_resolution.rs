@@ -160,11 +160,13 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
         return out;
     };
 
-    for (name, spec) in config.dependencies.iter().chain(config.dev_dependencies.iter()) {
+    for (name, spec) in config
+        .dependencies
+        .iter()
+        .chain(config.dev_dependencies.iter())
+    {
         let path_str = match spec {
-            crate::config::DependencySpec::Detailed {
-                path: Some(p), ..
-            } => p.as_str(),
+            crate::config::DependencySpec::Detailed { path: Some(p), .. } => p.as_str(),
             _ => continue,
         };
         let dep_root = if Path::new(path_str).is_absolute() {
@@ -174,17 +176,11 @@ pub(crate) fn discover_wj_toml_path_dependency_metadata(
         };
         let key = name.replace('-', "_");
         // Prefer library gen/ output (post-codegen ownership + emitted_rust_ref_params).
-        let candidates = [
-            dep_root.join("gen"),
-            dep_root.clone(),
-            dep_root.join("src"),
-        ];
+        let candidates = [dep_root.join("gen"), dep_root.clone(), dep_root.join("src")];
         let mut found = None;
         for candidate in &candidates {
             let meta_file = if candidate.is_file()
-                && candidate
-                    .file_name()
-                    .is_some_and(|n| n == "metadata.json")
+                && candidate.file_name().is_some_and(|n| n == "metadata.json")
             {
                 candidate.clone()
             } else {
@@ -230,12 +226,19 @@ pub(crate) fn discover_wj_import_dependency_metadata(
     let Ok(wj_files) = find_wj_files(&src_root) else {
         return out;
     };
-    let project_root = crate::metadata::find_project_root(&src_root)
-        .unwrap_or_else(|| src_root.clone());
+    let project_root =
+        crate::metadata::find_project_root(&src_root).unwrap_or_else(|| src_root.clone());
     let output_hint = project_root.join("gen");
 
     let builtin = [
-        "std", "core", "alloc", "crate", "self", "super", "windjammer_runtime", "serde",
+        "std",
+        "core",
+        "alloc",
+        "crate",
+        "self",
+        "super",
+        "windjammer_runtime",
+        "serde",
     ];
 
     for file in &wj_files {

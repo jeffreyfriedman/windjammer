@@ -83,12 +83,13 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::EnumPatternBinding;
         match pattern {
             Pattern::Wildcard => "_".to_string(),
-            Pattern::Identifier(name) => {
-                self.qualify_enum_variant_path(name, scrutinee_ty)
-            }
+            Pattern::Identifier(name) => self.qualify_enum_variant_path(name, scrutinee_ty),
             Pattern::MutBinding(name) => format!("mut {}", name),
             Pattern::Reference(inner) => {
-                format!("&{}", self.generate_pattern_with_scrutinee(inner, scrutinee_ty))
+                format!(
+                    "&{}",
+                    self.generate_pattern_with_scrutinee(inner, scrutinee_ty)
+                )
             }
             Pattern::Ref(name) => format!("ref {}", name),
             Pattern::RefMut(name) => format!("ref mut {}", name),
@@ -229,11 +230,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // not variable bindings. Treating them as bindings makes match arms emit
                 // `None.clone()` when the scrutinee is behind a reference (E0614-ish noise /
                 // nonsense for Option::None).
-                if name
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_uppercase())
-                {
+                if name.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
                     // not a binding
                 } else {
                     bindings.insert(name.clone());
@@ -513,7 +510,9 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn map_receiver_type_name(ty: &Type) -> Option<String> {
         match ty {
-            Type::Parameterized(name, _) if crate::codegen::rust::stdlib_method_traits::is_map_type_name(name) => {
+            Type::Parameterized(name, _)
+                if crate::codegen::rust::stdlib_method_traits::is_map_type_name(name) =>
+            {
                 Some(name.clone())
             }
             Type::Custom(name) => {

@@ -44,10 +44,7 @@ impl RegistryClient {
     /// Fetch metadata for a package from the registry.
     ///
     /// Stub: returns cached stub data or a synthetic entry for unknown packages.
-    pub fn fetch_package_metadata(
-        &self,
-        name: &str,
-    ) -> Result<PackageMetadata, RegistryError> {
+    pub fn fetch_package_metadata(&self, name: &str) -> Result<PackageMetadata, RegistryError> {
         if let Some(meta) = self.stub_packages.get(name) {
             return Ok(meta.clone());
         }
@@ -64,11 +61,7 @@ impl RegistryClient {
     /// Download a specific version of a package.
     ///
     /// Stub: returns an empty directory path without performing any I/O.
-    pub fn download_package(
-        &self,
-        name: &str,
-        version: &str,
-    ) -> Result<PathBuf, RegistryError> {
+    pub fn download_package(&self, name: &str, version: &str) -> Result<PathBuf, RegistryError> {
         if name.is_empty() {
             return Err(RegistryError::InvalidPackageName);
         }

@@ -80,7 +80,8 @@ impl<'ast> CodeGenerator<'ast> {
         analyzed: &AnalyzedFunction<'ast>,
     ) {
         let func = &analyzed.decl;
-        if func.decorators.iter().any(|d| d.name == "test_cases") || self.has_wrapping_decorator(func)
+        if func.decorators.iter().any(|d| d.name == "test_cases")
+            || self.has_wrapping_decorator(func)
         {
             return;
         }

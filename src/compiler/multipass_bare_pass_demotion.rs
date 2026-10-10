@@ -44,10 +44,7 @@ impl<'a> ProgramLookup<'a> {
                     Item::Impl { block, .. } => {
                         for method in &block.functions {
                             Self::note_multi_bare(method, &mut multi_bare_targets);
-                            methods.insert(
-                                (block.type_name.clone(), method.name.clone()),
-                                method,
-                            );
+                            methods.insert((block.type_name.clone(), method.name.clone()), method);
                         }
                     }
                     _ => {}
@@ -164,14 +161,8 @@ fn promote_callees_from_bare_pass_callers_inner(
     hints.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     hints.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
     for (callee_key, param_idx, mode) in hints {
-        if bare_pass_hint_should_skip(
-            programs,
-            registry,
-            &callee_key,
-            param_idx,
-            mode,
-            copy_types,
-        ) {
+        if bare_pass_hint_should_skip(programs, registry, &callee_key, param_idx, mode, copy_types)
+        {
             continue;
         }
         apply_bare_pass_hint(registry, &callee_key, param_idx, mode);
@@ -278,19 +269,13 @@ pub fn restore_owned_formals_forwarded_to_owned_callees(
             ) {
                 continue;
             }
-            let Some((param_name, body)) =
-                find_function_body_for_registry_key(programs, &key, idx)
+            let Some((param_name, body)) = find_function_body_for_registry_key(programs, &key, idx)
             else {
                 continue;
             };
             // DB-366: soft AST-Custom "owned" peers (mutual BT ticks) must not undo
             // analyzer Borrowed — only extern / Vec / consuming-body Custom are hard.
-            if !param_forwarded_bare_into_hard_owned_callee(
-                body,
-                param_name,
-                registry,
-                programs,
-            ) {
+            if !param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs) {
                 continue;
             }
             new_sig.param_ownership[idx] = OwnershipMode::Owned;
@@ -367,7 +352,9 @@ fn walk_stmts_for_producer_only_kinds<'ast>(
             | Statement::Return {
                 value: Some(expr), ..
             } => visit_expr_for_producer_only_kinds(expr, registry, kinds),
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 visit_expr_for_producer_only_kinds(value, registry, kinds);
                 if let Some(b) = else_block {
                     walk_stmts_for_producer_only_kinds(b, registry, kinds);
@@ -385,7 +372,9 @@ fn walk_stmts_for_producer_only_kinds<'ast>(
                     walk_stmts_for_producer_only_kinds(b, registry, kinds);
                 }
             }
-            Statement::While { body, condition, .. } => {
+            Statement::While {
+                body, condition, ..
+            } => {
                 visit_expr_for_producer_only_kinds(condition, registry, kinds);
                 walk_stmts_for_producer_only_kinds(body, registry, kinds);
             }
@@ -446,8 +435,12 @@ fn visit_expr_for_producer_only_kinds(
             visit_expr_for_producer_only_kinds(right, registry, kinds);
         }
         Expression::Unary { operand, .. }
-        | Expression::FieldAccess { object: operand, .. }
-        | Expression::Index { object: operand, .. }
+        | Expression::FieldAccess {
+            object: operand, ..
+        }
+        | Expression::Index {
+            object: operand, ..
+        }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. }
         | Expression::Cast { expr: operand, .. } => {
@@ -540,10 +533,7 @@ fn associated_pub_owned_custom_formal_should_restore(
     let Some(param) = non_self_param(&decl.parameters, param_idx) else {
         return false;
     };
-    if matches!(
-        &param.type_,
-        Type::Reference(_) | Type::MutableReference(_)
-    ) {
+    if matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_)) {
         return false;
     }
     // DB-398: pub associated Custom. DB-407: Vec stored into a field may be
@@ -646,10 +636,7 @@ fn record_producer_only_call_kinds_from_name(
             if is_bare_binding_pass(arg) {
                 entry.bare = true;
             }
-            if matches!(
-                arg,
-                Expression::Call { .. } | Expression::MethodCall { .. }
-            ) {
+            if matches!(arg, Expression::Call { .. } | Expression::MethodCall { .. }) {
                 entry.producer = true;
             }
         }
@@ -710,15 +697,13 @@ pub fn restore_pub_owned_non_copy_api_formals(
             ) {
                 continue;
             }
-            if matches!(
-                new_sig.param_ownership.get(idx),
-                Some(OwnershipMode::Owned)
-            ) && new_sig
-                .emitted_rust_ref_params
-                .as_ref()
-                .and_then(|flags| flags.get(idx))
-                .copied()
-                != Some(true)
+            if matches!(new_sig.param_ownership.get(idx), Some(OwnershipMode::Owned))
+                && new_sig
+                    .emitted_rust_ref_params
+                    .as_ref()
+                    .and_then(|flags| flags.get(idx))
+                    .copied()
+                    != Some(true)
             {
                 continue;
             }
@@ -796,14 +781,14 @@ pub fn restore_owned_string_formals_stored_in_payload(
                     .param_types
                     .get(idx)
                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
-            let demoted_str_formal = new_sig.param_types.get(idx).is_some_and(|t| {
-                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-            });
+            let demoted_str_formal = new_sig
+                .param_types
+                .get(idx)
+                .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t));
             if !wj_string_formal && !demoted_str_formal {
                 continue;
             }
-            let Some((param_name, body)) =
-                find_function_body_for_registry_key(programs, &key, idx)
+            let Some((param_name, body)) = find_function_body_for_registry_key(programs, &key, idx)
             else {
                 continue;
             };
@@ -876,8 +861,7 @@ pub fn restore_owned_field_forward_formals(
             if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
                 continue;
             }
-            let Some((param_name, body)) =
-                find_function_body_for_registry_key(programs, &key, idx)
+            let Some((param_name, body)) = find_function_body_for_registry_key(programs, &key, idx)
             else {
                 continue;
             };
@@ -950,10 +934,7 @@ mod tests {
                 Type::String,
             ],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -1083,10 +1064,7 @@ fn check_schedule(expr: string, at: At) -> bool {
                 sig.param_ownership.first()
             );
             assert!(
-                !matches!(
-                    sig.param_types.first(),
-                    Some(Type::MutableReference(_))
-                ),
+                !matches!(sig.param_types.first(), Some(Type::MutableReference(_))),
                 "{key} must not wrap CronExpr as MutableReference"
             );
         }
@@ -1135,11 +1113,7 @@ fn pg_wire_serve_on_simple_query(session: Session, sql: string) -> Session {
             "pg_wire_parse".to_string(),
             FunctionSignature {
                 name: "pg_wire_parse".to_string(),
-                param_types: vec![
-                    Type::Custom("Session".into()),
-                    Type::String,
-                    Type::String,
-                ],
+                param_types: vec![Type::Custom("Session".into()), Type::String, Type::String],
                 formal_param_types: vec![
                     Type::Custom("Session".into()),
                     Type::String,
@@ -1387,10 +1361,7 @@ fn consume(scores: Vec<f64>) {
             sig.param_ownership
         );
         assert!(
-            !matches!(
-                sig.param_types.get(0),
-                Some(Type::Reference(_))
-            ),
+            !matches!(sig.param_types.get(0), Some(Type::Reference(_))),
             "FFI-forwarding Vec formal type must stay owned Vec, got {:?}",
             sig.param_types
         );
@@ -1416,9 +1387,10 @@ fn put_version(store: Store) -> Store {
 "#,
         );
         let mut registry = SignatureRegistry::new();
-        registry
-            .signatures
-            .insert("put_version".to_string(), owned_custom_sig("put_version", "Store"));
+        registry.signatures.insert(
+            "put_version".to_string(),
+            owned_custom_sig("put_version", "Store"),
+        );
         let programs = vec![program];
         let copy_types = std::collections::HashSet::new();
         promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
@@ -1585,9 +1557,10 @@ fn base_response(status: u16, body: string) -> int {
 "#,
         );
         let mut registry = SignatureRegistry::new();
-        registry
-            .signatures
-            .insert("to_response".to_string(), owned_custom_sig("to_response", "HttpReply"));
+        registry.signatures.insert(
+            "to_response".to_string(),
+            owned_custom_sig("to_response", "HttpReply"),
+        );
         let programs = vec![program];
         let copy_types = std::collections::HashSet::new();
         promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
@@ -1884,9 +1857,10 @@ pub fn parse_payment(row: Row) -> string {
 "#,
         );
         let mut registry = SignatureRegistry::new();
-        registry
-            .signatures
-            .insert("col_string".to_string(), owned_custom_sig("col_string", "Row"));
+        registry.signatures.insert(
+            "col_string".to_string(),
+            owned_custom_sig("col_string", "Row"),
+        );
         let programs = vec![adapter, domain];
         let copy_types = std::collections::HashSet::new();
         promote_callees_from_bare_pass_callers(&mut registry, &programs, &copy_types);
@@ -1936,7 +1910,9 @@ fn walk_statements_for_calls<'ast>(
             | Statement::Return {
                 value: Some(expr), ..
             } => visit_expr_for_calls(expr, programs, registry, copy_types, hints),
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 visit_expr_for_calls(value, programs, registry, copy_types, hints);
                 if let Some(b) = else_block {
                     walk_statements_for_calls(b, programs, registry, copy_types, hints);
@@ -1954,7 +1930,9 @@ fn walk_statements_for_calls<'ast>(
                     walk_statements_for_calls(b, programs, registry, copy_types, hints);
                 }
             }
-            Statement::While { body, condition, .. } => {
+            Statement::While {
+                body, condition, ..
+            } => {
                 visit_expr_for_calls(condition, programs, registry, copy_types, hints);
                 walk_statements_for_calls(body, programs, registry, copy_types, hints);
             }
@@ -1998,9 +1976,7 @@ fn visit_expr_for_calls(
             }
         }
         Expression::MethodCall {
-            object,
-            arguments,
-            ..
+            object, arguments, ..
         } => {
             visit_expr_for_calls(object, programs, registry, copy_types, hints);
             for (_, arg) in arguments {
@@ -2015,8 +1991,12 @@ fn visit_expr_for_calls(
             visit_expr_for_calls(right, programs, registry, copy_types, hints);
         }
         Expression::Unary { operand, .. }
-        | Expression::FieldAccess { object: operand, .. }
-        | Expression::Index { object: operand, .. }
+        | Expression::FieldAccess {
+            object: operand, ..
+        }
+        | Expression::Index {
+            object: operand, ..
+        }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. }
         | Expression::Cast { expr: operand, .. } => {
@@ -2141,10 +2121,7 @@ fn apply_bare_pass_hint(
         return;
     }
     if sig.param_ownership.is_empty() {
-        let n = sig
-            .formal_param_types
-            .len()
-            .max(sig.param_types.len());
+        let n = sig.formal_param_types.len().max(sig.param_types.len());
         sig.param_ownership = vec![OwnershipMode::Owned; n];
     }
     if matches!(
@@ -2244,17 +2221,13 @@ fn bare_pass_hint_should_skip(
     }
     if matches!(mode, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
         && callee_pub_owned_formal_skip_bare_pass(
-            &sig,
-            programs,
-            registry,
-            callee_key,
-            param_idx,
-            None,
+            &sig, programs, registry, callee_key, param_idx, None,
         )
     {
         return true;
     }
-    let Some((param_name, body)) = find_function_body_for_registry_key(programs, callee_key, param_idx)
+    let Some((param_name, body)) =
+        find_function_body_for_registry_key(programs, callee_key, param_idx)
     else {
         return false;
     };
@@ -2268,18 +2241,9 @@ fn bare_pass_hint_should_skip(
                 || param_whole_binding_returned(body, param_name)
                 || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
-                || param_forwarded_bare_into_hard_owned_callee(
-                    body,
-                    param_name,
-                    registry,
-                    programs,
-                )
+                || param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs)
                 || param_has_consuming_field_or_index_move(
-                    body,
-                    param_name,
-                    formal_ty,
-                    programs,
-                    copy_types,
+                    body, param_name, formal_ty, programs, copy_types,
                 )
                 || param_for_in_moves_element_fields(body, param_name)
         }
@@ -2306,11 +2270,7 @@ enum ScrutineeScan {
     OtherUse,
 }
 
-fn stmt_match_scrutinee_only(
-    stmt: &Statement,
-    param_name: &str,
-    saw: &mut bool,
-) -> ScrutineeScan {
+fn stmt_match_scrutinee_only(stmt: &Statement, param_name: &str, saw: &mut bool) -> ScrutineeScan {
     match stmt {
         Statement::Match { value, arms, .. } => {
             if expr_is_bare_param(value, param_name) {
@@ -2360,7 +2320,9 @@ fn stmt_match_scrutinee_only(
             value: Some(expr), ..
         } => expr_match_scrutinee_only(expr, param_name, saw),
         Statement::Return { .. } => ScrutineeScan::Ok,
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             if let ScrutineeScan::OtherUse = expr_match_scrutinee_only(value, param_name, saw) {
                 return ScrutineeScan::OtherUse;
             }
@@ -2383,11 +2345,7 @@ fn stmt_match_scrutinee_only(
     }
 }
 
-fn expr_match_scrutinee_only(
-    expr: &Expression,
-    param_name: &str,
-    saw: &mut bool,
-) -> ScrutineeScan {
+fn expr_match_scrutinee_only(expr: &Expression, param_name: &str, saw: &mut bool) -> ScrutineeScan {
     match expr {
         Expression::Block { statements, .. } => {
             for s in statements {
@@ -2431,9 +2389,8 @@ fn param_forwarded_bare_into_owned_callee(
     registry: &SignatureRegistry,
     programs: &[&Program],
 ) -> bool {
-    body.iter().any(|stmt| {
-        stmt_forwards_bare_into_owned_callee(stmt, param_name, registry, programs)
-    })
+    body.iter()
+        .any(|stmt| stmt_forwards_bare_into_owned_callee(stmt, param_name, registry, programs))
 }
 
 fn stmt_forwards_bare_into_owned_callee(
@@ -2450,7 +2407,9 @@ fn stmt_forwards_bare_into_owned_callee(
         | Statement::Assignment { value: expr, .. } => {
             expr_forwards_bare_into_owned_callee(expr, param_name, registry, programs)
         }
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_forwards_bare_into_owned_callee(value, param_name, registry, programs)
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
@@ -2474,7 +2433,9 @@ fn stmt_forwards_bare_into_owned_callee(
                     })
                 })
         }
-        Statement::While { body, condition, .. } => {
+        Statement::While {
+            body, condition, ..
+        } => {
             expr_forwards_bare_into_owned_callee(condition, param_name, registry, programs)
                 || body.iter().any(|s| {
                     stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
@@ -2556,16 +2517,20 @@ fn expr_forwards_bare_into_owned_callee(
                     expr_forwards_bare_into_owned_callee(arg, param_name, registry, programs)
                 })
         }
-        Expression::Block { statements, .. } => statements.iter().any(|s| {
-            stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)
-        }),
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| stmt_forwards_bare_into_owned_callee(s, param_name, registry, programs)),
         Expression::Binary { left, right, .. } => {
             expr_forwards_bare_into_owned_callee(left, param_name, registry, programs)
                 || expr_forwards_bare_into_owned_callee(right, param_name, registry, programs)
         }
         Expression::Unary { operand, .. }
-        | Expression::FieldAccess { object: operand, .. }
-        | Expression::Index { object: operand, .. }
+        | Expression::FieldAccess {
+            object: operand, ..
+        }
+        | Expression::Index {
+            object: operand, ..
+        }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. } => {
             expr_forwards_bare_into_owned_callee(operand, param_name, registry, programs)
@@ -2573,9 +2538,9 @@ fn expr_forwards_bare_into_owned_callee(
         Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
             .iter()
             .any(|e| expr_forwards_bare_into_owned_callee(e, param_name, registry, programs)),
-        Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| {
-            expr_forwards_bare_into_owned_callee(e, param_name, registry, programs)
-        }),
+        Expression::StructLiteral { fields, .. } => fields
+            .iter()
+            .any(|(_, e)| expr_forwards_bare_into_owned_callee(e, param_name, registry, programs)),
         _ => false,
     }
 }
@@ -2590,19 +2555,15 @@ fn callee_arg_expects_owned(
             continue;
         };
         let pidx = sig.arg_param_index(arg_index);
-        if matches!(
-            sig.param_ownership.get(pidx),
-            Some(OwnershipMode::Owned)
-        ) {
+        if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Owned)) {
             // Prefer explicit Owned; also treat missing demotion flags as owned when
             // the declared formal type is a bare (non-ref) Vec/Custom.
             let formal = sig
                 .formal_param_types
                 .get(pidx)
                 .or_else(|| sig.param_types.get(pidx));
-            if formal.is_some_and(|t| {
-                !matches!(t, Type::Reference(_) | Type::MutableReference(_))
-            }) {
+            if formal.is_some_and(|t| !matches!(t, Type::Reference(_) | Type::MutableReference(_)))
+            {
                 return true;
             }
             if sig.is_extern {
@@ -2625,10 +2586,7 @@ fn callee_arg_registry_is_borrowed(
             continue;
         };
         let pidx = sig.arg_param_index(arg_index);
-        if matches!(
-            sig.param_ownership.get(pidx),
-            Some(OwnershipMode::Borrowed)
-        ) {
+        if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Borrowed)) {
             return true;
         }
     }
@@ -2650,26 +2608,22 @@ fn callee_arg_expects_shared_ref(
         if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx) {
             return true;
         }
-        if matches!(
-            sig.param_ownership.get(pidx),
-            Some(OwnershipMode::Borrowed)
-        ) && sig
-            .param_types
-            .get(pidx)
-            .or_else(|| sig.formal_param_types.get(pidx))
-            .is_some_and(|t| matches!(t, Type::Reference(_)))
+        if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Borrowed))
+            && sig
+                .param_types
+                .get(pidx)
+                .or_else(|| sig.formal_param_types.get(pidx))
+                .is_some_and(|t| matches!(t, Type::Reference(_)))
         {
             return true;
         }
-        if matches!(
-            sig.param_ownership.get(pidx),
-            Some(OwnershipMode::Borrowed)
-        ) && sig
-            .emitted_rust_ref_params
-            .as_ref()
-            .and_then(|flags| flags.get(pidx))
-            .copied()
-            == Some(true)
+        if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Borrowed))
+            && sig
+                .emitted_rust_ref_params
+                .as_ref()
+                .and_then(|flags| flags.get(pidx))
+                .copied()
+                == Some(true)
         {
             return true;
         }
@@ -2701,10 +2655,7 @@ fn callee_arg_expects_owned_in_programs(
             let Some(param) = params.get(arg_index) else {
                 continue;
             };
-            if matches!(
-                &param.type_,
-                Type::Reference(_) | Type::MutableReference(_)
-            ) {
+            if matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_)) {
                 continue;
             }
             // Extern FFI and pub free wrappers declare owned Vec/Custom in source.
@@ -2802,10 +2753,7 @@ fn expr_returns_whole_binding(param_name: &str, expr: &Expression) -> bool {
 }
 
 /// Restore owned Custom formals demoted by bare-pass when the body returns the whole param.
-pub fn restore_owned_returned_formals(
-    registry: &mut SignatureRegistry,
-    programs: &[&Program],
-) {
+pub fn restore_owned_returned_formals(registry: &mut SignatureRegistry, programs: &[&Program]) {
     let keys: Vec<String> = registry.signatures.keys().cloned().collect();
     for key in keys {
         let Some(sig) = registry.get_signature(&key).cloned() else {
@@ -2845,18 +2793,21 @@ pub fn restore_owned_returned_formals(
                     .param_types
                     .get(idx)
                     .is_some_and(crate::codegen::rust::types::is_windjammer_text_type);
-            let demoted_str_formal = new_sig.param_types.get(idx).is_some_and(|t| {
-                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
-            });
+            let demoted_str_formal = new_sig
+                .param_types
+                .get(idx)
+                .is_some_and(|t| crate::codegen::rust::string_utilities::param_is_rust_str_ref(t));
             let owned_ty = if wj_string_formal || demoted_str_formal {
                 Type::String
             } else {
                 let bare = match formal_ty {
                     Type::Custom(name) => name.clone(),
-                    Type::Reference(inner) | Type::MutableReference(inner) => match inner.as_ref() {
-                        Type::Custom(name) => name.clone(),
-                        _ => continue,
-                    },
+                    Type::Reference(inner) | Type::MutableReference(inner) => {
+                        match inner.as_ref() {
+                            Type::Custom(name) => name.clone(),
+                            _ => continue,
+                        }
+                    }
                     _ => continue,
                 };
                 if is_copy_formal_name(&bare, &std::collections::HashSet::new()) {
@@ -2864,8 +2815,7 @@ pub fn restore_owned_returned_formals(
                 }
                 Type::Custom(bare)
             };
-            let Some((param_name, body)) =
-                find_function_body_for_registry_key(programs, &key, idx)
+            let Some((param_name, body)) = find_function_body_for_registry_key(programs, &key, idx)
             else {
                 continue;
             };
@@ -2942,12 +2892,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
     // `VoxelMaterialEditor::new(palette: MaterialPalette)`).
     if registry_key_is_type_qualified_method(callee_key) {
         return associated_pub_owned_custom_formal_should_restore(
-            sig,
-            programs,
-            callee_key,
-            param_idx,
-            lookup,
-            formal_ty,
+            sig, programs, callee_key, param_idx, lookup, formal_ty,
         );
     }
     let is_pub_free_fn = if let Some(lookup) = lookup {
@@ -3021,10 +2966,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
             // look Owned from AST stubs — those are not hard consumes.
             if param_is_readonly_custom_walk_body(body, param_name)
                 && !param_forwarded_bare_into_hard_owned_callee(
-                    body,
-                    param_name,
-                    registry,
-                    programs,
+                    body, param_name, registry, programs,
                 )
             {
                 return false;
@@ -3081,7 +3023,9 @@ fn collect_bare_callees_for_binding(
             | Statement::Return {
                 value: Some(expr), ..
             } => visit_expr_bare_callees_for_binding(expr, binding, callees),
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 visit_expr_bare_callees_for_binding(value, binding, callees);
                 if let Some(b) = else_block {
                     collect_bare_callees_for_binding(b, binding, callees);
@@ -3099,7 +3043,9 @@ fn collect_bare_callees_for_binding(
                     collect_bare_callees_for_binding(b, binding, callees);
                 }
             }
-            Statement::While { body, condition, .. } => {
+            Statement::While {
+                body, condition, ..
+            } => {
                 visit_expr_bare_callees_for_binding(condition, binding, callees);
                 collect_bare_callees_for_binding(body, binding, callees);
             }
@@ -3132,10 +3078,9 @@ fn visit_expr_bare_callees_for_binding(
             arguments,
             ..
         } => {
-            if arguments
-                .iter()
-                .any(|(_, arg)| matches!(arg, Expression::Identifier { name, .. } if name == binding))
-            {
+            if arguments.iter().any(
+                |(_, arg)| matches!(arg, Expression::Identifier { name, .. } if name == binding),
+            ) {
                 if let Some(name) = callee_name_from_expr(function) {
                     callees.insert(name.rsplit("::").next().unwrap_or(&name).to_string());
                 }
@@ -3146,9 +3091,7 @@ fn visit_expr_bare_callees_for_binding(
             }
         }
         Expression::MethodCall {
-            object,
-            arguments,
-            ..
+            object, arguments, ..
         } => {
             visit_expr_bare_callees_for_binding(object, binding, callees);
             for (_, arg) in arguments {
@@ -3163,8 +3106,12 @@ fn visit_expr_bare_callees_for_binding(
             visit_expr_bare_callees_for_binding(right, binding, callees);
         }
         Expression::Unary { operand, .. }
-        | Expression::FieldAccess { object: operand, .. }
-        | Expression::Index { object: operand, .. }
+        | Expression::FieldAccess {
+            object: operand, ..
+        }
+        | Expression::Index {
+            object: operand, ..
+        }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. }
         | Expression::Cast { expr: operand, .. } => {
@@ -3280,9 +3227,8 @@ fn param_forwarded_bare_into_hard_owned_callee(
     registry: &SignatureRegistry,
     programs: &[&Program],
 ) -> bool {
-    body.iter().any(|stmt| {
-        stmt_forwards_bare_into_hard_owned_callee(stmt, param_name, registry, programs)
-    })
+    body.iter()
+        .any(|stmt| stmt_forwards_bare_into_hard_owned_callee(stmt, param_name, registry, programs))
 }
 
 fn stmt_forwards_bare_into_hard_owned_callee(
@@ -3299,7 +3245,9 @@ fn stmt_forwards_bare_into_hard_owned_callee(
         | Statement::Assignment { value: expr, .. } => {
             expr_forwards_bare_into_hard_owned_callee(expr, param_name, registry, programs)
         }
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs)
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
@@ -3323,7 +3271,9 @@ fn stmt_forwards_bare_into_hard_owned_callee(
                     })
                 })
         }
-        Statement::While { body, condition, .. } => {
+        Statement::While {
+            body, condition, ..
+        } => {
             expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs)
                 || body.iter().any(|s| {
                     stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
@@ -3339,10 +3289,7 @@ fn stmt_forwards_bare_into_hard_owned_callee(
             expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs)
                 || arms.iter().any(|arm| {
                     expr_forwards_bare_into_hard_owned_callee(
-                        &arm.body,
-                        param_name,
-                        registry,
-                        programs,
+                        &arm.body, param_name, registry, programs,
                     )
                 })
         }
@@ -3394,16 +3341,20 @@ fn expr_forwards_bare_into_hard_owned_callee(
                     expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs)
                 })
         }
-        Expression::Block { statements, .. } => statements.iter().any(|s| {
-            stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
-        }),
+        Expression::Block { statements, .. } => statements
+            .iter()
+            .any(|s| stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)),
         Expression::Binary { left, right, .. } => {
             expr_forwards_bare_into_hard_owned_callee(left, param_name, registry, programs)
                 || expr_forwards_bare_into_hard_owned_callee(right, param_name, registry, programs)
         }
         Expression::Unary { operand, .. }
-        | Expression::FieldAccess { object: operand, .. }
-        | Expression::Index { object: operand, .. }
+        | Expression::FieldAccess {
+            object: operand, ..
+        }
+        | Expression::Index {
+            object: operand, ..
+        }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. } => {
             expr_forwards_bare_into_hard_owned_callee(operand, param_name, registry, programs)
@@ -3425,11 +3376,9 @@ fn callee_arg_is_hard_owned(
     arg_index: usize,
 ) -> bool {
     let cache_key = (callee_name.to_string(), arg_index);
-    if let Some(hit) = HARD_OWNED_CACHE.with(|c| {
-        c.borrow()
-            .as_ref()
-            .and_then(|m| m.get(&cache_key).copied())
-    }) {
+    if let Some(hit) =
+        HARD_OWNED_CACHE.with(|c| c.borrow().as_ref().and_then(|m| m.get(&cache_key).copied()))
+    {
         return hit;
     }
     let result = callee_arg_is_hard_owned_uncached(registry, programs, callee_name, arg_index);
@@ -3469,12 +3418,9 @@ fn callee_arg_is_hard_owned_uncached(
         }
         // Custom formal: hard Owned only when the callee body consumes the binding.
         if formal.is_some_and(|t| {
-            matches!(t, Type::Custom(_))
-                && !crate::codegen::rust::types::is_windjammer_text_type(t)
+            matches!(t, Type::Custom(_)) && !crate::codegen::rust::types::is_windjammer_text_type(t)
         }) {
-            if let Some((pname, body)) =
-                find_function_body_for_registry_key(programs, &key, pidx)
-            {
+            if let Some((pname, body)) = find_function_body_for_registry_key(programs, &key, pidx) {
                 if !param_is_readonly_custom_walk_body(body, pname) {
                     return true;
                 }
@@ -3482,10 +3428,7 @@ fn callee_arg_is_hard_owned_uncached(
                 continue;
             }
             // No body: treat Custom AST Owned as hard only when registry says Owned.
-            if matches!(
-                sig.param_ownership.get(pidx),
-                Some(OwnershipMode::Owned)
-            ) {
+            if matches!(sig.param_ownership.get(pidx), Some(OwnershipMode::Owned)) {
                 return true;
             }
         }
@@ -3518,10 +3461,7 @@ fn callee_arg_is_hard_owned_in_programs(
             let Some(param) = params.get(arg_index) else {
                 continue;
             };
-            if matches!(
-                &param.type_,
-                Type::Reference(_) | Type::MutableReference(_)
-            ) {
+            if matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_)) {
                 continue;
             }
             if decl.is_extern || is_vec_container_type(&param.type_) {
@@ -3534,7 +3474,9 @@ fn callee_arg_is_hard_owned_in_programs(
 
 fn statement_mentions_param_name(stmt: &Statement, param_name: &str) -> bool {
     match stmt {
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_mentions_param(value, param_name)
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter()
@@ -3561,7 +3503,9 @@ fn statement_mentions_param_name(stmt: &Statement, param_name: &str) -> bool {
                         .any(|s| statement_mentions_param_name(s, param_name))
                 })
         }
-        Statement::While { body, condition, .. } => {
+        Statement::While {
+            body, condition, ..
+        } => {
             expr_mentions_param(condition, param_name)
                 || body
                     .iter()
@@ -3624,8 +3568,9 @@ enum BorrowPassthroughUsage {
 impl BorrowPassthroughUsage {
     fn merge(self, other: Self) -> Self {
         match (self, other) {
-            (BorrowPassthroughUsage::Disallowed, _)
-            | (_, BorrowPassthroughUsage::Disallowed) => BorrowPassthroughUsage::Disallowed,
+            (BorrowPassthroughUsage::Disallowed, _) | (_, BorrowPassthroughUsage::Disallowed) => {
+                BorrowPassthroughUsage::Disallowed
+            }
             (BorrowPassthroughUsage::Ok, _) | (_, BorrowPassthroughUsage::Ok) => {
                 BorrowPassthroughUsage::Ok
             }
@@ -3654,11 +3599,15 @@ fn stmt_readonly_borrow_passthrough_usage(
                 )
             }
         }
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             let mut u = expr_readonly_borrow_passthrough_usage(value, param_name, registry);
             if let Some(b) = else_block {
                 for s in b {
-                    u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                    u = u.merge(stmt_readonly_borrow_passthrough_usage(
+                        s, param_name, registry,
+                    ));
                 }
             }
             u
@@ -3669,14 +3618,17 @@ fn stmt_readonly_borrow_passthrough_usage(
             else_block,
             ..
         } => {
-            let mut u =
-                expr_readonly_borrow_passthrough_usage(condition, param_name, registry);
+            let mut u = expr_readonly_borrow_passthrough_usage(condition, param_name, registry);
             for s in then_block {
-                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(
+                    s, param_name, registry,
+                ));
             }
             if let Some(b) = else_block {
                 for s in b {
-                    u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                    u = u.merge(stmt_readonly_borrow_passthrough_usage(
+                        s, param_name, registry,
+                    ));
                 }
             }
             u
@@ -3684,18 +3636,20 @@ fn stmt_readonly_borrow_passthrough_usage(
         Statement::While {
             condition, body, ..
         } => {
-            let mut u =
-                expr_readonly_borrow_passthrough_usage(condition, param_name, registry);
+            let mut u = expr_readonly_borrow_passthrough_usage(condition, param_name, registry);
             for s in body {
-                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(
+                    s, param_name, registry,
+                ));
             }
             u
         }
         Statement::For { iterable, body, .. } => {
-            let mut u =
-                expr_readonly_borrow_passthrough_usage(iterable, param_name, registry);
+            let mut u = expr_readonly_borrow_passthrough_usage(iterable, param_name, registry);
             for s in body {
-                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(
+                    s, param_name, registry,
+                ));
             }
             u
         }
@@ -3806,12 +3760,11 @@ fn expr_readonly_borrow_passthrough_usage(
             }
             u
         }
-        Expression::Binary { left, right, .. } => expr_readonly_borrow_passthrough_usage(
-            left, param_name, registry,
-        )
-        .merge(expr_readonly_borrow_passthrough_usage(
-            right, param_name, registry,
-        )),
+        Expression::Binary { left, right, .. } => {
+            expr_readonly_borrow_passthrough_usage(left, param_name, registry).merge(
+                expr_readonly_borrow_passthrough_usage(right, param_name, registry),
+            )
+        }
         Expression::Unary { operand, .. }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. }
@@ -3821,21 +3774,27 @@ fn expr_readonly_borrow_passthrough_usage(
         Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
             let mut u = BorrowPassthroughUsage::None;
             for e in elements {
-                u = u.merge(expr_readonly_borrow_passthrough_usage(e, param_name, registry));
+                u = u.merge(expr_readonly_borrow_passthrough_usage(
+                    e, param_name, registry,
+                ));
             }
             u
         }
         Expression::StructLiteral { fields, .. } => {
             let mut u = BorrowPassthroughUsage::None;
             for (_, e) in fields {
-                u = u.merge(expr_readonly_borrow_passthrough_usage(e, param_name, registry));
+                u = u.merge(expr_readonly_borrow_passthrough_usage(
+                    e, param_name, registry,
+                ));
             }
             u
         }
         Expression::Block { statements, .. } => {
             let mut u = BorrowPassthroughUsage::None;
             for s in statements {
-                u = u.merge(stmt_readonly_borrow_passthrough_usage(s, param_name, registry));
+                u = u.merge(stmt_readonly_borrow_passthrough_usage(
+                    s, param_name, registry,
+                ));
             }
             u
         }
@@ -3856,7 +3815,9 @@ fn statement_mentions_param(stmt: &Statement, param_name: &str) -> bool {
             value: Some(expr), ..
         }
         | Statement::Assignment { value: expr, .. } => expr_mentions_param(expr, param_name),
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_mentions_param(value, param_name)
                 || else_block
                     .as_ref()
@@ -3901,7 +3862,9 @@ fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
         Expression::Identifier { name, .. } => name == param_name,
         Expression::FieldAccess { object, .. }
         | Expression::Index { object, .. }
-        | Expression::Unary { operand: object, .. }
+        | Expression::Unary {
+            operand: object, ..
+        }
         | Expression::TryOp { expr: object, .. }
         | Expression::Await { expr: object, .. }
         | Expression::Cast { expr: object, .. } => expr_mentions_param(object, param_name),
@@ -3919,9 +3882,7 @@ fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
                     .any(|(_, a)| expr_mentions_param(a, param_name))
         }
         Expression::MethodCall {
-            object,
-            arguments,
-            ..
+            object, arguments, ..
         } => {
             expr_mentions_param(object, param_name)
                 || arguments
@@ -3931,9 +3892,9 @@ fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
         Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => {
             elements.iter().any(|e| expr_mentions_param(e, param_name))
         }
-        Expression::StructLiteral { fields, .. } => {
-            fields.iter().any(|(_, e)| expr_mentions_param(e, param_name))
-        }
+        Expression::StructLiteral { fields, .. } => fields
+            .iter()
+            .any(|(_, e)| expr_mentions_param(e, param_name)),
         Expression::Block { statements, .. } => statements
             .iter()
             .any(|s| statement_mentions_param(s, param_name)),
@@ -4039,13 +4000,7 @@ fn param_has_consuming_field_or_index_move(
         // No type info — fail closed (keep Owned / skip demotion).
         return true;
     };
-    !param_let_field_moves_are_only_copy_or_text(
-        body,
-        param_name,
-        formal_ty,
-        programs,
-        copy_types,
-    )
+    !param_let_field_moves_are_only_copy_or_text(body, param_name, formal_ty, programs, copy_types)
 }
 
 fn param_let_field_moves_are_only_copy_or_text(
@@ -4058,12 +4013,7 @@ fn param_let_field_moves_are_only_copy_or_text(
     let mut saw = false;
     for stmt in body {
         if !stmt_let_field_moves_are_only_copy_or_text(
-            stmt,
-            param_name,
-            formal_ty,
-            programs,
-            copy_types,
-            &mut saw,
+            stmt, param_name, formal_ty, programs, copy_types, &mut saw,
         ) {
             return false;
         }
@@ -4080,7 +4030,9 @@ fn stmt_let_field_moves_are_only_copy_or_text(
     saw: &mut bool,
 ) -> bool {
     match stmt {
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             if expr_is_field_move_from_param(param_name, value) {
                 match resolve_projected_expr_type(formal_ty, value, programs) {
                     Some(ty)
@@ -4095,12 +4047,7 @@ fn stmt_let_field_moves_are_only_copy_or_text(
             else_block.as_ref().is_none_or(|b| {
                 b.iter().all(|s| {
                     stmt_let_field_moves_are_only_copy_or_text(
-                        s,
-                        param_name,
-                        formal_ty,
-                        programs,
-                        copy_types,
-                        saw,
+                        s, param_name, formal_ty, programs, copy_types, saw,
                     )
                 })
             })
@@ -4112,22 +4059,12 @@ fn stmt_let_field_moves_are_only_copy_or_text(
         } => {
             then_block.iter().all(|s| {
                 stmt_let_field_moves_are_only_copy_or_text(
-                    s,
-                    param_name,
-                    formal_ty,
-                    programs,
-                    copy_types,
-                    saw,
+                    s, param_name, formal_ty, programs, copy_types, saw,
                 )
             }) && else_block.as_ref().is_none_or(|b| {
                 b.iter().all(|s| {
                     stmt_let_field_moves_are_only_copy_or_text(
-                        s,
-                        param_name,
-                        formal_ty,
-                        programs,
-                        copy_types,
-                        saw,
+                        s, param_name, formal_ty, programs, copy_types, saw,
                     )
                 })
             })
@@ -4136,12 +4073,7 @@ fn stmt_let_field_moves_are_only_copy_or_text(
         | Statement::For { body, .. }
         | Statement::Loop { body, .. } => body.iter().all(|s| {
             stmt_let_field_moves_are_only_copy_or_text(
-                s,
-                param_name,
-                formal_ty,
-                programs,
-                copy_types,
-                saw,
+                s, param_name, formal_ty, programs, copy_types, saw,
             )
         }),
         Statement::Match { arms, .. } => arms.iter().all(|arm| {
@@ -4214,11 +4146,7 @@ fn element_type_of_container(ty: &Type) -> Option<Type> {
     }
 }
 
-fn resolve_struct_field_type(
-    owner_ty: &Type,
-    field: &str,
-    programs: &[&Program],
-) -> Option<Type> {
+fn resolve_struct_field_type(owner_ty: &Type, field: &str, programs: &[&Program]) -> Option<Type> {
     let owner = strip_ref_type(owner_ty);
     let type_name = match owner {
         Type::Custom(name) => name.rsplit("::").next().unwrap_or(name),
@@ -4251,10 +4179,9 @@ fn param_has_non_let_field_or_index_move(body: &[&Statement], param_name: &str) 
 
 fn stmt_has_non_let_field_move(stmt: &Statement, param_name: &str) -> bool {
     match stmt {
-        Statement::Let { else_block, .. } => else_block.as_ref().is_some_and(|b| {
-            b.iter()
-                .any(|s| stmt_has_non_let_field_move(s, param_name))
-        }),
+        Statement::Let { else_block, .. } => else_block
+            .as_ref()
+            .is_some_and(|b| b.iter().any(|s| stmt_has_non_let_field_move(s, param_name))),
         Statement::Return {
             value: Some(expr), ..
         }
@@ -4267,10 +4194,9 @@ fn stmt_has_non_let_field_move(stmt: &Statement, param_name: &str) -> bool {
             then_block
                 .iter()
                 .any(|s| stmt_has_non_let_field_move(s, param_name))
-                || else_block.as_ref().is_some_and(|b| {
-                    b.iter()
-                        .any(|s| stmt_has_non_let_field_move(s, param_name))
-                })
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| stmt_has_non_let_field_move(s, param_name)))
         }
         Statement::While { body, .. }
         | Statement::For { body, .. }
@@ -4286,12 +4212,13 @@ fn stmt_has_non_let_field_move(stmt: &Statement, param_name: &str) -> bool {
 
 fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
     match stmt {
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_is_field_move_from_param(param_name, value)
-                || else_block.as_ref().is_some_and(|b| {
-                    b.iter()
-                        .any(|s| stmt_has_field_move_binding(s, param_name))
-                })
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| stmt_has_field_move_binding(s, param_name)))
         }
         // P3.582: `fn consume(csr) { csr.neighbors }` / `return csr.offsets` — field move.
         Statement::Return {
@@ -4306,15 +4233,15 @@ fn stmt_has_field_move_binding(stmt: &Statement, param_name: &str) -> bool {
             then_block
                 .iter()
                 .any(|s| stmt_has_field_move_binding(s, param_name))
-                || else_block.as_ref().is_some_and(|b| {
-                    b.iter()
-                        .any(|s| stmt_has_field_move_binding(s, param_name))
-                })
+                || else_block
+                    .as_ref()
+                    .is_some_and(|b| b.iter().any(|s| stmt_has_field_move_binding(s, param_name)))
         }
-        Statement::While { body, .. } | Statement::For { body, .. } | Statement::Loop { body, .. } => {
-            body.iter()
-                .any(|s| stmt_has_field_move_binding(s, param_name))
-        }
+        Statement::While { body, .. }
+        | Statement::For { body, .. }
+        | Statement::Loop { body, .. } => body
+            .iter()
+            .any(|s| stmt_has_field_move_binding(s, param_name)),
         Statement::Match { arms, .. } => arms
             .iter()
             .any(|arm| expr_is_field_move_from_param(param_name, &arm.body)),
@@ -4328,7 +4255,11 @@ fn expr_is_field_move_from_param(param_name: &str, expr: &Expression) -> bool {
 
 /// `value_position`: field/index is used as a value (return, let, call arg) → move.
 /// Place position (method/index receiver, binary operand) → auto-borrow, not a move.
-fn expr_has_field_move_from_param(param_name: &str, expr: &Expression, value_position: bool) -> bool {
+fn expr_has_field_move_from_param(
+    param_name: &str,
+    expr: &Expression,
+    value_position: bool,
+) -> bool {
     match expr {
         Expression::FieldAccess { object, .. } => {
             if value_position {
@@ -4350,9 +4281,7 @@ fn expr_has_field_move_from_param(param_name: &str, expr: &Expression, value_pos
             .iter()
             .any(|(_, arg)| expr_has_field_move_from_param(param_name, arg, true)),
         Expression::MethodCall {
-            object,
-            arguments,
-            ..
+            object, arguments, ..
         } => {
             expr_has_field_move_from_param(param_name, object, false)
                 || arguments
@@ -4400,7 +4329,9 @@ fn param_moved_into_let_binding(body: &[&Statement], param_name: &str) -> bool {
 
 fn statement_moves_param_into_let(stmt: &Statement, param_name: &str) -> bool {
     match stmt {
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_is_bare_param(value, param_name)
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter()
@@ -4464,7 +4395,9 @@ fn stmt_param_usage(stmt: &Statement, param_name: &str) -> ParamUsage {
             value: Some(expr), ..
         } => expr_param_usage(expr, param_name),
         Statement::Return { .. } => ParamUsage::None,
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             let mut usage = expr_param_usage(value, param_name);
             if let Some(b) = else_block {
                 for s in b {
@@ -4520,9 +4453,8 @@ impl ParamUsage {
         match (self, other) {
             (ParamUsage::Other, _) | (_, ParamUsage::Other) => ParamUsage::Other,
             (ParamUsage::FieldInCallArg, ParamUsage::FieldInCallArg) => ParamUsage::FieldInCallArg,
-            (ParamUsage::FieldInCallArg, ParamUsage::None) | (ParamUsage::None, ParamUsage::FieldInCallArg) => {
-                ParamUsage::FieldInCallArg
-            }
+            (ParamUsage::FieldInCallArg, ParamUsage::None)
+            | (ParamUsage::None, ParamUsage::FieldInCallArg) => ParamUsage::FieldInCallArg,
             (ParamUsage::None, ParamUsage::None) => ParamUsage::None,
         }
     }
@@ -4548,7 +4480,9 @@ fn expr_param_usage(expr: &Expression, param_name: &str) -> ParamUsage {
             }
             usage
         }
-        Expression::MethodCall { object, arguments, .. } => {
+        Expression::MethodCall {
+            object, arguments, ..
+        } => {
             let mut usage = expr_param_usage(object, param_name);
             for (_, arg) in arguments {
                 usage = usage.merge(call_arg_param_usage(arg, param_name));
@@ -4620,7 +4554,9 @@ fn statement_stores_param_in_struct_literal(stmt: &Statement, param_name: &str) 
         | Statement::Assignment { value: expr, .. } => {
             expr_stores_param_in_struct_literal(expr, param_name)
         }
-        Statement::Let { value, else_block, .. } => {
+        Statement::Let {
+            value, else_block, ..
+        } => {
             expr_stores_param_in_struct_literal(value, param_name)
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter()

@@ -131,12 +131,10 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::MethodCall { object, method, .. } => {
                 // For method chains, try to resolve the return type of the method.
                 // If the method returns Self (or the same type), the type propagates.
-                let obj_type = self
-                    .infer_type_name(object)
-                    .or_else(|| {
-                        self.infer_expression_type(object)
-                            .and_then(|t| Self::type_to_name(&t))
-                    });
+                let obj_type = self.infer_type_name(object).or_else(|| {
+                    self.infer_expression_type(object)
+                        .and_then(|t| Self::type_to_name(&t))
+                });
                 if let Some(ref tn) = obj_type {
                     let qualified = format!("{}::{}", tn, method);
                     if let Some(sig) = self.get_signature_with_global(&qualified) {

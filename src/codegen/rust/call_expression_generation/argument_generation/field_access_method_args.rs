@@ -32,7 +32,10 @@ fn ensure_clone_borrowed_self_field_into_owned(
     arg_index: usize,
     qualified_name: &str,
 ) {
-    if !matches!(arg, Expression::FieldAccess { .. } | Expression::Index { .. }) {
+    if !matches!(
+        arg,
+        Expression::FieldAccess { .. } | Expression::Index { .. }
+    ) {
         return;
     }
     if coerced.ends_with(".clone()") || coerced.ends_with(".to_owned()") {
@@ -45,19 +48,20 @@ fn ensure_clone_borrowed_self_field_into_owned(
         return;
     }
     let pidx = sig.arg_param_index(arg_index);
-    let owned_slot = crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
-        || crate::analyzer::SignatureRegistry::stdlib()
-            .get_signature(qualified_name)
-            .or_else(|| {
-                let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
-                crate::analyzer::SignatureRegistry::stdlib().get_signature(simple)
-            })
-            .is_some_and(|std_sig| {
-                crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
-                    std_sig,
-                    std_sig.arg_param_index(arg_index),
-                )
-            });
+    let owned_slot =
+        crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(sig, pidx)
+            || crate::analyzer::SignatureRegistry::stdlib()
+                .get_signature(qualified_name)
+                .or_else(|| {
+                    let simple = qualified_name.rsplit("::").next().unwrap_or(qualified_name);
+                    crate::analyzer::SignatureRegistry::stdlib().get_signature(simple)
+                })
+                .is_some_and(|std_sig| {
+                    crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
+                        std_sig,
+                        std_sig.arg_param_index(arg_index),
+                    )
+                });
     if !owned_slot {
         return;
     }

@@ -645,7 +645,10 @@ impl<'ast> CodeGenerator<'ast> {
                         .and_then(|a| a.inferred_ownership.get("self").copied());
                     let impl_upgraded_mut = matches!(
                         (trait_only_self, self_ownership),
-                        (Some(OwnershipMode::Borrowed), Some(OwnershipMode::MutBorrowed))
+                        (
+                            Some(OwnershipMode::Borrowed),
+                            Some(OwnershipMode::MutBorrowed)
+                        )
                     );
                     let default_body_readonly = analyzed
                         .iter()
@@ -1282,7 +1285,8 @@ impl<'ast> CodeGenerator<'ast> {
                 if !name_set.contains(callee.as_str()) {
                     continue;
                 }
-                let Some(callee_idx) = names.iter().position(|name| *name == callee.as_str()) else {
+                let Some(callee_idx) = names.iter().position(|name| *name == callee.as_str())
+                else {
                     continue;
                 };
                 if callee_idx == caller_idx {
@@ -1335,11 +1339,16 @@ impl<'ast> CodeGenerator<'ast> {
         out: &mut HashSet<String>,
     ) {
         match stmt {
-            Statement::Expression { expr, .. } | Statement::Return { value: Some(expr), .. } => {
+            Statement::Expression { expr, .. }
+            | Statement::Return {
+                value: Some(expr), ..
+            } => {
                 Self::collect_impl_sibling_method_calls_in_expression(expr, sibling_methods, out);
             }
             Statement::Return { .. } => {}
-            Statement::Let { value, else_block, .. } => {
+            Statement::Let {
+                value, else_block, ..
+            } => {
                 Self::collect_impl_sibling_method_calls_in_expression(value, sibling_methods, out);
                 if let Some(block) = else_block {
                     Self::collect_impl_sibling_method_calls_in_body(
@@ -1376,7 +1385,9 @@ impl<'ast> CodeGenerator<'ast> {
                     );
                 }
             }
-            Statement::While { body, condition, .. } => {
+            Statement::While {
+                body, condition, ..
+            } => {
                 Self::collect_impl_sibling_method_calls_in_expression(
                     condition,
                     sibling_methods,
@@ -1447,7 +1458,11 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 Self::collect_impl_sibling_method_calls_in_expression(object, sibling_methods, out);
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 if let Expression::FieldAccess { object, field, .. } = &**function {
                     if matches!(&**object, Expression::Identifier { name, .. } if name == "Self")
                         && sibling_methods.contains(field.as_str())
@@ -1479,7 +1494,11 @@ impl<'ast> CodeGenerator<'ast> {
                 Self::collect_impl_sibling_method_calls_in_expression(right, sibling_methods, out);
             }
             Expression::Unary { operand, .. } => {
-                Self::collect_impl_sibling_method_calls_in_expression(operand, sibling_methods, out);
+                Self::collect_impl_sibling_method_calls_in_expression(
+                    operand,
+                    sibling_methods,
+                    out,
+                );
             }
             Expression::FieldAccess { object, .. } => {
                 Self::collect_impl_sibling_method_calls_in_expression(object, sibling_methods, out);

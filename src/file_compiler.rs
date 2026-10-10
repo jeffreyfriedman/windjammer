@@ -316,7 +316,8 @@ impl ModuleCompiler {
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
         generator.set_numeric_inference(numeric_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
-        generator.set_global_signature_registry(std::sync::Arc::new(self.global_signatures.clone()));
+        generator
+            .set_global_signature_registry(std::sync::Arc::new(self.global_signatures.clone()));
         // CROSS-MODULE STRUCT FIELD TYPES: Pre-populate for type inference on imported structs
         generator.set_global_struct_field_types(self.global_struct_field_types.clone());
         // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums

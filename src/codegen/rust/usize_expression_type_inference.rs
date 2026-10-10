@@ -279,19 +279,12 @@ impl<'ast> CodeGenerator<'ast> {
         // i64+usize arithmetic is often inferred as usize, which previously skipped
         // the cast and left the `strings.len` binding bare (E0308).
         if let Expression::Binary {
-            op,
-            left,
-            right,
-            ..
+            op, left, right, ..
         } = expr
         {
             if matches!(
                 op,
-                BinaryOp::Add
-                    | BinaryOp::Sub
-                    | BinaryOp::Mul
-                    | BinaryOp::Div
-                    | BinaryOp::Mod
+                BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
             ) && (self.comparison_other_side_needs_len_as_i64(left)
                 || self.comparison_other_side_needs_len_as_i64(right))
             {
@@ -331,7 +324,10 @@ impl<'ast> CodeGenerator<'ast> {
             if matches!(it, IntType::I32 | IntType::U32 | IntType::Usize) {
                 return false;
             }
-            return matches!(it, IntType::I8 | IntType::I16 | IntType::I64 | IntType::Isize);
+            return matches!(
+                it,
+                IntType::I8 | IntType::I16 | IntType::I64 | IntType::Isize
+            );
         }
         false
     }
@@ -354,7 +350,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// When comparing `u64` (etc.) against `.len()`, cast the **len** side to that width — not `i64`.
-    pub(in crate::codegen::rust) fn unsigned_int_width_for_len_cast(ty: &Type) -> Option<&'static str> {
+    pub(in crate::codegen::rust) fn unsigned_int_width_for_len_cast(
+        ty: &Type,
+    ) -> Option<&'static str> {
         match ty {
             Type::Uint => Some("u32"),
             Type::Custom(name) => match name.as_str() {
@@ -373,7 +371,9 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// i32 counters vs `.len()`: cast len to `i32`, not `i64` (P3.338).
-    pub(in crate::codegen::rust) fn narrow_signed_width_for_len_compare(ty: &Type) -> Option<&'static str> {
+    pub(in crate::codegen::rust) fn narrow_signed_width_for_len_compare(
+        ty: &Type,
+    ) -> Option<&'static str> {
         match ty {
             Type::Int32 => Some("i32"),
             Type::Custom(name) if name == "i32" => Some("i32"),
@@ -402,7 +402,8 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .and_then(Self::narrow_signed_width_for_len_compare)
             .or_else(|| {
-                if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::I32 {
+                if self.int_type_for_mixed_int_codegen(expr) == crate::type_inference::IntType::I32
+                {
                     Some("i32")
                 } else {
                     None
@@ -530,7 +531,10 @@ impl<'ast> CodeGenerator<'ast> {
             // `as` binds tighter than `+`/`-`: `i + 1_usize as i64` is invalid.
             // Parenthesize non-atomic RHSes (`(i + 1_usize) as i64`).
             let needs_parens = base.chars().any(|c| {
-                matches!(c, '+' | '-' | '*' | '/' | '%' | '|' | '&' | '^' | '<' | '>' | ' ')
+                matches!(
+                    c,
+                    '+' | '-' | '*' | '/' | '%' | '|' | '&' | '^' | '<' | '>' | ' '
+                )
             }) && !(base.starts_with('(') && base.ends_with(')'));
             *expr_str = if needs_parens {
                 format!("({base}){cast_suffix}")
@@ -631,12 +635,13 @@ impl<'ast> CodeGenerator<'ast> {
         if self.codegen_i32_binding_names.contains(name) {
             return false;
         }
-        self.current_function_params.iter().any(|p| {
-            p.name == name && matches!(&p.type_, Type::Custom(s) if s == "usize")
-        }) || self
-            .local_var_types
-            .get(name)
-            .is_some_and(|t| matches!(t, Type::Custom(s) if s == "usize"))
+        self.current_function_params
+            .iter()
+            .any(|p| p.name == name && matches!(&p.type_, Type::Custom(s) if s == "usize"))
+            || self
+                .local_var_types
+                .get(name)
+                .is_some_and(|t| matches!(t, Type::Custom(s) if s == "usize"))
     }
 
     /// DB-308/303: index expressions involving u32/i32 locals need an outer `as usize`
@@ -720,8 +725,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         if let Expression::Identifier { name, .. } = index {
             if self.local_var_types.get(name.as_str()).is_some_and(|ty| {
-                matches!(ty, Type::Int32)
-                    || matches!(ty, Type::Custom(n) if n == "i32")
+                matches!(ty, Type::Int32) || matches!(ty, Type::Custom(n) if n == "i32")
             }) && !idx_str.contains(" as usize")
             {
                 *idx_str = format!("({} as usize)", idx_str);
@@ -756,7 +760,9 @@ impl<'ast> CodeGenerator<'ast> {
         // `.len()` promotion — still cast at the index so `[String]` is not indexed by
         // an inferred i64 (vec_int_index) and the gate sees `as usize`.
         if let Expression::Identifier { name, .. } = index {
-            if self.literal_init_wj_int_loop_counters.contains(name.as_str())
+            if self
+                .literal_init_wj_int_loop_counters
+                .contains(name.as_str())
                 && !idx_str.contains(" as usize")
             {
                 *idx_str = format!("({} as usize)", idx_str);
@@ -769,9 +775,9 @@ impl<'ast> CodeGenerator<'ast> {
         if self.infer_expression_type_is_usize(index) {
             if let Expression::Identifier { name, .. } = index {
                 let is_i32_scan = self.local_var_types.get(name.as_str()).is_some_and(|ty| {
-                    matches!(ty, Type::Int32)
-                        || matches!(ty, Type::Custom(n) if n == "i32")
-                }) || self.int_type_for_mixed_int_codegen(index) == crate::type_inference::IntType::I32;
+                    matches!(ty, Type::Int32) || matches!(ty, Type::Custom(n) if n == "i32")
+                }) || self.int_type_for_mixed_int_codegen(index)
+                    == crate::type_inference::IntType::I32;
                 if is_i32_scan && !idx_str.contains(" as usize") {
                     *idx_str = format!("({} as usize)", idx_str);
                     return;
@@ -827,7 +833,9 @@ impl<'ast> CodeGenerator<'ast> {
             *idx_str = format!("{} as usize", base);
         } else if !idx_str.contains(" as ") {
             if let Expression::Identifier { name, .. } = index {
-                if self.local_int_rust_type_name_excluding_ambiguous_int(name).as_deref()
+                if self
+                    .local_int_rust_type_name_excluding_ambiguous_int(name)
+                    .as_deref()
                     == Some("i32")
                 {
                     *idx_str = format!("{} as usize", idx_str);
@@ -1002,9 +1010,7 @@ impl<'ast> CodeGenerator<'ast> {
         if unified == crate::type_inference::IntType::Unknown {
             return;
         }
-        let natural = self
-            .natural_int_emission_type(expr)
-            .unwrap_or(unified);
+        let natural = self.natural_int_emission_type(expr).unwrap_or(unified);
         if natural == unified {
             return;
         }

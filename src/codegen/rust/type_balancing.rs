@@ -996,10 +996,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             );
             let left_is_shared_text_ref = left_is_ref
-                || matches!(
-                    lt.as_ref(),
-                    Some(Type::Reference(_))
-                )
+                || matches!(lt.as_ref(), Some(Type::Reference(_)))
                 || matches!(
                     left,
                     Expression::Identifier { name, .. }
@@ -1008,10 +1005,7 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                 );
             let right_is_shared_text_ref = right_is_ref
-                || matches!(
-                    rt.as_ref(),
-                    Some(Type::Reference(_))
-                )
+                || matches!(rt.as_ref(), Some(Type::Reference(_)))
                 || matches!(
                     right,
                     Expression::Identifier { name, .. }
@@ -1089,7 +1083,14 @@ impl<'ast> CodeGenerator<'ast> {
         // No cleanup needed here since they never get * derefs in the first place
 
         if is_ordering_compare {
-            self.balance_owned_text_against_str_literal(left, right, lt.as_ref(), rt.as_ref(), left_str, right_str);
+            self.balance_owned_text_against_str_literal(
+                left,
+                right,
+                lt.as_ref(),
+                rt.as_ref(),
+                left_str,
+                right_str,
+            );
         }
     }
 

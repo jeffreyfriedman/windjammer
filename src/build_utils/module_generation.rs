@@ -418,7 +418,11 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                             if !is_reserved_cargo_layout_dir(dir_name)
                                 && path.join("mod.rs").exists()
                                 && !mod_declared_in(&content, dir_name)
-                                && should_merge_extra_module(dir_name, sibling_src.as_deref(), output_dir)
+                                && should_merge_extra_module(
+                                    dir_name,
+                                    sibling_src.as_deref(),
+                                    output_dir,
+                                )
                             {
                                 extra_modules.push(dir_name.to_string());
                             }
@@ -701,7 +705,9 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                     let local_modules: std::collections::HashSet<&str> =
                         modules.iter().map(|s| s.as_str()).collect();
                     let (_, pub_uses) =
-                        crate::module_system::import_resolution::parse_mod_declarations(&wj_content);
+                        crate::module_system::import_resolution::parse_mod_declarations(
+                            &wj_content,
+                        );
                     for path in pub_uses {
                         let first = path.split("::").next().unwrap_or("");
                         if is_test_module(first) {
@@ -974,7 +980,11 @@ mod wdb093_cross_crate_pub_use_tests {
             "pub mod observability_layer\npub use observability_layer::ObservabilityLayer\npub use db_index::Bm25Index\npub use db_index::PartTextStats\n",
         )
         .unwrap();
-        fs::write(out.join("observability_layer.rs"), "pub struct ObservabilityLayer;\n").unwrap();
+        fs::write(
+            out.join("observability_layer.rs"),
+            "pub struct ObservabilityLayer;\n",
+        )
+        .unwrap();
         // Auto-generated mod.rs WITHOUT cross-crate re-exports (bug state).
         fs::write(
             out.join("mod.rs"),
