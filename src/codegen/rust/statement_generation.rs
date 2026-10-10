@@ -1366,16 +1366,90 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         }
         let yields_refs = self.tuple_let_rhs_yields_ref_bindings(value, &tuple_ty);
+        let indexed_i32_literal_tuples = self.indexed_i32_literal_tuple_array(value);
         for (pat, elem_ty) in patterns.iter().zip(elem_tys.iter()) {
             if let Pattern::Identifier(name) = pat {
-                let ty = if yields_refs {
-                    Type::Reference(Box::new(elem_ty.clone()))
+                let elem_ty = if indexed_i32_literal_tuples && matches!(elem_ty, Type::Int) {
+                    Type::Int32
                 } else {
                     elem_ty.clone()
                 };
+                let ty = if yields_refs {
+                    Type::Reference(Box::new(elem_ty))
+                } else {
+                    elem_ty
+                };
+                if matches!(ty, Type::Int32) {
+                    self.codegen_i32_binding_names.insert(name.clone());
+                }
                 self.local_var_types.insert(name.clone(), ty);
             }
         }
+    }
+
+    /// `let offsets = [(-1, 0), …]` in an `-> i32` function, then `let (ox, oz) = offsets[i]`.
+    /// The components are unsuffixed literals emitted as `i32`; binding them as WJ `int`
+    /// widens `cx + ox` to `i64`.
+    fn indexed_i32_literal_tuple_array(&self, value: &Expression<'ast>) -> bool {
+        if !self.function_returns_i32_for_loop_scan() {
+            return false;
+        }
+        let Expression::Index { object, .. } = value else {
+            return false;
+        };
+        let Expression::Identifier { name, .. } = &**object else {
+            return false;
+        };
+        self.let_binding_rhs(name)
+            .is_some_and(Self::array_is_int_literal_tuples)
+    }
+
+    fn let_binding_rhs(&self, name: &str) -> Option<&Expression<'ast>> {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        Self::find_let_binding_rhs(&body, name)
+    }
+
+    fn find_let_binding_rhs<'a>(
+        stmts: &[&'a crate::parser::Statement<'a>],
+        name: &str,
+    ) -> Option<&'a Expression<'a>> {
+        use crate::parser::Statement;
+        for stmt in stmts {
+            match stmt {
+                Statement::Let {
+                    pattern: Pattern::Identifier(n),
+                    value,
+                    ..
+                } if n == name => return Some(*value),
+                Statement::While { body, .. }
+                | Statement::For { body, .. }
+                | Statement::Loop { body, .. } => {
+                    if let Some(found) = Self::find_let_binding_rhs(body, name) {
+                        return Some(found);
+                    }
+                }
+                Statement::If {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if let Some(found) = Self::find_let_binding_rhs(then_block, name) {
+                        return Some(found);
+                    }
+                    if let Some(else_body) = else_block {
+                        if let Some(found) = Self::find_let_binding_rhs(else_body, name) {
+                            return Some(found);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     fn tuple_let_rhs_yields_ref_bindings(

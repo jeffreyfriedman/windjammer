@@ -1188,6 +1188,11 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         name: &str,
     ) -> Option<Type> {
+        // `ii: i32` + `ii + i1` fixes the untyped offset at i32. A later
+        // `i1 = 1` is an unsuffixed literal and must not override that.
+        if self.binding_is_added_to_i32(name) {
+            return Some(Type::Int32);
+        }
         let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
             self.full_function_body_snapshot.iter().copied().collect()
         } else {
@@ -1196,6 +1201,164 @@ impl<'ast> CodeGenerator<'ast> {
         let mut peer = None;
         self.scan_stmts_for_mut_int_assign_peer(&body, name, &mut peer);
         peer
+    }
+
+    /// `name + 1` and `name = 1` carry no width. Inferring them as WJ `int`
+    /// stamped `0_i64` on void-function counters (P3.775).
+    fn rhs_is_self_or_unsuffixed_int(value: &Expression<'ast>, name: &str) -> bool {
+        match value {
+            Expression::Literal {
+                value: Literal::Int(_),
+                ..
+            } => true,
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Neg,
+                operand,
+                ..
+            } => matches!(
+                operand,
+                Expression::Literal {
+                    value: Literal::Int(_),
+                    ..
+                }
+            ),
+            Expression::Identifier { name: n, .. } => n == name,
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Add | crate::parser::BinaryOp::Sub,
+                left,
+                right,
+                ..
+            } => {
+                Self::rhs_is_self_or_unsuffixed_int(left, name)
+                    && Self::rhs_is_self_or_unsuffixed_int(right, name)
+            }
+            _ => false,
+        }
+    }
+
+    fn binding_is_added_to_i32(&self, name: &str) -> bool {
+        let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty() {
+            self.full_function_body_snapshot.iter().copied().collect()
+        } else {
+            self.current_function_body.iter().copied().collect()
+        };
+        self.stmts_add_binding_to_i32(&body, name)
+    }
+
+    fn stmts_add_binding_to_i32(
+        &self,
+        stmts: &[&crate::parser::Statement<'ast>],
+        name: &str,
+    ) -> bool {
+        use crate::parser::Statement;
+        for stmt in stmts {
+            match stmt {
+                Statement::Let { value, .. } | Statement::Expression { expr: value, .. } => {
+                    if self.expr_adds_binding_to_i32(value, name) {
+                        return true;
+                    }
+                }
+                Statement::Assignment { value, .. } => {
+                    if self.expr_adds_binding_to_i32(value, name) {
+                        return true;
+                    }
+                }
+                Statement::While {
+                    condition, body, ..
+                } => {
+                    if self.expr_adds_binding_to_i32(condition, name)
+                        || self.stmts_add_binding_to_i32(body, name)
+                    {
+                        return true;
+                    }
+                }
+                Statement::For { body, .. } | Statement::Loop { body, .. } => {
+                    if self.stmts_add_binding_to_i32(body, name) {
+                        return true;
+                    }
+                }
+                Statement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    if self.expr_adds_binding_to_i32(condition, name)
+                        || self.stmts_add_binding_to_i32(then_block, name)
+                        || else_block
+                            .as_ref()
+                            .is_some_and(|b| self.stmts_add_binding_to_i32(b, name))
+                    {
+                        return true;
+                    }
+                }
+                Statement::Return {
+                    value: Some(value), ..
+                } => {
+                    if self.expr_adds_binding_to_i32(value, name) {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn expr_adds_binding_to_i32(&self, expr: &Expression<'ast>, name: &str) -> bool {
+        match expr {
+            Expression::Binary {
+                op: crate::parser::BinaryOp::Add | crate::parser::BinaryOp::Sub,
+                left,
+                right,
+                ..
+            } => {
+                let left_has = Self::expr_mentions_ident(left, name);
+                let right_has = Self::expr_mentions_ident(right, name);
+                if left_has && self.side_is_i32_other_than(right, name) {
+                    return true;
+                }
+                if right_has && self.side_is_i32_other_than(left, name) {
+                    return true;
+                }
+                self.expr_adds_binding_to_i32(left, name)
+                    || self.expr_adds_binding_to_i32(right, name)
+            }
+            Expression::Unary { operand, .. } | Expression::Cast { expr: operand, .. } => {
+                self.expr_adds_binding_to_i32(operand, name)
+            }
+            Expression::Block { statements, .. } => self.stmts_add_binding_to_i32(statements, name),
+            _ => false,
+        }
+    }
+
+    fn side_is_i32_other_than(&self, expr: &Expression<'ast>, excluded: &str) -> bool {
+        if let Expression::Identifier { name, .. } = expr {
+            if name == excluded {
+                return false;
+            }
+            if self.current_function_params.iter().any(|p| {
+                p.name == *name
+                    && (matches!(&p.type_, Type::Int32)
+                        || matches!(&p.type_, Type::Custom(n) if n == "i32"))
+            }) {
+                return true;
+            }
+        }
+        self.expression_has_i32_width_in_tree(expr)
+    }
+
+    fn expr_mentions_ident(expr: &Expression<'ast>, name: &str) -> bool {
+        match expr {
+            Expression::Identifier { name: n, .. } => n == name,
+            Expression::Binary { left, right, .. } => {
+                Self::expr_mentions_ident(left, name) || Self::expr_mentions_ident(right, name)
+            }
+            Expression::Unary { operand, .. } | Expression::Cast { expr: operand, .. } => {
+                Self::expr_mentions_ident(operand, name)
+            }
+            _ => false,
+        }
     }
 
     fn scan_stmts_for_mut_int_assign_peer(
@@ -1211,7 +1374,8 @@ impl<'ast> CodeGenerator<'ast> {
                     if matches!(
                         target,
                         Expression::Identifier { name: n, .. } if n == name
-                    ) {
+                    ) && !Self::rhs_is_self_or_unsuffixed_int(value, name)
+                    {
                         // Resolve RHS width against the *full* function body so
                         // `best_count = count` inside `if` still finds
                         // `let count = counts[i]` in the enclosing while (WDB-305).

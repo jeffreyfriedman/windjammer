@@ -2,6 +2,26 @@
 
 
 
+## P3.780 (2026-10-09) — `Vec::new()` plus `push` into `Vec<u32>` must not be `i64`
+
+`streaming_coordinator_test.wj` does `adds.push(100)` then stores `adds` in
+`StreamingTileBatch.add_ids: Vec<u32>`. Tip-out emits `Vec<i64>` and
+`adds.push(100_i64)`.
+
+| Gate | Status |
+|------|--------|
+| P3.780 isolate | pending |
+| P3.780 tip-out | pending — `gen/world/streaming_coordinator_test.rs` has `Vec<i64>` |
+
+**Root cause layer:** integer width of an empty vec filled by `push`, then
+moved into a `Vec<u32>` field. Distinct from P3.744 (vec literal vs later
+`push`) and WDB-127 (`vec![30, 40]` into `&Vec<u64>`).
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --release --test all -- vec_new_push_into_u32_field_`
+
+
 ## P3.779 (2026-10-09) — `f32 * ((len - 1) as f32)` must not compare to `1_i32`
 
 `ui/layout.wj` writes `if child_count > 1 { self.gap * ((child_count - 1) as f32) }`
@@ -116,12 +136,12 @@ emits `let mut configured_count = 0_i64`.
 
 | Gate | Status |
 |------|--------|
-| `untyped_plus_one_counter_must_not_emit_i64` | ❌ isolate RED — `let mut configured_count = 0_i64` then `configured_count += 1` beside `while i < 256_u32` |
-| `untyped_plus_one_counter_tip_out_material_palette` | ❌ tip-out RED — `gen/voxel/material.rs` has `configured_count = 0_i64` |
+| `untyped_plus_one_counter_must_not_emit_i64` | ✅ isolate GREEN |
+| `untyped_plus_one_counter_tip_out_material_palette` | ❌ tip-out RED — stale `gen/voxel/material.rs` (do not regen) |
 
-**Root cause layer:** default width of an untyped `+ 1` accumulator. Distinct
-from P3.755 (`+ g.len()`), P3.773 (counter compared to `.len()`), and P3.772
-(untyped offset added to an `i32`).
+**Root cause layer:** constraint/solver — `name = name + 1` was inferred as WJ `int` and overrode the void-function i32 paint.
+
+**What became unnecessary:** treating a self-increment of unsuffixed literals as an i64 assignment peer.
 
 **Do not steal:** compiler `src/`.
 
@@ -164,12 +184,12 @@ emits `let mut idx = 0_i64` and `barriers[(idx as usize)]`.
 
 | Gate | Status |
 |------|--------|
-| `for_loop_len_counter_must_not_emit_i64` | ❌ isolate RED — `let mut idx = 0_i64`, `barriers: &Vec<Barrier>`, `idx < ((barriers.len() as i64))`, `barriers[(idx as usize)]` |
-| `for_loop_len_counter_tip_out_shader_graph_executor` | ❌ tip-out RED — `gen/rendering/shader_graph_executor.rs` has `let mut idx = 0_i64` |
+| `for_loop_len_counter_must_not_emit_i64` | ✅ isolate GREEN |
+| `for_loop_len_counter_tip_out_shader_graph_executor` | ❌ tip-out RED — stale `gen/rendering/shader_graph_executor.rs` (do not regen) |
 
-**Root cause layer:** untyped counter beside a `for` and a `.len()` compare.
-Distinct from P3.755 (`total = total + g.len()`), P3.772 (corner offset added
-to an `i32`), and the `while idx < vec.len()` unify test.
+**Root cause layer:** constraint/solver — `if idx < barriers.len()` inside `for` did not join the usize-bound counter prepass (only `while` conditions did).
+
+**What became unnecessary:** nothing deleted; the `while` usize walk now also runs on `if` conditions.
 
 **Do not steal:** compiler `src/`.
 
@@ -182,12 +202,16 @@ to an `i32`), and the `while idx < vec.len()` unify test.
 
 | Gate | Status |
 |------|--------|
-| `wdb475_module_file_untyped_corner_offset_added_to_i32_must_not_be_i64` | ❌ isolate RED — `0_i64` |
-| `wdb475_tip_out_simplex_corner_offset_must_not_be_i64` | ❌ tip RED — `simplex_noise.rs` |
+| `wdb475_module_file_untyped_corner_offset_added_to_i32_must_not_be_i64` | ✅ isolate GREEN |
+| `wdb475_tip_out_simplex_corner_offset_must_not_be_i64` | ❌ tip RED — stale `simplex_noise.rs` (do not regen) |
+
+**Root cause layer:** constraint/solver — `i1 = 1` was an i64 peer, so an untyped offset added to an `i32` stayed `i64`.
+
+**What became unnecessary:** unsuffixed `name = 1` no longer stamps WJ `int` onto the binding when `ii + i1` already fixes i32.
 
 **Do not steal:** compiler `src/`. Distinct from P3.770 (tuple-array `0_i64` beside `i32`).
 
-**Gates:** `cargo test --test all --features integration_tests -- wdb475_` — isolate RED / tip RED (2026-10-09).
+**Gates:** `cargo test --release --test all -- wdb475_module_file_untyped_corner_offset_added_to_i32_must_not_be_i64` — isolate GREEN (2026-10-09). Tip-out stays stale.
 
 
 ## P3.771 (2026-10-09) — mixed `&str` and owned `Vec` call borrows the wrong args (no compiler src)
@@ -219,11 +243,12 @@ components to `i32` cell coordinates. Tip-out emits
 
 | Gate | Status |
 |------|--------|
-| `tuple_i32_offset_array_must_not_mix_i64` | ❌ isolate RED — `[(-1_i32, 0_i64), (1_i32, 0_i32), (0_i64, -1_i32), (0_i32, 1_i32)]` |
-| `tuple_i32_offset_array_tip_out_tps_camera` | ❌ tip-out RED — `(-1, 0_i64)` and `(0_i64, -1)` |
+| `tuple_i32_offset_array_must_not_mix_i64` | ✅ isolate GREEN — array and `cx + ox` stay i32 |
+| `tuple_i32_offset_array_tip_out_tps_camera` | ❌ tip-out RED — stale `gen/camera/tps_camera.rs` (do not regen) |
 
-**Root cause layer:** integer suffix on tuple-array literals. Distinct from
-WDB-423 (clone on `offsets[i]`) and P3.403 (neg while counter vs i32 peers).
+**Root cause layer:** coercion/encoding — a negated int literal inferred as WJ `int` was a tuple peer for the sibling `0`, and the destructured components stayed WJ `int` so `cx + ox` widened to `i64`.
+
+**What became unnecessary:** negated int literals are not tuple width peers. Components of an `-> i32` int-literal tuple array are recorded as `i32`.
 
 **Do not steal:** compiler `src/`.
 
