@@ -2,6 +2,26 @@
 
 
 
+## P3.798 (2026-10-10) — `while i < 6` used as an index must not be `i32`
+
+`camera/fps_camera.wj` writes `let mut i = 0`, `while i < 6`, and `offsets[i]`. HEAD emits `let mut i: i32 = 0_i32`, `while i < 6_i32`, and `offsets[(i as usize)]`.
+
+| Gate | Status |
+|------|--------|
+| P3.798 MultiFile | ❌ isolate RED — `let mut i: i32 = 0_i32`, `while i < 6_i32`, `offsets[(i as usize)]` |
+| P3.798 tip-out | ❌ tip RED — `while i < 6_i32` in `gen/camera/fps_camera.rs` |
+
+**Root cause layer:** codegen — an untyped `while` counter bounded by an int literal and used as a vec index becomes `i32`.
+
+**Why this is a new class:**
+- P3.792 is `for i in 0..len()` beside a sibling `count: i32`.
+- P3.795 is `for i in 0..len()` with `return i as i32`.
+- P3.679 accepted `while i < 64_i32` for a substring index. This loop indexes a `Vec<f32>` and only does `i = i + 1`. The bound is the literal `6`.
+
+**Do not steal:** WDB-406/408/411/457–486, P3.508–P3.797, compiler `src/`.
+
+**Gates:** `cargo test --release --offline --test all --features integration_tests -- while_literal_bound_index` against HEAD `6a9b6255` → **0 passed; 2 failed**; 1834 filtered; 0.05s.
+
 ## P3.797 (2026-10-10) — TDD WDB-486 (DB agent; no compiler src)
 
 A `string` inserted into different maps on successive `if` arms must not `.clone().clone()`. One clone per arm that is not the last use is enough.
