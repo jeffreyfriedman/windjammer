@@ -10,8 +10,6 @@
     feature = "integration_tests",
 ))]
 
-//! DB-081 / DB-082 multipass codegen regression gates (DbProject CSR + HashMap i64).
-
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
@@ -28,7 +26,6 @@ fn fixture(relative: &str) -> String {
     .unwrap_or_else(|e| panic!("missing fixture {relative}: {e}"))
 }
 
-/// DB-081: CSR view reused in while-loop helpers must borrow, not clone neighbor arrays.
 #[test]
 fn test_library_multipass_graph_csr_view_loop_must_borrow_not_clone() {
     let mut test = MultiFileTest::new();
@@ -70,7 +67,6 @@ fn test_library_multipass_graph_csr_view_loop_must_borrow_not_clone() {
     test.assert_compiles_without_error();
 }
 
-/// DB-082: HashMap<i64,_> contains_key in nested triangle loop auto-borrows i64 keys.
 #[test]
 fn test_library_multipass_hashmap_i64_set_contains_key_in_triangle_loop() {
     let mut test = MultiFileTest::new();

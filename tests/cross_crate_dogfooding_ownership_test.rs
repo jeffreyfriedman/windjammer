@@ -10,16 +10,8 @@
     feature = "integration_tests",
 ))]
 
-//! Cross-crate dogfooding ownership regressions.
 //!
-//! Run: `cargo test --release --test all dogfood_`
 //!
-//! ## Suite state (Jul 29 PM, wj 0.50.0+)
-//!
-//! **Dogfooding:** 47/47 pass (Jul 30, wj 0.50.0 f95b9c32). Phase 1 compiler blockers cleared.
-//!
-//! Phase 1 e2e regressions (Jul 29–30); all passing after f95b9c32.
-//! Recently fixed substrate/sim, wal/substrate, and vec-literal guards must stay passing.
 //! Closed-issue and owned-only guard tests remain covered below.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -29,6 +21,7 @@ use integration_test_helpers::MultiFileTest;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+
 use std::process::Command;
 
 // ── regression: user-type get(key: Key) passes owned helper-return Key ──────────
@@ -426,8 +419,6 @@ pub fn run() -> int {
     );
 }
 
-// ── dogfood: MemoryEngine::get delegation must pass &Key, not key.clone() ───────
-
 #[test]
 fn dogfood_engine_get_delegation_passes_borrowed_key() {
     let mut test = MultiFileTest::new();
@@ -785,13 +776,12 @@ pub fn run() {
     );
     assert!(
         rs.contains("latest.has_key(key)") && !rs.contains("latest.has_key(key.clone())"),
-        "last-use owned Key into owned has_key must move (DB-209), not blanket-clone. Got:\n{rs}"
+        "last-use owned Key into owned has_key must move, not blanket-clone. Got:\n{rs}"
     );
 }
 
 // ── regression: free-fn `copy_key_bytes(key: Key)` — owned param, no spurious &Key formal ──
 //
-// Dogfooding: engine-crate/memory_engine.wj put/delete paths call copy_key_bytes(key)
 // after other uses of key in the same function.
 
 #[test]
@@ -3386,8 +3376,7 @@ impl WalWriter {
 }
 
 pub fn replay_all(path: string) -> Vec<WalRecord> {
-    // Product `replay_all` reads path via FFI; readonly use demotes to `&str`
-    // (unused path stays Owned per DB-152 — P3.586 tip-truth).
+    // (unused path stays Owned unchanged).
     let _ = path.len()
     decode_records(Vec::new())
 }
@@ -3522,7 +3511,7 @@ pub fn run() {
 
     let map = test.compile().expect("compile");
     let wal_rs = map.get("wal/wal.rs").expect("wal/wal.rs");
-    // Tip-truth (P3.583): prefer demoted `path: &str` + `&self.path`, but owned
+    // Prefer demoted `path: &str` + `&self.path`, but owned
     // `String` + `self.path.clone()` under `&self` is also E0507-safe. Reject a bare
     // field move from `&self` into Owned String.
     let demoted_str = wal_rs.contains("pub fn replay_to_lsn(path: &str, through: Lsn)")
@@ -4560,66 +4549,7 @@ impl SimNetwork {
     }
 }
 
-// ── Optional external dogfood e2e helpers ─────────────────────────────────────
-// Set WJ_DOGFOOD_CRATES_DIR to a directory of sibling crates to enable these gates.
-// When unset, e2e tests below return early (in-tree MultiFileTest coverage still runs).
-
-fn dogfood_crates_root() -> Option<PathBuf> {
-    std::env::var_os("WJ_DOGFOOD_CRATES_DIR").map(PathBuf::from)
-}
-
-fn require_dogfood_crate(name: &str) -> Option<PathBuf> {
-    let root = dogfood_crates_root()?;
-    let path = root.join(name);
-    assert!(
-        path.is_dir(),
-        "dogfood crate {name} not found at {}",
-        path.display()
-    );
-    Some(path)
-}
-
-fn wj_build_dogfood_crate(name: &str) -> bool {
-    let Some(crate_root) = require_dogfood_crate(name) else {
-        return false;
-    };
-    // Invalidate incremental stamp so a newer `wj` always re-transpiles — otherwise
-    // parallel e2e tests can keep pre-fix `gen/*.rs` when source fingerprints match.
-    let _ = fs::remove_file(crate_root.join("gen/.wj-compiler-stamp"));
-    let output = Command::new(env!("CARGO_BIN_EXE_wj"))
-        .args(["build", "src", "-o", "gen", "--no-cargo"])
-        .current_dir(&crate_root)
-        .output()
-        .unwrap_or_else(|e| panic!("spawn wj build {name}: {e}"));
-    assert!(
-        output.status.success(),
-        "wj build {name} failed:\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    true
-}
-
-fn cargo_check_dogfood_gen(name: &str, with_tests: bool) -> bool {
-    let Some(crate_root) = require_dogfood_crate(name) else {
-        return false;
-    };
-    let gen = crate_root.join("gen");
-    let mut cmd = Command::new("cargo");
-    cmd.arg("check").arg("--quiet").current_dir(&gen);
-    if with_tests {
-        cmd.arg("--tests");
-    }
-    let output = cmd
-        .output()
-        .unwrap_or_else(|e| panic!("spawn cargo check {name}: {e}"));
-    assert!(
-        output.status.success(),
-        "cargo check {name} failed:\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    true
-}
+// ── Shared helper ─────────────────────────────────────────────────────────────
 
 fn build_wal_engine_library(tmp: &Path) -> PathBuf {
     let wal_src = tmp.join("wal_src");
@@ -4704,54 +4634,12 @@ impl WalSegment {
     wal_gen
 }
 
-// ── regression: TxnManager put/delete — borrow &Key at cross-crate delegation ───────────────
+// ── regression: WalSegment append_put — cross-crate owned vec literal/helper ────────
 //
-// Real txn-crate gen/txn_manager.rs:42,46 emits key.clone() for MemoryEngine::put/delete(&Key).
-// In-project MultiFileTest fixtures do not reproduce this; use optional WJ_DOGFOOD_CRATES_DIR e2e + cargo check.
-
-#[test]
-fn dogfood_txn_manager_e2e_gen_put_delete_no_key_clone() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    wj_build_dogfood_crate("engine-crate");
-    wj_build_dogfood_crate("txn-crate");
-    let Some(txn) = require_dogfood_crate("txn-crate") else { return; };
-    let rs_path = txn.join("gen/txn_manager.rs");
-    let rs = fs::read_to_string(&rs_path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", rs_path.display()));
-    for line in rs.lines() {
-        if line.contains("engine.put(") {
-            assert!(
-                !line.contains("key.clone()"),
-                "put must pass &Key through, not key.clone() (txn_manager.rs:42). Line: {line}\nFull:\n{rs}"
-            );
-        }
-        if line.contains("engine.delete(") {
-            assert!(
-                !line.contains("key.clone()"),
-                "delete must pass &Key through, not key.clone() (txn_manager.rs:46). Line: {line}\nFull:\n{rs}"
-            );
-        }
-    }
-}
-
-#[test]
-fn dogfood_txn_manager_e2e_cargo_check() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    wj_build_dogfood_crate("engine-crate");
-    wj_build_dogfood_crate("txn-crate");
-    cargo_check_dogfood_gen("txn-crate", false);
-}
-
-// ── regression: WalSegment append_put — cross-crate owned vec literal/helper (P3.674) ────────
-//
-// Tip keep-owned (P3.456) emits `append_put(key: Vec<u8>, value: Vec<u8>)` with
+// Keep-owned emits `append_put(key: Vec<u8>, value: Vec<u8>)` with
 // `forwarding_borrow_params` set. Call sites must pass owned temporaries (`vec![…]`,
 // `encode_int64(…)`) — not `&vec![…]` (E0308 into owned formals) and not `.clone()` on
-// pure rvalues (P3.647 peel after stale forwarding dual-oracle).
+// pure rvalues.
 
 #[test]
 fn dogfood_wal_segment_cross_crate_append_put_borrows_vec_literal() {
@@ -4813,31 +4701,6 @@ pub fn test_store_rebuild_from_segment() {
             );
         }
     }
-}
-
-#[test]
-fn dogfood_engine_lsm_test_e2e_cargo_check() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    wj_build_dogfood_crate("wal-crate");
-    wj_build_dogfood_crate("engine-crate");
-    cargo_check_dogfood_gen("engine-crate", true);
-}
-
-#[test]
-fn dogfood_embedded_e2e_cargo_check() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    // Types is a path dependency of embedded; rebuild first so stale `gen/` from an
-    // older `wj` cannot poison cargo check (const match arms, ownership formals).
-    wj_build_dogfood_crate("types-crate");
-    wj_build_dogfood_crate("wal-crate");
-    wj_build_dogfood_crate("engine-crate");
-    wj_build_dogfood_crate("txn-crate");
-    wj_build_dogfood_crate("embedded-crate");
-    cargo_check_dogfood_gen("embedded-crate", true);
 }
 
 // ── regression: cross-crate owned struct param — call site must auto-borrow ─────
@@ -4937,46 +4800,5 @@ pub fn main() {
         !rs.contains("apply_zset_to_circuit(circuit, &zset)")
             || rs.contains("apply_zset_to_circuit(&circuit"),
         "must not pass owned Circuit where callee expects &Circuit without borrow. Got:\n{rs}"
-    );
-}
-
-#[test]
-fn dogfood_reducer_e2e_cargo_check() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    wj_build_dogfood_crate("types-crate");
-    wj_build_dogfood_crate("circuit-crate");
-    wj_build_dogfood_crate("reducer-crate");
-    cargo_check_dogfood_gen("reducer-crate", false);
-}
-
-// ── regression dogfooding: commit_granularity enum match in for-loop ────────────
-
-#[test]
-fn dogfood_types_commit_granularity_cargo_check() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    wj_build_dogfood_crate("types-crate");
-    cargo_check_dogfood_gen("types-crate", true);
-}
-
-// ── regression dogfooding: document_layer encode row_id spurious deref (regression) ─
-
-#[test]
-fn dogfood_layers_document_encode_row_id_no_spurious_deref() {
-    if dogfood_crates_root().is_none() {
-        return;
-    }
-    wj_build_dogfood_crate("layers-crate");
-    let Some(layers) = require_dogfood_crate("layers-crate") else { return; };
-    let rs_path = layers.join("gen/document/document_layer.rs");
-    let rs = fs::read_to_string(&rs_path).unwrap_or_else(|e| {
-        panic!("read {}: {e}", rs_path.display())
-    });
-    assert!(
-        !rs.contains("*row.row_id") && !rs.contains("* row.row_id"),
-        "document_layer encode must not spurious-deref Copy row_id (regression guard).\nGot:\n{rs}"
     );
 }

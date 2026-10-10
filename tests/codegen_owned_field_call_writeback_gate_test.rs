@@ -12,7 +12,6 @@
 
 //! Gate — owned `self.field` passed into a helper that returns a writeback field.
 //!
-//! Pattern (db-sim `poll` / `pop_ready`):
 //! ```text
 //! let popped = pop_ready(self.queue, now)
 //! self.queue = popped.remaining
@@ -185,7 +184,7 @@ fn owned_field_call_writeback_must_mem_take_not_clone() {
     let bare_owned = rust.contains("pop_ready(self.queue,")
         && !rust.contains("&mut self")
         && !rust.contains("& self");
-    // Tip may demote `pop_ready(queue: Vec)` → `&Vec` and pass `&self.queue` (no take/clone).
+    // The compiler may demote `pop_ready(queue: Vec)` → `&Vec` and pass `&self.queue` (no take/clone).
     let demoted_borrow = rust.contains("pop_ready(&self.queue,")
         || (rust.contains("fn pop_ready(queue: &Vec") && rust.contains("pop_ready(&self.queue"));
     assert!(

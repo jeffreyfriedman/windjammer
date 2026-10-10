@@ -29,7 +29,6 @@ mod test_utils;
 
 #[test]
 fn test_no_clone_on_intermediate_for_nested_copy_field() {
-    // Exact pattern from game-host rpg/inventory.wj:
     // if let Some(stack) = &self.head { total.armor + stack.item.stats.armor }
     // stack.item is Item (non-Copy), but stats.armor is f32 (Copy).
     // No clone needed on the intermediate — Rust auto-derefs through &.

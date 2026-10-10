@@ -18,7 +18,6 @@
 ///
 ///     The codegen then emits a full `match` statement with `_ => {}`, triggering
 ///     clippy's "you seem to be trying to use `match` for destructuring a single
-///     pattern" warning (84 instances in game-host).
 ///
 /// Fix: Detect this pattern in Statement::Match codegen and emit `if let`
 /// instead of `match`. When the wildcard arm has a non-empty body, emit

@@ -30,7 +30,6 @@ mod test_utils;
 
 #[test]
 fn test_no_clone_on_i32_field_via_cloned_iter() {
-    // Pattern from game-host rpg/crafting.wj:
     // for ingredient in &recipe.ingredients.clone() { ingredient.quantity }
     // ingredient.quantity is i32 (Copy) — should NOT get .clone()
     let source = r#"
@@ -69,7 +68,6 @@ impl Recipe {
 
 #[test]
 fn test_no_clone_on_i32_field_gold_cost_via_match() {
-    // Pattern from game-host: recipe.gold_cost where recipe
     // is bound via match (if let Some(recipe) = self.recipes.get(...))
     let source = r#"
 pub struct RecipeIngredient {
@@ -147,7 +145,6 @@ impl Recipe {
 
 #[test]
 fn test_nested_field_no_intermediate_clone_via_borrowed_iter() {
-    // Pattern from game-host: stack.item.stats.armor
     // where stack comes from `for stack in &self.slots`
     // The intermediate `item` should NOT be cloned if we're accessing
     // a Copy sub-field (stats.armor where armor is i32)

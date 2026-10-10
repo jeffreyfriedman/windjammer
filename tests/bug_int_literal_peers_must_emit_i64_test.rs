@@ -11,7 +11,6 @@
     feature = "integration_tests",
 ))]
 
-//! wj-sync: WJ `int` (i64) contexts must not emit `_i32` literal peers.
 //! Covers call formals, compare/mul, tuple None arms, and `AtomicI64::new(0)`.
 
 #[path = "common/test_utils.rs"]
@@ -55,7 +54,6 @@ pub fn lookup(m: HashMap<string, int>, key: string) -> (bool, int) {
 }
 "#;
 
-
 const VOID_BENCH_MUL: &str = r#"
 pub fn bench_channel_peer() {
     let n: int = 100_000
@@ -86,9 +84,8 @@ fn main() {
 }
 "#;
 
-
 #[test]
-fn wj_sync_void_bench_mul_literals_must_emit_i64() {
+fn void_bench_mul_literals_must_emit_i64() {
     let generated = test_utils::compile_single(VOID_BENCH_MUL);
     assert!(
         !generated.contains("1_i32") && !generated.contains("2_i32"),
@@ -101,7 +98,7 @@ fn wj_sync_void_bench_mul_literals_must_emit_i64() {
 }
 
 #[test]
-fn wj_sync_call_int_formal_literal_must_emit_i64() {
+fn call_int_formal_literal_must_emit_i64() {
     let generated = test_utils::compile_single(SHARED_ADD);
     assert!(
         !generated.contains("1_i32"),
@@ -114,7 +111,7 @@ fn wj_sync_call_int_formal_literal_must_emit_i64() {
 }
 
 #[test]
-fn wj_sync_int_compare_and_mul_literals_must_emit_i64() {
+fn int_compare_and_mul_literals_must_emit_i64() {
     let generated = test_utils::compile_single(COMPARE_MUL);
     assert!(
         !generated.contains("0_i32") && !generated.contains("2_i32"),
@@ -128,7 +125,7 @@ fn wj_sync_int_compare_and_mul_literals_must_emit_i64() {
 }
 
 #[test]
-fn wj_sync_tuple_none_zero_must_emit_i64() {
+fn tuple_none_zero_must_emit_i64() {
     let generated = test_utils::compile_single(MAP_NONE);
     assert!(
         !generated.contains("0_i32"),
@@ -141,7 +138,7 @@ fn wj_sync_tuple_none_zero_must_emit_i64() {
 }
 
 #[test]
-fn wj_sync_atomic_i64_new_zero_must_emit_i64() {
+fn atomic_i64_new_zero_must_emit_i64() {
     let generated = test_utils::compile_single(ATOMIC_NEW);
     assert!(
         !generated.contains("0_i32"),
@@ -154,7 +151,7 @@ fn wj_sync_atomic_i64_new_zero_must_emit_i64() {
 }
 
 #[test]
-fn wj_sync_atomic_i64_void_main_literals_must_emit_i64() {
+fn atomic_i64_void_main_literals_must_emit_i64() {
     let generated = test_utils::compile_single(ATOMIC_VOID_MAIN);
     assert!(
         !generated.contains("0_i32") && !generated.contains("1_i32"),
@@ -167,7 +164,7 @@ fn wj_sync_atomic_i64_void_main_literals_must_emit_i64() {
 }
 
 #[test]
-fn wj_sync_int_literal_peers_must_cargo_check() {
+fn int_literal_peers_must_cargo_check() {
     test_utils::assert_stdlib_runtime_links(ATOMIC_NEW, &["AtomicI64", "new"]);
     test_utils::assert_stdlib_runtime_links(ATOMIC_VOID_MAIN, &["AtomicI64", "fetch_add"]);
 }

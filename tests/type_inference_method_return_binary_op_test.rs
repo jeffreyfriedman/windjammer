@@ -16,7 +16,6 @@
 /// Pattern: MethodCall with f32 return type used in binary operation with float literal
 /// Expected: Literal should be constrained to method's return type (f32)
 ///
-/// Example from game-host:
 /// ```windjammer
 /// pub fn set_time_of_day(self, hours: f32) {
 ///     let t = (hours - 6.0) / 12.0

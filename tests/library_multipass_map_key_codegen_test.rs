@@ -461,8 +461,6 @@ pub fn load_twice(path: string) -> int {
     test.assert_compiles_without_error();
 }
 
-
-/// DB-084: `map = f(map, k, v)` writeback must not clone map.
 #[test]
 fn test_library_multipass_map_writeback_must_not_clone() {
     let mut test = MultiFileTest::new();
@@ -507,7 +505,6 @@ pub fn build_scores() -> HashMap<string, int> {
     test.assert_compiles_without_error();
 }
 
-/// DB-086: HashMap::get borrow-break must emit exactly one `.copied()` on Copy V.
 #[test]
 fn test_library_multipass_hashmap_get_borrow_break_single_copied() {
     let mut test = MultiFileTest::new();
@@ -553,7 +550,6 @@ impl GraphVertexU32Map {
     test.assert_compiles_without_error();
 }
 
-/// DB-087: tuple restore `let t = f(v, w); v = t.0; w = t.1` must not clone heap Vecs.
 #[test]
 fn test_library_multipass_tuple_writeback_must_not_clone() {
     let mut test = MultiFileTest::new();
@@ -598,7 +594,6 @@ pub fn grow_heap(n: int) -> (Vec<f64>, Vec<i64>) {
     test.assert_compiles_without_error();
 }
 
-/// DB-089: Rust `HashMap::with_capacity` takes `usize`. Multipass must not cast
 /// a `usize` arg to `i64` (WJ std used to declare `capacity: int`).
 #[test]
 fn test_library_multipass_hashmap_with_capacity_usize_no_i64_cast() {

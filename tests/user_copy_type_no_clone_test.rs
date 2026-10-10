@@ -28,7 +28,6 @@ mod test_utils;
 
 #[test]
 fn test_no_clone_on_derive_copy_enum_multi_use() {
-    // Pattern from game-host rendering/mesh_generator.wj:
     // let voxel = chunk.get_local_voxel(x, y, z)
     // if voxel.is_solid() && condition {
     //     mask[y][z] = Some(voxel)  // voxel used again
