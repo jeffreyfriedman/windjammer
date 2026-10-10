@@ -8,10 +8,10 @@
 
 | Gate | Status |
 |------|--------|
-| P3.795 MultiFile | pending this run |
-| P3.795 tip-out | pending this run — `gen/assets/pipeline.rs` |
+| P3.795 MultiFile | ❌ isolate RED — `for i in 0_i32..(textures.len() as i32)` and `textures[(i as usize)]` |
+| P3.795 tip-out | ❌ tip RED — `0_i32..(self.textures.len() as i32)` in `gen/assets/pipeline.rs` |
 
-**Root cause layer:** codegen — `return i as i32` pulls the index range down to `i32` even though the source cast says `i` is not `i32`.
+**Root cause layer:** live — `return i as i32` pulls the index range down to `i32` even though the source cast says `i` is not `i32`.
 
 **Why this is a new class:**
 - P3.792 is a sibling `count: i32` tally. The loop variable is only an index.
@@ -19,7 +19,7 @@
 
 **Do not steal:** WDB-406/408/411/457–484, P3.508–P3.794, compiler `src/`.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- index_loop_returned_as_i32` — pending.
+**Gates:** `cargo test --release --test all --features integration_tests -- index_loop_returned_as_i32` — 0 passed / 2 failed, 1830 filtered, 0.05s (2026-10-10, HEAD `4e0bdbcb`).
 
 ## P3.794 (2026-10-10) — TDD WDB-484 (DB agent; no compiler src)
 
