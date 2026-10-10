@@ -33,6 +33,28 @@ for squad in self.squads {
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb480_` — isolate GREEN / tip RED (2026-10-10).
 
+## P3.785 (2026-10-10) — string index `i + needle.len()` must not be `i64`
+
+`editor/ecs_inspector_test.wj` `string_contains` writes `let mut i = 0` then
+`while i + needle.len() <= haystack.len()` and indexes `haystack[i + j]`.
+Tip-out emits `let mut i = 0_i64` and `haystack.as_bytes()[i + (j as i64)]`.
+
+| Gate | Status |
+|------|--------|
+| P3.785 MultiFile | ❌ isolate RED — `i + (j as i64)` and `(needle.len() as i64)` |
+| P3.785 tip-out | ❌ tip RED — `let mut i = 0_i64` in `gen/editor/ecs_inspector_test.rs` |
+
+**Root cause layer:** codegen — adding `.len()` to an untyped counter widens it to `i64` before a string index.
+
+**Why this is a new class:**
+- P3.783 is `while b + 1 < vec.len()` indexing a `Vec`.
+- P3.773 is a `for`-loop counter compared to `Vec::len()`.
+- This indexes a `string` with `i + j` while `i + needle.len() <= haystack.len()`.
+
+**Do not steal:** WDB-406/408/411/457–479, P3.508–P3.784, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- string_index_plus_len` — 0 passed / 2 failed, 1808 filtered, 0.05s (2026-10-10, HEAD `51c5bb43`). Isolate emits `let mut i = 0` then `haystack.as_bytes()[i + (j as i64)]`.
+
 ## P3.784 (2026-10-10) — `println`-only `string` formal is `&str`
 
 `fn takes_borrowed(s: string) { println("{}", s) }` emitted `s: String` and `takes_borrowed(name.to_string())`. The analyzer already decided Borrowed `&str`. Formal emit pinned owned `String` because `io::println`'s signature is one `&str` format slot, and the Display argument was treated as an AsRef runtime parameter.
