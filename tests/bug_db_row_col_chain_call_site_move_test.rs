@@ -11,10 +11,9 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — after `get_string` borrows (P3.237 GREEN), owned `(Row, string)`
+//! FAILING REPRO — after `get_string` borrows, owned `(Row, string)`
 //! chain call sites must **move** `row` into the next `col_string(row, …)`, not
-//! `col_string(row.clone(), …)`. LedgerKit still uses `"col" + ""` / clones while
-//! tip clones at every link of `two_columns`.
+//! the compiler clones at every link of `two_columns`.
 //!
 //! Distinct from `bug_db_row_get_string_no_row_clone_test` (getter / return clone).
 

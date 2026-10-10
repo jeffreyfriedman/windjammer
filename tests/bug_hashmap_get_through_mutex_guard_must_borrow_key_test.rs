@@ -13,14 +13,13 @@
 
 //! FAILING REPRO — `HashMap::{get,contains_key}` through `MutexGuard` must borrow the key.
 //!
-//! Ecosystem `wj-sync` `SharedMap`:
 //! ```ignore
 //! match m.inner.lock() {
 //!     Ok(g) => g.data.contains_key(key),  // or g.data.get(key)
 //!     …
 //! }
 //! ```
-//! Tip emits `contains_key(key.to_string())` / `get(key.to_string())` (E0308 expected `&_`).
+//! The compiler emits `contains_key(key.to_string())` / `get(key.to_string())` (E0308 expected `&_`).
 //! Owned `HashMap` key methods (no mutex) already cargo-check.
 
 #[path = "common/test_utils.rs"]

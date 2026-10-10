@@ -29,7 +29,6 @@ mod test_utils;
 ///   Option<Custom>.as_ref() → Option<&Custom>   (works for any type)
 #[test]
 fn test_borrow_break_uses_as_ref_not_as_deref() {
-    // This test models the exact pattern from windjammer-game-core/dialogue/manager.wj:
     // - self.tree.get_node(id) returns Option<&DialogueNode> (borrows from self.tree)
     // - The match arm body mutates self (self.current_index = ...)
     // - This triggers the borrow break pattern

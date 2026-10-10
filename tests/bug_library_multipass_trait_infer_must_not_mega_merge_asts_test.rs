@@ -10,7 +10,6 @@
     feature = "integration_tests",
 ))]
 
-//! Product: tip `wj build --library` of windjammer-game-core (~669 files) was
 //! SIGKILL'd (jetsam) immediately after ownership pass 10.
 //!
 //! Root cause: Step 4B-pre cloned every AST item into one mega-`Program` solely
@@ -30,7 +29,6 @@ use integration_test_helpers::MultiFileTest;
 fn library_multipass_infers_cross_file_trait_mut_self_without_merging_all_asts() {
     let mut t = MultiFileTest::new();
 
-    // Many tiny modules — product scale is hundreds of files; we only need
     // enough siblings that a mega-merge would be the wrong design.
     let mut mod_lines = String::from("pub mod ports\npub mod renderer\n");
     for i in 0..48 {

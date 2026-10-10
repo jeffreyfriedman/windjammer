@@ -11,8 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.332: `recv<T>(rx) -> (Receiver<T>, Option<T>)` must move `rx`, not `rx.clone()`.
-//! Tip RED: emits `rx.clone()` on non-Clone mpsc::Receiver wrapper (blocks generic wj-sync).
+//! `recv<T>(rx) -> (Receiver<T>, Option<T>)` must move `rx`, not `rx.clone()`.
 
 use std::fs;
 use std::path::PathBuf;
@@ -59,11 +58,11 @@ fn generic_channel_recv_must_move_receiver_not_clone() {
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     if bad_recv(&generated) {
-        eprintln!("P3.332 RED (snippet):\n{}", &generated[..generated.len().min(2000)]);
+        eprintln!("RED (snippet):\n{}", &generated[..generated.len().min(2000)]);
     }
     assert!(
         !bad_recv(&generated),
-        "RED P3.332: recv must move Receiver, not rx.clone():\n{}",
+        "RED recv must move Receiver, not rx.clone():\n{}",
         generated
             .lines()
             .filter(|l| l.contains("recv") || l.contains("clone") || l.contains("rx"))

@@ -11,12 +11,10 @@
     feature = "integration_tests",
 ))]
 
-//! P3.524: with `use std::strings`, inline `strings.substring(text, …) == needle`
+//! with `use std::strings`, inline `strings.substring(text, …) == needle`
 //! must still demote `text` to `&str` (not `&String`).
 //!
-//! Product `wj-notes-api` adapter `find_char` stays `text: &String` while
 //! `split_header_line(line: &str)` passes `line` → E0308. Domain bind-then-
-//! compare greened. Do not reshape notes-api.
 
 use std::process::Command;
 use tempfile::TempDir;
@@ -103,7 +101,7 @@ pub fn serve(raw: string) -> int {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.524 isolate transpile failed:\n{}",
+        "isolate transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -118,10 +116,10 @@ pub fn serve(raw: string) -> int {
 
     assert!(
         !find_sig.contains("text: &String"),
-        "P3.524 RED: inline substring== must demote text to &str (not &String):\n{find_sig}\n{http}"
+        "RED: inline substring== must demote text to &str (not &String):\n{find_sig}\n{http}"
     );
     assert!(
         find_sig.contains("text: &str"),
-        "P3.524: expected find_char(text: &str, …):\n{find_sig}"
+        "expected find_char(text: &str, …):\n{find_sig}"
     );
 }

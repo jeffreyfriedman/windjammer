@@ -11,13 +11,10 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO / product-shape gate — tip must not double-import the same type (E0252).
 //!
-//! Product cold gen (LedgerKit adapters): tip emits prelude
 //!   `use crate::domain::…::InventoryItemView;`
 //! and also the source brace import containing the same name → E0252.
 //!
-//! Product interim (P3.265): omit View/Line types from brace imports (tip auto-imports).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -91,17 +88,17 @@ impl ItemPort for SeedRepo {
             }));
 
     if duplicate {
-        eprintln!("RED P3.265 duplicate ItemView imports:\n{rs}");
+        eprintln!("RED duplicate ItemView imports:\n{rs}");
     }
 
     assert!(
         !duplicate,
-        "RED P3.265: tip must not emit ItemView more than once in use lines. Uses: {item_view_use_lines:?}\n{rs}"
+        "RED the compiler must not emit ItemView more than once in use lines. Uses: {item_view_use_lines:?}\n{rs}"
     );
 
     project.cargo_check().unwrap_or_else(|e| {
         panic!(
-            "RED P3.265: hexagonal ItemView import must cargo-check without E0252.\n{e}\nGenerated repo.rs:\n{rs}"
+            "RED: ItemView import must cargo-check without E0252.\n{e}\nGenerated repo.rs:\n{rs}"
         );
     });
 }

@@ -1,7 +1,6 @@
 //! When `dispatch` consumes JSON body after comparing method/path, call-site
 //! ownership must match the emitted formal (owned `String` vs `&str`).
 //!
-//! Ecosystem `wj-notes-api` `NotesApi::serve` → `dispatch` (GET/POST/PUT/DELETE).
 
 #![cfg(any(
     not(any(
@@ -114,13 +113,13 @@ struct NoteInput {
     body: string,
 }
 
-pub struct NotesApi {
+pub struct Api {
     store: NoteStore,
 }
 
-impl NotesApi {
-    pub fn new(store: NoteStore) -> NotesApi {
-        NotesApi { store: store }
+impl Api {
+    pub fn new(store: NoteStore) -> Api {
+        Api { store: store }
     }
 
     pub fn serve(self, request: HttpRequest) -> HttpReply {
@@ -183,7 +182,7 @@ impl NotesApi {
 
     let map = test
         .compile()
-        .expect("notes-api-shaped dispatch should compile");
+        .expect("api-shaped dispatch should compile");
     let rs = map.get("domain/api.rs").expect("domain/api.rs generated");
 
     let dispatch_owns_body = rs.contains("fn dispatch(&mut self, method: &str, path: &str, body: String)");

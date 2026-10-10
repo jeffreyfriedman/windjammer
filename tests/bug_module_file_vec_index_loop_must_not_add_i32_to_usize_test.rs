@@ -12,9 +12,7 @@
 ))]
 
 //! FAILING REPRO — `while i < parts.len()` + `parts[i]` + `i = i + 1` emits
-//! `i += 1 as i32` while `i` is promoted to `usize` → E0277 (`wj-dotenv` parse).
 //!
-//! Inverse of P3.304 (i32 += 1 as usize). WDB-231 tip-out gate is product-file
 //! only; this is the library multipass shape.
 
 use std::fs;
@@ -86,7 +84,7 @@ fn module_file_vec_index_loop_must_not_add_i32_to_usize() {
         || generated.contains("i += 1 as i32");
     assert!(
         !bad,
-        "RED P3.311: vec-index loop must not emit i += 1 as i32 onto usize:\n{generated}"
+        "RED vec-index loop must not emit i += 1 as i32 onto usize:\n{generated}"
     );
 
     let check = Command::new("cargo")
