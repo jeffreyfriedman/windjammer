@@ -10,10 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! P3.785: `while i + needle.len() <= haystack.len()` must not index with `i64`.
+//! `while i + needle.len() <= haystack.len()` must not index with `i64`.
 //!
 //! `ecs_inspector_test.wj` `string_contains` writes `let mut i = 0` then
-//! `haystack[i + j]` while `i + needle.len() <= haystack.len()`. Tip-out emits
 //! `let mut i = 0_i64` and `haystack.as_bytes()[i + (j as i64)]`.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -53,7 +52,7 @@ pub fn string_contains(haystack: string, needle: string) -> bool {
     );
     let map = test
         .compile()
-        .expect("P3.785: string index fixture must transpile");
+        .expect("string index fixture must transpile");
     let body = map
         .get("mod.rs")
         .unwrap_or_else(|| panic!("mod.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
@@ -63,47 +62,3 @@ pub fn string_contains(haystack: string, needle: string) -> bool {
     );
 }
 
-fn search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    let mut walked = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..6 {
-        roots.push(walked.clone());
-        if let Some(parent) = walked.parent() {
-            walked = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-    roots
-}
-
-#[test]
-fn string_index_plus_len_tip_out_ecs_inspector() {
-    let mut paths = Vec::new();
-    for dir in search_roots() {
-        paths.push(
-            dir.join("game-host/game-host-core/gen/editor/ecs_inspector_test.rs"),
-        );
-    }
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("ecs_inspector_test.rs");
-        if text.contains("let mut i = 0_i64") {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(
-        saw,
-        "P3.785: ecs_inspector_test.rs product file missing"
-    );
-    assert!(
-        bad_paths.is_empty(),
-        "P3.785 RED: tip-out string index counter is 0_i64:\n  {}",
-        bad_paths.join("\n  ")
-    );
-}

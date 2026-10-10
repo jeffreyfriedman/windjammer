@@ -13,12 +13,11 @@
 
 //! FAILING REPRO — `std::thread::spawn(move \|\| …)` must preserve the `move` keyword.
 //!
-//! Ecosystem `wj-sync` shared-inbox Pool:
 //! ```ignore
 //! std::thread::spawn(move || { inbox.lock()… })
 //! ```
-//! Tip library multipass emits `spawn(|| {…})` (move stripped) → E0373 borrow of `inbox`.
-//! P3.294 only asserted absence of `spawn(&(move`; stripping `move` still breaks Arc capture.
+//! The compiler library multipass emits `spawn(|| {…})` (move stripped) → E0373 borrow of `inbox`.
+//! only asserted absence of `spawn(&(move`; stripping `move` still breaks Arc capture.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

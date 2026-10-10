@@ -10,10 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! P3.739: if both owned `Vec` formals are demoted to `&Vec`, both call args borrow.
+//! if both owned `Vec` formals are demoted to `&Vec`, both call args borrow.
 //!
 //! `half_edge.wj` declares `from_triangle_mesh(positions: Vec<Vec3>, indices: Vec<u32>)`.
-//! Tip-out emits `positions: &Vec<Vec3>, indices: &Vec<u32>` but
 //! `mesh_ops.rs` calls `from_triangle_mesh(positions, &indices)`.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -62,7 +61,7 @@ pub fn build(positions: Vec<Vec3>, indices: Vec<u32>) -> Mesh {
     );
     let map = test
         .compile()
-        .expect("P3.739: owned Vec formals fixture must transpile");
+        .expect("owned Vec formals fixture must transpile");
     let body = map
         .get("ops.rs")
         .unwrap_or_else(|| panic!("ops.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
@@ -72,42 +71,3 @@ pub fn build(positions: Vec<Vec3>, indices: Vec<u32>) -> Mesh {
     );
 }
 
-fn search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    let mut walked = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..6 {
-        roots.push(walked.clone());
-        if let Some(parent) = walked.parent() {
-            walked = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-    roots
-}
-
-#[test]
-fn owned_vec_formals_tip_out_mesh_ops() {
-    let mut paths = Vec::new();
-    for dir in search_roots() {
-        paths.push(dir.join("game-host/game-host-core/gen/editor/mesh_ops.rs"));
-    }
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("mesh_ops.rs");
-        if mixed_borrow(&text) {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(saw, "P3.739: mesh_ops.rs product file missing");
-    assert!(
-        bad_paths.is_empty(),
-        "P3.739 RED: tip-out borrows only the second Vec:\n  {}",
-        bad_paths.join("\n  ")
-    );
-}

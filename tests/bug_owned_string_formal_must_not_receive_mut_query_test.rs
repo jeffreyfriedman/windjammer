@@ -13,7 +13,6 @@
 
 //! Same-crate `query: String` must not receive `&mut query`.
 //!
-//! Ecosystem `wj-notes-api` `note_get_reply(note, if_none_match, query)`:
 //! formal stays `query: String` (consumed by `query_wants_base64`) but the
 //! GET arm emits `note_get_reply(&mut note, if_none_match, &mut query)` (E0308).
 
