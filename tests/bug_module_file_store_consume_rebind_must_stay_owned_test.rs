@@ -61,7 +61,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_store_consume_rebind_must_stay_owned() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

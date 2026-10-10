@@ -88,7 +88,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_annotated_usize_loop_must_not_emit_i64_literals() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

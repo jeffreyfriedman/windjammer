@@ -66,7 +66,7 @@ pub fn make_account() -> AccountJson {
     }
 }
 "#;
-    let (generated, success) = test_utils::compile_single_check(source);
+    let (_generated, success) = test_utils::compile_single_check(source);
     assert!(success, "compilation should succeed for r#type in struct literal");
 }
 

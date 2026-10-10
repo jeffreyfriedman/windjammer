@@ -268,7 +268,7 @@ fn render(score: i32, lives: i32) {
     let temp_count = rust_code.matches("let _temp").count()
         + rust_code.matches("let score_text").count()
         + rust_code.matches("let lives_text").count();
-    let ffi_format_count = rust_code.matches("string_to_ffi(format!").count()
+    let _ffi_format_count = rust_code.matches("string_to_ffi(format!").count()
         + rust_code.matches("string_to_ffi(format!(\"").count();
     // Count format! occurrences as a lower bound for inline FFI path.
     let format_count = rust_code.matches("format!(").count();

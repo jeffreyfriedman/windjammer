@@ -59,7 +59,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_demoted_vec_formal_must_borrow_vec_literal_call_sites() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

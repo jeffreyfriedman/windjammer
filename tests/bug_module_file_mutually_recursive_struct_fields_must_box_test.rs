@@ -84,7 +84,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_mutually_recursive_struct_fields_must_box_or_cargo_check() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

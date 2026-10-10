@@ -44,7 +44,7 @@ pub mod migrate_cli
 
 #[test]
 fn cross_crate_vec_string_helper_must_auto_borrow_at_call_site() {
-    let mut test = cross_crate_vec_fixture();
+    let test = cross_crate_vec_fixture();
     let map = test
         .compile()
         .expect("cross-module Vec helper compile should succeed");

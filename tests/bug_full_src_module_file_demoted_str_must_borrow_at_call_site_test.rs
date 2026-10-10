@@ -73,7 +73,7 @@ pub fn load_from_paths(li_path: string, ord_path: string) -> u64 {
 
 #[test]
 fn full_library_multipass_demoted_str_formal_must_borrow_clone_call_sites() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed");

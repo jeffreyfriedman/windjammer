@@ -90,7 +90,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_copy_int_formals_must_stay_owned_not_mut_ref() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

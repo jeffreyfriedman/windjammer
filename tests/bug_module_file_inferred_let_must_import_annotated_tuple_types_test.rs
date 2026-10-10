@@ -60,7 +60,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_inferred_let_must_import_annotated_tuple_types() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");
