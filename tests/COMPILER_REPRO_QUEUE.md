@@ -2,6 +2,64 @@
 
 
 
+## P3.779 (2026-10-09) — `f32 * ((len - 1) as f32)` must not compare to `1_i32`
+
+`ui/layout.wj` writes `if child_count > 1 { self.gap * ((child_count - 1) as f32) }`
+with `child_count` from `.len()` and `gap: f32`. Tip-out emits
+`child_count > 1_i32` and `self.gap as f32 * (child_count - 1_usize) as f32`
+(`f32 * usize`, then cast).
+
+| Gate | Status |
+|------|--------|
+| P3.779 isolate | pending |
+| P3.779 tip-out | pending — `gen/ui/layout.rs` has `child_count > 1_i32` |
+
+**Root cause layer:** integer suffix and cast grouping on a length used as an
+`f32` scale. Distinct from P3.753 (`u32` product wrapped in `as f32`).
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --release --test all -- f32_times_len_minus_one_cast_`
+
+
+## P3.778 (2026-10-09) — TDD WDB-478 (DB agent; no compiler src)
+
+A `for` binding moved into `Vec::push` on exclusive `if let` arms must not `.clone()`, including `.clone().clone()` on the nested arms.
+
+Product `dialogue_system.rs` `filter_choices`:
+```wj
+for choice in choices {
+    if let Some(world) = self.world {
+        if let Some(player) = self.player {
+            if choice.is_available(world, player) {
+                available.push(choice)
+            }
+        } else {
+            available.push(choice)
+        }
+    } else {
+        available.push(choice)
+    }
+}
+```
+`choice` is the loop binding and is not used after the push. Tip MultiFile emits the push bare (isolate GREEN). Tip-out still has `available.push(choice.clone().clone())` and `available.push(choice.clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-478 MultiFile | ✅ isolate GREEN — no `choice.clone()` |
+| WDB-478 tip-out | ❌ tip RED — clones in `rel_tip_out/dialogue_system.rs` and `windjammer-game-core/gen/dialogue_system.rs` |
+
+**Root cause layer:** tip-out lag — exclusive arms still clone a moved loop binding.
+
+**Why this is a new class:**
+- WDB-474 is one last-use local struct into `push`, with no exclusive arms.
+- WDB-471 is a reused `Vec` argument `.clone().clone()`.
+- This is one `for choice in choices` binding pushed on mutually exclusive `if let` arms.
+
+**Do not steal:** WDB-406/408/411/457–478, P3.508–P3.778, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb478_` — isolate GREEN / tip RED (2026-10-09).
+
 ## P3.777 (2026-10-09) — match scrutinee `string` passed owned into `&str` (no compiler src)
 
 `render(kind, json)` matches on `kind` and, in the `"aging"` arm, calls
