@@ -78,7 +78,7 @@ pub fn has_id(store: Store, id: int) -> bool {
         .arg(out.path().join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3597_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");
