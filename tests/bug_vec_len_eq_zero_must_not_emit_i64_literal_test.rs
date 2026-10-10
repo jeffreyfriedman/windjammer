@@ -11,9 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — product multipass `rows.len() == 0` emits `0_i64` (LedgerKit).
 //!
-//! Shallow isolate often rewrites to `is_empty()` (GREEN). Full LedgerKit
 //! `--module-file` still emits `rows.len() == 0_i64` → E0277 usize vs i64.
 //! This fixture keeps the comparison form and asserts no i64 zero literal.
 
@@ -105,10 +103,10 @@ fn vec_len_eq_zero_must_not_emit_i64_literal() {
 
     let bad = bad_len_zero_i64(&rs);
     if bad {
-        eprintln!("RED P3.305 vec len==0 must not emit 0_i64:\n{rs}");
+        eprintln!("RED vec len==0 must not emit 0_i64:\n{rs}");
     }
     assert!(
         !bad,
-        "RED P3.305: rows.len() == 0 must emit is_empty() or 0_usize, not 0_i64. Generated:\n{rs}"
+        "RED rows.len() == 0 must emit is_empty() or 0_usize, not 0_i64. Generated:\n{rs}"
     );
 }

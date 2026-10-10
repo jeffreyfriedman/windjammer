@@ -12,7 +12,6 @@
 ))]
 
 //! FAILING REPRO — `Vec<string>` elements must own ints and demoted `&str` locals
-//! (LedgerKit `amount + ""` / `tenant_id + ""` query-param workarounds).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
