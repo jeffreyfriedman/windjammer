@@ -10,15 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Gate — DB-096: moving multiple non-Copy fields from an owned struct into
-//! owned formals must keep the root Owned and move fields (no `.clone()`).
-//!
-//! Pattern (PageRank buffer release):
-//! ```text
-//! return_f64(buf.scores)
-//! return_f64(buf.next)
-//! return_f64(buf.contrib)
-//! ```
+//! Regression: codegen owned multi field move gate.
 
 use std::fs;
 use std::path::Path;
@@ -94,47 +86,47 @@ pub fn release_via_lets(buf: Buf) {
 "#;
 
 #[test]
-fn test_wdb096_multi_field_call_moves_without_clone() {
+fn test_multi_field_call_moves_without_clone() {
     let rust = build_source(RELEASE_SOURCE, "pagerank_release");
     eprintln!("Generated Rust:\n{rust}");
 
     assert!(
         rust.contains("pub fn release(buf: Buf)")
             || rust.contains("pub fn release(mut buf: Buf)"),
-        "DB-096: release must keep owned Buf so fields can move. Got:\n{rust}"
+        "release must keep owned Buf so fields can move. Got:\n{rust}"
     );
     assert!(
         !rust.contains("pub fn release(buf: &Buf)"),
-        "DB-096: must not demote buf to &Buf when moving fields into owned formals. Got:\n{rust}"
+        "must not demote buf to &Buf when moving fields into owned formals. Got:\n{rust}"
     );
     assert!(
         !rust.contains("buf.scores.clone()")
             && !rust.contains("buf.next.clone()")
             && !rust.contains("buf.contrib.clone()"),
-        "DB-096: distinct field moves into owned Vec formals must not clone. Got:\n{rust}"
+        "distinct field moves into owned Vec formals must not clone. Got:\n{rust}"
     );
     assert!(
         rust.contains("return_f64(buf.scores)")
             && rust.contains("return_f64(buf.next)")
             && rust.contains("return_f64(buf.contrib)"),
-        "DB-096: expected bare field moves into return_f64. Got:\n{rust}"
+        "expected bare field moves into return_f64. Got:\n{rust}"
     );
 }
 
 #[test]
-fn test_wdb096_multi_field_let_extract_moves_without_clone() {
+fn test_multi_field_let_extract_moves_without_clone() {
     let rust = build_source(RELEASE_SOURCE, "pagerank_release");
     eprintln!("Generated Rust:\n{rust}");
 
     assert!(
         rust.contains("pub fn release_via_lets(buf: Buf)")
             || rust.contains("pub fn release_via_lets(mut buf: Buf)"),
-        "DB-096: let-extract release must keep owned Buf. Got:\n{rust}"
+        "let-extract release must keep owned Buf. Got:\n{rust}"
     );
     assert!(
         !rust.contains("buf.scores.clone()")
             && !rust.contains("buf.next.clone()")
             && !rust.contains("buf.contrib.clone()"),
-        "DB-096: let-bound field extracts from owned Buf must move, not clone. Got:\n{rust}"
+        "let-bound field extracts from owned Buf must move, not clone. Got:\n{rust}"
     );
 }

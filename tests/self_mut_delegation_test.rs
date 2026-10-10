@@ -123,7 +123,7 @@ pub fn main() {
     );
 }
 
-/// Match the actual pattern from game-host: methods that call callee methods
+/// Match the actual pattern: methods that call callee methods
 /// on self which themselves only delegate (never directly modify fields).
 /// Tests SINGLE-FILE compilation.
 #[test]
@@ -216,7 +216,7 @@ pub fn main() {
     );
 }
 
-/// Reproduce the exact bug from game-host: multifile library compilation
+/// Reproduce the exact bug: multifile library compilation
 /// incorrectly infers `mut self` (consuming) instead of `&mut self` for methods
 /// that delegate to other field-mutating methods.
 #[test]

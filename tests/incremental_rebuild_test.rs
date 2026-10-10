@@ -271,7 +271,7 @@ fn submodule_mod_decl_before_parent_and_importers() {
 /// submodule, not the package `mod.wj`. Otherwise `mod → child` + `child → mod` cycles
 /// collapse Kahn sort to discovery order (session before engine → stale call-site borrows).
 #[test]
-/// Dogfood shape: package `mod.wj` lists session before engine alphabetically, while
+/// Shape: package `mod.wj` lists session before engine alphabetically, while
 /// session imports the engine free-fn. Codegen must still emit engine before session.
 /// Mutual imports form an SCC; the callee with more pending importers must sort first.
 #[test]
@@ -310,63 +310,6 @@ fn codegen_sort_breaks_scc_preferring_most_depended_upon() {
     );
 }
 
-/// Live dogfood check (skipped if db-layers is not checked out beside windjammer).
-#[test]
-fn db_layers_graph_codegen_order_session_after_bfs() {
-    let layers_src = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../db-project/crates/db-layers/src");
-    if !layers_src.join("graph/graph_analytics_session.wj").is_file() {
-        eprintln!("skip: db-layers not present at {}", layers_src.display());
-        return;
-    }
-    let mut sources: Vec<(std::path::PathBuf, String)> = Vec::new();
-    fn walk(dir: &std::path::Path, out: &mut Vec<(std::path::PathBuf, String)>) {
-        let Ok(rd) = fs::read_dir(dir) else {
-            return;
-        };
-        for ent in rd.flatten() {
-            let p = ent.path();
-            if p.is_dir() {
-                walk(&p, out);
-            } else if p.extension().and_then(|s| s.to_str()) == Some("wj") {
-                out.push((p.clone(), fs::read_to_string(&p).unwrap()));
-            }
-        }
-    }
-    walk(&layers_src, &mut sources);
-    sources.sort_by(|a, b| a.0.cmp(&b.0));
-    let mut parsers = Vec::new();
-    let mut programs = Vec::new();
-    for (file, source) in &sources {
-        let (parser, program) = parse_file(file, source);
-        parsers.push(parser);
-        programs.push(program);
-    }
-    let _ = parsers;
-    let graph = DependencyGraph::build(&sources, &programs, &layers_src);
-    let indices: Vec<usize> = (0..sources.len()).collect();
-    let sorted = graph.sort_indices_for_codegen(&indices);
-    let pos = |suffix: &str| {
-        let idx = sources
-            .iter()
-            .position(|(p, _)| p.ends_with(suffix))
-            .unwrap_or_else(|| panic!("missing {suffix}"));
-        sorted.iter().position(|&i| i == idx).expect("in sorted")
-    };
-    let session_pos = pos("graph_analytics_session.wj");
-    let bfs_pos = pos("graph_bfs_engine.wj");
-    let df_pos = pos("graph_sql_datafusion_port.wj");
-    let phys_pos = pos("graph_sql_physical_exec_port.wj");
-    assert!(
-        bfs_pos < session_pos,
-        "bfs@{bfs_pos} must codegen before session@{session_pos}"
-    );
-    assert!(
-        phys_pos < df_pos,
-        "physical_exec@{phys_pos} must codegen before datafusion@{df_pos}"
-    );
-}
-
 #[test]
 fn package_mod_decl_order_must_not_codegen_importer_before_callee() {
     let dir = TempDir::new().unwrap();
@@ -374,7 +317,7 @@ fn package_mod_decl_order_must_not_codegen_importer_before_callee() {
     fs::create_dir_all(src.join("graph")).unwrap();
 
     let graph_mod = src.join("graph/mod.wj");
-    // Intentionally list session before bfs (matches db-layers graph/mod.wj order).
+    // Intentionally list session before bfs (alphabetical module order).
     fs::write(
         &graph_mod,
         "pub mod graph_analytics_session\npub mod graph_bfs_engine\npub mod graph_dense_csr\n",

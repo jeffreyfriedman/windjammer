@@ -12,9 +12,6 @@
 ))]
 
 //! FAILING REPRO — `while idx < vec.len()` must unify int index vs usize len.
-//!
-//! Product tip api-check (DownstreamApp seed/postgres repos):
-//!   `while (idx as i64) < validated.lines.len()` → WJ0003 expected int, found uint.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

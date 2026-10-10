@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-094: qualified external-crate free calls must resolve via registry aliases.
+//! Regression: codegen external crate qualified call gate.
 //!
 //! Cross-crate metadata registers bare `fn` keys. Call sites may use
 //! `dep_crate::fn(...)`. IR fail-closed must not emit `compile_error!` when the

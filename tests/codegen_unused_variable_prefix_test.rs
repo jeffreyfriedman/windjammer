@@ -95,7 +95,7 @@ fn compile_and_check_warnings(code: &str) -> (bool, String, Vec<String>) {
 fn test_unused_function_param_gets_underscore_prefix() {
     // THE BUG: When a function parameter is never used in the body,
     // the generated Rust triggers "unused variable: `dt`" warnings.
-    // This is the exact pattern from game-host's update functions:
+    // This is the exact pattern from update functions:
     //   fn update(self, dt: f64, game_state: GameState) { ... only uses self ... }
     let (ok, generated, warnings) = compile_and_check_warnings(
         r#"

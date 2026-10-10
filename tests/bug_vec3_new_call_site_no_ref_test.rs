@@ -11,7 +11,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Mirrors sample-game combat/damage.wj: static Vec3::new must not add & on f32 args
+/// Mirrors combat/damage: static Vec3::new must not add & on f32 args
 /// when engine metadata marks params Borrowed (stale) but param types are Copy f32.
 fn build_engine(tmp: &TempDir) -> std::path::PathBuf {
     let engine_src = tmp.path().join("engine_src");

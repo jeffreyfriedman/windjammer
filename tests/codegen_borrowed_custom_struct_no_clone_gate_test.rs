@@ -10,9 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-097: borrowed non-Copy Custom formals must not get `.clone()` at call sites.
-//! Cross-file / cold-meta: callee analyzed as Borrowed with bare Custom (no
-//! `emitted_rust_ref_params` yet) must still drive `&csr`, not `csr.clone()`.
+//! Regression: codegen borrowed custom struct no clone gate.
 
 use std::sync::Arc;
 use windjammer::analyzer::{Analyzer, OwnershipMode, SignatureRegistry};
@@ -89,7 +87,7 @@ pub fn run_twice() -> i64 {
     let rs = codegen.generate_program(&program_b, &analyzed_b);
     assert!(
         !rs.contains("graph_bfs_run_dense(csr.clone()"),
-        "DB-097: must not clone into &DenseCsr. Got:\n{rs}"
+        "must not clone into &DenseCsr. Got:\n{rs}"
     );
     assert!(
         rs.contains("graph_bfs_run_dense(&csr") || rs.contains("graph_bfs_run_dense(csr,"),
@@ -137,7 +135,7 @@ impl Session {
     let rs = codegen.generate_program(&program_b, &analyzed_b);
     assert!(
         !rs.contains("self.csr.clone()") && !rs.contains("graph_bfs_run_dense(self.csr.clone()"),
-        "DB-097: field into &DenseCsr must not clone. Got:\n{rs}"
+        "field into &DenseCsr must not clone. Got:\n{rs}"
     );
     assert!(
         rs.contains("graph_bfs_run_dense(&self.csr"),

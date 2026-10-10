@@ -12,10 +12,6 @@
 ))]
 
 //! FAILING REPRO — owned trait string formals must not receive `&String` at call sites.
-//!
-//! Product tip api-check (DownstreamApp):
-//!   `self.get(&_temp0, _temp1)` / `lock.close_period(&tenant_slug, …)` after tip kept
-//!   trait-impl formals Owned while call sites still borrow.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

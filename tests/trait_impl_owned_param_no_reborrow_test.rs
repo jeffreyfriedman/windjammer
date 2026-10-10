@@ -12,9 +12,6 @@
 
 //! E0053: trait defines method with owned param, but auto-borrow in impl
 //! changes it to &mut, breaking trait signature match.
-//!
-//! Reproduces: game-host plugin/audio_plugin.rs initialize(&self, ctx: &mut App)
-//! vs trait core.rs initialize(&self, app: App)
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

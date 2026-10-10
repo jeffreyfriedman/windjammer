@@ -11,9 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! Owned `string` **self** builder formals (`StatusChip::label`) emit `impl Into<String>`
-//! so Rust consumers can pass `&str`. Associated constructors without `self`
-//! (`StatusChip::new`) stay concrete `String` (DB-157 / DB-357).
+//! Regression: ui builder into string.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -34,7 +32,7 @@ fn assert_into_string_formals(rs: &str) {
         rs.contains("fn new")
             && (rs.contains("status: String") || rs.contains("status: string"))
             && !rs.contains("status: impl Into<String>"),
-        "RED: StatusChip::new must take concrete String (DB-357). Got:\n{rs}"
+        "RED: StatusChip::new must take concrete String (). Got:\n{rs}"
     );
     // Self-receiver withers still accept Rust `&str` via Into (P3.598 / DB-157).
     assert!(
@@ -78,7 +76,7 @@ pub use domain::chip::StatusChip
 
 #[test]
 fn ui_builder_string_formal_rust_str_call_site_must_cargo_check() {
-    // Tip: StatusChip::new("paid") fails E0308 until Into lands.
+    // StatusChip::new("paid") fails E0308 until Into lands.
     let tmp = TempDir::new().expect("tempdir");
     let wj = tmp.path().join("chip.wj");
     fs::write(&wj, CHIP).unwrap();
@@ -91,7 +89,7 @@ fn ui_builder_string_formal_rust_str_call_site_must_cargo_check() {
     )
     .expect("transpile chip");
 
-    // Rust consumer mirrors windjammer-ui call sites.
+    // Rust consumer mirrors UI call sites.
     fs::write(
         out.join("caller_main.rs"),
         r#"
