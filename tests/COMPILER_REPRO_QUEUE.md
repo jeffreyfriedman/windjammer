@@ -2,6 +2,20 @@
 
 
 
+## P3.784 (2026-10-10) — `println`-only `string` formal is `&str`
+
+`fn takes_borrowed(s: string) { println("{}", s) }` emitted `s: String` and `takes_borrowed(name.to_string())`. The analyzer already decided Borrowed `&str`. Formal emit pinned owned `String` because `io::println`'s signature is one `&str` format slot, and the Display argument was treated as an AsRef runtime parameter.
+
+| Gate | Status |
+|------|--------|
+| `ir_call_sites_default_on_without_typed_lowering_bridge` | ✅ GREEN — borrowed call is `takes_borrowed(name)` / `&name`; owned literal stays `.to_string()` |
+
+**Root cause layer:** signature. `param_asref_runtime_forces_owned_formal` counted any runtime-module callee. The Display arg of `io::println` is past the declared format slot, so it is not an AsRef<&str> parameter.
+
+**What became unnecessary:** pinning a formatting-only formal to owned `String` (and the matching `.to_string()` at the call).
+
+**Gates:** `cargo test --release --test all -- phase5_no_legacy_bridge string_optimization_phase3 string_ref_decorator std_db_call_site_borrow` — phase5 3 passed, db borrow 3 passed (2026-10-10). `test_string_ref_decorator_forces_string` and `test_mixed_decorated_and_inferred_params` still fail (pre-existing `@string_ref` → `&str`).
+
 ## P3.781 (2026-10-09) — cross-module `aging` must move `Vec`s and borrow demoted strings
 
 `read.wj` calls `tables::aging(buckets, parties, fallback, title, wire)`.

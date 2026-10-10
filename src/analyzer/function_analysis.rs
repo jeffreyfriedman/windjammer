@@ -134,8 +134,7 @@ impl<'ast> Analyzer<'ast> {
         let modifies_fields =
             self.function_modifies_self_fields_with_registry(func, Some(registry));
         let returns_self = self.function_returns_self(func);
-        let body_moves_fields =
-            self.function_body_moves_non_copy_self_fields(func, Some(registry));
+        let body_moves_fields = self.function_body_moves_non_copy_self_fields(func, Some(registry));
         let snapshot_factory = self.function_returns_new_instance_from_self_fields(func);
 
         let consumes_self = if has_multi_recursive {
@@ -190,10 +189,7 @@ impl<'ast> Analyzer<'ast> {
         // (WDB-104 `append_edge`: mutates `self.buffer` then returns `self`).
         // Skip when the method calls another method with owned `self` (evaluate → evaluate_node)
         // or moves non-Copy fields out of `self`.
-        if (modifies_fields || calls_mutating)
-            && !body_moves_fields
-            && !calls_owned_on_self
-        {
+        if (modifies_fields || calls_mutating) && !body_moves_fields && !calls_owned_on_self {
             return OwnershipMode::MutBorrowed;
         }
 
@@ -357,8 +353,8 @@ impl<'ast> Analyzer<'ast> {
                             let modifies_fields = self
                                 .function_modifies_self_fields_with_registry(func, Some(registry));
                             let returns_self = self.function_returns_self(func);
-                            let body_moves_fields = self
-                                .function_body_moves_non_copy_self_fields(func, Some(registry));
+                            let body_moves_fields =
+                                self.function_body_moves_non_copy_self_fields(func, Some(registry));
                             let snapshot_factory =
                                 self.function_returns_new_instance_from_self_fields(func);
 
@@ -493,10 +489,17 @@ impl<'ast> Analyzer<'ast> {
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
             for param in &func.parameters {
-                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body)
-                {
+                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body) {
                     str_ref_optimizable_params.remove(&param.name);
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                }
+            }
+            // `analyze_str_ref_optimizable_params` already dropped stored, returned,
+            // and concat formals. A prior Owned default must not erase that `&str`
+            // decision (`println!("{}", s)` was staying `String` + `.to_string()`).
+            for name in &str_ref_optimizable_params {
+                if inferred_ownership.get(name) == Some(&OwnershipMode::Owned) {
+                    inferred_ownership.insert(name.clone(), OwnershipMode::Borrowed);
                 }
             }
             str_ref_optimizable_params
@@ -599,10 +602,17 @@ impl<'ast> Analyzer<'ast> {
                 self.analyze_str_ref_optimizable_params(func, registry);
             let mut str_ref_optimizable_params = str_ref_optimizable_params;
             for param in &func.parameters {
-                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body)
-                {
+                if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body) {
                     str_ref_optimizable_params.remove(&param.name);
                     inferred_ownership.insert(param.name.clone(), OwnershipMode::Owned);
+                }
+            }
+            // `analyze_str_ref_optimizable_params` already dropped stored, returned,
+            // and concat formals. A prior Owned default must not erase that `&str`
+            // decision (`println!("{}", s)` was staying `String` + `.to_string()`).
+            for name in &str_ref_optimizable_params {
+                if inferred_ownership.get(name) == Some(&OwnershipMode::Owned) {
+                    inferred_ownership.insert(name.clone(), OwnershipMode::Borrowed);
                 }
             }
             str_ref_optimizable_params
@@ -816,12 +826,7 @@ impl<'ast> Analyzer<'ast> {
             }
             if !self.is_copy_type(&param.type_)
                 && !returned_parameters.contains(&param.name)
-                && !self.is_stored_requiring_owned(
-                    &param.name,
-                    &param.type_,
-                    &func.body,
-                    registry,
-                )
+                && !self.is_stored_requiring_owned(&param.name, &param.type_, &func.body, registry)
                 && matches!(
                     self.infer_passthrough_ownership(
                         &param.name,
@@ -1459,6 +1464,15 @@ impl<'ast> Analyzer<'ast> {
                     }
                     if idx < param_types.len() {
                         param_types[idx] = param.type_.clone();
+                    }
+                } else if Self::trait_param_is_owned_string(&param.type_)
+                    && str_ref_optimized.contains(&param.name)
+                {
+                    // Phase-2 `&str` optimization already decided this formal is only
+                    // borrowed (`println!("{}", s)`). Leaving the inferred Owned slot
+                    // made call sites emit `name.to_string()` into a String formal.
+                    if idx < param_ownership.len() {
+                        param_ownership[idx] = OwnershipMode::Borrowed;
                     }
                 }
             }

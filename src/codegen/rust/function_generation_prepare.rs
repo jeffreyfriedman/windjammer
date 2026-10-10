@@ -8941,8 +8941,11 @@ impl<'ast> CodeGenerator<'ast> {
         // WDB-110/111: `strings::is_empty(path)` + `path.len()` (or `==` + `starts_with`)
         // still keep owned `String` formals — mixed readonly use must not demote.
         let mut has_asref_forward = false;
-        self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, _| {
-            if self.callee_signature_is_asref_str_runtime(sig) {
+        self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, arg_idx| {
+            // Formatting sinks (`io::println("{}", s)`) are runtime modules whose
+            // declared slot is the format string. A later Display arg is not an
+            // AsRef<&str> parameter — do not pin the formal to owned `String`.
+            if self.arg_is_runtime_asref_text_param(sig, arg_idx) {
                 has_asref_forward = true;
             }
         });
@@ -8966,6 +8969,40 @@ impl<'ast> CodeGenerator<'ast> {
         sig: &crate::analyzer::FunctionSignature,
     ) -> bool {
         crate::codegen::rust::stdlib_method_traits::callee_path_is_runtime_std(sig.name.as_str())
+    }
+
+    /// True when call-site `arg_idx` lands on a declared borrowed text parameter of a
+    /// runtime AsRef module (`strings::is_empty`, `db::connect`). Format varargs past
+    /// `io::println`'s `&str` format slot are not that contract.
+    fn arg_is_runtime_asref_text_param(
+        &self,
+        sig: &crate::analyzer::FunctionSignature,
+        arg_idx: usize,
+    ) -> bool {
+        if !self.callee_signature_is_asref_str_runtime(sig) {
+            return false;
+        }
+        let pidx = sig.arg_param_index(arg_idx);
+        // Past the declared parameter list: format varargs (`println("{}", s)`),
+        // not the `&str` format slot.
+        if !matches!(
+            sig.param_ownership.get(pidx),
+            Some(
+                crate::analyzer::OwnershipMode::Borrowed
+                    | crate::analyzer::OwnershipMode::MutBorrowed
+            )
+        ) {
+            return false;
+        }
+        match sig.param_types.get(pidx) {
+            Some(ty) => {
+                crate::ir::formal_predicates::is_windjammer_text_type(ty)
+                    || crate::ir::formal_predicates::param_is_rust_str_ref(ty)
+                    || crate::ir::formal_predicates::param_is_rust_string_ref(ty)
+            }
+            // Scanned AsRef helpers sometimes record Borrowed with no param type.
+            None => true,
+        }
     }
 
     fn statement_has_runtime_std_forward_of_param(
