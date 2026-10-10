@@ -2,7 +2,7 @@
 
 **Read the [windjammer-engineering skill](../.cursor/skills/windjammer-engineering/SKILL.md) before starting work.**
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+Open compiler bugs are tracked in `tests/COMPILER_REPRO_QUEUE.md` (being consolidated); `bd` is optional.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ The compiler now includes a **Safety-Typed IR** layer (`src/ir/`) providing:
 - Caller-controlled execution modes (WJ-CONC-01)
 - Multi-target safety encodings (Rust, Go, JS, TS, WASM)
 
-The IR is additive infrastructure — the existing compilation pipeline (parser → analyzer → codegen) remains unchanged. Individual passes will be incrementally migrated to use the IR's constraint solver.
+The IR solver is the **single source of truth** for ownership, clone insertion and integer widths. Legacy analyzer/codegen heuristics are being deleted, not extended.
 
 **Architecture reference:** [docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md](docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md) — solver-driven codegen migration plan, cutover flags, TDD protocol, and backend consumption model.
 
@@ -61,7 +61,7 @@ Game, WindjammerDB, and finance remain separate dogfoods; seed bugs still get TD
    ```bash
    git pull --rebase
    bd sync
-   git push
+   git push   # push the current feature/working branch only; never force-push
    git status  # MUST show "up to date with origin"
    ```
 5. **Clean up** - Clear stashes, prune remote branches
@@ -97,3 +97,17 @@ When fixes enable or change player-visible behavior in **Breach Protocol** or th
 3. Dual-persona jury per `../.cursor/rules/dual-persona-jury-evaluation.mdc`
 
 Do not claim rendering or gameplay fixes are done without screenshot evidence and three-tier verdict.
+
+## Hardening rules (compiler)
+
+1. **One decision-maker.** Ownership, clones, borrows and int/float widths are decided by the IR solver (`src/ir/`). Never add method-name string matches (`"push"`, `"insert"`, `"clone"`) or special-case heuristics in `src/codegen`; add a constraint/signature instead.
+2. **Tests = production.** No test-only defaults. `IrCutoverConfig::default()` must match `from_env()`; unit tests exercise the same paths as `wj build`.
+3. **Done means tip-green.** A fix must pass both the isolate test and the whole-program multipass ("tip") test. An isolate-GREEN/tip-RED fix is not done.
+4. **Never silently change semantics.** Clone insertion must not drop mutations (`x.clone().mutate()`); mutating `self` methods infer `&mut self`. Prefer a hard Windjammer diagnostic over emitting code that compiles but behaves differently.
+5. **Repros are generic.** Name tests by behavior (`bug_<behavior>_test.rs`), not by dogfood ticket (`wdb`, `ledgerkit`, game file names). Project-specific fixtures belong in the project repo. The compiler never references a dogfood project's code.
+6. **Minimal repros, one bug each.** Reduce before filing; delete redundant/duplicate tests when a broader test subsumes them.
+7. **Tests write to temp dirs only.** Always `--out-dir`/`tempfile` for `rustc`; never write `*.rlib`, `tmp_*`, `*.zip` in the repo root.
+8. **No status docs** at the repo root or in `docs/` for sessions; update `CHANGELOG.md` instead.
+9. **Gates before commit:** `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --release --test all`.
+10. **Disk:** shared target dir via `wj cache path`; `wj cache prune` when free disk is below the threshold. Don't leave worktrees behind (`git worktree remove`); use `isolation: worktree` only for short tasks.
+11. **Docs honesty.** README/CLI help may only claim what exists. Mark experimental backends (JS/Go/WASM/interpreter) as such.
