@@ -2,6 +2,35 @@
 
 
 
+## P3.797 (2026-10-10) — TDD WDB-486 (DB agent; no compiler src)
+
+A `string` inserted into different maps on successive `if` arms must not `.clone().clone()`. One clone per arm that is not the last use is enough.
+
+Product `save/data.rs`:
+```wj
+if section == "int" { data.int_fields.insert(key, strings.parse_i32(val)) }
+if section == "float" { data.float_fields.insert(key, strings.parse_f32(val)) }
+if section == "bool" { data.bool_fields.insert(key, strings.parse_bool(val)) }
+if section == "string" { data.string_fields.insert(key, val) }
+```
+Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `key.clone().clone()` on the int, float, and bool inserts.
+
+| Gate | Status |
+|------|--------|
+| WDB-486 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-486 tip-out | ❌ tip RED — `rel_tip_out/save/data.rs` and `windjammer-game-core/gen/save/data.rs` |
+
+**Root cause layer:** tip-out lag — a string map key reused across `if` arms is still double-cloned into `insert`.
+
+**Why this is a new class:**
+- WDB-479 is one map: `contains_key`, `insert`, then `get_mut`.
+- WDB-485 is one call plus a later `match` arm.
+- This is successive `if section == ...` inserts into different maps.
+
+**Do not steal:** WDB-406/408/411/457–486, P3.508–P3.797, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb486_` — isolate GREEN / tip RED (2026-10-10).
+
 ## P3.796 (2026-10-10) — TDD WDB-485 (DB agent; no compiler src)
 
 A `string` passed into a call and also moved in a later `match` arm must not `.clone().clone()`. One clone into the call is enough.
