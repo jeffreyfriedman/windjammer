@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-238 multipass: owned inbound into demoted `&Vec` frame_total_len must borrow.
+//! Regression: module file owned into demoted frame total len codegen.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -39,12 +39,12 @@ pub fn feed(inbound: Vec<u8>, offset: int) -> int {
 "#;
 
 #[test]
-fn wdb238_codegen_owned_into_demoted_frame_total_len_must_borrow() {
+fn codegen_owned_into_demoted_frame_total_len_must_borrow() {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("wire.wj", WIRE);
     test.add_file("serve.wj", SERVE);
-    let map = test.compile().expect("DB-238 multipass compile");
+    let map = test.compile().expect("multipass compile");
     let wire = map.get("wire.rs").expect("wire.rs");
     let serve = map.get("serve.rs").expect("serve.rs");
     let demoted = wire.contains("fn frame_total_len(bytes: &Vec<u8>")
@@ -52,10 +52,10 @@ fn wdb238_codegen_owned_into_demoted_frame_total_len_must_borrow() {
     let bad = demoted
         && serve.contains("frame_total_len(inbound.clone()")
         && !serve.contains("frame_total_len(&inbound");
-    eprintln!("DB-238 demoted={demoted} bad={bad}\nwire:\n{wire}\nserve:\n{serve}");
+    eprintln!("demoted={demoted} bad={bad}\nwire:\n{wire}\nserve:\n{serve}");
     assert!(
         !bad,
-        "DB-238: owned into demoted &Vec must borrow, not clone"
+        "owned into demoted &Vec must borrow, not clone"
     );
-    test.cargo_check().expect("DB-238 cargo-check");
+    test.cargo_check().expect("cargo-check");
 }

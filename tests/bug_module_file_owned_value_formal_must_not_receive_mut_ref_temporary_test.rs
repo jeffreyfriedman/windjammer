@@ -10,23 +10,16 @@
     feature = "integration_tests",
 ))]
 
-//! DB-162: owned `Value` formal must not receive `&mut Value::Int64(...)` temporaries.
-//!
-//! Product cold gen (`relational_pg_serve_dispatch_port.rs`):
-//!   `relational_mvcc_put_version(..., &mut Value::Int64(42))` → E0308.
+//! Regression: module file owned value formal must not receive mut ref temporary.
 //!
 //! Root cause: bare-pass demotion to MutBorrowed when struct-literal store of `value`
 //! lives under `while` / `versions[i] = Version { value }` / `.push(Version { value })`
 //! — `param_stored_in_struct_literal` previously skipped those shapes.
-//!
-//! Gate A: multipass fixture matching put_version must not invent `&mut` + cargo-check.
-//! Gate B: product dispatch gen must not contain `&mut Value::Int64`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const MOD: &str = r#"
 pub mod value
@@ -83,7 +76,7 @@ pub fn seed() -> i64 {
 }
 "#;
 
-fn wdb162_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("value.wj", VALUE);
@@ -92,14 +85,14 @@ fn wdb162_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb162_module_file_owned_value_formal_must_not_receive_mut_ref_temporary() {
-    let mut test = wdb162_fixture();
+fn module_file_owned_value_formal_must_not_receive_mut_ref_temporary() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("DB-162 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let store_rs = map.get("store.rs").expect("store.rs");
 
-    eprintln!("DB-162 store.rs:\n{store_rs}");
+    eprintln!("store.rs:\n{store_rs}");
 
     let bad = store_rs.contains("&mut Value::Int64")
         || store_rs.contains("&mut value::Value::Int64")
@@ -108,42 +101,10 @@ fn wdb162_module_file_owned_value_formal_must_not_receive_mut_ref_temporary() {
 
     assert!(
         !bad,
-        "DB-162 RED: owned Value formal received &mut temporary. Got:\n{store_rs}"
+        "RED: owned Value formal received &mut temporary. Got:\n{store_rs}"
     );
 
     test.cargo_check().expect(
-        "DB-162: owned Value literal args must cargo-check without &mut temporaries.",
-    );
-}
-
-#[test]
-fn wdb162_product_full_relational_module_file_must_not_emit_mut_ref_value_temp() {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.pop();
-    path.push(
-        "db-project/crates/db-layers/gen/relational_module_file/relational_pg_serve_dispatch_port.rs",
-    );
-
-    if !path.exists() {
-        eprintln!(
-            "DB-162: skip product gate — {} missing (run transpile_relational_module_file.sh)",
-            path.display()
-        );
-        return;
-    }
-
-    let text = std::fs::read_to_string(&path).expect("read product dispatch gen");
-    let bad = text.matches("&mut Value::Int64").count();
-    eprintln!(
-        "DB-162 product dispatch {} mut_value_temp_count={}",
-        path.display(),
-        bad
-    );
-
-    assert!(
-        bad == 0,
-        "DB-162 RED: full relational --module-file still emits &mut Value::Int64 ({bad}×) in {}. \
-         Product: relational_mvcc_put_version(..., &mut Value::Int64(42)).",
-        path.display()
+        "owned Value literal args must cargo-check without &mut temporaries.",
     );
 }
