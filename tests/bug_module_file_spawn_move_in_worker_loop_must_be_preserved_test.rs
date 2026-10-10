@@ -11,18 +11,13 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — library multipass strips `move` from `spawn(move \|\| …)`
-//! when the closure body starts with `while` (wj-sync shared-inbox Pool).
-//!
-//! P3.295 simple Arc `spawn(move \|\| { match … })` is tip GREEN.
-//! The Pool shape below emits bare `spawn(\|\| …)` → E0373.
-//! Tip may log `Unexpected token … While` with prior token `Or` at `move \|\|`.
+//! Regression: module file spawn move in worker loop must be preserved.
 
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Exact shape of `wj-sync` shared-inbox `pool_run_double` workers.
+/// Shape of shared-inbox `pool_run_double` workers.
 const POOL_WORKER_LOOP: &str = r#"
 use std::sync::mpsc
 use std::sync::{Arc, Mutex}

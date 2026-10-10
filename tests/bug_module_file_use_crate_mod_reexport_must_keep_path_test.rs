@@ -10,18 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-154: multipass must preserve `use crate::<mod>::reexport` paths.
-//!
-//! DbProject CQ-C5 tip-sync of `graph_cdlp_test.wj`:
-//!   use crate::graph::cdlp_same_community
-//! tip often emits:
-//!   use crate::cdlp_same_community;
-//! → rustc E0432 (no `cdlp_same_community` in crate root) unless product dogfood
-//! rewrites the path.
-//!
-//! Expected: emitted Rust keeps `use crate::graph::cdlp_same_community;` (matching
-//! the Windjammer source path through the `graph` module’s `pub use`).
-//! Actual: tip drops the intermediate `graph::` segment.
+//! Regression: module file use crate mod reexport must keep path.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -55,7 +44,7 @@ pub fn test_cdlp_same_community_via_graph_reexport() {
 "#;
 
 #[test]
-fn wdb154_module_file_use_crate_mod_reexport_must_keep_path_or_cargo_check() {
+fn module_file_use_crate_mod_reexport_must_keep_path_or_cargo_check() {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("graph_algorithm_host.wj", HOST);
@@ -64,7 +53,7 @@ fn wdb154_module_file_use_crate_mod_reexport_must_keep_path_or_cargo_check() {
 
     let map = test
         .compile()
-        .expect("DB-154 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let leaf = map
         .get("graph_cdlp_test.rs")
         .expect("graph_cdlp_test.rs must be generated");
@@ -73,15 +62,15 @@ fn wdb154_module_file_use_crate_mod_reexport_must_keep_path_or_cargo_check() {
     let dropped_to_root = leaf.contains("use crate::cdlp_same_community") && !kept_path;
 
     if dropped_to_root || !kept_path {
-        eprintln!("DB-154 RED emit graph_cdlp_test.rs:\n{leaf}");
+        eprintln!("RED emit graph_cdlp_test.rs:\n{leaf}");
     }
 
     assert!(
         kept_path,
-        "DB-154 RED: use crate::graph::cdlp_same_community must not become use crate::cdlp_same_community. Product: graph_cdlp_test tip-sync E0432."
+        "RED: use crate::graph::cdlp_same_community must not become use crate::cdlp_same_community."
     );
 
     test.cargo_check().expect(
-        "DB-154 RED: reexport import path must cargo-check. Product: dogfood rewrites use crate::cdlp_same_community → use crate::graph::cdlp_same_community.",
+        "RED: reexport import path must cargo-check.",
     );
 }

@@ -10,16 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-146: multipass `--module-file` cluster emit must not flatten same-package
-//! imports to `use crate::lsqb_*` (missing package path) → E0432.
-//!
-//! Product CQ-C5 tip cluster sync of `lsqb_benchmark_port` emitted:
-//!   `use crate::lsqb_expected_count_for_scale;`
-//!   `use crate::lsqb_scale_from_path;`
-//! instead of `use crate::graph::lsqb_reference_counts::…`.
-//!
-//! Sync script can rewrite some imports, but tip should emit package-correct paths
-//! when building a multi-module library cluster.
+//! Regression: module file same package import must not flatten to crate root.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -54,7 +45,7 @@ pub fn run(path: string) -> u64 {
 }
 "#;
 
-fn wdb146_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("counts.wj", COUNTS);
@@ -63,11 +54,11 @@ fn wdb146_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb146_module_file_same_package_import_must_not_flatten_to_crate_root() {
-    let test = wdb146_fixture();
+fn module_file_same_package_import_must_not_flatten_to_crate_root() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-146 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let bench_rs = map.get("bench.rs").expect("bench.rs");
 
     let flat = bench_rs.contains("use crate::scale_from_path")
@@ -82,16 +73,16 @@ fn wdb146_module_file_same_package_import_must_not_flatten_to_crate_root() {
         .lines()
         .any(|l| l.trim() == "use crate::scale_from_path;" || l.trim() == "use crate::expected_count_for_scale;");
 
-    eprintln!("DB-146 bench.rs:\n{bench_rs}");
+    eprintln!("bench.rs:\n{bench_rs}");
     eprintln!("bad_flat={bad_flat} flat={flat}");
 
     if bad_flat {
         panic!(
-            "DB-146 RED: same-package imports flattened to crate root. \
-             Product: lsqb_benchmark_port after tip cluster sync → E0432."
+            "RED: same-package imports flattened to crate root. \
+            "
         );
     }
 
     test.cargo_check()
-        .expect("DB-146: same-package multipass imports must cargo-check.");
+        .expect("same-package multipass imports must cargo-check.");
 }

@@ -12,9 +12,6 @@
 ))]
 
 //! FAILING REPRO — `strings.len()` usize must unify with int loop indices.
-//!
-//! Product tip api-check (DownstreamApp domain/string_contains.wj):
-//!   `while i + n_len <= h_len` → WJ0003 expected int, found uint.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

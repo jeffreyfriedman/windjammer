@@ -12,10 +12,6 @@
 ))]
 
 //! Empty string literals into owned `string` formals must emit `String`, not `""`.
-//!
-//! Ecosystem `wj-notes-api` `handle_request`:
-//! `app.handle(method, path, "", "", "", 0, body)` — `origin` / `accept_encoding`
-//! / `client_key` stay `String` but the call emits `""` (E0308).
 
 use std::fs;
 use std::process::Command;
@@ -46,7 +42,7 @@ impl App {
         accept_encoding: string,
         client_key: string,
     ) -> string {
-        // Consume into owned storage so formals stay String like notes-api handle.
+        // Consume into owned storage so formals stay String like an app handle.
         let origin = keep(origin)
         let accept_encoding = keep(accept_encoding)
         let client_key = keep(client_key)

@@ -13,7 +13,7 @@
 /// calling `self.field.mutating_method()` fails to infer `&mut self` for the
 /// containing method.
 ///
-/// Examples from game-host:
+/// Examples:
 /// - World::remove_transform calls self.transforms.remove(entity) → needs &mut self
 /// - World::spawn calls self.allocator.allocate() → needs &mut self  
 /// - NpcBehavior::update_patrol calls self.patrol.update_wait(dt) → needs &mut self

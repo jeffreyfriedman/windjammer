@@ -10,10 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.383 / DB-270 class: `&owned.clone()` into demoted `&str` must reborrow.
-//!
-//! Product tip-out wave1 emits `helper(&dated_label.clone())` while formal is
-//! `label: &str`. Signature-driven: pass `&owned` (no clone into `&str`).
+//! Regression: owned str clone into demoted str must reborrow.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

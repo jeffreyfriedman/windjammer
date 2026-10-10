@@ -11,9 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! GREEN regression — seed overlay `Ok(body) => body` / `Err(_) => ""` without
-//! `+ ""` (DownstreamApp `seed_bank_*_overlay.wj`). Distinct from owned-match→formal
-//! RED (`bug_owned_match_binding_*`).
+//! Regression: seed overlay read body no plus empty.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

@@ -12,8 +12,6 @@
 ))]
 
 //! P3.322: `rows.len() > 0` must not mix uint (len) with int literal `0`.
-//!
-//! DownstreamApp tip api-check: `Ok(rows.len() > 0)` / `roles.len() > 0` → expected uint, found int.
 
 use std::fs;
 use std::process::Command;

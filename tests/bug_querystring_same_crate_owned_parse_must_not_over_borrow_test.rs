@@ -13,11 +13,6 @@
 
 //! Same-crate `parse(text: String)` / `stringify(pairs: Vec)` must not over-borrow
 //! because a global homonym (`url::parse`, `HashMap::get`) emits `&str` / `&K`.
-//!
-//! Ecosystem `wj-querystring`: E0308 `expected String, found &String` at
-//! `parse(&query)` and `expected Vec, found &Vec` at `stringify(&kept)`.
-//! Inverse of `bug_notes_api_cross_crate_owned_into_demoted_str_must_auto_borrow_test`
-//! (path-dep demoted `&str` must borrow). Shared≠Lock: one `parse` name.
 
 use std::fs;
 use std::process::Command;
