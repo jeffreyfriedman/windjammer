@@ -2,6 +2,36 @@
 
 
 
+## P3.793 (2026-10-10) — TDD WDB-483 (DB agent; no compiler src)
+
+An owned local passed into a call and then read again must not `.clone().clone()`. One clone into the call is enough.
+
+Product `rendering/shader_graph_executor.rs`:
+```wj
+let pass = sorted[step.pass_indices[pi]]
+self.bind_pass_buffers(pass)
+if pass.indirect_args_buffer != 0 {
+    dispatch_compute_indirect(pass.indirect_args_buffer)
+}
+```
+Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `self.bind_pass_buffers(pass.clone().clone())` after `let pass = sorted[...].clone()`.
+
+| Gate | Status |
+|------|--------|
+| WDB-483 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-483 tip-out | ❌ tip RED — `rel_tip_out/rendering/shader_graph_executor.rs` and `windjammer-game-core/gen/rendering/shader_graph_executor.rs` |
+
+**Root cause layer:** tip-out lag — a reused owned local is still double-cloned into a call.
+
+**Why this is a new class:**
+- WDB-480 double-clones the loop parameter itself.
+- WDB-481 double-clones a string into `Vec::push`.
+- This local is already owned from an index clone, then cloned again into `bind_pass_buffers` before later field reads.
+
+**Do not steal:** WDB-406/408/411/457–483, P3.508–P3.793, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb483_` — isolate GREEN / tip RED (2026-10-10).
+
 ## P3.791 (2026-10-10) — cross-module `"${json}"` moved before a later `json.clone()` (no compiler src)
 
 Oct 10 13:27 `wj` finance-screens regen is still cargo-red on the same E0382. Re-ran `p3791_cross_module_json_interp_must_clone_before_later_use` on HEAD: 0 passed, 1 failed. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
