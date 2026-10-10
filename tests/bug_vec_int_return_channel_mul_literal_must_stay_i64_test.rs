@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! `-> Vec<int>` must not demote `v * 2` to `v * 2_i32` (wj-sync `pool_run_double`).
+//! Regression: vec int return channel mul literal must stay i64.
 //!
 //! `function_prefers_i32_coord_locals` treated non-int returns as i32-coord builders;
 //! `Vec<int>` fell through to that path and broke channel `i64` payloads.

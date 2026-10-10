@@ -25,15 +25,15 @@ use tempfile::TempDir;
 fn test_build_system_propagates_ffi_dependencies() {
     // Create a temp directory for our test project
     let temp_dir = TempDir::new().unwrap();
-    let project_dir = temp_dir.path().join("test_game");
+    let project_dir = temp_dir.path().join("test_app");
     fs::create_dir_all(&project_dir).unwrap();
 
     // Create a simple Windjammer file that uses game engine
-    let game_file = project_dir.join("simple_game.wj");
+    let app_file = project_dir.join("simple_app.wj");
     fs::write(
-        &game_file,
+        &app_file,
         r#"// Simple game that uses FFI
-use windjammer_game_core::prelude::*
+use ffi_core::prelude::*
 
 fn main() {
     println!("Game!")
@@ -42,12 +42,12 @@ fn main() {
     )
     .unwrap();
 
-    // Create a Cargo.toml with FFI dependencies (simulating windjammer-game-core)
+    // Create a Cargo.toml with FFI dependencies (simulating ffi-core)
     let cargo_toml = project_dir.join("Cargo.toml");
     fs::write(
         &cargo_toml,
         r#"[package]
-name = "test-game"
+name = "test-app"
 version = "0.1.0"
 edition = "2021"
 
@@ -82,7 +82,7 @@ rapier3d = "0.17"
     let output = std::process::Command::new(&wj_binary)
         .args([
             "build",
-            game_file.to_str().unwrap(),
+            app_file.to_str().unwrap(),
             "--output",
             build_dir.to_str().unwrap(),
             "--no-cargo",
@@ -178,7 +178,7 @@ fn test_build_system_without_ffi_still_works() {
 
     // Should NOT contain FFI deps (since source project didn't have them)
     assert!(
-        !generated_content.contains("wgpu") || generated_content.contains("windjammer-game-core"),
+        !generated_content.contains("wgpu") || generated_content.contains("ffi-core"),
         "Non-FFI project shouldn't randomly get wgpu"
     );
 }

@@ -11,14 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! Hexagonal ECS playable loop — spec 2026-09-27 Phase 2.
-//! PlaytestCmd drives movement + combat + windjammer-ui HUD. No FFI.
+//! Regression: hexagonal ecs playable loop.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 /// Compiles, but fire does not spend ammo or kill, and HUD has no ui classes.
 const STUB: &str = r#"
@@ -96,14 +94,6 @@ fn assert_no_ffi(rs: &str) {
     );
 }
 
-fn product_src() -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/windjammer-game-core/src/application/ecs_playable_loop.wj");
-    std::fs::read_to_string(&path).unwrap_or_else(|_| STUB.to_string())
-}
-
 fn spends_ammo(rs: &str) -> bool {
     rs.contains("ammo")
         && (rs.contains("ammo -= 1")
@@ -132,29 +122,5 @@ fn hexagonal_ecs_stub_must_stay_red_on_combat_and_hud() {
     assert!(
         !rs.contains("wj-panel") && !rs.contains("wj-progress"),
         "stub HUD must stay empty:\n{rs}"
-    );
-}
-
-#[test]
-fn hexagonal_ecs_loop_must_fire_kill_and_compose_ui_hud() {
-    let src = product_src();
-    let rs = loop_isolate(&src);
-    eprintln!("ECS loop lib.rs:\n{rs}");
-    assert_no_ffi(&rs);
-    assert!(
-        spends_ammo(&rs),
-        "RED: combat_system must decrement ammo on fire:\n{rs}"
-    );
-    assert!(
-        increments_kills(&rs),
-        "RED: combat_system must increment kills when an enemy dies:\n{rs}"
-    );
-    assert!(
-        rs.contains("wj-panel") && rs.contains("wj-progress") && rs.contains("wj-text"),
-        "RED: HUD must dogfood windjammer-ui classes:\n{rs}"
-    );
-    assert!(
-        rs.contains("KILLS") || rs.contains("kills"),
-        "RED: HUD / observe must surface kill count:\n{rs}"
     );
 }

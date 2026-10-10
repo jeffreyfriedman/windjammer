@@ -1,9 +1,5 @@
 //! Library multipass: owned Custom formals must not get stale `&arg` / `&self.field`
 //! at call sites once defining-module codegen refresh records owned emission.
-//!
-//! Dogfood (wdb-layers):
-//! - `graph_bfs_run_dense(&self.csr, source)` while formal is `csr: DenseCsr`
-//! - `graph_sql_physical_exec_with_batch(&host2, …)` while formal is owned host
 
 #![cfg(any(
     not(any(

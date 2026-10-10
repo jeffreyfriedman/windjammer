@@ -16,7 +16,7 @@
 /// Pattern: Return type constrains variable, variable constrains collection elements
 /// Expected: Bidirectional flow from return type through Vec to tuple literals
 ///
-/// Example from windjammer-game (astar_grid.wj):
+/// Example (astar grid):
 /// ```windjammer
 /// fn get_neighbors(self, x: i32, y: i32) -> Vec<(i32, i32, f32)> {
 ///     let mut result = Vec::new()  // No type annotation

@@ -26,7 +26,7 @@ mod test_utils;
 
 #[test]
 fn test_no_clone_on_2d_vec_nested_index() {
-    // Pattern from windjammer-game world/tilemap.wj:
+    // Pattern (tilemap):
     // self.tiles[row][col] should NOT clone the entire row Vec
     let source = r#"
 pub struct Grid {
@@ -53,7 +53,7 @@ impl Grid {
 
 #[test]
 fn test_no_clone_on_2d_bool_nested_index() {
-    // Pattern from windjammer-game pathfinding/grid.wj:
+    // Pattern (pathfinding grid):
     // self.walkable[x][y] — bool is Copy, no clone needed at all
     let source = r#"
 pub struct PathGrid {

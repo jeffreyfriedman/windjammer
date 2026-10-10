@@ -12,9 +12,6 @@
 ))]
 
 //! FAILING REPRO — owned Vec<string> helper must not receive `&Vec` at call site.
-//!
-//! Product tip api-check (LedgerKit http_json.wj):
-//!   `string_list_json(&controls)` → E0308 expected Vec, found &Vec.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

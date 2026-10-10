@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! TDD: Auto-borrow patterns from windjammer-game-core dogfooding.
+//! Regression: engine autoborrow patterns.
 //!
 //! These tests capture real compilation failures in the game engine that
 //! stem from incorrect auto-borrow decisions in call_site_borrow.rs.
