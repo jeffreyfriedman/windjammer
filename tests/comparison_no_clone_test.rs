@@ -26,7 +26,7 @@ mod test_utils;
 
 #[test]
 fn test_no_clone_on_string_field_in_equality() {
-    // Pattern from game-host: recipe.name == target in a for loop
+    // Pattern from a downstream game project: recipe.name == target in a for loop
     let source = r#"
 pub struct Recipe {
     pub name: string,
@@ -56,7 +56,7 @@ pub fn find_recipe(recipes: Vec<Recipe>, target: string) -> i32 {
 
 #[test]
 fn test_no_clone_on_string_field_in_not_equal() {
-    // Pattern from game-host: member.id != npc_id
+    // Pattern from a downstream game project: member.id != npc_id
     let source = r#"
 pub struct Member {
     pub npc_id: string,

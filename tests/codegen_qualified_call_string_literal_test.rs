@@ -111,7 +111,7 @@ impl Game {
 /// blindly use the unqualified fallback signature.
 ///
 /// This reproduces the real bug: when compiling a game entry file,
-/// game-host's api.wj.meta has draw_text with Owned, but the actual
+/// a downstream game project's api.wj.meta has draw_text with Owned, but the actual
 /// draw module uses Borrowed. The simple-name fallback picks up the wrong one.
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
@@ -128,7 +128,7 @@ pub fn render() {
 "#;
 
     // Conflicting .wj.meta with draw_text having Owned string param
-    // (simulates game-host's api.wj.meta loading)
+    // (simulates a downstream game project's api.wj.meta loading)
     let conflicting_meta = r#"{
   "module_path": "rendering_api",
   "functions": {

@@ -112,16 +112,16 @@ fn test_mut_param_vec_field_take_clear_uses_mem_take() {
 
     assert!(
         rust.contains("std::mem::take(&mut csr.in_offsets)"),
-        "DB-090: take+clear must use mem::take on &mut csr.in_offsets. Got:\n{rust}"
+        "take+clear must use mem::take on &mut csr.in_offsets. Got:\n{rust}"
     );
     assert!(
         !rust.contains("csr.in_offsets.clone()"),
-        "DB-090: must not clone in_offsets when taking behind &mut. Got:\n{rust}"
+        "must not clone in_offsets when taking behind &mut. Got:\n{rust}"
     );
     assert!(
         rust.contains("std::mem::take(&mut csr.in_neighbors)")
             || rust.contains("take_in_edges"),
-        "DB-090: take_in_edges must mem::take neighbors too. Got:\n{rust}"
+        "take_in_edges must mem::take neighbors too. Got:\n{rust}"
     );
 }
 
@@ -133,11 +133,11 @@ fn test_mut_param_vec_field_restore_moves_without_clone() {
     // restore must assign by move, not clone the incoming Vecs
     assert!(
         !rust.contains("off.clone()") && !rust.contains("nei.clone()"),
-        "DB-090: restore_in_edges must move off/nei into csr fields. Got:\n{rust}"
+        "restore_in_edges must move off/nei into csr fields. Got:\n{rust}"
     );
     assert!(
         rust.contains("csr.in_offsets = off") || rust.contains("csr.in_offsets = off;"),
-        "DB-090: restore must assign off into csr.in_offsets. Got:\n{rust}"
+        "restore must assign off into csr.in_offsets. Got:\n{rust}"
     );
 }
 
@@ -150,10 +150,10 @@ fn test_mut_param_take_inferred_as_mut_borrow_at_call_site() {
     assert!(
         rust.contains("take_in_offsets(&mut csr)")
             || rust.contains("take_in_offsets(&mut csr);"),
-        "DB-090: call site must borrow mutably, not clone DenseCsr. Got:\n{rust}"
+        "call site must borrow mutably, not clone DenseCsr. Got:\n{rust}"
     );
     assert!(
         !rust.contains("take_in_offsets(csr.clone())"),
-        "DB-090: must not clone DenseCsr into take_in_offsets. Got:\n{rust}"
+        "must not clone DenseCsr into take_in_offsets. Got:\n{rust}"
     );
 }
