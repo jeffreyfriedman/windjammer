@@ -12,9 +12,6 @@
 ))]
 
 //! If a `Vec<T>` formal demotes to `&Vec<T>`, `return notes` must clone.
-//!
-//! Ecosystem `wj-notes-api` `truncate_notes(notes: Vec<Note>, limit: int) -> Vec<Note>`
-//! emits `notes: &Vec<Note>` then `return notes` (E0308 expected Vec, found &Vec).
 
 use std::fs;
 use std::process::Command;

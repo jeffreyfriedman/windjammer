@@ -12,10 +12,6 @@
 ))]
 
 //! FAILING REPRO — `HashMap<i64, T>` field access `.get(id)` must auto-borrow key.
-//!
-//! Ecosystem `wj-notes-api` `NoteStore::get` emits `self.notes.get(id)`; rustc E0308:
-//! expected `&i64`, found `i64`. Single-file helpers work (`regression_hashmap_i64_key_lookup_test.wj`);
-//! struct-field call sites in multipass apps regress on wj 0.50.0.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

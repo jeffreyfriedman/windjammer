@@ -11,11 +11,6 @@
 ))]
 
 //! P3.309: i32 loop counter vs int literal / i32 const / i32 field must stay i32 — no `3_i64 as i64`.
-//!
-//! Product (sample-game / game-host-core):
-//!   `while dy < 3` with `dy: i32` → `while dy < (3_i64 as i64)`
-//!   `while i < MANNEQUIN_BONE_COUNT` → `while i < (MANNEQUIN_BONE_COUNT as i64)`
-//!   `while ty < self.template.height` → `while ty < (self.template.height as i64)`
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

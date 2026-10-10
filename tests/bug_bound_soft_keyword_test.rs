@@ -1,15 +1,8 @@
-//! DB-102 / Phase 151 dogfood: keyword `bound` cannot be used as an identifier.
-//!
-//! Windjammer lexes `bound` as `Token::Bound` (bound-alias feature). That means
-//! ordinary bindings like `Ok(bound) =>` or `fn f(bound: T)` fail to parse with
-//! "Expected pattern, got Bound" / "Expected parameter name".
+//! Regression: bound soft keyword.
 //!
 //! Desired (soft keyword): `bound` is reserved only in `bound alias` positions;
 //! elsewhere it should be a normal identifier so SQL binder code can say
 //! `Ok(bound) =>` naturally.
-//!
-//! DO NOT fix in this PR from the DbProject agent — another agent owns Windjammer.
-//! This test documents the gap for that agent.
 
 use std::process::Command;
 use std::fs;
@@ -61,7 +54,7 @@ pub fn pick(x: Option<i64>) -> i64 {
         .expect("spawn wj");
     assert!(
         status.success(),
-        "keyword `bound` should be soft outside bound-alias syntax so `Some(bound) =>` parses (DB-102)"
+        "keyword `bound` should be soft outside bound-alias syntax so `Some(bound) =>` parses ()"
     );
 }
 
@@ -90,6 +83,6 @@ pub fn use_bound(bound: i64) -> i64 {
         .expect("spawn wj");
     assert!(
         status.success(),
-        "keyword `bound` should be soft so `fn use_bound(bound: i64)` parses (DB-102)"
+        "keyword `bound` should be soft so `fn use_bound(bound: i64)` parses ()"
     );
 }

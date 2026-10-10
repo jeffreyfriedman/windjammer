@@ -130,7 +130,7 @@ fn assert_mut_voxelgrid_passthrough(rs: &str) {
     );
 }
 
-/// sample-game scene_builder.wj: VoxelGrid from engine::voxel::grid, mutating via
+/// Scene builder: VoxelGrid from engine::voxel::grid, mutating via
 /// engine::scene::station_builder::set_if must infer &mut formals and pass &mut at calls.
 #[test]
 fn test_cross_crate_set_if_mut_borrow_with_split_voxelgrid_import() {
@@ -141,7 +141,7 @@ fn test_cross_crate_set_if_mut_borrow_with_split_voxelgrid_import() {
 }
 
 /// Real engine metadata omits many module-level helpers like `set_if`. Without registry
-/// entries, tip must fail closed (`compile_error!(missing boundary signature…)`) — never
+/// entries, codegen must fail closed (`compile_error!(missing boundary signature…)`) — never
 /// invent `&mut` from callee/method names (Phase 5 / no-hardcoded-method-names).
 #[test]
 fn test_cross_crate_set_if_mut_borrow_when_callee_missing_from_metadata() {

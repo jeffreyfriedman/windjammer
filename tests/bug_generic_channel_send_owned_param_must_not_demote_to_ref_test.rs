@@ -11,8 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.331: `send<T>(tx, value: T)` must emit owned `value: T` and `tx.send(value)`.
-//! Tip RED: demotes to `value: &T` + `value.clone()` (blocks generic wj-sync channels).
+//! Regression: generic channel send owned param must not demote to ref.
 
 use std::fs;
 use std::path::PathBuf;

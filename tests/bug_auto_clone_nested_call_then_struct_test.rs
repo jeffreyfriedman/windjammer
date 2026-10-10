@@ -8,9 +8,6 @@
 )))]
 
 //! TDD: auto-clone when a local is moved into a nested call argument then reused (E0382).
-//!
-//! Mirrors `game-host-core/.../uv_unwrap.wj`: `outer(a, b, inner(v))` moves `v`, then `v`
-//! is used again (e.g. in a struct literal on the next statement).
 
 use windjammer::analyzer::Analyzer;
 use windjammer::codegen::rust::CodeGenerator;

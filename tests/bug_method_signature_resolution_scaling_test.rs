@@ -7,7 +7,7 @@
     feature = "integration_tests",
 )))]
 
-//! Regression for Sample Game / game-host dogfooding.
+//! Regression: method signature resolution scaling.
 //!
 //! The engine build resolves thousands of `Type::method` call sites.  Resolution
 //! must use the registry's method index; scanning every unrelated signature for

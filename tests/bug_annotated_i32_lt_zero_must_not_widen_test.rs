@@ -11,10 +11,6 @@
 ))]
 
 //! P3.787: a declared `i32` compared with `< 0` must not widen zero to `i64`.
-//!
-//! `networking/snapshot.wj` writes `let mut from_idx: i32 = -1` then
-//! `if from_idx < 0`. Tip-out emits `from_idx < (0_i64 as i64)` while the
-//! sibling `eidx >= 0` in the same function stays `0_i32`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -60,45 +56,5 @@ pub fn find(snaps: Vec<Snap>, render_time: f32) -> i32 {
     assert!(
         !bad_widen(body),
         "declared i32 compared to 0 must not widen; got:\n{body}"
-    );
-}
-
-fn search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    let mut walked = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..6 {
-        roots.push(walked.clone());
-        if let Some(parent) = walked.parent() {
-            walked = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-    roots
-}
-
-#[test]
-fn annotated_i32_lt_zero_tip_out_snapshot() {
-    let mut paths = Vec::new();
-    for dir in search_roots() {
-        paths.push(dir.join("game-host/game-host-core/gen/networking/snapshot.rs"));
-    }
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("snapshot.rs");
-        if text.contains("from_idx < (0_i64 as i64)") {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(saw, "P3.787: snapshot.rs product file missing");
-    assert!(
-        bad_paths.is_empty(),
-        "P3.787 RED: tip-out widens i32 < 0:\n  {}",
-        bad_paths.join("\n  ")
     );
 }

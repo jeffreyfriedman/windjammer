@@ -10,14 +10,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-105: explicit `.clone()` on loop-carried non-Copy values passed to owned
-//! trait method formals must appear in generated Rust (Phase 153 grammar extensions).
+//! Regression: explicit clone in loop must emit.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn wdb105_explicit_clone_in_while_loop_trait_call_must_emit() {
+fn explicit_clone_in_while_loop_trait_call_must_emit() {
     let source = r#"
 pub enum Ast {
     Select(i64),
@@ -69,6 +68,6 @@ pub fn apply_extensions(ast: Ast, cursor: Cursor) -> (Ast, Cursor) {
     let rs = test_utils::compile_single(source);
     assert!(
         rs.contains("current_ast.clone()") && rs.contains("current.clone()"),
-        "DB-105: explicit clone in loop must be preserved in codegen. Got:\n{rs}"
+        "explicit clone in loop must be preserved in codegen. Got:\n{rs}"
     );
 }

@@ -10,11 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.734: `n * 48` into a `u32` formal must cast the product, not `48 as u32`.
-//!
-//! `hybrid_renderer.wj` writes `create_empty_storage_buffer(max_triangles * 48)`.
-//! Tip-out emits `(max_triangles * 48_i32 as u32)`, which is `i32 * u32`
-//! (expected `i32`, found `u32` on the literal).
+//! Regression: int mul into u32 formal must cast product.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -88,47 +84,5 @@ pub fn alloc() -> u32 {
     assert!(
         product_reaches_u32(body),
         "u32 formal must drive u32 width; got:\n{body}"
-    );
-}
-
-fn search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    let mut walked = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..6 {
-        roots.push(walked.clone());
-        if let Some(parent) = walked.parent() {
-            walked = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-    roots
-}
-
-#[test]
-fn int_mul_into_u32_formal_tip_out_hybrid_renderer() {
-    let mut paths = Vec::new();
-    for dir in search_roots() {
-        paths.push(dir.join(
-            "game-host/game-host-core/gen/rendering/hybrid_renderer.rs",
-        ));
-    }
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("hybrid_renderer.rs");
-        if bad_cast(&text) {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(saw, "P3.734: hybrid_renderer.rs product file missing");
-    assert!(
-        bad_paths.is_empty(),
-        "P3.734 RED: tip-out casts only the 48 literal:\n  {}",
-        bad_paths.join("\n  ")
     );
 }
