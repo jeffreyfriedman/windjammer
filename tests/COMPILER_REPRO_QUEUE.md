@@ -21,28 +21,20 @@ snapshot records `(Vec, &Vec<Line>, String, String, String)` and has more
 **Gates:** `cargo test --release --test all -- cross_module_aging_must_move_vecs_and_borrow_demoted_strs text_demotion_emit_beats_snapshot`
 
 
-## P3.783 (2026-10-09) — `while b + 1 < vec.len()` index must not be `i64`
+## P3.783 (2026-10-10) — `while b + 1 < vec.len()` index is `usize`
 
-`editor/weight_paint.wj` `limit_influences` writes `let mut b = 0` then
-`while b + 1 < pairs.len()` and indexes `pairs[b]`. A sibling counter in the
-same function (`while i < self.weights.len()`) emits `usize`. Tip-out emits
-`let mut b = 0_i64` and `while b + 1_i64 < ((pairs.len() as i64))`.
+`limit_influences` writes `let mut b = 0` then `while b + 1 < pairs.len()` and indexes `pairs[b]` / `pairs[b + 1]`. Before the fix, a void function painted `let mut b = 0_i32` and `pairs[(b as usize)]`.
 
 | Gate | Status |
 |------|--------|
-| P3.783 MultiFile | pending this run |
-| P3.783 tip-out | pending this run — `gen/editor/weight_paint.rs` |
+| P3.783 MultiFile | ✅ isolate GREEN |
+| P3.783 tip-out | ❌ stale — `gen/editor/weight_paint.rs` not regenerated |
 
-**Root cause layer:** codegen — `b + 1 < Vec::len()` widens the untyped counter to `i64` even though `b` indexes the same vec.
+**Root cause layer:** constraint/solver (codegen usize prepass). `mark_identifier_usize_if_bound_is_usize` only accepted a bare identifier, so `b + 1 < pairs.len()` never joined `usize_variables`.
 
-**Why this is a new class:**
-- P3.773 is a `for`-loop counter `idx < barriers.len()`.
-- P3.775 is `configured_count += 1` beside a `u32` loop, not a vec index.
-- This is `while b + 1 < pairs.len()` with `pairs[b]` and `pairs[b + 1]`.
+**What became unnecessary:** casting `.len()` to `i32` and the index to `usize` for an offset compare against a usize bound.
 
-**Do not steal:** WDB-406/408/411/457–479, P3.508–P3.782, compiler `src/`.
-
-**Gates:** `cargo test --release --test all --features integration_tests -- while_plus_one_len_index` — pending.
+**Gates:** `cargo test --release --test all -- while_plus_one_len_index_must_not_emit_i64` — RED (`0_i32`, `len() as i32`, `b as usize`) then 1 passed (2026-10-10). `for_loop_len_counter_must_not_emit_i64` isolate passed (tip-out stale). `i32_while_compare_must_not_cast_rhs_to_i64` — 1 passed. Tip-out `weight_paint.rs` not regenerated.
 
 ## P3.782 (2026-10-10) — WDB-479 reused string map key (isolate GREEN)
 

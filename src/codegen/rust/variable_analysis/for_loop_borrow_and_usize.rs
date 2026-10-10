@@ -785,15 +785,46 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
+    /// `b` from `b`, `b + 1`, or `1 + b` when that expression is compared to a usize bound.
+    fn counter_ident_in_usize_compare(expr: &Expression) -> Option<String> {
+        let nonneg_lit = |e: &Expression| {
+            matches!(
+                e,
+                Expression::Literal {
+                    value: Literal::Int(n),
+                    ..
+                } if *n >= 0
+            )
+        };
+        match expr {
+            Expression::Identifier { name, .. } => Some(name.clone()),
+            Expression::Binary {
+                op, left, right, ..
+            } if matches!(op, BinaryOp::Add | BinaryOp::Sub) => match (&**left, &**right) {
+                (Expression::Identifier { name, .. }, lit) if nonneg_lit(lit) => {
+                    Some(name.clone())
+                }
+                (lit, Expression::Identifier { name, .. })
+                    if matches!(op, BinaryOp::Add) && nonneg_lit(lit) =>
+                {
+                    Some(name.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     fn mark_identifier_usize_if_bound_is_usize(
         &mut self,
         maybe_counter: &Expression,
         bound: &Expression,
     ) {
-        let Expression::Identifier { name, .. } = maybe_counter else {
+        // P3.783: `while b + 1 < pairs.len()` is the same usize counter as `while b < len`.
+        let Some(name) = Self::counter_ident_in_usize_compare(maybe_counter) else {
             return;
         };
-        if self.identifier_is_wj_int_i64_binding(name) {
+        if self.identifier_is_wj_int_i64_binding(&name) {
             return;
         }
         // Inferred `i32` from return-type heuristics must not block usize counters when the
