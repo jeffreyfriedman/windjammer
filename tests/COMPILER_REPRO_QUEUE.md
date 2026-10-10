@@ -154,14 +154,14 @@ if let Some(world) = self.world {
 }
 return text
 ```
-Current HEAD emits `substitute(text.clone(), w)`. Tip-out emits `substitute_variables(text.clone().clone(), world)`.
+Current HEAD emits `substitute(text, w)`. Tip-out still emits `substitute_variables(text.clone().clone(), world)`.
 
 | Gate | Status |
 |------|--------|
-| WDB-482 MultiFile | ❌ isolate RED — `substitute(text.clone(), w)` |
-| WDB-482 tip-out | ❌ tip RED — `rel_tip_out/dialogue_system.rs` and `windjammer-game-core/gen/dialogue_system.rs` |
+| WDB-482 MultiFile | ✅ isolate GREEN — `substitute(text, w)` (no `.clone()`) |
+| WDB-482 tip-out | ❌ tip RED — stale `rel_tip_out/dialogue_system.rs` and `windjammer-game-core/gen/dialogue_system.rs` (do not regen) |
 
-**Root cause layer:** live — exclusive `if let` arms still clone a string into the call.
+**Root cause layer:** constraint/solver. `if let` lowers to `Match`. A block arm that always returns is exclusive vs. the following `return text`, and that tighter region must not be widened by an enclosing arm that also returns.
 
 **Why this is a new class:**
 - WDB-478 is a `for` binding moved into `push` on exclusive arms.
@@ -170,7 +170,9 @@ Current HEAD emits `substitute(text.clone(), w)`. Tip-out emits `substitute_vari
 
 **Do not steal:** WDB-406/408/411/457–482, P3.508–P3.790, compiler `src/`.
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb482_` — isolate RED / tip RED (2026-10-10).
+**What became unnecessary:** `.clone()` on a string moved into a returning `if let` arm when the other arm returns that same local.
+
+**Gates:** `cargo test --release --lib exclusive_if_let_return_does_not_clone_string` — ok. `cargo test --release --test all -- wdb482_module_file_exclusive_arm_string_call_must_not_clone wdb418_module_file_early_return_must_move_owned_vec` — isolate GREEN, WDB-418 isolate and tip-out GREEN, WDB-482 tip-out FAILED (stale gen).
 
 ## P3.789 (2026-10-10) — `for`-in counter later cast to `f32` must not be `i64`
 

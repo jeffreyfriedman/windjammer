@@ -299,9 +299,22 @@ impl AutoCloneAnalysis {
                     // statement indices stay synchronized with the codegen's
                     // auto_clone_counter which is global.
                     if let Expression::Block { statements, .. } = arm.body {
+                        // `if let` lowers to Match. A block arm that always
+                        // returns is exclusive vs. statements after the match
+                        // (`return substitute(text, w)` then `return text`).
+                        let lens_before: HashMap<String, usize> =
+                            map.iter().map(|(k, v)| (k.clone(), v.len())).collect();
                         for stmt in statements {
                             Self::collect_usages_from_statement(
                                 stmt, counter, in_loop, map, registry,
+                            );
+                        }
+                        if Self::block_unconditionally_returns(statements) {
+                            let region_end = counter.saturating_sub(1);
+                            Self::mark_diverging_early_return_usages(
+                                map,
+                                &lens_before,
+                                region_end,
                             );
                         }
                     } else {
@@ -343,8 +356,15 @@ impl AutoCloneAnalysis {
         for (key, usages) in map.iter_mut() {
             let start = lens_before.get(key).copied().unwrap_or(0);
             for u in usages.iter_mut().skip(start) {
-                u.in_diverging_early_return = true;
-                u.diverging_region_end = region_end;
+                // An inner `if let` that returns is a tighter exclusive region
+                // than the enclosing arm that also returns
+                // (`return substitute(text, w)` then `return text`).
+                if u.in_diverging_early_return {
+                    u.diverging_region_end = u.diverging_region_end.min(region_end);
+                } else {
+                    u.in_diverging_early_return = true;
+                    u.diverging_region_end = region_end;
+                }
             }
         }
     }
@@ -4008,6 +4028,42 @@ impl Tree {
         assert!(
             !analysis.needs_clone_anywhere("self.scene"),
             "owned-self ctor arg must move self.scene, sites={:?}",
+            analysis.clone_sites
+        );
+    }
+
+    #[test]
+    fn exclusive_if_let_return_does_not_clone_string() {
+        let src = r#"
+pub fn node_text(node: Node) -> string { node.body }
+pub fn substitute(text: string, world: World) -> string { text }
+pub fn current_text(node: Option<Node>, world: Option<World>) -> string {
+    if let Some(n) = node {
+        let text = node_text(n)
+        if let Some(w) = world {
+            return substitute(text, w)
+        }
+        return text
+    }
+    ""
+}
+"#;
+        let mut lexer = crate::lexer::Lexer::new(src);
+        let tokens = lexer.tokenize_with_locations();
+        let mut parser = crate::parser::Parser::new(tokens);
+        let program = parser.parse().expect("parse");
+        let func = program
+            .items
+            .iter()
+            .find_map(|item| match item {
+                Item::Function { decl, .. } if decl.name == "current_text" => Some(decl),
+                _ => None,
+            })
+            .expect("current_text");
+        let analysis = AutoCloneAnalysis::analyze_function(func);
+        assert!(
+            !analysis.needs_clone_anywhere("text"),
+            "exclusive if-let arms must not clone text, sites={:?}",
             analysis.clone_sites
         );
     }
