@@ -577,18 +577,6 @@ impl<'ast> CodeGenerator<'ast> {
                         || matches!(t, Type::Custom(n) if n == "u32" || n == "u64")
                 })
             };
-            if self.function_returns_i32_for_loop_scan() && right_is_usize && !left_is_usize {
-                if let Expression::Identifier { name, .. } = left {
-                    let param_is_wj_int = self
-                        .current_function_params
-                        .iter()
-                        .any(|p| p.name == *name && matches!(&p.type_, Type::Int));
-                    if !param_is_wj_int {
-                        left_str = format!("{left_str} as usize");
-                        skip_mixed_int_promotion = true;
-                    }
-                }
-            }
             if narrow_unsigned(left) && right_is_usize {
                 left_str = format!("{left_str} as usize");
                 skip_mixed_int_promotion = true;

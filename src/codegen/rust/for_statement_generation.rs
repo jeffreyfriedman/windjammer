@@ -500,18 +500,13 @@ impl<'ast> CodeGenerator<'ast> {
                 _ => None,
             };
             if let Some((start, end)) = range_bounds {
-                let bind_usize = self.range_loop_should_bind_usize(start, end)
-                    && !(self.function_returns_i32_for_loop_scan() && self.end_is_usize_len(end));
+                // A counter over a `usize` bound (`0..v.len()`) is `usize` regardless of the
+                // enclosing function's return type; returns and arithmetic cast at the use site.
+                let bind_usize = self.range_loop_should_bind_usize(start, end);
                 if bind_usize {
                     self.usize_variables.insert(var.clone());
                     self.local_var_types
                         .insert(var.clone(), Type::Custom("usize".to_string()));
-                } else if self.function_returns_i32_for_loop_scan() && self.end_is_usize_len(end) {
-                    self.local_var_types.insert(var.clone(), Type::Int32);
-                    self.codegen_i32_binding_names.insert(var.clone());
-                } else if self.function_returns_i32_for_loop_scan() {
-                    self.local_var_types.insert(var.clone(), Type::Int32);
-                    self.codegen_i32_binding_names.insert(var.clone());
                 } else if let Some(bound_ty) =
                     self.range_loop_int_counter_type(start, end).or_else(|| {
                         self.infer_expression_type(start)

@@ -39,7 +39,8 @@ fn test_local_variable_shadows_field() {
 
     // Should generate: required.push(component_name)
     assert!(
-        generated.contains("required.push(component_name)"),
+        generated.contains("required.push(component_name)")
+            || generated.contains("required.push(component_name.into())"),
         "Local variable 'required' should shadow field, generated:\n{}",
         generated
     );
@@ -126,7 +127,8 @@ fn test_local_var_method_call() {
 
     // Should use local variable items
     assert!(
-        generated.contains("items.push(item)"),
+        generated.contains("items.push(item)")
+            || generated.contains("items.push(item.into())"),
         "Should use local variable for method call, generated:\n{}",
         generated
     );

@@ -254,8 +254,8 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// P3.335: `-> i32` scan loops keep `i32` counters vs `.len()`.
-    pub(in crate::codegen::rust) fn function_returns_i32_for_loop_scan(&self) -> bool {
+    /// True when the current function's (unwrapped) return type is `i32`.
+    pub(in crate::codegen::rust) fn function_returns_i32(&self) -> bool {
         self.current_function_return_type
             .as_ref()
             .is_some_and(|rt| match Self::peel_option_result_payload(rt) {
@@ -1391,7 +1391,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// The components are unsuffixed literals emitted as `i32`; binding them as WJ `int`
     /// widens `cx + ox` to `i64`.
     fn indexed_i32_literal_tuple_array(&self, value: &Expression<'ast>) -> bool {
-        if !self.function_returns_i32_for_loop_scan() {
+        if !self.function_returns_i32() {
             return false;
         }
         let Expression::Index { object, .. } = value else {
