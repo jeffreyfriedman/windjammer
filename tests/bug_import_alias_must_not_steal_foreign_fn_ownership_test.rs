@@ -14,11 +14,6 @@
 //! cargo-bin / cross-crate: `use owned_pkg::get as query_get` must keep Owned call-site
 //! ownership even when another dependency exports a free fn named `query_get` with
 //! Borrowed formals.
-//!
-//! Dogfood: `wj-notes-api` + `wj-querystring::get as query_get` broke after adding
-//! `wj-url` (whose metadata registers Borrowed `query_get`). Product workaround:
-//! alias as `qs_get` instead.
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;

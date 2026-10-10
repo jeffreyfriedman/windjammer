@@ -13,8 +13,6 @@
 
 //! FAILING REPRO — `row.get_string(col)` must borrow `row` (or take `&Row`), not
 //! emit `row.clone().get_string(...)`, so owned `(Row, string)` helpers can return
-//! `row` by move. LedgerKit still chains via clones / `"col" + ""` workarounds
-//! when tip clones for every get_string + tuple return.
 //!
 //! Distinct from `bug_db_row_get_string_match_arm_unify_test` (Ok/Err arm unify).
 

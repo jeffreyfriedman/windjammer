@@ -11,9 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.339: `pub type SharedInt = Shared<int>` must appear **after** `struct Shared<T>`
-//! in generated Rust. Tip RED: aliases are hoisted above the struct (E0425).
-//! Blocks generics-first `wj-sync` Shared/Pending aliases.
+//! `pub type SharedInt = Shared<int>` must appear **after** `struct Shared<T>`
 
 use std::fs;
 use std::path::PathBuf;
@@ -64,11 +62,11 @@ fn generic_type_alias_must_emit_after_struct() {
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     if alias_before_struct(&generated) {
-        eprintln!("P3.339 RED (snippet):\n{}", &generated[..generated.len().min(1500)]);
+        eprintln!("RED (snippet):\n{}", &generated[..generated.len().min(1500)]);
     }
     assert!(
         !alias_before_struct(&generated),
-        "RED P3.339: type alias SharedInt must appear after struct Shared:\n{generated}"
+        "RED type alias SharedInt must appear after struct Shared:\n{generated}"
     );
 
     let check = Command::new("cargo")

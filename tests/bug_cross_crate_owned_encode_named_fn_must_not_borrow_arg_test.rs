@@ -15,10 +15,6 @@
 //! formal still emits `encode(&arg)` → E0308 expected `String`, found `&String`.
 //!
 //! Same metadata shape as `hex` / `encode_text` (Owned, emitted_rust_ref_params=false)
-//! but the bare name `encode` over-borrows. Ecosystem workaround: `encode_text`.
-//!
-//! Dogfood: `wj-notes-api` GET `?encoding=base64` via `wj_base64::encode_text`.
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;

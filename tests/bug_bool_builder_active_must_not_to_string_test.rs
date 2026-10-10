@@ -11,11 +11,6 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.705 / LedgerKit `shell_chrome.wj`:
-//! `ShellNavLink::active(is_active: bool)` must not emit
-//! `.active(is_active.to_string())` (E0308). Same-crate builders are tip GREEN;
-//! product fails when resolving against windjammer-ui (Tabs::active takes string).
-
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
@@ -83,20 +78,20 @@ fn bool_builder_active_must_not_to_string_with_string_overload() {
     test.add_file("mod.wj", MOD);
     test.add_file("link.wj", LINK);
     test.add_file("nav.wj", NAV);
-    let map = test.compile().expect("P3.705 active compile");
+    let map = test.compile().expect("active compile");
     let rs = map
         .get("nav.rs")
         .or_else(|| map.get("lib.rs"))
         .expect("nav.rs");
-    eprintln!("P3.705 active nav.rs:\n{rs}");
+    eprintln!("active nav.rs:\n{rs}");
     assert!(
         !rs.contains("is_active.to_string()")
             && !rs.contains(".active(is_active.to_string())"),
-        "P3.705 RED: bool builder .active must not .to_string() the bool:\n{rs}"
+        "RED: bool builder .active must not .to_string() the bool:\n{rs}"
     );
     assert!(
         rs.contains(".active(is_active)"),
-        "P3.705 RED: expected bare bool into .active:\n{rs}"
+        "RED: expected bare bool into .active:\n{rs}"
     );
-    test.cargo_check().expect("P3.705 active cargo-check");
+    test.cargo_check().expect("active cargo-check");
 }

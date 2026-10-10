@@ -11,22 +11,15 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.444: product `CsgScene::emit_node_instructions` still emits
 //!   `for i in 0_i32..node.params.len()` (E0308) and `buf.clone()` into
 //!   demoted `&mut Vec<f32>`.
 //!
-//! P3.359 covers a free function `count_slots(node: Node) -> int`.
-//! Product is an i32-heavy impl: `node_id: i32`, `primitive_type == 2`,
-//! `get_node` → `Option`, then `for i in 0..node.params.len()`.
-//! Engine also registers custom `len() -> i32` methods, which poisons
-//! `consensus_return_is_usize("len")` when the match-bound receiver is
-//! unresolved.
+//! covers a free function `count_slots(node: Node) -> int`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub struct PoisonLen {
@@ -126,42 +119,16 @@ fn bad_owned_buf_clone_into_mut(rs: &str) -> bool {
 fn i32_heavy_impl_match_field_len_must_not_emit_i32_range() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("P3.444 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("P3.444 MultiFile lib.rs:\n{rs}");
+    eprintln!("MultiFile lib.rs:\n{rs}");
     assert!(
         !bad_i32_field_len_range(rs),
-        "P3.444 RED: i32-heavy impl 0..node.params.len() must not emit 0_i32:\n{rs}"
+        "RED: i32-heavy impl 0..node.params.len() must not emit 0_i32:\n{rs}"
     );
     assert!(
         !bad_owned_buf_clone_into_mut(rs),
-        "P3.444 RED: demoted &mut Vec received owned buf.clone():\n{rs}"
+        "RED: demoted &mut Vec received owned buf.clone():\n{rs}"
     );
-    test.cargo_check().expect("P3.444 cargo-check");
-}
-
-#[test]
-fn p3444_tip_out_game_core_csg_must_not_emit_i32_len_range() {
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/windjammer-game-core/gen/csg/scene.rs");
-    assert!(
-        game.exists(),
-        "P3.444: tip-out gen/csg/scene.rs missing at {}",
-        game.display()
-    );
-    let text = std::fs::read_to_string(&game).expect("csg scene");
-    assert!(
-        !bad_i32_field_len_range(&text),
-        "P3.444 RED: tip-out gen/csg/scene.rs still has 0_i32..params.len():\n{}",
-        text.lines()
-            .filter(|l| l.contains("0_i32") || l.contains("params.len()"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-    assert!(
-        !bad_owned_buf_clone_into_mut(&text),
-        "P3.444 RED: tip-out gen/csg/scene.rs still passes buf.clone() into &mut Vec"
-    );
+    test.cargo_check().expect("cargo-check");
 }

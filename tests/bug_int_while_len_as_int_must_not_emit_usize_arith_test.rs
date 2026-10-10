@@ -12,11 +12,6 @@
 ))]
 
 //! FAILING REPRO — typed int + `len() as int` while must not emit usize into i64.
-//!
-//! Product tip api-check (LedgerKit): `_len as int` + `let mut idx: int = 0` →
-//!   `idx += 1_usize` / `while` usize vs i64 (~100+ E0277 on tip HEAD).
-//! Nested untyped increment isolate may GREEN; this product-shaped fixture stays RED.
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -76,10 +71,10 @@ fn int_while_len_as_int_must_not_emit_usize_arith() {
 
     let bad = bad_usize_into_i64(&rs);
     if bad {
-        eprintln!("RED P3.267 int while len-as-int must not emit usize into i64:\n{rs}");
+        eprintln!("RED int while len-as-int must not emit usize into i64:\n{rs}");
     }
     assert!(
         !bad,
-        "RED P3.267: typed int + len() as int must not emit usize arith into i64. Generated:\n{rs}"
+        "RED typed int + len() as int must not emit usize arith into i64. Generated:\n{rs}"
     );
 }

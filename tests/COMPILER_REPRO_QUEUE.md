@@ -8022,7 +8022,7 @@ P3.471 restored `strings::len` on `SignatureRegistry::stdlib()`, but library mul
 
 **Temporary remaining:** deleted in P3.465 — field-receiver lookup now peels `Vec<T>::push` → `Vec::push`.
 
-**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3461` `cargo test --release --test all --features integration_tests,codegen_tests -- wdb209_multipass_catalog_push_column_col_must_stay_owned dogfood_store_has_key_forward_ref_borrows_owned_key bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test bug_wdb124_module_file_demoted_vec_i64_formal_must_borrow_clone_call_sites_test bug_wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites_test bug_mut_param_passthrough_no_shared_amp_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **14 passed**.
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3461` `cargo test --release --test all --features integration_tests,codegen_tests -- wdb209_multipass_catalog_push_column_col_must_stay_owned dogfood_store_has_key_forward_ref_borrows_owned_key bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test bug_wdb124_module_file_demoted_vec_i64_formal_must_borrow_clone_call_sites_test bug_wdb125_module_file_demoted_struct_formal_must_borrow_clone_call_sites_test bug_mut_param_passthrough_no_shared_amp_test bug_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **14 passed**.
 
 ## P3.460 (2026-09-26) — `Mutex::lock` types `Ok(g)` so `g.data.get` borrows `&K`
 
@@ -8058,7 +8058,7 @@ P3.471 restored `strings::len` on `SignatureRegistry::stdlib()`, but library mul
 
 **Temporary remaining:** regular-call terminal peel of `&name` when local owned slot beats stdlib homonym. Delete path: once `call_sig` is the local user join (not `strings::join`) through prepare + skip_stale, last-writer `rust_shared_borrow` will not prefix and the peel can go.
 
-**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3459` `cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join codegen_user_join_must_not_borrow_owned_relative mut_ref_to_shared_ref_is_identity_reborrow` → **3 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_mut_param_passthrough_no_shared_amp_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test user_join_two_strings_moves_owned_locals` → **11 passed**.
+**Gates:** `CARGO_TARGET_DIR=.agent-wip/cargo-target-tip-p3459` `cargo test --release --lib -- skip_stale_borrow_peels_user_join_owned_slot_despite_stdlib_join codegen_user_join_must_not_borrow_owned_relative mut_ref_to_shared_ref_is_identity_reborrow` → **3 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_mut_param_passthrough_no_shared_amp_test bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test bug_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test bug_demoted_vec_param_into_owned_vec_callee_must_clone_test user_join_two_strings_moves_owned_locals` → **11 passed**.
 
 ## P3.458 (2026-09-25) — `&mut T` / `&T` reborrow stays Identity (`take_in_edges(csr)`)
 
@@ -8079,7 +8079,7 @@ P3.471 restored `strings::len` on `SignatureRegistry::stdlib()`, but library mul
 
 **Temporary remaining:** last-writers still sanitize `&x.clone()` and prefix shared borrow for *owned* non-ref bindings. Delete path: IR apply + 900–923 shared-ref path should own that; then last-writers can drop.
 
-**Gates:** `cargo test --release --lib -- mut_ref_to_shared_ref_is_identity_reborrow mut_ref_to_mut_ref_is_identity` → **2 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_mut_param_passthrough_no_shared_amp_test bug_thread_spawn_closure_must_not_be_ref_test bug_thread_spawn_move_keyword_must_be_preserved_test bug_mpsc_sync_channel_boundary_signature_test bug_wdb217_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **11 passed**.
+**Gates:** `cargo test --release --lib -- mut_ref_to_shared_ref_is_identity_reborrow mut_ref_to_mut_ref_is_identity` → **2 passed**. `cargo test --release --test all --features integration_tests,codegen_tests -- bug_mut_param_passthrough_no_shared_amp_test bug_thread_spawn_closure_must_not_be_ref_test bug_thread_spawn_move_keyword_must_be_preserved_test bug_mpsc_sync_channel_boundary_signature_test bug_module_file_owned_csr_clone_into_mut_ref_must_reborrow_test` → **11 passed**.
 
 ## P3.457 (2026-09-25) — owned `FnOnce` closures stay by-value (`spawn(move ||)`)
 
@@ -8213,7 +8213,7 @@ P3.471 restored `strings::len` on `SignatureRegistry::stdlib()`, but library mul
 
 **What became unnecessary:** float-only call-site Vec refine; `Vec(_)` early-return that blocked callee width. i32-coord still paints unannotated `vec!` when the element is default WJ `int` (void builders). No new `ir_call_site` peel.
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_wdb127_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` → 1 passed. Related: `wdb127_ wdb126_ wdb125_ spawn mpsc int_inference_generic_collections int_inference_vec_element int_inference_assignment struct_field_literal_typing test_cross_file_int_inference` → **30 passed**.
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- bug_module_file_demoted_vec_formal_must_borrow_bare_local_call_sites` → 1 passed. Related: `wdb127_ wdb126_ wdb125_ spawn mpsc int_inference_generic_collections int_inference_vec_element int_inference_assignment struct_field_literal_typing test_cross_file_int_inference` → **30 passed**.
 
 ## P3.448 (2026-09-25) — import alias must keep remapped Owned identity
 
@@ -8396,7 +8396,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **What became unnecessary:** classifying importer all-false stubs as owned user APIs; mixed-beats blocking runtime-std challengers. No new `ir_call_site` peel.
 
-**Gates:** `cargo test --release --lib -- refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub local_user_fn_homonym_keeps_global_bare_pass_when_bare_names_match bare_pass_skips_pub_vec_u8_owned_api_wdb175 prefer_shared_ref_picks_runtime refresh_join_delimiter_uses_runtime_fallback_from_stdlib refresh_split pick_prefers_mixed_owned_string_over_all_ref_importer_stub merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub merge_refresh_upgrades_importer_stub_to_defining_mixed registry_refresh_prefers_mixed_over_more_true_flags promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` → 12 passed. `cargo test --release --test all -- bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test bug_wdb175_module_file_demoted_vec_into_owned_vec_must_clone bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 7 passed. `cargo test --release --lib -- prefer_shared_runtime_tests promote_overlapping_tests multipass_bare_pass_demotion::tests` → 30 passed.
+**Gates:** `cargo test --release --lib -- refresh_call_site_prefers_global_bare_pass_demotion_over_importer_stub local_user_fn_homonym_keeps_global_bare_pass_when_bare_names_match bare_pass_skips_pub_vec_u8_owned_api_wdb175 prefer_shared_ref_picks_runtime refresh_join_delimiter_uses_runtime_fallback_from_stdlib refresh_split pick_prefers_mixed_owned_string_over_all_ref_importer_stub merge_refresh_keeps_mixed_owned_over_importer_all_ref_stub merge_refresh_upgrades_importer_stub_to_defining_mixed registry_refresh_prefers_mixed_over_more_true_flags promote_overlapping_prefers_mixed_owned_string_over_all_ref_importer_stub` → 12 passed. `cargo test --release --test all -- bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test bug_module_file_demoted_vec_into_owned_vec_must_clone bug_thread_spawn_closure_must_not_be_ref_test bug_mpsc_sync_channel_boundary_signature_test` → 7 passed. `cargo test --release --lib -- prefer_shared_runtime_tests promote_overlapping_tests multipass_bare_pass_demotion::tests` → 30 passed.
 
 **P3.439 follow-up:** `local_owned_wj_string_api_beats_borrowed_homonym` keep `Owned || emitted_owned || flags==false` for user `join` vs `strings::join`; only refuse when `resolved` is a **non-stdlib** defining-module demotion (`shared_ref_emission_beats`). Full suite on P3.438 binary: **5381 passed, 167 failed** (majority tip-out/gen lag). `user_join_two_strings_moves_owned_locals` ✅ GREEN (P3.446). Trait owned-string field gates ✅ GREEN (P3.451).
 
@@ -8477,7 +8477,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **What became unnecessary:** auto-clone on match scrutinees (if-let path previously suppressed only for tuple patterns). No new `ir_call_site` peel (path-dep validate peel reverted — it did not peel `&value`).
 
-**Gates:** `cargo test --release --test all -- bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test::wdb372_module_file_index_enum_match_must_not_clone_scrutinee bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test::wdb377_module_file_copy_pass_id_must_not_double_clone bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test::wdb378_module_file_index_struct_lit_must_not_clone_element_per_field bug_wdb379_module_file_format_must_not_emit_write_unwrap_test::wdb379_module_file_format_must_not_emit_write_unwrap` → 4 isolate passed; validate still RED.
+**Gates:** `cargo test --release --test all -- bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test::wdb372_module_file_index_enum_match_must_not_clone_scrutinee bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test::wdb377_module_file_copy_pass_id_must_not_double_clone bug_module_file_index_struct_lit_must_not_clone_element_per_field_test::wdb378_module_file_index_struct_lit_must_not_clone_element_per_field bug_module_file_format_must_not_emit_write_unwrap_test::wdb379_module_file_format_must_not_emit_write_unwrap` → 4 isolate passed; validate still RED.
 
 ## P3.432 (2026-09-23) — Align stale ownership gates with tip inference
 
@@ -8533,8 +8533,8 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 | Gate | Status |
 |------|--------|
-| `bug_wdb370_module_file_copy_field_must_not_double_clone` (self.chunks[i].coord, non-Copy Chunk) | ✅ isolate GREEN — `self.chunks[i].coord` |
-| `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone` | ✅ isolate GREEN |
+| `bug_module_file_copy_field_must_not_double_clone` (self.chunks[i].coord, non-Copy Chunk) | ✅ isolate GREEN — `self.chunks[i].coord` |
+| `bug_module_file_copy_vec3_field_must_not_double_clone` | ✅ isolate GREEN |
 | `bug_wdb372` / `bug_wdb373` isolates | ✅ isolate GREEN (unchanged) |
 | Tip-out 370/371/372/373 product `gen/` | ❌ stale tip-out — needs retranpile |
 
@@ -8542,7 +8542,7 @@ clone skip, multi-use owned auto-clone, WDB-108, assert msg var, and
 
 **What became unnecessary:** scalar-only skip in `maybe_auto_clone_expr_path`; now `is_type_copy` covers Copy aggregates.
 
-**Gates:** `cargo test --release --test all -- bug_wdb370_module_file_copy_field_must_not_double_clone bug_wdb371_module_file_copy_vec3_field_must_not_double_clone bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee bug_wdb373_module_file_index_string_field_must_not_double_clone` → 4 isolate passed / 4 tip-out RED (stale gen).
+**Gates:** `cargo test --release --test all -- bug_module_file_copy_field_must_not_double_clone bug_module_file_copy_vec3_field_must_not_double_clone bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee bug_wdb373_module_file_index_string_field_must_not_double_clone` → 4 isolate passed / 4 tip-out RED (stale gen).
 
 ## P3.428 (2026-09-23) — fail-closed + MutBorrowed Vec / readonly `&Vec`
 
@@ -8726,7 +8726,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P0 | **Full `windjammer-game-core` library rebuild “hang”** — (1) O(files×sigs) global signature copy per file; (2) `scenario_presets.wj` MethodCall type-infer re-walked receivers 3×/link (~3^depth, depth~32). **Fixes:** layered registry + `promote_overlapping_global_signatures_into_local`; reuse `obj_ty_early` in MethodCall inference. | `promote_overlapping_must_not_copy_absent_global_keys`, `consuming_builder_chain_fixture_must_transpile_under_15s` | ✅ tip GREEN (2026-09-13) — deep fixture <1s; presets ~6s iso; full 664-file lib ~15m (`scenario_presets` 2.4s) |
 | P0 | **WDB-192: demoted `&RelationalMvccStore` into owned load/put must clone** (job_store claim satellites) | `bug_wdb192_module_file_demoted_store_into_owned_claim_load_put_must_clone_test` | ✅ tip GREEN (2026-09-14) — pub owned Custom API skip bare-pass demotion + owned call-site reconcile; refresh tip-out/gen from `build/` |
 | P1 | **WDB-193: owned `frame.clone()` into demoted `&PgWireFrame` must borrow** | `bug_wdb193_module_file_owned_frame_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
-| P1 | **WDB-194: owned `graph.clone()` into demoted `&LsqbTypedGraph` must borrow** | `bug_wdb194_module_file_owned_graph_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
+| P1 | **WDB-194: owned `graph.clone()` into demoted `&LsqbTypedGraph` must borrow** | `bug_module_file_owned_graph_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
 | P1 | **WDB-195: tip-out bakeoff demoted `&Vec<u64>` into owned median must clone** | `bug_wdb195_module_file_bakeoff_demoted_vec_into_owned_median_must_clone_test` | ✅ tip GREEN (2026-09-14) — tip-out/gen sync |
 | P0 | **`HashMap::contains_key/insert` — call-return / loop-local i64 in multipass** | `test_library_multipass_graph_bfs_hashmap_compiles`, `test_library_multipass_hashmap_i64_*` | ✅ |
 | P0 | Loop reused binding — owned binding in loop must borrow for `&T` callee | `bug_loop_reused_binding_borrow_test`, `test_library_multipass_loop_reused_graph_borrow`, `regression_loop_reused_graph_borrow` | ✅ |
@@ -8826,9 +8826,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Cross-crate `join_url(base, path)` owned base must cargo-check (`wj-sitegen`)** | `bug_multipass_cross_crate_join_url_owned_base_test` | ✅ tip GREEN |
 | P1 | **Cross-crate `render(owned_template(), vars)` must cargo-check (`wj-template`)** | `bug_multipass_cross_crate_render_owned_template_helper_test` | ✅ tip GREEN |
 | P1 | **`self.get(id)` must not codegen as `self.delete(id)` when both exist** | `bug_self_get_call_emits_delete_method_test` | ✅ tip GREEN — regression guard (`note_store_self_get_call.wj`) |
-| P1 | **WDB-151: owned store `T→T` formal must not demote to `&T`** | `bug_wdb151_module_file_owned_store_formal_must_not_demote_to_ref_test` | ✅ tip GREEN |
-| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_wdb155_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ✅ tip GREEN — bare-pass match-scrutinee + struct-literal field skip |
-| P1 | **WDB-154: `use crate::<mod>::reexport` must keep module path** | `bug_wdb154_module_file_use_crate_mod_reexport_must_keep_path_test` | ✅ tip GREEN |
+| P1 | **WDB-151: owned store `T→T` formal must not demote to `&T`** | `bug_module_file_owned_store_formal_must_not_demote_to_ref_test` | ✅ tip GREEN |
+| P1 | **WDB-155: Option/match AST pipeline must keep owned formal (not `&mut`)** | `bug_module_file_owned_ast_formal_must_not_demote_to_mut_ref_test` (`wdb155_module_file_option_match_ast_pipeline_must_keep_owned_formal`) | ✅ tip GREEN — bare-pass match-scrutinee + struct-literal field skip |
+| P1 | **WDB-154: `use crate::<mod>::reexport` must keep module path** | `bug_module_file_use_crate_mod_reexport_must_keep_path_test` | ✅ tip GREEN |
 | P1 | **WDB-153: `a + (b as u32) << shift` must shift masked byte first** | `bug_wdb153_add_shift_precedence_must_shift_masked_byte_first_test` | ✅ tip GREEN — WJ shifts bind tighter than `+`; Rust emit `value + ((…) << shift)` |
 | P1 | **WDB-152: string lit into owned `string` formal must `.to_string()`** | `bug_wdb152_module_file_string_lit_into_owned_string_formal_must_to_string_test` | ✅ tip GREEN — `"worker_hb".to_string()` (recheck 2026-09-10) |
 | P1 | **LedgerKit clean row mapping without empty-concat** | `bug_ledgerkit_clean_row_mapping_no_plus_empty_test` | ✅ tip GREEN — P3.241 dogfood |
@@ -8837,7 +8837,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **Match `Ok(body)` → comparison-only formal demotes; call site borrows** | `bug_owned_match_binding_cross_fn_owned_string_formal_test` | ✅ tip GREEN (P3.471) — Phase-2 `&str` + `decode_store(&body)` |
 | P1 | **LedgerKit request_context UUID/Bearer without empty-concat** | `bug_request_context_uuid_substring_no_plus_empty_test` | ✅ tip GREEN — P3.247 dogfood |
 | P1 | **Seed overlay `Ok(body) => body` without empty-concat** | `bug_seed_overlay_read_body_no_plus_empty_test` | ✅ tip GREEN — P3.248 dogfood |
-| P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_seed_overlay_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
+| P1 | **Seed overlay `remember_*` loop/split without empty-concat** | `bug_remember_no_plus_empty_test` | ✅ tip GREEN — P3.249 dogfood |
 | P1 | **Seed overlay `apply_*` BankLineView + module const → owned field** | `bug_seed_overlay_apply_bank_line_no_plus_empty_test` | ✅ tip GREEN — `LINE_STATUS_MATCHED.to_string()` (P3.257) |
 | P1 | **Owned helper return → demoted `&str` formal auto-borrow** | `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test` | ✅ tip GREEN (2026-09-12) |
 | P1 | **Cross-crate owned free fn named `encode` must not borrow arg** | `bug_cross_crate_owned_encode_named_fn_must_not_borrow_arg_test` | ✅ tip GREEN (P3.282) — import alias + qualified registry lookup; no bare `encode` homonym borrow |
@@ -8855,9 +8855,9 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **`int` `while n>0` `n % 10` / `digit == 0` must not split i64 vs i32 (LedgerKit)** | `bug_int_mod_literal_zero_compare_must_not_split_i64_i32_test` | ✅ tip GREEN (P3.336); LedgerKit `make api-check` GREEN |
 | P1 | **`substring(s, i, i+1)` emits `(i + 1_i32) as usize` (`wj-duration`)** | `bug_substring_end_i_plus_one_must_not_emit_i32_into_usize_test` | ✅ tip GREEN (P3.300 isolate + P3.315 nested) |
 | P1 | **`&mut DenseCsr` → owned `distances_to_map` must clone (batch)** | `bug_wdb235_module_file_mut_ref_csr_into_owned_distances_to_map_must_clone_test` | ✅ tip GREEN (P3.316) — tip demotes to `&DenseCsr` |
-| P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_wdb236_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (2026-10-08) — `get(&key)`; `let mut updated = neighbors.clone()` cargo-check |
+| P1 | **HashMap String `contains_key`/`get` must borrow key** | `bug_module_file_hashmap_string_get_must_borrow_key_test` | ✅ tip GREEN (2026-10-08) — `get(&key)`; `let mut updated = neighbors.clone()` cargo-check |
 | P1 | **u64 acc `+= len() as u64 as i64` must stay u64** | `bug_wdb237_module_file_u64_acc_must_not_cast_len_through_i64_test` | ✅ tip GREEN (P3.316) — `len() as u64` |
-| P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_wdb244_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | ✅ tip GREEN (P3.364); twin module-file gate |
+| P1 | **`"props".to_string()` → demoted `sql_exec` `&str`** | `bug_module_file_string_lit_into_demoted_sql_exec_must_not_to_string_test` | ✅ tip GREEN (P3.364); twin module-file gate |
 | P1 | **bare `"props"` → owned df table_provider must `.to_string()`** | `bug_wdb245_module_file_string_lit_into_owned_df_table_must_to_string_test` | ✅ tip GREEN (P3.383) — tip demotes `left_table: &str` + bare lit |
 | P1 | **WCC `p.clone()` → demoted `&GraphVertexI64Map` get must borrow** | `bug_wdb247_module_file_owned_wcc_map_clone_into_demoted_ref_must_borrow_test` | ✅ tip GREEN (verified 2026-10-04); twin WDB-222 |
 | P1 | **analytics `csr.clone()` → demoted `&DenseCsr` multi_source must reborrow** | `bug_wdb248_module_file_owned_csr_clone_into_demoted_ref_analytics_must_reborrow_test` | ✅ tip GREEN (P3.383) — owned DenseCsr + clone accepted |
@@ -8914,96 +8914,96 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **wave1 `&args` → owned scale_status_cli_main must clone** | `bug_wdb295_module_file_demoted_vec_into_owned_wave1_scale_status_cli_must_clone_test` | ✅ tip GREEN (P3.379 tip-out wave1_cli); twin WDB-291 |
 | P1 | **gen-lag join_path `String::from` must match tip bare `&str`** | `bug_wdb296_module_file_gen_lag_join_path_string_from_must_match_tip_test` | ✅ GREEN (P3.377 tip→gen sync); twin WDB-225 |
 | P1 | **MultiFile CLI owned Vec reuse must clone (not `&args`)** | `bug_wdb297_module_file_demoted_vec_args_into_owned_cli_must_clone_test` | ✅ tip GREEN (P3.379) — regression guard; tip-out WDB-291/294 also GREEN |
-| P1 | **`u32` loop init must not emit `0_usize`** | `bug_wdb298_module_file_u32_loop_init_must_not_emit_0_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
-| P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_wdb299_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN; twin WDB-241 |
+| P1 | **`u32` loop init must not emit `0_usize`** | `bug_module_file_u32_loop_init_must_not_emit_0_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
+| P1 | **`Key::from_components(&parts)` → owned Vec must clone** | `bug_module_file_demoted_vec_into_owned_key_from_components_must_clone_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN; twin WDB-241 |
 | P1 | **cast must not emit trailing `.clone()` (`as usize.clone()`)** | `bug_wdb300_module_file_cast_must_not_receive_trailing_clone_test` | ✅ MultiFile GREEN (P3.386); tip-out still needs regen |
 | P1 | **owned LDBC string must not receive `&str`/`&String`/`&path.clone()`** | `bug_wdb301_module_file_owned_string_into_ldbc_validation_must_own_test` | ✅ tip GREEN (P3.387) — MultiFile + tip-out/gen sync; stale Borrowed no longer suppresses `.to_string()` / owned args |
-| P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_wdb302_module_file_i64_accum_must_not_double_cast_to_i32_test` | ✅ tip GREEN (P3.388) — untyped `total=0` under Custom return syncs `_i64`; peer beats struct-field `u64` |
-| P1 | **`u32` index into Vec must cast to `usize`** | `bug_wdb303_module_file_u32_index_into_vec_must_cast_to_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
+| P1 | **i64 triangle accum must not double-cast / `/ 3_u64`** | `bug_module_file_i64_accum_must_not_double_cast_to_i32_test` | ✅ tip GREEN (P3.388) — untyped `total=0` under Custom return syncs `_i64`; peer beats struct-field `u64` |
+| P1 | **`u32` index into Vec must cast to `usize`** | `bug_module_file_u32_index_into_vec_must_cast_to_usize_test` | ✅ tip GREEN (P3.390 tip-out/gen sync); MultiFile was already GREEN |
 | P1 | **`Some(x)` must not emit `Some(x.clone()).cloned()`** | `bug_wdb304_module_file_some_must_not_emit_cloned_chain_test` | ✅ MultiFile GREEN (P3.391); tip-out may lag until regen |
 | P1 | **CDLP `best_count` must peer `u32` (not `0_i64`)** | `bug_wdb305_module_file_cdlp_best_count_must_peer_u32_test` | ✅ MultiFile GREEN (P3.391); tip-out may lag until regen |
-| P1 | **owned bakeoff String must not receive `&hw.clone()`** | `bug_wdb306_module_file_owned_string_must_not_receive_ref_clone_bakeoff_test` | ✅ MultiFile GREEN (P3.389/391); tip-out RED lag; twin WDB-301 |
-| P1 | **`for` over owned field must not move when parent reused** | `bug_wdb307_module_file_for_field_must_not_move_when_parent_reused_test` | ✅ MultiFile GREEN (P3.392); tip-out lag (vector_topk) |
+| P1 | **owned bakeoff String must not receive `&hw.clone()`** | `bug_module_file_owned_string_must_not_receive_ref_clone_bakeoff_test` | ✅ MultiFile GREEN (P3.389/391); tip-out RED lag; twin WDB-301 |
+| P1 | **`for` over owned field must not move when parent reused** | `bug_module_file_for_field_must_not_move_when_parent_reused_test` | ✅ MultiFile GREEN (P3.392); tip-out lag (vector_topk) |
 | P1 | **wave1 CLI residual `u32=0_usize` / `args[i+1]`** | `bug_wdb308_module_file_wave1_cli_u32_init_and_index_must_peer_test` | ✅ tip GREEN (P3.397) — u32 return-scan peers + `(i+1) as usize`; MultiFile + tip-out |
 | P1 | **owned csr into demoted `&mut` take must be `mut`** | `bug_wdb309_module_file_owned_into_mut_ref_must_declare_mut_test` | 🆕 RED / filed (P3.392); tip-out RED; MultiFile isolate GREEN |
-| P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_wdb310_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
+| P1 | **LSQB owned String must not receive `&filename.clone()`** | `bug_module_file_owned_string_must_not_receive_ref_clone_lsqb_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
 | P1 | **timeseries/vertex_map residual `u32=0_usize`** | `bug_wdb311_module_file_u32_loop_residual_timeseries_vertex_map_test` | ✅ tip GREEN (P3.401 tip-out/gen sync); twin WDB-298/308 |
 | P1 | **publish owned String must not receive `&dated_label.clone()`** | `bug_wdb312_module_file_owned_string_must_not_receive_ref_clone_publish_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
 | P1 | **pg_wire/OTLP residual `u32=0_usize`** | `bug_wdb313_module_file_u32_loop_residual_pg_wire_otlp_test` | ✅ tip GREEN (P3.401 tip-out/gen sync); twin WDB-298/308/311 |
-| P1 | **hardware report owned String must not receive `&out`** | `bug_wdb314_module_file_owned_string_must_not_receive_ref_out_report_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
-| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_wdb315_module_file_usize_accum_must_not_add_i32_literals_test` | ✅ tip GREEN (P3.396 tip-out sync + P3.395 MultiFile) |
+| P1 | **hardware report owned String must not receive `&out`** | `bug_module_file_owned_string_must_not_receive_ref_out_report_test` | ✅ tip GREEN (P3.396 tip-out sync); MultiFile isolate GREEN |
+| P1 | **usize pos must not add `_i32` literals (pg_wire)** | `bug_module_file_usize_accum_must_not_add_i32_literals_test` | ✅ tip GREEN (P3.396 tip-out sync + P3.395 MultiFile) |
 | P1 | **scale status owned String must not receive `&out`** | `bug_wdb316_module_file_owned_string_must_not_receive_ref_out_scale_status_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-314 |
 | P1 | **vertex_map.hashmap/.vec residual `u32=0_usize`** | `bug_wdb317_module_file_u32_loop_residual_vertex_map_hashmap_vec_test` | ✅ tip GREEN (P3.400 tip regen after WDB-308/324) |
-| P1 | **publish owned String first formal must not receive `&out`** | `bug_wdb318_module_file_owned_string_first_formal_must_not_receive_ref_out_publish_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312/314 |
-| P1 | **publish_check CLI owned String must not receive `&dated`** | `bug_wdb319_module_file_owned_string_must_not_receive_ref_dated_publish_check_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312 |
+| P1 | **publish owned String first formal must not receive `&out`** | `bug_module_file_owned_string_first_formal_must_not_receive_ref_out_publish_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312/314 |
+| P1 | **publish_check CLI owned String must not receive `&dated`** | `bug_module_file_owned_string_must_not_receive_ref_dated_publish_check_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312 |
 | P1 | **publish_allows owned String must not receive bare `&dated_label`** | `bug_wdb320_module_file_owned_string_must_not_receive_bare_ref_publish_allows_test` | ✅ tip GREEN (P3.397 recheck); MultiFile isolate GREEN; twin WDB-312 |
 | P1 | **LSQB edge owned String must not receive bare `&content`** | `bug_wdb321_module_file_owned_string_must_not_receive_bare_ref_content_lsqb_test` | ✅ tip GREEN (P3.399 gate accuracy — call-line only; not `split_lines(&content)`) |
-| P1 | **LSQB push_adj owned String key must not receive `&out_key`** | `bug_wdb322_module_file_owned_string_key_must_not_receive_ref_lsqb_push_adj_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
-| P1 | **Arrow FFI owned String must not receive `&vname`/`&lname`** | `bug_wdb323_module_file_owned_string_must_not_receive_ref_names_arrow_ffi_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
+| P1 | **LSQB push_adj owned String key must not receive `&out_key`** | `bug_module_file_owned_string_key_must_not_receive_ref_lsqb_push_adj_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
+| P1 | **Arrow FFI owned String must not receive `&vname`/`&lname`** | `bug_module_file_owned_string_must_not_receive_ref_names_arrow_ffi_test` | ✅ MultiFile + tip-out GREEN (P3.397, 2026-09-19) |
 | P1 | **game-core tip navmesh `u32 = 0_usize`** | `bug_wdb324_module_file_game_core_navmesh_u32_must_not_emit_0_usize_test` | ✅ MultiFile + tip gen GREEN (P3.400); twin WDB-308/298 |
 | P1 | **DF sql_exec owned String must not receive `&emit.table`/`&emit.sql`** | `bug_wdb325_module_file_owned_string_sql_exec_must_not_receive_refs_test` | ✅ MultiFile GREEN; tip GREEN (P3.401 gate — demoted `&str` sql_exec takes `&emit.*`) |
-| P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_wdb326_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | ✅ MultiFile + tip gen GREEN (P3.406); twin WDB-134 |
-| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_wdb327_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | ✅ MultiFile + tip GREEN (P3.408) — narrow `_usize` emit reconcile (no `contains("_usize")` on `best_idx_usize`) |
+| P1 | **HashMap f32 get must not emit `Some(v) => *v`** | `bug_module_file_hashmap_f32_get_must_not_deref_copy_value_test` | ✅ MultiFile + tip gen GREEN (P3.406); twin WDB-134 |
+| P1 | **i32 coord compare must not cast peer `as usize`** | `bug_module_file_i32_coord_compare_must_not_cast_peer_usize_test` | ✅ MultiFile + tip GREEN (P3.408) — narrow `_usize` emit reconcile (no `contains("_usize")` on `best_idx_usize`) |
 | P1 | **i64 neg-init loop must not take `_i32` lit peers** | `bug_wdb328_module_file_i64_neg_init_loop_must_not_take_i32_lit_peers_test` | ✅ GREEN (P3.409); tip/game-core npc_behavior SearchState uses i32 peers |
 | P1 | **`Vec::remove(idx as usize)` must not emit `&idx as usize`** | `bug_wdb329_module_file_vec_remove_cast_must_not_borrow_idx_test` | ✅ GREEN (P3.409); tip/game-core blackboard `remove(idx as usize)` |
-| P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_wdb330_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | ✅ tip GREEN (P3.411 regen); product-shape SRC strengthened |
-| P1 | **owned Vec3 must not receive `&test_x` (fps_camera)** | `bug_wdb331_module_file_owned_vec3_must_not_receive_ref_test` | ✅ tip GREEN (P3.411 regen); twin WDB-306 |
+| P1 | **u32 bitwise must not take `_i64` lit peers (fps_camera)** | `bug_module_file_u32_bitwise_must_not_take_i64_lit_peers_test` | ✅ tip GREEN (P3.411 regen); product-shape SRC strengthened |
+| P1 | **owned Vec3 must not receive `&test_x` (fps_camera)** | `bug_module_file_owned_vec3_must_not_receive_ref_test` | ✅ tip GREEN (P3.411 regen); twin WDB-306 |
 | P1 | **i32 formal must not receive `priority.to_string()` (audio_mixer)** | `bug_wdb332_module_file_i32_formal_must_not_receive_to_string_test` | ✅ MultiFile + tip GREEN (P3.418) — caller-module affinity final authority over bare leaf `AudioChannel::new` |
 | P1 | **format temp into owned String must not receive `&_temp` (loader)** | `bug_wdb333_module_file_owned_string_format_temp_must_not_receive_ref_test` | 🆕 RED / filed (P3.405); tip/game-core RED; twin WDB-306 |
-| P1 | **tps owned Vec3 must not receive `&sample`** | `bug_wdb334_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | ✅ tip GREEN (P3.410 regen); twin WDB-331 |
-| P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_wdb335_module_file_borrowed_grid_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.410 regen); opposite polarity of WDB-331 |
+| P1 | **tps owned Vec3 must not receive `&sample`** | `bug_module_file_tps_owned_vec3_must_not_receive_ref_sample_test` | ✅ tip GREEN (P3.410 regen); twin WDB-331 |
+| P1 | **borrowed `&VoxelGrid` must not receive `grid.clone()`** | `bug_module_file_borrowed_grid_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.410 regen); opposite polarity of WDB-331 |
 | P1 | **`&mut Vec` must not receive `&mut data.clone()` temp** | `bug_wdb336_module_file_mut_vec_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413) — strip clone before `&mut` wrap |
 | P1 | **`&mut` collection must not receive `&mut quads/grid/d.clone()`** | `bug_wdb337_module_file_mut_collection_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-336 |
-| P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_wdb338_module_file_mut_mesh_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.413 regen) |
-| P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_wdb339_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | ✅ tip GREEN (P3.414 regen); `3_i32` peers |
+| P1 | **`&mut Mesh` must not receive owned `mesh.clone()`** | `bug_module_file_mut_mesh_must_not_receive_owned_clone_test` | ✅ tip GREEN (P3.413 regen) |
+| P1 | **i32 coord `cy + N` must not emit `N_i64 as i32`** | `bug_module_file_i32_coord_add_must_not_emit_i64_as_i32_test` | ✅ tip GREEN (P3.414 regen); `3_i32` peers |
 | P1 | **owned String must not emit `.to_string().to_string()`** | `bug_wdb340_module_file_owned_string_must_not_double_to_string_test` | 🆕 RED / filed (P3.410); MultiFile GREEN; tip RED |
 | P1 | **`Option<String>` must not emit `String::from(...).to_string()`** | `bug_wdb341_module_file_option_string_must_not_string_from_then_to_string_test` | ✅ MultiFile GREEN (P3.419) — `coerce_expr_to_owned_string`; tip-out pending regen |
-| P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_wdb342_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-337 |
-| P1 | **Copy i32 must not emit `.clone()`** | `bug_wdb343_module_file_copy_i32_must_not_emit_clone_test` | ✅ isolate GREEN (P3.470) — `i32::max` signature; no `max_size.clone()` |
+| P1 | **BT/`&mut Vec` must not receive `&mut active.clone()`** | `bug_module_file_bt_mut_vecs_must_not_borrow_clone_temp_test` | ✅ tip GREEN (P3.413); twin WDB-337 |
+| P1 | **Copy i32 must not emit `.clone()`** | `bug_module_file_copy_i32_must_not_emit_clone_test` | ✅ isolate GREEN (P3.470) — `i32::max` signature; no `max_size.clone()` |
 | P1 | **Copy f32 must not emit `.clone()`** | `bug_wdb344_module_file_copy_f32_must_not_emit_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED |
 | P1 | **`&mut Vec` must not receive owned `buf.clone()` (csg)** | `bug_wdb345_module_file_mut_vec_must_not_receive_owned_clone_test` | 🆕 RED / filed (P3.411); MultiFile GREEN; tip RED; twin WDB-338 |
-| P1 | **Copy f32 field must not emit `.x/.y/.z.clone()` (tps/fps)** | `bug_wdb346_module_file_copy_f32_field_must_not_emit_clone_test` | ✅ tip GREEN (P3.417 regen); twin WDB-344 |
-| P1 | **Copy f32 match binding must not emit `r.clone()` (jolt)** | `bug_wdb347_module_file_copy_f32_match_binding_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.419) — skip Copy tuple clone; tip-out pending regen |
+| P1 | **Copy f32 field must not emit `.x/.y/.z.clone()` (tps/fps)** | `bug_module_file_copy_f32_field_must_not_emit_clone_test` | ✅ tip GREEN (P3.417 regen); twin WDB-344 |
+| P1 | **Copy f32 match binding must not emit `r.clone()` (jolt)** | `bug_module_file_copy_f32_match_binding_must_not_emit_clone_test` | ✅ MultiFile GREEN (P3.419) — skip Copy tuple clone; tip-out pending regen |
 | P1 | **owned String must not emit `path.clone().to_string()` (loader)** | `bug_wdb348_module_file_owned_string_must_not_clone_then_to_string_test` | 🆕 RED / filed (P3.412); MultiFile GREEN; tip RED; twin WDB-340 |
 | P1 | **Option presence must not `matches!(opt.clone(), Some(_))`** | `bug_wdb349_module_file_option_presence_must_not_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
-| P1 | **Copy usize cast must not emit `(key as usize).clone()`** | `bug_wdb350_module_file_copy_usize_cast_must_not_emit_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED; twin WDB-343 |
-| P1 | **`match expr.clone()` must not clone scrutinee** | `bug_wdb351_module_file_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
+| P1 | **Copy usize cast must not emit `(key as usize).clone()`** | `bug_module_file_copy_usize_cast_must_not_emit_clone_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED; twin WDB-343 |
+| P1 | **`match expr.clone()` must not clone scrutinee** | `bug_module_file_match_must_not_clone_scrutinee_test` | 🆕 RED / filed (P3.414); MultiFile GREEN; tip RED |
 | P1 | **i32 zero must not emit redundant `0_i32 as i32`** | `bug_wdb352_module_file_i32_zero_must_not_emit_redundant_as_i32_test` | ✅ tip GREEN (P3.417) — strip same-width `_i32 as i32` |
 | P1 | **f32→usize must not emit `as i32 as usize`** | `bug_wdb353_module_file_f32_to_usize_must_not_double_cast_via_i32_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
-| P1 | **Result Ok must not emit `.map(|v| v.to_owned())`** | `bug_wdb354_module_file_result_ok_must_not_to_owned_borrow_break_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
-| P1 | **Copy Vec3 must not emit `n.clone()` (placeholder)** | `bug_wdb355_module_file_copy_vec3_must_not_emit_clone_test` | 🆕 RED / filed (P3.416); MultiFile GREEN; tip RED; twin WDB-344 |
+| P1 | **Result Ok must not emit `.map(|v| v.to_owned())`** | `bug_module_file_result_ok_must_not_to_owned_borrow_break_test` | 🆕 RED / filed (P3.415); MultiFile GREEN; tip RED |
+| P1 | **Copy Vec3 must not emit `n.clone()` (placeholder)** | `bug_module_file_copy_vec3_must_not_emit_clone_test` | 🆕 RED / filed (P3.416); MultiFile GREEN; tip RED; twin WDB-344 |
 | P1 | **Copy Mat4 must not emit `self.clone().method()`** | `bug_wdb356_module_file_copy_self_must_not_clone_before_owned_method_test` | ✅ MultiFile GREEN (P3.419) — Copy aggregate skip on owned-self receiver; tip-out pending regen |
 | P1 | **owned string must not emit `impl Into<String>` + `.into()`** | `bug_wdb357_module_file_owned_string_must_not_emit_into_test` | 🆕 RED / filed (P3.416); MultiFile GREEN; tip RED |
-| P1 | **`&self` method must not emit `self.clone().method()`** | `bug_wdb358_module_file_self_method_must_not_clone_receiver_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-356 |
-| P1 | **index field access must not `chunks[i].clone().coord`** | `bug_wdb359_module_file_index_field_must_not_clone_element_test` | ✅ MultiFile GREEN (P3.421) — skip Index clone when `in_field_access_object`; tip-out pending regen |
+| P1 | **`&self` method must not emit `self.clone().method()`** | `bug_module_file_self_method_must_not_clone_receiver_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-356 |
+| P1 | **index field access must not `chunks[i].clone().coord`** | `bug_module_file_index_field_must_not_clone_element_test` | ✅ MultiFile GREEN (P3.421) — skip Index clone when `in_field_access_object`; tip-out pending regen |
 | P1 | **`encode(grid)` must not force `grid.clone()`** | `bug_wdb360_module_file_encode_must_not_force_grid_clone_test` | 🆕 RED / filed (P3.417); MultiFile GREEN; tip RED; twin WDB-335 |
 | P1 | **usize counter must not emit `(i as usize)`** | `bug_wdb361_module_file_usize_counter_must_not_cast_as_usize_test` | ✅ isolate GREEN (P3.470) — skip cast when binding emits `usize` |
-| P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_wdb362_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
-| P1 | **indexed tuple field must not `].clone().rotation`** | `bug_wdb363_module_file_index_tuple_field_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
+| P1 | **indexed `&self` method must not `].clone().mesh_id()`** | `bug_module_file_index_method_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
+| P1 | **indexed tuple field must not `].clone().rotation`** | `bug_module_file_index_tuple_field_must_not_clone_element_test` | 🆕 RED / filed (P3.418); MultiFile GREEN; tip RED; twin WDB-359 |
 | P1 | **usize lit must not emit `N_usize as usize`** | `bug_wdb364_module_file_usize_lit_must_not_cast_as_usize_test` | 🆕 RED / filed (P3.419); MultiFile GREEN; tip RED; twin WDB-361/352 |
 | P1 | **statement args must not emit `__wj_tmpN` lets** | `bug_wdb365_module_file_must_not_emit_wj_tmp_lets_test` | ✅ tip GREEN (P3.723) — nested self-field split-borrow |
-| P1 | **BT tick must not force `tree.clone()`** | `bug_wdb366_module_file_bt_tick_must_not_force_tree_clone_test` | ✅ tip GREEN (P3.721) — hard-owned restore; bare forward ≠ FieldInCallArg/store |
-| P1 | **`None` must not emit `None.clone()`** | `bug_wdb367_module_file_none_must_not_emit_clone_test` | ✅ MultiFile + tip GREEN (P3.427) — unit keywords + `Type::None` identifier paths |
+| P1 | **BT tick must not force `tree.clone()`** | `bug_module_file_bt_tick_must_not_force_tree_clone_test` | ✅ tip GREEN (P3.721) — hard-owned restore; bare forward ≠ FieldInCallArg/store |
+| P1 | **`None` must not emit `None.clone()`** | `bug_module_file_none_must_not_emit_clone_test` | ✅ MultiFile + tip GREEN (P3.427) — unit keywords + `Type::None` identifier paths |
 | P1 | **`string` into `&str` must not emit `&*ident`** | `bug_wdb368_module_file_string_must_not_emit_star_deref_ref_test` | ✅ tip GREEN (P3.722) — text ref skip Copy `*` path; product match+let |
 | P1 | **string field eq must not `.key.clone() ==`** | `bug_wdb369_module_file_string_field_eq_must_not_clone_test` | ✅ MultiFile GREEN (P3.421) — honor `suppress_borrowed_clone` on index-field; tip-out pending regen |
-| P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_wdb370_module_file_copy_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429) — `is_type_copy` skip on Copy aggregates; tip-out pending regen |
-| P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_wdb371_module_file_copy_vec3_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429); tip-out pending regen; twin WDB-370/355 |
+| P1 | **indexed Copy field must not `].clone().coord.clone()`** | `bug_module_file_copy_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429) — `is_type_copy` skip on Copy aggregates; tip-out pending regen |
+| P1 | **indexed Copy Vec3 must not `].clone().position.clone()`** | `bug_module_file_copy_vec3_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429); tip-out pending regen; twin WDB-370/355 |
 | P1 | **indexed enum match must not `].value.clone()`** | `bug_wdb372_module_file_index_enum_match_must_not_clone_scrutinee_test` | ✅ isolate GREEN (P3.434) — non-Copy `Text(string)`; `suppress_borrowed_clone` + `&` prefix; tip-out pending regen |
 | P1 | **indexed String field must not `].clone().path.clone()`** | `bug_wdb373_module_file_index_string_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.429/430) — `self.watches[i].path`; tip-out pending regen |
-| P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_wdb374_module_file_copy_enum_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.430) — `is_type_copy` skip; tip-out pending regen |
-| P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_wdb375_module_file_nested_index_must_not_clone_chain_test` | ✅ isolate GREEN (P3.430) — nested `self.passes[i].bindings[j].binding_type`; tip-out pending regen |
+| P1 | **indexed Copy enum must not `].clone().state.clone()`** | `bug_module_file_copy_enum_field_must_not_double_clone_test` | ✅ isolate GREEN (P3.430) — `is_type_copy` skip; tip-out pending regen |
+| P1 | **nested index must not `].clone().bindings[j].clone().binding_type.clone()`** | `bug_module_file_nested_index_must_not_clone_chain_test` | ✅ isolate GREEN (P3.430) — nested `self.passes[i].bindings[j].binding_type`; tip-out pending regen |
 | P1 | **indexed Copy u32 must not `.buffer_id.clone()`** | `bug_wdb376_module_file_copy_u32_index_field_must_not_clone_test` | ✅ isolate GREEN (P3.430) — `self.lifetimes[i].buffer_id`; tip-out pending regen |
 | P1 | **indexed Copy PassId must not `].clone().pass_id.clone()`** | `bug_wdb377_module_file_copy_pass_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-374 |
-| P1 | **index struct lit must not clone element per field** | `bug_wdb378_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-370/375 |
-| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_wdb379_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.440) — let-bound `format!` (capacity hint) no longer `write!`/`unwrap`; tip-out pending regen |
+| P1 | **index struct lit must not clone element per field** | `bug_module_file_index_struct_lit_must_not_clone_element_per_field_test` | ✅ isolate GREEN (P3.433/434/438); tip RED (P3.438 TDD); twin WDB-370/375 |
+| P1 | **`format!` must not emit `write!(&mut __s).unwrap()`** | `bug_module_file_format_must_not_emit_write_unwrap_test` | ✅ isolate GREEN (P3.440) — let-bound `format!` (capacity hint) no longer `write!`/`unwrap`; tip-out pending regen |
 | P1 | **remaining product `None.clone()` (tilemap/blend/music/…)** | `bug_wdb380_module_file_remaining_none_must_not_emit_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-367 |
 | P1 | **indexed String mesh_id must not `].clone().mesh_id.clone()`** | `bug_wdb381_module_file_index_mesh_id_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-373 |
-| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_wdb382_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-374/377 |
-| P1 | **u32 index must not emit `as i64 as usize`** | `bug_wdb383_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-353 |
+| P1 | **indexed Copy AssetType must not `].clone().asset_type.clone()`** | `bug_module_file_copy_asset_type_must_not_double_clone_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-374/377 |
+| P1 | **u32 index must not emit `as i64 as usize`** | `bug_module_file_u32_index_must_not_cast_via_i64_test` | ✅ isolate GREEN (P3.437/438); tip RED (P3.438 TDD); twin WDB-353 |
 | P1 | **Copy enum variant must not `FaceDirection::PosX.clone()`** | `bug_wdb384_module_file_copy_enum_variant_must_not_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED |
 | P1 | **`f32::MAX`/`MIN` must not emit `.clone()`** | `bug_wdb385_module_file_f32_assoc_const_must_not_clone_test` | ✅ isolate GREEN (P3.445) — `copy_primitive_associated_path_type`; tip-out pending regen |
-| P1 | **indexed Copy ShaderFile must not `].clone().shader_file`** | `bug_wdb386_module_file_copy_shader_file_must_not_double_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-377 |
-| P1 | **indexed `get_id()` must not `].clone().get_id()`** | `bug_wdb387_module_file_index_get_id_must_not_clone_element_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-362 |
+| P1 | **indexed Copy ShaderFile must not `].clone().shader_file`** | `bug_module_file_copy_shader_file_must_not_double_clone_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-377 |
+| P1 | **indexed `get_id()` must not `].clone().get_id()`** | `bug_module_file_index_get_id_must_not_clone_element_test` | ✅ isolate GREEN (P3.443 TDD); tip RED; twin WDB-362 |
 | P1 | **wj-sync int literals must emit i64 peers** | `bug_wj_sync_int_literal_peers_must_emit_i64_test` | ✅ tip GREEN (P3.370 + P3.380) — void `AtomicI64::new`/`fetch_add` i64 peers
 | P1 | **owned Vec reuse into owned callee in `if` must clone** | `bug_owned_vec_reuse_into_owned_callee_must_clone_test` | ✅ tip GREEN (P3.373) — WDB-281 class |
 | P1 | **theme hex `hi * 16 + lo` must not mix i64 + i32** | `bug_theme_hex_byte_arith_must_stay_one_int_width_test` | ✅ tip GREEN (P3.371) |
@@ -9016,7 +9016,7 @@ cd /Users/jeffreyfriedman/src/wj/windjammer-game/windjammer-game-core
 | P1 | **i32-coord → i64/u32 formals (ECS/FFI)** | `bug_i32_binding_into_i64_and_u32_formal_must_cast_test` | ✅ tip GREEN (P3.368) |
 | P1 | **i64 entity compare / call lit + `idx + 1` index cast** | `bug_i64_entity_literal_peers_and_index_add_test` | ✅ tip GREEN (P3.369) — prefer i64 over i32 lit; index i64+lit → usize |
 | P1 | **module-file owned FFI Vec forwarder must stay owned** | `bug_wdb216_module_file_owned_ffi_wrapper_must_stay_owned_test` | ✅ tip GREEN (P3.369); twin WDB-216/275 |
-| P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_wdb244_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
+| P1 | **`--module-file` must honor cross-crate demoted sql_exec** | `bug_module_file_must_honor_cross_crate_demoted_sql_exec_test` | ✅ tip GREEN (P3.364) — bare-pass must not bind `Type::method` to free fns |
 | P1 | **u32 `while i < count` must not cast bound `as i64`** | `bug_u32_while_counter_vs_bound_must_not_cast_bound_as_i64_test` | ✅ tip GREEN (P3.348) — u32 loop counter width sync + compare prefer u32 |
 | P1 | **i32 `while` vs `.len()` / literal bounds must not emit `as i64`** | `bug_i32_while_len_and_literal_bound_must_not_emit_i64_test` | ✅ tip GREEN (P3.352) — struct-return must not block i32 loop counters |
 | P1 | **i32 coord / GPU dim literal peers must not emit `_i64`** | `bug_i32_coord_literal_peers_must_not_emit_i64_test` | ✅ tip GREEN (P3.450) — module `int` const casts `as i32` in coord builders |
@@ -10542,7 +10542,7 @@ cargo test --release --test all -- bug_wj_build_release_must_invoke_cargo_releas
 
 | Change | Status |
 |--------|--------|
-| Gate `bug_wdb190_module_file_feed_unified_owned_startup_must_not_borrow_test` (fixture) | ✅ tip GREEN |
+| Gate `bug_module_file_feed_unified_owned_startup_must_not_borrow_test` (fixture) | ✅ tip GREEN |
 | Fix | `is_public_owned_non_copy_formal_api`: when multipass `restore_pub_owned_non_copy_api_formals` locked registry `Owned` for pub `Vec`, emit owned formal (not readonly-only demotion) |
 | Fix (2026-09-14) | `restore_owned_formals_for_producer_only_call_sites`: when every call site passes an owned producer (`encode_startup(…)`) and none bare-pass a binding, keep pub `Vec` Owned so callers do not emit `&encode_startup(…)` |
 | Analyzer | Module-qualified free calls parsed as `MethodCall` (`station_builder.set_if`) detect MutBorrowed args like `::` Call form |
@@ -10957,8 +10957,8 @@ Verified on committed tip `a1ce1b2a` (`wj` CLI + `cargo test`, no local `src/` p
 
 | Change | Status |
 |--------|--------|
-| `bug_wdb114_module_file_vec_annotation_must_import_element_type_test` | ⚠️ RED — `Vec<JobRecord>` without `use JobRecord` |
-| `bug_wdb115_early_return_private_method_call_test` | ✅ tip GREEN — regression guard |
+| `bug_module_file_vec_annotation_must_import_element_type_test` | ⚠️ RED — `Vec<JobRecord>` without `use JobRecord` |
+| `bug_early_return_private_method_call_test` | ✅ tip GREEN — regression guard |
 | `bug_app_test_http_method_type_mismatch_test` — mini app `wj test` with `HttpMethod` lib port | ⚠️ RED on tip |
 | `tests/run_red_repro_bundle.sh` — runnable RED bundle | ✅ shipped |
 | `wj-auth-api` / `wj-webhook` hexagonal deepen | ✅ product regression |
@@ -11662,7 +11662,7 @@ unset CARGO_TARGET_DIR && cargo test --release --test all -- \
 
 **Fix:** registry `&str` formals force call-site borrow; demoted text `.clone()` into owned String → `.to_string()`.
 
-**Gates:** `bug_eco_wj_semver_owned_into_demoted_str_tail_call_must_borrow_test`, `bug_eco_wj_toml_demoted_str_tuple_push_must_to_string_test` (PASSING).
+**Gates:** `bug_eco_wj_semver_owned_into_demoted_str_tail_call_must_borrow_test`, `bug_toml_demoted_str_tuple_push_must_to_string_test` (PASSING).
 
 **Ecosystem:** `wj-timefmt` / `wj-semver` / `wj-toml` / `wj-config` tip GREEN.
 
