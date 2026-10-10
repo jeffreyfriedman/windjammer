@@ -1,4 +1,4 @@
-//! Regression: eco wj toml demoted str tuple push must to string.
+//! DB-170 class / `wj-toml`: demoted `&str` into owned tuple push must `.to_string()`.
 
 #![cfg(any(
     not(any(
@@ -42,7 +42,7 @@ pub fn probe(key: string, raw: string) -> int {
     let (generated, ok) = test_utils::compile_single_check(source);
     assert!(
         ok,
-        "toml expand_entries push shape must compile, got:\n{generated}"
+        "wj-toml expand_entries push shape must compile, got:\n{generated}"
     );
     if generated.contains("fn expand_entries(key: &str") || generated.contains("key: &str,") {
         assert!(
