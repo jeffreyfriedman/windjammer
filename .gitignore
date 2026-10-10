@@ -53,3 +53,4 @@ std/**/*.rs
 tmp_*
 .agent-wip/
 **/*.wip.rs
+/.worktrees/

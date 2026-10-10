@@ -108,6 +108,8 @@ impl DialogNode {
     let output = Command::new("rustc")
         .arg("--crate-type")
         .arg("lib")
+        .arg("--out-dir")
+        .arg(build_rs.parent().unwrap())
         .arg(&build_rs)
         .output()
         .unwrap();
