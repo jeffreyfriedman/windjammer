@@ -10,14 +10,11 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-121: annotated `let mut i: usize = 0` under multipass soa+query still emits `0_i64`.
 //!
-//! Tip GREEN'd WDB-117 `&mut` demotion. Same soa+query fixture still cargo-checks RED:
 //!   `let mut i: usize = 0` → `let mut i: usize = 0_i64`
 //!   `while i < 1` / `i = i + 1` → `1_i64`
 //!
 //! Single-module annotated loops may already unify (false-GREEN). Gate needs soa + query sibling
-//! (same multipass shape as WDB-117). Distinct from WDB-119 (unannotated `i = 0` + `Vec::push`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -81,7 +78,7 @@ pub fn query_above(min_value: i64) -> i64 {
 }
 "#;
 
-fn wdb121_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("soa.wj", SOA);
@@ -90,19 +87,19 @@ fn wdb121_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb121_module_file_annotated_usize_loop_must_not_emit_i64_literals() {
-    let mut test = wdb121_fixture();
+fn module_file_annotated_usize_loop_must_not_emit_i64_literals() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("WDB-121 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let query_rs = map.get("query.rs").expect("query.rs must be generated");
 
     let bad_i64_lit = query_rs.contains("0_i64") || query_rs.contains("1_i64");
     if bad_i64_lit {
-        eprintln!("WDB-121 RED emit query.rs:\n{query_rs}");
+        eprintln!("RED emit query.rs:\n{query_rs}");
     }
 
     test.cargo_check().expect(
-        "WDB-121 RED: multipass annotated `let mut i: usize = 0` must emit usize literals (not 0_i64). Surfaced after tip fixed WDB-117 &mut demotion.",
+        "RED: multipass annotated `let mut i: usize = 0` must emit usize literals (not 0_i64). Surfaced after fix of &mut demotion.",
     );
 }

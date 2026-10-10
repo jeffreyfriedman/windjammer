@@ -10,14 +10,11 @@
     feature = "integration_tests",
 ))]
 
-//! P3.701: Breach Protocol inventory `remove_item` shape.
 //!
 //! Untyped `let mut removed = 0` plus `Vec<Option<Stack>>` + `u32.min(u32)` must
 //! stay U32 through numeric inference — not widen peers to U64 and fail analysis.
 //!
-//! Dogfood: `breach-protocol/src/inventory/inventory.wj` `remove_item`.
-//! Typed `let mut removed: u32 = 0u32` is GREEN (not a product workaround target —
-//! tip must accept the untyped zero under u32 return context).
+//! the compiler must accept the untyped zero under u32 return context).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -84,7 +81,7 @@ fn u32_option_slot_min_untyped_zero_must_not_widen_u64() {
     test.add_file("inv.wj", INV);
     let map = test
         .compile()
-        .expect("P3.701: untyped 0 under -> u32 with Option slots + min must analyze (no U32/U64 conflict)");
+        .expect("untyped 0 under -> u32 with Option slots + min must analyze (no U32/U64 conflict)");
     let rs = map.get("inv.rs").expect("inv.rs");
     assert!(
         !rs.contains("_u64"),

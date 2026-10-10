@@ -10,15 +10,13 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-108: explicit `.clone()` on sequential owned custom-struct / Vec reuse
 //! (Phase 167 PEG `parse_ast_with_registry`) must emit in generated Rust.
-//! WDB-106 covered owned `string`; explicit `.clone()` on custom-struct locals must survive IR reconcile.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn wdb108_explicit_clone_on_sequential_owned_custom_struct_calls_must_emit() {
+fn explicit_clone_on_sequential_owned_custom_struct_calls_must_emit() {
     let source = r#"
 pub struct Cursor {
     pub pos: int,
@@ -59,12 +57,12 @@ pub fn parse_with_fallback(c: Cursor) -> int {
     let rs = test_utils::compile_single(source);
     assert!(
         rs.contains("c.clone()"),
-        "WDB-108: explicit clone before sequential owned custom-struct calls must emit. Got:\n{rs}"
+        "explicit clone before sequential owned custom-struct calls must emit. Got:\n{rs}"
     );
 }
 
 #[test]
-fn wdb108_explicit_clone_on_vec_before_parser_and_cursor_reuse_must_emit() {
+fn explicit_clone_on_vec_before_parser_and_cursor_reuse_must_emit() {
     let source = r#"
 pub struct Tok {
     pub n: int,
@@ -93,6 +91,6 @@ pub fn parse_ast(tokens: Vec<Tok>) -> int {
     let rs = test_utils::compile_single(source);
     assert!(
         rs.contains("tokens.clone()"),
-        "WDB-108: explicit clone of Vec before parser + cursor reuse must emit. Got:\n{rs}"
+        "explicit clone of Vec before parser + cursor reuse must emit. Got:\n{rs}"
     );
 }

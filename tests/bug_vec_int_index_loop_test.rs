@@ -13,7 +13,6 @@
 
 //! FAILING REPRO — `Vec` indexed by Windjammer `int` loop variable must cast to `usize`.
 //!
-//! Ecosystem `wj-yaml` first draft used `while idx < lines.len() { lines[idx] }` and hit
 //! E0277: `[String]` cannot be indexed by `i64`. Workaround: for-in / head-tail without int indices.
 
 #[path = "common/test_utils.rs"]
@@ -36,7 +35,6 @@ pub fn second(lines: Vec<string>) -> string {
 "#,
     );
 
-    // Either the binding is already `usize` (WDB-361) or the index is cast.
     let already_usize = generated.contains("idx: usize") || generated.contains("0_usize");
     let has_cast = generated.contains("as usize")
         || generated.contains("try_into()")

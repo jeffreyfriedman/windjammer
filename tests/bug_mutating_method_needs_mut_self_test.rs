@@ -10,14 +10,11 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-104: methods that mutate `self` fields must codegen `mut self`, not owned
-//! `self` (Phase 148 `GraphWritePort::append_edge` dogfood).
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn wdb104_field_mutating_method_must_emit_mut_self() {
+fn field_mutating_method_must_emit_mut_self() {
     let source = r#"
 pub struct EdgeBuffer {
     pub edges: Vec<i64>,
@@ -40,10 +37,10 @@ impl WritePort {
     let rs = test_utils::compile_single(source);
     assert!(
         rs.contains("append_edge(mut self") || rs.contains("append_edge(&mut self"),
-        "WDB-104: mutating method must take mut self. Got:\n{rs}"
+        "mutating method must take mut self. Got:\n{rs}"
     );
     assert!(
         !rs.contains("pub fn append_edge(self, edge: i64)") || rs.contains("mut self"),
-        "WDB-104: must not use immutable self when mutating fields. Got:\n{rs}"
+        "must not use immutable self when mutating fields. Got:\n{rs}"
     );
 }
