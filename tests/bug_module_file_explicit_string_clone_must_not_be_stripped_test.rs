@@ -10,14 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-142: dual bind of a reused `string` must not move twice without clone/to_string.
-//!
-//! WindjammerDB CQ-C5 stale gen emitted:
-//!   `let mut li_path = lineitem_path; let mut collect_path = lineitem_path;` → E0382
-//! while source wrote `.clone()`.
-//!
-//! Tip may demote to `&str` + `.to_string()` (OK) or keep owned + `.clone()` (OK).
-//! Forbidden: two bare moves of the same owned binding.
+//! Regression: module file explicit string clone must not be stripped.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -56,7 +49,7 @@ pub fn cap_file() -> string {
 }
 "#;
 
-fn wdb142_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("paths.wj", PATHS);
@@ -65,30 +58,30 @@ fn wdb142_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb142_module_file_explicit_string_clone_must_not_be_stripped() {
-    let test = wdb142_fixture();
+fn module_file_explicit_string_clone_must_not_be_stripped() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("WDB-142 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let paths_rs = map.get("paths.rs").expect("paths.rs");
 
-    // Stale product shape: owned formal + two bare moves (no clone/to_string).
+    // Stale shape: owned formal + two bare moves (no clone/to_string).
     let dual_bare_move = paths_rs.contains("let mut li_path = lineitem_path;")
         && paths_rs.contains("let mut collect_path = lineitem_path;");
     let ok_rebind = paths_rs.contains("lineitem_path.clone()")
         || paths_rs.contains("lineitem_path.to_string()");
 
-    eprintln!("WDB-142 paths.rs:\n{paths_rs}");
+    eprintln!("paths.rs:\n{paths_rs}");
     eprintln!("dual_bare_move={dual_bare_move} ok_rebind={ok_rebind}");
 
     if dual_bare_move || !ok_rebind {
         panic!(
-            "WDB-142 RED: reused string must clone or to_string on dual bind \
-             (not two bare moves). Product: wave1_sf1_cli / binder stale gen."
+            "RED: reused string must clone or to_string on dual bind \
+             (not two bare moves)."
         );
     }
 
     test.cargo_check().expect(
-        "WDB-142: dual bind of reused string must cargo-check.",
+        "dual bind of reused string must cargo-check.",
     );
 }
