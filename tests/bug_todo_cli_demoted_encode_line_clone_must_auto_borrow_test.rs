@@ -14,6 +14,9 @@
 //! Multipass demotes read-only `encode_line(todo: Todo)` to `&Todo`; same-file
 //! `encode_store` must auto-borrow the loop item (`&item` / `&item.clone()`),
 //! not pass owned `item.clone()` (E0308).
+//!
+//! Ecosystem `wj-todo-cli` `src/domain/codec.wj` `encode_store`.
+//! Related: `bug_wdb125_*`, `bug_todo_cli_demoted_struct_loop_must_not_star_deref_test`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
