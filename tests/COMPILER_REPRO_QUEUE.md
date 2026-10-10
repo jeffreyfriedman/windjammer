@@ -2,6 +2,35 @@
 
 
 
+## P3.796 (2026-10-10) — TDD WDB-485 (DB agent; no compiler src)
+
+A `string` passed into a call and also moved in a later `match` arm must not `.clone().clone()`. One clone into the call is enough.
+
+Product `assets/loader.rs` `load_batch`:
+```wj
+match self.load(name, path, size) {
+    Ok(asset) => successes.push(asset),
+    Err(error) => failures.push((name, error)),
+}
+```
+Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `self.load(name.clone().clone(), path, size)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-485 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-485 tip-out | ❌ tip RED — `rel_tip_out/assets/loader.rs` and `windjammer-game-core/gen/assets/loader.rs` |
+
+**Root cause layer:** tip-out lag — a string reused by a later `match` arm is still double-cloned into the call.
+
+**Why this is a new class:**
+- P3.590b allows one `name.clone()` so `path` can still move.
+- WDB-482 is exclusive `if let` arms, where no clone is required.
+- This call always runs, and the `Err` arm still needs `name`.
+
+**Do not steal:** WDB-406/408/411/457–485, P3.508–P3.796, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb485_` — isolate GREEN / tip RED (2026-10-10).
+
 ## P3.795 (2026-10-10) — index `for i in 0..len()` must stay `usize` when the source returns `i as i32`
 
 `assets/pipeline.wj` `find_texture` writes `for i in 0..self.textures.len()`, indexes `self.textures[i]`, and `return i as i32`. Tip-out emits `for i in 0_i32..(self.textures.len() as i32)` and `self.textures[(i as usize)]`.
@@ -100,7 +129,7 @@ Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `self.bin
 
 ## P3.791 (2026-10-10) — cross-module `"${json}"` moved before a later `json.clone()` (no compiler src)
 
-Oct 10 14:15 `wj` finance-screens regen is still cargo-red on the same E0382, and that binary still emits `parse_aging_bucket_fields(json)` then `parse_aging_party_line_fields(json.clone())` for the isolate. HEAD cargo re-run at 13:27: 0 passed, 1 failed. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
+Oct 10 14:35 `wj` finance-screens regen is still cargo-red on the same E0382, and that binary still emits `parse_aging_bucket_fields(json)` then `parse_aging_party_line_fields(json.clone())` for the isolate. HEAD cargo re-run at 13:27: 0 passed, 1 failed. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
 
 A same-file pair of owned parsers clones before the later use. The cross-module shape, with `&str` title/kind helpers and a later match arm that also uses `json`, moves on the `"${json}"` argument.
 
