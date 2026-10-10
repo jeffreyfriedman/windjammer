@@ -100,6 +100,9 @@ impl<'ast> CodeGenerator<'ast> {
         // Peer-drive bare int literals from sibling non-literal slots (match-arm
         // unification). Without this, `(true, *v)` vs `(false, 0)` emits `0_i32`
         // while `*v` is `i64` (HashMap<string, int> get None arm).
+        // A negation of an int literal is not an independent typed slot. Its
+        // inferred type defaults to WJ `int` and would stamp a sibling `0_i64`
+        // while the negation itself emits `i32`.
         let peer_int_target: Option<Type> = elements
             .iter()
             .find_map(|e| {
@@ -110,7 +113,8 @@ impl<'ast> CodeGenerator<'ast> {
                             | crate::parser::Literal::IntSuffixed(_, _),
                         ..
                     }
-                ) {
+                ) || Self::expr_is_negated_int_literal(e)
+                {
                     return None;
                 }
                 let ty = self.infer_expression_type(e)?;
@@ -131,15 +135,16 @@ impl<'ast> CodeGenerator<'ast> {
                     match t {
                         Type::Tuple(ts) => ts.iter().any(|x| tuple_contains(x, pred)),
                         Type::Result(ok, _) | Type::Option(ok) => tuple_contains(ok, pred),
-                        Type::Parameterized(name, args) if name == "Result" => args
-                            .first()
-                            .is_some_and(|x| tuple_contains(x, pred)),
+                        Type::Parameterized(name, args) if name == "Result" => {
+                            args.first().is_some_and(|x| tuple_contains(x, pred))
+                        }
                         other => pred(other),
                     }
                 }
                 let ret = self.current_function_return_type.as_ref()?;
                 let has_i64 = tuple_contains(ret, &|t| {
-                    matches!(t, Type::Int) || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
+                    matches!(t, Type::Int)
+                        || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
                 });
                 let has_i32 = tuple_contains(ret, &|t| {
                     matches!(t, Type::Int32) || matches!(t, Type::Custom(n) if n == "i32")
@@ -175,7 +180,7 @@ impl<'ast> CodeGenerator<'ast> {
                         value: crate::parser::Literal::Int(_),
                         ..
                     }
-                );
+                ) || Self::expr_is_negated_int_literal(e);
                 if is_bare_int_lit {
                     if let Some(slot_ty) = tuple_slot_types
                         .as_ref()
@@ -396,6 +401,45 @@ impl<'ast> CodeGenerator<'ast> {
                 entries_str.join(", ")
             )
         }
+    }
+
+    fn expr_is_negated_int_literal(expr: &Expression<'_>) -> bool {
+        matches!(
+            expr,
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Neg,
+                operand,
+                ..
+            } if matches!(
+                operand,
+                Expression::Literal {
+                    value: Literal::Int(_),
+                    ..
+                }
+            )
+        )
+    }
+
+    /// `[(-1, 0), (1, 0), …]` — every slot is an unsuffixed int literal (or its negation).
+    pub(in crate::codegen::rust) fn array_is_int_literal_tuples(value: &Expression<'_>) -> bool {
+        let Expression::Array { elements, .. } = value else {
+            return false;
+        };
+        !elements.is_empty()
+            && elements.iter().all(|elem| match elem {
+                Expression::Tuple {
+                    elements: slots, ..
+                } => slots.iter().all(|slot| {
+                    matches!(
+                        slot,
+                        Expression::Literal {
+                            value: Literal::Int(_),
+                            ..
+                        }
+                    ) || Self::expr_is_negated_int_literal(slot)
+                }),
+                _ => false,
+            })
     }
 
     pub(in crate::codegen::rust) fn generate_array(
@@ -1037,9 +1081,8 @@ impl<'ast> CodeGenerator<'ast> {
         // Restore struct literal context
         self.current_struct_literal_name = prev_struct_name;
 
-        let qualified_name = self.qualify_stdlib_type_identifier(
-            &self.qualify_external_path_identifier(name),
-        );
+        let qualified_name =
+            self.qualify_stdlib_type_identifier(&self.qualify_external_path_identifier(name));
         format!("{} {{ {} }}", qualified_name, field_str.join(", "))
     }
 

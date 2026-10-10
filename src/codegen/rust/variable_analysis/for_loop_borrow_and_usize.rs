@@ -655,10 +655,14 @@ impl<'ast> CodeGenerator<'ast> {
                 self.prepass_mark_loop_counter_usize_variables(body.as_slice());
             }
             Statement::If {
+                condition,
                 then_block,
                 else_block,
                 ..
             } => {
+                // `idx < barriers.len()` inside `for` is not a `while` condition.
+                // The same usize-bound rule applies so the counter is `usize`.
+                self.mark_usize_variables_in_condition(condition);
                 self.prepass_mark_loop_counter_usize_variables(then_block.as_slice());
                 if let Some(b) = else_block {
                     self.prepass_mark_loop_counter_usize_variables(b.as_slice());
