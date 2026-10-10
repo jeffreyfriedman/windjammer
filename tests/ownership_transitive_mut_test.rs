@@ -12,7 +12,6 @@
 
 //! TDD Test: Transitive mutability inference for ownership
 //!
-//! Bug: E0596 - cannot borrow as mutable (15 errors in windjammer-game)
 //! Root Cause: Ownership inference doesn't track transitivity:
 //! - If self.field.method() needs &mut field → self needs &mut self
 //! - If for item in self.vec { item.mutate() } → self needs &mut self

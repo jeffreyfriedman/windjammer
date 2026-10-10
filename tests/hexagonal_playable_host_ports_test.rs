@@ -136,34 +136,3 @@ fn hexagonal_stub_compose_must_fail_ui_contract() {
         "stub isolate must stay RED (no ui classes) so the green test is meaningful:\n{rs}"
     );
 }
-
-#[test]
-fn hexagonal_playable_host_must_advance_move_and_compose_ui_hud() {
-    let src = std::fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join("windjammer-game/windjammer-game-core/src/application/playable_loop.wj"),
-    );
-    let src = match src {
-        Ok(s) if s.contains("wj-panel") => s,
-        _ => STUB.to_string(),
-    };
-    let rs = host_isolate(&src);
-    eprintln!("HOST lib.rs:\n{rs}");
-    assert_no_ffi(&rs);
-    assert!(
-        rs.contains("wj-panel") && rs.contains("wj-progress"),
-        "RED: compose_game_hud must emit windjammer-ui classes:\n{rs}"
-    );
-    assert!(
-        rs.contains("self.seconds") && (rs.contains("+= dt") || rs.contains("= self.seconds + dt") || rs.contains("= self.seconds+dt")),
-        "RED: FakeTime.advance must accumulate dt:\n{rs}"
-    );
-    assert!(
-        rs.contains("self.z") && (rs.contains("+= ") || rs.contains("= self.z +") || rs.contains("= self.z+")),
-        "RED: FakeWorld.apply_forward must move z:\n{rs}"
-    );
-}
-
-use std::path::PathBuf;

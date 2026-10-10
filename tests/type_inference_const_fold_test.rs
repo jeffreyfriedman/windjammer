@@ -15,16 +15,6 @@
 /// Bug: 1.0 / 60.0 in struct literal generates f64 even when field is f32
 /// Pattern: Binary operation gets constant-folded, but the folded value isn't constrained
 /// Expected: Folded literal should match the struct field type (f32)
-///
-/// Example from windjammer-game:
-/// ```windjammer
-/// pub struct GameConfig {
-///     pub timestep: f32,
-/// }
-/// pub fn create() -> GameConfig {
-///     GameConfig { timestep: 1.0 / 60.0 }  // Should be f32, not f64
-/// }
-/// ```
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

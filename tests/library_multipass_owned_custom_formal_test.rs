@@ -2,7 +2,6 @@
 //! callees must keep owned Rust formals (not demote to `&T` / `&mut T`).
 //!
 //! Take/restore bodies still emit `&mut` (see `bug_mut_param_passthrough_*`).
-//! Readonly-only Custom may demote to `&T` (WDB-097).
 
 #![cfg(any(
     not(any(

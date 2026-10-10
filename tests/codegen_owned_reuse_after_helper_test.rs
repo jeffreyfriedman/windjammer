@@ -55,8 +55,6 @@ fn main() {
     );
 }
 
-/// WDB-100 / Phase 128: two-arg owned helper then substring of the same String.
-/// IR call-site coercion must clone or borrow before reuse after by-value helper.
 #[test]
 fn owned_string_reuse_after_two_arg_by_value_helper_should_clone() {
     let source = r#"

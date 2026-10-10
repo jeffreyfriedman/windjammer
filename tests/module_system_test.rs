@@ -225,7 +225,6 @@ mod integration_tests {
 
     #[test]
     fn test_compile_game_engine_structure() {
-        // Realistic game engine structure like windjammer-game!
         let _temp_dir = create_test_project(&[
             (
                 "mod.wj",

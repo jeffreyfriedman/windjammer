@@ -12,7 +12,6 @@
 
 /// TDD Test: Extended mutation detection for .take(), .push(), .insert(), etc.
 ///
-/// Bug: E0596 - cannot borrow as mutable (17 errors in windjammer-game)
 /// Root Cause: is_mutating_method() doesn't detect Option::take(), Vec::push(), etc.
 /// Fix: Add pattern-based detection for common stdlib mutating methods.
 ///

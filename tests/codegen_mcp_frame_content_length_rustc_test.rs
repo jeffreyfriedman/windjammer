@@ -12,7 +12,6 @@
 
 //! MCP / E3.9.x unlock: Content-Length framing must rustc.
 //!
-//! LedgerKit `mcp_frame_message` historically hit `string.len()` (usize) → `int`
 //! formal (i64). Prefer NumericCast or `format!`; either path must cargo-check.
 
 #[path = "common/test_utils.rs"]
