@@ -13,7 +13,7 @@
 
 //! FAILING REPRO — `self.get(id)` must not codegen as `self.delete(id)` when both methods exist.
 //!
-//! Ecosystem `wj-notes-api` `NoteStore::create` calls `self.get(id)` after insert; emitted Rust
+//! Ecosystem `a downstream package` `NoteStore::create` calls `self.get(id)` after insert; emitted Rust
 //! calls `self.delete(id)` instead → E0308 (`Result<(), String>` vs `Option<_>`).
 //! Workaround: free function `lookup_note(notes, id)` instead of `self.get`.
 

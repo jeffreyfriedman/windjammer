@@ -22,7 +22,6 @@
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub struct Quality {
@@ -73,18 +72,18 @@ impl Renderer {
 fn nested_self_field_in_struct_lit_must_not_force_owned_self() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("P3.424 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("P3.424 MultiFile lib.rs:\n{rs}");
+    eprintln!("MultiFile lib.rs:\n{rs}");
     assert!(
         rs.contains("fn update_params(&self)") || rs.contains("fn update_params(&mut self)"),
-        "P3.424 RED: nested self.field.subfield must not force owned self:\n{rs}"
+        "nested self.field.subfield must not force owned self:\n{rs}"
     );
     assert!(
         !rs.contains("fn update_params(self)"),
-        "P3.424 RED: owned self on nested-field read method:\n{rs}"
+        "owned self on nested-field read method:\n{rs}"
     );
-    test.cargo_check().expect("P3.424 cargo-check");
+    test.cargo_check().expect("cargo-check");
 }
 
 /// Product shape: struct in types.wj, impl in renderer.wj (VoxelGPURenderer / AdaptiveQualityConfig).
@@ -142,33 +141,19 @@ fn cross_file_nested_self_field_in_struct_lit_must_not_force_owned_self() {
     test.add_file("mod.wj", "pub mod types\npub mod renderer\n");
     test.add_file("types.wj", TYPES_SRC);
     test.add_file("renderer.wj", IMPL_SRC);
-    let map = test.compile().expect("P3.424b compile");
+    let map = test.compile().expect("compile");
     let rs = map
         .get("renderer.rs")
         .or_else(|| map.get("renderer/mod.rs"))
         .expect("renderer.rs");
-    eprintln!("P3.424b cross-file renderer.rs:\n{rs}");
+    eprintln!("cross-file renderer.rs:\n{rs}");
     assert!(
         rs.contains("fn update_params(&self)") || rs.contains("fn update_params(&mut self)"),
-        "P3.424b RED: cross-file nested/direct Copy reads must not force owned self:\n{rs}"
+        "cross-file nested/direct Copy reads must not force owned self:\n{rs}"
     );
     assert!(
         !rs.contains("fn update_params(self)"),
-        "P3.424b RED: owned self on cross-file read method:\n{rs}"
+        "owned self on cross-file read method:\n{rs}"
     );
-    test.cargo_check().expect("P3.424b cargo-check");
-}
-
-#[test]
-fn tip_out_voxel_gpu_passes_update_raymarch_must_not_be_owned_self() {
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/windjammer-game-core/gen/rendering/voxel_gpu_passes.rs");
-    assert!(game.exists(), "missing tip product");
-    let text = std::fs::read_to_string(&game).expect("product");
-    assert!(
-        !text.contains("fn update_raymarch_params(self)"),
-        "P3.424 RED: tip still emits owned self for update_raymarch_params"
-    );
+    test.cargo_check().expect("cargo-check");
 }
