@@ -156,7 +156,7 @@ pub fn caller() {
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    // Tip truth: unused pub free-fn `string` formals stay Owned (DB-152 /
+    // Tip truth: unused pub free-fn `string` formals stay Owned (/
     // pub_module_api_keeps_owned_string_formal) — literal owns via `.to_string()` /
     // `String::from`. Demotion to `&str` + bare lit requires a borrowing use.
     assert!(

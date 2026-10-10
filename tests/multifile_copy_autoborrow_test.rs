@@ -14,7 +14,7 @@
 //!
 //! When a Copy struct (e.g. NodeId) is defined in one file and used in another,
 //! the codegen must know it's Copy and NOT add & at call sites.
-//! This is the root cause of ~20+ E0308 errors in game-host.
+//! This is the root cause of ~20+ E0308 errors in a downstream game project.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

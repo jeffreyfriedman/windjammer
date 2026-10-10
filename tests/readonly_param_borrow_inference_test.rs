@@ -24,7 +24,7 @@
 /// in binary ops), infer `Borrowed`. Update `build_signature` to respect `Borrowed` for
 /// non-Copy types instead of forcing `Owned`.
 ///
-/// Discovered via dogfooding: game-host-editor has 6+ E0308 errors from this pattern.
+/// Discovered via downstream usage: a downstream game project has 6+ E0308 errors from this pattern.
 /// Files affected: panels/profiler.rs, panels/hierarchy.rs, panels/inspector.rs
 #[path = "common/test_utils.rs"]
 mod test_utils;

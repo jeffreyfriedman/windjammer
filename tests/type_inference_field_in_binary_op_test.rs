@@ -16,7 +16,7 @@
 /// Pattern: FieldAccess is used in binary operation with float literal
 /// Expected: Literal should be constrained to field's type (f32)
 ///
-/// Example from game-host:
+/// Example from a downstream game project:
 /// ```windjammer
 /// struct CharacterController {
 ///     pub vy: f32, // velocity Y

@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! Ownership regressions from game-core dogfooding (E0308/E0507).
+//! Ownership regressions from downstream usage (E0308/E0507).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -3221,7 +3221,7 @@ pub fn quick_start() -> VoxelScene {
         CompilationTarget::Rust,
         false,
         true,
-        &[("game_core", &meta_path)],
+        &[("core_lib", &meta_path)],
     )
     .unwrap_or_else(|e| panic!("compile with stale metadata failed: {e}"));
 
@@ -3346,7 +3346,7 @@ impl VoxelScene {
         CompilationTarget::Rust,
         false,
         true,
-        &[("game_core", &meta_path)],
+        &[("core_lib", &meta_path)],
     )
     .unwrap_or_else(|e| panic!("compile failed: {e}"));
 
@@ -3442,7 +3442,7 @@ impl VoxelScene {
         CompilationTarget::Rust,
         false,
         true,
-        &[("game_core", &meta_path)],
+        &[("core_lib", &meta_path)],
     )
     .unwrap_or_else(|e| panic!("compile failed: {e}"));
 
@@ -3536,7 +3536,7 @@ impl Item {
         CompilationTarget::Rust,
         false,
         true,
-        &[("game_core", &meta_path)],
+        &[("core_lib", &meta_path)],
     )
     .unwrap_or_else(|e| panic!("compile with stale Item metadata failed: {e}"));
 
@@ -4008,7 +4008,7 @@ pub fn build_grid() {
     );
 }
 
-/// DB Phase 37 dogfood: `strings::starts_with(s, "#")` under library multipass must not
+/// Phase 37 downstream: `strings::starts_with(s, "#")` under library multipass must not
 /// emit `"#".to_string()` — runtime takes `&str` / AsRef despite WJ std stub `prefix: string`.
 #[test]
 fn test_library_multipass_strings_starts_with_literal_stays_str() {
@@ -4054,8 +4054,8 @@ pub fn is_comment_line(line: string) -> bool {
     );
 }
 
-/// DB Phase 49 dogfood: associated constructor names outside `new`/`from_`/`with_`/`default`
-/// (e.g. `LdbcGraphLoader::datagen_defaults`) must still type the local so a later
+/// Phase 49 downstream: associated constructor names outside `new`/`from_`/`with_`/`default`
+/// (e.g. `BenchGraphLoader::datagen_defaults`) must still type the local so a later
 /// `loader.load_edge_file("…")` keeps the path literal as `&str` (emitted Borrowed).
 ///
 /// Critical: regenerate the *caller* alone after the defining module's `.wj.meta` exists —
@@ -4070,13 +4070,13 @@ fn test_library_multipass_associated_constructor_types_receiver_for_str_method()
     test.add_file(
         "graph/loader.wj",
         r#"
-pub struct LdbcGraphLoader {
+pub struct BenchGraphLoader {
     pub undirected: bool,
 }
 
-impl LdbcGraphLoader {
-    pub fn datagen_defaults() -> LdbcGraphLoader {
-        LdbcGraphLoader { undirected: true }
+impl BenchGraphLoader {
+    pub fn datagen_defaults() -> BenchGraphLoader {
+        BenchGraphLoader { undirected: true }
     }
 
     pub fn load_edge_file(self, path: string) -> int {
@@ -4091,10 +4091,10 @@ impl LdbcGraphLoader {
     test.add_file(
         "graph/session_test.wj",
         r#"
-use crate::graph::loader::LdbcGraphLoader
+use crate::graph::loader::BenchGraphLoader
 
 pub fn test_load_via_defaults() {
-    let loader = LdbcGraphLoader::datagen_defaults()
+    let loader = BenchGraphLoader::datagen_defaults()
     let _ = loader.load_edge_file("fixtures/toy_triangle.e")
 }
 "#,
@@ -4149,8 +4149,7 @@ pub fn test_load_via_defaults() {
     );
 }
 
-
-/// DB-091 large-crate shape: `pub use loader::LdbcGraphLoader` + `use crate::graph::LdbcGraphLoader`
+/// DB-091 large-crate shape: `pub use loader::BenchGraphLoader` + `use crate::graph::BenchGraphLoader`
 /// (re-export), not `use crate::graph::loader::…`. Must keep Borrowed path after datagen_defaults.
 #[test]
 fn test_library_multipass_reexport_associated_ctor_str_method() {
@@ -4160,15 +4159,15 @@ fn test_library_multipass_reexport_associated_ctor_str_method() {
 
     let mut test = MultiFileTest::new();
     test.add_file(
-        "graph/ldbc_graph_loader.wj",
+        "graph/bench_graph_loader.wj",
         r#"
-pub struct LdbcGraphLoader {
+pub struct BenchGraphLoader {
     pub undirected: bool,
 }
 
-impl LdbcGraphLoader {
-    pub fn datagen_defaults() -> LdbcGraphLoader {
-        LdbcGraphLoader { undirected: true }
+impl BenchGraphLoader {
+    pub fn datagen_defaults() -> BenchGraphLoader {
+        BenchGraphLoader { undirected: true }
     }
 
     pub fn load_edge_file(self, path: string) -> int {
@@ -4183,17 +4182,17 @@ impl LdbcGraphLoader {
     test.add_file(
         "graph/session_test.wj",
         r#"
-use crate::graph::LdbcGraphLoader
+use crate::graph::BenchGraphLoader
 
 pub fn test_load_via_defaults() {
-    let loader = LdbcGraphLoader::datagen_defaults()
+    let loader = BenchGraphLoader::datagen_defaults()
     let _ = loader.load_edge_file("fixtures/toy_triangle.e")
 }
 "#,
     );
     test.add_file(
         "graph/mod.wj",
-        "pub mod ldbc_graph_loader\npub mod session_test\npub use ldbc_graph_loader::LdbcGraphLoader",
+        "pub mod bench_graph_loader\npub mod session_test\npub use bench_graph_loader::BenchGraphLoader",
     );
     test.add_file("mod.wj", "pub mod graph");
 
@@ -4249,10 +4248,9 @@ pub fn test_load_via_defaults() {
     );
 }
 
-
 /// DB-091: associated ctor + method that forwards `string` into an extern fn.
 /// Ownership convergence on the method must still keep call-site path literals bare
-/// (`emitted_rust_ref_params` / Borrowed), matching ldbc_graph_loader dogfood.
+/// (`emitted_rust_ref_params` / Borrowed), matching bench_graph_loader downstream.
 #[test]
 fn test_library_multipass_associated_ctor_extern_forward_str_method() {
     use std::fs;
@@ -4261,22 +4259,22 @@ fn test_library_multipass_associated_ctor_extern_forward_str_method() {
 
     let mut test = MultiFileTest::new();
     test.add_file(
-        "graph/ldbc_graph_loader.wj",
+        "graph/bench_graph_loader.wj",
         r#"
-extern fn graph_ldbc_load_edge_file_ffi(path: string, undirected: i64) -> i64
+extern fn graph_bench_load_edge_file_ffi(path: string, undirected: i64) -> i64
 
-pub struct LdbcGraphLoader {
+pub struct BenchGraphLoader {
     pub undirected: bool,
 }
 
-impl LdbcGraphLoader {
-    pub fn datagen_defaults() -> LdbcGraphLoader {
-        LdbcGraphLoader { undirected: true }
+impl BenchGraphLoader {
+    pub fn datagen_defaults() -> BenchGraphLoader {
+        BenchGraphLoader { undirected: true }
     }
 
     pub fn load_edge_file(self, path: string) -> int {
         let undirected_flag = if self.undirected { 1 } else { 0 }
-        let ok = graph_ldbc_load_edge_file_ffi(path, undirected_flag)
+        let ok = graph_bench_load_edge_file_ffi(path, undirected_flag)
         ok as int
     }
 }
@@ -4285,22 +4283,22 @@ impl LdbcGraphLoader {
     test.add_file(
         "graph/session_test.wj",
         r#"
-use crate::graph::LdbcGraphLoader
+use crate::graph::BenchGraphLoader
 
 pub fn test_load_via_defaults() {
-    let loader = LdbcGraphLoader::datagen_defaults()
+    let loader = BenchGraphLoader::datagen_defaults()
     let _ = loader.load_edge_file("fixtures/toy_triangle.e")
 }
 
 pub fn test_load_via_struct_lit() {
-    let loader = LdbcGraphLoader { undirected: true }
+    let loader = BenchGraphLoader { undirected: true }
     let _ = loader.load_edge_file("fixtures/toy_chain.e")
 }
 "#,
     );
     test.add_file(
         "graph/mod.wj",
-        "pub mod ldbc_graph_loader\npub mod session_test\npub use ldbc_graph_loader::LdbcGraphLoader",
+        "pub mod bench_graph_loader\npub mod session_test\npub use bench_graph_loader::BenchGraphLoader",
     );
     test.add_file("mod.wj", "pub mod graph");
 
