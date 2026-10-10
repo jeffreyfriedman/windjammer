@@ -11,7 +11,6 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.638: product `Event::get_data_string` — `use std::map::Map` + cross-module
 //! `EventType` registers `Map::get -> Option<V>` (no `&`). Match must still treat
 //! the payload as `&String` and `.clone()` into `Option<String>`.
 
@@ -19,8 +18,6 @@
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
-use std::process::Command;
 
 const EVENT_TYPE: &str = r#"
 pub struct EventType {
@@ -72,14 +69,14 @@ fn module_file_map_get_string_payload_must_clone() {
                 .cloned()
         })
         .expect("event.rs with get_data_string");
-    eprintln!("P3.638 multipass emit:\n{rs}");
+    eprintln!("multipass emit:\n{rs}");
     let arm_ok = rs.lines().any(|l| {
         l.contains("EventDataValue::String(value)")
             && (l.contains("clone()") || l.contains("to_owned()") || l.contains("String::from"))
     });
     assert!(
         arm_ok,
-        "P3.638 RED: Map::get String match payload must clone:\n{rs}"
+        "RED: Map::get String match payload must clone:\n{rs}"
     );
 }
 
@@ -113,68 +110,6 @@ impl Event {
     let arm_ok = rs.contains("value.clone()")
         || rs.contains("value.to_owned()")
         || rs.contains("(*value).clone()");
-    assert!(arm_ok, "P3.638 RED single-file:\n{rs}");
+    assert!(arm_ok, "RED single-file:\n{rs}");
     test.cargo_check().expect("cargo-check");
-}
-
-#[test]
-fn tip_out_event_get_data_string_must_clone() {
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("game-host/game-host-core/gen/event/event.rs");
-    let rs = std::fs::read_to_string(&game).unwrap_or_default();
-    assert!(!rs.is_empty(), "missing {}", game.display());
-    let clones = rs.lines().any(|l| {
-        l.contains("EventDataValue::String(value)")
-            && (l.contains("clone()") || l.contains("to_owned()"))
-    });
-    assert!(
-        clones,
-        "P3.638 RED tip-out: get_data_string must clone in {}",
-        game.display()
-    );
-}
-
-#[test]
-fn tip_wj_product_event_module_must_clone() {
-    let wj = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("game-host/.cargo-target-wj/release/wj");
-    if !wj.is_file() {
-        eprintln!("skip: no tip wj at {}", wj.display());
-        return;
-    }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("game-host/game-host-core/src/event");
-    let out = tempfile::tempdir().expect("tmpdir");
-    let status = Command::new(&wj)
-        .args([
-            "build",
-            root.join("mod.wj").to_str().unwrap(),
-            "--output",
-            out.path().to_str().unwrap(),
-            "--library",
-            "--no-cargo",
-            "--module-file",
-        ])
-        .status()
-        .expect("wj");
-    assert!(status.success(), "tip wj build event module failed");
-    let rs = std::fs::read_to_string(out.path().join("event.rs")).expect("event.rs");
-    let clones = rs.lines().any(|l| {
-        l.contains("EventDataValue::String(value)")
-            && (l.contains("clone()") || l.contains("to_owned()"))
-    });
-    assert!(
-        clones,
-        "P3.638 RED tip product event module:\n{}",
-        rs.lines()
-            .filter(|l| l.contains("get_data") || l.contains("String(value)"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
 }

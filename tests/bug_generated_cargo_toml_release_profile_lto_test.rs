@@ -11,7 +11,6 @@
 ))]
 
 //! Generated Cargo.toml must honor `wj.toml` `[profile.release]` (LTO default).
-//! Without LTO, cross-crate hot paths (wj-sync Shared/Counter) look falsely slow.
 
 use std::fs;
 use std::process::Command;

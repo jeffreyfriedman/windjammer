@@ -10,7 +10,6 @@
     feature = "integration_tests",
 ))]
 
-//! Engine tip blocker (game-host-core `component_viewer_controls.wj`):
 //!
 //!   `grid.set(*x.clone(), *y.clone(), z, mat as u8)` → E0614
 //!   (`type i32 cannot be dereferenced`)
@@ -53,8 +52,6 @@ use crate::grid::VoxelGrid
 const VIEWER_GRID: i32 = 64
 
 fn set_if(grid: VoxelGrid, x: i32, y: i32, z: i32, mat: i32) {
-    // Multi-use Copy formals (bounds check + call) — product shape from
-    // component_viewer_controls.wj that tip-gen'd as `*x.clone()`.
     if x >= 0 && x < VIEWER_GRID && y >= 0 && y < VIEWER_GRID && z >= 0 && z < VIEWER_GRID {
         grid.set(x, y, z, mat as u8)
     }

@@ -12,7 +12,6 @@
 ))]
 
 //! `AtomicI64` is not `Clone` — bare atomic structs must not auto-derive Clone.
-//! `Arc<AtomicI64>` is Clone (shared handle) — must derive Clone (P3.594 / wj-sync).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

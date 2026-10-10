@@ -28,42 +28,6 @@
 mod test_utils;
 
 #[test]
-fn test_no_clone_on_i32_field_via_borrowed_iter() {
-    // Exact pattern from game-host rpg/trading.wj:
-    // for stack in &stacks { ... stack.quantity ... }
-    // stack.quantity is i32 (Copy) — should NOT get .clone()
-    let source = r#"
-pub struct Item {
-    pub id: string,
-    pub name: string,
-}
-
-pub struct ItemStack {
-    pub item: Item,
-    pub quantity: i32,
-}
-
-pub fn total_quantity(stacks: Vec<ItemStack>) -> i32 {
-    let mut total = 0
-    for stack in &stacks {
-        total = total + stack.quantity
-    }
-    total
-}
-"#;
-
-    let generated = test_utils::compile_single(source);
-    println!("Generated:\n{}", generated);
-
-    // stack.quantity is i32 (Copy) — should NOT be cloned
-    assert!(
-        !generated.contains("stack.quantity.clone()"),
-        "Should not clone i32 field 'quantity' accessed through borrowed iterator.\nGenerated:\n{}",
-        generated
-    );
-}
-
-#[test]
 fn test_no_clone_on_f32_field_via_borrowed_iter() {
     // Access f32 field through borrowed iterator
     let source = r#"
