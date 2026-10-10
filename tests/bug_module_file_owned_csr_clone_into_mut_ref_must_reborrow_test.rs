@@ -17,7 +17,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb217_mut_ref_csr_reborrow.wj");
+    include_str!("fixtures/library_multipass/mut_ref_csr_reborrow.wj");
 
 #[test]
 fn codegen_mut_ref_formal_must_reborrow_not_clone() {

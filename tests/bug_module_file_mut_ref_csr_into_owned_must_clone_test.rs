@@ -22,7 +22,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb219_mut_ref_csr_into_owned_must_clone.wj");
+    include_str!("fixtures/library_multipass/mut_ref_csr_into_owned_must_clone.wj");
 
 #[test]
 fn codegen_owned_csr_formal_must_receive_owned() {

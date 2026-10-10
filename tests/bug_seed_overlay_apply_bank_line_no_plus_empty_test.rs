@@ -26,7 +26,7 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 const SOURCE: &str =
-    include_str!("fixtures/library_multipass/seed_overlay_apply_bank_line_no_plus_empty.wj");
+    include_str!("fixtures/library_multipass/apply_bank_line_no_plus_empty.wj");
 
 fn assert_module_const_owns_into_string_field(rs: &str) {
     assert!(

@@ -17,7 +17,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb214_push_cstring_must_borrow.wj");
+    include_str!("fixtures/library_multipass/push_cstring_must_borrow.wj");
 
 #[test]
 fn codegen_push_cstring_must_borrow_owned_string_field() {

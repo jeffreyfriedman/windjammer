@@ -16,7 +16,7 @@
 mod test_utils;
 
 const FIXTURE: &str = include_str!(
-    "fixtures/library_multipass/wdb244_string_lit_into_demoted_sql_exec_must_not_to_string.wj"
+    "fixtures/library_multipass/string_lit_into_demoted_sql_exec_must_not_to_string.wj"
 );
 
 #[test]

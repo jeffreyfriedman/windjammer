@@ -21,7 +21,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb216_demoted_vec_into_owned_ffi.wj");
+    include_str!("fixtures/library_multipass/demoted_vec_into_owned_ffi.wj");
 
 #[test]
 fn codegen_demoted_vec_into_owned_ffi_must_clone() {
