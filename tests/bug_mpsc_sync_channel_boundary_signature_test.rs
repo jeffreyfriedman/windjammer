@@ -12,14 +12,6 @@
 ))]
 
 //! FAILING REPRO — `std::sync::mpsc::sync_channel` needs a boundary signature.
-//!
-//! Ecosystem `wj-sync` bounded channels:
-//! ```ignore
-//! let pair = mpsc::sync_channel(2)
-//! ```
-//! Tip emits `compile_error!("missing boundary signature for mpsc::sync_channel")`.
-//! Runtime already exposes `windjammer_runtime::sync::sync_channel`.
-
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

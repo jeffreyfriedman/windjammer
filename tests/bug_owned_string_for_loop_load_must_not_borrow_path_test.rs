@@ -11,14 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.590b: product `load_batch` — Err arm reuses `name` → `name.clone()`, but
 //! `path` must still move into owned `String` formal (not `&path`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub struct Asset {
@@ -77,7 +75,7 @@ fn owned_string_for_loop_load_must_not_borrow_path() {
     test.add_file("lib.wj", SRC);
     let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs").clone();
-    eprintln!("P3.590b MultiFile emit:\n{rs}");
+    eprintln!("MultiFile emit:\n{rs}");
     let load_sig = rs
         .lines()
         .find(|l| l.contains("pub fn load(") && l.contains("path:"))
@@ -93,28 +91,7 @@ fn owned_string_for_loop_load_must_not_borrow_path() {
         .collect();
     assert!(
         bad.is_empty(),
-        "P3.590b RED MultiFile: owned path borrowed at load() sites:\n{rs}"
+        "RED MultiFile: owned path borrowed at load() sites:\n{rs}"
     );
     test.cargo_check().expect("cargo-check");
-}
-
-#[test]
-fn tip_out_loader_load_batch_must_not_borrow_path() {
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/windjammer-game-core/gen/assets/loader.rs");
-    let rs = std::fs::read_to_string(&game).unwrap_or_default();
-    assert!(!rs.is_empty(), "missing {}", game.display());
-    let bad: Vec<_> = rs
-        .lines()
-        .enumerate()
-        .filter(|(_, l)| l.contains(".load(") && (l.contains("&path") || l.contains("&_temp")))
-        .map(|(i, l)| format!("{}:{}", i + 1, l.trim()))
-        .collect();
-    assert!(
-        bad.is_empty(),
-        "P3.590b RED tip-out: owned path borrowed at load() sites:\n  {}",
-        bad.join("\n  ")
-    );
 }

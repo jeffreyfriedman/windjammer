@@ -11,10 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-281 class: live Vec into an *owned* Vec formal must `.clone()` (not `&items`).
-//! Tip may demote a read-only `contains(items: Vec)` to `&Vec` and borrow at the
-//! call site — that is correct (no E0308). RED only when formal stays owned and
-//! the call site reborrows.
+//! class: live Vec into an *owned* Vec formal must `.clone()` (not `&items`).
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

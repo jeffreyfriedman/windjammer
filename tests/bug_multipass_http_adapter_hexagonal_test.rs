@@ -12,9 +12,6 @@
 ))]
 
 //! FAILING REPRO — hexagonal `domain/` + `adapters/` multipass must emit owned HTTP reply/body.
-//!
-//! Mirrors `wj-notes-api` / `wj-auth-api` layout: `domain/app.wj` + `adapters/http_server.wj`.
-
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 

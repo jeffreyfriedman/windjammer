@@ -1,9 +1,4 @@
 //! Nested `use std::http::*` must map types to `windjammer_runtime::http`, not `super::`.
-//!
-//! Ecosystem `wj-notes-api` hexagonal adapter: `src/adapters/http_server.wj`.
-//! Auto-super sibling imports treated `HttpMethod` / `ServerRequest` / `ServerResponse`
-//! as crate-local types and emitted `use super::HttpMethod` (E0432).
-
 #![cfg(any(
     not(any(
         feature = "parser_tests",
