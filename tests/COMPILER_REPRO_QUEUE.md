@@ -2,6 +2,33 @@
 
 
 
+## P3.794 (2026-10-10) — TDD WDB-484 (DB agent; no compiler src)
+
+A struct parameter pushed into a `Vec` and then passed to a later call must not `.clone().clone()` on the push. One clone into `push` is enough.
+
+Product `vgs/lod_generator.rs` `generate_lods`:
+```wj
+base.push(cluster)
+let simplified = simplify_cluster(cluster, ratio)
+```
+Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `base.push(cluster.clone().clone())` and later `simplify_cluster(cluster.clone(), ratio)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-484 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-484 tip-out | ❌ tip RED — `rel_tip_out/vgs/lod_generator.rs` and `windjammer-game-core/gen/vgs/lod_generator.rs` |
+
+**Root cause layer:** tip-out lag — a reused struct parameter is still double-cloned into `Vec::push`.
+
+**Why this is a new class:**
+- WDB-481 is a fresh `string` local pushed and then formatted.
+- WDB-480 is a loop parameter double-cloned into a call.
+- This is a struct parameter stored in a `Vec` and then passed to `simplify_cluster`.
+
+**Do not steal:** WDB-406/408/411/457–484, P3.508–P3.794, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb484_` — isolate GREEN / tip RED (2026-10-10).
+
 ## P3.792 (2026-10-10) — index `for i in 0..len()` must stay `usize` beside an `i32` tally
 
 `scripting/components.wj` `active_count` returns `i32`, writes `let mut count: i32 = 0`, then `for i in 0..self.components.len()` and indexes `self.components[i]`. Tip-out emits `for i in 0_i32..(self.components.len() as i32)` and `self.components[(i as usize)]`.
