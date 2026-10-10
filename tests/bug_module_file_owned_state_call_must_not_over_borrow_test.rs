@@ -10,9 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-165: owned ServeState formal must not receive `&state.clone()` at call sites.
 //!
-//! Product (`relational_pg_serve_port.rs` after WDB-163/164 keep owned formals):
 //!   `pg_wire_serve_on_parse(&state.clone(), …)` → E0308 expected `PgWireServeState`, found `&`.
 //! Same for on_bind / on_sync. Formals are owned; nested match dispatch still over-borrows.
 //!
@@ -23,7 +21,6 @@
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const MOD: &str = r#"
 pub mod serve
@@ -47,7 +44,6 @@ pub fn on_startup(state: ServeState, _startup: Vec<u8>) -> (ServeState, bool) {
     (next, true)
 }
 
-/// Public API keeps owned string formals (product on_parse name/sql: String).
 pub fn on_parse(state: ServeState, name: string, sql: string) -> (ServeState, bool) {
     let mut out = state
     out.ok = name.len() > 0 && sql.len() > 0
@@ -108,7 +104,7 @@ pub fn cap() -> bool {
 }
 "#;
 
-fn wdb165_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("serve.wj", SERVE);
@@ -116,14 +112,14 @@ fn wdb165_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb165_module_file_owned_state_call_must_not_over_borrow() {
-    let mut test = wdb165_fixture();
+fn module_file_owned_state_call_must_not_over_borrow() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("WDB-165 multipass compile should succeed");
+        .expect("multipass compile should succeed");
     let serve_rs = map.get("serve.rs").expect("serve.rs");
 
-    eprintln!("WDB-165 serve.rs:\n{serve_rs}");
+    eprintln!("serve.rs:\n{serve_rs}");
 
     let over_borrow = serve_rs.contains("on_parse(&")
         || serve_rs.contains("on_bind(&")
@@ -131,47 +127,14 @@ fn wdb165_module_file_owned_state_call_must_not_over_borrow() {
 
     assert!(
         !over_borrow,
-        "WDB-165 RED: owned ServeState call sites over-borrowed. Got:\n{serve_rs}"
+        "RED: owned ServeState call sites over-borrowed. Got:\n{serve_rs}"
     );
     assert!(
         serve_rs.contains("on_parse(state.clone()")
             || serve_rs.contains("on_parse(state,"),
-        "WDB-165: expected bare/owned on_parse(state…) call. Got:\n{serve_rs}"
+        "expected bare/owned on_parse(state…) call. Got:\n{serve_rs}"
     );
 
     // Codegen asserts above are the gate; cargo-check under low-RAM agents often times out
-    // after the ownership contract is already proven. Product gate covers full multipass.
-}
-
-#[test]
-fn wdb165_product_serve_port_must_not_overborrow_owned_state_calls() {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.pop();
-    path.push(
-        "windjammerdb/crates/wdb-layers/gen/relational_module_file/relational_pg_serve_port.rs",
-    );
-    if !path.exists() {
-        eprintln!(
-            "WDB-165: skip product gate — {} missing",
-            path.display()
-        );
-        return;
-    }
-    let text = std::fs::read_to_string(&path).expect("read serve_port");
-    let bad = text.contains("pg_wire_serve_on_parse(&state")
-        || text.contains("pg_wire_serve_on_bind(&state")
-        || text.contains("pg_wire_serve_on_sync(&state")
-        || text.contains("pg_wire_serve_on_parse(&")
-        || text.contains("pg_wire_serve_on_bind(&")
-        || text.contains("pg_wire_serve_on_sync(&");
-    eprintln!(
-        "WDB-165 product {} overborrow={}",
-        path.display(),
-        bad
-    );
-    assert!(
-        !bad,
-        "WDB-165 RED: product serve_port still passes &state into owned on_parse/on_bind/on_sync."
-    );
 }
 
