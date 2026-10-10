@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! Engine tip blocker (windjammer-game-core `component_viewer_controls.wj`):
+//! Engine tip blocker (a downstream game project `component_viewer_controls.wj`):
 //!
 //!   `use crate::scene::component_viewer_state::VIEWER_GRID`
 //!   `let cx = VIEWER_GRID / 2`

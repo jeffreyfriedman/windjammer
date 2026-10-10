@@ -1,5 +1,5 @@
 //! HashMap::get of a non-Copy value in a mutating match must not emit `.copied()`.
-//! Ecosystem `wj-notes-api` `NoteStore::update` hits this in library multipass.
+//! Ecosystem `a downstream package` `NoteStore::update` hits this in library multipass.
 
 #![cfg(any(
     not(any(

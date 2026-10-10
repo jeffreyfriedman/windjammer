@@ -14,7 +14,7 @@
 //! FAILING REPRO — multipass HTTP adapter must pass owned `HttpReply` to `to_response` and owned
 //! `string` bodies into `ServerResponse` helpers.
 //!
-//! Ecosystem `wj-notes-api` / `wj-proxy` on wj 0.50.0 (2026-08-31) emits `to_response(&mut reply)`,
+//! Ecosystem `a downstream package` / `a downstream package` on wj 0.50.0 (2026-08-31) emits `to_response(&mut reply)`,
 //! `handle(..., &body, ...)`, and `json_response(&ServerResponse::bad_request(body))` with `body: &str`
 //! → E0308 across all hexagonal HTTP apps.
 

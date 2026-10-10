@@ -13,13 +13,13 @@
 //! Multipass: string literal into demoted `&str` method formal must stay bare
 //! (not `.to_string()`).
 //!
-//! Ecosystem `wj-auth-api` (string-label adapter path):
+//! Ecosystem `a downstream package-api` (string-label adapter path):
 //! ```
 //! app.handle("GET", path, …)  // method: string demoted to &str
 //! ```
 //! Tip emitted `handle("GET".to_string(), …)` → E0308 expected `&str`, found `String`.
 //! Related to WDB-168 (`String::from`); this gate targets `.to_string()` on impl
-//! method formals across domain/adapters modules (auth dogfood shape).
+//! method formals across domain/adapters modules (auth downstream shape).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -112,7 +112,7 @@ fn module_file_string_lit_into_demoted_str_must_not_emit_to_string() {
     };
 
     // Always assert cargo-check shape: if demoted, lit must not own; if owned,
-    // .to_string() is fine. Force RED when we see the auth dogfood bug pattern.
+    // .to_string() is fine. Force RED when we see the auth downstream bug pattern.
     let owns_lit = adapters_rs.contains("\"GET\".to_string()")
         || adapters_rs.contains("\"OPTIONS\".to_string()")
         || adapters_rs.contains("String::from(\"GET\")")

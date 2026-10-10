@@ -13,7 +13,7 @@
 
 //! FAILING REPRO — `strings.substring(h, i + j, i + j + 1)` with `int` loop
 //! counters must cast both start and end to `usize` (or keep both as i64).
-//! Tip emits `i + j + 1_usize` (E0277 i64 + usize). LedgerKit
+//! Tip emits `i + j + 1_usize` (E0277 i64 + usize). Ledger
 //! `domain/string_contains.wj` still uses `h + ""` / index workarounds around
 //! this class (`make api-check` WJ0003 / E0277).
 

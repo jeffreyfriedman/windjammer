@@ -13,7 +13,7 @@
 
 //! FAILING REPRO — `mpsc::sync_channel` returns `SyncSender`, not `Sender`.
 //!
-//! Ecosystem `wj-sync` bounded channels need a distinct sender type (or a unified
+//! Ecosystem `a downstream package` bounded channels need a distinct sender type (or a unified
 //! channel abstraction). Tip previously lacked a boundary signature (P3.287);
 //! with signature present, wrapping `pair.0` in `Sender`-shaped structs fails:
 //! `expected Sender<i64>, found SyncSender<_>`.

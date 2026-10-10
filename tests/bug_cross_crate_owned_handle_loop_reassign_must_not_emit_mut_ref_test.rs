@@ -13,7 +13,7 @@
 
 //! FAILING REPRO — cross-crate owned handle reassignment in a loop emits `&mut`.
 //!
-//! Ecosystem `wj-pipeline` dogfood of `wj-sync`:
+//! Ecosystem `a downstream package` downstream of `a downstream package`:
 //! ```ignore
 //! let mut tx = pair.0
 //! while i < n {

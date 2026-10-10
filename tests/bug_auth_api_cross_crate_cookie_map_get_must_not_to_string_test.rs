@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.537: product-shaped path-dep — `wj-cookie/build` is generated Rust with
+//! P3.537: product-shaped path-dep — `a downstream package/build` is generated Rust with
 //! no `--metadata`. After `parse_cookie_header` → `HashMap`,
 //! `map.get("access_token")` must stay a borrowed key (`get("access_token")`),
 //! not `get(String::from("access_token"))` / `get("…".to_string())`.
@@ -72,7 +72,7 @@ pub fn parse_cookie_header(header: string) -> Result<HashMap<string, string>, st
 "#,
     )
     .unwrap();
-    // Product shape: path = packages/wj-cookie/build (generated lib.rs, no --metadata)
+    // Product shape: path = packages/a downstream package/build (generated lib.rs, no --metadata)
     let cookie_build = tmp.path().join("cookie_build");
     build_library(wj, &cookie_src, &cookie_build);
     let _ = fs::remove_file(cookie_build.join("metadata.json"));
@@ -128,18 +128,18 @@ pub fn cookie_access_token(cookie: string) -> string {
         .expect("app build");
     assert!(
         app_build.status.success(),
-        "P3.537 transpile failed:\n{}",
+        "transpile failed:\n{}",
         String::from_utf8_lossy(&app_build.stderr)
     );
 
     let rs = fs::read_to_string(app_gen.join("domain").join("auth.rs")).unwrap_or_default();
-    eprintln!("P3.537 build-path-dep cookie map.get emit:\n{rs}");
+    eprintln!("build-path-dep cookie map.get emit:\n{rs}");
     assert!(
         !owned_get_key(&rs),
-        "P3.537 RED: HashMap.get lit after cookie/build path-dep must stay borrowed:\n{rs}"
+        "HashMap.get lit after cookie/build path-dep must stay borrowed:\n{rs}"
     );
     assert!(
         rs.contains("get(\"access_token\")"),
-        "P3.537: expected bare borrowed get(\"access_token\"):\n{rs}"
+        "expected bare borrowed get(\"access_token\"):\n{rs}"
     );
 }

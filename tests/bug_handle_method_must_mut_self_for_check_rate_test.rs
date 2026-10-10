@@ -14,7 +14,7 @@
 //! P3.522: a caller that reads `self.config` then calls `&mut self` `check_rate`
 //! must itself be `&mut self` (and must not clone `self` to call it).
 //!
-//! Product `wj-notes-api` defines `handle_http` / `handle_method` *above*
+//! Product `a downstream package` defines `handle_http` / `handle_method` *above*
 //! `check_rate`. Adapter `Ok(mut app) => app.handle_http(...)` cannot move
 //! `NotesApp` out of `MutexGuard` (E0507). Isolates that define `check_rate`
 //! first emit `handle_method(&mut self)` (false-GREEN). Do not reshape the app.
@@ -97,28 +97,28 @@ fn owned_or_shared_self(rs: &str, name: &str) -> bool {
 fn handle_method_must_mut_self_for_check_rate() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("P3.522 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("P3.522 MultiFile lib.rs:\n{rs}");
+    eprintln!("MultiFile lib.rs:\n{rs}");
     assert!(
         !rs.contains("self.clone().check_rate"),
-        "P3.522 RED: must not clone self to call check_rate:\n{rs}"
+        "must not clone self to call check_rate:\n{rs}"
     );
     assert!(
         !owned_or_shared_self(rs, "handle_method"),
-        "P3.522 RED: handle_method must be &mut self (config read + &mut check_rate):\n{rs}"
+        "handle_method must be &mut self (config read + &mut check_rate):\n{rs}"
     );
     assert!(
         rs.contains("fn handle_method(&mut self"),
-        "P3.522 RED: expected &mut self handle_method:\n{rs}"
+        "expected &mut self handle_method:\n{rs}"
     );
     assert!(
         !owned_or_shared_self(rs, "handle_http"),
-        "P3.522 RED: handle_http must be &mut self (MutexGuard cannot move App):\n{rs}"
+        "handle_http must be &mut self (MutexGuard cannot move App):\n{rs}"
     );
     assert!(
         rs.contains("fn handle_http(&mut self"),
-        "P3.522 RED: expected &mut self handle_http:\n{rs}"
+        "expected &mut self handle_http:\n{rs}"
     );
-    test.cargo_check().expect("P3.522 cargo-check");
+    test.cargo_check().expect("cargo-check");
 }

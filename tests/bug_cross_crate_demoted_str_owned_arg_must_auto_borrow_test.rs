@@ -14,8 +14,8 @@
 //! Cross-crate path-dep calls must auto-borrow owned `String` into demoted `&str` formals
 //! when dependency metadata has `param_ownership: Borrowed` / `emitted_rust_ref_params: true`.
 //!
-//! Ecosystem `apps/wj-find`: `glob_filter(pattern, paths)` and `walk_files(root)` emit E0308
-//! (`expected &str, found String`) when callee metadata lives in `.wj-cache/lib.wj.meta`.
+//! Ecosystem `apps/a downstream package`: `glob_filter(pattern, paths)` and `walk_files(root)` emit E0308
+//! (`expected &str, found String`) when callee metadata lives in `.a downstream package/lib.wj.meta`.
 
 use std::fs;
 use std::process::Command;
@@ -194,7 +194,7 @@ pub fn find_under(root: string, pattern: string) -> Result<Vec<string>, string> 
         );
     } else {
         // Phase-2 also demoted the wrapper (`pattern: &str`): Identity passthrough
-        // is the solver decision — same as http put / WDB-101.
+        // is the solver decision — same as http put / .
         assert!(
             generated.contains("glob_filter(pattern,")
                 || generated.contains("glob_filter(&pattern")
@@ -208,7 +208,7 @@ pub fn find_under(root: string, pattern: string) -> Result<Vec<string>, string> 
         "must not clone owned args into demoted formals.\n{generated}"
     );
     if generated.contains("walk_files(root)") && generated.contains("root: String") {
-        // Unused library `string` formals stay owned (WDB-152). Identity is correct
+        // Unused library `string` formals stay owned (). Identity is correct
         // unless metadata demoted the callee — cargo check is the ABI gate.
     } else {
         assert!(
