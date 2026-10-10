@@ -10,10 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-297: owned `Vec<string>` CLI formal must not receive demoted `&args`.
 //!
-//! Product: tip `wave1_cli` emits `wave1_*(&args)` while callees keep owned
-//! `args: Vec<String>` (DB-291/292/294/295). Signature-driven clone/move into
 //! owned formals when the binding is reused.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -36,25 +33,25 @@ pub fn run(args: Vec<string>) -> int {
 "#;
 
 #[test]
-fn wdb297_module_file_owned_cli_vec_must_not_receive_ref_args() {
+fn module_file_owned_cli_vec_must_not_receive_ref_args() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("DB-297 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
     let owned_formal = rs.contains("fn scale_status_main(args: Vec<String>");
     assert!(
         owned_formal,
-        "DB-297: expected owned Vec formal for scale_status_main:\n{rs}"
+        "expected owned Vec formal for scale_status_main:\n{rs}"
     );
     let bad = rs.contains("scale_status_main(&args)");
     assert!(
         !bad,
-        "DB-297 RED: owned Vec CLI formal received &args (must clone/move):\n{rs}"
+        "RED: owned Vec CLI formal received &args (must clone/move):\n{rs}"
     );
     // Prefer clone when reused after owned call
     assert!(
         rs.contains("scale_status_main(args.clone())") || rs.contains("scale_status_main(args)"),
-        "DB-297: expected owned/clone call into scale_status_main:\n{rs}"
+        "expected owned/clone call into scale_status_main:\n{rs}"
     );
-    test.cargo_check().expect("DB-297 cargo-check");
+    test.cargo_check().expect("cargo-check");
 }
