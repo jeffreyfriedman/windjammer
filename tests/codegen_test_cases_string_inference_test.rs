@@ -106,6 +106,8 @@ fn test_user(id: string, name: string, age: i32) {
             "lib",
             "--edition",
             "2021",
+            "--out-dir",
+            rustc_test_path.parent().unwrap().to_str().unwrap(),
             rustc_test_path.to_str().unwrap(),
         ])
         .output()
@@ -187,6 +189,8 @@ fn test_greet() {
             "lib",
             "--edition",
             "2021",
+            "--out-dir",
+            rustc_test_path.parent().unwrap().to_str().unwrap(),
             rustc_test_path.to_str().unwrap(),
         ])
         .output()

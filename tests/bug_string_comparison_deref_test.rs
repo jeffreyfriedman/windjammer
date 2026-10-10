@@ -147,6 +147,8 @@ fn main() {
             "2021",
             "--crate-type",
             "lib",
+            "--out-dir",
+            temp_dir.to_str().unwrap(),
             rs_file.to_str().unwrap(),
         ])
         .output()
