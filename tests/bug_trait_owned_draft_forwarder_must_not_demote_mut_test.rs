@@ -13,7 +13,6 @@
 
 //! FAILING REPRO — thin trait-impl Draft forwarder must not demote to `&mut Draft`.
 //!
-//! Product cold gen (LedgerKit `env_channel_adapter` / `env_inventory_repository`):
 //!   trait: `fn create(..., draft: Draft)`
 //!   impl:  `fn create(..., draft: &mut Draft)` → E0053
 //! Composition may also emit `deps: &Self` when Draft is demoted (E0411).
@@ -32,11 +31,11 @@ const SOURCE: &str =
 fn assert_owned_draft_formals(rs: &str) {
     assert!(
         !rs.contains("draft: &mut Draft") && !rs.contains("draft: &mut Draft,"),
-        "RED P3.263: trait/impl Draft formal must stay owned, not &mut. Generated:\n{rs}"
+        "RED trait/impl Draft formal must stay owned, not &mut. Generated:\n{rs}"
     );
     assert!(
         !rs.contains("deps: &Self"),
-        "RED P3.263: free fn must keep AppDeps-shaped formal, not &Self. Generated:\n{rs}"
+        "RED free fn must keep AppDeps-shaped formal, not &Self. Generated:\n{rs}"
     );
 }
 
@@ -46,7 +45,7 @@ fn trait_owned_draft_forwarder_must_not_demote_mut() {
     assert_owned_draft_formals(&rs);
     assert!(
         ok,
-        "RED P3.263: owned Draft trait forwarder must cargo-check. Generated:\n{rs}"
+        "RED owned Draft trait forwarder must cargo-check. Generated:\n{rs}"
     );
 }
 

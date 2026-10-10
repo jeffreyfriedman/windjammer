@@ -15,7 +15,6 @@
 //! `&str` must auto-borrow (`log_tagged(&level, …, &message)`, `slugify(&title)`,
 //! `parse_level(&probe)`).
 //!
-//! Ecosystem `wj-notes-api` → `wj-log` / `wj-inflect`: E0308 `expected &str, found String`.
 //! Inverse of `bug_todo_cli_cross_crate_validate_field_must_auto_borrow_test`
 //! (mixed formals: borrow field, keep owned value).
 
@@ -44,7 +43,7 @@ fn build_library(wj: &str, src_dir: &std::path::Path, out_dir: &std::path::Path)
 }
 
 #[test]
-fn notes_api_owned_into_demoted_str_must_auto_borrow() {
+fn owned_into_demoted_str_must_auto_borrow() {
     let tmp = TempDir::new().expect("tempdir");
     let wj = env!("CARGO_BIN_EXE_wj");
 

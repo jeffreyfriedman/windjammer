@@ -12,10 +12,7 @@
 ))]
 
 //! FAILING REPRO / GREEN gate — seed overlay `int_to_string` / `parse_int_string`
-//! without `+ ""` (LedgerKit `seed_bank_recon*_overlay.wj`).
 //!
-//! Product still uses `"0" + ""` / `raw + ""` / `text + ""` workarounds in recon
-//! overlays; `request_context` already dogfoods the clean shape.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -46,7 +43,7 @@ fn seed_overlay_int_parse_format_must_cargo_check_without_plus_empty() {
     assert_no_empty_concat_temps(&rs);
     assert!(
         ok,
-        "RED P3.258: seed overlay int parse/format without + \"\" must cargo-check. Generated:\n{rs}"
+        "RED seed overlay int parse/format without + \"\" must cargo-check. Generated:\n{rs}"
     );
 }
 

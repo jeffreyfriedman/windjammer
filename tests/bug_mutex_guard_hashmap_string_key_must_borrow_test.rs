@@ -11,9 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.576 / ecosystem `wj-sync`: `match m.inner.lock() { Ok(g) => g.get(key) }`
 //! must borrow the String key (`get(&key)` / `contains_key(&key)`), same as
-//! WDB-236 on a bare HashMap. MutexGuard Deref must not drop the key borrow.
 //! Multipass package shape (SharedMap alias + sibling `*_get` helpers) is required.
 
 use std::fs;
@@ -37,7 +35,6 @@ pub struct SharedMap<K, V> {
 
 pub type SharedMapSI = SharedMap<string, int>
 
-/// Sibling free-function `*_get` (like wj-sync `shared_int_get`) must not poison
 /// HashMap key borrow via bare `::get` suffix scramble.
 pub fn shared_int_get(n: int) -> int {
     n
@@ -87,27 +84,27 @@ fn mutex_guard_hashmap_string_key_must_borrow() {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.576 transpile failed:\n{}\n{}",
+        "transpile failed:\n{}\n{}",
         String::from_utf8_lossy(&build.stdout),
         String::from_utf8_lossy(&build.stderr)
     );
 
     let rs = fs::read_to_string(out.join("shared.rs")).unwrap_or_default();
-    eprintln!("P3.576 shared.rs:\n{rs}");
+    eprintln!("shared.rs:\n{rs}");
 
     let get_ok = rs.contains(".get(&key)") || rs.contains(".get(& key)");
     let contains_ok = rs.contains("contains_key(&key)") || rs.contains("contains_key(& key)");
     assert!(
         get_ok && contains_ok,
-        "P3.576 RED: MutexGuard HashMap get/contains_key must borrow String key:\n{rs}"
+        "RED: MutexGuard HashMap get/contains_key must borrow String key:\n{rs}"
     );
     assert!(
         !rs.contains("contains_key(key.clone())"),
-        "P3.576 RED: must not clone key into contains_key:\n{rs}"
+        "RED: must not clone key into contains_key:\n{rs}"
     );
     assert!(
         !rs.contains("get(key.to_string())") && !rs.contains("contains_key(key.to_string())"),
-        "P3.576 RED: must not Owned-homonym `.to_string()` the map key:\n{rs}"
+        "RED: must not Owned-homonym `.to_string()` the map key:\n{rs}"
     );
 
     let check = Command::new("cargo")
@@ -126,6 +123,6 @@ fn mutex_guard_hashmap_string_key_must_borrow() {
     );
     assert!(
         check.status.success(),
-        "P3.576 RED: MutexGuard HashMap String key borrow must cargo-check:\n{rs}\n{err}"
+        "RED: MutexGuard HashMap String key borrow must cargo-check:\n{rs}\n{err}"
     );
 }

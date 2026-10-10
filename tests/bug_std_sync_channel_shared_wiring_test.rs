@@ -11,7 +11,6 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — idiomatic `std::sync` channel + Shared for `wj-sync` graduation.
 //!
 //! Runtime today re-exports Rust `mpsc` / Arc / Mutex helpers (`channel`, `mutex`).
 //! Target vocabulary: `unbounded` / `send` / `recv` / `shared` (no Arc/Mutex in WJ).

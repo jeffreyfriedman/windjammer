@@ -11,9 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.684: LedgerKit call sites `fn_taking_str(id + "")` where tip demotes
 //! `string` formals to `&str` must auto-borrow the owned temp (not pass
-//! `String` → E0308). Product drops `+ ""` interim until tip greens.
 
 use std::fs;
 use std::process::Command;
@@ -52,12 +50,12 @@ pub fn build(result_id: string, result_reference: string) -> string {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.684 transpile failed:\n{}",
+        "transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.684 emit:\n{rs}");
+    eprintln!("emit:\n{rs}");
 
     let check = Command::new("cargo")
         .current_dir(&out)
@@ -66,7 +64,7 @@ pub fn build(result_id: string, result_reference: string) -> string {
         .expect("cargo check");
     assert!(
         check.status.success(),
-        "P3.684 RED: owned + \"\" into demoted &str formal must borrow:\n{}\nemit:\n{rs}",
+        "RED: owned + \"\" into demoted &str formal must borrow:\n{}\nemit:\n{rs}",
         String::from_utf8_lossy(&check.stderr)
     );
 }

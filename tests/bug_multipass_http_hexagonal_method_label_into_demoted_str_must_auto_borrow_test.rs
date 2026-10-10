@@ -13,12 +13,10 @@
 
 //! FAILING REPRO — hexagonal adapter: owned `method_label` → demoted `method: &str`.
 //!
-//! Mirrors `wj-notes-api` / `wj-auth-api` before `handle_http`: multipass demotes
 //! `App::handle`'s first formal to `&str` but emits owned `String` from
 //! `method_label(req.method)` → E0308.
 //!
 //! Single-file gate `bug_owned_helper_into_demoted_str_formal_must_auto_borrow_test`
-//! is tip GREEN; this multipass shape still RED on cargo-bin 0.50.0 product builds.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
