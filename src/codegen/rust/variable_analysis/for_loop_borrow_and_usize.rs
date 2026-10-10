@@ -785,8 +785,9 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// `b` from `b`, `b + 1`, or `1 + b` when that expression is compared to a usize bound.
-    fn counter_ident_in_usize_compare(expr: &Expression) -> Option<String> {
+    /// `b` from `b`, `b + 1`, `1 + b`, or `i + needle.len()` when that expression
+    /// is compared to a usize bound.
+    fn counter_ident_in_usize_compare(&self, expr: &Expression) -> Option<String> {
         let nonneg_lit = |e: &Expression| {
             matches!(
                 e,
@@ -795,6 +796,9 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } if *n >= 0
             )
+        };
+        let usize_operand = |e: &Expression| {
+            self.expression_produces_usize(e) || self.infer_expression_type_is_usize(e)
         };
         match expr {
             Expression::Identifier { name, .. } => Some(name.clone()),
@@ -806,6 +810,19 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 (lit, Expression::Identifier { name, .. })
                     if matches!(op, BinaryOp::Add) && nonneg_lit(lit) =>
+                {
+                    Some(name.clone())
+                }
+                // `i + needle.len()` compared to `haystack.len()` is a usize counter.
+                // A bare int literal is already handled above; this is a usize-producing
+                // operand (`.len()`), not a name list.
+                (Expression::Identifier { name, .. }, other)
+                    if matches!(op, BinaryOp::Add) && usize_operand(other) =>
+                {
+                    Some(name.clone())
+                }
+                (other, Expression::Identifier { name, .. })
+                    if matches!(op, BinaryOp::Add) && usize_operand(other) =>
                 {
                     Some(name.clone())
                 }
@@ -821,7 +838,8 @@ impl<'ast> CodeGenerator<'ast> {
         bound: &Expression,
     ) {
         // P3.783: `while b + 1 < pairs.len()` is the same usize counter as `while b < len`.
-        let Some(name) = Self::counter_ident_in_usize_compare(maybe_counter) else {
+        // P3.785: `while i + needle.len() <= haystack.len()` is the same class.
+        let Some(name) = self.counter_ident_in_usize_compare(maybe_counter) else {
             return;
         };
         if self.identifier_is_wj_int_i64_binding(&name) {
