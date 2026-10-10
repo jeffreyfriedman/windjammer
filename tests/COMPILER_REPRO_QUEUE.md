@@ -10,8 +10,8 @@
 
 | Gate | Status |
 |------|--------|
-| P3.780 isolate | pending |
-| P3.780 tip-out | pending — `gen/world/streaming_coordinator_test.rs` has `Vec<i64>` |
+| `vec_new_push_into_u32_field_must_not_emit_i64` | ✅ isolate GREEN — `Vec<u32>` and `100_u32` |
+| `vec_new_push_into_u32_field_tip_out_streaming_coordinator` | ❌ tip-out RED — stale `gen/world/streaming_coordinator_test.rs` still has `Vec<i64>` and `100_i64` |
 
 **Root cause layer:** integer width of an empty vec filled by `push`, then
 moved into a `Vec<u32>` field. Distinct from P3.744 (vec literal vs later
