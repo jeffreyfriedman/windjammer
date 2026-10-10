@@ -36,7 +36,7 @@ fn assert_no_borrow_clone_into_owned_string_formal(consumer: &str, callee: &str,
     assert!(
         !consumer.contains(&format!("{call}(&json.clone()"))
             && !consumer.contains(&format!("{call}(& json.clone()")),
-        "must not emit &json.clone() into owned/demoted string formal (WDB-110).\ncallee=\n{callee}\nconsumer=\n{consumer}"
+        "must not emit &json.clone() into owned/demoted string formal ().\ncallee=\n{callee}\nconsumer=\n{consumer}"
     );
 }
 
@@ -90,7 +90,7 @@ fn main() {
         "read-only concat helpers demote to &str. Got:\n{parser}"
     );
     // Owned `String` into demoted `&str` auto-borrows as `&json` (or bare if already
-    // `&str`) — never `&json.clone()` (WDB-110).
+    // `&str`) — never `&json.clone()` ().
     assert!(
         consumer.contains("parse_twice(json)") || consumer.contains("parse_twice(&json)"),
         "demoted &str formal must receive auto-borrow (bare or &json). Got:\n{consumer}"

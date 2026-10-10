@@ -12,7 +12,7 @@
 
 //! FAILING REPRO — `wj build --release` must pass `--release` to `cargo build`.
 //!
-//! Ecosystem `wj-sync` fair benches need release codegen; tip CLI takes `-r` /
+//! Ecosystem `a downstream package` fair benches need release codegen; tip CLI takes `-r` /
 //! `--release` but `cli/build.rs` binds it as `_release` and always runs
 //! `cargo build` (dev). That made debug WJ look ~4× slower than release Rust.
 
@@ -34,7 +34,7 @@ fn wj_build_release_must_invoke_cargo_release() {
     fs::write(
         temp.path().join("wj.toml"),
         r#"[package]
-name = "wj-release-gate"
+name = "release-gate"
 version = "0.1.0"
 edition = "2025"
 "#,
@@ -75,7 +75,7 @@ edition = "2025"
     let combined = format!("{stdout}{stderr}");
     assert!(
         release_bin.exists() || combined.contains("Finished `release`"),
-        "wj build --release must run `cargo build --release` (P3.350).\n\
+        "wj build --release must run `cargo build --release` ().\n\
          expected {release_bin:?} or Finished `release` in output.\n\
          debug_exists={} stdout=\n{stdout}\nstderr=\n{stderr}",
         debug_bin.exists()

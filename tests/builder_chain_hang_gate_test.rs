@@ -1,7 +1,7 @@
-//! P0: long consuming builder chains must not hang the compiler (scenario_presets.wj).
+//! P0: long consuming builder chains must not hang the compiler.
 //!
 //! Root cause: `infer_expression_type` on MethodCall re-inferred the receiver
-//! three times per link (~3^depth). Depth ~32 in scenario_presets hung codegen.
+//! three times per link (~3^depth). Depth ~32 in a long builder chain hung codegen.
 //! Fixture uses a ~32-call chain; budget 15s.
 
 use std::path::PathBuf;
@@ -9,12 +9,6 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 fn wj_bin() -> PathBuf {
-    // Prefer freshly built tip used in this session.
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../windjammer-game/.cargo-target-wj/release/wj");
-    if tip.is_file() {
-        return tip;
-    }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj")
 }
 
@@ -77,7 +71,7 @@ fn consuming_builder_chain_fixture_must_transpile_under_15s() {
                     let _ = child.kill();
                     let _ = child.wait();
                     panic!(
-                        "HANG: builder-chain fixture exceeded {:?} (scenario_presets class)",
+                        "HANG: builder-chain fixture exceeded {:?} (long builder chain class)",
                         deadline
                     );
                 }
