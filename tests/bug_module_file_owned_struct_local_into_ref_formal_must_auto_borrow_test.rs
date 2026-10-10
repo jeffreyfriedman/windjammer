@@ -10,12 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! DB-149: owned struct local into demoted `&T` formal must auto-borrow at call site.
 //!
-//! DbProject CQ-C5: after tip-sync of
 //! `observability_otlp_http_post_body_trace_complete_ops_cross_signal_search_host_port`,
-//! tip emits `cross_signal_search_host_run(req)` while the formal is
-//! `req: &CrossSignalSearchRequest` → rustc E0308. Product dogfood inserts `&req`.
+//! the compiler emits `cross_signal_search_host_run(req)` while the formal is
 //!
 //! Expected: call site emits `&req` (or formal stays owned). Idiomatic `.wj` has no `&`.
 
@@ -60,7 +57,7 @@ pub fn cap_run() -> u32 {
 }
 "#;
 
-fn wdb149_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("host.wj", HOST);
@@ -69,11 +66,11 @@ fn wdb149_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb149_module_file_owned_struct_local_into_ref_formal_must_auto_borrow() {
-    let test = wdb149_fixture();
+fn module_file_owned_struct_local_into_ref_formal_must_auto_borrow() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-149 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let host_rs = map.get("host.rs").expect("host.rs");
     let cap_rs = map.get("cap.rs").expect("cap.rs");
 
@@ -86,17 +83,17 @@ fn wdb149_module_file_owned_struct_local_into_ref_formal_must_auto_borrow() {
         && cap_rs.contains("search_host_run(req)")
         && !cap_rs.contains("search_host_run(&req)");
 
-    eprintln!("DB-149 host.rs:\n{host_rs}\ncap.rs:\n{cap_rs}");
+    eprintln!("host.rs:\n{host_rs}\ncap.rs:\n{cap_rs}");
     eprintln!("demoted_ref={demoted_ref} bad={bad}");
 
     if bad {
         panic!(
-            "DB-149 RED: demoted &SearchRequest formal must auto-borrow owned local at call site. \
-             Product: complete_ops cross_signal_search_host_run(req) → E0308."
+            "RED: demoted &SearchRequest formal must auto-borrow owned local at call site. \
+             "
         );
     }
 
     test.cargo_check().expect(
-        "DB-149: owned struct local into &T formal must cargo-check (auto-borrow or owned formal).",
+        "owned struct local into &T formal must cargo-check (auto-borrow or owned formal).",
     );
 }

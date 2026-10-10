@@ -10,12 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! DB-153: `a + (b as u32) << shift` must not emit `(a + b) << shift`.
 //!
-//! DbProject CQ-C5: tip codegen of protobuf varint
 //!   `value = value + ((b & 127) as u32) << shift`
 //! emitted `(value + (b & 127) as u32) << shift` (Rust precedence),
-//! breaking multi-byte varints. Product fixed with intermediate `piece`.
 //!
 //! Expected: shift applies to the 7-bit group before addition:
 //!   `value = value + (((b & 127) as u32) << shift)`
@@ -33,14 +30,14 @@ pub fn accumulate(value: u32, b: u8, shift: u32) -> u32 {
 "#;
 
 #[test]
-fn wdb153_shift_applies_to_masked_byte_before_add() {
+fn shift_applies_to_masked_byte_before_add() {
     let mut test = MultiFileTest::new();
     test.add_file("main.wj", SRC);
     let map = test
         .compile()
-        .expect("DB-153 compile should succeed (codegen may still be wrong)");
+        .expect("compile should succeed (codegen may still be wrong)");
     let rs = map.values().next().expect("generated rs");
-    eprintln!("DB-153 generated:\n{rs}");
+    eprintln!("generated:\n{rs}");
 
     let bad = rs.contains("(value +") && rs.contains(") << shift");
     let _good = rs.contains("<< shift")
@@ -50,26 +47,26 @@ fn wdb153_shift_applies_to_masked_byte_before_add() {
     let piece_ok = rs.contains("<< shift") && !bad;
 
     if bad || !piece_ok {
-        // If tip parenthesizes as (value + x) << shift → RED
+        // If the compiler parenthesizes as (value + x) << shift → RED
         if rs.contains("(value +") && rs.contains(") <<") {
             panic!(
-                "DB-153 RED: `value + ((b & 127) as u32) << shift` must not emit `(value + …) << shift`. \
-                 Product: otlp_protobuf_varint_decode (dogfood uses intermediate piece)."
+                "RED: `value + ((b & 127) as u32) << shift` must not emit `(value + …) << shift`. \
+                 "
             );
         }
     }
 
     // Stronger: must not have the bad grouping
     if rs.contains("(value +") && rs.contains(") << shift") {
-        panic!("DB-153 RED: shift grouped with addition accumulator");
+        panic!("RED: shift grouped with addition accumulator");
     }
 
     // Must emit shift as RHS of add (Rust needs parens because WJ binds shift tighter).
     assert!(
         _good || (rs.contains("value +") && rs.contains("<< shift") && !bad),
-        "DB-153: expected `value + (… << shift)`, got:\n{rs}"
+        "expected `value + (… << shift)`, got:\n{rs}"
     );
 
     test.cargo_check()
-        .expect("DB-153: accumulate helper must cargo-check");
+        .expect("accumulate helper must cargo-check");
 }

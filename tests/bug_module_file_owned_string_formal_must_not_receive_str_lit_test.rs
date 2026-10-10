@@ -10,13 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! DB-145: owned `String` formal must not receive bare `&str` literals at call sites.
 //!
-//! DbProject CQ-C5 lib tests (~171 E0308): tip keeps `path: String` (or emits owned)
 //! but test call sites pass `"fixtures/…"` bare literals
-//! (`lsqb_benchmark_port::run_all_from_dir`, `lsqb_scale_from_path`, webhook URLs).
 //!
-//! Inverse of DB-144. Expected: `"lit".to_string()` / `String::from("lit")`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -49,15 +45,15 @@ use crate::bench::run_all_from_dir
 use crate::bench::scale_from_path
 
 pub fn cap_run() -> u32 {
-    run_all_from_dir("fixtures/lsqb/sfexample-projected-fk")
+    run_all_from_dir("fixtures/graph/example")
 }
 
 pub fn cap_scale() -> u32 {
-    scale_from_path("datasets/social-network-sf1-projected-fk")
+    scale_from_path("datasets/example")
 }
 "#;
 
-fn wdb145_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("bench.wj", BENCH);
@@ -66,11 +62,11 @@ fn wdb145_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb145_module_file_owned_string_formal_must_not_receive_str_lit() {
-    let test = wdb145_fixture();
+fn module_file_owned_string_formal_must_not_receive_str_lit() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-145 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let bench_rs = map.get("bench.rs").expect("bench.rs");
     let cap_rs = map.get("cap.rs").expect("cap.rs");
 
@@ -85,17 +81,17 @@ fn wdb145_module_file_owned_string_formal_must_not_receive_str_lit() {
         && !cap_rs.contains(".to_string()")
         && !cap_rs.contains("String::from(");
 
-    eprintln!("DB-145 bench.rs:\n{bench_rs}\ncap.rs:\n{cap_rs}");
+    eprintln!("bench.rs:\n{bench_rs}\ncap.rs:\n{cap_rs}");
     eprintln!("owned_run={owned_run} bad={bad}");
 
     if bad {
         panic!(
-            "DB-145 RED: owned String formal must not receive bare &str lit. \
-             Product: lsqb_query_test / webhook / alert pipeline (~171 String←&str)."
+            "RED: owned String formal must not receive bare &str lit. \
+             "
         );
     }
 
     test.cargo_check().expect(
-        "DB-145: owned String call sites must cargo-check.",
+        "owned String call sites must cargo-check.",
     );
 }

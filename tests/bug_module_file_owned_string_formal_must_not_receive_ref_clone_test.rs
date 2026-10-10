@@ -10,20 +10,15 @@
     feature = "integration_tests",
 ))]
 
-//! DB-173: owned `String` formal must not receive `&local.clone()` / `&String`.
 //!
-//! Product census (~11× `String`←`&String`), e.g. observability reaper:
 //!   `job_store_claim_next(…, &worker_id.clone(), …)` while `worker_id: String`
 //! → E0308 expected `String`, found `&String`.
 //!
-//! Opposite of DB-170 (`&str`.clone() stays `&str`). Here tip over-borrows an
-//! owned clone. Signature-driven. Prefer tip greens over dogfood.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const MOD: &str = r#"
 pub mod claim
@@ -40,7 +35,6 @@ pub struct ClaimResult {
     pub ok: bool,
 }
 
-/// Owned worker_id consumer (product job_store_claim_next stores the id).
 pub fn claim_next(store: Store, worker_id: string, tick: int) -> (Store, ClaimResult) {
     (store, ClaimResult { worker_id: worker_id, ok: tick >= 0 })
 }
@@ -56,14 +50,13 @@ use crate::claim::claim_next
 use crate::claim::heartbeat
 
 pub fn reaper_tick(store: Store, worker_id: string, tick: int) -> bool {
-    // Product: claim then heartbeat reuses worker_id — must clone owned, never &worker_id.clone()
     let pair = claim_next(store, worker_id, tick)
     let next = pair.0
     heartbeat(next, worker_id, tick)
 }
 "#;
 
-fn wdb173_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("claim.wj", CLAIM);
@@ -72,15 +65,15 @@ fn wdb173_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb173_module_file_owned_string_formal_must_not_receive_ref_clone() {
-    let test = wdb173_fixture();
+fn module_file_owned_string_formal_must_not_receive_ref_clone() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-173 multipass compile should succeed");
+        .expect("multipass compile should succeed");
     let claim_rs = map.get("claim.rs").expect("claim.rs");
     let host_rs = map.get("host.rs").expect("host.rs");
 
-    eprintln!("DB-173 claim.rs:\n{claim_rs}\nhost.rs:\n{host_rs}");
+    eprintln!("claim.rs:\n{claim_rs}\nhost.rs:\n{host_rs}");
 
     let owned_formal = {
         let i = claim_rs.find("fn claim_next").unwrap_or(0);
@@ -96,53 +89,21 @@ fn wdb173_module_file_owned_string_formal_must_not_receive_ref_clone() {
 
     if owned_formal && bad_ref_clone {
         panic!(
-            "DB-173 RED: owned String formal received &worker_id / &worker_id.clone(). \
-             Product: job_store_claim_next(…, &worker_id.clone(), …). Got:\n{host_rs}\n{claim_rs}"
+            "RED: owned String formal received &worker_id / &worker_id.clone(). \
+             Got:\n{host_rs}\n{claim_rs}"
         );
     }
 
     if owned_formal {
         assert!(
             !bad_ref_clone,
-            "DB-173: owned String must not receive &String. Got:\n{host_rs}"
+            "owned String must not receive &String. Got:\n{host_rs}"
         );
         assert!(
             good || host_rs.contains("claim_next(store, worker_id")
                 || host_rs.contains("claim_next(store.clone(), worker_id"),
-            "DB-173: expected owned worker_id / worker_id.clone() at call site. Got:\n{host_rs}"
+            "expected owned worker_id / worker_id.clone() at call site. Got:\n{host_rs}"
         );
     }
 }
 
-fn wdb173_obs_gen_root() -> PathBuf {
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/obs_tip_out");
-    if tip.join("observability_job_reaper_host_port.rs").exists() {
-        return tip;
-    }
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("db-project/crates/db-layers/gen/observability")
-}
-
-#[test]
-fn wdb173_product_reaper_must_not_ref_clone_worker_id_into_owned() {
-    let root = wdb173_obs_gen_root();
-    let claim = root.join("observability_job_store_claim_port.rs");
-    let host = root.join("observability_job_reaper_host_port.rs");
-    if !claim.exists() || !host.exists() {
-        eprintln!("DB-173: skip product gate — claim/host missing");
-        return;
-    }
-    let claim_text = std::fs::read_to_string(&claim).expect("claim");
-    let host_text = std::fs::read_to_string(&host).expect("host");
-    let owned = claim_text.contains("worker_id: String");
-    let bad = owned
-        && (host_text.contains("&worker_id.clone()")
-            || host_text.contains("job_store_claim_next(&store, snapshot, &worker_id"));
-    eprintln!("DB-173 product owned_worker_id={} bad_ref={}", owned, bad);
-    assert!(
-        !bad,
-        "DB-173 RED: product reaper still passes &worker_id.clone() into owned String formal."
-    );
-}

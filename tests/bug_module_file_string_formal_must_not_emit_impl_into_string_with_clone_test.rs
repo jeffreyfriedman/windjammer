@@ -10,11 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! DB-157: multipass must not emit `sql: impl Into<String>` then `.clone()` it.
 //!
-//! Product cold gen (2026-09-11): `pg_wire_parse(session, name: String, sql: impl Into<String>)`
 //! body does `sql.clone().into()` → E0599 (clone not on impl Into<String>).
-//! Windjammer source uses `sql: string` — tip should emit `String` (or `&str` + to_string),
+//! Windjammer source uses `sql: string` — the compiler should emit `String` (or `&str` + to_string),
 //! never bare `impl Into<String>` with clone reuse.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -51,7 +49,7 @@ pub fn wire_parse_reuse(session: WireSession, name: string, sql: string) -> Wire
 }
 "#;
 
-fn wdb157_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("session.wj", SESSION);
@@ -60,22 +58,22 @@ fn wdb157_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb157_module_file_string_formal_must_not_emit_impl_into_string_with_clone() {
-    let test = wdb157_fixture();
+fn module_file_string_formal_must_not_emit_impl_into_string_with_clone() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-157 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let parse_rs = map.get("parse.rs").expect("parse.rs");
 
     let into_formal = parse_rs.contains("impl Into<String>") || parse_rs.contains("impl Into<string>");
     let clone_into = parse_rs.contains("sql.clone()") && parse_rs.contains("Into<String>");
 
     if into_formal || clone_into {
-        eprintln!("DB-157 RED parse.rs:\n{parse_rs}");
+        eprintln!("RED parse.rs:\n{parse_rs}");
     }
 
     assert!(
         !into_formal,
-        "DB-157 RED: string formal must not emit `impl Into<String>`. Product: pg_wire_parse sql formal."
+        "RED: string formal must not emit `impl Into<String>`. "
     );
 }
