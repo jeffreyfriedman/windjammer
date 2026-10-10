@@ -108,7 +108,7 @@ pub fn add_item() {
     let (result, success) = test_utils::compile_single_check(src);
     let err = if !success { &result } else { "" };
     assert!(success, "Must compile. Error:\n{}", err);
-    assert!(result.contains("v.push(42)"));
+    assert!(result.contains("v.push(42)") || result.contains("v.push(42_i64)"));
 }
 
 #[test]

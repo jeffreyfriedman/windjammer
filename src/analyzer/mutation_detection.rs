@@ -614,8 +614,12 @@ impl<'ast> Analyzer<'ast> {
                     if receiver_base.is_some() {
                         return false;
                     }
+                    // Receiver type unknown: fail closed (assume mutation) unless the signature
+                    // registry shows every method of this name takes a read-only receiver.
                     if param_type_hint.is_none() {
-                        return true;
+                        return !super::stdlib_method_traits::is_known_readonly_qualified(
+                            method, None, registry,
+                        );
                     }
                     return false;
                 }

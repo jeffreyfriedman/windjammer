@@ -684,9 +684,6 @@ impl<'ast> CodeGenerator<'ast> {
                                     if let Some(vn) = var_name {
                                         self.local_var_types.insert(vn.to_string(), Type::Int32);
                                         self.codegen_i32_binding_names.insert(vn.to_string());
-                                        if self.function_returns_i32_for_loop_scan() {
-                                            self.usize_variables.remove(vn);
-                                        }
                                     }
                                 }
                             }
@@ -824,10 +821,6 @@ impl<'ast> CodeGenerator<'ast> {
                 // DB-308: `-> u32` still wins over usize for CLI/index loops.
                 let len_while_usize_counter =
                     var_name.is_some_and(|n| self.usize_variables.contains(n));
-                let i32_return_scan_counter = mutable
-                    && Self::mut_let_rhs_is_return_width_counter(value)
-                    && self.function_returns_i32_for_loop_scan()
-                    && !len_while_usize_counter;
                 let u32_while_peer_counter = mutable
                     && Self::mut_let_rhs_is_return_width_counter(value)
                     && var_name.is_some_and(|n| {
@@ -844,15 +837,10 @@ impl<'ast> CodeGenerator<'ast> {
                         || self.assignment_int_target_type.as_ref().is_some_and(|t| {
                             matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
                         }));
-                if len_while_usize_counter && !u32_return_scan_counter && !i32_return_scan_counter {
+                if len_while_usize_counter && !u32_return_scan_counter {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }
-                if i32_return_scan_counter {
-                    self.assignment_int_target_type = Some(Type::Int32);
-                    if let Some(vn) = var_name {
-                        self.usize_variables.remove(vn);
-                    }
-                } else if u32_return_scan_counter {
+                if u32_return_scan_counter {
                     // DB-308: return/later u32 peer wins over index-driven usize for `let mut i = 0`.
                     self.assignment_int_target_type = Some(Type::Uint);
                     if let Some(vn) = var_name {
@@ -971,9 +959,6 @@ impl<'ast> CodeGenerator<'ast> {
                 // This is safe because String auto-borrows to &str when needed.
                 let mut value_str = self.generate_expression(value);
                 self.assignment_int_target_type = prev_assign_int;
-                if i32_return_scan_counter && value_str.ends_with("_usize") {
-                    value_str = value_str.replace("_usize", "_i32");
-                }
                 if u32_return_scan_counter && value_str.ends_with("_usize") {
                     value_str = value_str.replace("_usize", "_u32");
                 }

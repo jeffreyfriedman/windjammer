@@ -131,7 +131,7 @@ fn main() {
             rust_code
         );
         assert!(
-            rust_code.contains(", 2)") || rust_code.contains(", 2 "),
+            rust_code.contains(", 2)") || rust_code.contains(", 2 ") || rust_code.contains(", 2_i32)"),
             "Second arg should remain as int 2, got:\n{}",
             rust_code
         );

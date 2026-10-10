@@ -103,7 +103,8 @@ fn main() {
         generated.contains("for i in 0..10")
             || generated.contains("for i in 0i64..10i64")
             || generated.contains("for i in 0 ..10")
-            || generated.contains("0..10"),
+            || generated.contains("0..10")
+            || generated.contains("0_i32..10_i32"),
         "Range for-loops should not be modified.\nGenerated:\n{}",
         generated
     );

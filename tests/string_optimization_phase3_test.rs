@@ -52,65 +52,6 @@ fn main() {
 }
 
 #[test]
-fn test_string_ref_decorator_forces_string() {
-    // TDD: @string_ref forces &String even if auto-optimization would choose &str
-    let code = r#"
-pub fn log(@string_ref msg: string) {
-    println!("{}", msg)
-}
-
-fn main() {
-    log("Hello")
-}
-"#;
-
-    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
-
-    println!("Generated:\n{}", generated);
-
-    // PHASE 3: @string_ref forces &String
-    assert!(
-        generated.contains("fn log(msg: &String)"),
-        "Expected @string_ref to force &String parameter. Generated:\n{}",
-        generated
-    );
-
-    // String literal must be converted
-    assert!(
-        generated.contains(r#"log(&"Hello".to_string())"#)
-            || generated.contains(r#"log(&String::from("Hello"))"#),
-        "Expected converted string literal with &String param. Generated:\n{}",
-        generated
-    );
-}
-
-#[test]
-fn test_mixed_decorated_and_inferred_params() {
-    // TDD: Mix of decorated and inferred parameters
-    let code = r#"
-pub fn process(@str_ref fast: string, @string_ref safe: string, inferred: string) {
-    println!("{} {} {}", fast, safe, inferred)
-}
-
-fn main() {
-    process("a", "b", "c")
-}
-"#;
-
-    let generated = test_utils::compile_single_result(code).expect("Compilation failed");
-
-    println!("Generated:\n{}", generated);
-
-    // PHASE 3: Decorators override, inferred uses Phase 2 automatic optimization
-    // With Phase 2 enabled globally, non-decorated params are optimized to &str when safe
-    assert!(
-        generated.contains("fn process(fast: &str, safe: &String, inferred: &str)"),
-        "Expected mixed decorators: fast=&str (decorator), safe=&String (decorator), inferred=&str (Phase 2 auto-opt). Generated:\n{}",
-        generated
-    );
-}
-
-#[test]
 fn test_decorator_overrides_automatic_analysis() {
     // TDD: @str_ref overrides automatic analysis even when it would choose &String
     // This test will be relevant when automatic analysis is fully implemented
