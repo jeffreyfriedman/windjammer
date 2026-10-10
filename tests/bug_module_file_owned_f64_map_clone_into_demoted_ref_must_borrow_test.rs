@@ -22,7 +22,7 @@
 mod test_utils;
 
 const FIXTURE: &str = include_str!(
-    "fixtures/library_multipass/wdb223_owned_f64_map_clone_into_demoted_ref_must_borrow.wj"
+    "fixtures/library_multipass/owned_f64_map_clone_into_demoted_ref_must_borrow.wj"
 );
 
 #[test]

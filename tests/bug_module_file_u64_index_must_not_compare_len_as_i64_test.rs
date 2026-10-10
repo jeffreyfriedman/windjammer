@@ -16,7 +16,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb215_u64_index_len_compare.wj");
+    include_str!("fixtures/library_multipass/u64_index_len_compare.wj");
 
 #[test]
 fn codegen_u64_index_must_not_compare_len_as_i64() {

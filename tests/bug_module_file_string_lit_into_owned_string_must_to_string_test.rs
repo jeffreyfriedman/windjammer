@@ -17,7 +17,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb221_string_lit_into_owned_string_must_to_string.wj");
+    include_str!("fixtures/library_multipass/string_lit_into_owned_string_must_to_string.wj");
 
 #[test]
 fn codegen_string_lit_into_owned_must_to_string() {

@@ -17,7 +17,7 @@
 mod test_utils;
 
 const FIXTURE: &str = include_str!(
-    "fixtures/library_multipass/wdb225_string_lit_into_demoted_str_must_not_emit_string_from.wj"
+    "fixtures/library_multipass/string_lit_into_demoted_str_must_not_emit_string_from.wj"
 );
 
 #[test]

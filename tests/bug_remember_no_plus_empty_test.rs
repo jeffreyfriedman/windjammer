@@ -22,7 +22,7 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 const SOURCE: &str =
-    include_str!("fixtures/library_multipass/seed_overlay_remember_no_plus_empty.wj");
+    include_str!("fixtures/library_multipass/remember_no_plus_empty.wj");
 
 fn assert_no_empty_concat_temps(rs: &str) {
     assert!(

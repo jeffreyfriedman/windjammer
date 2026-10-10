@@ -24,7 +24,7 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 const SOURCE: &str =
-    include_str!("fixtures/library_multipass/downstreamapp_clean_account_from_row.wj");
+    include_str!("fixtures/library_multipass/ledger_clean_account_from_row.wj");
 
 fn assert_clean_ledger_emit(rs: &str) {
     assert!(

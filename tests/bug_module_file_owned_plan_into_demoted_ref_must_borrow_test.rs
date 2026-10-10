@@ -16,7 +16,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb218_owned_plan_into_demoted_ref_must_borrow.wj");
+    include_str!("fixtures/library_multipass/owned_plan_into_demoted_ref_must_borrow.wj");
 
 #[test]
 fn codegen_owned_plan_into_demoted_ref_must_borrow() {

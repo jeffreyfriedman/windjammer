@@ -17,7 +17,7 @@
 mod test_utils;
 
 const FIXTURE: &str =
-    include_str!("fixtures/library_multipass/wdb235_mut_ref_csr_into_owned_must_clone.wj");
+    include_str!("fixtures/library_multipass/mut_ref_csr_into_owned_must_clone_variant.wj");
 
 #[test]
 fn codegen_mut_ref_csr_into_owned_distances_to_map_must_clone() {
