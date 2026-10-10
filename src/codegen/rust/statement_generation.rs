@@ -1999,8 +1999,10 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         if let Some(ty) = self.infer_expression_type(expr) {
             if let Type::Option(inner) = ty {
+                // Only `Option<&T>` may be copied. `Option<&mut T>` must stay a place:
+                // `.copied()` would hand out a temporary and silently drop every mutation.
                 let pointee = match inner.as_ref() {
-                    Type::Reference(r) | Type::MutableReference(r) => Some(r.as_ref()),
+                    Type::Reference(r) => Some(r.as_ref()),
                     _ => None,
                 };
                 if let Some(pointee) = pointee {
