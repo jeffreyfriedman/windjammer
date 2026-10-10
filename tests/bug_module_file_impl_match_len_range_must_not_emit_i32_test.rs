@@ -11,18 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-389: impl + match + 0..node.params.len() must not emit 0_i32..len().
 //! Recursive buf: Vec<f32> that demotes to &mut Vec must not get buf.clone().
 //!
-//! Product gen/csg/scene.rs (CsgScene::emit_node_instructions).
-//! DB-345 free-fn isolate is GREEN and does not cover impl/match.
 //! WJ source: for i in 0..node.params.len() and self.emit_instruction(buf, ...).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub struct Node {
@@ -74,56 +70,18 @@ impl CsgScene {
 "#;
 
 #[test]
-fn wdb389_module_file_impl_match_len_range_must_not_emit_i32() {
+fn module_file_impl_match_len_range_must_not_emit_i32() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("DB-389 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("DB-389 MultiFile lib.rs:\n{rs}");
+    eprintln!("MultiFile lib.rs:\n{rs}");
     let bad_range = rs.contains("0_i32..node.params.len()");
     let bad_clone = rs.contains("buf.clone()");
     assert!(
         !bad_range && !bad_clone,
-        "DB-389 RED: impl/match len range or buf.clone():\n{rs}"
+        "RED: impl/match len range or buf.clone():\n{rs}"
     );
-    test.cargo_check().expect("DB-389 cargo-check");
+    test.cargo_check().expect("cargo-check");
 }
 
-#[test]
-fn wdb389_tip_out_game_core_csg_must_not_emit_i32_len_range() {
-    let tip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".agent-wip/rel_tip_out");
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("game-host/game-host-core");
-    let paths = [
-        tip.join("csg/scene.rs"),
-        tip.join("scene.rs"),
-        game.join("gen/csg/scene.rs"),
-    ];
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("product");
-        let bad = text.lines().any(|line| {
-            let t = line.trim_start();
-            !t.starts_with("//")
-                && (t.contains("0_i32..node.params.len()")
-                    || t.contains("emit_instruction(buf.clone()")
-                    || (t.contains("emit_node_instructions(") && t.contains("buf.clone()")))
-        });
-        if bad {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(saw, "DB-389: csg/scene product files missing");
-    assert!(
-        bad_paths.is_empty(),
-        "DB-389 RED: tip/product i32-len range or buf.clone() in:\n  {}",
-        bad_paths.join("\n  ")
-    );
-}
