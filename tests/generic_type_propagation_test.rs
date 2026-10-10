@@ -12,7 +12,6 @@
 
 //! TDD: Generic type parameter propagation in Rust codegen
 //!
-//! Bug: E0425 - "cannot find type 'T' in this scope" (19 errors in windjammer-game)
 //! Root cause: Codegen doesn't preserve generic type parameters when generating Rust
 //!
 //! Philosophy: "Compiler does hard work" - type parameter propagation is mechanical

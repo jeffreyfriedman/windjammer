@@ -14,13 +14,11 @@
 //!
 //! Runtime (`windjammer_runtime::db::Row`) already uses `&self`. When the std stub
 //! took `self` by value, multipass treated each `row.get_string(...)` as a move and
-//! dogfood adapters hit WJ0007 on the second column read (LedgerKit postgres_*).
 //!
 //! Desired:
 //! 1. Std stubs declare `&self` for `get_string` / `get_int` / `*_at`.
 //! 2. Multiple column reads from one `Row` binding must `wj build --check`.
 //!
-//! Language-only; no product/repo names.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

@@ -12,7 +12,6 @@
 
 //! Return Optimization: Preserve explicit return in if-without-else
 //!
-//! Bug discovered via dogfooding windjammer-game:
 //! The return optimization was converting `return value` to implicit `value`
 //! inside if/if-let blocks without else branches, creating invalid Rust code.
 //!
@@ -161,8 +160,7 @@ pub fn early_return(x: i32) -> i32 {
 
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_dogfooding_animation_frame_getter() {
-    // TDD RED: Real-world case from windjammer-game AnimationClip
+fn test_animation_frame_getter() {
     let source = r#"
 pub struct Frame {
     pub index: usize,

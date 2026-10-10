@@ -10,7 +10,6 @@
     feature = "codegen_tests",
 ))]
 
-//! Gate — classic Vec field swap behind `&mut self` must not clone (WDB-088).
 //!
 //! Pattern (PageRank double-buffer):
 //! ```text

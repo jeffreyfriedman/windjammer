@@ -12,7 +12,6 @@
 
 // TDD: E0596 from ownership inference — `&self` generated where Rust needs `&mut self`.
 //
-// Patterns (dogfooding windjammer-game):
 // 1. `for e in self.items { e.field = ... }` — loop variable mutations require `&mut self` iterator.
 // 2. `self.inner.m()` — resolve `Inner::m` in the registry, not an unrelated `m` on the outer impl.
 

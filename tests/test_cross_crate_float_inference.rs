@@ -12,7 +12,6 @@
 
 //! TDD Test: Cross-crate type inference for external struct fields
 //!
-//! Problem: When compiling game.wj that uses windjammer-game-core (external crate),
 //! struct field types like Vec3.x: f32 aren't available, breaking float inference.
 //!
 //! Solution: Load external crate metadata (metadata.json) when compiling with dependencies.
