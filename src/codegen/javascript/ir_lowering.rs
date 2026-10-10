@@ -3,7 +3,6 @@
 use crate::ir::target_encodings::{encode_call_argument, Target};
 use crate::ir::{
     analyze_and_lower, resolve_call_arg_actual_type, safety_type_from_signature_param, IrContext,
-    SafetyType,
 };
 use crate::parser::Program;
 

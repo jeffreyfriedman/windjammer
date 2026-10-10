@@ -188,7 +188,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     fn refreshed_call_site_sig_for_arg<'a>(
         &self,
-        registry: &'a SignatureRegistry,
+        _registry: &'a SignatureRegistry,
         callee_name: &str,
         arg_index: usize,
         sig: &crate::analyzer::FunctionSignature,
@@ -916,7 +916,7 @@ impl<'ast> CodeGenerator<'ast> {
             ])
         }
         .or_else(|| registry.lookup_method(callee_name).cloned());
-        let sig_for_owned_literal = sig.clone();
+        let _sig_for_owned_literal = sig.clone();
         // Upgrade stale owned WJ `string` formals to defining-module `&str` emission.
         // Never consult bare method-name keys for type-qualified calls (`App::record_resource`)
         // — homonyms can replace the whole signature with unrelated Borrowed formals.
@@ -1007,7 +1007,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ) {
                     let prefer_method = sig.as_ref().is_none_or(|local| {
                         let local_idx = local.arg_param_index(arg_index);
-                        let method_idx = method_sig.arg_param_index(arg_index);
+                        let _method_idx = method_sig.arg_param_index(arg_index);
                         // Keep local owned / Copy-aggregate contracts over stale method Ref wraps
                         // (regression-060 `other: Lsn` must not become `&through` via method_ref prefer).
                         if crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
@@ -9304,7 +9304,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     .and_then(|g| g.get_signature(callee))
                             })
                         {
-                            let pidx = sig.arg_param_index(idx);
+                            let _pidx = sig.arg_param_index(idx);
                             if self.local_should_move_into_owned_text_formal(name, sig, idx) {
                                 return arg_str.to_string();
                             }
@@ -9388,7 +9388,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     .and_then(|g| g.get_signature(callee))
                             })
                             .is_some_and(|sig| {
-                                let pidx = sig.arg_param_index(idx);
+                                let _pidx = sig.arg_param_index(idx);
                                 self.local_should_move_into_owned_text_formal(name, sig, idx)
                             });
                     if self.borrowed_iterator_vars.contains(name) {

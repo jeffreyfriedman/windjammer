@@ -179,7 +179,7 @@ impl<'ast> Analyzer<'ast> {
         &self,
         func: &FunctionDecl<'ast>,
         modifies_fields: bool,
-        returns_self: bool,
+        _returns_self: bool,
         body_moves_fields: bool,
         consumes_self: bool,
         calls_mutating: bool,

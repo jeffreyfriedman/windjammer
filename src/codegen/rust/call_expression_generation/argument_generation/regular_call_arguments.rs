@@ -796,7 +796,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             coerced = name.to_string();
                         }
                     }
-                    if let Expression::Identifier { name, .. } = arg {
+                    if let Expression::Identifier { name: _, .. } = arg {
                         let mut tmp = coerced.clone();
                         if crate::codegen::rust::string_utilities::rewrite_borrowed_str_clone_to_to_string(
                             &mut tmp,
