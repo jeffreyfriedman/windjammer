@@ -152,7 +152,14 @@ pub fn shared_target_dir() -> PathBuf {
 }
 
 /// Convenience: verify target path (creates dir when possible).
+///
+/// The first call in a process also reclaims space when the volume is low, so long test
+/// runs cannot silently fill the disk.
 pub fn verify_target_dir() -> PathBuf {
+    static GUARD: std::sync::Once = std::sync::Once::new();
+    GUARD.call_once(|| {
+        let _ = prune_if_low_disk();
+    });
     target_dir(TargetKind::Verify)
 }
 
@@ -188,8 +195,8 @@ pub fn status() -> CacheStatus {
     let shared = target_dir(TargetKind::Shared);
     let verify = target_dir(TargetKind::Verify);
     let expected_prefix = root.join("cargo-target");
-    let using_local = use_local_target()
-        || shared.ends_with("target") && !shared.starts_with(&expected_prefix);
+    let using_local =
+        use_local_target() || shared.ends_with("target") && !shared.starts_with(&expected_prefix);
     CacheStatus {
         free_bytes: free_disk_bytes(&shared),
         shared_bytes: dir_size(&shared),
@@ -230,11 +237,7 @@ pub fn free_disk_bytes(path: &Path) -> Option<u64> {
 
 #[cfg(unix)]
 fn free_disk_bytes_unix(path: &Path) -> Option<u64> {
-    let output = Command::new("df")
-        .args(["-Pk"])
-        .arg(path)
-        .output()
-        .ok()?;
+    let output = Command::new("df").args(["-Pk"]).arg(path).output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -251,10 +254,7 @@ fn free_disk_bytes_windows(path: &Path) -> Option<u64> {
         .args([
             "-NoProfile",
             "-Command",
-            &format!(
-                "(Get-Item -LiteralPath '{}').PSDrive.Free",
-                path.display()
-            ),
+            &format!("(Get-Item -LiteralPath '{}').PSDrive.Free", path.display()),
         ])
         .output()
         .ok()?;
@@ -323,6 +323,25 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
         }
     }
 
+    // The verify tree is ephemeral scratch: always drop it when large or when reclaiming.
+    if verify.exists() && (do_aggressive || dir_size(&verify) > VERIFY_MAX_BYTES) {
+        let size = dir_size(&verify);
+        if fs::remove_dir_all(&verify).is_ok() {
+            report.freed_bytes += size;
+            report.removed_paths.push(verify.clone());
+        }
+    }
+
+    report.freed_bytes += prune_stale_temp_scratch(
+        &std::env::temp_dir(),
+        if do_aggressive {
+            Duration::from_secs(30 * 60)
+        } else {
+            TEMP_SCRATCH_MAX_AGE
+        },
+        &mut report,
+    );
+
     if do_aggressive && low_disk {
         // Prefer keeping release (test suite / dogfood default); drop debug incremental already done.
         report.messages.push(
@@ -346,6 +365,44 @@ pub fn prune_if_low_disk() -> PruneReport {
     } else {
         PruneReport::default()
     }
+}
+
+/// Scratch dirs that tests/tools create under the OS temp dir (`wj_*`, `.wj_*`).
+const TEMP_SCRATCH_PREFIXES: [&str; 2] = ["wj_", ".wj_"];
+const TEMP_SCRATCH_MAX_AGE: Duration = Duration::from_secs(6 * 60 * 60);
+/// Drop the verify target when it grows past this size.
+const VERIFY_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Remove stale `wj_*` scratch dirs from `temp_root` that were not modified within `max_age`.
+fn prune_stale_temp_scratch(temp_root: &Path, max_age: Duration, report: &mut PruneReport) -> u64 {
+    let mut freed = 0u64;
+    let now = SystemTime::now();
+    let Ok(entries) = fs::read_dir(temp_root) else {
+        return 0;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !path.is_dir() || !TEMP_SCRATCH_PREFIXES.iter().any(|p| name.starts_with(p)) {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|mtime| now.duration_since(mtime).ok())
+            .map(|age| age > max_age)
+            .unwrap_or(false);
+        if stale {
+            let size = dir_size(&path);
+            if fs::remove_dir_all(&path).is_ok() {
+                freed += size;
+                report.removed_paths.push(path);
+            }
+        }
+    }
+    freed
 }
 
 fn prune_old_incremental(root: &Path, max_age: Duration, report: &mut PruneReport) -> u64 {
@@ -476,6 +533,31 @@ mod tests {
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn temp_scratch_sweep_removes_only_stale_prefixed_dirs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stale = tmp.path().join("wj_old_scratch");
+        let other = tmp.path().join("unrelated_dir");
+        fs::create_dir_all(&stale).unwrap();
+        fs::create_dir_all(&other).unwrap();
+        fs::write(stale.join("f"), vec![0u8; 1024]).unwrap();
+
+        let mut report = PruneReport::default();
+        // Nothing is older than an hour yet.
+        assert_eq!(
+            prune_stale_temp_scratch(tmp.path(), Duration::from_secs(3600), &mut report),
+            0
+        );
+        assert!(stale.exists());
+
+        // Zero max age makes every prefixed dir stale; unrelated dirs are never touched.
+        std::thread::sleep(Duration::from_millis(20));
+        let freed = prune_stale_temp_scratch(tmp.path(), Duration::from_millis(1), &mut report);
+        assert!(freed >= 1024);
+        assert!(!stale.exists());
+        assert!(other.exists());
+    }
 
     #[test]
     fn target_dir_respects_root_override() {
