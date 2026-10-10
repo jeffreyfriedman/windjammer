@@ -12,10 +12,6 @@
 ))]
 
 //! FAILING REPRO — library multipass strips `move` from `spawn(move \|\| …)`.
-//!
-//! Isolate `compile_single` may preserve `move` (P3.295 isolate GREEN), but
-//! `wj build --library --module-file` for `wj-sync` Pool emits `spawn(|| …)` → E0373.
-
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
