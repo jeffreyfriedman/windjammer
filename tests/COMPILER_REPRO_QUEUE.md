@@ -312,7 +312,7 @@ A small cross-module isolate keeps every formal owned (`String` / `Vec`) and pas
 |------|--------|
 | `mixed_str_and_owned_vec_call_must_borrow_strings_only` | ✅ isolate GREEN — formals stay owned |
 | `replace_demoted_str_beside_owned_vec_must_borrow_strings_only` | ✅ isolate GREEN — `table_html(&account_code, &as_of, lines)` after `lines.len() == 0` |
-| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` (reconfirmed on 19:34 `wj`, same two E0308s) |
+| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` (reconfirmed on 22:00 `wj`, same two E0308s. A 3-file Chart-shaped module (`general_ledger_table_html` + `aging_report_html`) emits `&account_code, &as_of, lines` and `aging_report_html(buckets, parties, &fallback, title, &kind)` — GREEN. The 43-file `make build` is still the two E0308s) |
 
 **Do not steal:** compiler `src/` (other agent).
 
