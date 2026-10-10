@@ -14,7 +14,7 @@
 //!
 //! Engine tip-out (`gen/plugin/core.rs` `record_resource`, `gen/scripting/live_reload.rs`
 //! `add_dependency`) is the dominant E0308 class: expected `String`, found `&str`
-//! (46 of 272 mismatches on game-host-core cargo, 2026-10-07).
+//! (46 of 272 mismatches on a downstream game project cargo, 2026-10-07).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -56,7 +56,7 @@ pub fn boot(ctx: App) {
     );
     let map = test
         .compile()
-        .expect("P3.731: owned string formal fixture must transpile");
+        .expect("owned string formal fixture must transpile");
     let body = map
         .get("boot.rs")
         .or_else(|| map.get("boot/mod.rs"))

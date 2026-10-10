@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! `std::sync::atomic` AtomicI64 must link for wj-sync Counter hot path.
+//! `std::sync::atomic` AtomicI64 must link for a downstream package Counter hot path.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

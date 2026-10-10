@@ -13,7 +13,7 @@
 
 //! FAILING REPRO — `std::thread::spawn(move \|\| …)` with `Arc` capture still wraps `&(move \|\|…)`.
 //!
-//! Ecosystem `wj-sync` Pool shared-inbox workers need:
+//! Ecosystem `a downstream package` Pool shared-inbox workers need:
 //! ```ignore
 //! let inbox = Arc::new(Mutex::new(…))
 //! std::thread::spawn(move || { inbox.lock()… })

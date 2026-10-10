@@ -12,7 +12,7 @@
 ))]
 
 //! FAILING REPRO — nested `concat2` / overlay_row helpers must keep owned
-//! string formals at call sites (DownstreamApp `domain/string_concat.wj`).
+//! string formals at call sites (Ledger `domain/string_concat.wj`).
 //!
 //! Product tip api-check (2026-09-13/14): ~17× WJ0003 on string_concat
 //! "arguments to this function are incorrect" / "consider removing the borrow".
@@ -40,7 +40,7 @@ fn assert_no_over_borrow_into_concat2(rs: &str) {
         || rs.contains("append_overlay_row(&b");
     assert!(
         !over_borrow,
-        "RED P3.264: nested concat/overlay helpers must not over-borrow owned formals. Generated:\n{rs}"
+        "RED nested concat/overlay helpers must not over-borrow owned formals. Generated:\n{rs}"
     );
 }
 
@@ -50,7 +50,7 @@ fn string_concat_nested_owned_must_not_over_borrow() {
     assert_no_over_borrow_into_concat2(&rs);
     assert!(
         ok,
-        "RED P3.264: nested concat2/overlay_row must cargo-check. Generated:\n{rs}"
+        "RED nested concat2/overlay_row must cargo-check. Generated:\n{rs}"
     );
 }
 

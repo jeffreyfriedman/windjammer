@@ -46,57 +46,12 @@ pub fn make() -> Batch {
     );
     let map = test
         .compile()
-        .expect("P3.780: Vec<u32> push fixture must transpile");
+        .expect("Vec<u32> push fixture must transpile");
     let body = map
         .get("mod.rs")
         .unwrap_or_else(|| panic!("mod.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
     assert!(
         !bad_i64_vec(body),
         "push into a Vec<u32> field must not emit i64; got:\n{body}"
-    );
-}
-
-fn search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    let mut walked = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..6 {
-        roots.push(walked.clone());
-        if let Some(parent) = walked.parent() {
-            walked = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-    roots
-}
-
-#[test]
-fn vec_new_push_into_u32_field_tip_out_streaming_coordinator() {
-    let mut paths = Vec::new();
-    for dir in search_roots() {
-        paths.push(dir.join(
-            "game-host/game-host-core/gen/world/streaming_coordinator_test.rs",
-        ));
-    }
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("streaming_coordinator_test.rs");
-        if bad_i64_vec(&text) {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(
-        saw,
-        "P3.780: streaming_coordinator_test.rs product file missing"
-    );
-    assert!(
-        bad_paths.is_empty(),
-        "P3.780 RED: tip-out tile ids are Vec<i64>:\n  {}",
-        bad_paths.join("\n  ")
     );
 }

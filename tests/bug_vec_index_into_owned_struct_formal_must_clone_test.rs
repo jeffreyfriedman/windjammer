@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.683: DownstreamApp `sort_reconciliation_queue` — `less(out[j], out[j+1])`
+//! P3.683: Ledger `sort_reconciliation_queue` — `less(out[j], out[j+1])`
 //! must clone non-Copy indexed elems into owned formals (not move → E0507).
 //! Distinct from P3.575 owned-let of `rows[0]` then reuse.
 
@@ -70,12 +70,12 @@ pub fn sort_items(items: Vec<Item>) -> Vec<Item> {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.683 transpile failed:\n{}",
+        "transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.683 emit:\n{rs}");
+    eprintln!("emit:\n{rs}");
 
     let call_ok = rs.contains("out[")
         && (rs.contains(".clone()")
@@ -89,7 +89,7 @@ pub fn sort_items(items: Vec<Item>) -> Vec<Item> {
     });
     assert!(
         call_ok && !bare_move,
-        "P3.683 RED: vec index into owned struct formal must clone:\n{rs}"
+        "vec index into owned struct formal must clone:\n{rs}"
     );
 
     let check = Command::new("cargo")
@@ -99,7 +99,7 @@ pub fn sort_items(items: Vec<Item>) -> Vec<Item> {
         .expect("cargo check");
     assert!(
         check.status.success(),
-        "P3.683 cargo-check failed:\n{}",
+        "cargo-check failed:\n{}",
         String::from_utf8_lossy(&check.stderr)
     );
 }

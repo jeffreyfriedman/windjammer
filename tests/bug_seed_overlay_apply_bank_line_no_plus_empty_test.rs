@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — DownstreamApp `apply_seed_bank_*_overlay` without `+ ""`.
+//! FAILING REPRO — Ledger `apply_seed_bank_*_overlay` without `+ ""`.
 //! Module `const string` (`LINE_STATUS_MATCHED`) into owned `BankLineView.status`
 //! must emit `.to_string()`, not `.clone()` on `&str` (E0308).
 //!
@@ -47,7 +47,7 @@ fn seed_overlay_apply_bank_line_must_cargo_check_without_plus_empty() {
     assert_module_const_owns_into_string_field(&rs);
     assert!(
         ok,
-        "RED P3.253: apply overlay without + \"\" must cargo-check (module const → owned field). Generated:\n{rs}"
+        "RED apply overlay without + \"\" must cargo-check (module const → owned field). Generated:\n{rs}"
     );
 }
 

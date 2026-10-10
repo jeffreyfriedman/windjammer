@@ -12,7 +12,7 @@
 
 //! P3.316: `while i < self.component_size` (usize field) must not emit `i += 1 as i32` / bare `0` + `as usize`.
 //!
-//! Product: `game-host-core` `ecs/component_storage.wj` — inferred i32 locals vs usize bounds.
+//! Product: `a downstream game project` `ecs/component_storage.wj` — inferred i32 locals vs usize bounds.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -53,14 +53,14 @@ fn usize_field_loop_counter_increment_width() {
     test.add_file("storage.wj", STORAGE);
     let map = test
         .compile()
-        .expect("P3.316 multipass compile should succeed");
+        .expect("multipass compile should succeed");
     let rs = map.get("storage.rs").expect("storage.rs");
     if bad_usize_loop_increment(rs) {
-        eprintln!("P3.316 RED emit:\n{rs}");
+        eprintln!("emit:\n{rs}");
     }
     assert!(
         !bad_usize_loop_increment(rs),
         "usize field loop counter must use usize binding + plain increment, not i32 casts"
     );
-    test.cargo_check().expect("P3.316 storage.rs must cargo-check");
+    test.cargo_check().expect("storage.rs must cargo-check");
 }
