@@ -797,9 +797,7 @@ impl CodeGenerator<'_> {
                 }
             }
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 Self::expr_collect_runtime_std_modules(
                     object,

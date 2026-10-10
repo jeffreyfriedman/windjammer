@@ -60,10 +60,12 @@ impl<'ast> Analyzer<'ast> {
                 then_block,
                 else_block,
                 ..
-            } => self.stmts_have_if_with_condition_and_branches(name, then_block)
-                || else_block
-                    .as_ref()
-                    .is_some_and(|block| self.stmts_have_if_with_condition_and_branches(name, block)),
+            } => {
+                self.stmts_have_if_with_condition_and_branches(name, then_block)
+                    || else_block.as_ref().is_some_and(|block| {
+                        self.stmts_have_if_with_condition_and_branches(name, block)
+                    })
+            }
             _ => false,
         }
     }
@@ -187,9 +189,7 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => self.expr_mentions_identifier(name, operand),
             Expression::TryOp { expr, .. } => self.expr_mentions_identifier(name, expr),
             Expression::MethodCall {
-                object,
-                arguments,
-                ..
+                object, arguments, ..
             } => {
                 self.expr_mentions_identifier(name, object)
                     || arguments

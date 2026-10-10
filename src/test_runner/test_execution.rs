@@ -113,8 +113,7 @@ fn resolve_prebuilt_library(
         .unwrap_or_else(|| lib_name.replace('_', "-"));
 
     // When the project manifest owns the crate, depend from project root so `path = "build/lib.rs"` works.
-    let cargo_dep_path = if project_cargo.exists()
-        && read_cargo_lib_name(&project_cargo).is_some()
+    let cargo_dep_path = if project_cargo.exists() && read_cargo_lib_name(&project_cargo).is_some()
     {
         project_root.to_path_buf()
     } else {
@@ -244,10 +243,7 @@ fn insert_dependency_line(cargo_toml: &mut String, dep_line: &str) {
             cargo_toml.push_str(&format!("\n{}\n", dep_line));
         }
     } else if let Some(lib_pos) = cargo_toml.find("[lib]") {
-        cargo_toml.insert_str(
-            lib_pos,
-            &format!("[dependencies]\n{}\n\n", dep_line),
-        );
+        cargo_toml.insert_str(lib_pos, &format!("[dependencies]\n{}\n\n", dep_line));
     }
 }
 
@@ -1001,14 +997,13 @@ pub(crate) fn generate_test_harness(
         .clone()
         .unwrap_or_else(crate::cargo_toml::find_windjammer_runtime_path);
 
-    let (runtime_path, no_runtime_copy) =
-        if let Some((_, _, lib_path, _)) = &library_dependency {
-            windjammer_runtime_path_from_cargo_toml(&lib_path.join("Cargo.toml"))
-                .map(|p| (p, true))
-                .unwrap_or((runtime_path, opts.no_runtime_copy))
-        } else {
-            (runtime_path, opts.no_runtime_copy)
-        };
+    let (runtime_path, no_runtime_copy) = if let Some((_, _, lib_path, _)) = &library_dependency {
+        windjammer_runtime_path_from_cargo_toml(&lib_path.join("Cargo.toml"))
+            .map(|p| (p, true))
+            .unwrap_or((runtime_path, opts.no_runtime_copy))
+    } else {
+        (runtime_path, opts.no_runtime_copy)
+    };
 
     let runtime_dep_line = if no_runtime_copy {
         format!(
@@ -1086,8 +1081,7 @@ smallvec = "1.13"{}
 name = "windjammer_tests"
 path = "lib.rs"
 "#,
-        runtime_dep_line,
-        library_dep_str
+        runtime_dep_line, library_dep_str
     );
 
     fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;

@@ -22,7 +22,9 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
 
-            if let Some(reason) = self.analyze_conditional_modification(&param.name, &param.type_, &func.body) {
+            if let Some(reason) =
+                self.analyze_conditional_modification(&param.name, &param.type_, &func.body)
+            {
                 optimizations.push(CowOptimization {
                     variable: param.name.clone(),
                     reason,
@@ -49,7 +51,8 @@ impl<'ast> Analyzer<'ast> {
                     else_block,
                     ..
                 } => {
-                    let modified_in_then = self.is_variable_modified(var_name, var_type, then_block);
+                    let modified_in_then =
+                        self.is_variable_modified(var_name, var_type, then_block);
                     let modified_in_else = else_block
                         .as_ref()
                         .map(|block| self.is_variable_modified(var_name, var_type, block))

@@ -90,7 +90,6 @@ fn sort_and_return(items: Vec<i32>) -> Vec<i32> {
     }
 
     #[test]
-
     #[test]
     fn wdb416_evaluate_method_keeps_owned_val_formals() {
         let src = r#"
@@ -144,7 +143,11 @@ impl Eval {
         };
         // op, a, b — find Val slots (Owned expected for a,b)
         assert!(
-            eval.param_ownership.iter().filter(|m| **m == OwnershipMode::Owned).count() >= 2,
+            eval.param_ownership
+                .iter()
+                .filter(|m| **m == OwnershipMode::Owned)
+                .count()
+                >= 2,
             "evaluate must keep owned Val formals; got {:?}",
             eval.param_ownership
         );
@@ -181,7 +184,9 @@ pub fn add(a: Val, b: Val) -> f32 {
         );
         eprintln!(
             "bare as_float={:?}",
-            registry.get_signature("as_float").map(|s| &s.param_ownership)
+            registry
+                .get_signature("as_float")
+                .map(|s| &s.param_ownership)
         );
         let add = funcs.iter().find(|f| f.decl.name == "add").expect("add");
         eprintln!("add inferred={:?}", add.inferred_ownership);

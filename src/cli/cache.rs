@@ -1,11 +1,11 @@
 //! `wj cache` — shared Cargo target status, prune, and setup.
 
-use anyhow::Result;
-use colored::*;
 use crate::cargo_cache::{
     self, format_size, prune, write_setup_scripts, PruneOptions, TargetKind,
     DEFAULT_INCREMENTAL_MAX_AGE_DAYS, DEFAULT_MIN_FREE_GIB,
 };
+use anyhow::Result;
+use colored::*;
 
 pub fn execute_path(verify: bool) -> Result<()> {
     let kind = if verify {

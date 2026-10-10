@@ -5,10 +5,10 @@
 pub mod add;
 pub mod build;
 pub mod cache;
-pub mod json_diagnostics;
 pub mod check;
 pub mod clean;
 pub mod fmt;
+pub mod json_diagnostics;
 pub mod lint;
 pub mod new;
 pub mod remove;

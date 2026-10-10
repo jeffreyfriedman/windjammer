@@ -17,7 +17,11 @@ impl MethodCallAnalyzer {
         registry: Option<&crate::analyzer::SignatureRegistry>,
     ) -> bool {
         crate::codegen::rust::string_utilities::is_readonly_string_key_method(
-            method, param_idx, sig, receiver_type, registry,
+            method,
+            param_idx,
+            sig,
+            receiver_type,
+            registry,
         )
     }
 
@@ -151,10 +155,7 @@ impl MethodCallAnalyzer {
             Some(Type::Parameterized(base, args))
                 if matches!(base.as_str(), "Option" | "option") && args.len() == 1 =>
             {
-                matches!(
-                    args[0],
-                    Type::Reference(_) | Type::MutableReference(_)
-                )
+                matches!(args[0], Type::Reference(_) | Type::MutableReference(_))
             }
             _ => false,
         }

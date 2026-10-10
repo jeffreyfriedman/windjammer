@@ -99,10 +99,7 @@ impl MethodCallAnalyzer {
         if let Some(registry) = signature_registry {
             let recv = receiver_type_name.or(Some("String"));
             if super::super::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
-                method,
-                recv,
-                registry,
-                param_idx,
+                method, recv, registry, param_idx,
             ) {
                 return true;
             }

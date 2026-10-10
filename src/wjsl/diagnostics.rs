@@ -17,9 +17,10 @@ pub fn enrich_shader_error(err: anyhow::Error, source: &str) -> anyhow::Error {
 }
 
 fn hint_for_message(message: &str, source: &str) -> Option<String> {
-    if let Some(name) = message.strip_prefix("Unknown identifier '").and_then(|rest| {
-        rest.strip_suffix('\'')
-    }) {
+    if let Some(name) = message
+        .strip_prefix("Unknown identifier '")
+        .and_then(|rest| rest.strip_suffix('\''))
+    {
         return suggest_unknown_identifier(name, source);
     }
 
@@ -164,9 +165,7 @@ fn levenshtein(a: &str, b: &str) -> u32 {
         curr[0] = (i + 1) as u32;
         for (j, cb) in b.chars().enumerate() {
             let cost = if ca == cb { 0 } else { 1 };
-            curr[j + 1] = (prev[j + 1] + 1)
-                .min(curr[j] + 1)
-                .min(prev[j] + cost);
+            curr[j + 1] = (prev[j + 1] + 1).min(curr[j] + 1).min(prev[j] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }

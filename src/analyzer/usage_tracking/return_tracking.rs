@@ -208,8 +208,7 @@ impl<'ast> Analyzer<'ast> {
             // WJ `"…${param}…"` / `format!(…)` — arguments are borrowed for `Display`;
             // the returned String is newly allocated; the param is not moved/consumed.
             Expression::MacroInvocation {
-                name: macro_name,
-                ..
+                name: macro_name, ..
             } if crate::type_classification::is_language_level_owned_string_macro(macro_name) => {
                 false
             }
@@ -307,11 +306,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// `let s = "${param.trim()}"; return s` — param is read, not moved into the return.
-    fn expression_is_readonly_text_derivation(
-        &self,
-        param_name: &str,
-        expr: &Expression,
-    ) -> bool {
+    fn expression_is_readonly_text_derivation(&self, param_name: &str, expr: &Expression) -> bool {
         if !self.expression_uses_identifier(param_name, expr) {
             return false;
         }
@@ -324,11 +319,7 @@ impl<'ast> Analyzer<'ast> {
         !self.expression_has_consuming_use_of_param(param_name, expr)
     }
 
-    fn expression_has_consuming_use_of_param(
-        &self,
-        param_name: &str,
-        expr: &Expression,
-    ) -> bool {
+    fn expression_has_consuming_use_of_param(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } if name == param_name => true,
             Expression::MethodCall { object, .. } => {
@@ -341,11 +332,15 @@ impl<'ast> Analyzer<'ast> {
                     self.expression_has_consuming_use_of_param(param_name, object)
                 }
             }
-            Expression::Call { arguments, function, .. } => {
+            Expression::Call {
+                arguments,
+                function,
+                ..
+            } => {
                 self.expression_has_consuming_use_of_param(param_name, function)
-                    || arguments.iter().any(|(_, arg)| {
-                        self.expression_has_consuming_use_of_param(param_name, arg)
-                    })
+                    || arguments
+                        .iter()
+                        .any(|(_, arg)| self.expression_has_consuming_use_of_param(param_name, arg))
             }
             Expression::Binary { left, right, .. } => {
                 self.expression_has_consuming_use_of_param(param_name, left)
@@ -354,14 +349,15 @@ impl<'ast> Analyzer<'ast> {
             Expression::Unary { operand, .. } => {
                 self.expression_has_consuming_use_of_param(param_name, operand)
             }
-            Expression::Block { statements, .. } => self
-                .function_uses_identifier(param_name, statements)
-                && statements.iter().any(|s| match s {
-                    Statement::Expression { expr, .. } => {
-                        self.expression_has_consuming_use_of_param(param_name, expr)
-                    }
-                    _ => false,
-                }),
+            Expression::Block { statements, .. } => {
+                self.function_uses_identifier(param_name, statements)
+                    && statements.iter().any(|s| match s {
+                        Statement::Expression { expr, .. } => {
+                            self.expression_has_consuming_use_of_param(param_name, expr)
+                        }
+                        _ => false,
+                    })
+            }
             Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
                 .iter()
                 .any(|el| self.expression_has_consuming_use_of_param(param_name, el)),

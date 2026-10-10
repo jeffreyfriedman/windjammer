@@ -89,9 +89,7 @@ impl PackageManifest {
 
     /// All dependencies (runtime + dev) by name.
     pub fn all_dependencies(&self) -> impl Iterator<Item = &Dependency> {
-        self.dependencies
-            .iter()
-            .chain(self.dev_dependencies.iter())
+        self.dependencies.iter().chain(self.dev_dependencies.iter())
     }
 }
 
@@ -160,7 +158,10 @@ mod tests {
         let mut config = WjConfig::default();
         config.package.name = "demo".to_string();
         config.package.version = "0.1.0".to_string();
-        config.add_dependency("serde".to_string(), DependencySpec::Simple("1.0".to_string()));
+        config.add_dependency(
+            "serde".to_string(),
+            DependencySpec::Simple("1.0".to_string()),
+        );
 
         let manifest = PackageManifest::from_config(&config);
         assert_eq!(manifest.name, "demo");

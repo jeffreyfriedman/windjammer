@@ -346,10 +346,7 @@ impl SignatureRegistry {
         // Do NOT also key under the leaf (`net`/`fs`) — that pollutes crate-root
         // modules (`fs::FileEntry` from platform::native::fs while rust import is `fs`).
         for key in keys {
-            let entry = self
-                .runtime_exported_types
-                .entry(key)
-                .or_default();
+            let entry = self.runtime_exported_types.entry(key).or_default();
             if !entry.iter().any(|t| t == type_name) {
                 entry.push(type_name.to_string());
             }
@@ -411,8 +408,7 @@ impl SignatureRegistry {
         let mut emit_names = Vec::new();
         for key in Self::stdlib().signatures.keys() {
             if key.ends_with(&suffix) && key.contains("::") {
-                if let Some(emit) =
-                    Self::resolve_runtime_emit_method_name_chain(key, local, global)
+                if let Some(emit) = Self::resolve_runtime_emit_method_name_chain(key, local, global)
                 {
                     emit_names.push(emit);
                 }
@@ -468,7 +464,12 @@ impl SignatureRegistry {
                     && rt_method.ends_with(wj_method)
                     && rt_method
                         .as_bytes()
-                        .get(rt_method.len().wrapping_sub(wj_method.len()).saturating_sub(1))
+                        .get(
+                            rt_method
+                                .len()
+                                .wrapping_sub(wj_method.len())
+                                .saturating_sub(1),
+                        )
                         .is_some_and(|&b| b == b'_');
                 if rt_method != wj_method && !renamed_runtime_method {
                     continue;
@@ -503,9 +504,7 @@ impl SignatureRegistry {
             (Some(a), Some(b)) => {
                 fn peel(t: &Type) -> Type {
                     match t {
-                        Type::Reference(inner) | Type::MutableReference(inner) => {
-                            (**inner).clone()
-                        }
+                        Type::Reference(inner) | Type::MutableReference(inner) => (**inner).clone(),
                         other => other.clone(),
                     }
                 }
@@ -545,7 +544,9 @@ impl SignatureRegistry {
         }
         wj.len() == rt.len()
             && wj.iter().zip(rt.iter()).all(|(a, b)| {
-                peel(a) == peel(b) || (is_int_like(a) && is_int_like(b)) || (is_float_like(a) && is_float_like(b))
+                peel(a) == peel(b)
+                    || (is_int_like(a) && is_int_like(b))
+                    || (is_float_like(a) && is_float_like(b))
             })
     }
 
@@ -1453,12 +1454,14 @@ impl SignatureRegistry {
         let Some(existing) = self.get_signature(aliased) else {
             return false;
         };
-        let existing_is_runtime_str = existing.param_types.iter().any(|t| {
-            crate::ir::formal_predicates::param_is_rust_str_ref(t)
-        }) || existing
-            .emitted_rust_ref_params
-            .as_ref()
-            .is_some_and(|f| f.iter().any(|&b| b));
+        let existing_is_runtime_str = existing
+            .param_types
+            .iter()
+            .any(|t| crate::ir::formal_predicates::param_is_rust_str_ref(t))
+            || existing
+                .emitted_rust_ref_params
+                .as_ref()
+                .is_some_and(|f| f.iter().any(|&b| b));
         if !existing_is_runtime_str {
             return false;
         }
@@ -1980,10 +1983,8 @@ impl SignatureRegistry {
                 .iter()
                 .zip(&local.param_ownership)
                 .any(|(rt, loc)| {
-                    matches!(
-                        rt,
-                        OwnershipMode::Borrowed | OwnershipMode::MutBorrowed
-                    ) && matches!(loc, OwnershipMode::Owned)
+                    matches!(rt, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
+                        && matches!(loc, OwnershipMode::Owned)
                 });
             let runtime_str_ref_beats_string_ref = fb
                 .param_types
@@ -1995,19 +1996,15 @@ impl SignatureRegistry {
                             || matches!(loc, Type::String)
                             || matches!(loc, Type::Custom(n) if n == "string" || n == "String"))
                 });
-            let runtime_emit_ref_beats_owned_or_string_ref = fb
-                .emitted_rust_ref_params
-                .as_ref()
-                .is_some_and(|flags| {
+            let runtime_emit_ref_beats_owned_or_string_ref =
+                fb.emitted_rust_ref_params.as_ref().is_some_and(|flags| {
                     flags.iter().enumerate().any(|(i, &emits_ref)| {
                         if !emits_ref {
                             return false;
                         }
                         let loc_ty = local.param_types.get(i);
-                        let loc_owned = matches!(
-                            local.param_ownership.get(i),
-                            Some(OwnershipMode::Owned)
-                        );
+                        let loc_owned =
+                            matches!(local.param_ownership.get(i), Some(OwnershipMode::Owned));
                         loc_owned
                             || loc_ty.is_some_and(|t| {
                                 crate::ir::formal_predicates::param_is_rust_string_ref(t)
@@ -2119,10 +2116,7 @@ mod tests {
                 Type::String,
             ],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -2139,10 +2133,7 @@ mod tests {
             ],
             formal_param_types: vec![Type::String, Type::String],
             param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Borrowed],
-            return_type: Some(Type::Result(
-                Box::new(Type::String),
-                Box::new(Type::String),
-            )),
+            return_type: Some(Type::Result(Box::new(Type::String), Box::new(Type::String))),
             return_ownership: OwnershipMode::Owned,
             has_self_receiver: false,
             is_extern: false,
@@ -2153,15 +2144,11 @@ mod tests {
         };
 
         let mut global = SignatureRegistry::empty();
-        global
-            .signatures
-            .insert("require_nonempty".into(), mixed);
+        global.signatures.insert("require_nonempty".into(), mixed);
         let mut local = SignatureRegistry::layered(std::sync::Arc::new(global));
         local.merge(&{
             let mut incoming = SignatureRegistry::empty();
-            incoming
-                .signatures
-                .insert("require_nonempty".into(), stub);
+            incoming.signatures.insert("require_nonempty".into(), stub);
             incoming
         });
 
@@ -2266,7 +2253,9 @@ pub fn array_len(text: string) -> int {
         let mut analyzer = Analyzer::new();
         let (_, registry, _) = analyzer.analyze_program(&program).unwrap();
         for key in ["json::is_array", "json::len"] {
-            let sig = registry.get_signature(key).unwrap_or_else(|| panic!("{key}"));
+            let sig = registry
+                .get_signature(key)
+                .unwrap_or_else(|| panic!("{key}"));
             assert!(
                 crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
                     &registry,
@@ -2392,7 +2381,8 @@ pub fn parse_field(line: string) -> string {
     fn resolve_runtime_emit_method_name_maps_random_range_to_int_range() {
         let reg = SignatureRegistry::stdlib();
         assert_eq!(
-            reg.resolve_runtime_emit_method_name("random::range").as_deref(),
+            reg.resolve_runtime_emit_method_name("random::range")
+                .as_deref(),
             Some("int_range"),
             "WJ random::range stub must codegen to scanned int_range"
         );
@@ -2402,7 +2392,8 @@ pub fn parse_field(line: string) -> string {
     fn resolve_runtime_emit_method_name_maps_dir_entry_name_to_file_name() {
         let reg = SignatureRegistry::stdlib();
         assert_eq!(
-            reg.resolve_runtime_emit_method_name("DirEntry::name").as_deref(),
+            reg.resolve_runtime_emit_method_name("DirEntry::name")
+                .as_deref(),
             Some("file_name"),
             "WJ fs DirEntry::name stub must codegen to runtime file_name()"
         );
@@ -2436,7 +2427,11 @@ pub fn parse_field(line: string) -> string {
                     Type::Custom("usize".into()),
                     Type::Custom("usize".into()),
                 ],
-                formal_param_types: vec![Type::String, Type::Custom("usize".into()), Type::Custom("usize".into())],
+                formal_param_types: vec![
+                    Type::String,
+                    Type::Custom("usize".into()),
+                    Type::Custom("usize".into()),
+                ],
                 param_ownership: vec![
                     OwnershipMode::Borrowed,
                     OwnershipMode::Owned,

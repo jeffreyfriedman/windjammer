@@ -441,10 +441,7 @@ impl Scope {
         let program = parse_program(src);
         let mut analyzer = Analyzer::new();
         let (analyzed, _, _) = analyzer.analyze_program(&program).expect("analyze");
-        let func = analyzed
-            .iter()
-            .find(|f| f.decl.name == "set")
-            .expect("set");
+        let func = analyzed.iter().find(|f| f.decl.name == "set").expect("set");
         assert_eq!(
             func.inferred_ownership.get("name").copied(),
             Some(OwnershipMode::Owned),

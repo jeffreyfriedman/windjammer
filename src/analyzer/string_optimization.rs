@@ -81,14 +81,17 @@ impl<'ast> Analyzer<'ast> {
                 // Stored/Into builders are blocked later via is_stored / consumed checks.
                 // Unused formals stay Owned (WDB-152) — no body evidence for `&str`.
                 if func.parent_type.is_none() && func.is_pub {
-                    if self.param_used_in_consuming_string_concat_expression(&param.name, &func.body)
+                    if self
+                        .param_used_in_consuming_string_concat_expression(&param.name, &func.body)
                     {
                         continue;
                     }
                 }
-                if !func.body.iter().any(|stmt| {
-                    self.statement_uses_identifier(&param.name, stmt)
-                }) {
+                if !func
+                    .body
+                    .iter()
+                    .any(|stmt| self.statement_uses_identifier(&param.name, stmt))
+                {
                     continue;
                 }
 
@@ -236,9 +239,8 @@ impl<'ast> Analyzer<'ast> {
         param_name: &str,
         body: &[&Statement],
     ) -> bool {
-        body.iter().any(|stmt| {
-            self.stmt_uses_param_in_consuming_string_concat(param_name, stmt)
-        })
+        body.iter()
+            .any(|stmt| self.stmt_uses_param_in_consuming_string_concat(param_name, stmt))
     }
 
     fn expr_is_empty_string_literal(expr: &Expression) -> bool {
@@ -279,12 +281,13 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                then_block.iter().any(|s| {
-                    self.stmt_uses_param_in_consuming_string_concat(param_name, s)
-                }) || else_block.as_ref().is_some_and(|b| {
-                    b.iter()
-                        .any(|s| self.stmt_uses_param_in_consuming_string_concat(param_name, s))
-                })
+                then_block
+                    .iter()
+                    .any(|s| self.stmt_uses_param_in_consuming_string_concat(param_name, s))
+                    || else_block.as_ref().is_some_and(|b| {
+                        b.iter()
+                            .any(|s| self.stmt_uses_param_in_consuming_string_concat(param_name, s))
+                    })
             }
             _ => false,
         }
@@ -297,10 +300,7 @@ impl<'ast> Analyzer<'ast> {
     ) -> bool {
         match expr {
             Expression::Binary {
-                left,
-                right,
-                op,
-                ..
+                left, right, op, ..
             } if matches!(op, crate::parser::BinaryOp::Add) => {
                 let readonly_append = (self.expr_is_bare_param(param_name, left)
                     && Self::expr_is_empty_string_literal(right))
@@ -317,10 +317,12 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_uses_param_in_consuming_string_concat(param_name, left)
                     || self.expr_uses_param_in_consuming_string_concat(param_name, right)
             }
-            Expression::Call { arguments, .. } => arguments.iter().any(|(_, arg)| {
-                self.expr_uses_param_in_consuming_string_concat(param_name, arg)
-            }),
-            Expression::MethodCall { object, arguments, .. } => {
+            Expression::Call { arguments, .. } => arguments
+                .iter()
+                .any(|(_, arg)| self.expr_uses_param_in_consuming_string_concat(param_name, arg)),
+            Expression::MethodCall {
+                object, arguments, ..
+            } => {
                 self.expr_uses_param_in_consuming_string_concat(param_name, object)
                     || arguments.iter().any(|(_, arg)| {
                         self.expr_uses_param_in_consuming_string_concat(param_name, arg)
@@ -359,10 +361,7 @@ impl<'ast> Analyzer<'ast> {
     fn expr_uses_param_bare_in_string_concat(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Binary {
-                left,
-                right,
-                op,
-                ..
+                left, right, op, ..
             } if matches!(op, crate::parser::BinaryOp::Add) => {
                 self.expr_is_bare_param(param_name, left)
                     || self.expr_is_bare_param(param_name, right)
@@ -404,10 +403,7 @@ impl<'ast> Analyzer<'ast> {
     fn expr_uses_param_in_string_concat(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Binary {
-                left,
-                right,
-                op,
-                ..
+                left, right, op, ..
             } if matches!(op, crate::parser::BinaryOp::Add) => {
                 self.expr_contains_bare_param(param_name, left)
                     || self.expr_contains_bare_param(param_name, right)
@@ -457,7 +453,9 @@ impl<'ast> Analyzer<'ast> {
                 else_block,
                 ..
             } => {
-                then_block.iter().all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use))
+                then_block
+                    .iter()
+                    .all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use))
                     && else_block.as_ref().map_or(true, |b| {
                         b.iter()
                             .all(|s| self.stmt_param_uses_only_in_call_args(param_name, s, saw_use))
@@ -491,7 +489,9 @@ impl<'ast> Analyzer<'ast> {
                     !self.expr_contains_bare_param(param_name, arg)
                 }
             }),
-            Expression::MethodCall { arguments, object, .. } => {
+            Expression::MethodCall {
+                arguments, object, ..
+            } => {
                 let object_ok = if self.expr_is_bare_param(param_name, object) {
                     *saw_use = true;
                     false
@@ -529,16 +529,18 @@ impl<'ast> Analyzer<'ast> {
     fn expr_contains_bare_param(&self, param_name: &str, expr: &Expression) -> bool {
         match expr {
             Expression::Identifier { name, .. } => name == param_name,
-            Expression::Call { arguments, function, .. } => {
+            Expression::Call {
+                arguments,
+                function,
+                ..
+            } => {
                 self.expr_contains_bare_param(param_name, function)
                     || arguments
                         .iter()
                         .any(|(_, arg)| self.expr_contains_bare_param(param_name, arg))
             }
             Expression::MethodCall {
-                arguments,
-                object,
-                ..
+                arguments, object, ..
             } => {
                 self.expr_contains_bare_param(param_name, object)
                     || arguments
@@ -551,7 +553,9 @@ impl<'ast> Analyzer<'ast> {
                     || self.expr_contains_bare_param(param_name, right)
             }
             Expression::Block { statements, .. } => statements.iter().any(|s| match s {
-                Statement::Expression { expr, .. } => self.expr_contains_bare_param(param_name, expr),
+                Statement::Expression { expr, .. } => {
+                    self.expr_contains_bare_param(param_name, expr)
+                }
                 _ => false,
             }),
             _ => false,

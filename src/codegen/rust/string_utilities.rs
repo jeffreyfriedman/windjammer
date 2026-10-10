@@ -1757,16 +1757,8 @@ mod tests {
         // Discard-only / readonly methods before caller refresh (`set_bool(key)`).
         let sig = FunctionSignature {
             name: "Blackboard::set_bool".into(),
-            param_types: vec![
-                Type::Custom("Blackboard".into()),
-                Type::String,
-                Type::Bool,
-            ],
-            formal_param_types: vec![
-                Type::Custom("Blackboard".into()),
-                Type::String,
-                Type::Bool,
-            ],
+            param_types: vec![Type::Custom("Blackboard".into()), Type::String, Type::Bool],
+            formal_param_types: vec![Type::Custom("Blackboard".into()), Type::String, Type::Bool],
             param_ownership: vec![
                 OwnershipMode::Borrowed,
                 OwnershipMode::Borrowed,

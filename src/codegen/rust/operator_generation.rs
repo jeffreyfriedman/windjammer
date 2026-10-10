@@ -207,7 +207,6 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     fn cast_target_is_i64(type_: &Type) -> bool {
-        matches!(type_, Type::Int)
-            || matches!(type_, Type::Custom(n) if n == "i64" || n == "int")
+        matches!(type_, Type::Int) || matches!(type_, Type::Custom(n) if n == "i64" || n == "int")
     }
 }

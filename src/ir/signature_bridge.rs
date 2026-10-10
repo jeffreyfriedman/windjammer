@@ -1377,7 +1377,9 @@ mod tests {
             forwarding_borrow_metadata_requests_call_site_borrow(&sig, 2),
             "value forwarding_borrow metadata must request borrow at emit"
         );
-        assert!(!forwarding_borrow_metadata_requests_call_site_borrow(&sig, 0));
+        assert!(!forwarding_borrow_metadata_requests_call_site_borrow(
+            &sig, 0
+        ));
     }
 
     /// P3.588 / WDB-110: AsRef-owned `string` keeps `String` emit + forwarding_borrow;
@@ -1412,10 +1414,7 @@ mod tests {
     fn stale_metadata_emitted_ref_must_not_borrow_owned_string_formal() {
         let sig = FunctionSignature {
             name: "BuildFingerprint::validate".into(),
-            formal_param_types: vec![
-                Type::Custom("Self".into()),
-                Type::String,
-            ],
+            formal_param_types: vec![Type::Custom("Self".into()), Type::String],
             param_types: vec![
                 Type::Reference(Box::new(Type::Custom("Self".into()))),
                 Type::String, // codegen emit — not Reference(str)
@@ -1437,8 +1436,6 @@ mod tests {
         );
         assert!(call_site_expects_owned_pass(&sig, 1));
     }
-
-
 
     /// P3.647b: recursive BlendTree keeps analyzer Borrowed + forwarding while codegen
     /// emits owned `Vec` (`emitted_rust_ref_params[i]=false`). Must not share-ref.

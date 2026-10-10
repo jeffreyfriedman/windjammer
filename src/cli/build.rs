@@ -61,8 +61,15 @@ pub fn execute(
 
     if json_output {
         return build_with_json_output(
-            path, output_dir, target_str, check, library, module_file, enable_lint,
-            no_generate_cargo_toml, metadata,
+            path,
+            output_dir,
+            target_str,
+            check,
+            library,
+            module_file,
+            enable_lint,
+            no_generate_cargo_toml,
+            metadata,
         );
     }
 
@@ -152,11 +159,7 @@ pub fn execute(
     // Run cargo build automatically for Rust target (unless disabled)
     if (target_str == "rust") && run_cargo && !check {
         let profile = if release { "release" } else { "dev" };
-        println!(
-            "\n{} Running cargo build ({})...",
-            "⚙️".bold(),
-            profile
-        );
+        println!("\n{} Running cargo build ({})...", "⚙️".bold(), profile);
 
         let mut cargo = std::process::Command::new("cargo");
         cargo.arg("build");
@@ -228,7 +231,7 @@ fn build_with_json_output(
     no_generate_cargo_toml: bool,
     metadata: &[String],
 ) -> Result<()> {
-    use crate::cli::json_diagnostics::{JsonCompilationOutput, Severity, JsonDiagnostic};
+    use crate::cli::json_diagnostics::{JsonCompilationOutput, JsonDiagnostic, Severity};
 
     let external_metadata = parse_external_metadata_args(metadata);
 
@@ -236,7 +239,10 @@ fn build_with_json_output(
         "rust" => crate::CompilationTarget::Rust,
         _ => {
             let mut output = JsonCompilationOutput::new_failure();
-            output.add_error(format!("JSON output mode only supports Rust target, got: {}", target_str));
+            output.add_error(format!(
+                "JSON output mode only supports Rust target, got: {}",
+                target_str
+            ));
             output.emit_to_stdout();
             return Ok(());
         }
@@ -244,7 +250,14 @@ fn build_with_json_output(
 
     crate::cargo_toml::set_skip_cargo_toml_generation(no_generate_cargo_toml);
 
-    match crate::build_project_ext(path, output_dir, target, enable_lint, library, &external_metadata) {
+    match crate::build_project_ext(
+        path,
+        output_dir,
+        target,
+        enable_lint,
+        library,
+        &external_metadata,
+    ) {
         Ok(()) => {
             let mut output = JsonCompilationOutput::new_success();
             if library {

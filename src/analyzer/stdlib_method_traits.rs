@@ -364,11 +364,7 @@ fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
 /// and must not classify as readonly — that blocked owning-method formal retention.
 /// Used by [`is_known_readonly_qualified`] (typed receiver).
 fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
-    sig.has_self_receiver
-        && matches!(
-            sig.param_ownership.first(),
-            Some(OwnershipMode::Borrowed)
-        )
+    sig.has_self_receiver && matches!(sig.param_ownership.first(), Some(OwnershipMode::Borrowed))
 }
 
 /// Non-`&mut self` receiver (`Owned` or `Borrowed`). Used only for unqualified
@@ -1103,10 +1099,6 @@ mod tests {
         reg.add_function("Val::as_float".into(), sig);
         // Typed/qualified path must reject Owned self; unqualified consensus still
         // treats non-`&mut` as "readonly" for stdlib getters — do not assert that here.
-        assert!(!is_known_readonly_qualified(
-            "as_float",
-            Some("Val"),
-            &reg
-        ));
+        assert!(!is_known_readonly_qualified("as_float", Some("Val"), &reg));
     }
 }

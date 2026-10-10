@@ -204,8 +204,8 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
     // IR cutover: when any cutover flag is enabled, run the IR pipeline and
     // attach the IrModule so codegen can read from SafetyType.
-    let run_ir_pipeline = !generator.ir_cutover.all_disabled()
-        || crate::ir::shadow::shadow_validate_strict();
+    let run_ir_pipeline =
+        !generator.ir_cutover.all_disabled() || crate::ir::shadow::shadow_validate_strict();
     if run_ir_pipeline {
         let mut ir_pipeline = crate::ir::IrPipeline::new();
         // Same registry as codegen: path-dep ABI + import aliases overwrite
@@ -225,11 +225,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
                     let allowed = caps.to_effect_set();
                     let violations = ir_module.check_capabilities(&allowed);
                     for v in &violations {
-                        eprintln!(
-                            "{}: {}",
-                            "error".red().bold(),
-                            v.message,
-                        );
+                        eprintln!("{}: {}", "error".red().bold(), v.message,);
                     }
                     if !violations.is_empty() {
                         return Err(anyhow::anyhow!(

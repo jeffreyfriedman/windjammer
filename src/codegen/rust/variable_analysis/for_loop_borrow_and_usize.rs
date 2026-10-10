@@ -805,9 +805,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Binary {
                 op, left, right, ..
             } if matches!(op, BinaryOp::Add | BinaryOp::Sub) => match (&**left, &**right) {
-                (Expression::Identifier { name, .. }, lit) if nonneg_lit(lit) => {
-                    Some(name.clone())
-                }
+                (Expression::Identifier { name, .. }, lit) if nonneg_lit(lit) => Some(name.clone()),
                 (lit, Expression::Identifier { name, .. })
                     if matches!(op, BinaryOp::Add) && nonneg_lit(lit) =>
                 {

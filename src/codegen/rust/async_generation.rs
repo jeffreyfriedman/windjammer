@@ -63,20 +63,19 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         // If end returns usize (registry: len/capacity/…), cast start to usize.
         let end_is_usize = match end {
-            Expression::MethodCall {
-                object, method, ..
-            } => crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
-                method,
-                self.infer_expression_type(object)
-                    .as_ref()
-                    .and_then(Self::type_to_name)
-                    .as_deref(),
-                &self.signature_registry,
-            ),
+            Expression::MethodCall { object, method, .. } => {
+                crate::codegen::rust::stdlib_method_traits::method_returns_usize_qualified(
+                    method,
+                    self.infer_expression_type(object)
+                        .as_ref()
+                        .and_then(Self::type_to_name)
+                        .as_deref(),
+                    &self.signature_registry,
+                )
+            }
             _ => false,
         } || self.expression_produces_usize(end);
-        let i32_scan_len_range =
-            self.function_returns_i32_for_loop_scan() && end_is_usize;
+        let i32_scan_len_range = self.function_returns_i32_for_loop_scan() && end_is_usize;
 
         // P3.280: peer-drive int literal suffixes from the other bound's type
         // (`(cx - 16)..(cx + 16)` with cx:i32 → `16_i32`, not default `_i64`).

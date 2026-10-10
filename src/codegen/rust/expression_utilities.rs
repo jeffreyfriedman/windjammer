@@ -271,11 +271,7 @@ pub fn is_copy_scalar_numeric_cast(expr: &str) -> bool {
 /// True for unit constructors that must never grow `.clone()` (WDB-367).
 pub fn is_unit_constructor_rust_text(expr: &str) -> bool {
     let t = expr.trim();
-    t == "None"
-        || t == "true"
-        || t == "false"
-        || t.ends_with("::None")
-        || t.ends_with(".None")
+    t == "None" || t == "true" || t == "false" || t.ends_with("::None") || t.ends_with(".None")
 }
 
 /// Peel spurious `.clone()` from unit constructors / already-Copy text.
@@ -320,9 +316,7 @@ pub fn append_rust_clone(expr: &str) -> String {
     if t.contains("std::mem::take(") {
         return t.to_string();
     }
-    if expr_needs_borrow_parentheses(t)
-        || (t.contains(" as ") && !t.starts_with('('))
-    {
+    if expr_needs_borrow_parentheses(t) || (t.contains(" as ") && !t.starts_with('(')) {
         format!("({t}).clone()")
     } else {
         format!("{t}.clone()")
@@ -417,9 +411,7 @@ pub fn apply_mut_borrow_coercion(
 pub fn arg_supports_mut_borrow_coercion(arg: &Expression) -> bool {
     matches!(
         arg,
-        Expression::Identifier { .. }
-            | Expression::FieldAccess { .. }
-            | Expression::Index { .. }
+        Expression::Identifier { .. } | Expression::FieldAccess { .. } | Expression::Index { .. }
     )
 }
 
@@ -478,10 +470,7 @@ mod tests {
             "conn.clone()",
             "never emit &x.clone() — owned path wants x.clone(); shared-ref peels later"
         );
-        assert_eq!(
-            coerce_borrowed_arg_to_owned("n as usize"),
-            "n as usize"
-        );
+        assert_eq!(coerce_borrowed_arg_to_owned("n as usize"), "n as usize");
         assert_eq!(
             sanitize_cast_trailing_clone("n as usize.clone()"),
             "(n as usize)"

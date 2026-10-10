@@ -134,15 +134,11 @@ impl ToolRegistry {
             "query_diagnostics" => {
                 Box::new(move |d, args| Box::pin(query_diagnostics::handle(d, args)))
             }
-            "query_effects" => {
-                Box::new(move |d, args| Box::pin(query_effects::handle(d, args)))
-            }
+            "query_effects" => Box::new(move |d, args| Box::pin(query_effects::handle(d, args))),
             "insert_statement" => {
                 Box::new(move |d, args| Box::pin(patch_insert_statement::handle(d, args)))
             }
-            "change_type" => {
-                Box::new(move |d, args| Box::pin(patch_change_type::handle(d, args)))
-            }
+            "change_type" => Box::new(move |d, args| Box::pin(patch_change_type::handle(d, args))),
             _ => Box::new(move |_d, _args| {
                 let tool_name = unknown_name.clone();
                 Box::pin(async move { Err(McpError::ToolNotFound { tool_name }) })

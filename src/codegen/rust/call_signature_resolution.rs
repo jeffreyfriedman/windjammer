@@ -11,10 +11,9 @@ use crate::parser::Type;
 
 pub(crate) use super::signature_promotion::{
     best_method_signature_for_receiver, best_method_signature_for_receiver_in_module,
-    body_borrow_must_not_replace_owned_copy_formal,
-    body_borrow_must_not_replace_owned_formal_stub, effective_user_arg_count,
-    has_stale_owned_non_copy_params, param_type_is_owned_non_text, pick_best_resolved_signature,
-    prefer_converged_over_stub, signature_is_declaration_stub_like,
+    body_borrow_must_not_replace_owned_copy_formal, body_borrow_must_not_replace_owned_formal_stub,
+    effective_user_arg_count, has_stale_owned_non_copy_params, param_type_is_owned_non_text,
+    pick_best_resolved_signature, prefer_converged_over_stub, signature_is_declaration_stub_like,
 };
 
 #[derive(Debug, Clone)]
@@ -140,8 +139,7 @@ pub(crate) fn signature_matches_resolved_callee(
     if resolved_lookup != callee_name {
         return sig.name == resolved_lookup || sig_simple == lookup_simple;
     }
-    sig.name == callee_name
-        || (!callee_name.contains("::") && sig_simple == callee_name)
+    sig.name == callee_name || (!callee_name.contains("::") && sig_simple == callee_name)
 }
 
 pub(crate) fn is_lowercase_user_module_qualified_call(callee_name: &str) -> bool {
@@ -586,9 +584,7 @@ pub fn resolve_call_signature(
     if !func_name.contains("::") {
         let suffix = format!("::{}", func_name);
         for (key, sig) in registry.signatures_matching_suffix(&suffix) {
-            if !sig.has_self_receiver
-                && validate_arg_count(sig, arg_count)
-            {
+            if !sig.has_self_receiver && validate_arg_count(sig, arg_count) {
                 return Some(ResolvedSignature {
                     sig: sig.clone(),
                     qualified_key: key.to_string(),
@@ -758,7 +754,10 @@ fn trait_declares_owned_text_param(sig: &FunctionSignature, idx: usize) -> bool 
     if formal_is_plain_windjammer_string(sig, idx) {
         return true;
     }
-    let Some(t) = sig.formal_param_type(idx).or_else(|| sig.param_types.get(idx)) else {
+    let Some(t) = sig
+        .formal_param_type(idx)
+        .or_else(|| sig.param_types.get(idx))
+    else {
         return false;
     };
     crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
@@ -1246,9 +1245,7 @@ pub fn effective_param_ownership(sig: &FunctionSignature, param_idx: usize) -> O
         {
             return OwnershipMode::Owned;
         }
-        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-            sig, param_idx,
-        ) {
+        if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx) {
             return OwnershipMode::Borrowed;
         }
         if sig.emitted_rust_ref_params.is_none() {
@@ -1445,9 +1442,8 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
     }
     if crate::codegen::rust::call_signature_resolution::formal_is_plain_windjammer_string(
         sig, param_idx,
-    ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-        sig, param_idx,
-    ) {
+    ) && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
+    {
         return false;
     }
     // Body-converged &str — only when codegen/analyzer confirmed shared-ref emission.
@@ -1456,9 +1452,7 @@ pub(crate) fn static_impl_text_borrows_at_call_site(
         .param_types
         .get(param_idx)
         .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
-        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(
-            sig, param_idx,
-        )
+        && crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, param_idx)
     {
         return true;
     }
@@ -1677,7 +1671,10 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
         // Bare-pass multipass demotion records MutBorrowed + `MutableReference(T)` with
         // `emitted_rust_ref_params[idx] == false` (false = not shared `&T`). Do not peel
         // back to owned Custom (WDB-113).
-        if sig.param_types.get(idx).is_some_and(|t| matches!(t, Type::MutableReference(_)))
+        if sig
+            .param_types
+            .get(idx)
+            .is_some_and(|t| matches!(t, Type::MutableReference(_)))
             && matches!(
                 sig.param_ownership.get(idx),
                 Some(OwnershipMode::MutBorrowed)
@@ -1840,12 +1837,8 @@ mod tests {
 
     #[test]
     fn same_name_sibling_import_refresh_keys_include_bare_defining_fn() {
-        let keys = codegen_refresh_lookup_keys(
-            "json_cors_error",
-            "http::json_cors_error",
-            true,
-            true,
-        );
+        let keys =
+            codegen_refresh_lookup_keys("json_cors_error", "http::json_cors_error", true, true);
         assert_eq!(
             keys,
             vec![
@@ -1867,33 +1860,24 @@ mod tests {
         // Sibling mixer: string second formal (wrong for audio_mixer callers).
         reg.add_function(
             "audio::mixer::AudioChannel::new".into(),
-            make_sig_with_types(
-                "new",
-                vec![Type::Int32, Type::String],
-                false,
-            ),
+            make_sig_with_types("new", vec![Type::Int32, Type::String], false),
         );
         // Bare collision key often overwritten by last writer.
         reg.add_function(
             "AudioChannel::new".into(),
-            make_sig_with_types(
-                "new",
-                vec![Type::Int32, Type::String],
-                false,
-            ),
+            make_sig_with_types("new", vec![Type::Int32, Type::String], false),
         );
         // Local audio_mixer: i32 priority formal.
         reg.add_function(
             "audio::audio_mixer::AudioChannel::new".into(),
-            make_sig_with_types(
-                "new",
-                vec![Type::Int32, Type::Int32],
-                false,
-            ),
+            make_sig_with_types("new", vec![Type::Int32, Type::Int32], false),
         );
 
         assert_eq!(
-            module_path_affinity("audio::audio_mixer", "audio::audio_mixer::AudioChannel::new"),
+            module_path_affinity(
+                "audio::audio_mixer",
+                "audio::audio_mixer::AudioChannel::new"
+            ),
             200
         );
         assert_eq!(
@@ -1984,7 +1968,15 @@ mod tests {
         let mut reg = SignatureRegistry::new();
         reg.add_function("Vec::push".into(), make_sig("push", 1, true));
 
-        let result = resolve_call_signature(&reg, "Vec::push", None, 1, &empty_aliases(), &empty_aliases(), None);
+        let result = resolve_call_signature(
+            &reg,
+            "Vec::push",
+            None,
+            1,
+            &empty_aliases(),
+            &empty_aliases(),
+            None,
+        );
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ExactQualified);
@@ -1996,8 +1988,15 @@ mod tests {
         let mut reg = SignatureRegistry::new();
         reg.add_function("Emitter::new".into(), make_sig("new", 2, false));
 
-        let result =
-            resolve_call_signature(&reg, "new", Some("Emitter"), 2, &empty_aliases(), &empty_aliases(), None);
+        let result = resolve_call_signature(
+            &reg,
+            "new",
+            Some("Emitter"),
+            2,
+            &empty_aliases(),
+            &empty_aliases(),
+            None,
+        );
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.resolution_method, ResolutionMethod::ReceiverQualified);
@@ -2031,7 +2030,15 @@ mod tests {
 
         // Looking up "new" bare with 2 args should NOT match Vec3::new (3 args)
         // and SHOULD match Emitter::new (2 args) via arg-count validation
-        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), &empty_aliases(), None);
+        let result = resolve_call_signature(
+            &reg,
+            "Emitter::new",
+            None,
+            2,
+            &empty_aliases(),
+            &empty_aliases(),
+            None,
+        );
         assert!(result.is_some());
         let r = result.unwrap();
         assert_eq!(r.qualified_key, "Emitter::new");
@@ -2180,7 +2187,10 @@ mod tests {
         );
         assert_eq!(sig.param_types.get(2), Some(&Type::String));
         assert_eq!(
-            sig.emitted_rust_ref_params.as_ref().and_then(|f| f.get(2)).copied(),
+            sig.emitted_rust_ref_params
+                .as_ref()
+                .and_then(|f| f.get(2))
+                .copied(),
             Some(false)
         );
         assert!(
@@ -2197,16 +2207,8 @@ mod tests {
             "ports::CredentialAuthenticator::authenticate".into(),
             FunctionSignature {
                 name: "authenticate".into(),
-                param_types: vec![
-                    Type::Custom("Self".into()),
-                    Type::String,
-                    Type::String,
-                ],
-                formal_param_types: vec![
-                    Type::Custom("Self".into()),
-                    Type::String,
-                    Type::String,
-                ],
+                param_types: vec![Type::Custom("Self".into()), Type::String, Type::String],
+                formal_param_types: vec![Type::Custom("Self".into()), Type::String, Type::String],
                 param_ownership: vec![
                     OwnershipMode::Borrowed,
                     OwnershipMode::Owned,
@@ -2262,7 +2264,10 @@ mod tests {
         );
         assert_eq!(sig.param_types.get(2), Some(&Type::String));
         assert_eq!(
-            sig.emitted_rust_ref_params.as_ref().and_then(|f| f.get(2)).copied(),
+            sig.emitted_rust_ref_params
+                .as_ref()
+                .and_then(|f| f.get(2))
+                .copied(),
             Some(false)
         );
     }
@@ -2475,7 +2480,15 @@ mod tests {
         reg.add_function("Foo::new".into(), make_sig("new", 3, false));
 
         // Call with 2 args should NOT match a 3-param signature
-        let result = resolve_call_signature(&reg, "Foo::new", None, 2, &empty_aliases(), &empty_aliases(), None);
+        let result = resolve_call_signature(
+            &reg,
+            "Foo::new",
+            None,
+            2,
+            &empty_aliases(),
+            &empty_aliases(),
+            None,
+        );
         assert!(result.is_none());
     }
 
@@ -2499,14 +2512,24 @@ mod tests {
             ),
         );
 
-        let result = resolve_call_signature(&reg, "Emitter::new", None, 2, &empty_aliases(), &empty_aliases(), None);
+        let result = resolve_call_signature(
+            &reg,
+            "Emitter::new",
+            None,
+            2,
+            &empty_aliases(),
+            &empty_aliases(),
+            None,
+        );
         assert!(result.is_some());
         assert!(result.unwrap().has_collision);
     }
 
     #[test]
     fn user_module_qualified_call_skips_bare_homonym_refresh() {
-        assert!(qualified_callee_skips_bare_homonym_lookup("draw::draw_text"));
+        assert!(qualified_callee_skips_bare_homonym_lookup(
+            "draw::draw_text"
+        ));
         assert!(qualified_callee_skips_bare_homonym_lookup("hud::draw_text"));
         assert!(!qualified_callee_skips_bare_homonym_lookup("draw_text"));
     }

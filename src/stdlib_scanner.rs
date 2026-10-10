@@ -1932,10 +1932,7 @@ mod tests {
             .expect("Server::serve must register from http.rs");
         assert!(sig.has_self_receiver);
         // handler formal: fn(ServerRequest) -> ServerResponse (Fn bound), not bare Custom(F)
-        let handler = sig
-            .param_types
-            .get(1)
-            .expect("serve(self, handler)");
+        let handler = sig.param_types.get(1).expect("serve(self, handler)");
         assert!(
             matches!(handler, Type::FunctionPointer { .. })
                 || matches!(handler, Type::Custom(n) if n == "Fn" || n == "FnMut"),

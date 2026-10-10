@@ -117,9 +117,8 @@ impl DependencyGraph {
         if set.is_empty() {
             return Vec::new();
         }
-        let counts_dep = |dep: usize| -> bool {
-            set.contains(&dep) && !self.dir_mod_indices.contains(&dep)
-        };
+        let counts_dep =
+            |dep: usize| -> bool { set.contains(&dep) && !self.dir_mod_indices.contains(&dep) };
         let mut in_degree: HashMap<usize, usize> = HashMap::new();
         for &idx in &set {
             let count = self
@@ -233,7 +232,8 @@ fn collect_defined_item_names(items: &[Item<'_>]) -> Vec<String> {
             Item::Mod { items, .. } => names.extend(collect_defined_item_names(items)),
             // `pub use types::Port` — re-export name is not a definition; defining
             // module is found via the item index from `types.wj`.
-            Item::Use { .. } | Item::Impl { .. } | Item::Macro { .. } | Item::BoundAlias { .. } => {}
+            Item::Use { .. } | Item::Impl { .. } | Item::Macro { .. } | Item::BoundAlias { .. } => {
+            }
             _ => {}
         }
     }
@@ -370,9 +370,12 @@ fn resolve_crate_or_absolute_path(
             // Prefer the submodule that *defines* `Port` under that package.
             if dir_mod_indices.contains(&idx) {
                 if let Some(ref item) = popped_item {
-                    if let Some(def) =
-                        prefer_defining_module_under_package(item, &resolved, item_to_modules, module_to_index)
-                    {
+                    if let Some(def) = prefer_defining_module_under_package(
+                        item,
+                        &resolved,
+                        item_to_modules,
+                        module_to_index,
+                    ) {
                         return Some(def);
                     }
                 }

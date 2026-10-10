@@ -217,10 +217,7 @@ path = "build/lib.rs"
         .unwrap();
         let mut opts = TestRunOptions::default();
         apply_inferred_test_options(root, &mut opts);
-        assert_eq!(
-            opts.use_build_dir.as_deref(),
-            Some(Path::new("build"))
-        );
+        assert_eq!(opts.use_build_dir.as_deref(), Some(Path::new("build")));
         assert!(opts.use_project_cargo);
     }
 

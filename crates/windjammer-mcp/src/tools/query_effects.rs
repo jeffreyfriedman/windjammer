@@ -22,8 +22,11 @@ pub async fn handle(
     _db: Arc<Mutex<WindjammerDatabase>>,
     params: Value,
 ) -> McpResult<ToolCallResult> {
-    let req: QueryEffectsRequest = serde_json::from_value(params)
-        .map_err(|e| crate::error::McpError::ValidationError { field: "params".into(), message: e.to_string() })?;
+    let req: QueryEffectsRequest =
+        serde_json::from_value(params).map_err(|e| crate::error::McpError::ValidationError {
+            field: "params".into(),
+            message: e.to_string(),
+        })?;
 
     let response = json!({
         "function": req.function_id,

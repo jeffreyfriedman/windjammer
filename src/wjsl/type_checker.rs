@@ -10,8 +10,8 @@ use std::collections::HashMap;
 
 /// Type check WJSL source. Returns Ok(()) if valid, Err with message if invalid.
 pub fn type_check_wjsl(source: &str) -> Result<()> {
-    let ast = parse_wjsl(source)
-        .map_err(|e| crate::wjsl::diagnostics::enrich_shader_error(e, source))?;
+    let ast =
+        parse_wjsl(source).map_err(|e| crate::wjsl::diagnostics::enrich_shader_error(e, source))?;
     check(&ast, source).map_err(|e| crate::wjsl::diagnostics::enrich_shader_error(e, source))
 }
 

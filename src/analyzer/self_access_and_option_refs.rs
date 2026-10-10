@@ -312,9 +312,12 @@ impl<'ast> Analyzer<'ast> {
         binding_type_bases: Option<&std::collections::HashMap<String, String>>,
     ) -> bool {
         match expr {
-            Expression::Block { statements, .. } => {
-                self.block_expr_calls_mut_self_on_id(statements.as_slice(), id, registry, binding_type_bases)
-            }
+            Expression::Block { statements, .. } => self.block_expr_calls_mut_self_on_id(
+                statements.as_slice(),
+                id,
+                registry,
+                binding_type_bases,
+            ),
             Expression::MethodCall {
                 object,
                 method,
@@ -370,12 +373,7 @@ impl<'ast> Analyzer<'ast> {
                 binding_type_bases,
             ),
             Expression::Call { arguments, .. } => arguments.iter().any(|(_, a)| {
-                self.expr_calls_mut_self_method_on_identifier(
-                    a,
-                    id,
-                    registry,
-                    binding_type_bases,
-                )
+                self.expr_calls_mut_self_method_on_identifier(a, id, registry, binding_type_bases)
             }),
             _ => false,
         }

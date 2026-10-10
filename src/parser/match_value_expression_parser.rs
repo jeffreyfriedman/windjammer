@@ -239,9 +239,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_match_value_atom_base(
-        &mut self,
-    ) -> Result<&'static Expression<'static>, String> {
+    fn parse_match_value_atom_base(&mut self) -> Result<&'static Expression<'static>, String> {
         match self.current_token() {
             Token::LParen => {
                 self.advance();

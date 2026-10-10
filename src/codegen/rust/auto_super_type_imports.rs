@@ -141,32 +141,36 @@ impl<'ast> CodeGenerator<'ast> {
         let mut uses = String::new();
         for type_name in names {
             let resolved = if let Some(ref cur) = current_module {
-                self.type_defining_modules.get(&type_name).and_then(|candidates| {
-                    if candidates.is_empty() {
-                        return None;
-                    }
-                    let best_lcp = candidates
-                        .iter()
-                        .map(|def_mod| {
-                            crate::analyzer::type_collector::longest_common_prefix_len(cur, def_mod)
-                        })
-                        .max()?;
-                    let tied: Vec<&Vec<String>> = candidates
-                        .iter()
-                        .filter(|def_mod| {
-                            crate::analyzer::type_collector::longest_common_prefix_len(
-                                cur, def_mod,
-                            ) == best_lcp
-                        })
-                        .collect();
-                    let best = tied.iter().min_by_key(|def_mod| {
-                        let tail = &def_mod[best_lcp..];
-                        (tail.len(), tail.iter().map(|s| s.len()).sum::<usize>())
-                    })?;
-                    crate::analyzer::type_collector::rust_use_path_from_module_to_type(
-                        cur, best, &type_name,
-                    )
-                })
+                self.type_defining_modules
+                    .get(&type_name)
+                    .and_then(|candidates| {
+                        if candidates.is_empty() {
+                            return None;
+                        }
+                        let best_lcp = candidates
+                            .iter()
+                            .map(|def_mod| {
+                                crate::analyzer::type_collector::longest_common_prefix_len(
+                                    cur, def_mod,
+                                )
+                            })
+                            .max()?;
+                        let tied: Vec<&Vec<String>> = candidates
+                            .iter()
+                            .filter(|def_mod| {
+                                crate::analyzer::type_collector::longest_common_prefix_len(
+                                    cur, def_mod,
+                                ) == best_lcp
+                            })
+                            .collect();
+                        let best = tied.iter().min_by_key(|def_mod| {
+                            let tail = &def_mod[best_lcp..];
+                            (tail.len(), tail.iter().map(|s| s.len()).sum::<usize>())
+                        })?;
+                        crate::analyzer::type_collector::rust_use_path_from_module_to_type(
+                            cur, best, &type_name,
+                        )
+                    })
             } else {
                 None
             };
@@ -192,7 +196,13 @@ impl<'ast> CodeGenerator<'ast> {
 fn extract_custom_types_from_rust_type_annotations(body: &str) -> Vec<String> {
     let mut out = std::collections::BTreeSet::new();
     let wrappers = [
-        "Vec<", "Option<", "SmallVec<[", "HashMap<", "HashSet<", "BTreeMap<", "BTreeSet<",
+        "Vec<",
+        "Option<",
+        "SmallVec<[",
+        "HashMap<",
+        "HashSet<",
+        "BTreeMap<",
+        "BTreeSet<",
     ];
     for wrapper in wrappers {
         let mut rest = body;

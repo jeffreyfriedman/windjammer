@@ -494,9 +494,9 @@ impl<'ast> CodeGenerator<'ast> {
                         let specialized = self
                             .registry_method_return_type(obj_type, method)
                             .or_else(|| {
-                                let base = receiver.as_deref().map(|r| {
-                                    r.split('<').next().unwrap_or(r)
-                                })?;
+                                let base = receiver
+                                    .as_deref()
+                                    .map(|r| r.split('<').next().unwrap_or(r))?;
                                 let leaf = base.rsplit("::").next().unwrap_or(base);
                                 self.lookup_method_signature(leaf, method)
                                     .and_then(|ms| ms.return_type.as_ref())
@@ -524,11 +524,9 @@ impl<'ast> CodeGenerator<'ast> {
                         // WJ `Map::get -> Option<V>` is surface sugar. Rust `HashMap::get`
                         // returns `Option<&V>` — match arms must see the reference so
                         // non-Copy payloads clone (P3.638).
-                        if let Some(shared) = self.map_shared_get_option_ref_return(
-                            obj_type,
-                            method,
-                            &ret,
-                        ) {
+                        if let Some(shared) =
+                            self.map_shared_get_option_ref_return(obj_type, method, &ret)
+                        {
                             return Some(shared);
                         }
                         return Some(ret);
@@ -604,8 +602,7 @@ impl<'ast> CodeGenerator<'ast> {
                 match (l, r) {
                     (Some(a), Some(b)) if a != b => {
                         let is_u32 = |t: &Type| {
-                            matches!(t, Type::Uint)
-                                || matches!(t, Type::Custom(n) if n == "u32")
+                            matches!(t, Type::Uint) || matches!(t, Type::Custom(n) if n == "u32")
                         };
                         // P3.578: `n / 2` with `n: u32` must stay u32 — do not let the
                         // untyped literal's default WJ `int` widen the binding (paint half).
@@ -750,7 +747,9 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(Type::Tuple(tys))
             }
             Expression::Array { elements, .. } => {
-                let elem = elements.first().and_then(|e| self.infer_expression_type(e))?;
+                let elem = elements
+                    .first()
+                    .and_then(|e| self.infer_expression_type(e))?;
                 Some(Type::Array(Box::new(elem), elements.len()))
             }
             // TDD FIX: Macro invocations return known types
@@ -787,8 +786,7 @@ impl<'ast> CodeGenerator<'ast> {
         method: &str,
         recorded: &Type,
     ) -> Option<Type> {
-        if matches!(recorded, Type::Option(inner) if matches!(inner.as_ref(), Type::Reference(_)))
-        {
+        if matches!(recorded, Type::Option(inner) if matches!(inner.as_ref(), Type::Reference(_))) {
             return None;
         }
         let Type::Option(inner) = recorded else {
@@ -835,20 +833,20 @@ impl<'ast> CodeGenerator<'ast> {
                 // Stdlib MethodSignature table (HashMap::values → Iterator<&V>, P3.646).
                 // Prefer parameterized `Iterator<item>` over a bare `Iterator` stub from
                 // registry/meta — bare Iterator collapses to the map receiver → `(K, V)`.
-                let from_stdlib = self.lookup_method_signature(candidate, method).and_then(|ms| {
-                    ms.return_type
-                        .as_ref()
-                        .map(|ret| Self::substitute_stdlib_generics(ret, &recv))
-                });
+                let from_stdlib = self
+                    .lookup_method_signature(candidate, method)
+                    .and_then(|ms| {
+                        ms.return_type
+                            .as_ref()
+                            .map(|ret| Self::substitute_stdlib_generics(ret, &recv))
+                    });
                 let pick = match (&from_stdlib, &from_registry) {
-                    (
-                        Some(Type::Parameterized(b, p)),
-                        _,
-                    ) if b == "Iterator" && p.len() == 1 => from_stdlib,
-                    (
-                        _,
-                        Some(Type::Parameterized(b, p)),
-                    ) if b == "Iterator" && p.len() == 1 => from_registry,
+                    (Some(Type::Parameterized(b, p)), _) if b == "Iterator" && p.len() == 1 => {
+                        from_stdlib
+                    }
+                    (_, Some(Type::Parameterized(b, p))) if b == "Iterator" && p.len() == 1 => {
+                        from_registry
+                    }
                     (Some(_), Some(Type::Custom(n))) if n == "Iterator" => from_stdlib,
                     (Some(t), _) => Some(t.clone()),
                     (_, Some(t)) => Some(t.clone()),

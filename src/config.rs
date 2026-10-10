@@ -204,7 +204,10 @@ impl AppCapabilities {
 
     /// Return the set of explicitly denied effects.
     pub fn denied_effects(&self) -> Vec<crate::ir::safety_type::Effect> {
-        self.deny.iter().filter_map(|s| parse_effect_name(s)).collect()
+        self.deny
+            .iter()
+            .filter_map(|s| parse_effect_name(s))
+            .collect()
     }
 }
 

@@ -36,8 +36,11 @@ pub async fn handle(
     _db: Arc<Mutex<WindjammerDatabase>>,
     params: Value,
 ) -> McpResult<ToolCallResult> {
-    let req: ChangeTypeRequest = serde_json::from_value(params)
-        .map_err(|e| crate::error::McpError::ValidationError { field: "params".into(), message: e.to_string() })?;
+    let req: ChangeTypeRequest =
+        serde_json::from_value(params).map_err(|e| crate::error::McpError::ValidationError {
+            field: "params".into(),
+            message: e.to_string(),
+        })?;
 
     let file_path = std::path::Path::new(&req.file);
     if !file_path.exists() {
@@ -49,8 +52,10 @@ pub async fn handle(
         });
     }
 
-    let content = std::fs::read_to_string(file_path)
-        .map_err(|e| crate::error::McpError::IoError { message: e.to_string() })?;
+    let content =
+        std::fs::read_to_string(file_path).map_err(|e| crate::error::McpError::IoError {
+            message: e.to_string(),
+        })?;
     let mut lines: Vec<String> = content.lines().map(String::from).collect();
 
     if req.line == 0 || req.line > lines.len() {
@@ -76,8 +81,9 @@ pub async fn handle(
     lines[line_idx] = original.replacen(&req.old_type, &req.new_type, 1);
 
     let new_content = lines.join("\n") + "\n";
-    std::fs::write(file_path, &new_content)
-        .map_err(|e| crate::error::McpError::IoError { message: e.to_string() })?;
+    std::fs::write(file_path, &new_content).map_err(|e| crate::error::McpError::IoError {
+        message: e.to_string(),
+    })?;
 
     let result = ChangeTypeResult {
         success: true,

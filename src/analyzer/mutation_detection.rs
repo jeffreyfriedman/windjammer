@@ -621,9 +621,7 @@ impl<'ast> Analyzer<'ast> {
                 }
 
                 // Module-qualified free calls parse as MethodCall (`station_builder.set_if`).
-                if let Some(func_name) =
-                    Self::method_call_module_qualified_name(object, method)
-                {
+                if let Some(func_name) = Self::method_call_module_qualified_name(object, method) {
                     for (i, (_, arg)) in arguments.iter().enumerate() {
                         if matches!(arg, Expression::Identifier { name: id, .. } if id == name)
                             && self.arg_passed_to_mut_borrowed_callee(
@@ -648,11 +646,8 @@ impl<'ast> Analyzer<'ast> {
                         // Receiver type for the *object*, not the checked arg name.
                         // `receiver_type_base_for_param_method_call(arg, …)` is wrong here:
                         // `loader.load(path)` checks `path` but the receiver is `loader`.
-                        let receiver_type = self.method_call_object_type_base(
-                            object,
-                            name,
-                            param_type_hint,
-                        );
+                        let receiver_type =
+                            self.method_call_object_type_base(object, name, param_type_hint);
                         // `out.push(item)` stores owned `item` into the receiver — not
                         // `&mut item` (Vec::push self slot is MutBorrowed, arg is Owned).
                         if Self::method_call_argument_stores_owned_payload(

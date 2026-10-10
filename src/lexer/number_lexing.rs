@@ -30,37 +30,36 @@ impl Lexer {
                         }
 
                         // Optional type suffix after hex digits (e.g. 0xFFu64)
-                        let type_suffix = if self.current_char == Some('u')
-                            || self.current_char == Some('i')
-                        {
-                            let mut suffix = String::new();
-                            while let Some(ch) = self.current_char {
-                                if ch.is_ascii_alphanumeric() {
-                                    suffix.push(ch);
-                                    self.advance();
-                                } else {
-                                    break;
+                        let type_suffix =
+                            if self.current_char == Some('u') || self.current_char == Some('i') {
+                                let mut suffix = String::new();
+                                while let Some(ch) = self.current_char {
+                                    if ch.is_ascii_alphanumeric() {
+                                        suffix.push(ch);
+                                        self.advance();
+                                    } else {
+                                        break;
+                                    }
                                 }
-                            }
-                            if crate::type_classification::is_numeric_suffix(&suffix) {
-                                Some(suffix)
-                            } else {
-                                for _ in 0..suffix.len() {
-                                    self.position = self.position.saturating_sub(1);
-                                }
-                                self.current_char = if self.position < self.input.len() {
-                                    Some(self.input[self.position])
+                                if crate::type_classification::is_numeric_suffix(&suffix) {
+                                    Some(suffix)
                                 } else {
+                                    for _ in 0..suffix.len() {
+                                        self.position = self.position.saturating_sub(1);
+                                    }
+                                    self.current_char = if self.position < self.input.len() {
+                                        Some(self.input[self.position])
+                                    } else {
+                                        None
+                                    };
                                     None
-                                };
+                                }
+                            } else {
                                 None
-                            }
-                        } else {
-                            None
-                        };
+                            };
 
-                        let parsed = u128::from_str_radix(&hex_str, 16)
-                            .expect("Invalid hex literal");
+                        let parsed =
+                            u128::from_str_radix(&hex_str, 16).expect("Invalid hex literal");
 
                         if let Some(suffix) = type_suffix {
                             let bits = parsed as u64;

@@ -159,10 +159,10 @@ pub fn generate_single_file_cargo_toml(
     write_cargo_toml(output_dir, source_dir, &lib_or_bin_section)
 }
 
+pub(crate) use toml_generation::find_wj_config;
 pub use toml_generation::generate_wasm_cargo_toml;
 pub use toml_generation::infer_configured_package_name;
 pub use toml_generation::infer_project_name_from;
-pub(crate) use toml_generation::find_wj_config;
 
 pub(crate) use dependency_management::{find_windjammer_runtime_path, path_to_toml_string};
 

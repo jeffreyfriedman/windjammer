@@ -14,11 +14,7 @@ pub fn execute(all: bool) -> Result<()> {
     let prune_report = crate::cargo_cache::prune_if_low_disk();
     total_freed += prune_report.freed_bytes;
     for p in &prune_report.removed_paths {
-        println!(
-            "  {} pruned {}",
-            "cleaned".green(),
-            p.display()
-        );
+        println!("  {} pruned {}", "cleaned".green(), p.display());
     }
 
     if all {
