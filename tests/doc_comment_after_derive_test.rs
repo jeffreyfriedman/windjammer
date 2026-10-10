@@ -20,7 +20,7 @@ use std::fs;
 /// "Unexpected token: DocComment(...)". Doc comments between @derive and struct
 /// should be accepted.
 ///
-/// Source: prefab_system.wj, crafting.wj in windjammer-game-core
+/// Source: prefab_system.wj, crafting.wj in a downstream game project
 use std::process::Command;
 
 #[test]

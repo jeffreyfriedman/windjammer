@@ -197,7 +197,7 @@ fn windjammer_bfs_svo_children_are_eight_contiguous_indices() {
     )
 }
 
-/// Minimal voxel grid + BFS SVO flatten (same shape as `windjammer-game-core` `svo_convert.wj`).
+/// Minimal voxel grid + BFS SVO flatten (same shape as `a downstream game project` `svo_convert.wj`).
 fn add_svo_bfs_compiler_fixture(test: &mut MultiFileTest) {
     test.add_file(
         "voxel_grid.wj",

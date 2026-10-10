@@ -51,7 +51,7 @@ impl Writer {
 }
 "#;
     let generated = test_utils::compile_single(source);
-    // Prefer owned `Key` + move into the owned Vec formal (WDB-096). The older
+    // Prefer owned `Key` + move into the owned Vec formal (). The older
     // Borrowed-`&Key` + `.clone()` path remains valid if inference demotes.
     let owned_move = generated.contains("key: Key")
         && generated.contains("ffi_write(key.bytes)")

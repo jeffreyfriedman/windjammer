@@ -1,6 +1,6 @@
 //! TDD tests for the typed lowering codegen overhaul.
 //!
-//! Each test encodes one of the 7 error classes found in windjammer-game-core downstream
+//! Each test encodes one of the 7 error classes found in a downstream game project downstream
 //! builds. Tests compile .wj programs to Rust and verify the generated code has correct
 //! ownership coercions.
 
@@ -61,36 +61,6 @@ fn build_wj_to_rust(test_name: &str, wj_source: &str) -> String {
     }
 
     stdout.to_string()
-}
-
-fn build_wj_multifile(test_name: &str, files: &[(&str, &str)]) -> Vec<(String, String)> {
-    let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("test_typed_lowering")
-        .join(test_name);
-    fs::create_dir_all(&test_dir).unwrap();
-
-    let mut results = Vec::new();
-    for (name, source) in files {
-        let test_file = test_dir.join(name);
-        fs::write(&test_file, source).unwrap();
-    }
-
-    for (name, _) in files {
-        let test_file = test_dir.join(name);
-        let output = Command::new(wj_binary())
-            .current_dir(&test_dir)
-            .arg("build")
-            .arg("--no-cargo")
-            .arg(&test_file)
-            .output()
-            .expect("Failed to run wj build");
-
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        results.push((name.to_string(), stdout));
-    }
-
-    results
 }
 
 // ============================================================================

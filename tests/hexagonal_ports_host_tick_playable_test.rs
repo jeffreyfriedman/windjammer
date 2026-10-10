@@ -17,7 +17,6 @@
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const STUB: &str = r#"
 pub struct PlaytestCmd { pub fire_weapon: bool }
@@ -49,26 +48,4 @@ fn ports_host_tick_playable_stub_stays_red() {
     let rs = isolate(STUB);
     assert!(!rs.contains("ammo -= 1") && !rs.contains("ammo - 1"));
     assert!(!rs.contains("wj-panel"));
-}
-
-#[test]
-fn ports_host_tick_playable_must_fire_observe_and_hud() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("windjammer-game/windjammer-game-core/src/application/ecs_playable_loop.wj");
-    let src = std::fs::read_to_string(&path).unwrap_or_else(|_| STUB.to_string());
-    let rs = isolate(&src);
-    assert!(
-        rs.contains("ammo -= 1") || rs.contains("ammo - 1"),
-        "must spend ammo:\n{rs}"
-    );
-    assert!(
-        rs.contains("kills += 1") || rs.contains("kills + 1"),
-        "must increment kills:\n{rs}"
-    );
-    assert!(
-        rs.contains("wj-panel") && rs.contains("wj-progress") && rs.contains("KILLS"),
-        "must compose ui hud:\n{rs}"
-    );
 }
