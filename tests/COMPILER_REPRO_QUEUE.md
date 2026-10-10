@@ -2,6 +2,27 @@
 
 
 
+## P3.777 (2026-10-09) — match scrutinee `string` passed owned into `&str` (no compiler src)
+
+`render(kind, json)` matches on `kind` and, in the `"aging"` arm, calls
+`aging(buckets, fallback, kind)`. `escape_html` demotes `kind` to `&str`, but
+tip `wj` (2026-10-09 19:34) and the in-tree compiler both emit
+`aging(&buckets, &fallback, kind)`.
+
+The sibling `table_html` arm in the same file borrows its strings and moves
+the `Vec`. Finance-screens `make build` with that same `wj` is still the two
+P3.771 E0308s (`general_ledger_table_html(account_code, as_of.clone(), …, &lines)`
+and `aging_report_html(&buckets, parties, fallback, title, kind)`).
+
+| Gate | Status |
+|------|--------|
+| `match_scrutinee_str_must_be_borrowed_at_call` | ❌ isolate RED — `aging(&buckets, &fallback, kind)` while `kind: &str` |
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --test all --features integration_tests,codegen_tests -- match_scrutinee_str_must_be_borrowed_at_call` — RED (2026-10-09).
+
+
 ## P3.776 (2026-10-09) — TDD WDB-477 (DB agent; no compiler src)
 
 A Copy `f32` struct field must not `.clone()` when read into another struct.
@@ -125,7 +146,7 @@ A small cross-module isolate keeps every formal owned (`String` / `Vec`) and pas
 |------|--------|
 | `mixed_str_and_owned_vec_call_must_borrow_strings_only` | ✅ isolate GREEN — formals stay owned |
 | `replace_demoted_str_beside_owned_vec_must_borrow_strings_only` | ✅ isolate GREEN — `table_html(&account_code, &as_of, lines)` after `lines.len() == 0` |
-| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` (reconfirmed on 18:36 `wj`) |
+| `finance_screens_mixed_str_vec_calls_must_match_formals` | ❌ tip RED — `build/read_models.rs` (reconfirmed on 19:34 `wj`, same two E0308s) |
 
 **Do not steal:** compiler `src/` (other agent).
 
