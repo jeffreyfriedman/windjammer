@@ -179,7 +179,7 @@ pub(crate) fn build_library_multipass(
     base_path: &Path,
     output: &Path,
     target: CompilationTarget,
-    library: bool,
+    _library: bool,
     enable_lint: bool,
     external_paths: &HashMap<String, PathBuf>,
     mut crate_metadata: CrateMetadata,

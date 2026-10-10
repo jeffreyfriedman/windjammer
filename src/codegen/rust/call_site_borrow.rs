@@ -232,7 +232,7 @@ fn lookup_free_fn_signature<'a>(
 pub(crate) fn skip_stale_borrow_on_owned_user_free_fn_with_global(
     registry: &crate::analyzer::SignatureRegistry,
     global: Option<&crate::analyzer::SignatureRegistry>,
-    callee_name: &str,
+    _callee_name: &str,
     call_sig: &FunctionSignature,
     param_idx: usize,
     arg_index: usize,

@@ -2808,7 +2808,7 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         name: &str,
     ) -> bool {
-        use crate::parser::Expression;
+        
         if self.current_function_body.is_empty() {
             return false;
         }

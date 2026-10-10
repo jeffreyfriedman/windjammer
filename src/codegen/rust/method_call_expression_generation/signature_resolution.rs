@@ -3,7 +3,6 @@
 use crate::analyzer::FunctionSignature;
 use crate::parser::{Expression, Type};
 
-use crate::codegen::rust::call_signature_resolution::resolve_method_for_call_site_in_module;
 use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {

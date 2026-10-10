@@ -3,7 +3,7 @@
 use crate::analyzer::{Analyzer, SignatureRegistry};
 use crate::codegen::rust::CodeGenerator;
 use crate::metadata::{
-    metadata_function_sig_from_analyzer, signature_targets_local_struct,
+    metadata_function_sig_from_analyzer,
     struct_name_from_method_key, CrateMetadata,
 };
 use crate::parser::ast::core::Item;

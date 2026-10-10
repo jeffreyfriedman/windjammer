@@ -111,7 +111,7 @@ pub(crate) fn copy_sibling_rs_from_parent(
     output_dir: &Path,
     layout: Option<(&Path, &Path)>,
 ) -> std::io::Result<()> {
-    use std::fs;
+    
 
     let copy_from = if let Some((_out_root, _src_root)) = layout {
         match super::path_utilities::source_dir_for_output(output_dir, layout) {

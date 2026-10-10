@@ -2059,7 +2059,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub(in crate::codegen::rust) fn parser_type_to_promotion_int_type(
         ty: &Type,
     ) -> Option<crate::type_inference::IntType> {
-        use crate::type_inference::{promote_types, IntType};
+        use crate::type_inference::IntType;
         match ty {
             // Windjammer `int` is i64 in Rust codegen — never promote as i32 (P3.267).
             Type::Int => Some(IntType::I64),

@@ -9401,7 +9401,7 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
         param_name: &str,
-        func: &FunctionDecl<'ast>,
+        _func: &FunctionDecl<'ast>,
     ) -> Option<(String, usize)> {
         match expr {
             Expression::Call {
