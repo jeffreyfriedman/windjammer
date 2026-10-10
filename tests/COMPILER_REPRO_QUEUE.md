@@ -2,6 +2,26 @@
 
 
 
+## P3.789 (2026-10-10) — `for`-in counter later cast to `f32` must not be `i64`
+
+`rendering/visual_verification.wj` `non_black_percentage` writes `let mut count = 0`, increments it inside `for p in self.pixels`, then returns `(count as f32) / (self.pixels.len() as f32)`. Tip-out emits `let mut count = 0_i64`. The counter is not used as an index.
+
+| Gate | Status |
+|------|--------|
+| P3.789 MultiFile | pending this run |
+| P3.789 tip-out | pending this run — `gen/rendering/visual_verification.rs` |
+
+**Root cause layer:** codegen — an untyped `+ 1` counter whose only later use is `as f32` defaults to `i64`.
+
+**Why this is a new class:**
+- P3.783 and P3.785 are index counters (`vec[b]`, `haystack[i + j]`).
+- P3.775 is `+= 1` beside an explicit `u32` loop.
+- This counter is incremented in `for p in pixels` and then divided as `f32` by `.len()`.
+
+**Do not steal:** WDB-406/408/411/457–481, P3.508–P3.788, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- for_in_f32_ratio_count` — pending.
+
 ## P3.787 (2026-10-10) — declared `i32` compared with `< 0` must not widen
 
 `networking/snapshot.wj` writes `let mut from_idx: i32 = -1`, assigns `from_idx = i as i32`, then `if from_idx < 0`. Tip-out emits `from_idx < (0_i64 as i64)`. The sibling `eidx >= 0` in the same function stays `0_i32`.
