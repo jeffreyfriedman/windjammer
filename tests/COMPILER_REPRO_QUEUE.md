@@ -2,6 +2,25 @@
 
 
 
+## P3.795 (2026-10-10) — index `for i in 0..len()` must stay `usize` when the source returns `i as i32`
+
+`assets/pipeline.wj` `find_texture` writes `for i in 0..self.textures.len()`, indexes `self.textures[i]`, and `return i as i32`. Tip-out emits `for i in 0_i32..(self.textures.len() as i32)` and `self.textures[(i as usize)]`.
+
+| Gate | Status |
+|------|--------|
+| P3.795 MultiFile | pending this run |
+| P3.795 tip-out | pending this run — `gen/assets/pipeline.rs` |
+
+**Root cause layer:** codegen — `return i as i32` pulls the index range down to `i32` even though the source cast says `i` is not `i32`.
+
+**Why this is a new class:**
+- P3.792 is a sibling `count: i32` tally. The loop variable is only an index.
+- This loop variable is indexed and then explicitly `return i as i32`.
+
+**Do not steal:** WDB-406/408/411/457–484, P3.508–P3.794, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- index_loop_returned_as_i32` — pending.
+
 ## P3.794 (2026-10-10) — TDD WDB-484 (DB agent; no compiler src)
 
 A struct parameter pushed into a `Vec` and then passed to a later call must not `.clone().clone()` on the push. One clone into `push` is enough.
@@ -81,7 +100,7 @@ Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `self.bin
 
 ## P3.791 (2026-10-10) — cross-module `"${json}"` moved before a later `json.clone()` (no compiler src)
 
-Oct 10 13:56 `wj` finance-screens regen is still cargo-red on the same E0382, and that binary still emits `parse_aging_bucket_fields(json)` then `parse_aging_party_line_fields(json.clone())` for the isolate. HEAD cargo re-run at 13:27: 0 passed, 1 failed. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
+Oct 10 14:15 `wj` finance-screens regen is still cargo-red on the same E0382, and that binary still emits `parse_aging_bucket_fields(json)` then `parse_aging_party_line_fields(json.clone())` for the isolate. HEAD cargo re-run at 13:27: 0 passed, 1 failed. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
 
 A same-file pair of owned parsers clones before the later use. The cross-module shape, with `&str` title/kind helpers and a later match arm that also uses `json`, moves on the `"${json}"` argument.
 
