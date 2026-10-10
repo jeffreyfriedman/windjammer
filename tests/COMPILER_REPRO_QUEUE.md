@@ -31,11 +31,12 @@ with `child_count` from `.len()` and `gap: f32`. Tip-out emits
 
 | Gate | Status |
 |------|--------|
-| `f32_times_len_minus_one_cast_must_parenthesize` | ❌ isolate RED — `child_count > 1_usize` then `container.gap as f32 * (child_count - 1_usize) as f32` |
-| `f32_times_len_minus_one_cast_tip_out_layout` | ❌ tip-out RED — `gen/ui/layout.rs` has `child_count > 1_i32` and `self.gap as f32 * (child_count - 1_usize) as f32` |
+| `f32_times_len_minus_one_cast_must_parenthesize` | ✅ isolate GREEN — `as` binds tighter than `*`, so `gap * (n - 1_usize) as f32` is `f32 * f32` |
+| `f32_times_len_minus_one_cast_tip_out_layout` | ❌ tip-out RED if `gen/ui/layout.rs` still has `child_count > 1_i32` (stale; do not regen) |
 
-**Root cause layer:** integer suffix and cast grouping on a length used as an
-`f32` scale. Distinct from P3.753 (`u32` product wrapped in `as f32`).
+**Root cause layer:** the isolate's "ungrouped cast" check did not match Rust precedence. `as` is tighter than `*`. Confirmed with `rustc`: `gap as f32 * (child_count - 1_usize) as f32` evaluates as f32.
+
+**What became unnecessary:** treating `(child_count - 1_usize) as f32` beside a multiply as an f32*usize bug.
 
 **Do not steal:** compiler `src/`.
 

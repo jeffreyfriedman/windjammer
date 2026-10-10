@@ -23,7 +23,10 @@ mod integration_test_helpers;
 use integration_test_helpers::MultiFileTest;
 
 fn bad_gap(body: &str) -> bool {
-    body.contains("> 1_i32") || body.contains("* (child_count - 1_usize) as f32")
+    // `as` binds tighter than `*`, so `gap * (n - 1_usize) as f32` is
+    // `gap * ((n - 1_usize) as f32)`. Reject an i32 compare and a length term
+    // that is not cast to f32.
+    body.contains("> 1_i32") || !body.contains("(child_count - 1_usize) as f32")
 }
 
 #[test]
@@ -90,9 +93,7 @@ fn f32_times_len_minus_one_cast_tip_out_layout() {
         }
         saw = true;
         let text = std::fs::read_to_string(path).expect("layout.rs");
-        if text.contains("child_count > 1_i32")
-            || text.contains("self.gap as f32 * (child_count - 1_usize) as f32")
-        {
+        if text.contains("child_count > 1_i32") {
             bad_paths.push(path.display().to_string());
         }
     }
