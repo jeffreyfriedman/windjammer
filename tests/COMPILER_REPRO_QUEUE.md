@@ -2,6 +2,21 @@
 
 
 
+## P3.791 (2026-10-10) — cross-module `"${json}"` moved before a later `json.clone()` (no compiler src)
+
+Oct 10 10:16 `wj` finance-screens regen is cargo-red on one E0382. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
+
+A same-file pair of owned parsers clones before the later use. The cross-module shape, with `&str` title/kind helpers and a later match arm that also uses `json`, moves on the `"${json}"` argument.
+
+| Gate | Status |
+|------|--------|
+| `p3791_cross_module_json_interp_must_clone_before_later_use` | ❌ isolate RED — `parse_aging_bucket_fields(json)` then `parse_aging_party_line_fields(json.clone())` |
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --test all --features integration_tests,codegen_tests -- p3791_cross_module_json_interp` — RED (2026-10-10).
+
+
 ## P3.790 (2026-10-10) — TDD WDB-482 (DB agent; no compiler src)
 
 A local `string` passed into a call on one `if let` arm and returned on the other must not `.clone()`. The arms are exclusive.
