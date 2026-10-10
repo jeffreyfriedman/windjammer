@@ -1,7 +1,4 @@
 //! Owned Vec formals in a loop with move-then-reassign must pass by value, not `&`.
-//!
-//! Dogfood: `graph_csr_sort_vertex_neighbors(&neighbors, &weights, ...)` when callee
-//! expects `Vec<i64>` / `Vec<f64>` (E0308 in wdb-layers graph_csr_engine).
 
 #![cfg(any(
     not(any(

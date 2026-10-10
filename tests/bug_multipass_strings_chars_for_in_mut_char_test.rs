@@ -13,9 +13,6 @@
 
 //! FAILING REPRO — multipass `for ch in strings.chars(text)` must not emit `&mut char`
 //! at `char_to_digit` call sites (E0277 / E0596).
-//!
-//! Ecosystem `wj-notes-api` / `wj-fetch` on wj 0.50.0 (2026-08-31) emits
-//! `match char_to_digit(&mut ch)` and `if ch == '0'` with `ch: &mut char`.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

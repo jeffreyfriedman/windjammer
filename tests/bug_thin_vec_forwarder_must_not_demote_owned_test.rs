@@ -12,9 +12,6 @@
 ))]
 
 //! FAILING REPRO — thin Vec forwarder must not demote to `&Vec` while callee stays owned.
-//!
-//! Product tip api-check (LedgerKit request_context.wj):
-//!   `post_request(headers: &Vec)` calling `post_request_query(..., Vec)` → E0308.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

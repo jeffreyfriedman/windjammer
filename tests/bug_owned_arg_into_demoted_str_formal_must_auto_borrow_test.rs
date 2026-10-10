@@ -1,7 +1,4 @@
 //! Owned `string` args into demoted `&str` formals must auto-borrow (E0308 otherwise).
-//!
-//! Ecosystem: `wj-notes-api` → `wj-validate::require_nonempty(field, value)` and
-//! `wj-url` → `wj-querystring` thin-wrap attempts fail with `expected &str, found String`.
 
 #![cfg(any(
     not(any(

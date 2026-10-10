@@ -12,7 +12,7 @@
 /// Bug: Compiler fails to add & or .clone() for nested field access like stack.item.id
 /// where stack is from &collection and parameter expects &String
 ///
-/// Real-world case from windjammer-game/rpg/trading.wj:
+/// Real-world case (trading):
 /// ```windjammer
 /// for stack in &self.merchant_offer {
 ///     if !merchant.has_item(stack.item.id, stack.quantity) {

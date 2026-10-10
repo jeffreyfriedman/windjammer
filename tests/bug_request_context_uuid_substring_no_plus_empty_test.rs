@@ -11,8 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! GREEN regression — LedgerKit `request_context` UUID / Bearer substring without
-//! `+ ""`. Tip must emit usize indices (not `String as usize`) and cargo-check.
+//! Regression: request context uuid substring no plus empty.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

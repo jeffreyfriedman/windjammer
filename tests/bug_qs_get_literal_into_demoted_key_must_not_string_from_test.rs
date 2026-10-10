@@ -13,9 +13,6 @@
 
 //! Cross-crate `get(query: String, key: &str)` must keep `"pretty"` as `&str`,
 //! not `String::from("pretty")`.
-//!
-//! Ecosystem `wj-notes-api` `query_wants_pretty`: `qs_get(query, "pretty")`
-//! emits E0308 `expected &str, found String`. Distinct from WDB-168 (same-crate).
 
 use std::fs;
 use std::process::Command;
@@ -170,9 +167,9 @@ pub fn query_wants_pretty(query: string) -> bool {
     );
 }
 
-/// Product shape: path-dep is a `build/` tree with generated `lib.rs` and no
+/// Shape: path-dep is a `build/` tree with generated `lib.rs` and no
 /// `metadata.json` / `--metadata` flags. Isolate above is GREEN with `--library`
-/// metadata; notes-api product still emits `"pretty".to_string()`.
+/// metadata; codegen still emitted `"pretty".to_string()`.
 #[test]
 fn qs_get_literal_from_generated_rs_path_dep_must_not_string_from() {
     let tmp = TempDir::new().expect("tempdir");
