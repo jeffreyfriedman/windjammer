@@ -1331,6 +1331,8 @@ pub(crate) fn build_library_multipass(
                         existing, sig,
                     ) || crate::codegen::rust::signature_promotion::shared_ref_emission_beats(
                         existing, sig,
+                    ) || crate::codegen::rust::signature_promotion::defining_text_demotion_beats_owned_string_snapshot(
+                        existing, sig,
                     ) {
                         continue;
                     }

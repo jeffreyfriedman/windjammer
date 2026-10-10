@@ -1873,10 +1873,17 @@ impl SignatureRegistry {
                 }
                 // WDB-398: only same-shape mixed incumbents may block an owned refresh.
                 // Arity-bloated mixed bags (`new` with 6× MaterialPalette) must not win.
+                if crate::codegen::rust::signature_promotion::defining_text_demotion_beats_owned_string_snapshot(
+                    existing, sig,
+                ) {
+                    continue;
+                }
                 if crate::codegen::rust::signature_promotion::signature_param_shapes_compatible(
                     existing, sig,
                 ) && crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
                     existing, sig,
+                ) && !crate::codegen::rust::signature_promotion::defining_text_demotion_beats_owned_string_snapshot(
+                    sig, existing,
                 ) {
                     continue;
                 }

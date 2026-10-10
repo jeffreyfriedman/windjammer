@@ -11,13 +11,9 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.777: a `string` match scrutinee that is also passed into an `&str`
-//! formal must be borrowed. Tip `wj` (2026-10-09 19:34) emits
-//! `aging(&buckets, &fallback, kind)` while `kind: &str`.
-//!
-//! The sibling `table_html` arm in this file already borrows its strings and
-//! moves the `Vec`. Finance-screens `general_ledger_table_html` is still the
-//! product RED in P3.771.
+//! P3.777: a `string` match scrutinee that is only matched and passed into an
+//! `&str` formal is itself demoted to `&str`. The call passes that binding
+//! bare. An extra `&kind` is `&&str`. Owned locals (`fallback`) still borrow.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -117,12 +113,19 @@ fn match_scrutinee_str_must_be_borrowed_at_call() {
         rs.contains("fn aging(") && rs.contains("kind: &str"),
         "P3.777: escape_html must demote aging's kind formal to &str:\n{rs}"
     );
+    assert!(
+        rs.contains("fn render(kind: &str"),
+        "P3.777: match scrutinee `kind` demotes with the callee:\n{rs}"
+    );
     let aging = rs
         .lines()
         .find(|l| l.contains("aging(") && !l.contains("fn aging"))
         .unwrap_or("");
     assert!(
-        aging.contains("&fallback") && aging.contains("&kind"),
-        "P3.777: match scrutinee `kind` must be borrowed, got `{aging}`:\n{rs}"
+        aging.contains("&fallback")
+            && aging.contains("kind)")
+            && !aging.contains("&kind")
+            && !aging.contains("kind.clone()"),
+        "P3.777: already-`&str` scrutinee passes bare, owned fallback borrows, got `{aging}`:\n{rs}"
     );
 }

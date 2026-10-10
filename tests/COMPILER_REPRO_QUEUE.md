@@ -2,6 +2,48 @@
 
 
 
+## P3.781 (2026-10-09) — cross-module `aging` must move `Vec`s and borrow demoted strings
+
+`read.wj` calls `tables::aging(buckets, parties, fallback, title, wire)`.
+Formal emit is `(Vec<Bucket>, Vec<Line>, &str, &str, &str)`. The pre-codegen
+snapshot records `(Vec, &Vec<Line>, String, String, String)` and has more
+`emitted=false` slots, so registry merge kept the snapshot. The call was
+`aging(buckets, &parties, fallback, title, wire)`.
+
+| Gate | Status |
+|------|--------|
+| `cross_module_aging_must_move_vecs_and_borrow_demoted_strs` | ✅ isolate GREEN — `aging(buckets, parties, &fallback, &title, &wire)` |
+
+**Root cause layer:** signature. `defining_mixed_owned_emission_beats` ranked the analysis snapshot above the defining-module formal emit because the snapshot owned more string slots.
+
+**What became unnecessary:** treating a higher owned-slot count as permission to drop a defining-module `&str` demotion.
+
+**Gates:** `cargo test --release --test all -- cross_module_aging_must_move_vecs_and_borrow_demoted_strs text_demotion_emit_beats_snapshot`
+
+
+## P3.783 (2026-10-09) — `while b + 1 < vec.len()` index must not be `i64`
+
+`editor/weight_paint.wj` `limit_influences` writes `let mut b = 0` then
+`while b + 1 < pairs.len()` and indexes `pairs[b]`. A sibling counter in the
+same function (`while i < self.weights.len()`) emits `usize`. Tip-out emits
+`let mut b = 0_i64` and `while b + 1_i64 < ((pairs.len() as i64))`.
+
+| Gate | Status |
+|------|--------|
+| P3.783 MultiFile | pending this run |
+| P3.783 tip-out | pending this run — `gen/editor/weight_paint.rs` |
+
+**Root cause layer:** codegen — `b + 1 < Vec::len()` widens the untyped counter to `i64` even though `b` indexes the same vec.
+
+**Why this is a new class:**
+- P3.773 is a `for`-loop counter `idx < barriers.len()`.
+- P3.775 is `configured_count += 1` beside a `u32` loop, not a vec index.
+- This is `while b + 1 < pairs.len()` with `pairs[b]` and `pairs[b + 1]`.
+
+**Do not steal:** WDB-406/408/411/457–479, P3.508–P3.782, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- while_plus_one_len_index` — pending.
+
 ## P3.782 (2026-10-09) — TDD WDB-479 (DB agent; no compiler src)
 
 A reused `string` inserted into a map must not `.clone().clone()`. `contains_key` and `get_mut` borrow, so one clone into `insert` is enough.
@@ -126,11 +168,13 @@ and `aging_report_html(&buckets, parties, fallback, title, kind)`).
 
 | Gate | Status |
 |------|--------|
-| `match_scrutinee_str_must_be_borrowed_at_call` | ❌ isolate RED — `aging(&buckets, &fallback, kind)` while `kind: &str` |
+| `match_scrutinee_str_must_be_borrowed_at_call` | ✅ isolate GREEN — `render(kind: &str)` passes bare `kind`; `&fallback` still borrows the owned local |
 
-**Do not steal:** compiler `src/`.
+**Root cause layer:** signature. Both formals demote to `&str`. A second `&kind` would be `&&str`. Rust rejects bare `String` under `match kind.as_str()`, which is why an owned scrutinee would need `&`; this scrutinee is not owned.
 
-**Gates:** `cargo test --test all --features integration_tests,codegen_tests -- match_scrutinee_str_must_be_borrowed_at_call` — RED (2026-10-09).
+**What became unnecessary:** requiring `&kind` on a binding whose emitted formal is already `&str`.
+
+**Gates:** `cargo test --release --test all -- match_scrutinee_str_must_be_borrowed_at_call`
 
 
 ## P3.776 (2026-10-09) — TDD WDB-477 (DB agent; no compiler src)

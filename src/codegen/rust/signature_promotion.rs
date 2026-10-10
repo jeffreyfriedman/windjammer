@@ -1591,6 +1591,62 @@ pub(crate) fn defining_mixed_owned_emission_beats(
         && owned_emission_slot_count(candidate) > owned_emission_slot_count(incumbent)
 }
 
+/// Defining-module formal emit demoted WJ `string` slots to `&str` while `snapshot`
+/// still records those slots as owned `String`.
+///
+/// `defining_mixed_owned_emission_beats` counts `emitted=false` slots, so the
+/// snapshot (more owned strings, one borrowed `Vec`) outranks the emit (owned
+/// `Vec`s, `&str` tails). Call sites then borrow the vec and move the strings
+/// (P3.781 `aging`).
+pub(crate) fn defining_text_demotion_beats_owned_string_snapshot(
+    defining: &FunctionSignature,
+    snapshot: &FunctionSignature,
+) -> bool {
+    let Some(flags) = defining.emitted_rust_ref_params.as_ref() else {
+        return false;
+    };
+    let n = defining
+        .param_ownership
+        .len()
+        .min(snapshot.param_ownership.len())
+        .min(flags.len());
+    (0..n).any(|idx| {
+        if defining.has_self_receiver && idx == 0 {
+            return false;
+        }
+        if !flags[idx] {
+            return false;
+        }
+        let text_ref = defining.param_types.get(idx).is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                || matches!(
+                    t,
+                    Type::Reference(inner) | Type::MutableReference(inner)
+                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                )
+        }) || defining.formal_param_type(idx).is_some_and(|t| {
+            crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+                || matches!(
+                    t,
+                    Type::Reference(inner) | Type::MutableReference(inner)
+                        if crate::codegen::rust::types::is_windjammer_text_type(inner)
+                )
+        });
+        if !text_ref {
+            return false;
+        }
+        let snapshot_shared = snapshot
+            .emitted_rust_ref_params
+            .as_ref()
+            .and_then(|f| f.get(idx).copied())
+            == Some(true)
+            || snapshot.param_types.get(idx).is_some_and(|t| {
+                crate::codegen::rust::string_utilities::param_is_rust_str_ref(t)
+            });
+        !snapshot_shared
+    })
+}
+
 /// Codegen recorded both a shared-ref slot and an owned-emission slot
 /// (`require_nonempty(field: &str, value: String)` → `[true, false]`).
 pub(crate) fn signature_has_mixed_shared_and_owned_emission(sig: &FunctionSignature) -> bool {
@@ -3055,6 +3111,119 @@ mod prefer_shared_runtime_tests {
         assert_eq!(
             merged.emitted_rust_ref_params.as_deref(),
             Some(&[false, false][..])
+        );
+    }
+
+    fn aging_sig(
+        name: &str,
+        param_types: Vec<Type>,
+        ownership: Vec<OwnershipMode>,
+        emitted: Vec<bool>,
+    ) -> FunctionSignature {
+        FunctionSignature {
+            name: name.into(),
+            param_types: param_types.clone(),
+            formal_param_types: param_types,
+            param_ownership: ownership,
+            return_type: Some(Type::String),
+            return_ownership: OwnershipMode::Owned,
+            has_self_receiver: false,
+            is_extern: false,
+            emitted_rust_ref_params: Some(emitted),
+            string_ref_string_formal_params: None,
+            field_extract_params: None,
+            forwarding_borrow_params: None,
+        }
+    }
+
+    #[test]
+    fn text_demotion_emit_beats_snapshot_that_owns_more_strings() {
+        let str_ref = Type::Reference(Box::new(Type::Custom("str".into())));
+        let emit = aging_sig(
+            "aging",
+            vec![
+                Type::Vec(Box::new(Type::Custom("Bucket".into()))),
+                Type::Vec(Box::new(Type::Custom("Line".into()))),
+                str_ref.clone(),
+                str_ref.clone(),
+                str_ref,
+            ],
+            vec![
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Borrowed,
+            ],
+            vec![false, false, true, true, true],
+        );
+        let snapshot = aging_sig(
+            "aging",
+            vec![
+                Type::Vec(Box::new(Type::Custom("Bucket".into()))),
+                Type::Reference(Box::new(Type::Vec(Box::new(Type::Custom("Line".into()))))),
+                Type::String,
+                Type::String,
+                Type::String,
+            ],
+            vec![
+                OwnershipMode::Owned,
+                OwnershipMode::Borrowed,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+                OwnershipMode::Owned,
+            ],
+            vec![false, true, false, false, false],
+        );
+        assert!(defining_text_demotion_beats_owned_string_snapshot(
+            &emit, &snapshot
+        ));
+        assert!(!defining_text_demotion_beats_owned_string_snapshot(
+            &snapshot, &emit
+        ));
+        assert!(
+            !defining_mixed_owned_emission_beats(&emit, &snapshot),
+            "slot count must not be the reason the emit wins"
+        );
+        let mut reg = crate::analyzer::SignatureRegistry::empty();
+        reg.add_function("aging".into(), snapshot);
+        let mut refreshed = crate::analyzer::SignatureRegistry::empty();
+        refreshed.add_function("aging".into(), emit.clone());
+        reg.merge(&refreshed);
+        let kept = reg.get_signature("aging").expect("aging");
+        assert_eq!(
+            kept.emitted_rust_ref_params.as_deref(),
+            Some(&[false, false, true, true, true][..])
+        );
+        // Caller-file snapshot must not clobber the emit.
+        let mut caller = crate::analyzer::SignatureRegistry::empty();
+        caller.add_function(
+            "aging".into(),
+            aging_sig(
+                "aging",
+                vec![
+                    Type::Vec(Box::new(Type::Custom("Bucket".into()))),
+                    Type::Reference(Box::new(Type::Vec(Box::new(Type::Custom("Line".into()))))),
+                    Type::String,
+                    Type::String,
+                    Type::String,
+                ],
+                vec![
+                    OwnershipMode::Owned,
+                    OwnershipMode::Borrowed,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                    OwnershipMode::Owned,
+                ],
+                vec![false, true, false, false, false],
+            ),
+        );
+        reg.merge(&caller);
+        assert_eq!(
+            reg.get_signature("aging")
+                .and_then(|s| s.emitted_rust_ref_params.clone())
+                .as_deref(),
+            Some(&[false, false, true, true, true][..])
         );
     }
 
