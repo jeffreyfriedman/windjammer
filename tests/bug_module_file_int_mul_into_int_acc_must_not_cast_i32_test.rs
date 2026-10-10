@@ -11,11 +11,10 @@
     feature = "integration_tests",
 ))]
 
-//! P3.317: `total = total + (n * mult)` with `n`/`mult`/`total: int` must not
+//! `total = total + (n * mult)` with `n`/`mult`/`total: int` must not
 //! emit `(n * mult) as i32` when `int` lowers to i64 (`wj-duration` parse_ms).
 //!
-//! Product: `Ok(total)` E0308 expected i64 found i32, or i64 += i32.
-//! (P3.316 is DB-235–238 coverage — do not collide.)
+//! `Ok(total)` E0308 expected i64 found i32, or i64 += i32.
 
 use std::fs;
 use std::process::Command;
@@ -65,11 +64,11 @@ fn module_file_int_mul_into_int_acc_must_not_cast_i32() {
 
     let generated = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
     if bad_mul_as_i32(&generated) {
-        eprintln!("P3.317 RED:\n{generated}");
+        eprintln!("RED:\n{generated}");
     }
     assert!(
         !bad_mul_as_i32(&generated),
-        "RED P3.317: int*(int) into int accumulator must not cast to i32:\n{generated}"
+        "RED int*(int) into int accumulator must not cast to i32:\n{generated}"
     );
 
     let check = Command::new("cargo")
