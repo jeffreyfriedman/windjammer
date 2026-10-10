@@ -15,7 +15,6 @@
 // Bug: scores.push(0.0) generates 0.0_f64 for Vec<f32>
 // Expected: Vec<f32> → push(f32) should constrain argument
 //
-// Dogfooding Win: Common pattern in game code
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -44,7 +43,6 @@ fn init_scores() -> Vec<f32> {
     );
 }
 
-/// Bug (Phase 38 / Graphalytics): `Vec<f64>.push(0.0)` emitted `0.0_f32` (default float).
 #[test]
 fn test_vec_f64_push_float_literal() {
     let wj_source = r#"
@@ -72,7 +70,7 @@ fn init_scores() -> Vec<f64> {
     );
 }
 
-/// DB-092: `distances[u] = 0.0` on `Vec<f64>` must emit `0.0_f64`, not default `0.0_f32`.
+/// `distances[u] = 0.0` on `Vec<f64>` must emit `0.0_f64`, not default `0.0_f32`.
 #[test]
 fn test_vec_f64_index_assign_float_literal() {
     let wj_source = r#"
@@ -100,7 +98,7 @@ fn seed_source() {
     );
 }
 
-/// DB-092: comparison against Vec&lt;f64&gt; element must also use f64 literal.
+/// comparison against Vec&lt;f64&gt; element must also use f64 literal.
 #[test]
 fn test_vec_f64_index_compare_float_literal() {
     let wj_source = r#"

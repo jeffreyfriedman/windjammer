@@ -90,7 +90,6 @@ fn owned_formal_copy_struct_no_borrow() {
 #[test]
 fn confirmed_shared_ref_param_borrows_owned_actual() {
     // Codegen-confirmed shared-ref emission (`emitted_rust_ref_params`) is required —
-    // stale Reference(T) alone must not force Borrow (emission_contract / DB-099).
     let sig = sig_with_formal(
         "QuestManager::is_quest_active",
         vec![

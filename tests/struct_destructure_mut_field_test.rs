@@ -29,7 +29,6 @@
 //! but rejects `{ mut inner }` at parse time:
 //!   `Expected field name in struct pattern`
 //!
-//! **Dogfooding impact:** `db-project/crates/db-layers/src/graph/graph_vertex_map.wj`
 //! needs in-place HashMap mutation. Without this syntax, codegen emits
 //! `map.inner.clone()` when extracting via `let mut next = map.inner`, making
 //! PageRank O(V×E) instead of O(E). Workaround: `let mut result = map; result.inner.insert(...)`.
