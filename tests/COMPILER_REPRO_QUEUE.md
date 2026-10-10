@@ -2,6 +2,37 @@
 
 
 
+## P3.786 (2026-10-10) — TDD WDB-480 (DB agent; no compiler src)
+
+A non-Copy value sent on every loop iteration must not `.clone().clone()`. One clone per call is enough.
+
+Product `ai/squad_tactics.rs` `broadcast_to_nearby`:
+```wj
+for squad in self.squads {
+    if squad.id != sender_squad_id {
+        squad.send_message(message)
+    }
+}
+```
+`message` is reused across iterations. Tip MultiFile emits a single clone or a move (isolate GREEN). Tip-out still has `squad.send_message(message.clone().clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-480 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-480 tip-out | ❌ tip RED — `rel_tip_out/ai/squad_tactics.rs` and `windjammer-game-core/gen/ai/squad_tactics.rs` |
+
+**Root cause layer:** tip-out lag — a loop-reused struct is still double-cloned into a call.
+
+**Why this is a new class:**
+- WDB-471 is a reused `Vec` argument `.clone().clone()`.
+- WDB-479 is a reused `string` map key.
+- P3.590b allows one `name.clone()` in `load_batch`.
+- This is a struct `message` passed to `send_message` on every iteration.
+
+**Do not steal:** WDB-406/408/411/457–480, P3.508–P3.786, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb480_` — isolate GREEN / tip RED (2026-10-10).
+
 ## P3.784 (2026-10-10) — `println`-only `string` formal is `&str`
 
 `fn takes_borrowed(s: string) { println("{}", s) }` emitted `s: String` and `takes_borrowed(name.to_string())`. The analyzer already decided Borrowed `&str`. Formal emit pinned owned `String` because `io::println`'s signature is one `&str` format slot, and the Display argument was treated as an AsRef runtime parameter.
