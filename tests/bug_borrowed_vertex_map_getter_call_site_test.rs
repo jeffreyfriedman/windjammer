@@ -10,10 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-101: cross-module map getters — borrowed `&GraphVertexI64Map` formals must
-//! auto-borrow owned locals at call sites (Phase 148 graph regen dogfood).
 //!
-//! DbProject pattern:
 //!   `graph_vertex_i64_get(map: GraphVertexI64Map, …)` in `.wj`
 //!   → Rust formal `map: &GraphVertexI64Map`
 //!   → call site still `graph_vertex_i64_get(distances, v)` → E0308
@@ -25,7 +22,7 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
-fn wdb101_sources() -> (&'static str, &'static str, &'static str) {
+fn sources() -> (&'static str, &'static str, &'static str) {
     (
         r#"
 pub mod vertex_map
@@ -66,13 +63,13 @@ fn assert_consumer_borrows_map(rs: &str) {
         && !rs.contains("graph_vertex_i64_get(&map");
     assert!(
         owned_borrow || demoted_passthrough,
-        "DB-101: borrowed map getter must auto-borrow owned local or pass demoted &T. Got:\n{rs}"
+        "borrowed map getter must auto-borrow owned local or pass demoted &T. Got:\n{rs}"
     );
 }
 
 #[test]
-fn wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site() {
-    let (mod_wj, vertex_map, consumer) = wdb101_sources();
+fn borrowed_vertex_map_getter_must_auto_borrow_at_call_site() {
+    let (mod_wj, vertex_map, consumer) = sources();
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", mod_wj);
     test.add_file("vertex_map.wj", vertex_map);
@@ -80,7 +77,7 @@ fn wdb101_borrowed_vertex_map_getter_must_auto_borrow_at_call_site() {
 
     let map = test
         .compile()
-        .expect("DB-101 multipass compile should succeed");
+        .expect("multipass compile should succeed");
     let rs = map.get("consumer.rs").expect("consumer.rs generated");
     assert_consumer_borrows_map(rs);
 }

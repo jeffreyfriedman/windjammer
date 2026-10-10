@@ -10,14 +10,12 @@
     feature = "integration_tests",
 ))]
 
-//! DB-137: owned Copy `i64` formal receives `&v` / `&v.clone()` → E0308
 //! (`expected i64, found &i64`).
 //!
-//! DbProject CQ-C5 (`graph_lcc_engine.rs` / `graph_cdlp_engine.rs`):
 //!   `graph_adjacency_collect_unique_neighbors(…, &v.clone())` while `vertex: i64`
 //!   `graph_cdlp_collect_neighbor_labels(…, &v.clone())` while `vertex: i64`
 //!
-//! Tip must pass Copy locals by value (or `*v` / `v.clone()` without `&`).
+//! The compiler must pass Copy locals by value (or `*v` / `v.clone()` without `&`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -58,7 +56,7 @@ pub fn cap() -> i64 {
 }
 "#;
 
-fn wdb137_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("adj.wj", ADJ);
@@ -67,11 +65,11 @@ fn wdb137_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb137_module_file_owned_i64_formal_must_not_receive_ref_clone() {
-    let test = wdb137_fixture();
+fn module_file_owned_i64_formal_must_not_receive_ref_clone() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-137 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let run_rs = map.get("run.rs").expect("run.rs");
     let adj_rs = map.get("adj.rs").expect("adj.rs");
 
@@ -88,17 +86,17 @@ fn wdb137_module_file_owned_i64_formal_must_not_receive_ref_clone() {
         || run_rs.contains(", v.clone())")
         || run_rs.contains(", *v)");
 
-    eprintln!("DB-137 adj.rs:\n{adj_rs}\nrun.rs:\n{run_rs}");
+    eprintln!("adj.rs:\n{adj_rs}\nrun.rs:\n{run_rs}");
     eprintln!("formal_owned_i64={formal_owned_i64} bad_ref_clone={bad_ref_clone} good={good}");
 
     if formal_owned_i64 && bad_ref_clone && !good {
         panic!(
-            "DB-137 RED: owned i64 formal must not receive &v / &v.clone(). \
-             Product: graph_adjacency_collect_unique_neighbors / graph_cdlp_collect_neighbor_labels."
+            "RED: owned i64 formal must not receive &v / &v.clone(). \
+             "
         );
     }
 
     test.cargo_check().expect(
-        "DB-137: Copy i64 into owned i64 formal must cargo-check (pass by value).",
+        "Copy i64 into owned i64 formal must cargo-check (pass by value).",
     );
 }

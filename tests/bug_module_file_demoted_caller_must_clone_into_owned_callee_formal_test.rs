@@ -10,12 +10,9 @@
     feature = "integration_tests",
 ))]
 
-//! DB-129: multipass demotes a caller formal to `&T` but a callee still takes owned `T`,
 //! and the call site passes the bare demoted binding (no `.clone()`) → E0308
 //! (`expected OptDatedArtifact, found &OptDatedArtifact`).
 //!
-//! DbProject CQ-C5 (~12× OptDatedArtifact cleared by dogfood; QueryFeedback residual).
-//! Inverse of DB-125. Struct must be **non-Copy** (string field) so demotion is meaningful.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -61,7 +58,7 @@ pub fn cap() -> bool {
 }
 "#;
 
-fn wdb129_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("dated.wj", DATED);
@@ -80,11 +77,11 @@ fn publishable_sig_owned(dated_rs: &str) -> bool {
 }
 
 #[test]
-fn wdb129_module_file_demoted_caller_must_clone_into_owned_callee_formal() {
-    let test = wdb129_fixture();
+fn module_file_demoted_caller_must_clone_into_owned_callee_formal() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-129 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let dated_rs = map.get("dated.rs").expect("dated.rs");
     let claim_rs = map.get("claim.rs").expect("claim.rs");
 
@@ -96,19 +93,19 @@ fn wdb129_module_file_demoted_caller_must_clone_into_owned_callee_formal() {
         && !claim_rs.contains("publishable(claim_ready, artifact.clone()");
     let bad = caller_demoted && publishable_owned && bare;
 
-    eprintln!("DB-129 dated.rs:\n{dated_rs}\nclaim.rs:\n{claim_rs}");
+    eprintln!("dated.rs:\n{dated_rs}\nclaim.rs:\n{claim_rs}");
     eprintln!(
         "caller_demoted={caller_demoted} publishable_owned={publishable_owned} clones={clones} bare={bare} bad={bad}"
     );
 
     if bad {
         panic!(
-            "DB-129 RED: demoted caller &DatedArtifact into owned publishable formal must .clone(). \
-             Product: opt_dated_quiet_run_live_publishable / query_feedback_cache_*."
+            "RED: demoted caller &DatedArtifact into owned publishable formal must .clone(). \
+             "
         );
     }
 
     test.cargo_check().expect(
-        "DB-129: demoted caller &T into owned callee formal must compile (clone or unify demotion).",
+        "demoted caller &T into owned callee formal must compile (clone or unify demotion).",
     );
 }

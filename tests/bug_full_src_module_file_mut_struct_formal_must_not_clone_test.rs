@@ -10,17 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! DB-113: full-library `--module-file` demotes owned struct formal to `&mut T` but call sites
 //! emit owned `.clone()` (E0308: expected `&mut DenseCsr`, found `DenseCsr`).
 //!
-//! DbProject Phase 193 `./scripts/build_gen.sh` (full `src` multipass) observed:
 //!   `graph_dense_csr_take_out_edges(csr: &mut DenseCsr)` in generated callee
 //! while batch engines emit:
 //!   `graph_dense_csr_take_out_edges(csr.clone())` → owned move, not `&mut`.
 //!
-//! Tip contract:
+//! The compiler contract:
 //! - If multipass demotes to `&mut T`, clone call sites must borrow (`&mut csr` / bare after mut).
-//! - If formal stays owned `DenseCsr`, `.clone()` / move at the call site is correct (DB-110 class).
 //! Gate still fails the demoted+clone mismatch that rustc rejects.
 
 #[path = "common/integration_test_helpers.rs"]
@@ -74,7 +71,7 @@ pub fn run_batch_clone(csr: DenseCsr) -> i64 {
 }
 "#;
 
-fn wdb113_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file(
         "mod.wj",
@@ -93,11 +90,11 @@ pub mod batch_clone
 }
 
 #[test]
-fn wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site() {
-    let mut test = wdb113_fixture();
+fn full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("DB-113 multipass compile should succeed");
+        .expect("multipass compile should succeed");
     let take_out = map.get("take_out.rs").expect("take_out.rs");
     let clone_caller = map.get("batch_clone.rs").expect("batch_clone.rs");
 
@@ -108,7 +105,7 @@ fn wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_
     if demoted {
         assert!(
             !bad_clone_emit,
-            "DB-113 RED: demoted &mut struct + owned .clone() call sites must borrow. Got:\n{clone_caller}"
+            "RED: demoted &mut struct + owned .clone() call sites must borrow. Got:\n{clone_caller}"
         );
         let borrowed = clone_caller.contains("take_out_edges(&mut csr")
             || clone_caller.contains("take_out_edges(& csr")
@@ -116,23 +113,22 @@ fn wdb113_full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_
                 && !clone_caller.contains(".clone()"));
         assert!(
             borrowed,
-            "DB-113: when multipass demotes to &mut, .clone() call sites must borrow. Got:\n{clone_caller}"
+            "when multipass demotes to &mut, .clone() call sites must borrow. Got:\n{clone_caller}"
         );
         test.cargo_check()
-            .expect("DB-113: borrowed call sites must cargo-check");
+            .expect("borrowed call sites must cargo-check");
     } else {
-        // Owned formal + explicit `.clone()` is correct (same contract as DB-110/111).
         assert!(
             take_out.contains("csr: DenseCsr"),
-            "DB-113: owned DenseCsr formal is acceptable when multipass does not demote.\n{take_out}"
+            "owned DenseCsr formal is acceptable when multipass does not demote.\n{take_out}"
         );
         assert!(
             bad_clone_emit
                 || clone_caller.contains("take_out_edges(csr)")
                     && !clone_caller.contains("take_out_edges(&"),
-            "DB-113: owned formal must receive move/clone, not bare borrow. Got:\n{clone_caller}"
+            "owned formal must receive move/clone, not bare borrow. Got:\n{clone_caller}"
         );
         test.cargo_check()
-            .expect("DB-113: owned struct formals must cargo-check");
+            .expect("owned struct formals must cargo-check");
     }
 }

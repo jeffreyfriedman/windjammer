@@ -10,15 +10,11 @@
     feature = "integration_tests",
 ))]
 
-//! DB-117: tip `--module-file` demotes Copy `u32`/`usize` formals to `&mut` when a
-//! sibling module passes loop counters into a read-only getter (ecs_soa / ecs_query class).
 //!
-//! Product: cold tip `wj build src --module-file` on `db-layers` emits
-//!   `ecs_soa_get_component(..., component_id: &mut u32, entity_index: &mut usize)`
-//! while Aug 27 `~/.cargo/bin/wj` emits owned `u32`/`usize`. Tip then fails with
-//! thousands of E0277/E0308 (`==` / index on `&mut`).
+//!   `let mut i: usize = 0` → `let mut i: usize = 0_i64`
+//!   `while i < 1` / `i = i + 1` → `1_i64`
 //!
-//! Minimal single-file getter stays owned (false-GREEN). Gate needs soa + query sibling.
+//! Single-module annotated loops may already unify (false-GREEN). Gate needs soa + query sibling
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -82,7 +78,7 @@ pub fn query_above(min_value: i64) -> i64 {
 }
 "#;
 
-fn wdb117_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("soa.wj", SOA);
@@ -91,35 +87,19 @@ fn wdb117_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb117_module_file_copy_int_formals_must_stay_owned_not_mut_ref() {
-    let mut test = wdb117_fixture();
+fn module_file_annotated_usize_loop_must_not_emit_i64_literals() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("DB-117 multipass compile should succeed (codegen may still be wrong)");
-    let soa_rs = map.get("soa.rs").expect("soa.rs must be generated");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let query_rs = map.get("query.rs").expect("query.rs must be generated");
 
-    let mut_ref_params = soa_rs.contains("component_id: &mut u32")
-        || soa_rs.contains("entity_index: &mut usize")
-        || soa_rs.contains("component_id:&mut u32")
-        || soa_rs.contains("entity_index:&mut usize");
-
-    if mut_ref_params {
-        eprintln!("DB-117 RED emit soa.rs:\n{soa_rs}");
-        eprintln!("DB-117 RED emit query.rs:\n{query_rs}");
+    let bad_i64_lit = query_rs.contains("0_i64") || query_rs.contains("1_i64");
+    if bad_i64_lit {
+        eprintln!("RED emit query.rs:\n{query_rs}");
     }
 
-    assert!(
-        !mut_ref_params,
-        "DB-117 RED: Copy u32/usize formals used in == / index must stay owned when siblings pass loop counters. Product: tip ecs_soa_get_component emits &mut; cargo wj emits owned."
+    test.cargo_check().expect(
+        "RED: multipass annotated `let mut i: usize = 0` must emit usize literals (not 0_i64). Surfaced after fix of &mut demotion.",
     );
-
-    // Tip (2026-09-04): &mut demotion is fixed for this fixture. Remaining cargo-check
-    // failure is annotated-usize + i64 literals → DB-121 (do not conflate with &mut).
-    let query_ok_literals = !query_rs.contains("0_i64") && !query_rs.contains("1_i64");
-    if !query_ok_literals {
-        eprintln!(
-            "DB-117 note: Copy formals owned, but query.rs still has i64 literals (tracked as DB-121):\n{query_rs}"
-        );
-    }
 }
