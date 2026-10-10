@@ -2,6 +2,26 @@
 
 
 
+## P3.792 (2026-10-10) — index `for i in 0..len()` must stay `usize` beside an `i32` tally
+
+`scripting/components.wj` `active_count` returns `i32`, writes `let mut count: i32 = 0`, then `for i in 0..self.components.len()` and indexes `self.components[i]`. Tip-out emits `for i in 0_i32..(self.components.len() as i32)` and `self.components[(i as usize)]`.
+
+| Gate | Status |
+|------|--------|
+| P3.792 MultiFile | ❌ isolate RED — `for i in 0_i32..(items.len() as i32)` and `items[(i as usize)]` |
+| P3.792 tip-out | ❌ tip RED — `0_i32..(self.components.len() as i32)` in `gen/scripting/components.rs` |
+
+**Root cause layer:** live — an `i32` tally in the same function pulls the index loop down to `i32`.
+
+**Why this is a new class:**
+- P3.773 is an untyped counter compared to `.len()` inside `for pass in sorted` (isolate GREEN, usize).
+- P3.775 is `count = count + 1` beside a `u32` loop, not the loop index itself.
+- This loop variable is the index, and a sibling `count: i32` must not change its range type.
+
+**Do not steal:** WDB-406/408/411/457–483, P3.508–P3.793, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- index_loop_beside_i32_tally` — 0 passed / 2 failed, 1824 filtered, 0.05s (2026-10-10, HEAD `82ed9d46`). Test file is `25724690`.
+
 ## P3.793 (2026-10-10) — TDD WDB-483 (DB agent; no compiler src)
 
 An owned local passed into a call and then read again must not `.clone().clone()`. One clone into the call is enough.
@@ -31,6 +51,26 @@ Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `self.bin
 **Do not steal:** WDB-406/408/411/457–483, P3.508–P3.793, compiler `src/`.
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb483_` — isolate GREEN / tip RED (2026-10-10).
+
+## P3.792 (2026-10-10) — index `for i in 0..len()` must stay `usize` beside an `i32` tally
+
+`scripting/components.wj` `active_count` returns `i32`, writes `let mut count: i32 = 0`, then `for i in 0..self.components.len()` and indexes `self.components[i]`. Tip-out emits `for i in 0_i32..(self.components.len() as i32)` and `self.components[(i as usize)]`.
+
+| Gate | Status |
+|------|--------|
+| P3.792 MultiFile | ❌ isolate RED — `for i in 0_i32..(items.len() as i32)` and `items[(i as usize)]` |
+| P3.792 tip-out | ❌ tip RED — `0_i32..(self.components.len() as i32)` in `gen/scripting/components.rs` |
+
+**Root cause layer:** live — an `i32` tally in the same function pulls the index loop down to `i32`.
+
+**Why this is a new class:**
+- P3.773 is an untyped counter compared to `.len()` inside `for pass in sorted` (isolate GREEN, usize).
+- P3.775 is `count = count + 1` beside a `u32` loop, not the loop index itself.
+- This loop variable is the index, and a sibling `count: i32` must not change its range type.
+
+**Do not steal:** WDB-406/408/411/457–482, P3.508–P3.791, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- index_loop_beside_i32_tally` — 0 passed / 2 failed, 1824 filtered, 0.05s (2026-10-10, HEAD `82ed9d46`).
 
 ## P3.791 (2026-10-10) — cross-module `"${json}"` moved before a later `json.clone()` (no compiler src)
 
