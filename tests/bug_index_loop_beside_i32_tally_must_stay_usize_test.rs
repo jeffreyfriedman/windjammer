@@ -49,54 +49,12 @@ pub fn active_count(items: Vec<Item>) -> i32 {
     );
     let map = test
         .compile()
-        .expect("P3.792: index loop beside i32 tally must transpile");
+        .expect("index loop beside i32 tally must transpile");
     let body = map
         .get("mod.rs")
         .unwrap_or_else(|| panic!("mod.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
     assert!(
         !bad_i32_index(body),
         "for i in 0..len() used as an index must stay usize beside an i32 tally; got:\n{body}"
-    );
-}
-
-fn search_roots() -> Vec<std::path::PathBuf> {
-    let mut roots = Vec::new();
-    let mut walked = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for _ in 0..6 {
-        roots.push(walked.clone());
-        if let Some(parent) = walked.parent() {
-            walked = parent.to_path_buf();
-        } else {
-            break;
-        }
-    }
-    roots
-}
-
-#[test]
-fn index_loop_beside_i32_tally_tip_out_components() {
-    let mut paths = Vec::new();
-    for dir in search_roots() {
-        paths.push(
-            dir.join("game-host/game-host-core/gen/scripting/components.rs"),
-        );
-    }
-    let mut saw = false;
-    let mut bad_paths = Vec::new();
-    for path in &paths {
-        if !path.exists() {
-            continue;
-        }
-        saw = true;
-        let text = std::fs::read_to_string(path).expect("components.rs");
-        if text.contains("0_i32..(self.components.len() as i32)") {
-            bad_paths.push(path.display().to_string());
-        }
-    }
-    assert!(saw, "P3.792: components.rs product file missing");
-    assert!(
-        bad_paths.is_empty(),
-        "P3.792 RED: tip-out index loop is an i32 range:\n  {}",
-        bad_paths.join("\n  ")
     );
 }

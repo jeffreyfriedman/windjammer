@@ -14,7 +14,7 @@
 /// in tuples that are pushed/inserted are not detected as "stored" and are
 /// incorrectly inferred as Borrowed instead of Owned.
 ///
-/// Dogfooding evidence: 12+ E0308 errors in game-host from this pattern
+/// Dogfooding evidence: 12+ E0308 errors in a downstream game project from this pattern
 #[path = "common/test_utils.rs"]
 mod test_utils;
 

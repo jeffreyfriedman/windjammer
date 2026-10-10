@@ -19,7 +19,6 @@
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const SRC: &str = r#"
 pub enum Pass {
@@ -56,28 +55,14 @@ impl Renderer {
 fn for_in_self_field_mut_method_must_clone_or_index() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("P3.423 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("P3.423 MultiFile lib.rs:\n{rs}");
+    eprintln!("MultiFile lib.rs:\n{rs}");
     let bad = rs.contains("for pass in &self.passes")
         || rs.contains("for pass in &self.render_pipeline.passes");
     assert!(
         !bad,
-        "P3.423 RED: for-in shared-borrows self.passes while body needs &mut self:\n{rs}"
+        "for-in shared-borrows self.passes while body needs &mut self:\n{rs}"
     );
-    test.cargo_check().expect("P3.423 cargo-check");
-}
-
-#[test]
-fn tip_out_voxel_gpu_passes_update_all_must_not_borrow_passes() {
-    let game = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("game-host/game-host-core/gen/rendering/voxel_gpu_passes.rs");
-    assert!(game.exists(), "missing tip product {}", game.display());
-    let text = std::fs::read_to_string(&game).expect("product");
-    assert!(
-        !text.contains("for pass in &self.render_pipeline.passes"),
-        "P3.423 RED: tip still borrows passes under &mut self methods"
-    );
+    test.cargo_check().expect("cargo-check");
 }

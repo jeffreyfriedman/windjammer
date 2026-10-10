@@ -75,23 +75,23 @@ fn client_key_from_headers(headers: Vec<(string, string)>) -> string {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.614 transpile failed:\n{}",
+        "transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
     let rs = fs::read_to_string(out.join("lib.rs")).unwrap_or_default();
-    eprintln!("P3.614 emit:\n{rs}");
+    eprintln!("emit:\n{rs}");
 
     assert!(
         !rs.contains("*pair.0") && !rs.contains("*key ==") && !rs.contains("if *key"),
-        "P3.614 RED: must not star-deref string tuple fields into str == &str:\n{rs}"
+        "must not star-deref string tuple fields into str == &str:\n{rs}"
     );
 
     let owned_vec = rs.contains("headers: Vec<(") && !rs.contains("headers: &Vec<(");
     let cloned = rs.contains("pair.0.clone()") || rs.contains("pair.1.clone()");
     assert!(
         owned_vec || cloned,
-        "P3.614 RED: keep Owned Vec when moving pair.N, or clone under &Vec for-in:\n{rs}"
+        "keep Owned Vec when moving pair.N, or clone under &Vec for-in:\n{rs}"
     );
 
     let ck = Command::new("cargo")
@@ -109,7 +109,7 @@ fn client_key_from_headers(headers: Vec<(string, string)>) -> string {
         .expect("cargo check");
     assert!(
         ck.status.success(),
-        "P3.614 RED: cargo-check failed:\n{}\n{rs}",
+        "cargo-check failed:\n{}\n{rs}",
         String::from_utf8_lossy(&ck.stderr)
     );
 }

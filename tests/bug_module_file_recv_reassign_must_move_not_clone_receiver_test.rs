@@ -13,13 +13,13 @@
 
 //! FAILING REPRO — reassign loop `recv_int(rx)` must MOVE, not `.clone()`.
 //!
-//! Ecosystem `wj-sync` `drain_int_until_sentinel`:
+//! Ecosystem `a downstream package` `drain_int_until_sentinel`:
 //! ```ignore
 //! let got = recv_int(rx)
 //! rx = got.0
 //! ```
 //! Tip multipass emits `recv_int(rx.clone())` but `mpsc::Receiver` wrappers
-//! are not `Clone` → E0599. Blocks tip-green `wj-sync` (incl. SharedMap get).
+//! are not `Clone` → E0599. Blocks tip-green `a downstream package` (incl. SharedMap get).
 
 use std::fs;
 use std::process::Command;
@@ -86,7 +86,7 @@ fn module_file_recv_reassign_must_move_not_clone_receiver() {
     assert!(
         !generated.contains("recv_int(rx.clone())")
             && !generated.contains("recv_int(rx . clone())"),
-        "RED P3.310: recv_int(rx) reassign must move, not clone non-Clone Receiver:\n{generated}"
+        "RED recv_int(rx) reassign must move, not clone non-Clone Receiver:\n{generated}"
     );
 
     let check = Command::new("cargo")
