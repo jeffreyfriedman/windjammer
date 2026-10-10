@@ -2,6 +2,37 @@
 
 
 
+## P3.782 (2026-10-09) — TDD WDB-479 (DB agent; no compiler src)
+
+A reused `string` inserted into a map must not `.clone().clone()`. `contains_key` and `get_mut` borrow, so one clone into `insert` is enough.
+
+Product `scene_graph/scene_graph_state.rs` `set_tag`:
+```wj
+if !self.tag_index.contains_key(tag) {
+    self.tag_index.insert(tag, vec![])
+}
+if let Some(list) = self.tag_index.get_mut(tag) {
+    list.push(node_id)
+}
+```
+Tip MultiFile and tip-out both emit `index.insert(tag.clone().clone(), vec![])`. Tip-out also passes `tag.clone()` to `get_mut`.
+
+| Gate | Status |
+|------|--------|
+| WDB-479 MultiFile | ❌ isolate RED — `tag.clone().clone()` |
+| WDB-479 tip-out | ❌ tip RED — `tag.clone().clone()` in `rel_tip_out/scene_graph/scene_graph_state.rs` and `windjammer-game-core/gen/scene_graph/scene_graph_state.rs` |
+
+**Root cause layer:** live — reused string keys are double-cloned into `HashMap::insert`.
+
+**Why this is a new class:**
+- WDB-471 is a reused `Vec` argument `.clone().clone()`.
+- WDB-478 is an exclusive-arm `for` binding into `push`.
+- This is a `string` map key used by `contains_key`, `insert`, and `get_mut`.
+
+**Do not steal:** WDB-406/408/411/457–479, P3.508–P3.782, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb479_` — isolate RED / tip RED (2026-10-09).
+
 ## P3.780 (2026-10-09) — `Vec::new()` plus `push` into `Vec<u32>` must not be `i64`
 
 `streaming_coordinator_test.wj` does `adds.push(100)` then stores `adds` in
