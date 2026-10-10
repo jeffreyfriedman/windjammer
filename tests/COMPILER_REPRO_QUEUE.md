@@ -2,16 +2,46 @@
 
 
 
+## P3.790 (2026-10-10) — TDD WDB-482 (DB agent; no compiler src)
+
+A local `string` passed into a call on one `if let` arm and returned on the other must not `.clone()`. The arms are exclusive.
+
+Product `dialogue_system.rs` `current_text`:
+```wj
+let text = node.text()
+if let Some(world) = self.world {
+    return self.substitute_variables(text, world)
+}
+return text
+```
+Current HEAD emits `substitute(text.clone(), w)`. Tip-out emits `substitute_variables(text.clone().clone(), world)`.
+
+| Gate | Status |
+|------|--------|
+| WDB-482 MultiFile | ❌ isolate RED — `substitute(text.clone(), w)` |
+| WDB-482 tip-out | ❌ tip RED — `rel_tip_out/dialogue_system.rs` and `windjammer-game-core/gen/dialogue_system.rs` |
+
+**Root cause layer:** live — exclusive `if let` arms still clone a string into the call.
+
+**Why this is a new class:**
+- WDB-478 is a `for` binding moved into `push` on exclusive arms.
+- WDB-481 is a string pushed and then used again, where one clone is required.
+- This local is used on only one arm, so it should move.
+
+**Do not steal:** WDB-406/408/411/457–482, P3.508–P3.790, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb482_` — isolate RED / tip RED (2026-10-10).
+
 ## P3.789 (2026-10-10) — `for`-in counter later cast to `f32` must not be `i64`
 
 `rendering/visual_verification.wj` `non_black_percentage` writes `let mut count = 0`, increments it inside `for p in self.pixels`, then returns `(count as f32) / (self.pixels.len() as f32)`. Tip-out emits `let mut count = 0_i64`. The counter is not used as an index.
 
 | Gate | Status |
 |------|--------|
-| P3.789 MultiFile | pending this run |
-| P3.789 tip-out | pending this run — `gen/rendering/visual_verification.rs` |
+| P3.789 MultiFile | ✅ isolate GREEN — no `count = 0_i64` |
+| P3.789 tip-out | ❌ tip RED — `let mut count = 0_i64` in `gen/rendering/visual_verification.rs` |
 
-**Root cause layer:** codegen — an untyped `+ 1` counter whose only later use is `as f32` defaults to `i64`.
+**Root cause layer:** tip-out lag. Current HEAD keeps this `for`-in counter off `i64`. The October 7 engine gen still emits `0_i64`.
 
 **Why this is a new class:**
 - P3.783 and P3.785 are index counters (`vec[b]`, `haystack[i + j]`).
@@ -20,7 +50,7 @@
 
 **Do not steal:** WDB-406/408/411/457–481, P3.508–P3.788, compiler `src/`.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- for_in_f32_ratio_count` — pending.
+**Gates:** `cargo test --release --test all --features integration_tests -- for_in_f32_ratio_count` — 1 passed / 1 failed, 1816 filtered, 0.05s (2026-10-10, HEAD `4192c773`).
 
 ## P3.787 (2026-10-10) — declared `i32` compared with `< 0` must not widen
 
