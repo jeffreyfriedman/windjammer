@@ -2,6 +2,26 @@
 
 
 
+## P3.787 (2026-10-10) — declared `i32` compared with `< 0` must not widen
+
+`networking/snapshot.wj` writes `let mut from_idx: i32 = -1`, assigns `from_idx = i as i32`, then `if from_idx < 0`. Tip-out emits `from_idx < (0_i64 as i64)`. The sibling `eidx >= 0` in the same function stays `0_i32`.
+
+| Gate | Status |
+|------|--------|
+| P3.787 MultiFile | ✅ isolate GREEN — no `0_i64` |
+| P3.787 tip-out | ❌ tip RED — `from_idx < (0_i64 as i64)` in `gen/networking/snapshot.rs` |
+
+**Root cause layer:** tip-out lag. Current HEAD keeps a declared `i32` compared with bare `0` off `i64`. The October 7 engine gen still widens it.
+
+**Why this is a new class:**
+- WDB-476 is `let val = (... ) as i32` then `val < 0` (isolate GREEN, simplex tip still widened).
+- P3.750 is `existing_group >= 0` on an inferred local.
+- This is `let mut from_idx: i32 = -1` then `from_idx < 0` after `from_idx = i as i32`.
+
+**Do not steal:** WDB-406/408/411/457–481, P3.508–P3.788, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests -- annotated_i32_lt_zero` — 1 passed / 1 failed, 1812 filtered, 0.05s (2026-10-10, HEAD `01984175`).
+
 ## P3.788 (2026-10-10) — TDD WDB-481 (DB agent; no compiler src)
 
 A `string` local pushed into a `Vec` and then used again must not `.clone().clone()`. One clone into `push` is enough.
