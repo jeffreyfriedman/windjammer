@@ -11,14 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-216/275: `--library --module-file` must keep pub wrappers that forward bare
 //! into owned `extern fn …(Vec<…>)` as owned formals (not `&Vec` + bare into FFI).
 
 use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-fn wdb216_module_file_owned_ffi_forwarder_must_stay_owned_vec() {
+fn module_file_owned_ffi_forwarder_must_stay_owned_vec() {
     let dir = TempDir::new().expect("temp");
     let src = dir.path().join("src");
     std::fs::create_dir_all(&src).unwrap();
@@ -51,10 +50,10 @@ pub fn count_intersection_owned(a: Vec<u32>, b: Vec<u32>) -> int {
     let port = std::fs::read_to_string(out.join("port.rs")).expect("port.rs");
     assert!(
         port.contains("fn count_intersection_owned(a: Vec<u32>"),
-        "DB-216 RED: module-file demoted owned FFI forwarder to &Vec. Got:\n{port}"
+        "RED: module-file demoted owned FFI forwarder to &Vec. Got:\n{port}"
     );
     assert!(
         !port.contains("fn count_intersection_owned(a: &Vec"),
-        "DB-216 RED: owned FFI forwarder emitted &Vec. Got:\n{port}"
+        "RED: owned FFI forwarder emitted &Vec. Got:\n{port}"
     );
 }
