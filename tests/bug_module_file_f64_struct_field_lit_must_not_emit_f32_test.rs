@@ -10,11 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-150: float field literals must emit `f64` when the field type is `f64`, not `f32`.
-//!
-//! DbProject CQ-C5: tip-sync of `cross_signal_search_host_port` alone emits
-//! `distance: 0.1_f32` / `score: 2.0_f32` into `VectorTopKHit.distance: f64` /
-//! `Bm25TopKHit.score: f64` → rustc E0308. Product dogfood rewrites `_f32` → `_f64`.
+//! Regression: module file f64 struct field lit must not emit f32.
 //!
 //! Expected: `0.1_f64` / `2.0_f64` (or un-suffixed lits that rustc infers as f64).
 
@@ -55,7 +51,7 @@ pub fn host_cap_hits() -> (Vec<VectorTopKHit>, Vec<Bm25TopKHit>) {
 }
 "#;
 
-fn wdb150_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("hits.wj", HITS);
@@ -64,27 +60,27 @@ fn wdb150_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb150_module_file_f64_struct_field_lit_must_not_emit_f32() {
-    let test = wdb150_fixture();
+fn module_file_f64_struct_field_lit_must_not_emit_f32() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("DB-150 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let host_rs = map.get("host.rs").expect("host.rs");
 
     let bad = host_rs.contains("_f32")
         && (host_rs.contains("distance:") || host_rs.contains("score:"));
 
-    eprintln!("DB-150 host.rs:\n{host_rs}");
+    eprintln!("host.rs:\n{host_rs}");
     eprintln!("bad={bad}");
 
     if bad {
         panic!(
-            "DB-150 RED: f64 struct field literals must not emit _f32. \
-             Product: cross_signal_search_host_port tip-sync → E0308."
+            "RED: f64 struct field literals must not emit _f32. \
+            "
         );
     }
 
     test.cargo_check().expect(
-        "DB-150: f64 field literals must cargo-check without f32 suffixes.",
+        "f64 field literals must cargo-check without f32 suffixes.",
     );
 }

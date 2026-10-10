@@ -7,17 +7,14 @@
     feature = "integration_tests",
 )))]
 
-//! DB-246: `--module-file` format! temps into demoted `&str` method formals must borrow.
-//!
-//! Tip-out residual: `left.hash_join_semi_i64(right, _temp0, _temp1)` while formals are
-//! `&str`. Signature-driven: hoist emits `&_temp0`, `&_temp1`.
+//! Regression: module file format temp into demoted method str must borrow.
 
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-fn wdb246_module_file_format_temp_into_demoted_method_str_must_borrow() {
+fn module_file_format_temp_into_demoted_method_str_must_borrow() {
     let tmp = TempDir::new().expect("tempdir");
     let types_src = tmp.path().join("types_src");
     fs::create_dir_all(&types_src).unwrap();
@@ -102,12 +99,12 @@ pub fn run(left: Batch, right: Batch, vname: string, rv: string) -> bool {
     );
 
     let generated = fs::read_to_string(app_gen.join("datafusion.rs")).unwrap_or_default();
-    eprintln!("DB-246 module-file emit:\n{generated}");
+    eprintln!("module-file emit:\n{generated}");
     let bad = generated.contains("hash_join_semi_i64(right, _temp0, _temp1)")
         && !generated.contains("hash_join_semi_i64(right, &_temp0, &_temp1)");
     assert!(
         !bad,
-        "DB-246 RED: format temps into demoted &str must borrow:\n{generated}"
+        "RED: format temps into demoted &str must borrow:\n{generated}"
     );
     assert!(
         generated.contains("&_temp0") && generated.contains("&_temp1"),

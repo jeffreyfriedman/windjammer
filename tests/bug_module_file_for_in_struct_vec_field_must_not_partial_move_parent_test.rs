@@ -12,9 +12,6 @@
 ))]
 
 //! P3.321: `for x in parent.field` then use `parent` must not partial-move the Vec field.
-//!
-//! DownstreamApp tip api-check: `for a in payment.allocations` then
-//! `allocations_sum_valid(payment, …)` → WJ0007 borrow of partially moved `payment`.
 
 use std::fs;
 use std::process::Command;

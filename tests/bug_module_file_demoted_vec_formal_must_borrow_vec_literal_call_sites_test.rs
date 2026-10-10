@@ -10,14 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-126: multipass demotes `Vec<i64>` formal to `&Vec<i64>` but call sites pass
-//! owned `vec![…]` literals → E0308 (`expected &Vec<i64>, found Vec<i64>`).
-//!
-//! DbProject CQ-C5 (~54× `&Vec`←`Vec`):
-//!   `ecs_soa_spawn_entity(arch, vec![0, 10])` while formal is `&Vec<i64>`
-//!
-//! Expected: `&vec![0, 10]` (or keep owned formal). Related to DB-124 (clone path);
-//! this gate is **literal** `vec![]` into demoted `&Vec`.
+//! Regression: module file demoted vec formal must borrow vec literal call sites.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -56,7 +49,7 @@ pub fn cap() -> Archetype {
 }
 "#;
 
-fn wdb126_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("soa.wj", SOA);
@@ -65,11 +58,11 @@ fn wdb126_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb126_module_file_demoted_vec_formal_must_borrow_vec_literal_call_sites() {
-    let mut test = wdb126_fixture();
+fn module_file_demoted_vec_formal_must_borrow_vec_literal_call_sites() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("DB-126 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let soa_rs = map.get("soa.rs").expect("soa.rs");
     let query_rs = map.get("query.rs").expect("query.rs");
 
@@ -84,10 +77,10 @@ fn wdb126_module_file_demoted_vec_formal_must_borrow_vec_literal_call_sites() {
         && !borrows;
 
     if demoted && bad_owned_lit {
-        eprintln!("DB-126 RED soa.rs:\n{soa_rs}\nquery.rs:\n{query_rs}");
+        eprintln!("RED soa.rs:\n{soa_rs}\nquery.rs:\n{query_rs}");
     }
 
     test.cargo_check().expect(
-        "DB-126 RED: demoted &Vec<i64> + owned vec![…] call sites must borrow. Product: ecs_query_port (~54 db-layers E0308).",
+        "RED: demoted &Vec<i64> + owned vec![…] call sites must borrow.",
     );
 }
