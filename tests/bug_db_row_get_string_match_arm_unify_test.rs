@@ -11,8 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! FAILING REPRO — `match row.get_string(col) { Ok(v) => v, Err(_) => "" }` must
-//! unify to owned `String` (LedgerKit drops `v + ""` / `"" + ""` workarounds).
+//! Regression: db row get string match arm unify.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

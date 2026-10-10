@@ -11,12 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! Product-shaped `NotesApp::handle` + `handle_request` empty lits must own.
-//!
-//! P3.499 tiny `App { n: int }` isolate already emits `"".to_string()`.
-//! Ecosystem `wj-notes-api` still emits `app.handle(&method, path, "", "", "", …)`
-//! (E0308). This fixture matches the product graph: HashMap app, `parse_method`,
-//! `handle_method(..., "")`, `own` rebinds.
+//! Regression: handle request empty lits hex app must own.
 
 use std::fs;
 use std::process::Command;
@@ -47,14 +42,14 @@ struct RateBucket {
     count: int,
 }
 
-struct NotesApp {
+struct ApiApp {
     n: int,
     buckets: HashMap<string, RateBucket>,
 }
 
-impl NotesApp {
-    pub fn new() -> NotesApp {
-        NotesApp {
+impl ApiApp {
+    pub fn new() -> ApiApp {
+        ApiApp {
             n: 0,
             buckets: HashMap::new(),
         }
@@ -109,7 +104,7 @@ fn parse_method(label: string) -> Option<HttpMethod> {
 }
 
 pub fn handle_request(method: string, path: string, body: string) -> string {
-    let mut app = NotesApp::new()
+    let mut app = ApiApp::new()
     app.handle(method, path, "", "", "", 0, body)
 }
 "#,
@@ -141,7 +136,7 @@ pub fn handle_request(method: string, path: string, body: string) -> string {
             && !api_rs.contains("body, \"\")")
             && !api_rs.contains("body,\"\")")
             && api_rs.contains("\"\".to_string()"),
-        "hex NotesApp handle_request / handle_method must own empty literals:\n{api_rs}"
+        "hex ApiApp handle_request / handle_method must own empty literals:\n{api_rs}"
     );
 
     let check = Command::new("cargo")

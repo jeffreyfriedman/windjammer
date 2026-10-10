@@ -11,14 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-110: isolate-transpile must not emit `&path.clone()` into owned `String` formals.
-//!
-//! WindjammerDB Phase 189 observed after per-file `wj build --no-cargo`:
-//!   `wave1_sf1_cli_run_parquet_load(&li_path.clone(), &ord_path.clone(), …)`
-//! when callee keeps owned `string` → `String` formals (E0308).
-//!
-//! Gate A: same-file tip must cargo-check.
-//! Gate B: tip isolate callee + caller; owned formals must receive move/clone, not borrow.
+//! Regression: isolate transpile owned string clone must not borrow.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -68,29 +61,29 @@ fn assert_caller_owned_string_formals(callee_rs: &str, caller_rs: &str) {
     let owned_ord = callee_rs.contains("orders_path: String");
     assert!(
         owned_li && owned_ord,
-        "WDB-110: expected owned String formals in callee.\n--- callee ---\n{callee_rs}"
+        "expected owned String formals in callee.\n--- callee ---\n{callee_rs}"
     );
     assert!(
         !caller_rs.contains("run_parquet_load(&li_path.clone()")
             && !caller_rs.contains("run_parquet_load(& ord_path.clone()")
             && !caller_rs.contains(", &li_path.clone(),")
             && !caller_rs.contains(", &ord_path.clone(),"),
-        "WDB-110: owned String formals must not receive &path.clone() at isolate call site.\n--- callee ---\n{callee_rs}\n--- caller ---\n{caller_rs}"
+        "owned String formals must not receive &path.clone() at isolate call site.\n--- callee ---\n{callee_rs}\n--- caller ---\n{caller_rs}"
     );
     assert!(
         !caller_rs.contains("li_path.to_string()")
             && !caller_rs.contains("ord_path.to_string()"),
-        "WDB-110: owned String formals must keep .clone(), not .to_string().\n--- caller ---\n{caller_rs}"
+        "owned String formals must keep .clone(), not .to_string().\n--- caller ---\n{caller_rs}"
     );
     assert!(
         caller_rs.contains("run_parquet_load(li_path.clone()")
             || caller_rs.contains("run_parquet_load(li_path,"),
-        "WDB-110: expected move/clone into owned String formal.\n--- caller ---\n{caller_rs}"
+        "expected move/clone into owned String formal.\n--- caller ---\n{caller_rs}"
     );
 }
 
 #[test]
-fn wdb110_same_file_owned_string_clone_call_site_cargo_checks() {
+fn same_file_owned_string_clone_call_site_cargo_checks() {
     let source = r#"
 use windjammer_runtime::strings
 
@@ -187,7 +180,7 @@ fn isolate_transpile_with(wj_bin: &std::path::Path) -> (String, String) {
 }
 
 #[test]
-fn wdb110_tip_isolate_owned_string_clone_must_not_borrow_at_call_site() {
+fn tip_isolate_owned_string_clone_must_not_borrow_at_call_site() {
     let wj = PathBuf::from(env!("CARGO_BIN_EXE_wj"));
     let (callee_rs, caller_rs) = isolate_transpile_with(&wj);
     assert_caller_owned_string_formals(&callee_rs, &caller_rs);

@@ -13,19 +13,6 @@
 
 //! FAILING REPRO — owned `HashMap` helper with `match map.get` must not inject
 //! mid-match `std::thread::spawn(move || drop(map))`.
-//!
-//! Ecosystem `wj-notes-api` cargo-bin 0.50.0 emitted (breaks match parse):
-//! ```ignore
-//! fn int_from_map(map: HashMap<String, String>, key: &str, fallback: i64) -> i64 {
-//!     match map.get(key) {
-//!         Some(v) => …,
-//!         None => fallback,
-//!     // DEFER DROP …
-//!     std::thread::spawn(move || drop(map));
-//!     }}
-//! }
-//! ```
-//! Prefer defer-drop after a complete expression, or omit when map was only borrowed via `.get`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

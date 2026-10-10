@@ -12,12 +12,6 @@
 ))]
 
 //! P3.520: same-field replace after a consuming helper must stay `&mut self`.
-//!
-//! Product `wj-notes-api` `check_rate`:
-//!   `let checked = check_key(..., buckets_for_limit(self.buckets), ...)`
-//!   `self.buckets = buckets_from_limit(checked.0)`
-//! Caller `handle_method` continues with `self.dispatch(...)`.
-//! Distinct from WDB-414 (`Vox::new(self.scene)` then write a *different* field).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

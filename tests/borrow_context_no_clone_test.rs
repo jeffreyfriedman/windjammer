@@ -26,7 +26,7 @@ mod test_utils;
 
 #[test]
 fn test_no_clone_on_vec_field_in_for_loop_borrow() {
-    // Pattern from windjammer-game rpg/crafting.wj:
+    // Pattern: nested field loop borrow:
     // for ingredient in &recipe.ingredients { ... }
     // recipe is borrowed — &recipe.ingredients is sufficient, no .clone() needed
     let source = r#"

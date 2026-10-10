@@ -12,13 +12,6 @@
 ))]
 
 //! FAILING REPRO — int `%` / compare / add must not split i64 vs i32.
-//!
-//! Product tip api-check (LedgerKit `domain/recurring.wj`) on tip after
-//! int_inference churn: `year % 4`, `m > 12`, `remaining > 0` → E0277.
-//! Isolate may cargo-check while still emitting `year as i64 % 400_i32` — that
-//! is still RED (width split); assert the emit shape, not only rustc ok.
-//!
-//! Tip transpile verified RED (2026-09-14): `year as i64 % 400_i32`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

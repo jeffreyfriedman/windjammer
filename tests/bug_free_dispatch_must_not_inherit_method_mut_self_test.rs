@@ -13,11 +13,6 @@
 
 //! P3.532 isolate: free `dispatch(req: ServerRequest, …)` must stay owned when a
 //! same-crate method `App::dispatch(&mut self, …)` shares the bare name.
-//!
-//! Product `wj-auth-api` false-GREEN isolates omitted the method homonym; multipass
-//! then applied the method's MutBorrowed self slot to the free formal (`&mut ServerRequest`
-//! + `dispatch(&mut req)` → E0596). Notes-api stays green because NotesApp::dispatch
-//! is owned `mut self`, so the collided slot is Owned.
 
 use std::process::Command;
 use tempfile::TempDir;

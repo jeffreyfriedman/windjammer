@@ -7,7 +7,7 @@
     feature = "integration_tests",
 )))]
 
-//! Regression for Breach Protocol / windjammer-game dogfooding.
+//! Regression: method signature resolution scaling.
 //!
 //! The engine build resolves thousands of `Type::method` call sites.  Resolution
 //! must use the registry's method index; scanning every unrelated signature for
