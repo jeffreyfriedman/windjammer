@@ -7,17 +7,14 @@
     feature = "integration_tests",
 )))]
 
-//! WDB-244: `--module-file` multipass must honor cross-crate demoted `&str` formals.
-//!
-//! Single-file tip emit keeps bare `"props"`; the same source via `mod.wj --module-file`
-//! still emits `"props".to_string()` into demoted `Batch::sql_exec`.
+//! Regression: module file must honor cross crate demoted sql exec.
 
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-fn wdb244_module_file_cross_crate_demoted_sql_exec_must_not_to_string() {
+fn module_file_cross_crate_demoted_sql_exec_must_not_to_string() {
     let tmp = TempDir::new().expect("tempdir");
     let types_src = tmp.path().join("types_src");
     fs::create_dir_all(&types_src).unwrap();
@@ -96,11 +93,11 @@ pub fn run(left: Batch, right: Batch, sql: string) -> bool {
     );
 
     let generated = fs::read_to_string(app_gen.join("datafusion.rs")).unwrap_or_default();
-    eprintln!("WDB-244 module-file emit:\n{generated}");
+    eprintln!("module-file emit:\n{generated}");
     assert!(
         !generated.contains("\"props\".to_string()")
             && !generated.contains("\"edges\".to_string()"),
-        "WDB-244 RED: module-file multipass owned string lits into demoted &str sql_exec:\n{generated}"
+        "RED: module-file multipass owned string lits into demoted &str sql_exec:\n{generated}"
     );
 
     // Control: single-file of the same source must also stay bare (already GREEN).

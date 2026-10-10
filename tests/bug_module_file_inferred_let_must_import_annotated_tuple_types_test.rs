@@ -10,12 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-118: `--module-file` emits `let x: Vec<(Key, Value)> = callee(...)` without importing `Key`.
-//!
-//! WindjammerDB CQ-C5: `document_dremel_nested_to_kv` source has unannotated
-//!   `let pairs = document_dremel_to_kv_pairs(...)`
-//! but cargo/tip module-file emit annotates `Vec<(Key, Value)>` without `use wdb_types::Key`
-//! → rustc E0425. Same class: `Vec<VectorTopKHit>` annotations without importing the hit type.
+//! Regression: module file inferred let must import annotated tuple types.
 //!
 //! Expected: either omit the annotation, or emit the required `use` for every named type in it.
 //! Gate: multipass cargo-check of the fixture (RED until fixed).
@@ -55,7 +50,7 @@ pub fn nested_len() -> usize {
 }
 "#;
 
-fn wdb118_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("keys.wj", KEYS);
@@ -64,11 +59,11 @@ fn wdb118_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb118_module_file_inferred_let_must_import_annotated_tuple_types() {
-    let mut test = wdb118_fixture();
+fn module_file_inferred_let_must_import_annotated_tuple_types() {
+    let mut test = fixture();
     let map = test
         .compile()
-        .expect("WDB-118 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let nest_rs = map.get("nest.rs").expect("nest.rs must be generated");
 
     let annotates_key = nest_rs.contains("Vec<(Key, Value)>") || nest_rs.contains("Vec<(keys::Key");
@@ -77,15 +72,15 @@ fn wdb118_module_file_inferred_let_must_import_annotated_tuple_types() {
         || nest_rs.lines().any(|l| l.trim().starts_with("use ") && l.contains("Key") && !l.contains("to_pairs"));
 
     if annotates_key && !imports_key {
-        eprintln!("WDB-118 RED emit nest.rs:\n{nest_rs}");
+        eprintln!("RED emit nest.rs:\n{nest_rs}");
     }
 
     assert!(
         !annotates_key || imports_key,
-        "WDB-118 RED: if codegen annotates Vec<(Key, Value)>, it must import Key/Value. Product: document_dremel_nested_to_kv E0425."
+        "RED: if codegen annotates Vec<(Key, Value)>, it must import Key/Value."
     );
 
     test.cargo_check().expect(
-        "WDB-118 RED: inferred let from Vec<(Key, Value)> callee must cargo-check (import or no annotation).",
+        "RED: inferred let from Vec<(Key, Value)> callee must cargo-check (import or no annotation).",
     );
 }

@@ -10,14 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! WDB-138: method `put(vertex: i64, …)` receives `&(ids[i])` → E0308
-//! (`expected i64, found &i64`).
-//!
-//! WindjammerDB CQ-C5 (`graph_dense_csr.rs` / `graph_pagerank_engine.rs` /
-//! `graph_sssp_engine.rs`):
-//!   `map.put(&(csr.vertex_ids[i as usize]), …)` while `put` takes owned `i64`
-//!
-//! Tip must pass Copy index values by value (no `&` around the index expr).
+//! Regression: module file map put i64 key must not borrow index expr.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
@@ -69,7 +62,7 @@ pub fn cap() -> i64 {
 }
 "#;
 
-fn wdb138_fixture() -> MultiFileTest {
+fn fixture() -> MultiFileTest {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("vmap.wj", VMAP);
@@ -78,11 +71,11 @@ fn wdb138_fixture() -> MultiFileTest {
 }
 
 #[test]
-fn wdb138_module_file_map_put_i64_key_must_not_borrow_index_expr() {
-    let test = wdb138_fixture();
+fn module_file_map_put_i64_key_must_not_borrow_index_expr() {
+    let test = fixture();
     let map = test
         .compile()
-        .expect("WDB-138 multipass compile should succeed (codegen may still be wrong)");
+        .expect("multipass compile should succeed (codegen may still be wrong)");
     let fill_rs = map.get("fill.rs").expect("fill.rs");
     let vmap_rs = map.get("vmap.rs").expect("vmap.rs");
 
@@ -92,17 +85,17 @@ fn wdb138_module_file_map_put_i64_key_must_not_borrow_index_expr() {
         || fill_rs.contains(".put(&(ids");
     let good = fill_rs.contains("put(ids[") || fill_rs.contains(".put(ids[");
 
-    eprintln!("WDB-138 vmap.rs:\n{vmap_rs}\nfill.rs:\n{fill_rs}");
+    eprintln!("vmap.rs:\n{vmap_rs}\nfill.rs:\n{fill_rs}");
     eprintln!("formal_owned={formal_owned} bad={bad} good={good}");
 
     if formal_owned && bad {
         panic!(
-            "WDB-138 RED: map.put owned i64 key must not wrap index expr in &. \
-             Product: graph_dense_csr / pagerank / sssp map.put(&(csr.vertex_ids[i]))."
+            "RED: map.put owned i64 key must not wrap index expr in &. \
+            "
         );
     }
 
     test.cargo_check().expect(
-        "WDB-138: Copy i64 index into owned put key must cargo-check.",
+        "Copy i64 index into owned put key must cargo-check.",
     );
 }
