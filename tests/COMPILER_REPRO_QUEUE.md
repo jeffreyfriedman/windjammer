@@ -4,7 +4,7 @@
 
 ## P3.791 (2026-10-10) — cross-module `"${json}"` moved before a later `json.clone()` (no compiler src)
 
-Oct 10 10:16 `wj` finance-screens regen is cargo-red on one E0382. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
+Oct 10 13:27 `wj` finance-screens regen is still cargo-red on the same E0382. Re-ran `p3791_cross_module_json_interp_must_clone_before_later_use` on HEAD: 0 passed, 1 failed. P3.771's mixed borrows are gone (`general_ledger_table_html(&account_code, &as_of, …, lines.clone())` and `aging_report_html(buckets, parties, &fallback, title, &kind)`). The aging arm still emits `parse_aging_bucket_fields(json)` and then `parse_aging_party_line_fields(json.clone())`.
 
 A same-file pair of owned parsers clones before the later use. The cross-module shape, with `&str` title/kind helpers and a later match arm that also uses `json`, moves on the `"${json}"` argument.
 
