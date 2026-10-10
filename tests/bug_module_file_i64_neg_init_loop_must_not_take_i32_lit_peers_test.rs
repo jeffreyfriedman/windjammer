@@ -1,0 +1,117 @@
+#![cfg(any(
+    not(any(
+        feature = "parser_tests",
+        feature = "analyzer_tests",
+        feature = "codegen_tests",
+        feature = "interpreter_tests",
+        feature = "conformance_tests",
+        feature = "integration_tests",
+    )),
+    feature = "integration_tests",
+    feature = "codegen_tests",
+))]
+
+//! WDB-328: i64 loop counters from negative init must not take `_i32` lit peers.
+//!
+//! Tip output for a game project `ai/npc_behavior.rs` SearchState::new:
+//!   `let mut i = -1_i64; while i <= 1_i32` / `i != 0_i32` → E0308/E0277.
+//! Source WJ: `let mut i = -1` / `while i <= 1`. Prefer `1_i64` / `0_i64`.
+
+#[path = "common/integration_test_helpers.rs"]
+mod integration_test_helpers;
+
+use integration_test_helpers::MultiFileTest;
+
+const SRC: &str = r#"
+pub fn neighbor_offsets() -> i64 {
+    let mut i = -1
+    let mut count = 0
+    while i <= 1 {
+        if i != 0 {
+            count = count + 1
+        }
+        i = i + 1
+    }
+    count
+}
+"#;
+
+/// Product shape: `SearchState::new` returns a struct with i32 fields; tip emits
+/// `let mut i = -1_i64` then `while i <= 1_i32` (mixed width).
+/// Loop/compare i32 literal peers on neg-init counters — not struct fields like `current_point: 0_i32`.
+fn bad_neg_init_loop_i32_literal_peers(rs: &str) -> bool {
+    rs.contains("-1_i32")
+        || rs.contains("<= 1_i32")
+        || rs.contains("!= 0_i32")
+        || rs.contains("while i <= 1_i32")
+        || rs.contains("while j <= 1_i32")
+}
+
+const SRC_SEARCH_STATE: &str = r#"
+pub struct Vec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Vec3 {
+    pub fn new(x: f32, y: f32, z: f32) -> Vec3 {
+        Vec3 { x: x, y: y, z: z }
+    }
+}
+
+pub struct SearchState {
+    pub search_points: Vec<Vec3>,
+    pub current_point: i32,
+}
+
+impl SearchState {
+    pub fn new(radius: f32) -> SearchState {
+        let mut search_points = Vec::new()
+        let mut i = -1
+        while i <= 1 {
+            let mut j = -1
+            while j <= 1 {
+                if i != 0 || j != 0 {
+                    search_points.push(Vec3::new(i as f32 * radius, 0.0, j as f32 * radius))
+                }
+                j = j + 1
+            }
+            i = i + 1
+        }
+        SearchState {
+            search_points: search_points,
+            current_point: 0,
+        }
+    }
+}
+"#;
+
+#[test]
+fn module_file_i64_neg_init_loop_must_not_take_i32_lit_peers() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC);
+    let map = test.compile().expect("compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("MultiFile lib.rs:\n{rs}");
+    let bad = bad_neg_init_loop_i32_literal_peers(rs);
+    assert!(
+        !bad,
+        "i64 neg-init loop emitted i32 lit peers:\n{rs}"
+    );
+    test.cargo_check().expect("cargo-check");
+}
+
+#[test]
+fn module_file_search_state_neg_init_must_not_mix_i64_i32_loop_lits() {
+    let mut test = MultiFileTest::new();
+    test.add_file("lib.wj", SRC_SEARCH_STATE);
+    let map = test.compile().expect("SearchState compile");
+    let rs = map.get("lib.rs").expect("lib.rs");
+    eprintln!("SearchState MultiFile lib.rs:\n{rs}");
+    assert!(
+        !bad_neg_init_loop_i32_literal_peers(rs),
+        "SearchState neg-init loop mixes i64 binding with i32 lit peers:\n{rs}"
+    );
+    test.cargo_check().expect("SearchState cargo-check");
+}
