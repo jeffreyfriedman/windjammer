@@ -29,6 +29,26 @@ roughness: m.roughness
 
 **Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb477_` — isolate GREEN / tip RED (2026-10-09).
 
+## P3.775 (2026-10-09) — untyped `+ 1` counter must not emit `0_i64`
+
+`material.wj` `log_palette_summary` writes `let mut configured_count = 0` then
+`configured_count = configured_count + 1` inside `while i < 256u32`. Tip-out
+emits `let mut configured_count = 0_i64`.
+
+| Gate | Status |
+|------|--------|
+| `untyped_plus_one_counter_must_not_emit_i64` | ❌ isolate RED — `let mut configured_count = 0_i64` then `configured_count += 1` beside `while i < 256_u32` |
+| `untyped_plus_one_counter_tip_out_material_palette` | ❌ tip-out RED — `gen/voxel/material.rs` has `configured_count = 0_i64` |
+
+**Root cause layer:** default width of an untyped `+ 1` accumulator. Distinct
+from P3.755 (`+ g.len()`), P3.773 (counter compared to `.len()`), and P3.772
+(untyped offset added to an `i32`).
+
+**Do not steal:** compiler `src/`.
+
+**Gates:** `cargo test --release --test all -- untyped_plus_one_counter_`
+
+
 ## P3.774 (2026-10-09) — TDD WDB-476 (DB agent; no compiler src)
 
 An `i32` compared with `< 0` must not widen the zero to `i64`.
