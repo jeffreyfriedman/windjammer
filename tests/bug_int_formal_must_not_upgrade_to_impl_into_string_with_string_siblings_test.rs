@@ -89,7 +89,7 @@ pub fn check_title(title: string, max_title_len: int) -> Result<string, string> 
         .arg(out.path().join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3599_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");

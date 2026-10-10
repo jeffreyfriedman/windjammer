@@ -86,7 +86,7 @@ fn match_arm_owned_binding_reuse_must_clone() {
         .arg(out.join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3574_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");

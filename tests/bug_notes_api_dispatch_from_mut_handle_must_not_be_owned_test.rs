@@ -140,7 +140,7 @@ fn notes_api_dispatch_from_mut_handle_must_not_be_owned() {
         .arg(out.join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3570_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");

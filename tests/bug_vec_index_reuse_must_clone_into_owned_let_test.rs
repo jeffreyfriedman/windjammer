@@ -111,7 +111,7 @@ fn cargo_check_gen(tmp: &TempDir, rs: &str) {
         .arg(out.join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3575_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");

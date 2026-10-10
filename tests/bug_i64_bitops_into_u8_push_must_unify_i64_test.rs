@@ -71,7 +71,7 @@ fn i64_bitops_into_u8_push_must_unify_i64() {
         .arg(out.path().join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3590_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");

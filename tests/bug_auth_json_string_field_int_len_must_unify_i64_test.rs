@@ -84,7 +84,7 @@ pub fn json_string_field(body: string, key: string) -> string {
         .arg(out.path().join("Cargo.toml"))
         .env(
             "CARGO_TARGET_DIR",
-            std::env::temp_dir().join(format!("wj_p3568_cargo_{}", std::process::id())),
+            windjammer::cargo_cache::verify_target_dir(),
         )
         .output()
         .expect("cargo check");
