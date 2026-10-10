@@ -48,7 +48,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_process_exit_must_emit_i32_not_i64() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

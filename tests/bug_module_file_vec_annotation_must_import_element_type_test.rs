@@ -66,7 +66,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_vec_type_annotation_must_import_element_type() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed");

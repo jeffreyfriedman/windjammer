@@ -86,7 +86,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_owned_value_formal_must_not_receive_mut_ref_temporary() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed (codegen may still be wrong)");

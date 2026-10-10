@@ -70,7 +70,7 @@ fn bad_i32_while_compare(rs: &str) -> bool {
 
 #[test]
 fn i32_while_compare_must_not_cast_rhs_to_i64() {
-    let mut test = p308_fixture();
+    let test = p308_fixture();
     let map = test
         .compile()
         .expect("P3.309 multipass compile should succeed");

@@ -113,7 +113,7 @@ fn fixture() -> MultiFileTest {
 
 #[test]
 fn module_file_owned_state_call_must_not_over_borrow() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed");

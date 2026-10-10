@@ -91,7 +91,7 @@ pub mod batch_clone
 
 #[test]
 fn full_library_multipass_mut_struct_formal_must_not_clone_owned_at_call_site() {
-    let mut test = fixture();
+    let test = fixture();
     let map = test
         .compile()
         .expect("multipass compile should succeed");

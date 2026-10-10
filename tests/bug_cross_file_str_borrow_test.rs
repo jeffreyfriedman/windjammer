@@ -108,7 +108,7 @@ impl Button {
     );
 
     let clean_has_clone = button_rs.contains("self.click_handler.clone()");
-    let clean_has_borrow = button_rs.contains("&self.click_handler");
+    let _clean_has_borrow = button_rs.contains("&self.click_handler");
     assert!(
         !clean_has_clone,
         "Clean build should NOT generate .clone() for cross-file &str param.\n\
