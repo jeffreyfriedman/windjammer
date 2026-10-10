@@ -11,20 +11,16 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.707: Sample Game `SampleGameGame::update_death_state` mutates
-//! `self.respawn_timer` / camera / renderer HUD but tip emit keeps owned
+//! `self.respawn_timer` / camera / renderer HUD but the compiler emit keeps owned
 //! immutable `self` (`error[E0594]: cannot assign … as self is not declared
 //! as mutable`).
 //!
-//! Product shape: field assigns + `player.is_alive` / `player.respawn` + call to
 //! owned-self `upload_camera` that partial-moves camera fields. Minimal
-//! field-assign-only isolates stay GREEN; this MultiFile matches the RED product.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
-use std::path::PathBuf;
 
 const SRC_MOD: &str = r#"
 pub mod game
@@ -114,61 +110,21 @@ impl Game {
 "#;
 
 #[test]
-fn bp_module_file_update_death_state_must_emit_mut_self() {
+fn module_file_update_death_state_must_emit_mut_self() {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", SRC_MOD);
     test.add_file("game.wj", SRC_GAME);
     test.add_file("camera.wj", SRC_CAMERA);
     test.add_file("state.wj", SRC_STATE);
-    let map = test.compile().expect("P3.707 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("state.rs").expect("state.rs");
-    eprintln!("P3.707 MultiFile state.rs:\n{rs}");
+    eprintln!("MultiFile state.rs:\n{rs}");
     let ok = rs.contains("fn update_death_state(&mut self")
         || rs.contains("fn update_death_state(mut self");
     assert!(
         ok,
-        "P3.707 RED: update_death_state must emit &mut self or mut self \
+        "RED: update_death_state must emit &mut self or mut self \
          (field assigns + owned upload_camera), not bare self:\n{rs}"
     );
 }
 
-#[test]
-fn bp_tip_out_update_death_state_must_emit_mut_self() {
-    let mut paths = Vec::new();
-    if let Ok(dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let root = PathBuf::from(dir);
-        paths.push(
-            root.parent()
-                .unwrap_or(root.as_path())
-                .join("sample-game/gen/game_state.rs"),
-        );
-        paths.push(
-            root.parent()
-                .unwrap_or(root.as_path())
-                .join("sample-game/build/game_state.rs"),
-        );
-    }
-    paths.push(PathBuf::from(
-        "/home/user/src/wj/sample-game/gen/game_state.rs",
-    ));
-    // Fresh tip multipass (agents often land under /tmp).
-    paths.push(PathBuf::from("/tmp/wj_bp_tip_full/game_state.rs"));
-
-    let path = paths.into_iter().find(|p| p.exists());
-    let Some(path) = path else {
-        eprintln!("skip: sample-game gen/game_state.rs not present");
-        return;
-    };
-    let rs = std::fs::read_to_string(&path).expect("read game_state.rs");
-    assert!(
-        rs.contains("fn update_death_state(&mut self")
-            || rs.contains("fn update_death_state(mut self"),
-        "P3.707 tip-out: update_death_state must emit &mut self (or mut self), not owned immutable self. path={} snippet:\n{}",
-        path.display(),
-        rs.lines()
-            .filter(|l| l.contains("update_death_state") || l.contains("respawn_timer"))
-            .take(12)
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
-}

@@ -13,11 +13,10 @@
 
 //! FAILING REPRO — library multipass SharedMap module must cargo-check.
 //!
-//! Isolate `compile_single` for get/has is tip GREEN (P3.288), but
+//! Isolate `compile_single` for get/has is green, but
 //! `wj build --library --module-file` for the full SharedMap module (insert +
 //! get + has) still fails cargo-check — historically `get(key.to_string())`,
-//! tip residual may also demote owned insert keys to `&mut String`.
-//! Blocks ecosystem `wj-sync` SharedMap get/has.
+//! the compiler may also demote owned insert keys to `&mut String`.
 
 use std::fs;
 use std::process::Command;
@@ -106,7 +105,7 @@ fn module_file_shared_map_get_must_borrow_key() {
     assert!(
         !generated.contains("get(key.to_string())")
             && !generated.contains("contains_key(key.to_string())"),
-        "RED P3.301: multipass SharedMap get/has must borrow key:\n{generated}"
+        "RED multipass SharedMap get/has must borrow key:\n{generated}"
     );
 
     let check = Command::new("cargo")

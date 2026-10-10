@@ -1,4 +1,3 @@
-//! DB-214 class / `wj-semver`: owned `string` locals into demoted `&str` sibling
 //! callees must borrow at the call site even when the caller keeps owned formals.
 
 #![cfg(any(
@@ -55,7 +54,7 @@ pub fn probe(a: string, b: string) -> int {
     let (generated, ok) = test_utils::compile_single_check(source);
     assert!(
         ok,
-        "wj-semver compare_identifiers shape must compile, got:\n{generated}"
+        "compare_identifiers shape must compile, got:\n{generated}"
     );
     if generated.contains("fn cmp_string(a: &str") || generated.contains("fn cmp_string(a:&str") {
         assert!(

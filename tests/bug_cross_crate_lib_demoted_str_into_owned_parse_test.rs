@@ -11,11 +11,8 @@
     feature = "integration_tests",
 ))]
 
-//! P3.262 (`wj-config` → `wj-toml`): library multipass demotes `from_toml(text: string)`
 //! to `&str`, then calls cross-crate `parse(text: String)` without auto-own → E0308.
 //!
-//! Ecosystem interim: `parse("${text}")` in `wj-config::from_toml`.
-//! Related: DB-170 (same-crate `.clone()`), P3.233 (app demoted → cross-crate owned).
 
 use std::fs;
 use std::process::Command;
@@ -129,7 +126,7 @@ pub fn from_toml(text: string) -> HashMap<string, string> {
         .expect("cargo check");
     assert!(
         check.status.success(),
-        "P3.262 RED: demoted &str into cross-crate owned parse must cargo-check.\ngenerated:\n{generated}\nstderr:\n{}",
+        "RED: demoted &str into cross-crate owned parse must cargo-check.\ngenerated:\n{generated}\nstderr:\n{}",
         String::from_utf8_lossy(&check.stderr)
     );
 }

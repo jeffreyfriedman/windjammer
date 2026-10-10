@@ -12,7 +12,6 @@
 ))]
 
 //! FAILING REPRO — hexagonal `(Row, T)` column-chain helpers must cargo-check without
-//! demoting `Row` to `&mut Row` while still returning owned `Row` (DownstreamApp
 //! `postgres_row_mapping.wj` / `"col" + ""` workaround).
 
 #[path = "common/test_utils.rs"]
@@ -37,7 +36,7 @@ fn assert_row_formal_matches_tuple_return(rs: &str) {
 
 #[test]
 fn row_col_chain_same_file_must_not_demote_mut_row_and_return_owned() {
-    // Single-file tip is GREEN; multipass hexagonal gate below remains RED.
+    // Single-file is GREEN; multipass hexagonal gate below remains RED.
     let rs = test_utils::compile_single(ROW);
     assert_row_formal_matches_tuple_return(&rs);
 }
