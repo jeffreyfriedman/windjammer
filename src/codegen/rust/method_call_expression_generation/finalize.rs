@@ -263,7 +263,12 @@ impl<'ast> CodeGenerator<'ast> {
                                     && !arg_str.starts_with("&mut ")
                                     && owned_non_copy_param)
                             {
-                                return format!("{base}.clone()");
+                                // IR already appended one `.clone()` for reuse. This
+                                // post-IR pass must stay idempotent (WDB-479
+                                // `tag.clone().clone()` on HashMap::insert).
+                                return crate::codegen::rust::expression_utilities::append_rust_clone(
+                                    base,
+                                );
                             }
                             if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                                 return base.to_string();

@@ -44,7 +44,7 @@ same function (`while i < self.weights.len()`) emits `usize`. Tip-out emits
 
 **Gates:** `cargo test --release --test all --features integration_tests -- while_plus_one_len_index` — pending.
 
-## P3.782 (2026-10-09) — TDD WDB-479 (DB agent; no compiler src)
+## P3.782 (2026-10-10) — WDB-479 reused string map key (isolate GREEN)
 
 A reused `string` inserted into a map must not `.clone().clone()`. `contains_key` and `get_mut` borrow, so one clone into `insert` is enough.
 
@@ -57,14 +57,16 @@ if let Some(list) = self.tag_index.get_mut(tag) {
     list.push(node_id)
 }
 ```
-Tip MultiFile and tip-out both emit `index.insert(tag.clone().clone(), vec![])`. Tip-out also passes `tag.clone()` to `get_mut`.
+Isolate now emits `index.insert(tag.clone(), vec![])` and `get_mut(&tag)`. Tip-out gen is unchanged.
 
 | Gate | Status |
 |------|--------|
-| WDB-479 MultiFile | ❌ isolate RED — `tag.clone().clone()` |
-| WDB-479 tip-out | ❌ tip RED — `tag.clone().clone()` in `rel_tip_out/scene_graph/scene_graph_state.rs` and `windjammer-game-core/gen/scene_graph/scene_graph_state.rs` |
+| WDB-479 MultiFile | ✅ isolate GREEN — `index.insert(tag.clone(), vec![])` and `get_mut(&tag)` |
+| WDB-479 tip-out | ❌ stale gen — `tag.clone().clone()` still in `rel_tip_out/scene_graph/scene_graph_state.rs` and `windjammer-game-core/gen/scene_graph/scene_graph_state.rs` (do not regen) |
 
-**Root cause layer:** live — reused string keys are double-cloned into `HashMap::insert`.
+**Root cause layer:** temporary reconcile (narrowed). IR already emitted one `.clone()` for the reused owned `String` key. The post-IR method-arg pass reformatted `format!("{base}.clone()")` on that result. `append_rust_clone` is idempotent, so the second append is gone. HashMap::insert's owned key contract was already correct — no new peel, no method-name list.
+
+**What became unnecessary:** a second `.clone()` on an argument IR had already cloned.
 
 **Why this is a new class:**
 - WDB-471 is a reused `Vec` argument `.clone().clone()`.
@@ -73,7 +75,7 @@ Tip MultiFile and tip-out both emit `index.insert(tag.clone().clone(), vec![])`.
 
 **Do not steal:** WDB-406/408/411/457–479, P3.508–P3.782, compiler `src/`.
 
-**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb479_` — isolate RED / tip RED (2026-10-09).
+**Gates:** `cargo test --release --test all -- bug_wdb479_module_file_reused_string_map_insert_must_not_double_clone_test::wdb479_module_file_reused_string_map_insert_must_not_double_clone` — 1 passed (2026-10-10). Tip-out scanner not re-run; product gen stays stale.
 
 ## P3.780 (2026-10-09) — `Vec::new()` plus `push` into `Vec<u32>` must not be `i64`
 
