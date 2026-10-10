@@ -11,10 +11,8 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-411: `while i < count` must stay u32 when `count` is u32, even if the
 //! body uses f32 math and `as i64` indexing (frame_analysis leftover).
 //!
-//! P3.348 isolate omitted luminance / `as i64` and stayed u32. Product
 //! `is_black` leftover rustc:
 //!   `while i < count` — expected `i32`, found `u32`.
 
@@ -55,7 +53,6 @@ pub fn is_black(frame: FramePixels) -> bool {
     avg < threshold
 }
 
-/// Product leftover: early `count == 0` return poisons `i` to i32 (average_brightness).
 pub fn average_brightness(frame: FramePixels) -> f32 {
     let count = frame.pixel_count()
     if count == 0 { return 0.0 }
@@ -75,7 +72,6 @@ pub struct Histogram {
     pub mean: f32,
 }
 
-/// Product leftover after WDB-411 average_brightness: histogram must keep
 /// `b` / `i` as u32 (not i32) when looping against `bin_count` / `count`.
 pub fn histogram(frame: FramePixels) -> Histogram {
     let bin_count = 256u32
@@ -103,12 +99,12 @@ pub fn histogram(frame: FramePixels) -> Histogram {
 "#;
 
 #[test]
-fn wdb411_module_file_u32_count_while_must_not_infer_i32() {
+fn module_file_u32_count_while_must_not_infer_i32() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("WDB-411 compile");
+    let map = test.compile().expect("compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("WDB-411 MultiFile lib.rs:\n{rs}");
+    eprintln!("MultiFile lib.rs:\n{rs}");
     assert!(
         !rs.contains("let mut i: i32")
             && !rs.contains("let mut b: i32")
@@ -116,12 +112,12 @@ fn wdb411_module_file_u32_count_while_must_not_infer_i32() {
             && !rs.contains("let mut b = 0_i32")
             && !rs.contains("let mut i: i32 = 0_u32")
             && !rs.contains("let mut b: i32 = 0"),
-        "WDB-411 RED: u32 count loop inferred i32:\n{rs}"
+        "RED: u32 count loop inferred i32:\n{rs}"
     );
     assert!(
         rs.contains("while i < count"),
         "expected while i < count:\n{rs}"
     );
     test.cargo_check()
-        .expect("WDB-411 u32 count while must cargo-check");
+        .expect("u32 count while must cargo-check");
 }
