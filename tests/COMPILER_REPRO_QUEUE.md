@@ -11,8 +11,8 @@ with `child_count` from `.len()` and `gap: f32`. Tip-out emits
 
 | Gate | Status |
 |------|--------|
-| P3.779 isolate | pending |
-| P3.779 tip-out | pending — `gen/ui/layout.rs` has `child_count > 1_i32` |
+| `f32_times_len_minus_one_cast_must_parenthesize` | ❌ isolate RED — `child_count > 1_usize` then `container.gap as f32 * (child_count - 1_usize) as f32` |
+| `f32_times_len_minus_one_cast_tip_out_layout` | ❌ tip-out RED — `gen/ui/layout.rs` has `child_count > 1_i32` and `self.gap as f32 * (child_count - 1_usize) as f32` |
 
 **Root cause layer:** integer suffix and cast grouping on a length used as an
 `f32` scale. Distinct from P3.753 (`u32` product wrapped in `as f32`).
