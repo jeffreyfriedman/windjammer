@@ -11,11 +11,6 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.705 / DownstreamApp `json.wj` `parse_json_string_array`:
-//! `section.substring(i, i + 1)` with `i` driven by `.len()` must not emit
-//! `i + 1_i32` (E0277 usize + i32). Tip `--module-file` currently peels
-//! substring to a slice end of `1_i32`.
-
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
@@ -43,12 +38,12 @@ pub fn parse_json_string_array(section: string) -> Vec<string> {
 fn substring_usize_plus_one_must_not_emit_i32() {
     let mut test = MultiFileTest::new();
     test.add_file("lib.wj", SRC);
-    let map = test.compile().expect("P3.705 substring compile");
+    let map = test.compile().expect("substring compile");
     let rs = map.get("lib.rs").expect("lib.rs");
-    eprintln!("P3.705 substring MultiFile lib.rs:\n{rs}");
+    eprintln!("substring MultiFile lib.rs:\n{rs}");
     assert!(
         !rs.contains("+ 1_i32") && !rs.contains("+1_i32"),
-        "P3.705 RED: substring(i, i + 1) must not emit 1_i32 beside usize i:\n{rs}"
+        "RED: substring(i, i + 1) must not emit 1_i32 beside usize i:\n{rs}"
     );
-    test.cargo_check().expect("P3.705 substring cargo-check");
+    test.cargo_check().expect("substring cargo-check");
 }

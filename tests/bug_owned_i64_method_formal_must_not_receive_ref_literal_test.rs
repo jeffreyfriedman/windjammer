@@ -11,12 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.651: owned `i64` method formal must not receive `&99` at the call site.
-//!
-//! Product `wj-notes-api` `store.get(99)` tip emits `store.get(&99_i64)` → E0308
-//! while formal is `id: i64`. Distinct from HashMap key borrow / P3.649 slice
-//! `&usize`. Do not reshape notes tests.
-
+//! owned `i64` method formal must not receive `&99` at the call site.
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
 
@@ -64,18 +59,18 @@ pub fn missing() -> bool {
 
     let map = test
         .compile()
-        .expect("P3.651 MultiFile compile should succeed");
+        .expect("MultiFile compile should succeed");
     let check_rs = map.get("check.rs").cloned().unwrap_or_default();
     let store_rs = map.get("store.rs").cloned().unwrap_or_default();
-    eprintln!("P3.651 store get sig:\n{}", store_rs.lines().find(|l| l.contains("fn get")).unwrap_or(""));
-    eprintln!("P3.651 check.rs:\n{check_rs}");
+    eprintln!("store get sig:\n{}", store_rs.lines().find(|l| l.contains("fn get")).unwrap_or(""));
+    eprintln!("check.rs:\n{check_rs}");
 
     let bad = check_rs.contains("get(&99") || check_rs.contains(".get(&99");
     assert!(
         !bad,
-        "P3.651 RED: owned i64 formal must receive bare 99, not &99:\n{check_rs}\n{store_rs}"
+        "RED: owned i64 formal must receive bare 99, not &99:\n{check_rs}\n{store_rs}"
     );
 
     test.cargo_check()
-        .expect("P3.651 RED: store.get(99) must cargo-check");
+        .expect("RED: store.get(99) must cargo-check");
 }

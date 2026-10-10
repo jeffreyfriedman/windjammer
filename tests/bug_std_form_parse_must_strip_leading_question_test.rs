@@ -11,14 +11,11 @@
     feature = "integration_tests",
 ))]
 
-//! P3.535: `std::encoding.form_parse` must strip an optional leading `?`
+//! `std::encoding.form_parse` must strip an optional leading `?`
 //! (`STDLIB_FORM_HANDOFF.md` / `wj-querystring` `parse("?a=1")`).
 //!
 //! Runtime today calls `url::form_urlencoded::parse` on the raw bytes, so
-//! `"?a=1"` becomes key `"?a"` (Ecosystem thin-wrap then fails
 //! `test_parse_strips_leading_question`). Do not keep a package-local
-//! `strip_question` — that hits P3.526 (`starts_with` moves `t`).
-//! P3.534 is DB-423 (other agent).
 
 use std::fs;
 use std::process::Command;
@@ -60,7 +57,7 @@ fn main() {
         .expect("wj build");
     assert!(
         build.status.success(),
-        "P3.535 transpile failed:\n{}",
+        "transpile failed:\n{}",
         String::from_utf8_lossy(&build.stderr)
     );
 
@@ -71,7 +68,7 @@ fn main() {
         .expect("cargo run");
     assert!(
         run.status.success(),
-        "P3.535 RED: form_parse(\"?a=1\") must yield key \"a\", not \"?a\".\nstdout:\n{}\nstderr:\n{}",
+        "RED: form_parse(\"?a=1\") must yield key \"a\", not \"?a\".\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&run.stdout),
         String::from_utf8_lossy(&run.stderr)
     );

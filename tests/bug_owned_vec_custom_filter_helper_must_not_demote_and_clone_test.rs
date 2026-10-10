@@ -14,7 +14,6 @@
 //! Multipass demotes `Vec<Custom>` helper formals to `&Vec<T>` then call sites
 //! emit `helper(notes.clone())` (owned) → E0308.
 //!
-//! Dogfood: `wj-notes-api` list `?q=` filter; product inlines the loop instead of
 //! `filter_notes_by_regex(notes, pattern)`.
 
 use std::fs;
