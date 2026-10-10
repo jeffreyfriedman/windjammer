@@ -2,6 +2,35 @@
 
 
 
+## P3.788 (2026-10-10) — TDD WDB-481 (DB agent; no compiler src)
+
+A `string` local pushed into a `Vec` and then used again must not `.clone().clone()`. One clone into `push` is enough.
+
+Product `rendering/material_node_graph.rs`:
+```wj
+let var_name = format!("node_{}", n.id)
+node_vars.push(var_name)
+code = code + format!("    let {} = {};\n", var_name, expr)
+```
+Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `node_vars.push(var_name.clone().clone())`.
+
+| Gate | Status |
+|------|--------|
+| WDB-481 MultiFile | ✅ isolate GREEN — no `.clone().clone()` |
+| WDB-481 tip-out | ❌ tip RED — `rel_tip_out/rendering/material_node_graph.rs` and `windjammer-game-core/gen/rendering/material_node_graph.rs` |
+
+**Root cause layer:** tip-out lag — a string used after `Vec::push` is still double-cloned.
+
+**Why this is a new class:**
+- WDB-474 is a last-use struct into `push` (no clone).
+- WDB-479 is a reused `string` map key.
+- WDB-480 is a loop-reused struct argument.
+- This is a fresh `string` local pushed and then formatted in the same iteration.
+
+**Do not steal:** WDB-406/408/411/457–481, P3.508–P3.788, compiler `src/`.
+
+**Gates:** `cargo test --release --test all --features integration_tests,codegen_tests -- wdb481_` — isolate GREEN / tip RED (2026-10-10).
+
 ## P3.786 (2026-10-10) — TDD WDB-480 (DB agent; no compiler src)
 
 A non-Copy value sent on every loop iteration must not `.clone().clone()`. One clone per call is enough.
@@ -41,10 +70,12 @@ Tip-out emits `let mut i = 0_i64` and `haystack.as_bytes()[i + (j as i64)]`.
 
 | Gate | Status |
 |------|--------|
-| P3.785 MultiFile | ❌ isolate RED — `i + (j as i64)` and `(needle.len() as i64)` |
-| P3.785 tip-out | ❌ tip RED — `let mut i = 0_i64` in `gen/editor/ecs_inspector_test.rs` |
+| P3.785 MultiFile | ✅ isolate GREEN — counter stays `usize`; `.len()` is not cast to `i64` |
+| P3.785 tip-out | ❌ stale — `gen/editor/ecs_inspector_test.rs` still `let mut i = 0_i64` (do not regen) |
 
-**Root cause layer:** codegen — adding `.len()` to an untyped counter widens it to `i64` before a string index.
+**Root cause layer:** constraint/solver (usize loop prepass). `counter_ident_in_usize_compare` peeled `b + 1` but not `i + needle.len()`, so the counter stayed `i64` and `.len()` was cast to match.
+
+**What became unnecessary:** casting both `.len()` calls to `i64` and the inner index `j` to `i64`.
 
 **Why this is a new class:**
 - P3.783 is `while b + 1 < vec.len()` indexing a `Vec`.
@@ -53,7 +84,7 @@ Tip-out emits `let mut i = 0_i64` and `haystack.as_bytes()[i + (j as i64)]`.
 
 **Do not steal:** WDB-406/408/411/457–479, P3.508–P3.784, compiler `src/`.
 
-**Gates:** `cargo test --release --test all --features integration_tests -- string_index_plus_len` — 0 passed / 2 failed, 1808 filtered, 0.05s (2026-10-10, HEAD `51c5bb43`). Isolate emits `let mut i = 0` then `haystack.as_bytes()[i + (j as i64)]`.
+**Gates:** `cargo test --release --test all -- string_index_plus_len_must_not_emit_i64` — RED (`needle.len() as i64`, `j as i64`) then 1 passed (2026-10-10). `while_plus_one_len_index_must_not_emit_i64` 1 passed. `i32_while_compare_must_not_cast_rhs_to_i64` 1 passed. Tip-out not regenerated.
 
 ## P3.784 (2026-10-10) — `println`-only `string` formal is `&str`
 
