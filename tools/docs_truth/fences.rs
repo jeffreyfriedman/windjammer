@@ -111,7 +111,8 @@ pub fn check_doc(file: &str, text: &str, wj_bin: Option<&std::path::Path>) -> Re
             continue;
         }
         let a = parse_info(&f.info);
-        if a.wj && (a.ignore || a.should_fail.is_some()) && !has_reason(&lines, f.line) {
+        let is_sh = matches!(f.info.split([',', ' ']).next().unwrap_or(""), "sh" | "bash" | "shell" | "console");
+        if (a.wj || is_sh) && (a.ignore || a.should_fail.is_some()) && !has_reason(&lines, f.line) {
             r.raw.push(Finding::fail("fences", file, f.line, "`ignore`/`should_fail` fences need a reason: put `<!-- ignore: why -->` (or `<!-- should_fail: why -->`) on the line above"));
         }
         if a.ignore {

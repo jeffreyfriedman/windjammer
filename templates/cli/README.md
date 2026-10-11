@@ -6,19 +6,22 @@ A command-line application built with Windjammer.
 
 ### Run the application
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj run src/main.wj
 ```
 
 ### Build for release
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj build --release
 ```
 
 ### Run with arguments
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj run src/main.wj -- YourName
 ```
 
@@ -37,7 +40,8 @@ wj run src/main.wj -- YourName
 
 Use the `wj add` command to add dependencies:
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj add reqwest      # HTTP client
 wj add serde --features derive  # Serialization
 ```

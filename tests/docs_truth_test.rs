@@ -537,3 +537,15 @@ fn unexecuted_sh_verify_fences_fail_when_execution_is_required() {
     let r = fences::check_doc("d.md", "```sh,verify\n$ wj --version\n```\n", None);
     assert_eq!(r.raw.len(), 1);
 }
+
+#[test]
+fn ignored_shell_fences_need_a_reason_too() {
+    assert_eq!(fences::check_doc("d.md", "```bash,ignore\nwj build\n```\n", None).raw.len(), 1);
+    assert!(fences::check_doc("d.md", "<!-- ignore: needs cargo -->\n```bash,ignore\nwj build\n```\n", None).raw.is_empty());
+}
+
+#[test]
+fn freshness_ignores_docs_that_reference_no_code_paths() {
+    // `git diff <sha> HEAD --` with an empty path list used to count the whole repository.
+    assert_eq!(freshness::changed_lines(&real(), "HEAD~1", &[]), Some(0));
+}

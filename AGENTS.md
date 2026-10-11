@@ -29,7 +29,8 @@ Never run tests with `--all-features` (it silently disables many test files; use
 
 ## Shared cargo cache
 
-```bash
+<!-- ignore: machine-level cache commands: they change the user's environment, so CI does not run them -->
+```bash,ignore
 wj cache status | wj cache prune | wj cache path | wj cache setup
 export CARGO_TARGET_DIR="$(wj cache path)"
 ```

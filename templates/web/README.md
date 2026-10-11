@@ -6,13 +6,15 @@ A web application built with Windjammer.
 
 ### Run the application
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj run src/main.wj
 ```
 
 ### Build for release
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj build --release
 ```
 
@@ -38,7 +40,8 @@ wj build --release
 
 Use the `wj add` command to add dependencies:
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo and network access -->
+```bash,ignore
 wj add serde --features derive  # Serialization
 wj add tokio --features full    # Async runtime
 ```

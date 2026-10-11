@@ -6,13 +6,15 @@ A library built with Windjammer.
 
 ### Run tests
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo -->
+```bash,ignore
 wj test
 ```
 
 ### Build the library
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo -->
+```bash,ignore
 wj build --release
 ```
 
@@ -69,13 +71,15 @@ fn main() {
 
 Run the test suite:
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo -->
+```bash,ignore
 wj test
 ```
 
 Run specific tests:
 
-```bash
+<!-- ignore: template for a new project: commands run inside a generated project with cargo -->
+```bash,ignore
 wj test --filter test_hello
 ```
 
