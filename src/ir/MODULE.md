@@ -14,6 +14,9 @@ In: analyzed program (`analyzer`) and `parser` AST. Out: `IrModule` with solved 
 ## Owns
 IR node types, lowering (`lower.rs`), constraints/solver, effects, taint, capability profiles/lock, execution mode, numeric bridge/solver, coercion encoding.
 
+## Reporting
+`explain/` (`wj explain-ownership`) only reports: it re-reads the constraint set (with provenance rule IDs, `ConstraintOrigin`), the IR result and the emitted Rust, and shows where analyzer / solver / IR / codegen disagree. It never feeds a decision back. Rule IDs: `explain/rules.rs` <-> `docs/spec/inference.md`.
+
 ## Never decides
 Text emission for a target, parsing, file IO.
 

@@ -27,6 +27,7 @@ pub mod cost_model;
 pub mod effects;
 pub mod emission_contract;
 pub mod execution;
+pub mod explain;
 pub mod formal_predicates;
 pub mod lower;
 pub mod node;
