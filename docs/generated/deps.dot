@@ -117,7 +117,7 @@ digraph deps {
   "analyzer" -> "type_inference" [label="1"];
   "auto_clone" -> "analyzer" [label="15"];
   "auto_clone" -> "codegen" [label="3",color=red,fontcolor=red];
-  "auto_clone" -> "parser" [label="33"];
+  "auto_clone" -> "parser" [label="34"];
   "auto_clone" -> "type_classification" [label="1"];
   "auto_clone_tests" -> "analyzer" [label="23"];
   "auto_clone_tests" -> "lexer" [label="2"];
@@ -299,7 +299,7 @@ digraph deps {
   "ir" -> "parser" [label="42"];
   "ir" -> "type_classification" [label="30"];
   "ir" -> "type_inference" [label="5"];
-  "lexer" -> "type_classification" [label="2",color=red,fontcolor=red];
+  "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
   "linter" -> "auto_clone" [label="1"];
   "linter" -> "error" [label="3"];
@@ -313,9 +313,6 @@ digraph deps {
   "metadata" -> "parser" [label="20"];
   "metadata" -> "type_classification" [label="2"];
   "module_system" -> "test_module_gate" [label="1"];
-  "optimizer" -> "parser" [label="27"];
-  "optimizer" -> "parser_impl" [label="1"];
-  "optimizer" -> "test_utils" [label="5"];
   "output_generation" -> "analyzer" [label="1"];
   "output_generation" -> "cargo_toml" [label="1"];
   "output_generation" -> "codegen" [label="4"];
