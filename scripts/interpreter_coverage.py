@@ -39,7 +39,7 @@ def interp(wj, path):
         p = run([DRIVER, "interpreter_probe_test::probe_one", "--exact", "--ignored", "--nocapture"], env=env)
         if p is None:
             return None
-        m = re.search(r"@@STDOUT-BEGIN\n(.*?)@@STDOUT-END\n@@EXIT (-?\d+)\n@@ERR (.*)", p.stdout, re.S)
+        m = re.search(r"@@STDOUT-BEGIN\n(.*?)@@STDOUT-END\n@@EXIT (-?\d+)\n@@ERR ([^\n]*)", p.stdout, re.S)
         if not m:
             return Result("", p.returncode or 1, "driver crashed: " + p.stderr[-200:])
         return Result(m.group(1), int(m.group(2)), m.group(3).replace("\\n", "\n"))
@@ -109,7 +109,7 @@ def corpus(wj, d):
             if r is None:
                 ok, why = False, "timeout"
             elif r.stdout != want or r.returncode != exit_:
-                ok, why = False, f"seed {s}: exit {r.returncode}; " + (r.stderr.strip().splitlines() or [""])[-1][:120]
+                ok, why = False, f"seed {s}: exit {r.returncode}; " + " | ".join((r.stderr.strip().splitlines() or [""])[:2])[:120]
             if not ok:
                 break
         res[name] = {"oracle_ok": ok, "why": why}
@@ -158,7 +158,7 @@ def main():
         r = interp(wj, p)
         e = {"interp_ok": bool(r and r.returncode == 0)}
         if r is not None and r.returncode != 0:
-            e["why"] = (r.stderr.strip().splitlines() or [""])[-1][:160]
+            e["why"] = " | ".join((r.stderr.strip().splitlines() or [""])[:2])[:160]
         if r is None:
             e["why"] = "timeout"
         if rust_diff:

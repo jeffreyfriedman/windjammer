@@ -1,0 +1,30 @@
+// seeds: 1 2 3 10
+// Longest Collatz chain below a seed-dependent bound.
+fn chain(start: u64) -> int {
+    let mut n = start
+    let mut steps = 0
+    while n != 1 {
+        if n % 2 == 0 {
+            n = n / 2
+        } else {
+            n = 3 * n + 1
+        }
+        steps += 1
+    }
+    steps
+}
+fn main() {
+    let limit: u64 = 1000 + __SEED__ * 100
+    let mut best: u64 = 1
+    let mut best_len = 0
+    let mut i: u64 = 1
+    while i < limit {
+        let l = chain(i)
+        if l > best_len {
+            best_len = l
+            best = i
+        }
+        i += 1
+    }
+    println("{} {} {}", limit, best, best_len)
+}
