@@ -2,7 +2,7 @@
 //! becomes `Vec::with_capacity(N)` (PASSES.md P4).
 //!
 //! Preconditions: the loop statement immediately follows the `let`; the range
-//! starts at literal `0_usize`; `N` is side-effect free; the body pushes to `v`
+//! starts at literal `0_usize` (or `0_<int>` with a literal bound); `N` is side-effect free; the body pushes to `v`
 //! unconditionally at its top level and contains no early exit; the file never
 //! observes `.capacity()`.
 
@@ -89,6 +89,10 @@ fn is_vec_new(e: &Expr) -> bool {
     false
 }
 
+fn is_vec_new_local(s: &Stmt) -> bool {
+    matches!(s, Stmt::Local(l) if l.init.as_ref().is_some_and(|i| i.diverge.is_none() && is_vec_new(&i.expr)))
+}
+
 fn pushes_unconditionally(body: &Block, name: &str) -> bool {
     body.stmts.iter().any(|s| match s {
         Stmt::Expr(Expr::MethodCall(m), Some(_)) => {
@@ -131,7 +135,12 @@ impl V<'_, '_> {
             return None;
         }
         let (from, to) = (r.start.as_deref()?, r.end.as_deref()?);
-        let zero = matches!(from, Expr::Lit(l) if matches!(&l.lit, Lit::Int(i) if i.base10_digits() == "0" && i.suffix() == "usize"));
+        let zero_lit = |suffixes: &[&str]| {
+            matches!(from, Expr::Lit(l) if matches!(&l.lit, Lit::Int(i) if i.base10_digits() == "0" && suffixes.contains(&i.suffix())))
+        };
+        // `0_usize..N` for any pure N; `0_<other int>..LIT` for a non-negative literal bound.
+        let lit_bound = matches!(to, Expr::Lit(l) if matches!(&l.lit, Lit::Int(i) if i.base10_digits().parse::<u64>().is_ok()));
+        let zero = zero_lit(&["usize"]) || (lit_bound && zero_lit(&["i32", "u32", "i64", "u64"]));
         let any_start = cfg.mutant == Some(Mutant::CapacityAnyStart);
         if !(zero || any_start) || !is_pure(to) || !is_pure(from) {
             return None;
@@ -145,7 +154,9 @@ impl V<'_, '_> {
             return None;
         }
         let to_text = self.ctx.idx.text(to.span())?;
-        if zero {
+        if zero && !zero_lit(&["usize"]) {
+            Some(format!("{} as usize", to_text))
+        } else if zero {
             Some(to_text.to_string())
         } else {
             Some(format!("({}) - ({})", to_text, self.ctx.idx.text(from.span())?))
@@ -155,9 +166,12 @@ impl V<'_, '_> {
 
 impl<'ast> Visit<'ast> for V<'_, '_> {
     fn visit_block(&mut self, b: &'ast Block) {
-        for w in b.stmts.windows(2) {
-            if let Stmt::Local(l) = &w[0] {
-                self.try_pair(l, &w[1]);
+        for (i, st) in b.stmts.iter().enumerate() {
+            let Stmt::Local(l) = st else { continue };
+            // the loop must follow directly, or after more `let x = Vec::new();` statements
+            let next = b.stmts[i + 1..].iter().find(|s| !is_vec_new_local(s));
+            if let Some(n) = next {
+                self.try_pair(l, n);
             }
         }
         syn::visit::visit_block(self, b);

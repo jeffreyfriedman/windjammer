@@ -50,15 +50,17 @@ Mutant caught: `CastDropsAnyIdent` (drops a narrowing cast such as `x as u8`).
 ## P4 with_capacity (ON)
 Rewrite: `let mut v = Vec::new(); for _ in 0_usize..N { ...; v.push(..); ... }` ->
 `Vec::with_capacity(N)`.
-Preconditions (all checked): the `for` is the statement right after the `let`;
-range start is the literal `0_usize` and exclusive; `N` is built only from
+Preconditions (all checked): the `for` is the statement right after the `let` (only
+other `let x = Vec::new();` statements may sit in between: they are pure constructors);
+range start is the literal `0_usize` and exclusive, or `0_i32/u32/i64/u64` with a
+non-negative integer LITERAL bound (emitted as `LIT as usize`); `N` is built only from
 identifiers, integer literals, field paths, `+ - *`, casts, and `.len()` on a place
 (no calls, no side effects); the loop body has a top-level unconditional
 `v.push(..);`; the body contains no `break`, `continue`, `return`, `?` (also inside
 macro token streams); the file never calls `.capacity()`.
 Why sound: capacity is not part of `Vec`'s observable semantics except via
-`.capacity()` (excluded). `N` is evaluated once more, immediately before the loop
-head evaluates it again, with no statement in between, so panics (overflow) occur
+`.capacity()` (excluded). `N` is evaluated once more, before the loop
+head evaluates it again, with no side-effecting statement in between, so panics (overflow) occur
 identically and in the same order. With no early exit, the loop pushes at least
 once per iteration, so the reservation is never larger than the final length by
 more than what the program would allocate anyway; with `break` it could be absurdly
