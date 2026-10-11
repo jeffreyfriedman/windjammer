@@ -79,5 +79,5 @@ pre-existing problems. A file may not exceed its baseline; `scripts/docs_gen.sh 
 Number of programs in the conformance corpus (a generated region; edit the code, not this number):
 
 <!-- wj:gen name=metric key=conformance.programs -->
-119
+130
 <!-- wj:end -->

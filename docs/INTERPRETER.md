@@ -29,13 +29,13 @@ Two oracles, neither of them a hand-typed number:
   Currently:
 
   <!-- wj:gen name=metric key=interpreter.features_supported -->
-26
+35
   <!-- wj:end -->
 
   supported entries, and
 
   <!-- wj:gen name=metric key=interpreter.features_unsupported -->
-2
+3
   <!-- wj:end -->
 
   entries that must fail with "unsupported".
@@ -65,9 +65,10 @@ Generated from the registry (do not edit; change `src/interpreter/features.rs`):
 - **Numbers**: integer widths with Rust overflow semantics (`wrapping_*`, `checked_*`, `as` casts); arithmetic overflow panics (exit 101)
 - **Collections**: `Vec` push/len/index/sort/dedup, `VecDeque`; `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet`, `entry` API; iterator adaptors (`map filter fold sum zip enumerate rev take skip chain flat_map windows chunks sort_by`), lazy `cycle`/`repeat`/`from_fn`; `Option`/`Result` combinators
 - **Strings**: string and char methods, `split`, `parse`
-- **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability
-- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`)
+- **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability; `RefCell` borrow tracking with Rust's `BorrowMutError` panic
+- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`); `thread::spawn`/`join`, `thread::scope`, `sleep` on a virtual clock (deterministic cooperative scheduler; `--sched-seed N` explores other interleavings); `mpsc::channel`/`sync_channel`: send, recv, try_recv, recv_timeout, iteration; closes when every sender is gone; `Arc<Mutex>`/`RwLock` guards (released at scope end), `Condvar`, `Barrier`, atomics; deadlocks are reported
 - **Intrinsics**: `assert`, `assert_eq`, `panic`, `todo`, `debug`
+- **Std modules**: `Duration`, `Instant`, `SystemTime`, `std::time::DateTime` (chrono formats); `std::json` dynamic values and typed `to_string`/`parse_string::<T>`; `std::regex` (same engine as compiled programs); `std::fs` files, directories (`read_dir`, `metadata`), path helpers; `csv`, `url`, `mime`, `crypto` (sha/base64/bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`
 <!-- wj:end -->
 
 Also covered by the engine but not itemised in the registry yet: `std::{fs,env,process,io::stdin,time,mem,cmp,math,strings}` subsets and
@@ -100,6 +101,7 @@ location after consuming it, so the reported line can be the line after the fail
 `unsupported in the interpreter: ...` and exit 2:
 
 <!-- wj:gen name=interpreter_unsupported -->
+- **Std modules**: `std::http` client without a capability flag (use `--mock-http FILE` or `--allow-network`); `http::serve` servers
 - **Concurrency**: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)
 - **FFI**: calls to `extern fn`
 <!-- wj:end -->

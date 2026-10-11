@@ -99,6 +99,10 @@ Usage: wj run [OPTIONS] <FILE> [ARGS]...
 | `<ARGS>` | ARGS |  | Arguments to pass to the program |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
+| `--sched-seed` | N | 0 | With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
+| `--deterministic-time` | DETERMINISTIC_TIME |  | With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it |
+| `--allow-network` | ALLOW_NETWORK |  | With --interpret: allow plain http:// client requests (default: the http client refuses) |
+| `--mock-http` | FILE |  | With --interpret: answer http client calls from a JSON file of canned responses |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -387,5 +391,9 @@ Usage: wj cache setup
 Install wj and plugins to ~/.wj/bin/ and ensure PATH
 
 ```text
-Usage: wj self-install
+Usage: wj self-install [OPTIONS]
 ```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--dry-run` | DRY_RUN |  | Print what would be installed (binary, plugins, embedded std/ files) without writing anything |
