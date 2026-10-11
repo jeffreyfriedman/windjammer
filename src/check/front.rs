@@ -92,11 +92,13 @@ pub fn parse(file: &str, text: &str, out: &mut Vec<Diagnostic>) -> Option<Parsed
             program,
         }),
         Ok(Err(msg)) => {
-            let (l, c) = parser.error_position().unwrap_or((1, 1));
-            out.push(
-                Diagnostic::error("WJ0011", tidy_parse_message(&msg))
-                    .at(error_span(&ix, l, c).with_label("unexpected here")),
-            );
+            let (msg, at) = split_position(&msg);
+            let (l, c) = at.or_else(|| parser.error_position()).unwrap_or((1, 1));
+            let (code, text, label) = match msg.strip_prefix("Lexical error: ") {
+                Some(rest) => ("WJ0012", rest.to_string(), "not valid here"),
+                None => ("WJ0011", tidy_parse_message(&msg), "unexpected here"),
+            };
+            out.push(Diagnostic::error(code, text).at(error_span(&ix, l, c).with_label(label)));
             None
         }
         Err(p) => {
@@ -235,4 +237,23 @@ fn error_span(ix: &SourceIndex, l: usize, c: usize) -> crate::diagnostics::Span 
     let end = ix.text().trim_end().len();
     let start = ix.text()[..end].char_indices().next_back().map_or(0, |(i, _)| i);
     ix.span(start, end)
+}
+
+/// Split a trailing-or-embedded `(at line L, column C)` out of a parser message.
+fn split_position(msg: &str) -> (String, Option<(usize, usize)>) {
+    let Some(i) = msg.find(" (at line ") else {
+        return (msg.to_string(), None);
+    };
+    let rest = &msg[i + " (at line ".len()..];
+    let Some(close) = rest.find(')') else {
+        return (msg.to_string(), None);
+    };
+    let inner = &rest[..close];
+    let mut nums = inner.split(", column ").map(|n| n.trim().parse::<usize>().ok());
+    let pos = match (nums.next().flatten(), nums.next().flatten()) {
+        (Some(l), Some(c)) => Some((l, c)),
+        _ => None,
+    };
+    let cleaned = format!("{}{}", &msg[..i], &rest[close + 1..]);
+    (cleaned, pos)
 }
