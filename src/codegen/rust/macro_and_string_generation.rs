@@ -50,7 +50,11 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(t) = peer.clone() {
                     self.assignment_int_target_type = Some(t);
                 }
+                // Elements are moved into the new collection: they are not themselves call
+                // arguments, so identifier emission must apply its own reuse clone.
+                let prev_call_arg = std::mem::replace(&mut self.in_call_argument_generation, false);
                 let s = self.generate_expression(e);
+                self.in_call_argument_generation = prev_call_arg;
                 self.assignment_int_target_type = prev;
                 s
             })
@@ -74,7 +78,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Apply IR coercion when a `vec!` element must match an expected collection slot type.
-    pub(in crate::codegen::rust) fn coerce_vec_macro_element(
+    fn coerce_vec_macro_element(
         &self,
         arg_expr: &Expression<'ast>,
         generated: &str,
