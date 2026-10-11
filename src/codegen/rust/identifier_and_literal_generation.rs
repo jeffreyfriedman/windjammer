@@ -10,6 +10,24 @@ use crate::parser::{Expression, Literal, Type};
 use super::{float_type_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// `expr` is a module `const NAME: string` (or a `let s = "lit"` binding): emitted as a
+    /// `&'static str`, so it is *borrowed* text even though its WJ type says `string`.
+    pub(in crate::codegen::rust) fn expression_is_static_str_value(
+        &self,
+        expr: &Expression<'_>,
+    ) -> bool {
+        let name = match expr {
+            Expression::Identifier { name, .. } => name,
+            Expression::FieldAccess { field, .. } => field,
+            _ => return false,
+        };
+        crate::codegen::rust::string_utilities::is_string_const_identifier(
+            name,
+            self.auto_clone_analysis.as_ref(),
+            Some(&self.module_string_consts),
+        )
+    }
+
     /// Copy / reborrow bindings do not need auto-clone at move+reuse sites.
     /// Shared by identifier emit and assignment so field-assign cannot re-add `.clone()`.
     pub(in crate::codegen::rust) fn ident_skips_auto_clone_as_copy(
@@ -265,5 +283,20 @@ impl<'ast> CodeGenerator<'ast> {
     pub(super) fn generate_literal(&self, lit: &Literal) -> String {
         // Delegate to context-sensitive version
         self.generate_literal_context_sensitive(lit)
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// Module consts are re-instantiated at each use and never move: drop any "moved then
+    /// reused" clone sites the usage analysis recorded for them (it cannot see their
+    /// definition, so it mistakes them for parameters).
+    pub(in crate::codegen::rust) fn without_module_item_clones(
+        &self,
+        mut analysis: crate::auto_clone::AutoCloneAnalysis,
+    ) -> crate::auto_clone::AutoCloneAnalysis {
+        analysis.forget_module_item_clone_sites(|name| {
+            self.module_const_type_for_binding(name).is_some()
+        });
+        analysis
     }
 }

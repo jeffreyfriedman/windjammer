@@ -507,6 +507,15 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&value_str);
         }
 
+        // `const NAME: string` is a `&'static str`; an owned text slot needs the IR conversion.
+        if self.expression_is_static_str_value(value) {
+            if let Some(target_ty) = self.infer_expression_type(target) {
+                if crate::codegen::rust::string_utilities::type_is_owned_string(&target_ty) {
+                    value_str = self.coerce_vec_macro_element(value, &value_str, &target_ty);
+                }
+            }
+        }
+
         // Vec<T>[i] → owned String field: clone the element, not borrow it.
         if matches!(value, Expression::Index { .. }) {
             let target_type = self.infer_expression_type(target);

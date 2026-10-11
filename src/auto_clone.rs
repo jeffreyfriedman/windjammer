@@ -21,6 +21,10 @@ pub struct AutoCloneAnalysis {
     /// Variables that are bound to string literals (don't need .clone())
     /// These are Copy types (references) so .clone() is a no-op
     pub string_literal_vars: std::collections::HashSet<String>,
+    /// Names bound inside the analysed function (parameters and `let`/pattern definitions).
+    /// Any other bare identifier is a module-level item (const/static/fn) rather than a
+    /// local, which the usage analysis cannot see the definition of.
+    pub bound_names: std::collections::HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +50,18 @@ impl AutoCloneAnalysis {
         AutoCloneAnalysis {
             clone_sites: HashMap::new(),
             string_literal_vars: std::collections::HashSet::new(),
+            bound_names: std::collections::HashSet::new(),
         }
+    }
+
+    /// Drop clone sites recorded for module-level items mistaken for locals. A `const` is
+    /// re-instantiated at every use and never moves, so a "moved then used again" clone is
+    /// meaningless (and for a `&'static str` const `.clone()` would leave the value a `&str`).
+    /// `is_module_item` is answered by the caller, which owns the module/library symbol table.
+    pub fn forget_module_item_clone_sites(&mut self, is_module_item: impl Fn(&str) -> bool) {
+        let bound = &self.bound_names;
+        self.clone_sites
+            .retain(|(name, _), _| bound.contains(name) || !is_module_item(name));
     }
 
     /// Analyze a function to determine where clones should be inserted
@@ -93,6 +108,12 @@ impl AutoCloneAnalysis {
                 );
             }
         }
+
+        analysis.bound_names = usage_map
+            .iter()
+            .filter(|(_, usages)| usages.iter().any(|u| u.kind == UsageKind::Definition))
+            .map(|(name, _)| name.clone())
+            .collect();
 
         // For each variable, determine if it needs clones
         for (var_name, usages) in &usage_map {
