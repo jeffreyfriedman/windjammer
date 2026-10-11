@@ -283,8 +283,9 @@ digraph deps {
   "ide_analysis" -> "type_display" [label="1"];
   "inference" -> "parser" [label="6"];
   "inference" -> "test_utils" [label="1"];
+  "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
   "interpreter" -> "lexer" [label="1"];
-  "interpreter" -> "parser" [label="50"];
+  "interpreter" -> "parser" [label="51"];
   "interpreter" -> "source_map" [label="3"];
   "intrinsics" -> "error_catalog" [label="2"];
   "ir" -> "analyzer" [label="57"];
