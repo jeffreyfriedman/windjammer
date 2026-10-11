@@ -313,6 +313,48 @@ match value {
             rust_codes: vec!["E0004".to_string()],
             maturity: GuaranteeMaturity::Proven,
         });
+
+        // WJ0160: arena value escapes its arena (ADR-0016, `std::arena`, unstable)
+        self.register(WjErrorCode {
+            code: "WJ0160".to_string(),
+            title: "Arena value escapes its arena".to_string(),
+            explanation: "A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function that declares the arena, stored in a variable, field or collection declared outside the arena's scope, used as the value of the block that declares the arena, or used after the arena's `reset()`.".to_string(),
+            causes: vec![
+                "Returning a scratch string or a handle of a local arena".to_string(),
+                "Pushing an arena value into a collection that outlives the arena".to_string(),
+                "Reading a handle after `reset()`".to_string(),
+            ],
+            solutions: vec![
+                "Copy the value out (`.to_string()`, `.to_vec()`) before the arena goes away".to_string(),
+                "Declare the arena in the caller and pass it in".to_string(),
+                "Allocate again after `reset()`, or use `try_get` for a handle that may be stale".to_string(),
+            ],
+            example: Some(r#"// Wrong:
+fn label() -> string {
+    let s = Scratch::new()
+    return s.str("x")
+}
+
+// Correct:
+fn label() -> string {
+    let s = Scratch::new()
+    return s.str("x").to_string()
+}"#.to_string()),
+            rust_codes: vec!["E0597".to_string(), "E0505".to_string()],
+            maturity: GuaranteeMaturity::HighConfidence,
+        });
+
+        // WJ0161: `std::arena` is unstable
+        self.register(WjErrorCode {
+            code: "WJ0161".to_string(),
+            title: "`std::arena` is unstable".to_string(),
+            explanation: "Arenas (ADR-0016) are behind the compiler feature `unstable_arenas`.".to_string(),
+            causes: vec!["`use std::arena` with a compiler built without `unstable_arenas`".to_string()],
+            solutions: vec!["Build the compiler with `cargo build --features unstable_arenas`".to_string()],
+            example: None,
+            rust_codes: vec![],
+            maturity: GuaranteeMaturity::Proven,
+        });
     }
 
     /// Register an error code

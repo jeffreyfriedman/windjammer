@@ -11,12 +11,14 @@ struct Particle {
 
 fn main() {
     let mut pool = Arena::new()
-    let mut sum = 0.0
-    for frame in 0..60 {
+    let mut sum: float = 0.0
+    let frames: int = 60
+    let count: int = 20000
+    for frame in 0..frames {
         pool.reset()
-        for i in 0..20000 {
-            let f = float(i * 7 + frame * 13)
-            pool.alloc(Particle { x: f * 0.01, y: f * 0.02, vx: float(i % 5) - 2.0, vy: float(i % 3), life: 1.0 + float(i % 4) })
+        for i in 0..count {
+            let f = (i * 7 + frame * 13) as float
+            pool.alloc(Particle { x: f * 0.01, y: f * 0.02, vx: (i % 5) as float - 2.0, vy: (i % 3) as float, life: 1.0 + (i % 4) as float })
         }
         for step in 0..4 {
             for p in pool.iter_mut() {

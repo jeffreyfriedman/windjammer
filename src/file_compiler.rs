@@ -341,7 +341,10 @@ impl ModuleCompiler {
         // USER-DEFINED COPY TYPES: Enable Copy detection for @derive(Copy) structs/enums
         generator.set_copy_types_registry(self.copy_structs_registry.clone());
         let rust_code =
-            crate::optimizer::run_default(&generator.generate_program(&program, &analyzed));
+            crate::optimizer::run_with_auto_arena(
+                self.config.auto_arena,
+                &generator.generate_program(&program, &analyzed),
+            );
 
         generator.apply_self_receiver_upgrades(&mut self.global_signatures);
         self.global_signatures.merge(&generator.signature_registry);
