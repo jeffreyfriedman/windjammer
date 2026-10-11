@@ -1,0 +1,23 @@
+// seeds: 1 2 3 7 12
+// ADR-0014 interpolation specifiers: ${f:.2} ${x:?} ${x:>6} ${x:<6} ${x:04} ${x:x} ${s:^9}, plus braces and expressions.
+fn main() {
+    let n: int = __SEED__ * 37 + 5
+    let f: f64 = (n as f64) / 7.0
+    let name = "w-bat"
+    println("n=${n} f=${f:.2} f3=${f:.3} q=${name:?}")
+    println("r=[${n:>6}] l=[${n:<6}] z=${n:04} hex=${n:x} c=[${name:^9}]")
+    let one: int = 1
+    let h: f64 = (n as f64) / 2.0
+    println("sum=${n + one} sq=${n * n} half=${h:.1}")
+    println("literal {braces} and ${n} kept")
+    let v = [n, n + one, n + one + one]
+    println("v=${v:?} len=${v.len()}")
+    let o: Option<int> = Some(n)
+    println("o=${o:?}")
+    print("a")
+    print("b${n}")
+    println("")
+    println("")
+    println("")
+    println("end")
+}

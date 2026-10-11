@@ -32,6 +32,9 @@ impl Interpreter {
         };
         let mut out = String::new();
         let mut next = 1usize;
+        // arguments referenced by the template; rustc rejects a template that leaves one unused
+        let mut used = vec![false; args.len()];
+        used[0] = true;
         let chars: Vec<char> = fmt.chars().collect();
         let mut i = 0;
         while i < chars.len() {
@@ -58,9 +61,12 @@ impl Interpreter {
                 };
                 let mut spec = parse_spec(&spec_s);
                 // width/precision from arguments
-                let resolve_count = |this: &mut Interpreter, s: &str, next: &mut usize| -> R<Option<usize>> {
+                let resolve_count = |this: &mut Interpreter, s: &str, next: &mut usize, used: &mut [bool]| -> R<Option<usize>> {
                     if s == "*" {
                         let v = args.get(*next).cloned();
+                        if let Some(u) = used.get_mut(*next) {
+                            *u = true;
+                        }
                         *next += 1;
                         return Ok(match v {
                             Some(Value::Int(n, _)) => Some(n as usize),
@@ -69,6 +75,9 @@ impl Interpreter {
                     }
                     let name = s.trim_end_matches('$');
                     if let Ok(idx) = name.parse::<usize>() {
+                        if let Some(u) = used.get_mut(idx + 1) {
+                            *u = true;
+                        }
                         return Ok(match args.get(idx + 1) {
                             Some(Value::Int(n, _)) => Some(*n as usize),
                             _ => None,
@@ -83,16 +92,22 @@ impl Interpreter {
                     }
                 };
                 if let Some(w) = spec_width_arg(&spec_s) {
-                    spec.width = resolve_count(self, &w, &mut next)?;
+                    spec.width = resolve_count(self, &w, &mut next, &mut used)?;
                 }
                 if let Some(p) = spec_prec_arg(&spec_s) {
-                    spec.precision = resolve_count(self, &p, &mut next)?;
+                    spec.precision = resolve_count(self, &p, &mut next, &mut used)?;
                 }
                 let v = if arg.is_empty() {
                     let v = args.get(next).cloned();
+                    if let Some(u) = used.get_mut(next) {
+                        *u = true;
+                    }
                     next += 1;
                     v.ok_or_else(|| semantic("format string has more `{}` than arguments"))?
                 } else if let Ok(idx) = arg.parse::<usize>() {
+                    if let Some(u) = used.get_mut(idx + 1) {
+                        *u = true;
+                    }
                     args.get(idx + 1).cloned().ok_or_else(|| semantic("format argument index out of range"))?
                 } else {
                     match self.lookup_var(&arg) {
@@ -117,6 +132,9 @@ impl Interpreter {
                 out.push(c);
                 i += 1;
             }
+        }
+        if used.iter().any(|u| !u) {
+            return Err(semantic("format string leaves an argument unused (rustc: argument never used)"));
         }
         Ok(out)
     }

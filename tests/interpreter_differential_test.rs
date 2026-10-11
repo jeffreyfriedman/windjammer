@@ -335,3 +335,127 @@ fn selftest_source_mutants_are_killed_by_the_oracle() {
     assert!(total >= 15, "too few mutants generated: {}", total);
     assert!(killed * 10 >= total * 8, "only {}/{} mutants were killed by the oracle", killed, total);
 }
+
+// ------------------------------------------------------------ ADR-0014 Phase 1 intrinsics
+// stdout and the exit status are compared exactly by the corpus tests above. The tests below add
+// the second stream: stderr text (panic messages, eprintln, debug) against compiled Rust, with the
+// only legitimately different part (source locations, backtrace footer) normalised away.
+
+/// Keep message content; drop what must differ between a generated `.rs` and the `.wj` source.
+fn normalize_stderr(s: &str) -> String {
+    let mut out = Vec::new();
+    for line in s.lines() {
+        if line.starts_with("note: run with") || line.starts_with("stack backtrace") {
+            break; // rust footer / interpreter backtrace follow the message
+        }
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.starts_with("thread 'main'") {
+            out.push("PANIC".to_string());
+        } else if line.starts_with('[') && line.contains("] ") {
+            let i = line.find("] ").unwrap();
+            out.push(format!("[LOC] {}", &line[i + 2..]));
+        } else {
+            out.push(line.to_string());
+        }
+    }
+    out.join("\n")
+}
+
+fn intrinsic_program(body: &str) -> String {
+    format!(
+        "fn main() {{\n    let x: int = 5\n    let one: int = 1\n    let s = \"txt\"\n    {}\n}}\n",
+        body
+    )
+}
+
+#[test]
+fn intrinsic_stderr_and_exit_match_compiled_rust() {
+    let bodies = [
+        "stderr.println(\"e ${x}\")\n    stderr.print(\"p\")\n    eprintln(\"q ${x}\")\n    println(\"o ${x}\")",
+        "panic(\"boom ${x}\")",
+        "panic()",
+        "todo()",
+        "todo(\"later ${x}\")",
+        "unreachable()",
+        "unreachable(\"state ${x}\")",
+        // no integer literal in the condition: rustc echoes the generated source (`6_i64`)
+        "assert(x == one)",
+        "assert(x > 9, \"too small: ${x}\")",
+        "assert_eq(x, 6)",
+        "assert_eq(x, 6, \"ctx ${x}\")",
+        "assert_ne(x, 5)",
+        "assert_ne(x, 5, \"same ${x}\")",
+        "assert_eq(s, \"other\")",
+        "let y = debug(x + one)\n    let z = debug(s)\n    println(\"${y} ${z}\")",
+        "let l = [x, one]\n    let m = debug(l)\n    println(\"${m:?}\")",
+        "println!(\"legacy {} {:?}\", x, s)\n    eprintln!(\"legacy-err {}\", x)\n    assert!(x == 5, \"m {}\", x)\n    let d = dbg!(x)\n    println(\"${d}\")",
+        "assert_eq!(x, 6, \"legacy {}\", x)",
+    ];
+    let mut failures = Vec::new();
+    for body in bodies {
+        let src = intrinsic_program(body);
+        let rust = match compiled_rust(&src) {
+            Ok(r) => r,
+            Err(e) => {
+                failures.push(format!("{body}: Rust pipeline failed: {e}"));
+                continue;
+            }
+        };
+        let got = interpret(&src);
+        let (gs, rs) = (normalize_stderr(&got.stderr), normalize_stderr(&rust.stderr));
+        if got.stdout != rust.stdout || got.exit != rust.exit || gs != rs {
+            failures.push(format!(
+                "`{body}`: interpreter exit {} vs rust {}\n--- interpreter stdout/stderr\n{}\n{}\n--- rust\n{}\n{}",
+                got.exit, rust.exit, got.stdout, gs, rust.stdout, rs
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{} intrinsic differences:\n{}", failures.len(), failures.join("\n=====\n"));
+}
+
+#[test]
+fn intrinsic_stderr_has_independent_expected_text() {
+    // Expected values hand-derived from rustc's documented panic formats, not from any backend.
+    let cases: [(&str, i32, &str, &str); 6] = [
+        ("stderr.println(\"e ${x}\")\n    println(\"o ${x}\")", 0, "o 5\n", "e 5"),
+        ("todo(\"later\")", 101, "", "not yet implemented: later"),
+        ("assert(x == 6)", 101, "", "assertion failed: x == 6"),
+        ("assert_eq(x, 6, \"c\")", 101, "", "assertion `left == right` failed: c\n  left: 5\n right: 6"),
+        ("let y = debug(x)\n    println(\"${y}\")", 0, "5\n", "] x = 5"),
+        ("unreachable()", 101, "", "internal error: entered unreachable code"),
+    ];
+    for (body, exit, out, err) in cases {
+        let got = interpret(&intrinsic_program(body));
+        assert_eq!((got.exit, got.stdout.as_str()), (exit, out), "{body}: {}", got.stderr);
+        assert!(got.stderr.contains(err), "{body}: stderr {:?} lacks {:?}", got.stderr, err);
+    }
+}
+
+#[test]
+fn intrinsic_unsupported_shapes_exit_2_with_a_diagnostic() {
+    for body in ["let y = debug(x, x)", "assert()", "assert_eq(x)", "println(a: x)", "let y = dbg!(x, x)"] {
+        let got = interpret(&intrinsic_program(body));
+        assert_eq!(got.exit, 2, "{body}: stdout {:?} stderr {:?}", got.stdout, got.stderr);
+        assert!(got.stderr.contains("unsupported in the interpreter"), "{body}: {}", got.stderr);
+        assert_eq!(got.stdout, "", "{body} must not print anything");
+    }
+}
+
+#[test]
+fn selftest_stream_and_message_mutants_are_detected() {
+    // The stderr oracle must notice a message that went to the wrong stream or has the wrong text.
+    let good = interpret(&intrinsic_program("stderr.println(\"e ${x}\")\n    assert(x == 6, \"bad ${x}\")"));
+    let wrong_stream = interpret(&intrinsic_program("stdout.println(\"e ${x}\")\n    assert(x == 6, \"bad ${x}\")"));
+    let wrong_text = interpret(&intrinsic_program("stderr.println(\"e ${x}\")\n    assert(x == 6, \"bad ${one}\")"));
+    assert_eq!(good.exit, 101);
+    assert_ne!(good.stdout, wrong_stream.stdout);
+    assert_ne!(normalize_stderr(&good.stderr), normalize_stderr(&wrong_stream.stderr));
+    assert_ne!(normalize_stderr(&good.stderr), normalize_stderr(&wrong_text.stderr));
+    // normalisation keeps content but drops locations
+    assert_eq!(
+        normalize_stderr("thread 'main' panicked at a.wj:1:2:\nmsg\nstack backtrace:\n  0: main"),
+        normalize_stderr("thread 'main' (9) panicked at build/t.rs:7:5:\nmsg\nnote: run with `RUST_BACKTRACE=1`")
+    );
+}
