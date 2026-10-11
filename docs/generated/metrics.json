@@ -4,14 +4,16 @@
     "adr.count": 15,
     "cli.subcommands": 26,
     "conformance.backends": 4,
-    "conformance.programs": 119,
-    "conformance.unsupported_pairs": 29,
-    "errors.codes_total": 21,
+    "conformance.programs": 130,
+    "conformance.unsupported_pairs": 32,
+    "errors.codes_total": 22,
+    "interpreter.features_supported": 35,
+    "interpreter.features_unsupported": 3,
     "intrinsics.count": 13,
     "lexer.keywords": 44,
-    "lints.w_codes": 6,
+    "lints.w_codes": 7,
     "stdlib.files": 40,
-    "tests.rust_files": 1853,
-    "tests.wj_programs": 523
+    "tests.rust_files": 1868,
+    "tests.wj_programs": 526
   }
 }
