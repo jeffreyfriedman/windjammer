@@ -1,0 +1,20 @@
+# Corpus files the compiler front end currently rejects: `<path> | <one-line cause>`.
+# Entries may only be removed (fix the source or the compiler). See tests/wj_corpus_test.rs.
+tests/bug_deref_simple.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
+tests/bug_deref_vec.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
+tests/bug_function_call_deref.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
+tests/bug_method_call_deref.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
+tests/fixtures/mut_ref_test.wj | stale source: explicit `&` borrow in call is rejected by lint W0004 (Rust leakage)
+tests/fixtures/traits/test_ui_pattern.wj | stale source: `.as_str()` is forbidden in Windjammer source
+tests/framework_validation.wj | stale source: explicit `&` borrow in call is rejected by lint W0004 (Rust leakage)
+tests/function_param_patterns.wj | stale source: no longer parses (Expected Colon, got LBrace (at token position 68))
+tests/generic_owned_param_test.wj | stale source: explicit `&` borrow in call is rejected by lint W0004 (Rust leakage)
+tests/input_keyboard_test.wj | compiler panics on `#` in source (lexer: Unexpected character) instead of reporting a diagnostic
+tests/let_patterns.wj | stale source: no longer parses (Refutable pattern in `let` binding requires an `else` block. Use `let SingleVari)
+tests/stdlib_all_tests.wj | stale source: no longer parses (Expected '<' or identifier after '::', got Int)
+tests/type_registry_imports_test.wj | stale source: no longer parses (Expected comma or closing brace in struct literal, got Ident("body") at position)
+tests/vec_index_local_var.wj | stale source: `.unwrap()` is rejected by lint W0002 (Rust leakage)
+tests/windjammer_tests/regression_enum_kill_payload_extract_test.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
+tests/windjammer_tests/regression_option_vec_pair_sum_test.wj | stale source: `.unwrap()` is rejected by lint W0002 (Rust leakage)
+tests/windjammer_tests/regression_outer_inner_area_test.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
+tests/windjammer_tests/regression_vec_tuple_string_push_test.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)

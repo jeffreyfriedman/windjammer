@@ -36,8 +36,8 @@ fn wj_test_empty_state_mentions_at_test_and_tests_dir() {
     );
 
     assert!(
-        output.status.success(),
-        "empty test run should succeed:\n{combined}"
+        !output.status.success(),
+        "an empty test run must fail (silent zero-test success hides skipped tests):\n{combined}"
     );
     assert!(
         combined.contains("@test"),
