@@ -25,8 +25,8 @@ decisions are in [docs/adr/](docs/adr/README.md).
   [ADR-0002](docs/adr/0002-local-mutability.md) for the open decision on whether this is the intended rule).
 - String interpolation (`"${name}"`), pipe operator (`|>`), `defer`, `if`/`else` as expressions, `?` error propagation,
   decorators (`@name`), `mod`, `extern`, `unsafe`, `static`, `where` clauses.
-- Concurrency keywords that exist in the lexer: `thread { }`, `async`/`await`, `async fn`. There is no `go` keyword and no
-  `chan::new()`; see [ADR-0004](docs/adr/0004-concurrency-surface.md).
+- Concurrency keywords that exist in the lexer: `thread { }`, `async`/`await`, `async fn`. Channel send/receive operators (`ch <- v`, `<-ch`) are parsed. There is no `go` keyword,
+  no `chan::new()` and no `select`; see [ADR-0004](docs/adr/0004-concurrency-surface.md).
 - Effect checking against an `[app_capabilities]` section in `wj.toml` (fails the build on violations).
 
 Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [docs/MODULE_SYSTEM.md](docs/MODULE_SYSTEM.md).
