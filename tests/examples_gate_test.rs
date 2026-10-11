@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! Every program under `examples/` (outside `examples/verified/`, which `verified_examples_test.rs` owns) is
+//! Every program under `examples/` and `templates/` (outside `examples/verified/`, which `verified_examples_test.rs` owns) is
 //! exercised by CI or it does not exist. `examples/EXAMPLES.toml` assigns each file a mode:
 //!
 //! * `run`   the interpreter runs it (`wj run --interpret`); its `// expect: line` headers (an oracle written by hand,
@@ -68,10 +68,11 @@ fn walk(dir: &Path, out: &mut Vec<String>, base: &Path) {
     }
 }
 
-/// Programs governed by this gate.
+/// Programs governed by this gate: `examples/` (except `verified/`) and the project templates `wj new` copies out.
 fn examples() -> Vec<String> {
     let mut all = Vec::new();
     walk(&root().join("examples"), &mut all, &root());
+    walk(&root().join("templates"), &mut all, &root());
     all.into_iter().filter(|f| !f.starts_with("examples/verified/")).collect()
 }
 

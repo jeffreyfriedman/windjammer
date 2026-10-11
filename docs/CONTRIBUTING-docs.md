@@ -51,7 +51,7 @@ checked against the compiler (they name things that do not exist yet) but it mus
 * `src/interpreter/features.rs` lists what the interpreter supports and rejects, each with a probe program that `tests/interpreter_features_test.rs` runs.
   `docs/INTERPRETER.md` is generated from it (`interpreter_supported`, `interpreter_unsupported` regions).
 * `docs/errors/errors.md` is the output of `wj docs -f markdown` and a registered generated file; its order is sorted so two runs are identical.
-* `examples/EXAMPLES.toml` assigns every example a mode (`run`, `test`, `check`); `tests/examples_gate_test.rs` fails on an unlisted example.
+* `examples/EXAMPLES.toml` assigns every example and project template (`templates/`) a mode (`run`, `test`, `check`); `tests/examples_gate_test.rs` fails on an unlisted example.
 
 ## 4. Claims
 Never type a statistic. Use `<!-- wj:gen name=metric key=conformance.programs -->`. Computed keys are in `metrics.json`;

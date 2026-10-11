@@ -1,4 +1,4 @@
-# Every example program outside examples/verified/ (which tests/verified_examples_test.rs owns) is listed here, and
+# Every example program (and project template) outside examples/verified/ (which tests/verified_examples_test.rs owns) is listed here, and
 # tests/examples_gate_test.rs exercises it in CI. Modes:
 #   run    interpreter run; the file's `// expect:` lines (hand-derived oracle, never copied from the interpreter) must equal stdout
 #   test   `wj test --interpret` passes
@@ -78,3 +78,8 @@ reason = "multi-file CLI that needs the real command line and filesystem"
 glob = "examples/wschat/**/*.wj"
 mode = "check"
 reason = "multi-file WebSocket server (needs network)"
+
+[[example]]
+glob = "templates/*/*.wj"
+mode = "check"
+reason = "project templates copied out by `wj new`: a web server, a wasm module and a library cannot run standalone; the CLI template reads its command line"
