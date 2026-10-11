@@ -101,67 +101,36 @@ pub struct TestResult {
     pub message: String,
 }
 
-fn is_test_file(p: &Path) -> bool {
-    p.extension().map(|e| e == "wj").unwrap_or(false)
-        && p.file_stem().map(|s| s.to_string_lossy().ends_with("_test")).unwrap_or(false)
+/// One test to run, as discovered by `wj test`'s shared discovery (`test_runner::test_discovery`).
+#[derive(Debug, Clone)]
+pub struct TestSpec {
+    pub file: PathBuf,
+    /// The function name.
+    pub name: String,
+    /// Name shown in reports (`mod::name` / `Type::name`), identical to the compiled listing.
+    pub display_name: String,
+    /// Inline `mod` path the function lives in (empty at the top level).
+    pub mods: Vec<String>,
+    /// `Some(type)` for a receiver-less associated function `Type::name()`.
+    pub assoc: Option<String>,
 }
 
-pub fn discover_test_files(path: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    fn walk(d: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(rd) = std::fs::read_dir(d) else { return };
-        let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
-        entries.sort();
-        for p in entries {
-            if p.is_dir() {
-                let n = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                if !n.starts_with('.') && n != "target" && n != "build" {
-                    walk(&p, out);
-                }
-            } else if is_test_file(&p) {
-                out.push(p);
-            }
-        }
-    }
-    if path.is_file() {
-        out.push(path.to_path_buf());
-    } else {
-        walk(path, &mut out);
-    }
-    out
-}
-
-/// Run every `@test` / `test_*` function in the given test files. Each test sees a fresh interpreter.
-pub fn run_tests(path: &Path, filter: Option<&str>) -> Vec<TestResult> {
-    let files = discover_test_files(path);
-    let filter = filter.map(|s| s.to_string());
+/// Run the given tests (each against a fresh interpreter, files loaded once per test).
+pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
     with_big_stack(move || {
         let mut results = Vec::new();
-        for f in files {
-            // names are discovered once, then each test runs against its own interpreter
-            let mut probe = Interpreter::new_capturing();
-            probe.guard_stack();
-            if let Err(e) = probe.load_entry_file(&f) {
-                results.push(TestResult { file: f.clone(), name: "<load>".into(), passed: false, message: e.render() });
-                continue;
-            }
-            let names = probe.test_function_names();
-            for name in names {
-                if let Some(flt) = &filter {
-                    if !name.contains(flt.as_str()) {
-                        continue;
-                    }
-                }
-                let mut it = Interpreter::new_capturing();
-                it.guard_stack();
-                if it.load_entry_file(&f).is_err() {
-                    continue;
-                }
-                match it.run_test(&name) {
-                    Ok(()) => results.push(TestResult { file: f.clone(), name, passed: true, message: String::new() }),
-                    Err(e) => results.push(TestResult { file: f.clone(), name, passed: false, message: e.render() }),
-                }
-            }
+        for spec in specs {
+            let mut it = Interpreter::new_capturing();
+            it.guard_stack();
+            let outcome = match it.load_entry_file(&spec.file) {
+                Ok(_) => it.run_test(&spec.mods, spec.assoc.as_deref(), &spec.name),
+                Err(e) => Err(e),
+            };
+            let (passed, message) = match outcome {
+                Ok(()) => (true, String::new()),
+                Err(e) => (false, e.render()),
+            };
+            results.push(TestResult { file: spec.file, name: spec.display_name, passed, message });
         }
         results
     })
@@ -186,28 +155,23 @@ pub fn report_tests(results: &[TestResult]) -> i32 {
 }
 
 impl Interpreter {
-    /// Names of test functions in the root module: `@test`, `@test_cases(...)` or `test_*`.
-    pub fn test_function_names(&self) -> Vec<String> {
-        let mut names: Vec<String> = self.modules[0]
-            .funcs
-            .values()
-            .filter(|f| {
-                f.decorators.iter().any(|d| d.name == "test" || d.name == "test_cases") || f.name.starts_with("test_")
-            })
-            .filter(|f| f.name != "main")
-            .map(|f| f.name.clone())
-            .collect();
-        names.sort();
-        names
-    }
-
     /// Run one test function (all cases for `@test_cases`).
-    pub fn run_test(&mut self, name: &str) -> Result<(), RuntimeError> {
-        let f = self.modules[0]
-            .funcs
-            .get(name)
-            .cloned()
-            .ok_or_else(|| RuntimeError::new(ErrorKind::Semantic, format!("no test named {}", name)))?;
+    pub fn run_test(&mut self, mods: &[String], assoc: Option<&str>, name: &str) -> Result<(), RuntimeError> {
+        let mut module = 0;
+        for m in mods {
+            module = *self.modules[module]
+                .children
+                .get(m)
+                .ok_or_else(|| RuntimeError::new(ErrorKind::Semantic, format!("no module {} for test {}", m, name)))?;
+        }
+        let found = match assoc {
+            Some(ty) => self.methods.get(&(super::register::base_type_name(ty), name.to_string())).cloned(),
+            None => self.modules[module].funcs.get(name).cloned(),
+        };
+        let f = found.ok_or_else(|| RuntimeError::new(ErrorKind::Semantic, format!("no test named {}", name)))?;
+        if f.decorators.iter().any(|d| d.name == "property_test") {
+            return Err(RuntimeError::new(ErrorKind::Unsupported, "`@property_test` (generated inputs) is not interpreted; use `wj test`"));
+        }
         let cases = f.decorators.iter().find(|d| d.name == "test_cases");
         let mut calls: Vec<Vec<Value>> = Vec::new();
         if let Some(d) = cases {

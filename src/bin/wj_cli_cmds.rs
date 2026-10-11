@@ -109,7 +109,7 @@ pub fn run(cli: Cli) -> Result<()> {
             interpret,
         } => {
             if interpret {
-                return interpret_tests(path.as_deref(), filter.as_deref());
+                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -439,17 +439,3 @@ fn run_repl() -> Result<()> {
     Ok(())
 }
 
-/// `wj test --interpret`: run `@test` / `test_*` functions without compiling.
-fn interpret_tests(path: Option<&std::path::Path>, filter: Option<&str>) -> Result<()> {
-    let root = path.unwrap_or_else(|| std::path::Path::new("."));
-    let results = windjammer::interpreter::runner::run_tests(root, filter);
-    let code = windjammer::interpreter::runner::report_tests(&results);
-    if results.is_empty() {
-        eprintln!("no test files (*_test.wj) found under {}", root.display());
-        std::process::exit(1);
-    }
-    if code != 0 {
-        std::process::exit(code);
-    }
-    Ok(())
-}
