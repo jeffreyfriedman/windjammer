@@ -1,0 +1,36 @@
+// 25! = 15511210043330985984000000, 30! = 265252859812191058636308480000000 (exact)
+// expect: 15511210043330985984000000
+// expect: 265252859812191058636308480000000
+fn factorial(n: i64) -> string {
+    let mut digits: Vec<i64> = vec![1]
+    let mut k: i64 = 2
+    while k <= n {
+        let mut carry: i64 = 0
+        let mut i = 0
+        while i < digits.len() {
+            let v = digits[i] * k + carry
+            digits[i] = v % 1000000000
+            carry = v / 1000000000
+            i += 1
+        }
+        while carry > 0 {
+            digits.push(carry % 1000000000)
+            carry = carry / 1000000000
+        }
+        k += 1
+    }
+    let mut out = digits[digits.len() - 1].to_string()
+    let mut j = digits.len() - 1
+    while j > 0 {
+        j -= 1
+        let part = digits[j].to_string()
+        let pad = 9 - part.len()
+        out = out + "0".repeat(pad) + part
+    }
+    out
+}
+
+fn main() {
+    println("{}", factorial(25))
+    println("{}", factorial(30))
+}

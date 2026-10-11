@@ -1,28 +1,27 @@
-# src/codegen/go/
+# go (Go backend)
 
-## Purpose
-Experimental Go backend (`ir_lowering.rs`, stdlib method lowering, per-construct generators under `generator/`).
+**Purpose.** Emit a ready-to-run Go module from the portable IR: `main.go`, `wj_core.go` (runtime), `go.mod`.
 
-## Inputs/Outputs
-In: AST `Program`. Out: Go source text.
+**Inputs/outputs.** `Program` -> (`portable::lower` -> `flatten`) -> `emit::emit_module` -> source text.
+`CodegenBackend::generate_additional_files` supplies `wj_core.go` (embedded from `std/runtime/go/wj_core.go`) and `go.mod`.
 
-## Invariants
-- Experimental: does not consume the shared IR.
-- Stdlib method mapping lives in `stdlib_method_lowering.rs` only.
+**Representation contract.**
+- ints: exact Go widths (`usize` = `uint`, `isize` = `int`); `+ - * / %` go through generic checked helpers and panic on overflow
+  (Rust debug semantics); `wrapping_*` use native Go wrap-around; shifts check the count.
+- `char` = `Char` (a defined rune type), `Vec` = slice, `HashMap` = map, `HashSet` = `map[T]struct{}`.
+- `Option[T]`, `Result[T, E]`, `TupleN[...]` are runtime generics; enums are an interface plus one struct per variant.
+- Struct fields are exported (`X`) so reflection-based `wjClone`/`wjDbg` work. Methods keep lower-case names.
+- `&mut` params are pointers (`*T`); maps/sets are reference types and are passed as-is.
+- Panics (explicit, overflow, index, divide by zero) exit with status 101.
 
-## Owns
-Go text emission.
+**Invariants.** No imports in `main.go` (everything goes through `wj*` helpers); every declared local gets `_ = x`
+(Go rejects unused variables); loops that need it get labels; non-terminating non-unit functions end in `panic`.
 
-## Never decides
-Ownership and Rust semantics.
+**Owns / never decides.** Owns Go spelling. Never decides typing or ownership (portable layer does).
 
-## Allowed imports
-Layer `backend`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir). Known violations (tracked in docs/architecture-allowlist.toml, may only shrink): `compiler`, `linter`.
-Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
+**Entry points.** `GoBackend`, `emit::emit_module`. CLI: `wj build --target go FILE -o DIR`, then `cd DIR && go run .`.
 
-## Entry points
-`GoBackend` (generator/mod.rs), `mod.rs`, and `generator/` (expression/statement/type generation).
+**Known limitations.** Generic methods (Go methods cannot declare type parameters), trait objects over enums,
+closures that mutate captured `&mut` Vec parameters, struct map keys. These are `Unsupported` errors, not wrong code.
 
-## Tests
-tests/go_backend_test.rs, go_backend_extended_test.rs, go_enum_pattern_extraction_test.rs.
-Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
+**Testing.** `cargo test --release --test all backend_conformance`; needs `go` (skips are loud; `WJ_REQUIRE_TOOLCHAINS=1` fails them).

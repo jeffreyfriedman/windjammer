@@ -1,0 +1,22 @@
+// expect: a=1
+// expect: b=2
+// expect: c=3
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, i32> = HashMap::new()
+    m.insert("c", 3)
+    m.insert("a", 1)
+    m.insert("b", 2)
+    let mut keys: Vec<string> = Vec::new()
+    for k in m.keys() {
+        keys.push(k.clone())
+    }
+    keys.sort()
+    for k in keys {
+        match m.get(k) {
+            Some(v) => println("{}={}", k, v),
+            None => {}
+        }
+    }
+}

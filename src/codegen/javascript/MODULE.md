@@ -1,28 +1,24 @@
-# src/codegen/javascript/
+# javascript (JavaScript and TypeScript backends)
 
-## Purpose
-JavaScript/TypeScript backend with optional tree-shaking, minification, source maps, polyfills and web-worker support.
+**Purpose.** Emit an ES-module project from the portable IR: `main.mjs` (or `main.ts`), `wj_core.mjs` (runtime), `package.json`.
+One emitter serves both languages; `JavaScriptBackend::typescript()` adds type annotations (runs on Node >= 22.6 type stripping, or `tsc`).
 
-## Inputs/Outputs
-In: AST `Program`. Out: JS source (and optional `.d.ts`, source maps).
+**Representation contract.**
+- `i64/u64/isize/usize` = `BigInt`; `i8..i32/u8..u32` = Number kept in range by checked helpers (`$i32(a + b)`), panic on overflow;
+  `wrapping_*` wrap explicitly. `f32` = `Math.fround`. `char` = one-code-point string.
+- `Vec` = Array, `HashMap` = Map (integer/string/char/bool keys only), `HashSet` = Set, tuple = Array.
+- `Option<T>` = `null | {v}`, `Result<T, E>` = `{ok, v}`; structs = classes with `clone()`; enums = base class + one class per variant (`$t` tag).
+- Strings are UTF-16 in memory but `len()`, slicing and `find` use UTF-8 byte semantics (`$strlen`, `$strSlice`).
+- Panics exit 101 (`$run`); output is buffered and flushed on exit.
 
-## Invariants
-- Works from the AST (`ir_lowering.rs` is a local lowering), not the shared IR.
-- Optimization files (minifier, tree_shaker, code_splitter, v8_optimizer) are independent post-passes.
+**Invariants.** All value-semantics copies come from `PK::Copy` (lowering); the emitter never aliases a struct on assignment.
 
-## Owns
-JS text emission and JS-specific post-processing.
+**Owns / never decides.** Owns JS spelling and the runtime. Never decides typing/ownership.
 
-## Never decides
-Ownership, borrows, numeric widths (JS has none), Rust-specific concerns.
+**Removed (see docs/backends/ASSESSMENT.md).** `minifier`, `polyfills`, `source_maps`, `v8_optimizer`, `module_federation`,
+`web_workers`, `code_splitter`, `differential_loading`: they were text/regex scaffolding with no connection to program semantics.
+`--minify/--polyfills/--v8-optimize/--source-maps` now fail loudly. `tree_shaker` (AST-level) is kept.
 
-## Allowed imports
-Layer `backend`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir). Known violations (tracked in docs/architecture-allowlist.toml, may only shrink): `compiler`, `linter`.
-Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
+**Entry points.** `JavaScriptBackend::new()` / `::typescript()`, `emit::emit_module`. CLI: `wj build --target js|ts FILE -o DIR`; `cd DIR && node main.mjs`.
 
-## Entry points
-`JavaScriptGenerator` (generator.rs); `mod.rs` wires the backend.
-
-## Tests
-tests/js_backend_test.rs.
-Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
+**Testing.** `cargo test --release --test all backend_conformance`; needs `node` (skips are loud).

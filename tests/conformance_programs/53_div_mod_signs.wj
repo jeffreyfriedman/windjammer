@@ -1,0 +1,22 @@
+// expect: -3 -1
+// expect: -3 1
+// expect: 3 -1
+// expect: 3 1
+// expect: 1
+// expect: 1
+// expect: -3 -1
+// expect: 4 0
+fn main() {
+    let a: i32 = -7
+    let b: i32 = 7
+    println("{} {}", a / 2, a % 2)
+    println("{} {}", b / -2, b % -2)
+    println("{} {}", a / -2, a % -2)
+    println("{} {}", b / 2, b % 2)
+    println("{}", a.rem_euclid(2))
+    let c: i64 = -7
+    println("{}", c.rem_euclid(2))
+    println("{} {}", c / 2, c % 2)
+    let d: u8 = 200
+    println("{} {}", d / 50, d % 50)
+}

@@ -1,0 +1,20 @@
+// expect: red
+// expect: blue
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn name(c: Color) -> string {
+    match c {
+        Color::Red => "red",
+        Color::Green => "green",
+        Color::Blue => "blue",
+    }
+}
+
+fn main() {
+    println("{}", name(Color::Red))
+    println("{}", name(Color::Blue))
+}

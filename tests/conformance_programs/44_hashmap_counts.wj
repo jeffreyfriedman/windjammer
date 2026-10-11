@@ -1,0 +1,47 @@
+// HashMap<i64,i64> counting 5000 PRNG draws; output independent of iteration order (keys sorted).
+use std::collections::HashMap
+
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut counts: HashMap<i64, i64> = HashMap::new()
+    let mut i = 0
+    while i < 5000 {
+        s = next(s)
+        let k = (s % 97) as i64
+        let cur = match counts.get(k) {
+            Some(v) => v,
+            None => 0,
+        }
+        counts.insert(k, cur + 1)
+        i += 1
+    }
+    let mut keys: Vec<i64> = Vec::new()
+    for k in counts.keys() {
+        keys.push(k)
+    }
+    keys.sort()
+    let mut h: i64 = 11
+    let mut best: i64 = 0
+    for k in keys {
+        let c = match counts.get(k) {
+            Some(v) => v,
+            None => 0,
+        }
+        h = (h * 1000003 + k * 7919 + c) % 998244353
+        if c > best {
+            best = c
+        }
+    }
+    println("distinct {}", keys.len())
+    println("best {}", best)
+    println("first {} last {}", keys[0], keys[keys.len() - 1])
+    println("hash {}", h)
+}

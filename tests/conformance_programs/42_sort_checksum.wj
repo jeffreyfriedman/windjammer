@@ -1,0 +1,92 @@
+// Insertion sort + merge sort over 400 PRNG values; print order-sensitive checksums.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+fn insertion_sort(v: Vec<i64>) {
+    let mut i = 1
+    while i < v.len() {
+        let key = v[i]
+        let mut j = i
+        while j > 0 && v[j - 1] > key {
+            v[j] = v[j - 1]
+            j -= 1
+        }
+        v[j] = key
+        i += 1
+    }
+}
+
+fn merge_sort(v: Vec<i64>) -> Vec<i64> {
+    if v.len() <= 1 {
+        return v
+    }
+    let mid = v.len() / 2
+    let mut left: Vec<i64> = Vec::new()
+    let mut right: Vec<i64> = Vec::new()
+    let mut i = 0
+    while i < v.len() {
+        if i < mid {
+            left.push(v[i])
+        } else {
+            right.push(v[i])
+        }
+        i += 1
+    }
+    let l = merge_sort(left)
+    let r = merge_sort(right)
+    let mut out: Vec<i64> = Vec::new()
+    let mut a = 0
+    let mut b = 0
+    while a < l.len() && b < r.len() {
+        if l[a] <= r[b] {
+            out.push(l[a])
+            a += 1
+        } else {
+            out.push(r[b])
+            b += 1
+        }
+    }
+    while a < l.len() {
+        out.push(l[a])
+        a += 1
+    }
+    while b < r.len() {
+        out.push(r[b])
+        b += 1
+    }
+    out
+}
+
+fn checksum(v: Vec<i64>) -> i64 {
+    let mut h: i64 = 17
+    let mut i = 0
+    while i < v.len() {
+        h = (h * 31 + v[i]) % 1000000007
+        i += 1
+    }
+    h
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut data: Vec<i64> = Vec::new()
+    let mut i = 0
+    while i < 400 {
+        s = next(s)
+        data.push((s % 100000) as i64 - 50000)
+        i += 1
+    }
+    println("unsorted {}", checksum(data))
+    let sorted = merge_sort(data.clone())
+    let mut ins = data.clone()
+    insertion_sort(ins)
+    println("merge {}", checksum(sorted))
+    println("insertion {}", checksum(ins))
+    println("min {} max {}", sorted[0], sorted[sorted.len() - 1])
+    println("median {}", sorted[200])
+}

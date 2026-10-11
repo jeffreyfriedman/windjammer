@@ -1,0 +1,44 @@
+// Strings built from PRNG letters: concat, len, upper-case, reverse via chars, contains, FNV over bytes.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+fn letter(n: u64) -> string {
+    let letters = vec!["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+    let k = (n % 26) as usize
+    letters[k].to_string()
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut text = ""
+    let mut i = 0
+    while i < 300 {
+        s = next(s)
+        text = text + letter(s >> 8)
+        i += 1
+    }
+    let upper = text.to_uppercase()
+    let mut vowels: i64 = 0
+    let mut h: u64 = (3421674724 << 32) | 2216829733
+    for c in text.chars() {
+        if c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' {
+            vowels += 1
+        }
+        h = (h ^ (c as u64)).wrapping_mul(1099511628211)
+    }
+    let mut rev = ""
+    for c in upper.chars().rev() {
+        rev = rev + c.to_string()
+    }
+    println("{}", text.len())
+    println("{}", vowels)
+    println("{}", h)
+    println("{}", upper.substring(0, 12))
+    println("{}", rev.substring(0, 12))
+    println("{}", text.contains("ab"))
+}

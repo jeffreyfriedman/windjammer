@@ -1,0 +1,39 @@
+// expect: 3 4
+// expect: 7
+// expect: 2 1
+// expect: 10 20
+// expect: x 5
+fn pair(a: i64, b: i64) -> (i64, i64) {
+    (a, b)
+}
+
+fn minmax(v: Vec<i64>) -> (i64, i64) {
+    let mut lo = v[0]
+    let mut hi = v[0]
+    for x in v {
+        if x < lo {
+            lo = x
+        }
+        if x > hi {
+            hi = x
+        }
+    }
+    (lo, hi)
+}
+
+fn main() {
+    let (a, b) = pair(3, 4)
+    println("{} {}", a, b)
+    let p = pair(3, 4)
+    println("{}", p.0 + p.1)
+    let (mut x, mut y) = (1, 2)
+    let tmp = x
+    x = y
+    y = tmp
+    println("{} {}", x, y)
+    let (lo, hi) = minmax(vec![30, 10, 20])
+    println("{} {}", lo, hi + 0 - 10)
+    let nested = ((1, "x"), 5)
+    let ((_, name), n) = nested
+    println("{} {}", name, n)
+}

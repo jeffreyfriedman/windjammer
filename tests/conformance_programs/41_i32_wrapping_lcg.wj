@@ -1,0 +1,14 @@
+// i32 wrapping arithmetic (LCG with i32 overflow), checkpoint every 2000 of 10000 steps.
+fn main() {
+    let mut x: i32 = __SEED__
+    let mut acc: i64 = 0
+    let mut i = 1
+    while i <= 10000 {
+        x = x.wrapping_mul(1103515245).wrapping_add(12345)
+        acc = acc + (x as i64)
+        if i % 2000 == 0 {
+            println("{} {} {}", i, x, acc)
+        }
+        i += 1
+    }
+}

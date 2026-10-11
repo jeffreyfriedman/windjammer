@@ -1,0 +1,10 @@
+// expect: 5
+// exit: 101
+fn div(a: i32, b: i32) -> i32 {
+    a / b
+}
+
+fn main() {
+    println("{}", div(10, 2))
+    println("{}", div(1, 0))
+}

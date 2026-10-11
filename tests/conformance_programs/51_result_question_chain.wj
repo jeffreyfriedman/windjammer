@@ -1,0 +1,62 @@
+// Result and `?` propagation with error values depending on PRNG input; counts successes/failures.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+fn check_range(v: i64) -> Result<i64, string> {
+    if v < 10 {
+        return Err("too small")
+    }
+    if v > 990 {
+        return Err("too big")
+    }
+    Ok(v)
+}
+
+fn halve(v: i64) -> Result<i64, string> {
+    if v % 2 != 0 {
+        return Err("odd")
+    }
+    Ok(v / 2)
+}
+
+fn pipeline(v: i64) -> Result<i64, string> {
+    let a = check_range(v)?
+    let b = halve(a)?
+    let c = check_range(b + 3)?
+    Ok(c * 2)
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut ok: i64 = 0
+    let mut small: i64 = 0
+    let mut big: i64 = 0
+    let mut odd: i64 = 0
+    let mut sum: i64 = 0
+    let mut i = 0
+    while i < 4000 {
+        s = next(s)
+        match pipeline((s % 1000) as i64) {
+            Ok(v) => {
+                ok += 1
+                sum += v
+            }
+            Err(e) => {
+                if e == "too small" {
+                    small += 1
+                } else if e == "too big" {
+                    big += 1
+                } else {
+                    odd += 1
+                }
+            }
+        }
+        i += 1
+    }
+    println("{} {} {} {} {}", ok, small, big, odd, sum)
+}

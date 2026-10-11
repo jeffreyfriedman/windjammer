@@ -20,8 +20,10 @@ pub enum Target {
     Rust,
     /// Go source code (experimental)
     Go,
-    /// JavaScript (ES2020+)
+    /// JavaScript (ES2022 modules)
     JavaScript,
+    /// TypeScript (annotated JavaScript; runs on Node >= 22.6 type stripping or via tsc)
+    TypeScript,
     /// WebAssembly
     WebAssembly,
     /// WGSL (WebGPU Shading Language)
@@ -36,6 +38,7 @@ impl std::str::FromStr for Target {
             "rust" | "rs" => Ok(Target::Rust),
             "go" | "golang" => Ok(Target::Go),
             "javascript" | "js" => Ok(Target::JavaScript),
+            "typescript" | "ts" => Ok(Target::TypeScript),
             "wasm" | "webassembly" => Ok(Target::WebAssembly),
             "wgsl" => Ok(Target::Wgsl),
             _ => Err(format!("Unknown target: {}", s)),
@@ -49,6 +52,7 @@ impl Target {
             Target::Rust => "rust",
             Target::Go => "go",
             Target::JavaScript => "javascript",
+            Target::TypeScript => "typescript",
             Target::WebAssembly => "webassembly",
             Target::Wgsl => "wgsl",
         }
@@ -58,7 +62,8 @@ impl Target {
         match self {
             Target::Rust => "rs",
             Target::Go => "go",
-            Target::JavaScript => "js",
+            Target::JavaScript => "mjs",
+            Target::TypeScript => "ts",
             Target::WebAssembly => "wasm",
             Target::Wgsl => "wgsl",
         }
@@ -239,6 +244,7 @@ pub fn create_backend(target: Target) -> Box<dyn CodegenBackend> {
         Target::Rust => Box::new(crate::codegen::rust::RustBackend::new()),
         Target::Go => Box::new(crate::codegen::go::GoBackend::new()),
         Target::JavaScript => Box::new(crate::codegen::javascript::JavaScriptBackend::new()),
+        Target::TypeScript => Box::new(crate::codegen::javascript::JavaScriptBackend::typescript()),
         Target::WebAssembly => Box::new(crate::codegen::wasm::WasmBackend::new()),
         Target::Wgsl => Box::new(crate::codegen::wgsl::WgslBackend::new()),
     }
@@ -272,7 +278,8 @@ mod tests {
     fn test_target_extensions() {
         assert_eq!(Target::Rust.file_extension(), "rs");
         assert_eq!(Target::Go.file_extension(), "go");
-        assert_eq!(Target::JavaScript.file_extension(), "js");
+        assert_eq!(Target::JavaScript.file_extension(), "mjs");
+        assert_eq!(Target::TypeScript.file_extension(), "ts");
         assert_eq!(Target::WebAssembly.file_extension(), "wasm");
     }
 

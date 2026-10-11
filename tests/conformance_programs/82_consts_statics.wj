@@ -1,0 +1,18 @@
+// expect: 100
+// expect: 3.14
+// expect: hello
+// expect: 25
+const LIMIT: i64 = 100
+const PI_ISH: f64 = 3.14
+const GREETING: string = "hello"
+
+fn square(n: i64) -> i64 {
+    n * n
+}
+
+fn main() {
+    println("{}", LIMIT)
+    println("{}", PI_ISH)
+    println("{}", GREETING)
+    println("{}", square(5))
+}

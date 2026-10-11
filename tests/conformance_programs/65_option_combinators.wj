@@ -1,0 +1,32 @@
+// expect: 10
+// expect: 0
+// expect: 6
+// expect: none
+// expect: 3
+// expect: true false
+// expect: err missing
+fn halve(x: i64) -> Option<i64> {
+    if x % 2 == 0 {
+        Some(x / 2)
+    } else {
+        None
+    }
+}
+
+fn main() {
+    let a: Option<i64> = Some(5)
+    println("{}", a.map(|x| x * 2).unwrap_or(0))
+    let b: Option<i64> = None
+    println("{}", b.map(|x| x * 2).unwrap_or(0))
+    println("{}", Some(12).and_then(halve).unwrap_or(-1))
+    match Some(7).and_then(halve) {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    println("{}", a.filter(|x| x > 3).map(|x| x - 2).unwrap_or(0))
+    println("{} {}", a.is_some(), b.is_some())
+    match b.ok_or("missing") {
+        Ok(v) => println("ok {}", v),
+        Err(e) => println("err {}", e),
+    }
+}

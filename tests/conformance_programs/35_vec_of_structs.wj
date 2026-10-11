@@ -1,0 +1,18 @@
+// expect: 6
+// expect: 2
+struct Item {
+    q: i32,
+}
+
+fn main() {
+    let mut items: Vec<Item> = Vec::new()
+    items.push(Item { q: 1 })
+    items.push(Item { q: 2 })
+    items.push(Item { q: 3 })
+    let mut t = 0
+    for it in items {
+        t += it.q
+    }
+    println("{}", t)
+    println("{}", items[1].q)
+}

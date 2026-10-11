@@ -1,0 +1,10 @@
+// expect: 3
+// expect: hi
+fn ident<T>(x: T) -> T {
+    x
+}
+
+fn main() {
+    println("{}", ident(3))
+    println("{}", ident("hi"))
+}

@@ -1,0 +1,21 @@
+// expect: 2
+// expect: 30
+// expect: missing
+// expect: true
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, i32> = HashMap::new()
+    m.insert("a", 30)
+    m.insert("b", 25)
+    println("{}", m.len())
+    match m.get("a") {
+        Some(v) => println("{}", v),
+        None => println("missing"),
+    }
+    match m.get("zz") {
+        Some(v) => println("{}", v),
+        None => println("missing"),
+    }
+    println("{}", m.contains_key("b"))
+}

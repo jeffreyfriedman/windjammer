@@ -1,0 +1,30 @@
+// Longest Collatz chain below 10000 starts at 6171 (262 terms) - known result
+// expect: 6171 262
+fn chain_len(start: i64) -> i64 {
+    let mut n = start
+    let mut c: i64 = 1
+    while n != 1 {
+        if n % 2 == 0 {
+            n = n / 2
+        } else {
+            n = 3 * n + 1
+        }
+        c += 1
+    }
+    c
+}
+
+fn main() {
+    let mut best: i64 = 1
+    let mut best_len: i64 = 1
+    let mut i: i64 = 1
+    while i < 10000 {
+        let l = chain_len(i)
+        if l > best_len {
+            best_len = l
+            best = i
+        }
+        i += 1
+    }
+    println("{} {}", best, best_len)
+}

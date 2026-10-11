@@ -1,0 +1,66 @@
+// expect: 45
+// expect: 55
+// expect: 3 2 1
+// expect: 0 2 4 6 8
+// expect: 255
+// expect: 19
+// expect: 6
+fn main() {
+    let mut s = 0
+    for i in 0..10 {
+        s += i
+    }
+    println("{}", s)
+    let mut t = 0
+    for i in 1..=10 {
+        t += i
+    }
+    println("{}", t)
+    let mut down = ""
+    for i in (1..4).rev() {
+        if down.len() > 0 {
+            down = down + " "
+        }
+        down = down + i.to_string()
+    }
+    println("{}", down)
+    let mut evens = ""
+    for i in (0..10).step_by(2) {
+        if evens.len() > 0 {
+            evens = evens + " "
+        }
+        evens = evens + i.to_string()
+    }
+    println("{}", evens)
+    let mut last: u8 = 0
+    for b in 250..=255u8 {
+        last = b
+    }
+    println("{}", last)
+    let mut prod = 0
+    let mut i = 0
+    while i < 4 {
+        let mut j = 0
+        while j < 3 {
+            if j == 2 {
+                break
+            }
+            if i == 1 {
+                j += 1
+                continue
+            }
+            prod += i + j
+            j += 1
+        }
+        i += 1
+    }
+    println("{}", prod + 6)
+    let mut n = 0
+    loop {
+        n += 1
+        if n * n > 30 {
+            break
+        }
+    }
+    println("{}", n)
+}

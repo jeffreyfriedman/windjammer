@@ -1,0 +1,14 @@
+// Textbook example: det [[6,1,1],[4,-2,5],[2,8,7]] = -306
+// expect: -306
+// expect: 0
+fn det3(m: Vec<Vec<i64>>) -> i64 {
+    let a = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+    let b = m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+    let c = m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    a - b + c
+}
+
+fn main() {
+    println("{}", det3(vec![vec![6, 1, 1], vec![4, -2, 5], vec![2, 8, 7]]))
+    println("{}", det3(vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]]))
+}

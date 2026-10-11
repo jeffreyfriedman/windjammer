@@ -1,0 +1,35 @@
+// expect: 6
+// expect: 5
+// expect: HÉLLO
+// expect: 9
+// expect: 3
+// expect: 6
+// expect: olléh
+// expect: true
+// expect: 日
+// expect: 1 é
+fn main() {
+    let s = "héllo"
+    println("{}", s.len())
+    println("{}", s.chars().count())
+    println("{}", s.to_uppercase())
+    let j = "日本語"
+    println("{}", j.len())
+    println("{}", j.chars().count())
+    match j.find("語") {
+        Some(i) => println("{}", i),
+        None => println("none"),
+    }
+    let mut rev = ""
+    for c in s.chars().rev() {
+        rev = rev + c.to_string()
+    }
+    println("{}", rev)
+    println("{}", s.contains("éll"))
+    println("{}", j.substring(0, 3))
+    for (i, c) in s.char_indices() {
+        if c == 'é' {
+            println("{} {}", i, c)
+        }
+    }
+}

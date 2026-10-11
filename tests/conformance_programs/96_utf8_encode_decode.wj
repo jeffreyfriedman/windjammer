@@ -1,0 +1,52 @@
+// Known encodings: U+00E9 = C3 A9, U+20AC = E2 82 AC, U+1F600 = F0 9F 98 80
+// expect: 195 169
+// expect: 226 130 172
+// expect: 240 159 152 128
+// expect: 233 8364 128512
+// expect: 2 3 4
+fn encode(cp: u32) -> Vec<u32> {
+    let mut out: Vec<u32> = Vec::new()
+    if cp < 128 {
+        out.push(cp)
+    } else if cp < 2048 {
+        out.push(192 | (cp >> 6))
+        out.push(128 | (cp & 63))
+    } else if cp < 65536 {
+        out.push(224 | (cp >> 12))
+        out.push(128 | ((cp >> 6) & 63))
+        out.push(128 | (cp & 63))
+    } else {
+        out.push(240 | (cp >> 18))
+        out.push(128 | ((cp >> 12) & 63))
+        out.push(128 | ((cp >> 6) & 63))
+        out.push(128 | (cp & 63))
+    }
+    out
+}
+
+fn show(v: Vec<u32>) -> string {
+    let mut s = ""
+    for x in v {
+        if s.len() > 0 {
+            s = s + " "
+        }
+        s = s + x.to_string()
+    }
+    s
+}
+
+fn main() {
+    println("{}", show(encode(233)))
+    println("{}", show(encode(8364)))
+    println("{}", show(encode(128512)))
+    let text = "é€😀"
+    let mut cps: Vec<u32> = Vec::new()
+    for c in text.chars() {
+        cps.push(c as u32)
+    }
+    println("{} {} {}", cps[0], cps[1], cps[2])
+    let a = "é".len()
+    let b = "€".len()
+    let c = "😀".len()
+    println("{} {} {}", a, b, c)
+}

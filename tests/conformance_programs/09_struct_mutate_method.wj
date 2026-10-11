@@ -1,0 +1,21 @@
+// expect: 0
+// expect: 1
+// expect: 2
+struct Counter {
+    value: i32,
+}
+
+impl Counter {
+    fn inc(self) {
+        self.value += 1
+    }
+}
+
+fn main() {
+    let mut c = Counter { value: 0 }
+    println("{}", c.value)
+    c.inc()
+    println("{}", c.value)
+    c.inc()
+    println("{}", c.value)
+}

@@ -1,0 +1,41 @@
+// expect: 3
+// expect: 30
+// expect: big
+// expect: 7
+// expect: 12
+// expect: inner 5 outer 1
+// expect: 0
+fn classify(n: i64) -> string {
+    if n > 100 {
+        "huge"
+    } else if n > 10 {
+        "big"
+    } else {
+        "small"
+    }
+}
+
+fn main() {
+    let x = 1
+    let x = x + 2
+    println("{}", x)
+    let y = {
+        let t = 10
+        t * x
+    }
+    println("{}", y)
+    println("{}", classify(50))
+    let z = if x > 2 { 7 } else { 8 }
+    println("{}", z)
+    let w = match x {
+        3 => 12,
+        _ => 0,
+    }
+    println("{}", w)
+    let v = 1
+    {
+        let v = 5
+        println("inner {} outer {}", v, 1)
+    }
+    println("{}", v - 1 + z - 7)
+}

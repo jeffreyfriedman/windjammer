@@ -1,0 +1,30 @@
+# Features every corpus program set must exercise (checked against the parsed AST).
+# `kinds` are AST node kinds; `methods` are called method / macro / function names.
+# A feature is listed here only if at least one backend is expected to support it;
+# unsupported (program, backend) pairs are recorded in SUPPORT.toml instead.
+kinds = [
+  "Let", "Assignment", "Return", "If", "Match", "For", "Loop", "While", "Break", "Continue",
+  "Binary", "Unary", "Call", "MethodCall", "FieldAccess", "StructLiteral", "Closure", "Cast",
+  "Index", "Tuple", "TryOp", "Block", "Range", "Struct", "Enum", "Trait", "Impl", "Const",
+  "Literal", "Identifier", "MacroInvocation",
+]
+methods = [
+  # collections
+  "len", "push", "pop", "get", "insert", "remove", "contains_key", "keys", "values", "sort",
+  "dedup", "retain", "iter", "binary_search", "windows", "chunks", "clone", "join", "contains",
+  # iterators
+  "map", "filter", "fold", "sum", "zip", "enumerate", "rev", "take", "skip", "chain", "collect",
+  "any", "all", "max", "count", "step_by", "cloned",
+  # integers
+  "wrapping_add", "wrapping_mul", "checked_add", "checked_mul", "saturating_add", "saturating_sub",
+  "rem_euclid", "count_ones", "leading_zeros", "trailing_zeros", "rotate_left",
+  # floats
+  "sqrt", "floor", "ceil", "round", "trunc", "powi", "abs", "signum",
+  # strings
+  "to_uppercase", "trim", "split", "replace", "parse", "chars", "char_indices", "find", "starts_with",
+  "ends_with", "repeat", "lines", "split_whitespace", "to_string", "substring",
+  # option / result
+  "unwrap", "unwrap_or", "map_err", "and_then", "ok_or", "is_some", "unwrap_or",
+  # macros / functions
+  "vec", "println", "panic",
+]

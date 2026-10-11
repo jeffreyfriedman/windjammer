@@ -1,0 +1,31 @@
+// Stable sort by key: equal keys keep their original relative order
+// expect: 1:b 1:d 2:a 2:c 3:e
+fn main() {
+    let keys = vec![2, 1, 2, 1, 3]
+    let names = vec!["a", "b", "c", "d", "e"]
+    let mut idx: Vec<usize> = Vec::new()
+    let mut i = 0
+    while i < keys.len() {
+        idx.push(i)
+        i += 1
+    }
+    let mut j = 1
+    while j < idx.len() {
+        let cur = idx[j]
+        let mut p = j
+        while p > 0 && keys[idx[p - 1]] > keys[cur] {
+            idx[p] = idx[p - 1]
+            p -= 1
+        }
+        idx[p] = cur
+        j += 1
+    }
+    let mut out = ""
+    for x in idx {
+        if out.len() > 0 {
+            out = out + " "
+        }
+        out = out + keys[x].to_string() + ":" + names[x]
+    }
+    println("{}", out)
+}

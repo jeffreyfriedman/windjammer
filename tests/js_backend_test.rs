@@ -44,8 +44,8 @@ fn compile_to_js(source: &str) -> String {
         );
     }
 
-    // Find the generated JS file (the backend names it output.js)
-    for name in &["output.js", "main.js", "test.js"] {
+    // Find the generated JS file (the backend names it main.mjs)
+    for name in &["main.mjs", "main.js"] {
         let generated_file = output_dir.join(name);
         if generated_file.exists() {
             return fs::read_to_string(&generated_file).unwrap();
@@ -94,50 +94,12 @@ fn compile_and_run_js(source: &str) -> String {
         );
     }
 
-    // Find JS file (the backend names it output.js)
-    let js_file = ["output.js", "main.js", "test.js"]
-        .iter()
-        .map(|n| output_dir.join(n))
-        .find(|p| p.exists())
-        .unwrap_or_else(|| {
-            let entries: Vec<String> = fs::read_dir(&output_dir)
-                .map(|dir| {
-                    dir.filter_map(|e| e.ok())
-                        .map(|e| e.file_name().to_string_lossy().to_string())
-                        .collect()
-                })
-                .unwrap_or_default();
-            panic!(
-                "No JS file found. Files: {:?}\nStderr:\n{}",
-                entries,
-                String::from_utf8_lossy(&wj_output.stderr)
-            );
-        });
-
-    // The generated JS has an auto-run guard (`import.meta.url` check) that may
-    // or may not fire depending on the Node.js version and how the file is invoked.
-    // To avoid double-execution, we strip the auto-run block and add our own call.
-    let js_code = fs::read_to_string(&js_file).unwrap();
-    // Remove `export` keyword so it works as a standalone script
-    let mut cleaned = js_code
-        .replace("export function", "function")
-        .replace("export class", "class")
-        .replace("export const", "const")
-        .replace("export let", "let");
-    // Remove the auto-run block to prevent double main() calls
-    if let Some(pos) = cleaned.find("// Auto-run main") {
-        cleaned.truncate(pos);
-    }
-    // Write a .mjs file with the code + single unconditional main() call
-    let test_js = output_dir.join("_test.mjs");
-    let test_code = format!(
-        "{}\n\n// Test runner: unconditional main() call\nif (typeof main === 'function') main();\n",
-        cleaned.trim()
-    );
-    fs::write(&test_js, &test_code).unwrap();
+    // The backend emits a ready-to-run directory: main.mjs + wj_core.mjs + package.json.
+    let js_file = output_dir.join("main.mjs");
+    assert!(js_file.exists(), "main.mjs missing; stderr:\n{}", String::from_utf8_lossy(&wj_output.stderr));
 
     let node_output = Command::new("node")
-        .arg(&test_js)
+        .arg(&js_file)
         .current_dir(&output_dir)
         .output()
         .expect("Failed to execute node");
@@ -424,7 +386,7 @@ fn main() {
 "#,
     );
     assert!(
-        code.contains("Direction") && (code.contains("Object.freeze") || code.contains("Symbol")),
+        code.contains("class Direction") && code.contains("Direction$"),
         "Enum should generate JS enum pattern. Got:\n{}",
         code
     );

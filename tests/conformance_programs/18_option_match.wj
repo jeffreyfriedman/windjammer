@@ -1,0 +1,21 @@
+// expect: 42
+// expect: none
+fn find(v: Vec<i32>, t: i32) -> Option<i32> {
+    for x in v {
+        if x == t {
+            return Some(x)
+        }
+    }
+    None
+}
+
+fn main() {
+    match find(vec![1, 42, 3], 42) {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    match find(vec![1, 2], 42) {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+}
