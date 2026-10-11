@@ -23,7 +23,7 @@ or by running it (date in the file); **Design** = intent, may differ from code; 
 | [superpowers/](superpowers/) | Dated specs and plans (shared cargo cache design, IR call-site cutover); point-in-time |
 
 ## Language specification
-[spec/README.md](spec/README.md) (a specification may be added by another stream; this link is the stable entry point).
+A language specification is being written; until it lands the grammar reference is `docs/windjammer.ebnf` (checked against the parser).
 Until then: [windjammer.ebnf](windjammer.ebnf) (grammar, reconciled with the parser), [MODULE_SYSTEM.md](MODULE_SYSTEM.md),
 [language-design/ownership-inference.md](language-design/ownership-inference.md), [language-guide/self-parameter.md](language-guide/self-parameter.md),
 [design/surface-syntax.md](design/surface-syntax.md) (ADR-0014 phase 1), [design/pipe-operator.md](design/pipe-operator.md) (implemented),
@@ -42,7 +42,7 @@ Until then: [windjammer.ebnf](windjammer.ebnf) (grammar, reconciled with the par
 ## Backends and interpreter
 | Document | Truth status |
 |----------|--------------|
-| [backends/ASSESSMENT.md](backends/ASSESSMENT.md), [backends/CONFORMANCE.md](backends/CONFORMANCE.md) | Measured on a 98-program corpus; Go/JS/WASM maturity |
+| [backends/ASSESSMENT.md](backends/ASSESSMENT.md), [backends/CONFORMANCE.md](backends/CONFORMANCE.md) | Measured on the conformance corpus; Go/JS/WASM maturity |
 | [INTERPRETER.md](INTERPRETER.md) | Verified: status, design, measurements of `wj run --interpret` / `wj repl` (experimental subset) |
 
 ## Known issues

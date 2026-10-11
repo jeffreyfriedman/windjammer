@@ -339,7 +339,8 @@ fn main() {
 **Implementation:** rand  
 **Public API:**
 
-```windjammer
+<!-- ignore: signature sketch without bodies -->
+```windjammer,ignore
 fn random<T>() -> T
 fn range(min: int, max: int) -> int
 fn float() -> float
@@ -353,10 +354,9 @@ fn choice<T>(list: Vec<T>) -> Option<T>
 use std::random
 
 fn main() {
-    let num = random.range(1, 100)
-    let coin = random.bool()
+    let num = random::range(1, 100)
     let items = [1, 2, 3, 4, 5]
-    let shuffled = random.shuffle(items)
+    let shuffled = random::shuffle(items)
 }
 ```
 

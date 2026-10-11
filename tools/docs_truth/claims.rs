@@ -107,6 +107,10 @@ fn prose_outside_regions(text: &str) -> Vec<(usize, &str)> {
 
 pub fn check_doc(file: &str, text: &str) -> Vec<Finding> {
     let mut out = Vec::new();
+    // Proposals state targets, not facts about the current compiler.
+    if super::proposal::is_proposal(text) {
+        return out;
+    }
     for (ln, line) in prose_outside_regions(text) {
         for (m, key) in stats_in_line(line) {
             out.push(Finding::fail("claims", file, ln, format!("hand-typed statistic `{m}`; use <!-- wj:gen name=metric key={key} --> (see docs/CONTRIBUTING-docs.md)")));

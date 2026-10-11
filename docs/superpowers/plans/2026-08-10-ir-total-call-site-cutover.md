@@ -36,7 +36,7 @@
 - Modify: `src/codegen/rust/program_generation.rs` (flush errors)
 - Modify: `src/codegen/rust/ir_call_site.rs` (no-sig boundary path)
 - Modify: `src/codegen/rust/string_utilities.rs` (stop conservative `true` guesses)
-- Test: `tests/ir_boundary_missing_signature_test.rs`
+- Test: a new `ir_boundary_missing_signature` test under `tests/`
 
 - [ ] Write failing test: module-qualified call with no meta → compile error message
 - [ ] Accumulate `missing boundary signature for …` errors; fail `generate_program`

@@ -43,6 +43,28 @@ pub fn parse_info(info: &str) -> Ann {
     a
 }
 
+/// A `sh,verify` fence that could not run: a warning locally, a failure in CI (`WJ_DOCS_REQUIRE_EXEC=1`), so a
+/// missing `wj` can never turn the quickstart check into a silent pass.
+pub fn not_executed(file: &str, line: usize, require: bool) -> Finding {
+    let msg = "sh,verify fence not executed (no wj binary: set WJ_BIN)";
+    if require { Finding::fail("fences", file, line, msg) } else { Finding::warn("fences", file, line, msg) }
+}
+
+/// An `ignore`/`should_fail` fence must be justified by an HTML comment on the nearest non-blank line above it.
+pub fn has_reason(lines: &[&str], fence_line: usize) -> bool {
+    let mut i = fence_line.saturating_sub(1); // index of the fence line itself (1-based -> 0-based)
+    while i > 0 {
+        i -= 1;
+        let t = lines[i].trim();
+        if t.is_empty() {
+            continue;
+        }
+        let low = t.to_lowercase();
+        return t.starts_with("<!--") && t.ends_with("-->") && (low.contains("ignore:") || low.contains("should_fail:")) && t.len() > "<!-- ignore: -->".len() + 3;
+    }
+    false
+}
+
 /// Documents scanned: Markdown anywhere, plus rustdoc (`///`, `//!`) of `.rs` under `src/` and `crates/`.
 pub fn sources(ctx: &Ctx) -> Vec<(String, String)> {
     let mut out = Vec::new();
@@ -80,8 +102,19 @@ pub struct Report {
 /// Check one document's fences. `wj_bin` enables `sh,verify` execution.
 pub fn check_doc(file: &str, text: &str, wj_bin: Option<&std::path::Path>) -> Report {
     let mut r = Report { checked: 0, ignored: 0, raw: vec![] };
+    let lines: Vec<&str> = text.lines().collect();
+    // Proposal documents (front matter `status: proposal`, banner enforced by `proposal`) show future syntax.
+    let proposal = super::proposal::is_proposal(text);
     for f in md::fences(text) {
+        if proposal && parse_info(&f.info).wj {
+            r.ignored += 1;
+            continue;
+        }
         let a = parse_info(&f.info);
+        let is_sh = matches!(f.info.split([',', ' ']).next().unwrap_or(""), "sh" | "bash" | "shell" | "console");
+        if (a.wj || is_sh) && (a.ignore || a.should_fail.is_some()) && !has_reason(&lines, f.line) {
+            r.raw.push(Finding::fail("fences", file, f.line, "`ignore`/`should_fail` fences need a reason: put `<!-- ignore: why -->` (or `<!-- should_fail: why -->`) on the line above"));
+        }
         if a.ignore {
             r.ignored += 1;
             continue;
@@ -94,7 +127,7 @@ pub fn check_doc(file: &str, text: &str, wj_bin: Option<&std::path::Path>) -> Re
                         r.raw.push(Finding::fail("fences", file, f.line, format!("sh,verify failed: {e}")));
                     }
                 }
-                None => r.raw.push(Finding::warn("fences", file, f.line, "sh,verify fence not executed (no wj binary)")),
+                None => r.raw.push(not_executed(file, f.line, std::env::var_os("WJ_DOCS_REQUIRE_EXEC").is_some())),
             }
             continue;
         }
@@ -114,18 +147,44 @@ pub fn wj_bin() -> Option<std::path::PathBuf> {
     std::env::var_os("WJ_BIN").map(Into::into).or_else(|| option_env!("CARGO_BIN_EXE_wj").map(Into::into)).filter(|p: &std::path::PathBuf| p.exists())
 }
 
+/// In documents listed under `[verify] required`, every shell fence that runs `wj` must be
+/// `sh,verify` (executed in CI) or explicitly `ignore`d. Not ratcheted: this fails outright.
+pub fn unverified_wj_fences(file: &str, text: &str) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for f in md::fences(text) {
+        let a = parse_info(&f.info);
+        let lang = f.info.split([',', ' ']).next().unwrap_or("");
+        if !matches!(lang, "sh" | "bash" | "shell" | "console") || a.sh_verify || a.ignore {
+            continue;
+        }
+        let runs_wj = f.body.lines().any(|l| {
+            let l = l.trim_start().trim_start_matches("$ ");
+            l.starts_with("wj ") || l.starts_with("./target/release/wj ") || l == "wj"
+        });
+        if runs_wj {
+            out.push(Finding::fail("fences", file, f.line, "shell fence runs `wj` but is neither `sh,verify` nor `ignore` (documents under [verify] required must execute their commands in CI)"));
+        }
+    }
+    out
+}
+
 pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let bin = wj_bin();
     let mut raw = Vec::new();
+    let mut hard = Vec::new();
     for (file, text) in sources(ctx) {
         if cfg.excluded("fences", &file) {
             continue;
+        }
+        if cfg.verify.required.iter().any(|g| util::glob_match(g, &file)) {
+            hard.extend(unverified_wj_fences(&file, &text));
         }
         raw.extend(check_doc(&file, &text, bin.as_deref()).raw);
     }
     let (warns, fails): (Vec<_>, Vec<_>) = raw.into_iter().partition(|f| f.warn);
     let mut out = cfg.ratchet("fences", fails);
     out.extend(warns);
+    out.extend(hard);
     out
 }
 

@@ -2,7 +2,7 @@
 
 use std::db
 use std::log
-use ../models/task::{Task, CreateTaskRequest, TaskSearchQuery}
+use ../models::task::{Task, CreateTaskRequest, TaskSearchQuery}
 
 // Create a new task
 pub async fn create(conn: Connection, project_id: int, req: CreateTaskRequest) -> Result<Task, Error> {
@@ -209,19 +209,19 @@ pub async fn search(conn: Connection, query: TaskSearchQuery) -> Result<Vec<Task
     let mut param_idx = 1
     
     if let Some(status) = query.status {
-        sql.push_str(&format!(" AND status = ${}", param_idx))
+        sql.push_str(&format!(" AND status = \${}", param_idx))
         params.push(status)
         param_idx += 1
     }
     
     if let Some(priority) = query.priority {
-        sql.push_str(&format!(" AND priority = ${}", param_idx))
+        sql.push_str(&format!(" AND priority = \${}", param_idx))
         params.push(priority)
         param_idx += 1
     }
     
     if let Some(assigned_to) = query.assigned_to {
-        sql.push_str(&format!(" AND assigned_to = ${}", param_idx))
+        sql.push_str(&format!(" AND assigned_to = \${}", param_idx))
         params.push(assigned_to.to_string())
     }
     

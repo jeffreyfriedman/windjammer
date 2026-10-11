@@ -12,9 +12,24 @@ check = "claims"
 glob = "CHANGELOG.md"
 reason = "release notes record numbers as of their release"
 
+[[exclude]]
+check = "fences"
+glob = "CHANGELOG.md"
+reason = "release notes quote the syntax as it was at their release"
+
+[[exclude]]
+check = "links"
+glob = "CHANGELOG.md"
+reason = "release notes name files, commands and docs as they were at their release; many were deleted or renamed since"
+
 [freshness]
 tracked = ["docs/adr/0*.md", "docs/design/*.md"]
 changed_lines = 200
+require = true
+
+# Shell fences that run `wj` in these documents must be `sh,verify` (executed in CI with the built wj).
+[verify]
+required = ["README.md", "AGENTS.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "examples/README.md", "examples/*/README.md", "templates/*/README.md"]
 
 # Rule-id namespaces: ids cited in docs must be defined in the matching files. A namespace is
 # inactive until at least one defining file exists.
@@ -22,114 +37,14 @@ changed_lines = 200
 prefix = "SPEC-"
 defs = "docs/spec/**/*.md"
 
-[baseline.claims]
-"AGENTS.md" = 1
-"CONTRIBUTING.md" = 1
-"docs/INTERPRETER.md" = 9
-"docs/adr/0007-target-tiers-conformance.md" = 1
-"docs/backends/ASSESSMENT.md" = 4
-"docs/backends/CONFORMANCE.md" = 1
-"docs/known-gaps.md" = 1
-"docs/known-issues/ownership-and-width-ratchet-residue.md" = 1
-"docs/language-design/WGSL_EXTERN_LET_DESIGN.md" = 2
-"docs/optimization/ASSESSMENT.md" = 2
-"src/optimizer/MODULE.md" = 1
-"tests/COMPILER_REPRO_QUEUE.md" = 2
-"tests/LANGUAGE_SPEC_TESTS.md" = 3
-"tests/TEST_COVERAGE_PLAN.md" = 7
+# docs/windjammer.ebnf is cross-checked against the parser (tools/docs_truth/ebnf.rs, docs/CONTRIBUTING-docs.md).
+# Lexer keywords deliberately absent from the grammar: "keyword" = "reason". May only shrink.
+[ebnf.unlisted_keywords]
 
-[baseline.fences]
-"CHANGELOG.md" = 2
-"docs/BEST_PRACTICES.md" = 4
-"docs/COMPARISON.md" = 1
-"docs/CONCURRENCY_ARCHITECTURE.md" = 2
-"docs/EXPORT_TARGETS.md" = 3
-"docs/STDLIB_ARCHITECTURE.md" = 2
-"docs/design/ASYNC_EXECUTION_MODEL.md" = 16
-"docs/design/windjammer-ui.md" = 21
-"docs/language-design/WGSL_EXTERN_LET_DESIGN.md" = 5
-"docs/language-design/ownership-inference.md" = 2
-"docs/language-guide/self-parameter.md" = 1
-"docs/proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md" = 1
-"docs/proposals/rfcs/WJ-CONC-01-async-concurrency.md" = 39
-"docs/proposals/rfcs/WJ-LANG-02-mojo-feature-analysis.md" = 2
-"docs/proposals/rfcs/WJ-PERF-01-economic-efficiency.md" = 14
-"docs/proposals/rfcs/WJ-SEC-01-effect-capabilities.md" = 6
-"docs/proposals/rfcs/WJ-SEC-02-taint-tracking.md" = 8
-"docs/proposals/rfcs/WJ-SEC-04-capability-profiles.md" = 2
-"docs/proposals/rfcs/WJ-SYN-01-pipe-operator.md" = 5
-"docs/proposals/rfcs/WJ-SYN-02-syntax-improvements.md" = 23
-"docs/tutorials/01_GETTING_STARTED.md" = 6
-"examples/applications/components/README.md" = 2
-"examples/taskflow/COMPARISON.md" = 1
-"examples/taskflow/INTEGRATION_GUIDE.md" = 1
-"examples/taskflow/PHASE2_COMPARISON.md" = 2
-"examples/taskflow/PHASE2_SUMMARY.md" = 1
-"examples/wasm_game/README.md" = 1
-"examples/wjfind/DESIGN.md" = 1
-"examples/wschat/DESIGN.md" = 1
-"src/ir/execution.rs" = 1
-"src/optimizer/quarantine/phase11_string_interning/mod.rs" = 1
-"std/json/API.md" = 2
-"templates/lib/README.md" = 1
-"templates/web/README.md" = 1
-"tests/COMPILER_REPRO_QUEUE.md" = 3
-"vscode-extension/README.md" = 1
-
-[baseline.links]
-"AGENTS.md" = 7
-"CHANGELOG.md" = 38
-"README.md" = 6
-"ROADMAP.md" = 2
-"benchmarks/README.md" = 1
-"crates/windjammer-lsp/MODULE.md" = 1
-"crates/windjammer-lsp/README.md" = 2
-"crates/windjammer-mcp/MODULE.md" = 3
-"crates/windjammer-mcp/README.md" = 3
-"docs/API_REFERENCE.md" = 2
-"docs/ARCHITECTURE_IMPROVEMENT_PLAN.md" = 4
-"docs/COMPARISON.md" = 5
-"docs/CONTRIBUTING-docs.md" = 1
-"docs/COOKBOOK.md" = 2
-"docs/INTERPRETER.md" = 1
-"docs/MODULE_SYSTEM.md" = 1
-"docs/OPTIMIZATION_ARCHITECTURE.md" = 2
-"docs/SALSA_ARCHITECTURE.md" = 2
-"docs/TOOLING_VISION.md" = 12
-"docs/USER_LIBRARY_TEST_GAPS.md" = 3
-"docs/adr/0001-ownership-truth.md" = 1
-"docs/adr/0006-optimizer-fate.md" = 4
-"docs/adr/0010-package-source-of-truth.md" = 2
-"docs/backends/CONFORMANCE.md" = 1
-"docs/design/ASYNC_EXECUTION_MODEL.md" = 1
-"docs/design/error-mapping.md" = 3
-"docs/design/multi-target-codegen.md" = 2
-"docs/design/windjammer-ui.md" = 12
-"docs/known-gaps.md" = 7
-"docs/optimization/ASSESSMENT.md" = 3
-"docs/proposals/rfcs/README.md" = 4
-"docs/proposals/rfcs/WJ-CONC-01-async-concurrency.md" = 14
-"docs/proposals/rfcs/WJ-LANG-01-shader-language.md" = 3
-"docs/proposals/rfcs/WJ-LANG-02-mojo-feature-analysis.md" = 1
-"docs/proposals/rfcs/WJ-PERF-01-economic-efficiency.md" = 109
-"docs/proposals/rfcs/WJ-PKG-01-package-management.md" = 54
-"docs/proposals/rfcs/WJ-SEC-01-effect-capabilities.md" = 76
-"docs/proposals/rfcs/WJ-SEC-03-capability-lock-file.md" = 36
-"docs/proposals/rfcs/WJ-SEC-04-capability-profiles.md" = 73
-"docs/superpowers/plans/2026-08-10-ir-total-call-site-cutover.md" = 1
-"docs/tutorials/01_GETTING_STARTED.md" = 6
-"docs/tutorials/02_FPS_GAME.md" = 2
-"examples/taskflow/README.md" = 1
-"examples/wjfind/README.md" = 2
-"examples/wschat/README.md" = 2
-"fuzz/README.md" = 1
-"std/README.md" = 1
-"std/testing/API.md" = 2
-"tests/COMPILER_REPRO_QUEUE.md" = 15
-"tests/LANGUAGE_SPEC_TESTS.md" = 7
-"tests/README.md" = 1
-"tests/STDLIB_ADOPTION_QUEUE.md" = 1
-"tests/STDLIB_FORM_HANDOFF.md" = 1
-"tests/conformance/README.md" = 1
-"tests/fixtures/shaders/README.md" = 2
+# Grammar sentences the parser rejects: "production#alternative" = "reason". An entry the parser accepts fails the check.
+[ebnf.divergences]
+"pattern#6" = "range patterns are documented but the parser does not accept them yet (wt/parser-gaps adds them; delete these four entries when that merges)"
+"range_pattern#0" = "see pattern#6"
+"range_pattern#1" = "see pattern#6"
+"range_pattern#full" = "see pattern#6"
 
