@@ -4,6 +4,10 @@ inner 4
 drop 4
 drop 5
 drop 7
+drop 10
+made 111
+drop 111
+drop 11
 end 2 3 2
 drop 8
 drop 9

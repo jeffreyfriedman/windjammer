@@ -18,6 +18,9 @@ impl Interpreter {
             let v = self.exec_stmt(s)?;
             if i + 1 == n {
                 last = v;
+            } else if !self.drop_types.is_empty() && matches!(s, Statement::Expression { .. }) {
+                // a discarded temporary is dropped at the end of its statement
+                self.drop_unreachable(&[v], &[])?;
             }
         }
         Ok(last)
@@ -66,7 +69,9 @@ impl Interpreter {
                     Pattern::Identifier(n) | Pattern::MutBinding(n) => {
                         self.define(n.as_str(), v);
                     }
-                    Pattern::Wildcard => {}
+                    Pattern::Wildcard => {
+                        self.drop_unreachable(&[v], &[])?;
+                    }
                     pat => {
                         let mut binds = Vec::new();
                         if self.match_pattern(pat, &v, None, false, &mut binds) {

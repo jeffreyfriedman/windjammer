@@ -33,5 +33,7 @@ fn main() {
     items.push(Guard { id: s + 6 })
     items.push(Guard { id: s + 7 })
     let p = Pair { items: items, tag: s }
+    let _ = Guard { id: s + 8 }
+    make(s + 9)
     println("end {} {} {}", a.id, b.id, p.tag)
 }
