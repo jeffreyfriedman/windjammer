@@ -906,14 +906,8 @@ impl<'ast> CodeGenerator<'ast> {
             };
 
             // Determine ownership explicitly, being careful about match arm bindings
-            // A string literal is `&str` (compares natively with `&String`), never an owned `String`.
-            let is_str_literal = |e: &Expression| {
-                matches!(e, Expression::Literal { value: Literal::String(_), .. })
-            };
-            let left_is_owned =
-                !is_str_literal(left) && (is_owned_string(lt.as_ref()) || is_owned_string_var(left));
-            let right_is_owned =
-                !is_str_literal(right) && (is_owned_string(rt.as_ref()) || is_owned_string_var(right));
+            let left_is_owned = !expression_utilities::is_string_literal(left) && (is_owned_string(lt.as_ref()) || is_owned_string_var(left));
+            let right_is_owned = !expression_utilities::is_string_literal(right) && (is_owned_string(rt.as_ref()) || is_owned_string_var(right));
             let left_is_ref = is_ref_string(lt.as_ref());
             let right_is_ref = is_ref_string(rt.as_ref());
             let right_is_borrowed_param = is_borrowed_string_param(right);

@@ -2240,6 +2240,20 @@
   {
     "kind": "example",
     "module": "",
+    "name": "idiom_agentdx_regressions",
+    "signature": "",
+    "source": "examples/verified/idiom_agentdx_regressions.wj",
+    "summary": "verified program; first output line: 1",
+    "tags": [
+      "idioms",
+      "regression",
+      "strings",
+      "sort"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "if_let_chain",
     "signature": "",
     "source": "examples/verified/if_let_chain.wj",
