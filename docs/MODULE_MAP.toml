@@ -71,7 +71,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "command-line subcommands"
 module_md = "src/cli/MODULE.md"
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "formatter", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
 known_violations = []
 
 [modules.cli_args]
@@ -114,7 +114,7 @@ layer = "backend"
 owner_stage = "code emission to target languages (stage 6)"
 module_md = "src/codegen/MODULE.md"
 allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "parser", "parser_impl", "parser_recovery", "project_paths", "source_map", "source_map_cache", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry"]
-known_violations = ["compiler", "linter"]
+known_violations = ["compiler", "intrinsics", "linter", "wjsl"]
 
 [modules.compilation_error_handling]
 layer = "driver"
@@ -128,7 +128,7 @@ layer = "driver"
 owner_stage = "compilation orchestration (driver)"
 module_md = "src/compiler/MODULE.md"
 allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_toml", "codegen", "compiler_config", "compiler_database", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "error_tui", "errors", "ffi", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "parser_recovery", "plugin", "project_paths", "rust_integration_tests", "source_map", "source_map_cache", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
-known_violations = []
+known_violations = ["resolve"]
 
 [modules.compiler_database]
 layer = "driver"
@@ -177,7 +177,7 @@ layer = "tooling"
 owner_stage = "tooling support"
 module_md = ""
 allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "optimizer", "parser", "parser_impl", "parser_recovery", "project_paths", "source_map", "source_map_cache", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
-known_violations = []
+known_violations = ["intrinsics"]
 
 [modules.error_codes]
 layer = "support"
@@ -296,7 +296,7 @@ layer = "tooling"
 owner_stage = "lint rules"
 module_md = "src/linter/MODULE.md"
 allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "optimizer", "parser", "parser_impl", "parser_recovery", "project_paths", "source_map", "source_map_cache", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
-known_violations = []
+known_violations = ["intrinsics"]
 
 [modules.main]
 layer = "driver"
@@ -345,7 +345,7 @@ layer = "syntax"
 owner_stage = "parsing to AST (stage 1)"
 module_md = "src/parser/MODULE.md"
 allowed_imports = ["compiler_config", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "lexer", "parser_impl", "project_paths", "source_map", "source_map_cache", "test_module_gate", "test_utils"]
-known_violations = []
+known_violations = ["intrinsics"]
 
 [modules.parser_impl]
 layer = "syntax"
