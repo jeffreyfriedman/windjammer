@@ -13,7 +13,7 @@ and adds the date and any amendments. Until then the recommendation is guidance,
 | [0001](0001-ownership-truth.md) | Ownership truth: IR solver vs analyzer | IR solver is the single writer; analyzer shrinks to fact collection | Accepted (2026-10-10) |
 | [0002](0002-local-mutability.md) | Local mutability: inferred vs explicit | Explicit `let mut` (Rust-like); parameters/`self` modes stay inferred | Accepted (2026-10-10) |
 | [0003](0003-owned-keyword.md) | The `owned` keyword | Do not add; ownership stays inferred | Proposed |
-| [0004](0004-concurrency-surface.md) | Concurrency surface | One documented surface: `async`/`spawn` expressions per WJ-CONC-01; `thread {}` kept; `go`/channels not added | Proposed |
+| [0004](0004-concurrency-surface.md) | Concurrency surface | One documented surface: `async`/`spawn` expressions per WJ-CONC-01; `thread {}` kept; `go`/channels not added | Accepted (2026-10-10) |
 | [0005](0005-error-strategy.md) | Error strategy | Front-end checks first; rustc errors stay a mapped fallback | Proposed |
 | [0006](0006-optimizer-fate.md) | Optimizer fate | Delete the dormant 15-phase optimizer; keep IR-level passes; rebuild on measurement | Accepted (2026-10-10) |
 | [0007](0007-target-tiers-conformance.md) | Target tiers and conformance contract | Tier 1 Rust, Tier 2 WASM/JS, Tier 3 Go; conformance suite gates promotion | Proposed |
