@@ -10,6 +10,9 @@ pub fn lit_int(v: i128, k: IntKind) -> String {
 
 pub fn float_lit(f: f64, is32: bool) -> String {
     let ty = if is32 { "float32" } else { "float64" };
+    if f == 0.0 && f.is_sign_negative() {
+        return format!("{ty}(wjNegZero())");
+    }
     if f.is_nan() {
         return format!("{ty}(wjNaN())");
     }

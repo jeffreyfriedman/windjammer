@@ -1,0 +1,30 @@
+// expect: 6
+// expect: 36
+// expect: 1 2
+struct Acc {
+    total: i64,
+    count: i64,
+}
+
+impl Acc {
+    fn new() -> Acc {
+        Acc { total: 0, count: 0 }
+    }
+
+    fn add(self, n: i64) -> Acc {
+        Acc { total: self.total + n, count: self.count + 1 }
+    }
+
+    fn scaled(self, k: i64) -> Acc {
+        Acc { total: self.total * k, count: self.count }
+    }
+}
+
+fn main() {
+    let a = Acc::new().add(1).add(2).add(3)
+    println("{}", a.total)
+    let b = a.scaled(6)
+    println("{}", b.total)
+    let c = Acc::new().add(5).scaled(0)
+    println("{} {}", c.count, c.count + 1)
+}

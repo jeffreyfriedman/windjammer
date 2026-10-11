@@ -43,6 +43,13 @@ pub struct ItemEnv {
     pub trait_methods: HashMap<String, Vec<String>>,
     pub impl_traits: HashMap<String, Vec<String>>,
     pub consts: HashMap<String, Ty>,
+    /// Trait name -> names of methods that have a default body.
+    pub trait_defaults: HashMap<String, Vec<String>>,
+}
+
+/// `Stack<T>` -> `Stack`.
+pub fn base_name(n: &str) -> &str {
+    n.split('<').next().unwrap_or(n).trim()
 }
 
 fn mode_of(m: &OwnershipMode) -> ParamMode {
@@ -101,8 +108,16 @@ fn sig_of(decl: &FunctionDecl, key: &str, reg: Option<&SignatureRegistry>, outer
 impl ItemEnv {
     pub fn build(program: &Program, reg: Option<&SignatureRegistry>) -> ItemEnv {
         let mut env = ItemEnv::default();
+        // Traits first so impls can inherit default-method signatures regardless of source order.
         for item in &program.items {
-            env.register(item, reg);
+            if matches!(item, Item::Trait { .. }) {
+                env.register(item, reg);
+            }
+        }
+        for item in &program.items {
+            if !matches!(item, Item::Trait { .. }) {
+                env.register(item, reg);
+            }
         }
         env
     }
@@ -129,6 +144,8 @@ impl ItemEnv {
             Item::Trait { decl, .. } => {
                 let names = decl.methods.iter().map(|m| m.name.clone()).collect();
                 self.trait_methods.insert(decl.name.clone(), names);
+                let defaults = decl.methods.iter().filter(|m| m.body.is_some()).map(|m| m.name.clone()).collect();
+                self.trait_defaults.insert(decl.name.clone(), defaults);
                 for m in &decl.methods {
                     self.methods.insert((decl.name.clone(), m.name.clone()), trait_sig(m, &decl.name));
                 }
@@ -147,13 +164,27 @@ impl ItemEnv {
 
     fn register_impl(&mut self, block: &crate::parser::ImplBlock, reg: Option<&SignatureRegistry>) {
         let outer: Vec<String> = block.type_params.iter().map(|t| t.name.clone()).collect();
+        let owner = base_name(&block.type_name).to_string();
         if let Some(t) = &block.trait_name {
-            self.impl_traits.entry(block.type_name.clone()).or_default().push(t.clone());
+            self.impl_traits.entry(owner.clone()).or_default().push(t.clone());
         }
+        let self_ty = Ty::Adt(owner.clone(), outer.iter().map(|n| Ty::Param(n.clone())).collect());
         for f in &block.functions {
             let key = format!("{}::{}", block.type_name, f.name);
-            let self_ty = Ty::Adt(block.type_name.clone(), outer.iter().map(|n| Ty::Param(n.clone())).collect());
-            self.methods.insert((block.type_name.clone(), f.name.clone()), sig_of(f, &key, reg, &outer, Some(&self_ty)));
+            self.methods.insert((owner.clone(), f.name.clone()), sig_of(f, &key, reg, &outer, Some(&self_ty)));
+        }
+        if let Some(t) = &block.trait_name {
+            for d in self.trait_defaults.get(t).cloned().unwrap_or_default() {
+                if !block.functions.iter().any(|f| f.name == d) {
+                    if let Some(sig) = self.methods.get(&(t.clone(), d.clone())).cloned() {
+                        let mut sig = sig;
+                        let fix = |ty: &Ty| ty.replace_self(&self_ty);
+                        sig.params = sig.params.iter().map(|(n, ty, m)| (n.clone(), fix(ty), *m)).collect();
+                        sig.ret = fix(&sig.ret);
+                        self.methods.insert((owner.clone(), d), sig);
+                    }
+                }
+            }
         }
     }
 

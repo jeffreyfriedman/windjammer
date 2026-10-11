@@ -150,7 +150,7 @@ impl<'m> Go<'m> {
 
     fn expr_stmt(&mut self, e: &PExpr) -> PResult<()> {
         let v = self.expr(e)?;
-        let is_call = matches!(&*e.kind, PK::Call { .. } | PK::StaticCall { .. } | PK::CallValue { .. } | PK::Method { .. } | PK::Print { .. } | PK::Panic(_));
+        let is_call = matches!(&*e.kind, PK::Call { .. } | PK::StaticCall { .. } | PK::StdCall { .. } | PK::CallValue { .. } | PK::Method { .. } | PK::Print { .. } | PK::Panic(_));
         if is_call && e.ty == Ty::Unit || matches!(&*e.kind, PK::Print { .. } | PK::Panic(_)) {
             self.line(&v);
         } else {

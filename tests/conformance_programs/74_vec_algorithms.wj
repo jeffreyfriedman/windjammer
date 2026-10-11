@@ -1,0 +1,42 @@
+// expect: 1 2 3 5 8
+// expect: 5
+// expect: found 3
+// expect: missing
+// expect: 2 4 6
+// expect: 2
+// expect: 1,2|3,4|5
+fn join(v: Vec<i64>, sep: string) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first {
+            out = out + sep
+        }
+        out = out + x.to_string()
+        first = false
+    }
+    out
+}
+
+fn main() {
+    let mut v = vec![5, 3, 8, 1, 2, 3]
+    v.sort()
+    v.dedup()
+    println("{}", join(v.clone(), " "))
+    println("{}", v.len())
+    match v.binary_search(5) {
+        Ok(i) => println("found {}", i),
+        Err(_) => println("missing"),
+    }
+    match v.binary_search(4) {
+        Ok(i) => println("found {}", i),
+        Err(_) => println("missing"),
+    }
+    let mut w = vec![1, 2, 3, 4, 5, 6]
+    w.retain(|x| x % 2 == 0)
+    println("{}", join(w.clone(), " "))
+    let win = vec![1, 2, 3].windows(2).count()
+    println("{}", win)
+    let parts: Vec<string> = vec![1, 2, 3, 4, 5].chunks(2).map(|c| join(c, ",")).collect()
+    println("{}", parts.join("|"))
+}

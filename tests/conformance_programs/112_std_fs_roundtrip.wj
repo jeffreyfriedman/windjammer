@@ -1,0 +1,33 @@
+// Seeded: the file name and content depend on the seed, so a hard-coded answer cannot pass.
+use std::fs
+
+fn main() {
+    let path = "/tmp/wj_conformance_fs___SEED__.txt"
+    let body = "seed=__SEED__\n"
+    match fs::write(path, body) {
+        Ok(_) => println("written"),
+        Err(e) => println("write failed {}", e),
+    }
+    match fs::append(path, "more\n") {
+        Ok(_) => println("appended"),
+        Err(e) => println("append failed {}", e),
+    }
+    println("{}", fs::exists(path))
+    match fs::read_to_string(path) {
+        Ok(text) => {
+            println("{}", text.len())
+            println("{}", text.lines().count())
+            println("{}", text.trim())
+        }
+        Err(e) => println("read failed {}", e),
+    }
+    match fs::remove_file(path) {
+        Ok(_) => println("removed"),
+        Err(e) => println("remove failed {}", e),
+    }
+    println("{}", fs::exists(path))
+    match fs::read_to_string(path) {
+        Ok(_) => println("still there"),
+        Err(_) => println("gone"),
+    }
+}

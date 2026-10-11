@@ -1,0 +1,22 @@
+// expect: 75
+// expect: 16
+// expect: 0
+enum Shape {
+    Circle(i32),
+    Square(i32),
+    Point,
+}
+
+fn area(s: Shape) -> i32 {
+    match s {
+        Shape::Circle(r) => 3 * r * r,
+        Shape::Square(side) => side * side,
+        Shape::Point => 0,
+    }
+}
+
+fn main() {
+    println("{}", area(Shape::Circle(5)))
+    println("{}", area(Shape::Square(4)))
+    println("{}", area(Shape::Point))
+}

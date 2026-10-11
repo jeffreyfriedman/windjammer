@@ -1,0 +1,12 @@
+// expect: 3.5
+// expect: 0.5
+// expect: 7
+// expect: 2.5
+fn main() {
+    let a: f64 = 1.5
+    let b: f64 = 2.0
+    println("{}", a + b)
+    println("{}", a - 1.0)
+    println("{}", a * b + 4.0)
+    println("{}", 5.0 / b)
+}

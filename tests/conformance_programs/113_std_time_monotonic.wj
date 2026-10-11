@@ -1,0 +1,15 @@
+// expect: monotonic
+// expect: slept
+use std::time
+
+fn main() {
+    let a = time::now_millis()
+    time::sleep_millis(30)
+    let b = time::now_millis()
+    if b >= a {
+        println("monotonic")
+    }
+    if b - a >= 20 {
+        println("slept")
+    }
+}

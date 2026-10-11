@@ -1,0 +1,52 @@
+// expect: woof
+// expect: meow
+// expect: Rex says woof
+// expect: Tom says meow
+// expect: loud: WOOF
+trait Animal {
+    fn name(self) -> string
+    fn sound(self) -> string
+    fn speak(self) -> string {
+        self.name() + " says " + self.sound()
+    }
+}
+
+struct Dog {
+    name: string,
+}
+
+struct Cat {
+    name: string,
+}
+
+impl Animal for Dog {
+    fn name(self) -> string {
+        self.name
+    }
+    fn sound(self) -> string {
+        "woof"
+    }
+}
+
+impl Animal for Cat {
+    fn name(self) -> string {
+        self.name
+    }
+    fn sound(self) -> string {
+        "meow"
+    }
+}
+
+fn loud<T: Animal>(a: T) -> string {
+    "loud: " + a.sound().to_uppercase()
+}
+
+fn main() {
+    let d = Dog { name: "Rex" }
+    let c = Cat { name: "Tom" }
+    println("{}", d.sound())
+    println("{}", c.sound())
+    println("{}", d.speak())
+    println("{}", c.speak())
+    println("{}", loud(d))
+}

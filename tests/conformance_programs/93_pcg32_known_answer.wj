@@ -1,0 +1,33 @@
+// PCG32 reference demo: pcg32_srandom(42, 54) yields a15c02b7 7b47f409 ba1d3330 83d2f293 bfa4784b cbed606e
+// expect: a15c02b7
+// expect: 7b47f409
+// expect: ba1d3330
+// expect: 83d2f293
+// expect: bfa4784b
+// expect: cbed606e
+struct Pcg {
+    state: u64,
+    inc: u64,
+}
+
+impl Pcg {
+    fn next(self) -> u32 {
+        let old = self.state
+        self.state = old.wrapping_mul(6364136223846793005).wrapping_add(self.inc)
+        let xorshifted = (((old >> 18) ^ old) >> 27) as u32
+        let rot = (old >> 59) as u32
+        (xorshifted >> rot) | (xorshifted << ((32 - rot) & 31))
+    }
+}
+
+fn main() {
+    let mut rng = Pcg { state: 0, inc: (54 << 1) | 1 }
+    rng.next()
+    rng.state = rng.state.wrapping_add(42)
+    rng.next()
+    let mut i = 0
+    while i < 6 {
+        println("{:x}", rng.next())
+        i += 1
+    }
+}

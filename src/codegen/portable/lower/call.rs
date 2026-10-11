@@ -39,13 +39,14 @@ impl<'e> Lowerer<'e> {
         match function {
             Expression::Identifier { name, .. } => self.named_call(name, args, want),
             Expression::FieldAccess { object, field, .. } => {
+                // The parser desugars `Type::ctor(..)` and (in `match`/`for` heads) `recv.method(..)` to
+                // `Call(FieldAccess)`; a call of a field value would need parentheses in the source.
                 if let Expression::Identifier { name: owner, .. } = object {
                     if self.lookup(owner).is_none() {
                         return self.path_call(owner, field, args, want);
                     }
                 }
-                let f = self.expr(function, None)?;
-                self.call_value(f, args)
+                self.method_call(object, field, None, args, want)
             }
             other => {
                 let f = self.expr(other, None)?;
@@ -212,6 +213,12 @@ impl<'e> Lowerer<'e> {
     }
 
     pub(super) fn method_call(&mut self, object: &Expression, method: &str, turbofish: Option<&[Type]>, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        // Quirk of the `match`-head parser: `recv.name::<T>(..)` arrives as `MethodCall { method: "", object: FieldAccess }`.
+        if method.is_empty() {
+            if let Expression::FieldAccess { object: inner, field, .. } = object {
+                return self.method_call(inner, field, turbofish, args, want);
+            }
+        }
         let recv = self.expr(object, None)?;
         let rty = self.resolve_for_dispatch(&recv.ty);
         let recv = PExpr { ty: rty, ..recv };
@@ -261,6 +268,10 @@ impl<'e> Lowerer<'e> {
         if recv.ty.is_unknown() {
             return self.err(format!("cannot infer receiver type for `.{method}()` (annotate the variable or closure parameter)"));
         }
+        if matches!(method, "clone" | "to_owned") && !matches!(recv.ty, Ty::Iter(_)) {
+            let ty = recv.ty.clone();
+            return Ok(PExpr::new(ty, PK::Copy(recv)));
+        }
         let tf = turbofish.and_then(|t| t.first()).map(|t| from_ast(t, &self.generics));
         let want_for_ret: Option<Ty> = match (method, &tf) {
             ("parse", Some(t)) => Some(Ty::Result(Box::new(t.clone()), Box::new(Ty::Str))),
@@ -280,6 +291,11 @@ impl<'e> Lowerer<'e> {
         let Some(mut ty) = ty else { return self.err(format!("built-in method `{}::{method}` is not supported", recv.ty.describe())) };
         if method == "collect" && ty == Ty::Vec(Box::new(Ty::Unknown)) {
             ty = Ty::Vec(Box::new(recv.ty.elem().unwrap_or(Ty::Unknown)));
+        }
+        if method == "collect" {
+            if let (Some(src), Some(dst)) = (recv.ty.elem(), ty.elem()) {
+                self.constrain(&dst, &src);
+            }
         }
         let ty = refine_container(ty, &recv, method, &lowered);
         Ok(PExpr::new(ty, PK::Method { recv, name: method.to_string(), args: lowered, res: Resolution::Builtin }))

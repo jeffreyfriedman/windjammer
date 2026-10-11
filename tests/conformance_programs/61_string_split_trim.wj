@@ -1,0 +1,30 @@
+// expect: 3
+// expect: a|b|c
+// expect: ["x", "y"]
+// expect: hello world
+// expect: 2
+// expect: ab-ab-ab
+// expect: true false
+// expect: 4
+fn main() {
+    let parts = "a,b,c".split(",")
+    let mut n = 0
+    let mut joined = ""
+    for p in parts {
+        if n > 0 {
+            joined = joined + "|"
+        }
+        joined = joined + p
+        n += 1
+    }
+    println("{}", n)
+    println("{}", joined)
+    let words: Vec<string> = "  x   y  ".split_whitespace().collect()
+    println("{:?}", words)
+    println("{}", "  hello world \n".trim())
+    let lines = "one\ntwo\n"
+    println("{}", lines.lines().count())
+    println("{}", "ab".repeat(3).replace("abab", "ab-ab").replace("ab-abab", "ab-ab-ab"))
+    println("{} {}", "prefix_x".starts_with("prefix"), "x".ends_with("y"))
+    println("{}", "a b c d".split(" ").count())
+}

@@ -1,0 +1,6 @@
+// seeds: 1 2 3 4 5
+// Deliberate cheater: ignores its input and prints the answer for seed 1 as a literal.
+// The harness self-test requires this program to FAIL on seeds 2..5.
+fn main() {
+    println("12048")
+}

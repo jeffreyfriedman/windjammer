@@ -1,0 +1,11 @@
+// expect: hello world
+// expect: 11
+// expect: HELLO WORLD
+fn main() {
+    let a = "hello"
+    let b = "world"
+    let c = a + " " + b
+    println("{}", c)
+    println("{}", c.len())
+    println("{}", c.to_uppercase())
+}

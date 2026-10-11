@@ -1,0 +1,14 @@
+// expect: 1 1
+// expect: 99 1
+struct P {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let a = P { x: 1, y: 1 }
+    let mut b = a
+    println("{} {}", a.x, b.x)
+    b.x = 99
+    println("{} {}", b.x, a.x)
+}

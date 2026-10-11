@@ -3,7 +3,7 @@
 use super::{Lowerer, PResult};
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{from_ast, IntKind, Ty};
-use crate::parser::{BinaryOp, Expression, Literal, Statement, UnaryOp};
+use crate::parser::{BinaryOp, Expression, Literal, Statement, Type, UnaryOp};
 
 fn bin_kind(op: &BinaryOp) -> BinKind {
     match op {
@@ -226,6 +226,11 @@ impl<'e> Lowerer<'e> {
             UnaryOp::Ref | UnaryOp::MutRef | UnaryOp::Deref => self.expr(operand, want),
             UnaryOp::Neg => {
                 let a = self.expr(operand, want)?;
+                match &*a.kind {
+                    PK::Int(v) => return Ok(PExpr::new(a.ty.clone(), PK::Int(-*v))),
+                    PK::Float(f) => return Ok(PExpr::new(a.ty.clone(), PK::Float(-*f))),
+                    _ => {}
+                }
                 Ok(PExpr::new(a.ty.clone(), PK::Unary(UnKind::Neg, a)))
             }
             UnaryOp::Not => {
@@ -396,10 +401,22 @@ impl<'e> Lowerer<'e> {
         };
         self.push();
         let mut ps = Vec::new();
-        for (i, p) in params.iter().enumerate() {
-            let t = ptys.get(i).cloned().unwrap_or(Ty::Unknown);
-            self.declare(p, t.clone(), false);
-            ps.push((p.clone(), t));
+        let mut prologue = Vec::new();
+        for (i, raw) in params.iter().enumerate() {
+            let hint = ptys.get(i).filter(|t| !matches!(t, Ty::Unknown)).cloned();
+            if raw.starts_with('(') {
+                let (param, stmt) = self.tuple_param(raw, hint)?;
+                ps.push(param);
+                prologue.push(stmt);
+                continue;
+            }
+            let (name, declared) = match raw.split_once(':') {
+                Some((n, t)) => (n.trim().to_string(), Some(from_ast(&type_from_str(t), &self.generics))),
+                None => (raw.trim().to_string(), None),
+            };
+            let t = declared.or(hint).unwrap_or_else(|| self.new_var());
+            let out = self.declare(&name, t.clone(), false);
+            ps.push((out, t));
         }
         self.rets.push(rwant.clone());
         let blk = match body {
@@ -408,12 +425,32 @@ impl<'e> Lowerer<'e> {
         };
         self.rets.pop();
         self.pop();
-        let blk = blk?;
+        let mut blk = blk?;
+        prologue.extend(std::mem::take(&mut blk.stmts));
+        blk.stmts = prologue;
         let ret = blk.tail.as_ref().map(|t| t.ty.clone()).unwrap_or(Ty::Unit);
         let ty = Ty::Fn(ps.iter().map(|p| p.1.clone()).collect(), Box::new(ret.clone()));
-        let mut blk = blk;
         let captures = self.closure_captures(&mut blk);
         Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk, captures }))
+    }
+
+    /// `|(a, b)|`: a hidden tuple parameter plus a destructuring `let` at the top of the body.
+    fn tuple_param(&mut self, raw: &str, hint: Option<Ty>) -> PResult<((String, Ty), PStmt)> {
+        let names: Vec<String> = raw.trim_matches(|c| c == '(' || c == ')').split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        let elem_tys: Vec<Ty> = match &hint {
+            Some(Ty::Tuple(ts)) if ts.len() == names.len() => ts.clone(),
+            _ => names.iter().map(|_| self.new_var()).collect(),
+        };
+        let tup_ty = Ty::Tuple(elem_tys.clone());
+        let nm = self.fresh("tup");
+        let hidden = self.declare(&nm, tup_ty.clone(), false);
+        let mut binds = Vec::new();
+        for (n, t) in names.iter().zip(&elem_tys) {
+            let out = self.declare(n, t.clone(), false);
+            binds.push(PPat::Bind { name: out, mutable: false });
+        }
+        let init = PExpr::new(tup_ty.clone(), PK::Local(hidden.clone()));
+        Ok(((hidden, tup_ty), PStmt::LetPat { pat: PPat::Tuple(binds), init, els: None }))
     }
 
     /// Outer `mut` locals referenced by the closure body: Rust `move` closures own a snapshot.
@@ -452,4 +489,46 @@ impl<'e> Lowerer<'e> {
         self.pop();
         r
     }
+}
+
+/// Rebuild a parser `Type` from the textual form the closure-parameter parser keeps (`i32`, `Vec<int>`, `(a, b)`).
+fn type_from_str(s: &str) -> Type {
+    let s = s.trim().trim_start_matches('&').trim_start_matches("mut ").trim();
+    if let Some(inner) = s.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
+        let parts: Vec<Type> = split_top(inner).into_iter().map(type_from_str).collect();
+        return Type::Tuple(parts);
+    }
+    if let (Some(lt), true) = (s.find('<'), s.ends_with('>')) {
+        let args: Vec<Type> = split_top(&s[lt + 1..s.len() - 1]).into_iter().map(type_from_str).collect();
+        return Type::Parameterized(s[..lt].trim().to_string(), args);
+    }
+    match s {
+        "int" => Type::Int,
+        "i32" => Type::Int32,
+        "uint" => Type::Uint,
+        "float" => Type::Float,
+        "bool" => Type::Bool,
+        "string" => Type::String,
+        other => Type::Custom(other.to_string()),
+    }
+}
+
+fn split_top(s: &str) -> Vec<&str> {
+    let (mut depth, mut start, mut out) = (0i32, 0usize, Vec::new());
+    for (i, c) in s.char_indices() {
+        match c {
+            '<' | '(' | '[' => depth += 1,
+            '>' | ')' | ']' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(s[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    let last = s[start..].trim();
+    if !last.is_empty() {
+        out.push(last);
+    }
+    out
 }

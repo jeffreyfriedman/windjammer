@@ -1,0 +1,29 @@
+// expect: none
+// expect: 7
+// expect: 2147483647
+// expect: -2147483648
+// expect: none
+// expect: 255
+// expect: 0
+// expect: none
+fn show(o: Option<i32>) {
+    match o {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+}
+
+fn main() {
+    let max: i32 = 2147483647
+    show(max.checked_add(1))
+    show(3i32.checked_add(4))
+    println("{}", max.saturating_add(10))
+    let min: i32 = -2147483648
+    println("{}", min.saturating_sub(10))
+    show(10i32.checked_div(0))
+    let a: u8 = 250
+    println("{}", a.saturating_add(100))
+    let b: u8 = 5
+    println("{}", b.saturating_sub(100))
+    show(max.checked_mul(2))
+}

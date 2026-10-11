@@ -1,0 +1,9 @@
+// expect: 11
+// expect: 30
+fn main() {
+    let k = 10
+    let add = |x: i32| x + k
+    println("{}", add(1))
+    let mul = |a: i32, b: i32| a * b
+    println("{}", mul(5, 6))
+}

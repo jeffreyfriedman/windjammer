@@ -1,0 +1,25 @@
+// expect: 7
+// expect: bad
+fn parse(x: i32) -> Result<i32, string> {
+    if x < 0 {
+        return Err("bad")
+    }
+    Ok(x)
+}
+
+fn add(a: i32, b: i32) -> Result<i32, string> {
+    let x = parse(a)?
+    let y = parse(b)?
+    Ok(x + y)
+}
+
+fn main() {
+    match add(3, 4) {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+    match add(3, -4) {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+}

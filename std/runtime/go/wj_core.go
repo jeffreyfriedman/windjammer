@@ -462,6 +462,8 @@ func wjRotr[T integer, N integer](a T, n N) T {
 const wjPi = math.Pi
 
 func wjNaN() float64          { return math.NaN() }
+func wjNegZero() float64      { return math.Copysign(0, -1) }
+func wjFneg[T ~float32 | ~float64](x T) T { return -x }
 func wjInf(sign int) float64  { return math.Inf(sign) }
 func wjFmod[T ~float32 | ~float64](a, b T) T { return T(math.Mod(float64(a), float64(b))) }
 func wjMath_sqrt(x float64) float64  { return math.Sqrt(x) }

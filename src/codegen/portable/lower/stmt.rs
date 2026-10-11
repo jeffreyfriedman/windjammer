@@ -82,7 +82,7 @@ impl<'e> Lowerer<'e> {
             let body = self.arm_body(arm.body, result_ty.as_ref(), need_value)?;
             self.pop();
             if let Some(t) = &body.tail {
-                if result_ty.as_ref().map(|r| r.is_unknown()).unwrap_or(true) && !t.ty.is_unknown() {
+                if result_ty.as_ref().map(|r| matches!(r, Ty::Unknown)).unwrap_or(true) && !matches!(t.ty, Ty::Unknown) {
                     result_ty = Some(t.ty.clone());
                 }
                 if let Some(r) = result_ty.clone() {

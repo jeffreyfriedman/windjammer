@@ -1,0 +1,19 @@
+// 0.1 added ten times in binary64 is 0.9999999999999999 (classic)
+// expect: 0.9999999999999999
+// expect: 55
+fn main() {
+    let mut s: f64 = 0.0
+    let mut i = 0
+    while i < 10 {
+        s += 0.1
+        i += 1
+    }
+    println("{}", s)
+    let mut t: f64 = 0.0
+    let mut k = 1
+    while k <= 10 {
+        t += k as f64
+        k += 1
+    }
+    println("{}", t)
+}

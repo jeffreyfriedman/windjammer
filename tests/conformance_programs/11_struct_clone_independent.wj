@@ -1,0 +1,13 @@
+// expect: 5
+// expect: 1
+struct Box1 {
+    v: i32,
+}
+
+fn main() {
+    let a = Box1 { v: 1 }
+    let mut b = a.clone()
+    b.v = 5
+    println("{}", b.v)
+    println("{}", a.v)
+}

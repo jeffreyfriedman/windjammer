@@ -1,0 +1,56 @@
+// expect: 3
+// expect: 30
+// expect: some 30
+// expect: none
+// expect: a:1
+struct Stack<T> {
+    items: Vec<T>,
+}
+
+impl<T> Stack<T> {
+    fn new() -> Stack<T> {
+        Stack { items: Vec::new() }
+    }
+
+    fn push(self, x: T) {
+        self.items.push(x)
+    }
+
+    fn pop(self) -> Option<T> {
+        self.items.pop()
+    }
+
+    fn size(self) -> usize {
+        self.items.len()
+    }
+}
+
+struct Pair<A, B> {
+    first: A,
+    second: B,
+}
+
+fn main() {
+    let mut s: Stack<i64> = Stack::new()
+    s.push(10)
+    s.push(20)
+    s.push(30)
+    println("{}", s.size())
+    let top = s.pop()
+    match top {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    let mut t: Stack<i64> = Stack::new()
+    t.push(30)
+    match t.pop() {
+        Some(v) => println("some {}", v),
+        None => println("none"),
+    }
+    match t.pop() {
+        Some(v) => println("some {}", v),
+        None => println("none"),
+    }
+    let p = Pair { first: "a", second: 1 }
+    println("{}:{}", p.first, p.second)
+}

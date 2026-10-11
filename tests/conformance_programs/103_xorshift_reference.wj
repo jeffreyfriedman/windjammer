@@ -1,0 +1,13 @@
+// seeds: 88172645463325252 1 2 3 4
+// Marsaglia xorshift64 from a published seed; expected values come from the Python reference model.
+fn main() {
+    let mut x: u64 = __SEED__
+    let mut i = 0
+    while i < 3 {
+        x = x ^ (x << 13)
+        x = x ^ (x >> 7)
+        x = x ^ (x << 17)
+        println("{}", x)
+        i += 1
+    }
+}

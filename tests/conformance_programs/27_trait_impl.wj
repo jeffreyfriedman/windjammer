@@ -1,0 +1,27 @@
+// expect: woof
+// expect: meow
+trait Speak {
+    fn speak(self) -> string
+}
+
+struct Dog {}
+struct Cat {}
+
+impl Speak for Dog {
+    fn speak(self) -> string {
+        "woof"
+    }
+}
+
+impl Speak for Cat {
+    fn speak(self) -> string {
+        "meow"
+    }
+}
+
+fn main() {
+    let d = Dog {}
+    let c = Cat {}
+    println("{}", d.speak())
+    println("{}", c.speak())
+}

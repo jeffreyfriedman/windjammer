@@ -89,28 +89,29 @@ fn tparams_names(tp: &[TypeParam]) -> Vec<String> {
 
 fn attach_impl(env: &ItemEnv, block: &ImplBlock, defaults: &Defaults, m: &mut PModule) -> PResult<()> {
     let outer = tparams_names(&block.type_params);
+    let owner = crate::codegen::portable::env::base_name(&block.type_name).to_string();
     let mut methods = Vec::new();
     for f in &block.functions {
-        let sig = &env.methods[&(block.type_name.clone(), f.name.clone())];
-        let mut fx = lower_fn(env, f, sig, Some(&block.type_name), &outer)?;
-        fx.owner = Some(block.type_name.clone());
+        let sig = &env.methods[&(owner.clone(), f.name.clone())];
+        let mut fx = lower_fn(env, f, sig, Some(&owner), &outer)?;
+        fx.owner = Some(owner.clone());
         methods.push(fx);
     }
     if let Some(tr) = &block.trait_name {
         for tm in defaults.get(tr).into_iter().flatten() {
             if !block.functions.iter().any(|f| f.name == tm.name) {
-                methods.push(lower_trait_method(env, tm, tr, Some((&block.type_name, &outer)))?);
+                methods.push(lower_trait_method(env, tm, tr, Some((&owner, &outer)))?);
             }
         }
     }
-    if let Some(s) = m.structs.iter_mut().find(|s| s.name == block.type_name) {
+    if let Some(s) = m.structs.iter_mut().find(|s| s.name == owner) {
         s.methods.extend(methods);
         s.traits.extend(block.trait_name.clone());
-    } else if let Some(e) = m.enums.iter_mut().find(|e| e.name == block.type_name) {
+    } else if let Some(e) = m.enums.iter_mut().find(|e| e.name == owner) {
         e.methods.extend(methods);
         e.traits.extend(block.trait_name.clone());
     } else {
-        return Err(Unsupported { what: format!("impl for unknown type `{}`", block.type_name), line: 0 });
+        return Err(Unsupported { what: format!("impl for unknown type `{owner}`"), line: 0 });
     }
     Ok(())
 }
