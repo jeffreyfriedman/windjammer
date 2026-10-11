@@ -1,0 +1,9 @@
+use std.io
+
+fn a() {
+    let x = 1
+
+    let y = 2
+}
+
+fn b() {}

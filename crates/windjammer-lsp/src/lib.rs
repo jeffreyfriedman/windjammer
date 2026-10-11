@@ -20,5 +20,6 @@
 
 pub mod cache;
 pub mod database;
+pub mod formatting;
 pub mod ide_queries;
 pub mod refactoring;

@@ -226,9 +226,17 @@ pub enum Commands {
 
     /// Format Windjammer code
     Fmt {
-        /// Check formatting without applying changes
+        /// Check formatting without applying changes (non-zero exit if changes are needed)
         #[arg(long)]
         check: bool,
+
+        /// Format generated Rust crates with `cargo fmt --all` instead of .wj files
+        #[arg(long)]
+        rust: bool,
+
+        /// Files or directories to format (default: current directory); `-` reads stdin
+        #[arg(value_name = "PATH")]
+        paths: Vec<PathBuf>,
     },
 
     /// Run Rust leakage linter on .wj files (W0001-W0004)
