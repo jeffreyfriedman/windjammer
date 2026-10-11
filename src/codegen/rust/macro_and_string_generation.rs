@@ -50,7 +50,11 @@ impl<'ast> CodeGenerator<'ast> {
                 if let Some(t) = peer.clone() {
                     self.assignment_int_target_type = Some(t);
                 }
+                // Elements are moved into the new collection: they are not themselves call
+                // arguments, so identifier emission must apply its own reuse clone.
+                let prev_call_arg = std::mem::replace(&mut self.in_call_argument_generation, false);
                 let s = self.generate_expression(e);
+                self.in_call_argument_generation = prev_call_arg;
                 self.assignment_int_target_type = prev;
                 s
             })
@@ -224,7 +228,10 @@ impl<'ast> CodeGenerator<'ast> {
                         // `actual` is Owned+Inferred / misclassified Owned.
                         let mut kind = compute_coercion(&actual, &expected);
                         if matches!(kind, CoercionKind::Identity) {
-                            kind = CoercionKind::Clone;
+                            // `to_string`, not `clone`: this copy is semantic (a fresh value), so the
+                            // call-site "owned arg, last use" peel of a trailing `.clone()` must not
+                            // turn it into a move of the operand.
+                            kind = CoercionKind::ToOwnedString;
                         }
                         return apply_coercion(&kind, &arg_strs[1], Target::Rust);
                     }

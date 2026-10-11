@@ -129,11 +129,14 @@ impl<'ast> CodeGenerator<'ast> {
             if both_literal_ints {
                 self.assignment_int_target_type = Some(Type::Int32);
             } else if let Some(t) = bound_ty {
-                self.assignment_int_target_type = if matches!(t, Type::Int) {
-                    Some(Type::Int32)
+                // The literal must take the bound's *emitted* width. WJ `uint` is emitted as
+                // `u64` (types.rs), whereas the generic literal-suffix mapping for `Type::Uint`
+                // is u32, so name the width explicitly.
+                self.assignment_int_target_type = Some(if matches!(t, Type::Uint) {
+                    Type::Custom("u64".to_string())
                 } else {
-                    Some(t)
-                };
+                    t
+                });
             }
         }
 

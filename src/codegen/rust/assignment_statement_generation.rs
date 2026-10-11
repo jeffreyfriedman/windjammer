@@ -496,13 +496,9 @@ impl<'ast> CodeGenerator<'ast> {
         let mut value_str = self.generate_expression(value);
         self.assignment_float_target_type = prev_assign_ty;
         self.assignment_int_target_type = prev_assign_int;
-        if matches!(
-            value,
-            Expression::Literal {
-                value: Literal::String(_),
-                ..
-            }
-        ) {
+        if matches!(value, Expression::Literal { value: Literal::String(_), .. })
+            || self.static_str_into_owned_text_slot(value, target)
+        {
             value_str =
                 crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&value_str);
         }
