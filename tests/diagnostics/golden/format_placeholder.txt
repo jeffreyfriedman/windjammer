@@ -1,0 +1,9 @@
+warning[W0008]: `println` with a `{}` format string: use `${..}` interpolation
+  --> format_placeholder.wj:4:5
+  |
+4 |     println("x = {}", x)
+  |     ^^^^^^^^^^^^^^^^^^^^
+  = help: replace `println("x = {}", x)` with `println("x = ${x}")`
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = fix (auto-fixable): replace `println("x = {}", x)` with `println("x = ${x}")`
+  = explain: wj explain W0008

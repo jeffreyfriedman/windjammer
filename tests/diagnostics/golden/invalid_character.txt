@@ -1,0 +1,7 @@
+error[WJ0012]: invalid character `#`
+  --> invalid_character.wj:3:15
+  |
+3 |     let x = 1 # one
+  |               ^ not valid here
+  = help: delete it, or put it inside a string literal
+  = explain: wj explain WJ0012

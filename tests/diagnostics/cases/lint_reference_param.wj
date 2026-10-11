@@ -1,0 +1,8 @@
+// expect: W0001
+fn total(items: &Vec<int>) -> int {
+    0
+}
+
+fn main() {
+    println("${total([1])}")
+}

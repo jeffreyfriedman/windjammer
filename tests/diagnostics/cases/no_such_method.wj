@@ -1,0 +1,9 @@
+// expect: rustc:WJ0015
+struct Counter {
+    n: int,
+}
+
+fn main() {
+    let c = Counter { n: 1 }
+    c.bump()
+}

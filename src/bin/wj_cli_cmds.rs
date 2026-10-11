@@ -137,10 +137,12 @@ pub fn run(cli: Cli) -> Result<()> {
             windjammer::cli::lint::execute(&path, strict)?;
         }
         Commands::Check {
-            path: _path,
-            json: _json,
+            path,
+            json,
+            watch,
+            fix,
         } => {
-            windjammer::cli::check::execute()?;
+            windjammer::cli::check::execute(path.as_deref(), json, watch, fix)?;
         }
         Commands::Add {
             package,
@@ -260,6 +262,10 @@ fn cmd_generate_docs(output: &std::path::Path, format: &str) -> Result<()> {
 }
 
 fn cmd_explain(code: &str) -> Result<()> {
+    if let Some(text) = windjammer::diagnostics::codes::explain(&code.to_uppercase()) {
+        println!("{text}");
+        return Ok(());
+    }
     let registry = windjammer::error_codes::get_registry();
 
     if let Some(wj_code) = registry.get(code) {

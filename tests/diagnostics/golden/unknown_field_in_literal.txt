@@ -1,0 +1,8 @@
+error[WJ0014]: struct `Point` has no field named `z`
+  --> unknown_field_in_literal.wj:8:27
+  |
+8 |     let p = Point { x: 1, z: 2 }
+  |                           ^ unknown field
+  = help: `Point` has the fields: x, y
+  = fix (suggested): rename the field to `x`
+  = explain: wj explain WJ0014

@@ -1,0 +1,8 @@
+error[WJ0004]: cannot assign twice to immutable variable `x`
+  --> immutable_reassign.wj:4:5
+  |
+4 |     x = 20
+  |     ^ not mutable
+  = help: consider changing this to be mutable: `let mut x`
+  = fix (auto-fixable): declare `x` as mutable: `let mut x`
+  = explain: wj explain WJ0004

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`wj check` is a real front-end check** (no cargo/rustc): `wj check [PATH] [--json] [--watch] [--fix]`.
+- **Diagnostics schema v2** (`docs/diagnostics-schema.json`): stable codes, spans with byte ranges, fixes with applicability, `wj explain` links; shared by `wj check/build/test --json` and the LSP. See `docs/DIAGNOSTICS.md`.
+- Error codes WJ0011-WJ0028, WJ0098, WJ0099 with `wj explain` entries (explanation, cause, fix, examples).
+- rustc errors are translated to WJ codes with `.wj` locations; untranslatable ones become WJ0099.
+
+### Changed
+- `wj build --json` exits non-zero on errors and uses schema v2 (v1 was the legacy shape).
+
 ## [0.50.0] - 2026-07-07
 
 ### Added
