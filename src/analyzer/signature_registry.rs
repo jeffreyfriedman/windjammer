@@ -1787,6 +1787,12 @@ impl SignatureRegistry {
     pub fn merge(&mut self, other: &SignatureRegistry) {
         for (name, sig) in &other.signatures {
             if let Some(existing) = self.signatures.get(name) {
+                // A bare (unqualified) key is a free function. A method that happens to share
+                // its name registers a Self-receiver signature under the same bare key in
+                // another module; it must never replace the free function's formals.
+                if !name.contains("::") && !existing.has_self_receiver && sig.has_self_receiver {
+                    continue;
+                }
                 // Caller-file declaration stubs must not clobber defining-module
                 // codegen refresh (`emitted_rust_ref_params`, `&Vec` formals, etc.).
                 if existing.emitted_rust_ref_params.is_some()

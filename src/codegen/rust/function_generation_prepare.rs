@@ -13222,10 +13222,18 @@ impl<'ast> CodeGenerator<'ast> {
         keys.dedup();
 
         for key in keys {
-            let mut updated =
-                if let Some(existing) = self.signature_registry.get_signature(&key).cloned() {
-                    existing
-                } else {
+            // The bare key may hold a *method's* signature (same name, Self receiver). A free
+            // function must never inherit it: its formals would be shifted by the Self slot.
+            let func_has_self = func.parameters.iter().any(|p| p.name == "self");
+            let mut updated = if let Some(existing) = self
+                .signature_registry
+                .get_signature(&key)
+                .filter(|existing| existing.has_self_receiver == func_has_self)
+                .cloned()
+            {
+                existing
+            } else {
+                {
                     let mut sig = crate::analyzer::FunctionSignature {
                         name: key.clone(),
                         param_types: func
@@ -13258,7 +13266,8 @@ impl<'ast> CodeGenerator<'ast> {
                             .insert(0, crate::analyzer::OwnershipMode::Borrowed);
                     }
                     sig
-                };
+                }
+            };
             self.sync_registry_signature_from_emitted_formals(
                 func,
                 &mut updated,

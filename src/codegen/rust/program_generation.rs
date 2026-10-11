@@ -718,24 +718,40 @@ impl<'ast> CodeGenerator<'ast> {
             body.push('\n');
         }
 
-        // Collect names of functions in impl blocks and trait methods to avoid generating them twice
-        let mut impl_methods = std::collections::HashSet::new();
+        // Identify functions that belong to impl blocks / traits so they are not generated twice
+        // as free functions. Identity is (name, body address, extern): matching on the bare name
+        // silently dropped every free function that shared a name with any method.
+        let fn_identity = |name: &str, body: &[&Statement<'_>], is_extern: bool| {
+            (
+                name.to_string(),
+                body.first()
+                    .map_or(0usize, |stmt| *stmt as *const _ as usize),
+                is_extern,
+            )
+        };
+        let mut impl_method_ids = std::collections::HashSet::new();
         for item in &program.items {
             if let Item::Impl {
                 block: impl_block, ..
             } = item
             {
                 for func in &impl_block.functions {
-                    impl_methods.insert(func.name.clone());
+                    impl_method_ids.insert(fn_identity(&func.name, &func.body, func.is_extern));
                 }
             }
-            // Also collect trait method names
+            // Also collect trait method declarations / default bodies
             if let Item::Trait { decl, .. } = item {
                 for method in &decl.methods {
-                    impl_methods.insert(method.name.clone());
+                    impl_method_ids.insert(fn_identity(
+                        &method.name,
+                        method.body.as_deref().unwrap_or(&[]),
+                        false,
+                    ));
                 }
             }
         }
+        let is_impl_method =
+            |af: &AnalyzedFunction<'_>| impl_method_ids.contains(&fn_identity(&af.decl.name, &af.decl.body, af.decl.is_extern));
 
         // WJ AST formals for free functions (never overwritten by codegen refresh).
         // Include `extern fn` so wrappers that forward into owned FFI (`Vec` / Custom)
@@ -743,7 +759,7 @@ impl<'ast> CodeGenerator<'ast> {
         // `wj_ast_bare_owned_non_text_type` never matched FFI `Vec` formals.
         for analyzed_func in analyzed
             .iter()
-            .filter(|af| !impl_methods.contains(&af.decl.name))
+            .filter(|af| !is_impl_method(af))
         {
             self.register_free_function_ast_formals(&analyzed_func.decl, Some(analyzed_func));
         }
@@ -771,7 +787,7 @@ impl<'ast> CodeGenerator<'ast> {
         // (P3.532 auth-api `profile` → `resolve_token`).
         let free_fns: Vec<&AnalyzedFunction<'_>> = analyzed
             .iter()
-            .filter(|af| !impl_methods.contains(&af.decl.name))
+            .filter(|af| !is_impl_method(af))
             .collect();
         for _ in 0..4 {
             for analyzed_func in &free_fns {
@@ -946,7 +962,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Generate extern functions (FFI declarations)
         let extern_funcs: Vec<_> = analyzed
             .iter()
-            .filter(|af| af.decl.is_extern && !impl_methods.contains(&af.decl.name))
+            .filter(|af| af.decl.is_extern && !is_impl_method(af))
             .collect();
 
         if !extern_funcs.is_empty() {
@@ -975,7 +991,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut top_level_funcs: Vec<_> = analyzed
             .iter()
             .filter(|af| {
-                !impl_methods.contains(&af.decl.name)
+                !is_impl_method(af)
                     && !af.decl.is_extern
                     && !(self.is_module && af.decl.name == "main")
             })
