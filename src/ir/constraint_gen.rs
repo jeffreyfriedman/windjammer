@@ -720,6 +720,44 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// OWN-READ-FIELD: a field projection of a parameter that the analyzer reads as a borrow
+    /// (or a Copy-seeded parameter) borrows the root parameter.
+    fn emit_read_field_ref(&mut self, object: &Expression<'ast>, expr: &Expression<'ast>) {
+        if let Some(name) = self.root_identifier(object) {
+            if let Some(&var) = self.param_vars.get(&name) {
+                let readonly_borrow = self
+                    .analyzed
+                    .inferred_ownership
+                    .get(&name)
+                    .is_some_and(|m| {
+                        matches!(
+                            m,
+                            crate::analyzer::OwnershipMode::Borrowed
+                                | crate::analyzer::OwnershipMode::MutBorrowed
+                        )
+                    });
+                let copy_field_read = self
+                    .analyzed
+                    .decl
+                    .parameters
+                    .iter()
+                    .find(|p| p.name == name)
+                    .is_some_and(|p| param_ownership_seed_is_copy(&p.type_));
+                if readonly_borrow || copy_field_read {
+                    let r = self.fresh_region();
+                    self.cs.add_because(
+                        Constraint::OwnershipIs(var, OwnedType::Ref(r)),
+                        origin(
+                            "OWN-READ-FIELD",
+                            format!("`{}` is only read through a field projection", name),
+                            &expr.location(),
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
     /// Walk an expression, returning a constraint var representing its result type.
     fn walk_expression(&mut self, expr: &Expression<'ast>) -> ConstraintVar {
         match expr {
@@ -728,16 +766,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let base = literal_to_base_type(value);
                 self.cs.add_because(
                     Constraint::TypeIs(var, base.clone()),
-                    origin(
-                        match value {
-                            Literal::Int(_) => "NUM-DEFAULT-INT",
-                            Literal::Float(_) => "NUM-DEFAULT-FLOAT",
-                            Literal::IntSuffixed(..) => "NUM-LITERAL-SUFFIX",
-                            _ => "NUM-LITERAL",
-                        },
-                        format!("literal {:?} is {:?}", value, base),
-                        location,
-                    ),
+                    origin(literal_rule(value), format!("literal {:?} is {:?}", value, base), location),
                 );
                 emit_numeric_class_constraint(&mut self.cs, var, &base);
                 var
@@ -933,39 +962,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             Expression::FieldAccess { object, .. } => {
-                if let Some(name) = self.root_identifier(object) {
-                    if let Some(&var) = self.param_vars.get(&name) {
-                        let readonly_borrow = self
-                            .analyzed
-                            .inferred_ownership
-                            .get(&name)
-                            .is_some_and(|m| {
-                                matches!(
-                                    m,
-                                    crate::analyzer::OwnershipMode::Borrowed
-                                        | crate::analyzer::OwnershipMode::MutBorrowed
-                                )
-                            });
-                        let copy_field_read = self
-                            .analyzed
-                            .decl
-                            .parameters
-                            .iter()
-                            .find(|p| p.name == name)
-                            .is_some_and(|p| param_ownership_seed_is_copy(&p.type_));
-                        if readonly_borrow || copy_field_read {
-                            let r = self.fresh_region();
-                            self.cs.add_because(
-                                Constraint::OwnershipIs(var, OwnedType::Ref(r)),
-                                origin(
-                                    "OWN-READ-FIELD",
-                                    format!("`{}` is only read through a field projection", name),
-                                    &expr.location(),
-                                ),
-                            );
-                        }
-                    }
-                }
+                self.emit_read_field_ref(object, expr);
                 let obj_var = self.walk_expression(object);
                 let field_var = self.cs.fresh_var();
                 let _ = obj_var;
@@ -1374,6 +1371,16 @@ pub fn generate_constraints_with_fields(
     walker.emit_clone_constraints();
     walker.emit_mutation_constraints();
     walker.finish()
+}
+
+/// Provenance rule for a literal's type constraint.
+fn literal_rule(value: &Literal) -> &'static str {
+    match value {
+        Literal::Int(_) => "NUM-DEFAULT-INT",
+        Literal::Float(_) => "NUM-DEFAULT-FLOAT",
+        Literal::IntSuffixed(..) => "NUM-LITERAL-SUFFIX",
+        _ => "NUM-LITERAL",
+    }
 }
 
 /// Map a literal value to its base type.
