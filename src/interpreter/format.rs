@@ -203,6 +203,19 @@ impl Interpreter {
                 self.display_string(&inner)
             }
             Value::Native(n) if n.display().is_some() => Ok(n.display().unwrap_or_default()),
+            // `char::to_lowercase()`/`to_uppercase()`/`escape_*` are char iterators that implement Display
+            Value::Iter(i) => {
+                let copy = super::iter::clone_iter(i);
+                let items = self.drain_iter(&copy)?;
+                let mut out = String::new();
+                for x in &items {
+                    match x {
+                        Value::Char(c) => out.push(*c),
+                        other => return Err(semantic(format!("`{}` iterator doesn't implement `std::fmt::Display`", other.type_name()))),
+                    }
+                }
+                Ok(out)
+            }
             Value::Struct(_) | Value::Enum(_) => {
                 let tn = v.type_name();
                 let f = self

@@ -180,7 +180,18 @@ impl Interpreter {
                 Item::Use { path, alias, .. } => {
                     self.register_use(module, path, alias.as_deref())?;
                 }
-                Item::Macro { .. } | Item::ExternLet { .. } | Item::BoundAlias { .. } => {}
+                Item::Macro { expr, .. } => {
+                    // ADR-0014: the language has no macros; a top-level invocation is never silently skipped
+                    let name = match expr {
+                        crate::parser::Expression::MacroInvocation { name, .. } => name.as_str(),
+                        _ => "?",
+                    };
+                    return Err(RuntimeError::new(
+                        crate::interpreter::error::ErrorKind::Unsupported,
+                        format!("top-level macro invocation `{}!` (Windjammer has no macros)", name),
+                    ));
+                }
+                Item::ExternLet { .. } | Item::BoundAlias { .. } => {}
             }
         }
         Ok(())

@@ -134,8 +134,8 @@ impl Interpreter {
     pub(crate) fn weak_count(&self, target: &Slot) -> usize {
         let mut n = 0;
         self.walk_roots(&[], &mut |v| {
-            if let Value::Weak(s) = v {
-                if Rc::ptr_eq(s, target) {
+            if let Value::Weak(w) = v {
+                if std::ptr::eq(w.as_ptr(), Rc::as_ptr(target)) {
                     n += 1;
                 }
             }
@@ -184,43 +184,48 @@ impl Interpreter {
     }
 
     /// Destructor-carrying structs inside `v`, owner before fields, in declaration/element order.
-    fn glue_order(v: &Value, out: &mut Vec<(u32, Value)>, seen: &mut HashSet<usize>) {
+    /// The flag is true for objects reached through an `Rc` (shared ownership).
+    fn glue_order(v: &Value, out: &mut Vec<(u32, Value, bool)>, seen: &mut HashSet<usize>) {
+        Self::glue_order_in(v, out, seen, false)
+    }
+
+    fn glue_order_in(v: &Value, out: &mut Vec<(u32, Value, bool)>, seen: &mut HashSet<usize>, shared: bool) {
         match v {
             Value::Struct(s) => {
                 if s.uid != 0 {
-                    out.push((s.uid, v.clone()));
+                    out.push((s.uid, v.clone(), shared));
                 }
                 for (_, x) in &s.fields {
-                    Self::glue_order(x, out, seen);
+                    Self::glue_order_in(x, out, seen, shared);
                 }
             }
             Value::Vec(xs) | Value::Tuple(xs) => {
                 for x in xs.iter() {
-                    Self::glue_order(x, out, seen);
+                    Self::glue_order_in(x, out, seen, shared);
                 }
             }
             Value::Enum(e) => match &e.payload {
                 Payload::Unit => {}
                 Payload::Tuple(xs) => {
                     for x in xs {
-                        Self::glue_order(x, out, seen);
+                        Self::glue_order_in(x, out, seen, shared);
                     }
                 }
                 Payload::Struct(fs) => {
                     for (_, x) in fs {
-                        Self::glue_order(x, out, seen);
+                        Self::glue_order_in(x, out, seen, shared);
                     }
                 }
             },
             Value::Map(m) => {
                 for x in m.values() {
-                    Self::glue_order(x, out, seen);
+                    Self::glue_order_in(x, out, seen, shared);
                 }
             }
             Value::Rc(slot) | Value::Cell(_, slot, _) => {
                 if seen.insert(Rc::as_ptr(slot) as usize) {
                     let inner = slot.borrow().clone();
-                    Self::glue_order(&inner, out, seen);
+                    Self::glue_order_in(&inner, out, seen, true);
                 }
             }
             _ => {}
@@ -230,6 +235,11 @@ impl Interpreter {
     /// Run destructors for the destructor-carrying values in `vals` that are no longer
     /// reachable from the roots (or `extra`). `vals` is in drop order (reverse declaration).
     pub(crate) fn drop_unreachable(&mut self, vals: &[Value], extra: &[&Value]) -> R<()> {
+        self.drop_values(vals, extra, false)
+    }
+
+    /// `force`: owned objects in `vals` (not behind an `Rc`) are dropped even if still reachable.
+    pub(crate) fn drop_values(&mut self, vals: &[Value], extra: &[&Value], force: bool) -> R<()> {
         if self.drop_types.is_empty() || vals.is_empty() {
             return Ok(());
         }
@@ -250,8 +260,8 @@ impl Interpreter {
             }
         });
         let mut first_err: Option<Ctl> = None;
-        for (uid, val) in order {
-            if live.contains(&uid) || !self.dropped.insert(uid) {
+        for (uid, val, shared) in order {
+            if (live.contains(&uid) && !(force && !shared)) || !self.dropped.insert(uid) {
                 continue;
             }
             let ty = val.type_name();

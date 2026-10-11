@@ -243,13 +243,19 @@ impl Registry {
 // Argument helpers
 // ---------------------------------------------------------------------------
 
+/// Argument `i` with `&`/`&mut` references followed. An `Rc` handle is kept (so storing it keeps
+/// the sharing); the typed helpers below look through it.
 pub(crate) fn arg(args: &[Value], i: usize, what: &str) -> R<Value> {
     let v = args.get(i).cloned().ok_or_else(|| semantic(format!("`{}` is missing argument {}", what, i + 1)))?;
-    super::place::deref_value(v)
+    super::place::strip_refs(v)
+}
+
+fn arg_val(args: &[Value], i: usize, what: &str) -> R<Value> {
+    super::place::deref_value(arg(args, i, what)?)
 }
 
 pub(crate) fn arg_int(args: &[Value], i: usize, what: &str) -> R<i128> {
-    match arg(args, i, what)? {
+    match arg_val(args, i, what)? {
         Value::Int(n, _) => Ok(n),
         other => Err(semantic(format!("`{}` expects an integer, found {}", what, other.type_name()))),
     }
@@ -261,7 +267,7 @@ pub(crate) fn arg_usize(args: &[Value], i: usize, what: &str) -> R<usize> {
 }
 
 pub(crate) fn arg_str(args: &[Value], i: usize, what: &str) -> R<Rc<String>> {
-    match arg(args, i, what)? {
+    match arg_val(args, i, what)? {
         Value::Str(s) => Ok(s),
         Value::Char(c) => Ok(Rc::new(c.to_string())),
         other => Err(semantic(format!("`{}` expects a string, found {}", what, other.type_name()))),
@@ -269,7 +275,7 @@ pub(crate) fn arg_str(args: &[Value], i: usize, what: &str) -> R<Rc<String>> {
 }
 
 pub(crate) fn arg_f64(args: &[Value], i: usize, what: &str) -> R<f64> {
-    match arg(args, i, what)? {
+    match arg_val(args, i, what)? {
         Value::Float(f, _) => Ok(f),
         Value::Int(n, IntTy::Lit) => Ok(n as f64),
         other => Err(semantic(format!("`{}` expects a float, found {}", what, other.type_name()))),
