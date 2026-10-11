@@ -1,0 +1,9 @@
+// spec: SPEC-LEX-011
+// expect: aa
+// expect: true
+fn main() {
+    let c = 'a'
+    let n = '\n'
+    println("${c}${c}")
+    println("${n == '\n'}")
+}

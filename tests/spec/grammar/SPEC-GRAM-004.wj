@@ -1,0 +1,7 @@
+// spec: SPEC-GRAM-004
+// mode: parse-error
+fn f() -> int { 5 }
+fn main() {
+    let a = f()
+    [1, 2].len()
+}

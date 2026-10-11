@@ -1,0 +1,9 @@
+// spec: SPEC-TYP-008
+// expect: 200 100 1.5
+fn takes_u8(x: u8) -> u8 { x }
+fn main() {
+    let a = 200
+    let b = takes_u8(100)
+    let c = 1.5
+    println("${a} ${b} ${c}")
+}

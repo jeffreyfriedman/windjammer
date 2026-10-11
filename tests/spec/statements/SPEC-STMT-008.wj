@@ -1,0 +1,8 @@
+// spec: SPEC-STMT-008
+// expect: 123 7 8
+struct P { x: int, y: int }
+fn main() {
+    let (a, (b, c)) = (1, (2, 3))
+    let P { x, y } = P { x: 7, y: 8 }
+    println("${a}${b}${c} ${x} ${y}")
+}

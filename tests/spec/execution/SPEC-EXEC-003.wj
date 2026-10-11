@@ -1,0 +1,13 @@
+// spec: SPEC-EXEC-003
+// mode: panic
+// expect: 1
+// expect: 2
+// expect-error: out of bounds
+fn main() {
+    println("1")
+    let v = [1]
+    let i = 5
+    println("2")
+    println("${v[i]}")
+    println("3")
+}

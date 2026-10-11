@@ -1,0 +1,6 @@
+// spec: SPEC-EXPR-004
+// expect: -2 true -6
+fn main() {
+    let v = [3, 4]
+    println("${-v[0] + 1} ${!(1 > 2)} ${-2 * 3}")
+}
