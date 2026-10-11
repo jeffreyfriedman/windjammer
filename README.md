@@ -1,482 +1,173 @@
-# Windjammer Programming Language
+# Windjammer
 
-**Write simple code. Run it fast. Debug it easily.**
+**A high-level language that compiles to Rust, with ownership and borrowing inferred by the compiler.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 
-A high-level programming language that combines Go's ergonomics with Rust's safety and performance—plus world-class IDE support.
+Windjammer source (`.wj`) is parsed, analysed and translated to Rust, which `cargo` then builds. You write plain
+function signatures and bodies; the compiler decides where `&`, `&mut`, moves and clones go.
 
-> **🎯 The 80/20 Language**: 80% of Rust's power with 20% of the complexity  
-> **🛠️ Production-Ready Tooling**: Complete LSP, debugging, and editor integration  
-> **📊 [Read the detailed comparison: Windjammer vs Rust vs Go](docs/COMPARISON.md)**
+This README describes only what exists in the repository today. Items that are being built or only proposed are in
+separate sections. The honest, ranked list of gaps is in [docs/known-gaps.md](docs/known-gaps.md); open design
+decisions are in [docs/adr/](docs/adr/README.md).
 
----
-
-## What is Windjammer?
-
-Windjammer is a pragmatic systems programming language that compiles to **Rust, JavaScript, and WebAssembly**, giving you:
-
-✅ **Memory safety** without garbage collection  
-✅ **Rust-level performance** (99%+ measured)  
-✅ **Multi-target compilation** - Rust, JavaScript (ES2020+), WebAssembly  
-✅ **276x faster compilation** with incremental builds  
-✅ **Automatic ownership inference** - no manual borrowing  
-✅ **Go-style concurrency** - familiar `go` keyword and channels  
-✅ **Modern syntax** - string interpolation, pipe operator, pattern matching  
-✅ **100% Rust compatibility** - use any Rust crate  
-✅ **World-class IDE support** - LSP, debugging, refactoring in VSCode/Vim/IntelliJ  
-✅ **AI-powered development** - MCP server for Claude, ChatGPT code assistance  
-✅ **Production-ready** - comprehensive testing, fuzzing, security audit (A+ rating)  
-✅ **No lock-in** - `wj eject` converts your project to pure Rust anytime
-
-**Perfect for:** Web APIs, CLI tools, microservices, data processing, learning systems programming
-
-**Philosophy:** Provide 80% of developers with 80% of Rust's power while eliminating 80% of its complexity.
+**Version:** 0.50.0 (`Cargo.toml`). Pre-1.0: language and compiler behaviour can change between minor versions.
 
 ---
 
-## Quick Start
+## Today
 
-### Install
+### Language
+- Functions, structs, enums, traits, `impl` blocks, generics, closures, pattern matching with guards.
+- Ownership of function parameters and `self` inferred (borrow, mutable borrow, move); clones inserted by the compiler.
+- Local `let` bindings that are mutated are emitted as `let mut` even if you omit `mut` (see
+  [ADR-0002](docs/adr/0002-local-mutability.md) for the open decision on whether this is the intended rule).
+- String interpolation (`"${name}"`), pipe operator (`|>`), `defer`, `if`/`else` as expressions, `?` error propagation,
+  decorators (`@name`), `mod`, `extern`, `unsafe`, `static`, `where` clauses.
+- Concurrency keywords that exist in the lexer: `thread { }`, `async`/`await`, `async fn`. There is no `go` keyword and no
+  `chan::new()`; see [ADR-0004](docs/adr/0004-concurrency-surface.md).
+- Effect checking against an `[app_capabilities]` section in `wj.toml` (fails the build on violations).
+
+Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [docs/MODULE_SYSTEM.md](docs/MODULE_SYSTEM.md).
+
+### Tooling (the `wj` binary)
+| Command | What it does |
+|---------|--------------|
+| `wj new`, `wj build`, `wj run`, `wj test` | Create, transpile + build, build and run, run tests |
+| `wj lint` | Rust-leakage lint rules (W0001-W0004) on `.wj` files |
+| `wj add` / `wj remove` / `wj update` | Edit `wj.toml` dependencies / update the toolchain |
+| `wj repl` | Interpreter (Windjammerscript) |
+| `wj explain`, `wj errors`, `wj stats`, `wj docs` | Error catalogue and diagnostics browsing |
+| `wj shader-compile`, `wj validate-wjsl` | WJSL shader front end to WGSL |
+| `wj cache`, `wj clean`, `wj self-install`, `wj agent-index` | Shared cargo cache, cleanup, install, agent artifacts |
+
+Caveats, each tracked in [docs/known-gaps.md](docs/known-gaps.md):
+- `wj fmt` runs `cargo fmt --all`; it does not format `.wj` files.
+- `wj check` runs `cargo check` in the current directory; it does not check `.wj` sources.
+- `wj eject` does not exist. The older `windjammer` binary has an `eject` subcommand that writes a standalone Rust project.
+- A language server (`crates/windjammer-lsp`) and an MCP server (`crates/windjammer-mcp`) exist as workspace crates.
+
+### Targets
+| Target | Status |
+|--------|--------|
+| Rust (`--target rust`, default) | Primary; the only backend that consumes the ownership IR solver |
+| WebAssembly (`--target wasm`), JavaScript (`--target javascript`) | Implemented; not held to the same conformance bar |
+| Go (legacy `windjammer` binary, "experimental") | Implemented as source translation; does not use the IR |
+| WGSL | Via WJSL (`.wjsl`) shaders |
+
+Tiers and the conformance contract are proposed in [ADR-0007](docs/adr/0007-target-tiers-conformance.md).
+
+---
+
+## Install and build
+
+Requirements: Rust 1.90 or newer (`rust-version` in `Cargo.toml`).
 
 ```bash
-# macOS / Linux
-brew install windjammer
-
-# Or via Cargo
-cargo install windjammer
-
-# Or from source
 git clone https://github.com/jeffreyfriedman/windjammer.git
 cd windjammer
 cargo build --release
-# After the first build, prefer the shared Cargo cache (see below):
-#   ./target/release/wj cache setup && source ~/Library/Caches/windjammer/env.sh   # macOS
-#   cargo build --release   # subsequent builds land outside the repo
-./target/release/wj --version
+./target/release/wj --version        # wj 0.50.0
 ```
 
-### Shared Cargo cache (disk-friendly builds)
-
-Compiled Cargo artifacts (`.rlib`, incremental, etc.) are kept **outside** application repos so they do not pollute each project and can be cleaned in one place. Matching dependencies are shared across Windjammer ecosystem crates.
-
-| Platform | Default location |
-|----------|------------------|
-| macOS | `~/Library/Caches/windjammer/cargo-target/` |
-| Linux | `~/.cache/windjammer/cargo-target/` (or `$XDG_CACHE_HOME/…`) |
-| Windows | `%LOCALAPPDATA%\windjammer\cargo-target\` |
+Optional, to keep build artifacts outside repositories:
 
 ```bash
-wj cache setup          # write env.sh / env.ps1
-source ~/Library/Caches/windjammer/env.sh   # macOS; Linux: ~/.cache/windjammer/env.sh
-# PowerShell: . "$env:LOCALAPPDATA\windjammer\env.ps1"
-
-wj cache status         # sizes + free disk
-wj cache path           # print shared target dir (for scripts)
-wj cache prune          # reclaim old incremental; aggressive when disk is low
-wj clean --all          # also wipe shared + local target trees
+./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory
+wj cache status | wj cache path | wj cache prune
 ```
 
-Override the root with `WJ_CARGO_TARGET_ROOT`. Force in-repo `./target` with `WJ_USE_LOCAL_TARGET=1`.
+Override the cache root with `WJ_CARGO_TARGET_ROOT`; set `WJ_USE_LOCAL_TARGET=1` to force `./target`.
+Design notes: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md).
 
-`wj`, `wj test`, and `wj game build` set `CARGO_TARGET_DIR` automatically. Sourcing `env.sh` is for bare `cargo` invocations.
+Package-manager installs (`brew`, `cargo install windjammer`) are not verified by this repository's CI; build from source.
 
-Design notes: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md)
-
-### Hello World
-
-Create `hello.wj`:
+### Hello world
 
 ```windjammer
 fn main() {
     let name = "World"
-    println!("Hello, ${name}!")  // String interpolation!
+    println!("Hello, ${name}!")
 }
 ```
-
-Run it:
 
 ```bash
 wj run hello.wj
 ```
 
-### HTTP Server Example
+### Ownership inference
 
 ```windjammer
-use std::http
-
-fn main() {
-    let server = http::Server::new()
-    
-    server.get("/", |req| {
-        http::Response::ok("Hello from Windjammer!")
-    })
-    
-    server.get("/user/:name", |req| {
-        let name = req.param("name")
-        http::Response::ok("Hello, ${name}!")
-    })
-    
-    println!("Server running on http://localhost:3000")
-    server.listen(3000)
-}
-```
-
----
-
-## Key Features
-
-### 1. Memory Safety Without the Complexity
-
-Windjammer infers ownership and lifetimes automatically:
-
-```windjammer
-// No lifetime annotations needed!
-fn longest(s1: str, s2: str) -> str {
+fn longest(s1: string, s2: string) -> string {
     if s1.len() > s2.len() { s1 } else { s2 }
 }
 ```
 
-Compiles to safe Rust:
+You do not write `&` or lifetimes; the generated Rust carries whatever the solver decides. The specification of what is
+inferred is in [docs/language-design/ownership-inference.md](docs/language-design/ownership-inference.md).
 
-```rust
-fn longest<'a>(s1: &'a str, s2: &'a str) -> &'a str {
-    if s1.len() > s2.len() { s1 } else { s2 }
-}
-```
-
-### 2. Go-Style Concurrency
-
-```windjammer
-fn main() {
-    let ch = chan::new()
-    
-    go {
-        ch.send("Hello from goroutine!")
-    }
-    
-    let msg = ch.recv()
-    println!(msg)
-}
-```
-
-### 3. Multi-Target Compilation
+## Test
 
 ```bash
-# Compile to native binary
-wj build --target=rust
-
-# Compile to JavaScript (Node.js or browser)
-wj build --target=javascript
-
-# Compile to WebAssembly
-wj build --target=wasm
+cargo test --release --test all --no-fail-fast      # about 5,500 tests; 15-20 minutes
+cargo test --release --test all <name-filter>       # targeted
 ```
 
-### 4. Modern Syntax
-
-```windjammer
-// String interpolation
-let name = "Windjammer"
-println!("Hello, ${name}!")
-
-// Pipe operator
-let result = data
-    |> parse()
-    |> validate()
-    |> process()
-
-// Pattern matching with guards
-match value {
-    Some(x) if x > 0 => println!("Positive: ${x}")
-    Some(x) => println!("Non-positive: ${x}")
-    None => println!("No value")
-}
-
-// Defer statement
-fn read_file(path: str) -> Result<String, Error> {
-    let file = fs::open(path)?
-    defer file.close()
-    file.read_to_string()
-}
-```
-
-### 5. World-Class IDE Support
-
-**Language Server Protocol (LSP):**
-- ✅ Real-time type checking and error highlighting
-- ✅ Auto-completion for functions, types, and variables
-- ✅ Go-to-definition and find-references
-- ✅ Hover documentation
-- ✅ Inline code hints
-- ✅ Refactoring support (rename, extract function, inline variable)
-- ✅ Integration with VS Code, IntelliJ, Neovim, Emacs
-
-**MCP Server (AI Integration):**
-- ✅ Claude, ChatGPT integration for code assistance
-- ✅ Natural language to Windjammer code translation
-- ✅ Automated refactoring suggestions
-- ✅ Intelligent error diagnosis and fixes
-
-### 6. Zero Lock-In
-
-Not sure if Windjammer is right for you? No problem!
-
-```bash
-wj eject
-```
-
-Converts your entire project to pure Rust:
-- ✅ Production-quality Rust code
-- ✅ Complete `Cargo.toml` with dependencies
-- ✅ Formatted with `rustfmt`, validated with `clippy`
-- ✅ No vendor lock-in whatsoever
+Known failing tests are listed in `.config/known-test-failures.txt` (a ratchet: it may only shrink).
+Backend-neutral behaviour tests live in [tests/conformance/](tests/conformance/README.md). Strategy:
+[docs/TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md).
 
 ---
 
-## Language Features
+## In progress
 
-### Core Features
-- ✅ Ownership and lifetime inference
-- ✅ Trait bound inference
-- ✅ Pattern matching with guards
-- ✅ Go-style concurrency (channels, spawn, defer)
-- ✅ String interpolation
-- ✅ Pipe operator
-- ✅ Decorator system
-- ✅ Macro system
-- ✅ Result and Option types
-- ✅ Error propagation with `?`
+Work described in [docs/ARCHITECTURE_IMPROVEMENT_PLAN.md](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md):
+- Single ownership/clone/numeric-width owner (the IR solver) replacing the legacy analyzer patches.
+- Name resolution to stable identities instead of string lookups.
+- Layering and fitness tests, per-module `MODULE.md` documents, removal of global state and environment toggles.
+- A `.wj` formatter and a real `wj check`.
 
-### Type System
-- ✅ Strong static typing
-- ✅ Type inference
-- ✅ Generics
-- ✅ Traits (like Rust traits)
-- ✅ Sum types (enums)
-- ✅ Product types (structs)
-- ✅ Newtype pattern
+## Planned (not implemented)
 
-### Safety
-- ✅ No null pointers
-- ✅ No data races
-- ✅ Memory safety without GC
-- ✅ Thread safety
-- ✅ Immutable by default
+Status per RFC, with evidence, is in [docs/proposals/rfcs/README.md](docs/proposals/rfcs/README.md).
+- Package registry and dependency resolver (today: path/git/version entries in `wj.toml` are forwarded to Cargo; `src/package/` is a stub).
+- Caller-controlled `async expr` / `spawn expr` syntax (AST nodes exist, the parser does not produce them).
+- Comptime evaluation, const generics, `owned` argument convention, map type hierarchy.
+- `wj doc`, `wj watch`, `wj publish`, `wj optimize`, `wj economics`.
+- Capability lock file enforcement, taint errors failing the build, capability profiles.
+- An optimizer. The optimizer module exists but is disabled in the pipeline ([ADR-0006](docs/adr/0006-optimizer-fate.md)).
+
+Performance claims (speed relative to Rust, incremental-build multipliers) are intentionally absent until they are
+produced by a benchmark that runs in CI.
 
 ---
 
-## Performance
+## Repository map
 
-**Compilation Speed:**
-- ✅ **276x faster** hot builds (incremental compilation with Salsa)
-- ✅ Cold build: ~5-10s for medium project
-- ✅ Hot build: ~50ms for single file change
-
-**Runtime Performance:**
-- ✅ **99%+ of Rust's performance** (measured in benchmarks)
-- ✅ Zero-cost abstractions
-- ✅ No garbage collection overhead
-- ✅ SIMD vectorization
-- ✅ Advanced optimizations (15-phase pipeline)
-
----
-
-## Architecture
-
-Windjammer compiles through multiple stages:
-
-```
-.wj file → Lexer → Parser → Analyzer → Optimizer → Codegen → Target Code
-                                          ↓
-                                    15 Optimization Phases:
-                                    1-10: Analysis & transformation
-                                    11: String interning
-                                    12: Dead code elimination
-                                    13: Loop optimization
-                                    14: Escape analysis
-                                    15: SIMD vectorization
-```
-
-**Targets:**
-- **Rust** → Native binaries (Linux, macOS, Windows)
-- **JavaScript** → Node.js or browser (ES2020+, tree-shaking, minification)
-- **WebAssembly** → Browser or WASI runtime
-
----
-
-## Project Status
-
-**Current Version:** 0.38.6  
-**Status:** Production-ready for early adopters
-
-**What's Complete:**
-- ✅ Core language features
-- ✅ Multi-target compilation
-- ✅ 15-phase optimization pipeline
-- ✅ LSP server with full IDE integration
-- ✅ MCP server for AI assistance
-- ✅ Standard library (fs, http, json, crypto, etc.)
-- ✅ Testing framework
-- ✅ Fuzzing infrastructure
-- ✅ Security audit (A+ rating)
-- ✅ 420+ tests passing
-
-**What's Next:**
-- 🔄 Async/await syntax
-- 🔄 Const generics
-- 🔄 More standard library modules
-- 🔄 Documentation generator (`wj doc`)
-- 🔄 Package manager
-- 🔄 More language examples
-
----
-
-## Using Windjammer from Rust
-
-Windjammer libraries (like `windjammer-runtime`) are published to [crates.io](https://crates.io) and can be used directly in Rust projects!
-
-### Windjammer Runtime
-
-The Windjammer runtime provides essential functionality that Windjammer programs depend on:
-
-```toml
-[dependencies]
-windjammer-runtime = "0.37"
-```
-
-```rust
-use windjammer_runtime::http::Server;
-
-fn main() {
-    let server = Server::new("127.0.0.1:8080");
-    server.route("/", |_req| {
-        "Hello from Rust using Windjammer runtime!"
-    });
-    server.listen();
-}
-```
-
-### Windjammer Standard Library
-
-Windjammer's standard library modules compile to idiomatic Rust code:
-
-```windjammer
-// Windjammer code
-use std::http
-
-fn main() {
-    let server = http::Server::new("127.0.0.1:8080")
-    server.route("/", fn(req) {
-        "Hello World"
-    })
-    server.listen()
-}
-```
-
-Compiles to Rust that you can use in any Rust project:
-
-```bash
-wj build myapp.wj --target rust
-# Generates: build/myapp.rs
-```
-
-### Benefits for Rust Developers
-
-- ✅ **Faster prototyping**: Write Windjammer, compile to Rust
-- ✅ **Simpler syntax**: No explicit lifetimes or borrowing
-- ✅ **Same performance**: Compiles to idiomatic Rust code
-- ✅ **Gradual adoption**: Mix Windjammer and Rust in the same project
-- ✅ **No runtime overhead**: Pure compile-time transpilation
-
-### Example: Using Windjammer UI in Rust
-
-```toml
-[dependencies]
-windjammer-ui = "0.3"
-```
-
-```rust
-use windjammer_ui::components::{Button, Container, Text};
-use windjammer_ui::core::Style;
-
-fn main() {
-    let app = Container::new()
-        .child(Text::new("Hello from Rust!").render())
-        .child(
-            Button::new("Click me")
-                .on_click(|| println!("Clicked!"))
-                .render()
-        )
-        .style(Style::new().padding("16px"))
-        .render();
-    
-    // Render to desktop, web, or mobile
-    windjammer_ui::run(app);
-}
-```
-
-See [windjammer-ui documentation](https://docs.rs/windjammer-ui) for more details.
-
----
-
-## Examples
-
-See the [examples/](examples/) directory for more:
-
-- **HTTP Server** - RESTful API with routing
-- **CLI Tool** - Command-line argument parsing
-- **Concurrent Processing** - Channels and goroutines
-- **WebAssembly** - Browser applications
-- **Database Access** - SQL queries with connection pooling
-
----
+| Path | Contents |
+|------|----------|
+| `src/` | Compiler: lexer, parser, analyzer, `ir/` (solver), `codegen/` (Rust, Go, JS, WASM, WGSL), CLI |
+| `crates/` | `windjammer-runtime`, `windjammer-lsp`, `windjammer-mcp` |
+| `std/` | Standard library written in `.wj` (wrappers over the runtime crate) |
+| `tests/`, `tests_wj/` | Rust integration tests, `.wj` fixtures, conformance suite |
+| `docs/` | Architecture, RFCs, ADRs, language design, known gaps |
+| `editors/`, `vscode-extension/` | Editor support |
+| `examples/` | Example programs (not all are maintained; see `examples/README.md`) |
 
 ## Documentation
+- [Architecture](docs/ARCHITECTURE.md) and [improvement plan](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md)
+- [Architecture decision records](docs/adr/README.md) and [RFCs](docs/proposals/rfcs/README.md)
+- [Known gaps](docs/known-gaps.md), [Roadmap](ROADMAP.md), [Changelog](CHANGELOG.md)
+- [API reference](docs/API_REFERENCE.md), [Comparison with Rust and Go](docs/COMPARISON.md)
+- [Contributing](CONTRIBUTING.md), [Security policy](SECURITY.md), [Agent instructions](AGENTS.md)
+- [Documentation index](docs/INDEX.md)
 
-- [Installation Guide](docs/INSTALLATION.md)
-- [Language Guide](docs/GUIDE.md)
-- [API Reference](docs/API_REFERENCE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Shared Cargo cache design](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md)
-- [Comparison with Rust and Go](docs/COMPARISON.md)
-- [Contributing](CONTRIBUTING.md)
-- [Roadmap](ROADMAP.md)
-
----
-
-## Community
-
-- **GitHub**: [github.com/jeffreyfriedman/windjammer](https://github.com/jeffreyfriedman/windjammer)
-- **Issues**: Report bugs or request features
-- **Discussions**: Ask questions and share projects
-
----
+## Related projects
+- [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui) - UI framework written in Windjammer
 
 ## License
 
-Dual-licensed under MIT OR Apache-2.0
-
----
-
-## Credits
+Dual-licensed under MIT OR Apache-2.0.
 
 Created by [Jeffrey Friedman](https://github.com/jeffreyfriedman) and contributors.
-
-**Inspiration:**
-- Rust (safety and performance)
-- Go (simplicity and concurrency)
-- Swift (developer experience)
-- TypeScript (gradual typing)
-
----
-
-## Related Projects
-
-- **[windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui)** - Cross-platform UI framework
-
----
-
-**Made with ❤️ by developers who believe programming should be both safe AND simple.**
