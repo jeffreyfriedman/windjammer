@@ -1,6 +1,5 @@
 //! `Condvar`, `Barrier`, `Once`-free primitives and atomics.
 
-use super::channel::raw_arg;
 use super::*;
 use crate::interpreter::locks::CellState;
 use crate::interpreter::native::{downcast, Native};
@@ -73,6 +72,10 @@ impl Native for Flag {
     fn debug(&self) -> String {
         format!("{}({})", self.0, self.1)
     }
+}
+
+fn guard_arg(a: &[Value], what: &str) -> R<Value> {
+    a.first().cloned().ok_or_else(|| semantic(format!("`{}` needs a guard", what)))
 }
 
 fn guard_parts(v: &Value) -> R<(Place, Rc<crate::interpreter::locks::GuardToken>)> {
@@ -228,12 +231,12 @@ pub fn register(r: &mut Registry) {
         downcast::<CondvarObj>(v).map(|c| c.0.clone()).ok_or_else(|| semantic("expected a Condvar"))
     }
     r.native("Condvar", "wait", |it, v, a| {
-        let g = raw_arg(&a, 0, "wait")?;
+        let g = guard_arg(&a, "wait")?;
         cond_wait(it, &cv(v)?, &g, None)?;
         Ok(Value::ok(g))
     });
     r.native("Condvar", "wait_while", |it, v, a| {
-        let g = raw_arg(&a, 0, "wait_while")?;
+        let g = guard_arg(&a, "wait_while")?;
         let f = arg(&a, 1, "wait_while")?;
         let c = cv(v)?;
         loop {
@@ -247,7 +250,7 @@ pub fn register(r: &mut Registry) {
         Ok(Value::ok(g))
     });
     r.native("Condvar", "wait_timeout", |it, v, a| {
-        let g = raw_arg(&a, 0, "wait_timeout")?;
+        let g = guard_arg(&a, "wait_timeout")?;
         let ns = super::time::duration_ns(&arg(&a, 1, "wait_timeout")?)?;
         let timed_out = cond_wait(it, &cv(v)?, &g, Some(ns))?;
         Ok(Value::ok(Value::tuple(vec![g, Value::Native(Rc::new(Flag("WaitTimeoutResult", timed_out)))])))

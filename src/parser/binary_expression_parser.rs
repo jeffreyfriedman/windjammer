@@ -46,6 +46,27 @@ impl Parser {
         Ok(left)
     }
 
+    /// A `*` that opens a line and whose line contains an assignment (`*g += 1`, `*r = x`) starts a
+    /// new deref-assignment statement; it is not a multiplication continuing the previous line.
+    fn star_starts_assignment_statement(&self) -> bool {
+        let Some(cur) = self.tokens.get(self.position) else { return false };
+        let Some(prev) = self.position.checked_sub(1).and_then(|i| self.tokens.get(i)) else { return false };
+        if prev.line >= cur.line {
+            return false;
+        }
+        self.tokens[self.position + 1..].iter().take_while(|t| t.line == cur.line).any(|t| {
+            matches!(
+                t.token,
+                Token::Assign
+                    | Token::PlusAssign
+                    | Token::MinusAssign
+                    | Token::StarAssign
+                    | Token::SlashAssign
+                    | Token::PercentAssign
+            )
+        })
+    }
+
     pub(in crate::parser) fn get_binary_op(&self) -> Option<(BinaryOp, u8)> {
         match self.current_token() {
             Token::Or => Some((BinaryOp::Or, 1)),            // Logical OR
@@ -65,6 +86,7 @@ impl Parser {
             Token::Minus => Some((BinaryOp::Sub, 8)),
             Token::Shl => Some((BinaryOp::Shl, 9)), // Shift left
             Token::Shr => Some((BinaryOp::Shr, 9)), // Shift right
+            Token::Star if self.star_starts_assignment_statement() => None,
             Token::Star => Some((BinaryOp::Mul, 10)),
             Token::Slash => Some((BinaryOp::Div, 10)),
             Token::Percent => Some((BinaryOp::Mod, 10)),

@@ -49,7 +49,7 @@ impl Interpreter {
     pub(crate) fn exec_stmt(&mut self, s: &'static Statement<'static>) -> R {
         self.mark(stmt_loc(s));
         match s {
-            Statement::Expression { expr, .. } => self.eval(expr),
+            Statement::Expression { expr, .. } => self.eval_raw(expr),
 
             Statement::Let { pattern, type_, value, else_block, .. } => {
                 if let Some(t) = type_ {
@@ -176,7 +176,7 @@ impl Interpreter {
             return self.eval_raw(e);
         }
         // a guard/reference returned by a call (`cell.borrow_mut()`, `lock().unwrap()`) stays a reference
-        if let Expression::MethodCall { .. } = e {
+        if let Expression::MethodCall { .. } | Expression::Block { .. } = e {
             return self.eval_raw(e);
         }
         self.eval(e)
@@ -188,7 +188,7 @@ impl Interpreter {
         value: &'static Expression<'static>,
         op: Option<crate::parser::CompoundOp>,
     ) -> R<()> {
-        let rhs = self.eval(value)?;
+        let rhs = self.eval_keep_guard(value)?;
         if let Expression::Identifier { name, .. } = target {
             if name == "_" {
                 return Ok(());
@@ -409,7 +409,7 @@ impl Interpreter {
                         }
                     }
                 }
-                let r = self.eval(arm.body);
+                let r = self.eval_raw(arm.body);
                 return self.pop_scope(r);
             }
             let _ = self.pop_scope(Ok(Value::Unit));

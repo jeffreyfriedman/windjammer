@@ -295,7 +295,7 @@ impl Interpreter {
         if let Expression::Unary { op: crate::parser::UnaryOp::MutRef, .. } = a {
             return self.eval_raw(a);
         }
-        self.eval(a)
+        self.eval_keep_guard(a)
     }
 
     pub(crate) fn call_named(
