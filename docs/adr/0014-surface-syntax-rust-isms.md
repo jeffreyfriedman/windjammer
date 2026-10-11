@@ -24,7 +24,7 @@ Phase 1 (accepted): built-in functions, not macros; `!` forms deprecated.
 
 Phase 2 (proposed, separate acceptance): `List<T>`, `Map<K,V>`, `Set<T>`, `T?`, `Shared<T>`; `.unwrap()` lint
 (`?`, `.or(default)`, `.expect("why")`); iterator chains via pipes with inferred collection.
-Phase 3 (deferred, see ADR-0015): `::` to `.` waits until the DefId resolver is authoritative; then at most an alias.
+Phase 3 (`::` to `.`): dropped; revisit only if needed.
 
 Unchanged: explicit `let mut` (ADR-0002), `match`, `impl`, `Self`, `fn`, inferred `&`/`&mut`/derives.
 
