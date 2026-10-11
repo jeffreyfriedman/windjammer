@@ -305,6 +305,8 @@ pub(crate) fn generate_mod_file_with_layout(
                 let _ = std::fs::remove_file(&lib_items_path);
             }
             std::fs::write(&lib_rs, cleaned + "\n")?;
+            // Regenerating lib.rs drops the `tests/lib.rs` hook; restore it for crates that have one.
+            crate::rust_integration_tests::wire_tests_lib_into_crate_root(output_dir)?;
 
             if lib_rs.exists() {
                 let cargo_toml_path = output_dir.join("Cargo.toml");
