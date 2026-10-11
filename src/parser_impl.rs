@@ -108,6 +108,11 @@ pub struct Parser {
     pub(crate) expr_arena: Arena<Expression<'static>>,
     pub(crate) stmt_arena: Arena<Statement<'static>>,
     pub(crate) pattern_arena: Arena<Pattern<'static>>,
+    /// Errors already reported and recovered from (statement-level recovery); `parse()` fails
+    /// with all of them plus the final one.
+    pub(crate) recovered_errors: Vec<String>,
+    /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
+    pub(crate) recovering: bool,
 }
 
 impl Parser {
@@ -141,6 +146,8 @@ impl Parser {
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
+            recovered_errors: Vec::new(),
+            recovering: false,
         }
     }
 
@@ -161,7 +168,132 @@ impl Parser {
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
+            recovered_errors: Vec::new(),
+            recovering: false,
         }
+    }
+
+    /// `line L, column C` of the current token (the last token when past the end).
+    pub(crate) fn pos_desc(&self) -> String {
+        match self.tokens.get(self.position).or_else(|| self.tokens.last()) {
+            Some(t) => format!("line {}, column {}", t.line, t.column),
+            None => "end of input".to_string(),
+        }
+    }
+
+    /// Guarantee `line L, column C` in a parse error (many call sites build bare messages).
+    /// The position is that of the token the parser stopped at.
+    pub(crate) fn with_position(&self, message: String) -> String {
+        if message.contains("line ") && message.contains(", column ") {
+            message
+        } else {
+            format!("{} (at {})", message, self.pos_desc())
+        }
+    }
+
+    /// Position + diagnostics watermark for speculative parsing; pair with `rewind`.
+    pub(crate) fn mark(&self) -> (usize, usize) {
+        (self.position, self.recovered_errors.len())
+    }
+
+    /// Undo everything since `mark` (tokens consumed and errors recovered inside a speculation).
+    pub(crate) fn rewind(&mut self, mark: (usize, usize)) {
+        self.position = mark.0;
+        self.recovered_errors.truncate(mark.1);
+    }
+
+    /// One message per `Token::Invalid` in the stream, each with line and column.
+    pub fn lexical_errors(&self) -> Vec<String> {
+        self.tokens
+            .iter()
+            .filter_map(|t| match &t.token {
+                Token::Invalid(m) => Some(format!(
+                    "Lexical error: {} (at line {}, column {})",
+                    m, t.line, t.column
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Skip to a safe resume point after a failed statement that began at `start`: the next
+    /// token that starts a new line with all brackets opened since `start` closed, or a `;`
+    /// (consumed), or the `}` that ends the enclosing block (not consumed). Always makes progress.
+    pub(crate) fn recover_to_statement_boundary(&mut self, start: usize) {
+        let mut depth: i32 = 0;
+        let fail_at = self.position.max(start);
+        let mut i = start;
+        while i < self.tokens.len() {
+            let t = &self.tokens[i].token;
+            match t {
+                Token::Eof => break,
+                Token::LParen | Token::LBracket | Token::LBrace => depth += 1,
+                Token::RParen | Token::RBracket | Token::RBrace => {
+                    if depth == 0 && i >= fail_at && *t == Token::RBrace {
+                        break; // end of the enclosing block
+                    }
+                    depth -= 1;
+                }
+                Token::Semicolon if depth <= 0 && i >= fail_at => {
+                    i += 1;
+                    break;
+                }
+                _ => {}
+            }
+            let next_starts_line = self
+                .tokens
+                .get(i + 1)
+                .is_some_and(|n| n.line > self.tokens[i].line);
+            if i >= fail_at && depth <= 0 && next_starts_line && i + 1 > start {
+                i += 1;
+                break;
+            }
+            i += 1;
+        }
+        self.position = i.max(start + 1).min(self.tokens.len().saturating_sub(1));
+    }
+
+    /// Skip to the next top-level item after a failed item that began at `start`.
+    fn recover_to_item_boundary(&mut self, start: usize) {
+        let fail_at = self.position.max(start);
+        let mut depth: i32 = 0;
+        let mut i = start;
+        while i < self.tokens.len() {
+            let t = &self.tokens[i].token;
+            match t {
+                Token::Eof => break,
+                Token::LBrace => depth += 1,
+                Token::RBrace => {
+                    depth -= 1;
+                    if depth <= 0 && i >= fail_at {
+                        i += 1;
+                        break;
+                    }
+                }
+                Token::Fn
+                | Token::Struct
+                | Token::Enum
+                | Token::Trait
+                | Token::Impl
+                | Token::Use
+                | Token::Mod
+                | Token::Pub
+                | Token::Const
+                | Token::Static
+                | Token::Extern
+                | Token::Decorator(_)
+                    if depth <= 0
+                        && i > start
+                        && i >= fail_at
+                        && self.tokens[i].line > self.tokens[i - 1].line =>
+                {
+                    break;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        self.position = i.max(start + 1).min(self.tokens.len().saturating_sub(1));
     }
 
     pub fn warnings(&self) -> &[ParseWarning] {
@@ -261,10 +393,10 @@ impl Parser {
             Ok(())
         } else {
             Err(format!(
-                "Expected {:?}, got {:?} (at token position {})",
+                "Expected {:?}, got {:?} (at {})",
                 expected,
                 self.current_token(),
-                self.position
+                self.pos_desc()
             ))
         }
     }
@@ -295,9 +427,9 @@ impl Parser {
                 Ok(true) // Was a split >>
             }
             _ => Err(format!(
-                "Expected '>' or '>>', got {:?} (at token position {})",
+                "Expected '>' or '>>', got {:?} (at {})",
                 self.current_token(),
-                self.position
+                self.pos_desc()
             )),
         }
     }
@@ -309,8 +441,34 @@ impl Parser {
     pub fn parse(&mut self) -> Result<Program<'static>, String> {
         let mut items = Vec::new();
 
+        // Lexical errors first, each with line:column. Parsing a stream with invalid tokens
+        // would only add cascading noise.
+        let lexical = self.lexical_errors();
+        if !lexical.is_empty() {
+            return Err(lexical.join("\n"));
+        }
+
+        self.recovering = true;
+        const MAX_ERRORS: usize = 25;
+        let mut errors: Vec<String> = Vec::new();
         while self.current_token() != &Token::Eof {
-            items.push(self.parse_item()?);
+            let start = self.position;
+            match self.parse_item() {
+                Ok(item) => items.push(item),
+                Err(e) => {
+                    errors.append(&mut self.recovered_errors);
+                    errors.push(self.with_position(e));
+                    if errors.len() >= MAX_ERRORS {
+                        break;
+                    }
+                    self.recover_to_item_boundary(start);
+                }
+            }
+        }
+        self.recovering = false;
+        errors.append(&mut self.recovered_errors);
+        if !errors.is_empty() {
+            return Err(errors.join("\n"));
         }
 
         self.emit_surface_syntax_warnings();
@@ -603,9 +761,9 @@ impl Parser {
                 })
             }
             _ => Err(format!(
-                "Unexpected token: {:?} (at token position {})",
+                "Unexpected token: {:?} (at {}); expected an item: one of `fn`, `struct`, `enum`, `trait`, `impl`, `use`, `mod`, `const`, `static`, `type`, `extern`, `pub`, `async`, a decorator such as `@derive(..)`, or a doc comment",
                 self.current_token(),
-                self.position
+                self.pos_desc()
             )),
         }
     }

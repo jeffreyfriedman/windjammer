@@ -28,6 +28,25 @@ No forced `return`: `if`/`match`/closures/pipes are expressions. Add diagnostics
 non-value last statement or a non-returning path is an error with a span; lint against `return x` as the final
 statement. `return` remains for early exit.
 
+## 5a. `if x is Pattern` (advisory, specified here, not implemented)
+Status: **advisory**, so the parser does not accept it yet; this section is the spec an implementation
+must follow (decided with the parser-gaps work, 2026-10-11).
+
+* Syntax: `expr is Pattern` is a boolean expression of precedence just above `&&`/`||` and below
+  comparison. `if x is Some(v) { use(v) }` is exactly `if let Some(v) = x { use(v) }`; the bindings
+  of `Pattern` are in scope in the `then` block and in the remainder of a `&&` chain:
+  `if x is Some(v) && v > 3 { .. }`. Bindings never escape an `||` chain or a negation.
+* `x is Pattern` outside a condition is a plain `bool` (`let ok = x is Ok(_)`); patterns that bind
+  there are an error ("binding in `is` needs an `if`/`while`/`&&` context"), with the fix suggestion
+  to use `matches`.
+* `x is not Pattern` is the negation and binds nothing. `!(x is P)` is accepted, `not` is the preferred form.
+* Lowering: parser desugars to the same AST as `if let`/`matches`, so every backend sees one node.
+  Rust: `if let`/`matches!`; Go/JS: the existing pattern-test lowering.
+* Why advisory: `if let` already works and `is` adds a second spelling; adopt only if usage data
+  from agent-written programs shows `if let` is a frequent error source. Kill criterion: if after
+  implementing, `is` programs do not parse first-try more often than `if let` programs in the
+  conformance generator, remove it.
+
 ## 5. Lower priority (advisory)
 `if x is Some(v)` for `if let`; documented string byte-vs-char indexing rule; no `unsafe` in `.wj` (use `rust { }`, ADR-0012).
 
