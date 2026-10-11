@@ -10,3 +10,5 @@ examples/syntax_tests/** | example package whose tests are run by `wj test examp
 examples/tests/** | example package whose tests are run by `wj test examples`
 examples/test_ecs_game.wj | example program (not a test); named test_ for the game ECS demo
 examples/wschat/tests/** | example package tests, run by `wj test examples/wschat`
+tests/fixtures/formatter/* | golden input/expected pairs read by directory in tests/formatter_golden_test.rs
+tests/fixtures/resolve/* | resolver fixtures read by directory in tests/resolve_fixtures_test.rs
