@@ -1,6 +1,7 @@
 # interpreter (Windjammerscript)
 
-Purpose: run Windjammer source directly, with no cargo/rustc, for an instant dev loop
+## Purpose
+Run Windjammer source directly, with no cargo/rustc, for an instant dev loop
 (`wj run --interpret`, `wj test --interpret`, `wj repl`). Rust remains the release path;
 the interpreter must never print something the compiled program would not print.
 Status and measurements: `docs/INTERPRETER.md`.
@@ -30,6 +31,12 @@ Status and measurements: `docs/INTERPRETER.md`.
   error naming it. No silent `Nil` fallbacks.
 - No `cargo`/`rustc` spawn anywhere in this module (asserted by `tests/interpreter_cli_test.rs`).
 
+## Owns
+Evaluation semantics, the value model, the native stdlib registry, the CLI port (`runner`, `repl`).
+
+## Never decides
+Compiled-path behaviour (codegen/analyzer); it mirrors Rust semantics rather than defining its own.
+
 ## Allowed imports
 `crate::parser` (AST), `crate::lexer`, `crate::source_map::Location`, std. Nothing from `codegen`,
 `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*` and `Interpreter`.
@@ -41,7 +48,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in the matching
 `builtins/*.rs`; no evaluator change needed. Mutating methods receive `&mut Value` (taken out of its place).
 
-## Testing
+## Test
 - `cargo test --test interpreter_semantics_test` hand-derived Rust semantics
 - `cargo test --test interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests)
 - `cargo test --test interpreter_cli_test` real `wj` binary: no-cargo, multi-file, `wj test`, REPL, exit codes

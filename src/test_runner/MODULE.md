@@ -1,10 +1,12 @@
 # test_runner
 
-**Purpose:** implement `wj test`: discover Windjammer tests, compile them into a throw-away
+## Purpose
+Implement `wj test`: discover Windjammer tests, compile them into a throw-away
 harness crate next to the project library, run `cargo test`, report.
 
-**Inputs:** `TestRunOptions` (path, filter, `list`, `allow_empty`, library/layout flags).
-**Outputs:** process exit status (non-zero on test failure, scan errors, or zero tests),
+## Inputs/Outputs
+In: `TestRunOptions` (path, filter, `list`, `allow_empty`, library/layout flags).
+Out: process exit status (non-zero on test failure, scan errors, or zero tests),
 human or JSON report.
 
 ## Files
@@ -23,6 +25,9 @@ human or JSON report.
 - The harness `lib.rs` declares exactly the modules that were compiled.
 - Module names are unique: stem if unique, else root-relative path joined by `__`.
 
+## Owns
+Test discovery/extraction, harness crate generation, filter selection, test reporting.
+
 ## Never decides
 Ownership/codegen behaviour, which cargo features a project uses.
 
@@ -32,5 +37,5 @@ Ownership/codegen behaviour, which cargo features a project uses.
 ## Entry points
 `run_tests`, `run_tests_with_options`.
 
-## How to test
+## Test
 `cargo test --lib test_runner`, `cargo test --release --test all wj_test_`.

@@ -13,6 +13,9 @@ WGSL backend in `codegen/wgsl`) prints types/structs/bindings via `wgsl_printer`
 - Block syntax: `compile_legacy_shader(src)` (= `parse_block_shader` + `check_block_shader`
   + `emit_block_shader`); `check_uniform_match` validates host/shader uniform types.
 
+## Inputs/Outputs
+In: `.wjsl` / block-syntax shader source text (plus an include dir). Out: `ShaderModule`, diagnostics, WGSL text.
+
 ## Modules
 lexer, parser, ast: tokens and AST. type_checker + expression_/statement_type_checking +
 shader_type_rules: semantic checks. codegen: module-level layout and function bodies.
@@ -22,14 +25,23 @@ front end lowering into the same AST. includes: include resolution. diagnostics:
 ## Invariants
 - Output is pinned by `tests/wgsl_golden_test.rs` (goldens in `tests/golden/wgsl/`).
 - No other module may print WGSL types itself; add printing to `wgsl_printer`.
-- Never decides: host-side layout (see `codegen/wgsl`).
 
-## Imports
-`anyhow`, std only; `codegen/wgsl` depends on `wjsl`, never the reverse.
+## Owns
+The WJSL lexer/parser/checker, block-syntax front end, include resolution, and `wgsl_printer`.
+
+## Never decides
+Host-side layout (see `codegen/wgsl`).
+
+## Allowed imports
+Only `crate::wjsl` itself plus `anyhow`/std; `codegen/wgsl` depends on `wjsl`, never the reverse.
+Contract: docs/MODULE_MAP.toml.
+
+## Entry points
+`parse`, `check`, `emit_wgsl`, `transpile_wjsl[_with_includes]`, `compile_legacy_shader` (src/wjsl/mod.rs).
 
 ## Callers
 `wj shader-compile` (block syntax), `wj validate-wjsl`, `wj build` (.wjsl files),
 `windjammer-runtime-host` (`transpile_wjsl[_with_includes]`).
 
-## Testing
+## Test
 `cargo test --release --test all wgsl_golden wjsl shader wgsl`
