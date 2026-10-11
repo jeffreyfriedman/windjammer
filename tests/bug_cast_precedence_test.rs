@@ -14,7 +14,16 @@
 // FIX:
 // Preserve parentheses around cast expressions when followed by binary operators
 
-// use windjammer::compile_to_rust;
+#[path = "common/test_utils.rs"]
+mod test_utils;
+
+struct Compiled {
+    generated_code: String,
+}
+
+fn compile_to_rust(source: &str, _name: &str) -> Result<Compiled, String> {
+    test_utils::compile_single_result(source).map(|generated_code| Compiled { generated_code })
+}
 
 #[test]
 fn test_cast_with_bitshift_preserves_parentheses() {
