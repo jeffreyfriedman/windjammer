@@ -1,6 +1,6 @@
 //! Registry of generated files and region generators; the only place that maps names to code.
 
-use super::{gen_cli, gen_errors, gen_interp, gen_lang, gen_meta, gen_stdlib, gen_targets, util, Ctx, Finding};
+use super::{gen_cli, gen_errors, gen_interp, gen_lang, gen_llms, gen_meta, gen_stdlib, gen_targets, util, Ctx, Finding};
 use std::collections::BTreeMap;
 
 pub const HEADER_MARK: &str = "GENERATED FILE - DO NOT EDIT";
@@ -14,6 +14,8 @@ pub const FILES: &[(&str, &str)] = &[
     ("docs/reference/targets.md", "targets"),
     ("docs/reference/stdlib.md", "stdlib"),
     ("docs/generated/metrics.json", "metrics"),
+    ("llms.txt", "llms_txt"),
+    ("llms-full.txt", "llms_full"),
     // Output of `wj docs -f markdown` (the error catalog); determinism is a test in src/error_catalog.rs.
     ("docs/errors/errors.md", "error_catalog"),
 ];
@@ -33,26 +35,29 @@ pub fn body(ctx: &Ctx, name: &str) -> Result<String, String> {
         "targets" => gen_targets::targets(ctx),
         "stdlib" => gen_stdlib::stdlib(ctx),
         "metrics" => gen_meta::metrics_json(ctx),
+        "llms_txt" => gen_llms::llms_txt(ctx)?,
+        "llms_full" => gen_llms::llms_full(ctx)?,
         _ => return Err(format!("unknown generator `{name}`")),
     })
 }
 
 pub fn render_file(ctx: &Ctx, name: &str) -> Result<String, String> {
     let b = body(ctx, name)?;
-    Ok(if name == "metrics" { b } else { format!("{}{}", header(name), b.trim_end().to_string() + "\n") })
+    Ok(if matches!(name, "metrics" | "llms_txt" | "llms_full") { b } else { format!("{}{}", header(name), b.trim_end().to_string() + "\n") })
 }
 
 /// Content of a `<!-- wj:gen name=... -->` region.
 pub fn region(ctx: &Ctx, name: &str, args: &BTreeMap<String, String>) -> Result<String, String> {
     match name {
         "cli_commands" => Ok(gen_cli::command_table(&ctx.cli)),
+        "targets_summary" => Ok(gen_targets::summary(ctx)),
         "adr_index" => Ok(gen_meta::adr_index(ctx)),
         "vscode_package" => Ok(gen_meta::vscode_package(ctx)),
         "interpreter_supported" => Ok(gen_interp::supported()),
         "interpreter_unsupported" => Ok(gen_interp::unsupported()),
         "lint_range" => Ok(gen_errors::lint_range()),
         "metric" => gen_meta::metric(ctx, args.get("key").ok_or("metric needs key=")?),
-        other if FILES.iter().any(|(_, g)| *g == other) && other != "metrics" => body(ctx, other),
+        other if FILES.iter().any(|(_, g)| *g == other) && !matches!(other, "metrics" | "llms_txt" | "llms_full") => body(ctx, other),
         other => Err(format!("unknown region generator `{other}`")),
     }
 }

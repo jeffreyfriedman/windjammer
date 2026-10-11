@@ -20,13 +20,14 @@ Commands: `scripts/docs_gen.sh` (regenerate), `--check` (drift only), `--verify`
 | `reference/targets.md` | `tests/conformance_programs/SUPPORT.toml` + corpus |
 | `reference/stdlib.md` | scan of `std/**/*.wj` |
 | `generated/metrics.json` | computed counts (see below) |
+| `/llms.txt`, `/llms-full.txt` | `tools/docs_truth/gen_llms.rs`: index and inline bundle of the agent guide, CLI/targets/keywords references, MCP tool manifest and known gaps (a missing source fails the check) |
 
 Adding a generator: write `fn(&Ctx) -> String`, register it in `tools/docs_truth/genfiles.rs`. Anything else
 under `docs/reference/` fails the check.
 
 ## 2. Regions in hand-written docs
 `<!-- wj:gen name=NAME [key=value] -->` ... `<!-- wj:end -->` is rewritten by `scripts/docs_gen.sh`.
-Names: `cli_commands`, `adr_index`, `lint_range`, `metric key=K`, plus every file generator (`cli`, `errors`, ...).
+Names: `cli_commands`, `targets_summary`, `adr_index`, `lint_range`, `metric key=K`, plus every file generator (`cli`, `errors`, ...).
 
 ## 3. Executable examples
 Every ```` ```windjammer ```` / ```` ```wj ```` fence in Markdown and rustdoc must parse (a fragment is retried as a `fn main` body).
@@ -79,5 +80,5 @@ pre-existing problems. A file may not exceed its baseline; `scripts/docs_gen.sh 
 Number of programs in the conformance corpus (a generated region; edit the code, not this number):
 
 <!-- wj:gen name=metric key=conformance.programs -->
-119
+127
 <!-- wj:end -->
