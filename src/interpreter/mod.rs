@@ -29,6 +29,7 @@ pub mod repl;
 pub mod runner;
 mod sched;
 mod scope;
+mod slicing;
 pub mod value;
 
 pub use engine::Interpreter;

@@ -55,10 +55,10 @@ pub fn register(r: &mut Registry) {
         });
     }
     for n in ["Rc::downgrade", "Arc::downgrade"] {
-        r.func(n, |_, a| Ok(Value::Weak(rc_slot(&raw(&a, 0, "downgrade")?, "downgrade")?)));
+        r.func(n, |_, a| Ok(Value::Weak(Rc::downgrade(&rc_slot(&raw(&a, 0, "downgrade")?, "downgrade")?))));
     }
     for n in ["Weak::new"] {
-        r.func(n, |_, _| Ok(Value::Weak(new_slot(Value::Unit))));
+        r.func(n, |_, _| Ok(Value::Weak(std::rc::Weak::new())));
     }
     for n in ["Rc::try_unwrap", "Arc::try_unwrap"] {
         r.func(n, |it, a| {
@@ -72,14 +72,45 @@ pub fn register(r: &mut Registry) {
             }
         });
     }
+    for n in ["Rc::get_mut", "Arc::get_mut"] {
+        r.func(n, |it, a| {
+            let v = raw(&a, 0, "get_mut")?;
+            let slot = rc_slot(&v, "get_mut")?;
+            Ok(if it.strong_count(&slot) <= 1 && it.weak_count(&slot) == 0 {
+                Value::some(Value::Ref(Place::of_slot(slot)))
+            } else {
+                Value::none()
+            })
+        });
+    }
+    for n in ["Rc::make_mut", "Arc::make_mut"] {
+        r.func(n, |it, a| {
+            // the argument is `&mut rc`: a place holding the Rc
+            let place = match a.first() {
+                Some(Value::Ref(p)) => p.clone(),
+                _ => return Err(semantic("`make_mut` needs `&mut` of an Rc")),
+            };
+            let slot = rc_slot(&place.read()?, "make_mut")?;
+            if it.strong_count(&slot) <= 1 {
+                return Ok(Value::Ref(Place::of_slot(slot)));
+            }
+            // shared: clone the contents into a fresh allocation owned by this handle
+            let inner = slot.borrow().clone();
+            let fresh = new_slot(it.fresh_identities(&inner));
+            place.write(Value::Rc(fresh.clone()))?;
+            Ok(Value::Ref(Place::of_slot(fresh)))
+        });
+    }
     r.func("RefCell::new", |_, a| Ok(new_cell(CellKind::RefCell, raw(&a, 0, "new")?)));
     r.func("Cell::new", |_, a| Ok(new_cell(CellKind::Cell, raw(&a, 0, "new")?)));
     r.func("Mutex::new", |_, a| Ok(new_cell(CellKind::Mutex, raw(&a, 0, "new")?)));
     r.func("RwLock::new", |_, a| Ok(new_cell(CellKind::RwLock, raw(&a, 0, "new")?)));
 
     r.pure(Kind::Rc, "upgrade", |it, v, _| match v {
-        Value::Weak(s) if it.strong_count(s) > 0 => Ok(Value::some(Value::Rc(s.clone()))),
-        Value::Weak(_) => Ok(Value::none()),
+        Value::Weak(w) => {
+            let _ = it;
+            Ok(Value::option(w.upgrade().map(Value::Rc)))
+        }
         _ => Err(semantic("`upgrade` needs a Weak")),
     });
     r.pure(Kind::Rc, "clone", |_, v, _| Ok(v.clone()));

@@ -309,7 +309,7 @@ fn register_uuid_log_strings(r: &mut Registry) {
     });
 
     r.func("log::init", |it, _| {
-        it.log_level = Some(std::env::var("RUST_LOG").ok().and_then(|v| level_of(&v)).unwrap_or(0));
+        it.log_level = Some(rust_log(it)?.unwrap_or(0));
         Ok(Value::Unit)
     });
     r.func("log::init_with_level", |it, a| {
@@ -317,7 +317,8 @@ fn register_uuid_log_strings(r: &mut Registry) {
             Value::Enum(e) => e.idx as i32,
             _ => 2,
         };
-        it.log_level = Some(match std::env::var("RUST_LOG").ok().and_then(|v| level_of(&v)) {
+        let env_level = rust_log(it)?;
+        it.log_level = Some(match env_level {
             Some(e) => e,
             None => 4 - idx,
         });
@@ -428,6 +429,21 @@ fn uuid7(ms: u64, rnd: &mut [u8; 16]) -> String {
     b[6] = (b[6] & 0x0f) | 0x70;
     b[8] = (b[8] & 0x3f) | 0x80;
     uuid_text(&b)
+}
+
+/// `RUST_LOG`, read through the program-visible `env::var` builtin (env_logger honours it).
+fn rust_log(it: &mut Interpreter) -> R<Option<i32>> {
+    let v = it.call_builtin_fn("env::var", vec![Value::str("RUST_LOG")])?;
+    Ok(match &v {
+        Value::Enum(e) if &*e.ty == "Result" && e.idx == 0 => match &e.payload {
+            Payload::Tuple(p) => match p.first() {
+                Some(Value::Str(t)) => level_of(t),
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    })
 }
 
 fn level_of(v: &str) -> Option<i32> {

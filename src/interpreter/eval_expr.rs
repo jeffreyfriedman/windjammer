@@ -382,18 +382,17 @@ impl Interpreter {
                 Ok(v[*i as usize].clone())
             }
             (Value::Vec(v), Value::Range(a, b, _)) => {
-                let (a, b) = (*a as usize, (*b).min(i128::MAX) as usize);
-                if a > b || b > v.len() {
-                    return Err(panic_ctl(format!("range end index {} out of range for slice of length {}", b, v.len())));
+                let (a, b) = (*a, *b);
+                if let Some(msg) = super::slicing::slice_error(a, b, v.len()) {
+                    return Err(panic_ctl(msg));
                 }
-                Ok(Value::vec(v[a..b].to_vec()))
+                Ok(Value::vec(v[a as usize..b as usize].to_vec()))
             }
             (Value::Str(s), Value::Range(a, b, _)) => {
-                let (a, b) = (*a as usize, *b as usize);
-                if a > b || b > s.len() || !s.is_char_boundary(a) || !s.is_char_boundary(b) {
-                    return Err(panic_ctl(format!("byte index {}..{} out of range or not on a char boundary for string of length {}", a, b, s.len())));
+                if let Some(msg) = super::slicing::str_slice_error(s, *a, *b) {
+                    return Err(panic_ctl(msg));
                 }
-                Ok(Value::str(s[a..b].to_string()))
+                Ok(Value::str(s[*a as usize..*b as usize].to_string()))
             }
             (Value::Map(m), k) => m
                 .get(&Key(k.clone()))

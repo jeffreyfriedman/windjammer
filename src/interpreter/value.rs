@@ -165,8 +165,9 @@ pub enum Value {
     Ref(Place),
     /// `Rc<T>` / `Arc<T>`: a shared slot. Clones alias; strong counts are computed by reachability.
     Rc(Slot),
-    /// `Weak<T>` of an `Rc` slot (does not keep it alive).
-    Weak(Slot),
+    /// `Weak<T>` of an `Rc` slot: a real `std::rc::Weak`, so a value kept alive only by an `Rc`
+    /// cycle still upgrades (Rust leaks cycles).
+    Weak(std::rc::Weak<RefCell<Value>>),
     /// `RefCell` / `Cell` / `Mutex` / `RwLock`: an interior-mutable slot.
     Cell(CellKind, Slot, Rc<super::locks::CellState>),
     /// Host objects: threads, channels, durations... (see `native.rs`).

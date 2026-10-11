@@ -409,7 +409,9 @@ impl Interpreter {
                 *slot.borrow_mut() = Value::Unit;
             }
         }
-        self.drop_unreachable(&[v], &[])?;
+        // `drop(x)` takes ownership: the object dies now even if an alias (an auto-borrowed caller
+        // copy) still mentions it; values behind an `Rc` only lose this handle
+        self.drop_values(&[v], &[], true)?;
         Ok(Value::Unit)
     }
 
@@ -824,8 +826,15 @@ impl Interpreter {
                     None => Place::temp(recv),
                 };
                 let mut v = place.take()?;
+                let before = if self.drop_types.is_empty() { None } else { Some(v.clone()) };
                 let r = f(self, &mut v, args);
                 place.write(v)?;
+                // elements a mutating builtin discarded (`clear`, `truncate`, `remove`, overwritten map
+                // entries...) are dropped now; what it returns stays alive
+                if let (Some(before), Ok(res)) = (before, &r) {
+                    let keep = res.clone();
+                    self.drop_unreachable(&[before], &[&keep])?;
+                }
                 r
             }
             Some(MethodImpl::Place(f)) => {
