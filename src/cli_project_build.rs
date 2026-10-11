@@ -3,6 +3,7 @@
 use crate::analyzer;
 use crate::build_utils;
 use crate::cargo_integration;
+use crate::compiler_config::CompilerConfig;
 use crate::codegen::rust::backend::RustBackend;
 use crate::config;
 use crate::file_compiler;
@@ -38,19 +39,41 @@ pub fn build_project_ext(
     library: bool,
     external_metadata: &[(&str, &Path)],
 ) -> Result<()> {
+    build_project_with_config(
+        path,
+        output,
+        target,
+        enable_lint,
+        library,
+        external_metadata,
+        &CompilerConfig::default(),
+    )
+}
+
+/// Build with an explicit [`CompilerConfig`] (constructed once by the CLI driver).
+pub fn build_project_with_config(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    library: bool,
+    external_metadata: &[(&str, &Path)],
+    config: &CompilerConfig,
+) -> Result<()> {
     // Library builds and cross-crate metadata require the multipass compiler pipeline.
     if !external_metadata.is_empty() || library {
-        return crate::compiler::build_project_ext(
+        return crate::compiler::build_project_with_config(
             path,
             output,
             target,
             enable_lint,
             library,
             external_metadata,
+            config,
         );
     }
     // Full multi-file build
-    build_project(path, output, target, enable_lint)
+    build_project_single_crate(path, output, target, enable_lint, config)
 }
 
 pub fn build_project(
@@ -58,6 +81,16 @@ pub fn build_project(
     output: &Path,
     target: CompilationTarget,
     enable_lint: bool,
+) -> Result<()> {
+    build_project_single_crate(path, output, target, enable_lint, &CompilerConfig::default())
+}
+
+fn build_project_single_crate(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    config: &CompilerConfig,
 ) -> Result<()> {
     println!(
         "{} Windjammer files in: {:?}",
@@ -84,7 +117,7 @@ pub fn build_project(
     let mut all_external_crates = Vec::new();
 
     // Create a single ModuleCompiler for all files to share trait registry
-    let mut module_compiler = file_compiler::ModuleCompiler::new(target, enable_lint);
+    let mut module_compiler = file_compiler::ModuleCompiler::with_config(target, enable_lint, config.clone());
 
     // Load windjammer.toml if it exists (search up directory tree)
     let mut search_dir = if path.is_file() {
@@ -492,6 +525,7 @@ pub fn build_project(
                 &combined_external_crates,
                 target,
                 source_dir,
+                &module_compiler.config,
             )?;
         }
 

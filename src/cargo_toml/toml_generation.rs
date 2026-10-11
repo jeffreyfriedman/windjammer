@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::dependency_management::{
-    dep_spec_to_cargo_line_with_base, detect_external_crate_deps, find_windjammer_runtime_path,
+    dep_spec_to_cargo_line_with_base, detect_external_crate_deps, find_windjammer_runtime_path_with,
     path_to_toml_string, propagate_source_cargo_deps, walk_rs_files,
 };
 use super::feature_management::{wasm_output_needs_runtime, WEB_SYS_CARGO_FEATURES};
@@ -71,10 +71,11 @@ pub(crate) fn write_cargo_toml(
     output_dir: &Path,
     source_dir: &Path,
     lib_or_bin_section: &str,
+    config: &crate::compiler_config::CompilerConfig,
 ) -> Result<()> {
     let (wj_config, wj_dir) = find_wj_config_with_dir(source_dir);
 
-    let runtime_path = find_windjammer_runtime_path();
+    let runtime_path = find_windjammer_runtime_path_with(config.runtime_path.as_deref());
     let runtime_path_str = path_to_toml_string(&runtime_path);
 
     let runtime_features = detect_runtime_features(output_dir);
@@ -245,10 +246,23 @@ pub(crate) fn resolve_wasm_lib_path(output_dir: &Path) -> Result<String> {
 /// `WasmBackend::generate_additional_files` template, but uses the same runtime path discovery
 /// as single-file Rust builds.
 pub fn generate_wasm_cargo_toml(output_dir: &Path, source_dir: &Path) -> Result<()> {
+    generate_wasm_cargo_toml_with_config(
+        output_dir,
+        source_dir,
+        &crate::compiler_config::CompilerConfig::default(),
+    )
+}
+
+/// Like [`generate_wasm_cargo_toml`], honoring `config.runtime_path`.
+pub fn generate_wasm_cargo_toml_with_config(
+    output_dir: &Path,
+    source_dir: &Path,
+    config: &crate::compiler_config::CompilerConfig,
+) -> Result<()> {
     let lib_rel = resolve_wasm_lib_path(output_dir)?;
     let needs_runtime = wasm_output_needs_runtime(output_dir)?;
     let runtime_line = if needs_runtime {
-        let runtime_path = find_windjammer_runtime_path();
+        let runtime_path = find_windjammer_runtime_path_with(config.runtime_path.as_deref());
         let runtime_str = path_to_toml_string(&runtime_path);
         format!(
             "windjammer-runtime = {{ path = \"{}\", features = [\"wasm\"] }}\n",

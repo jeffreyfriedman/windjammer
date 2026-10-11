@@ -34,16 +34,7 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
         visited: &mut HashSet<String>,
     ) -> bool {
-        thread_local! {
-            static DEPTH_S: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-        }
-        let cur = DEPTH_S.with(|d| {
-            let v = d.get();
-            d.set(v + 1);
-            v
-        });
-        if cur > 1000 {
-            DEPTH_S.with(|d| d.set(d.get() - 1));
+        if !super::RecursionDepths::enter(&self.recursion_depths.self_call_stmt) {
             return false;
         }
         let result = match stmt {
@@ -98,7 +89,7 @@ impl<'ast> Analyzer<'ast> {
             }
             _ => false,
         };
-        DEPTH_S.with(|d| d.set(d.get() - 1));
+        super::RecursionDepths::leave(&self.recursion_depths.self_call_stmt);
         result
     }
 
@@ -109,20 +100,11 @@ impl<'ast> Analyzer<'ast> {
         registry: Option<&super::SignatureRegistry>,
         visited: &mut HashSet<String>,
     ) -> bool {
-        thread_local! {
-            static DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-        }
-        let cur = DEPTH.with(|d| {
-            let v = d.get();
-            d.set(v + 1);
-            v
-        });
-        if cur > 1000 {
-            DEPTH.with(|d| d.set(d.get() - 1));
+        if !super::RecursionDepths::enter(&self.recursion_depths.self_call_expr) {
             return false;
         }
         let result = self.expression_calls_mutating_self_methods_inner(expr, registry, visited);
-        DEPTH.with(|d| d.set(d.get() - 1));
+        super::RecursionDepths::leave(&self.recursion_depths.self_call_expr);
         result
     }
 

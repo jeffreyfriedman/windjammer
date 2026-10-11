@@ -392,6 +392,8 @@ pub struct CodeGenerator<'ast> {
     /// IR cutover configuration: which categories read from IR SafetyType instead of AnalyzedFunction.
     /// When all flags are true, the IR pipeline is the sole source of truth.
     pub(crate) ir_cutover: IrCutoverConfig,
+    /// Explicit compiler configuration (production defaults unless the driver injects one).
+    pub(crate) config: crate::compiler_config::CompilerConfig,
     /// Per-function IR data, populated when the IR pipeline runs alongside legacy codegen.
     /// When set and a cutover flag is enabled, the corresponding codegen reads from here.
     pub(crate) current_ir_function: Option<crate::ir::IrFunction>,
@@ -407,7 +409,9 @@ pub struct CodeGenerator<'ast> {
 /// Configuration for incremental IR cutover.
 /// Each flag controls whether a specific category of codegen decisions reads from
 /// the IR `SafetyType` (true) or the legacy `AnalyzedFunction` fields (false).
-#[derive(Debug, Clone, Default)]
+/// `Default` is production behavior (all on); use [`IrCutoverConfig::legacy_all_off`]
+/// to opt into the legacy pipeline explicitly.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrCutoverConfig {
     /// Read parameter ownership from `IrFunction.param_types[name].ownership`
     pub ownership: bool,
@@ -423,7 +427,37 @@ pub struct IrCutoverConfig {
     pub locals: bool,
 }
 
+impl Default for IrCutoverConfig {
+    fn default() -> Self {
+        Self::production()
+    }
+}
+
 impl IrCutoverConfig {
+    /// Production behavior: every cutover flag on.
+    pub fn production() -> Self {
+        Self {
+            ownership: true,
+            clones: true,
+            param_types: true,
+            str_ref: true,
+            call_sites: true,
+            locals: true,
+        }
+    }
+
+    /// Every flag off: the legacy analyzer-driven path (isolated unit tests only).
+    pub fn legacy_all_off() -> Self {
+        Self {
+            ownership: false,
+            clones: false,
+            param_types: false,
+            str_ref: false,
+            call_sites: false,
+            locals: false,
+        }
+    }
+
     pub fn all_enabled(&self) -> bool {
         self.ownership
             && self.clones
@@ -440,22 +474,6 @@ impl IrCutoverConfig {
             && !self.str_ref
             && !self.call_sites
             && !self.locals
-    }
-
-    /// Load configuration. Production flags default on via env (except `call_sites`,
-    /// which is always on — the `!call_sites` heuristic tails have been deleted).
-    /// Set `WJ_IR_CUTOVER_DISABLE_<FLAG>=1` to disable individual remaining flags.
-    /// `Default` still keeps every flag off for isolated unit tests.
-    pub fn from_env() -> Self {
-        Self {
-            ownership: !std::env::var("WJ_IR_CUTOVER_DISABLE_OWNERSHIP").is_ok_and(|v| v == "1"),
-            clones: !std::env::var("WJ_IR_CUTOVER_DISABLE_CLONES").is_ok_and(|v| v == "1"),
-            param_types: !std::env::var("WJ_IR_CUTOVER_DISABLE_PARAM_TYPES")
-                .is_ok_and(|v| v == "1"),
-            str_ref: !std::env::var("WJ_IR_CUTOVER_DISABLE_STR_REF").is_ok_and(|v| v == "1"),
-            call_sites: true,
-            locals: !std::env::var("WJ_IR_CUTOVER_DISABLE_LOCALS").is_ok_and(|v| v == "1"),
-        }
     }
 }
 
@@ -788,7 +806,8 @@ impl<'ast> CodeGenerator<'ast> {
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
             self_receiver_upgrades: std::collections::HashMap::new(),
-            ir_cutover: IrCutoverConfig::from_env(),
+            ir_cutover: IrCutoverConfig::production(),
+            config: crate::compiler_config::CompilerConfig::default(),
             current_ir_function: None,
             ir_module_functions: Vec::new(),
             ir_module: None,
@@ -1328,7 +1347,18 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Set IR cutover configuration explicitly (for testing).
     pub fn set_ir_cutover_config(&mut self, config: IrCutoverConfig) {
+        self.config.ir_cutover = config.clone();
         self.ir_cutover = config;
+    }
+
+    /// Inject the explicit compiler configuration (built once at the driver edge).
+    pub fn set_config(&mut self, config: crate::compiler_config::CompilerConfig) {
+        self.ir_cutover = config.ir_cutover.clone();
+        self.config = config;
+    }
+
+    pub fn config(&self) -> &crate::compiler_config::CompilerConfig {
+        &self.config
     }
 
     /// Store an IR module for cutover. The codegen will look up the right IrFunction
@@ -5123,8 +5153,8 @@ mod tests {
     }
 
     #[test]
-    fn test_ir_cutover_config_derive_default_all_off() {
-        let config = IrCutoverConfig::default();
+    fn test_ir_cutover_config_legacy_all_off_is_explicit() {
+        let config = IrCutoverConfig::legacy_all_off();
         assert!(!config.ownership);
         assert!(!config.clones);
         assert!(!config.param_types);
@@ -5166,8 +5196,8 @@ mod tests {
     }
 
     #[test]
-    fn test_ir_cutover_from_env_defaults_formal_flags_on() {
-        let config = IrCutoverConfig::from_env();
+    fn test_ir_cutover_default_is_production() {
+        let config = IrCutoverConfig::default();
         assert!(config.ownership);
         assert!(config.clones);
         assert!(config.param_types);

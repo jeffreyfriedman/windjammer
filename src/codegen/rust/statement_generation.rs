@@ -738,7 +738,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => self.generate_if_statement(condition, then_block, else_block),
             Statement::Match { value, arms, .. } => {
-                if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
+                if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") {
                     if let Expression::MethodCall { method, .. } = value {
                         if method == "find" {}
                     }
