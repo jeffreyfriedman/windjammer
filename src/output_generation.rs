@@ -139,7 +139,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
             generator.set_workspace_root(cwd);
         }
 
-        let result = generator.generate_program(program, analyzed);
+        let result = crate::optimizer::run_default(&generator.generate_program(program, analyzed));
         let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
 
         generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
@@ -257,7 +257,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         generator.set_workspace_root(cwd);
     }
 
-    let result = generator.generate_program(program, analyzed);
+    let result = crate::optimizer::run_default(&generator.generate_program(program, analyzed));
     let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
 
     generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);

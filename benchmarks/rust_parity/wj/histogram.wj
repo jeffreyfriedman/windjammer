@@ -1,0 +1,19 @@
+fn main() {
+    let mut counts = Vec::new()
+    for i in 0..4096 {
+        counts.push(0_u64)
+    }
+    let mut x: u64 = 88172645463325252
+    for i in 0..30000000 {
+        x = x ^ (x << 13)
+        x = x ^ (x >> 7)
+        x = x ^ (x << 17)
+        let k = (x % 4096) as usize
+        counts[k] = counts[k] + 1
+    }
+    let mut total: u64 = 0
+    for k in 0..4096 {
+        total += counts[k] * (k as u64 + 1)
+    }
+    println!("{}", total)
+}

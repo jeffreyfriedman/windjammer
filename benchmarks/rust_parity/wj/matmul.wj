@@ -1,0 +1,32 @@
+fn matmul(n: usize, a: Vec<f64>, b: Vec<f64>) -> Vec<f64> {
+    let mut c = Vec::new()
+    for i in 0..n * n {
+        c.push(0.0)
+    }
+    for i in 0..n {
+        for j in 0..n {
+            let mut s = 0.0
+            for k in 0..n {
+                s += a[i * n + k] * b[k * n + j]
+            }
+            c[i * n + j] = s
+        }
+    }
+    c
+}
+
+fn main() {
+    let n = 300
+    let mut a = Vec::new()
+    let mut b = Vec::new()
+    for i in 0..n * n {
+        a.push((i % 7) as f64)
+        b.push((i % 11) as f64)
+    }
+    let c = matmul(n, a, b)
+    let mut total = 0.0
+    for i in 0..n * n {
+        total += c[i]
+    }
+    println!("{}", total)
+}

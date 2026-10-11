@@ -33,7 +33,6 @@ pub mod node;
 pub mod numeric_bridge;
 pub mod numeric_solver;
 pub mod numeric_types;
-pub mod optimizations;
 pub mod pipeline;
 pub mod receiver_type;
 pub mod safety_type;
@@ -62,10 +61,6 @@ pub use lower::lower_body;
 pub use node::{parser_type_to_base_type, IrFunction, IrNode, IrNodeKind};
 pub use numeric_solver::NumericSolver;
 pub use numeric_types::{NumericConstraint, NumericType, UnifiedExprId};
-pub use optimizations::{
-    AoSoAPass, CostDelta, CowPass, DeferDropPass, IrOptimizationPass, OptimizationPipeline,
-    OptimizationResult, PipelineResult, SmallVecPass,
-};
 pub use pipeline::{FileIrModule, IrModule, IrModuleSet, IrPipeline, IrPipelineConfig};
 pub use safety_type::{
     BaseType, ConstEval, EffectSet, ExecutionMode, OwnedType, Region, SafetyType, TaintSource,
