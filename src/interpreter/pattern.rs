@@ -44,6 +44,16 @@ impl Interpreter {
         }
     }
 
+    /// Order of `v` relative to the literal bound `l` (`Some(Less)` means `v < l`), if comparable.
+    fn literal_order(&self, l: &Literal, v: &Value) -> Option<std::cmp::Ordering> {
+        match (&self.literal(l), v) {
+            (Value::Int(a, _), Value::Int(b, _)) => Some(b.cmp(a)),
+            (Value::Float(a, _), Value::Float(b, _)) => b.partial_cmp(a),
+            (Value::Char(a), Value::Char(b)) => Some(b.cmp(a)),
+            _ => None,
+        }
+    }
+
     /// Match `pat` against `v`. `place` is the location of `v` (when known) so that
     /// `by_ref` bindings can alias the matched parts.
     pub(crate) fn match_pattern(
@@ -92,6 +102,22 @@ impl Interpreter {
             }
             Pattern::Reference(inner) => self.match_pattern(inner, v, place, by_ref, binds),
             Pattern::Literal(l) => self.literal_matches(l, v),
+            Pattern::Range { start, end, inclusive } => {
+                use std::cmp::Ordering::*;
+                let above = match start {
+                    Some(l) => matches!(self.literal_order(l, v), Some(Greater | Equal)),
+                    None => true,
+                };
+                let below = match end {
+                    Some(l) => match self.literal_order(l, v) {
+                        Some(Less) => true,
+                        Some(Equal) => *inclusive,
+                        _ => false,
+                    },
+                    None => true,
+                };
+                above && below
+            }
             Pattern::Or(alts) => {
                 for a in alts {
                     let mark = binds.len();

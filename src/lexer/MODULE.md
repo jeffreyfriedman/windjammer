@@ -7,7 +7,8 @@ Turns Windjammer source text into tokens (identifiers, numbers with suffixes, st
 In: `&str`. Out: `Vec<Token>` or `Vec<TokenWithLocation>`.
 
 ## Invariants
-- Pure and total: never panics on input; unknown input becomes error tokens.
+- Pure and total: never panics on input; unknown characters and malformed literals become `Token::Invalid(message)` (reported with line:column by the parser). Property test: `tests/lexer_parser_never_panic_test.rs`.
+- Integer literal typing is one function (`number_lexing::int_token`); spec in `docs/design/lexical-grammar.md`.
 - Imports nothing above the syntax layer (one known exception, below).
 
 ## Owns

@@ -307,7 +307,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Self::bind_pattern(bound, inner);
             }
             Pattern::EnumVariant(_, _) => {}
-            Pattern::Wildcard | Pattern::Literal(_) => {}
+            Pattern::Wildcard | Pattern::Literal(_) | Pattern::Range { .. } => {}
         }
     }
 }

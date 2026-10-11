@@ -87,8 +87,8 @@ impl Parser {
                         n
                     } else {
                         return Err(format!(
-                            "Expected field name in struct variant (at token position {})",
-                            self.position
+                            "Expected field name in struct variant (at {})",
+                            self.pos_desc()
                         ));
                     };
 
