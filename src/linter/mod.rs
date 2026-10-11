@@ -9,6 +9,8 @@
 
 pub mod rust_leakage;
 pub mod surface_syntax;
+pub mod missing_value;
+pub mod trailing_return;
 
 use crate::analyzer::AnalyzedFunction;
 use crate::error::SourceLocation;
