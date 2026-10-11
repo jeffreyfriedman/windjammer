@@ -1,9 +1,14 @@
 # portable (shared Go / JS / TS backend front-end)
 
-**Purpose.** Turns a parsed Windjammer `Program` into a typed, statement-oriented IR (`PModule`) that the Go and
+## Purpose
+Turns a parsed Windjammer `Program` into a typed, statement-oriented IR (`PModule`) that the Go and
 JavaScript/TypeScript emitters print. All semantics that must agree across backends live here, not in the emitters.
 
-**Pipeline.** `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emitter`.
+
+## Inputs/Outputs
+In: parsed `Program` plus the analyzer `SignatureRegistry`. Out: `PModule`.
+Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emitter`.
+
 
 | file | role |
 |------|------|
@@ -17,19 +22,30 @@ JavaScript/TypeScript emitters print. All semantics that must agree across backe
 | `flatten.rs` | expression-position `if`/`match`/block/`?` become statements, preserving evaluation order |
 | `visit.rs` | mutable traversals (type resolution after inference) |
 
-**Invariants.**
+
+## Invariants
 - After `lower_program` + `flatten_module`, every `PExpr.ty` is resolved (or an emitter reports "type could not be inferred"),
   expressions are pure trees, and `PBlock.tail` is `None`.
 - Value semantics: an owned use of a place of aggregate type is wrapped in `PK::Copy`; `&`/`&mut` parameter modes
   come from `analyzer::SignatureRegistry` (`ParamMode::{Value, Ref, MutRef}`), so emitters never guess ownership.
 - Anything not implemented returns `Unsupported` (compile error) - never placeholder code.
 
-**Owns / never decides.** Owns typing and ownership-driven copies. Never decides syntax, runtime representation of
-integers/strings, or naming (emitters do).
 
-**Allowed imports.** `crate::intrinsics` (the intrinsic name registry; never match `println`/`panic`/... as strings here), `crate::parser`, `crate::analyzer` (registry only), `crate::ir::analyze_and_lower` (done by backends).
+## Owns
+Typing and ownership-driven copies.
 
-**Entry points.** `lower::lower_program(&Program, Some(&registry))`, `flatten::flatten_module(&mut PModule)`.
+## Never decides
+Syntax, runtime representation of integers/strings, or naming (emitters do).
 
-**Testing.** Unit tests next to each module; end-to-end through `tests/backend_conformance_test.rs`
+
+## Allowed imports
+`crate::intrinsics` (the intrinsic name registry; never match `println`/`panic`/... as strings here), `crate::parser`, `crate::analyzer` (registry only), `crate::ir::analyze_and_lower` (done by backends).
+
+
+## Entry points
+`lower::lower_program(&Program, Some(&registry))`, `flatten::flatten_module(&mut PModule)`.
+
+
+## Test
+Unit tests next to each module; end-to-end through `tests/backend_conformance_test.rs`
 (runs generated Go/JS against independent oracles). Add a corpus program in `tests/conformance_programs/` for every feature.
