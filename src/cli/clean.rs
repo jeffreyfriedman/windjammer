@@ -11,7 +11,7 @@ pub fn execute(all: bool) -> Result<()> {
     total_freed += clean_temp_artifacts()?;
 
     // Always soft-prune the shared cache when disk is low.
-    let prune_report = crate::cargo_cache::prune_if_low_disk();
+    let prune_report = crate::cargo_cache::reclaim();
     total_freed += prune_report.freed_bytes;
     for p in &prune_report.removed_paths {
         println!("  {} pruned {}", "cleaned".green(), p.display());

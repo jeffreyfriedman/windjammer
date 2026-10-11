@@ -166,7 +166,7 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
         println!();
     }
 
-    let _ = crate::cargo_cache::prune_if_low_disk();
+    let _ = crate::cargo_cache::reclaim();
     let mut cmd = Command::new("cargo");
     cmd.arg("test").current_dir(&temp_dir);
     // Ephemeral test crates share the verify tree (often identical package names).

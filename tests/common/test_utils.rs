@@ -103,6 +103,8 @@ pub fn cargo_check_generated(build_dir: &Path) {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(build_dir)
         .env("CARGO_TARGET_DIR", &shared_target)
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
         .args(["check", "--quiet"]);
 
     let output = run_with_timeout(cmd, SUBPROCESS_TIMEOUT)
@@ -128,6 +130,8 @@ pub fn cargo_build_generated(build_dir: &Path) -> PathBuf {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(build_dir)
         .env("CARGO_TARGET_DIR", &shared_target)
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
         .args(["build", "--quiet"]);
 
     let output = run_with_timeout(cmd, SUBPROCESS_TIMEOUT)
