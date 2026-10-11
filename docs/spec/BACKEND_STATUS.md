@@ -1,11 +1,11 @@
 # Backend status of the spec examples (measured)
 
-`scripts/spec_backends.sh <wj> rust|js` compiles every `run`/`panic` example with the real compiler and runs it with `rustc` / `node`, comparing stdout and exit status with the example's `// expect:` oracle. `parse-ok` / `parse-error` examples are skipped (no front-end-only mode on compiled backends). Per-example results: [backend_status.tsv](backend_status.tsv). Measured with the `wj` built from this branch (commit of this file); this is a snapshot, not a gate.
+`scripts/spec_backends.sh <wj> rust|js` compiles every `run`/`panic` example with the real compiler and runs it with `rustc` / `node`, comparing stdout and exit status with the example's `// expect:` oracle. `parse-ok` / `parse-error` examples are skipped (no front-end-only mode on compiled backends). Per-example results: [backend_status.tsv](backend_status.tsv). Measured with the `wj` built from this branch after merging next/v0.50.0 at f42c6764 (parser-gaps included); this is a snapshot, not a gate.
 
 | Backend | Runnable examples | PASS | FAIL (built, wrong output) | BUILD (wj or toolchain rejected) |
 |---|---|---|---|---|
-| Rust (`wj build --no-cargo` + `rustc`) | 167 | 101 | 5 | 61 |
-| JavaScript (`wj build -t javascript` + `node`) | 167 | 128 | 5 | 34 |
+| Rust (`wj build --no-cargo` + `rustc`) | 169 | 104 | 5 | 60 |
+| JavaScript (`wj build -t javascript` + `node`) | 169 | 131 | 5 | 33 |
 | Interpreter (`tests/spec_conformance_test.rs`) | all | all except the `xfail` examples | | |
 
 Examples marked `xfail` are expected not to pass anywhere (the spec states the decided behaviour). The interesting rows are the **non-xfail** examples that fail on a compiled backend, because the spec and the interpreter agree and the backend does not.
