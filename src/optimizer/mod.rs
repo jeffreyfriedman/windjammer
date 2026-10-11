@@ -61,6 +61,16 @@ fn declares_macros(file: &syn::File) -> bool {
     file.items.iter().any(|i| matches!(i, syn::Item::Macro(m) if m.mac.path.is_ident("macro_rules")))
 }
 
+/// Optimize with production defaults, plus the opt-in auto-arena pass when `auto_arena` is set
+/// (`CompilerConfig::auto_arena`).
+pub fn run_with_auto_arena(auto_arena: bool, rust_source: &str) -> String {
+    if auto_arena {
+        run(&OptimizationConfig::with_auto_arena(), rust_source).code
+    } else {
+        run_default(rust_source)
+    }
+}
+
 /// Optimize with production defaults.
 pub fn run_default(rust_source: &str) -> String {
     run(&OptimizationConfig::production(), rust_source).code

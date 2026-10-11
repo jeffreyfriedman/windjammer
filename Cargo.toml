@@ -170,6 +170,11 @@ path = "tests/arena_capability_test.rs"
 required-features = ["unstable_arenas"]
 
 [[test]]
+name = "arena_rust_backend"
+path = "tests/arena_rust_backend_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
 name = "parser_arena_memory"
 path = "tests/parser_arena_memory_test.rs"
 

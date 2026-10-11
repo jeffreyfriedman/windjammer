@@ -299,15 +299,16 @@ impl<'a, T> IntoIterator for &'a ScratchList<'_, T> {
 pub struct Scratch {
     bump: bumpalo::Bump,
     generation: u32,
+    staging: std::cell::RefCell<String>,
 }
 
 impl Scratch {
     pub fn new() -> Self {
-        Scratch { bump: bumpalo::Bump::new(), generation: 0 }
+        Scratch { bump: bumpalo::Bump::new(), generation: 0, staging: Default::default() }
     }
 
     pub fn with_capacity(bytes: usize) -> Self {
-        Scratch { bump: bumpalo::Bump::with_capacity(bytes), generation: 0 }
+        Scratch { bump: bumpalo::Bump::with_capacity(bytes), generation: 0, staging: Default::default() }
     }
 
     /// Copy `s` into the scratch arena.
@@ -326,6 +327,16 @@ impl Scratch {
     #[inline]
     pub fn new_list<T>(&self) -> ScratchList<'_, T> {
         ScratchList(bumpalo::collections::Vec::new_in(&self.bump))
+    }
+
+    /// Format straight into the arena: `scratch.fmt(format_args!("hp={}", hp))`. The text is rendered into a
+    /// reused staging buffer and copied into the arena once, so the result needs no growth reallocations.
+    pub fn fmt(&self, args: fmt::Arguments<'_>) -> &str {
+        use fmt::Write as _;
+        let mut staging = self.staging.borrow_mut();
+        staging.clear();
+        let _ = staging.write_fmt(args);
+        self.bump.alloc_str(&staging)
     }
 
     /// Place a value without a destructor in the arena (destructors would never run).
@@ -443,6 +454,7 @@ mod tests {
             assert_eq!(format!("<{b}>"), "<hello, world>");
             assert_eq!(l.iter().sum::<i32>(), 9900);
             *s.alloc(7i64) += 1;
+            assert_eq!(s.fmt(format_args!("hp={}", 42)), "hp=42");
         }
         let before = s.allocated_bytes();
         s.reset();

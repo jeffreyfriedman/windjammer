@@ -250,6 +250,20 @@ fn scratch_wj() -> f64 {
     total as f64
 }
 
+fn scratch_wj_fmt() -> f64 {
+    let mut total = 0usize;
+    let mut sc = Scratch::new();
+    for frame in 0..FRAMES {
+        sc.reset();
+        let mut labels = sc.new_list();
+        for i in 0..K {
+            labels.push(sc.fmt(format_args!("entity#{} hp={} f={}", i, (i * 7 + frame) % 100, frame)));
+        }
+        total += labels.iter().map(|s| s.len()).sum::<usize>();
+    }
+    total as f64
+}
+
 fn scratch_reuse() -> f64 {
     // Hand-tuned: one text buffer + offsets, reused every frame.
     let mut total = 0usize;
@@ -293,7 +307,7 @@ fn main() {
     let groups: [(&str, usize, Vec<(&str, fn() -> f64)>); 3] = [
         ("particles", FRAMES, vec![("box (Vec<Box<P>>)", particles_box), ("vec-new (Vec<P>/frame)", particles_vec_new), ("wj-arena (Arena<P>)", particles_wj_arena), ("bumpalo (&mut P)", particles_bumpalo)]),
         ("tree", ROUNDS, vec![("box (Box<Node>)", tree_box), ("wj-arena (Handle<Node>)", tree_wj_arena), ("bumpalo (&Node)", tree_bumpalo)]),
-        ("scratch", FRAMES, vec![("string-new (String/label)", scratch_string_new), ("wj-scratch (Scratch)", scratch_wj), ("reuse (1 buffer, hand-tuned)", scratch_reuse)]),
+        ("scratch", FRAMES, vec![("string-new (String/label)", scratch_string_new), ("wj-scratch (Scratch string)", scratch_wj), ("wj-scratch fmt (Scratch::fmt)", scratch_wj_fmt), ("reuse (1 buffer, hand-tuned)", scratch_reuse)]),
     ];
     for (g, frames, vs) in groups {
         println!("\n## {g}");

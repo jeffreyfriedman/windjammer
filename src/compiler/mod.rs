@@ -162,7 +162,8 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     dep_roots: &[std::path::PathBuf],
     dep_epoch: Option<u64>,
 ) -> anyhow::Result<()> {
-    let rust_code = crate::optimizer::run_default(&codegen.generate_program(program, analyzed_functions));
+    let auto_arena = codegen.config.auto_arena;
+    let rust_code = crate::optimizer::run_with_auto_arena(auto_arena, &codegen.generate_program(program, analyzed_functions));
     let mut registry = std::mem::take(&mut codegen.signature_registry);
     codegen.apply_self_receiver_upgrades(&mut registry);
     codegen.signature_registry = registry;

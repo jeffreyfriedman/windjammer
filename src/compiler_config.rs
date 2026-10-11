@@ -31,6 +31,8 @@ pub struct CompilerConfig {
     pub runtime_path: Option<PathBuf>,
     /// Override the a game engine project workspace path for generated Cargo.toml.
     pub game_path: Option<PathBuf>,
+    /// Run the opt-in auto-arena optimizer pass (`scratch_reuse`, ADR-0016; `WJ_AUTO_ARENA=1`).
+    pub auto_arena: bool,
 }
 
 impl Default for CompilerConfig {
@@ -46,6 +48,7 @@ impl Default for CompilerConfig {
             stdlib_path: None,
             runtime_path: None,
             game_path: None,
+            auto_arena: false,
         }
     }
 }
@@ -79,6 +82,7 @@ impl CompilerConfig {
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
             game_path: path("game-host_PATH"),
+            auto_arena: on("WJ_AUTO_ARENA"),
         }
     }
 

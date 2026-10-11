@@ -23,7 +23,7 @@ pub struct OptimizationConfig {
     /// Remove file-private `#[repr(C)]` and unreferenced `to_bytes` helpers.
     pub dead_helpers: bool,
     /// Auto-arena: hoist a per-iteration `String::new()`/`Vec::new()` scratch buffer out of its loop and
-    /// `clear()` it instead (PASSES.md P8). OFF by default; `wj build --auto-arena` turns it on.
+    /// `clear()` it instead (PASSES.md P8). OFF by default; `WJ_AUTO_ARENA=1` (CompilerConfig::auto_arena) turns it on.
     pub scratch_reuse: bool,
     /// Byte size of a function body above which `#[inline]` is removed.
     pub inline_max_body_bytes: usize,
