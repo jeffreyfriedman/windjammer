@@ -410,7 +410,7 @@ impl<'ast> Analyzer<'ast> {
                                 ),
                                 Some(OwnershipMode::MutBorrowed)
                             );
-                            if std::env::var("WJ_DEBUG_OWNERSHIP").is_ok() {
+                            if crate::debug_env::enabled("WJ_DEBUG_OWNERSHIP") {
                                 eprintln!(
                                     "  [OWNERSHIP-COPY] {} in {}: is_copy=true mutated={} passthrough_mut={} (type: {:?})",
                                     param.name, func.name, mutated, passthrough_mut, param.type_
@@ -444,7 +444,7 @@ impl<'ast> Analyzer<'ast> {
                             )?;
 
                             // DEBUG: Log ownership inference for non-Copy parameters
-                            if std::env::var("WJ_DEBUG_OWNERSHIP").is_ok() {
+                            if crate::debug_env::enabled("WJ_DEBUG_OWNERSHIP") {
                                 eprintln!(
                                     "  [OWNERSHIP] {} in {}: {:?} (type: {:?})",
                                     param.name, func.name, inferred_mode, param.type_

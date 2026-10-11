@@ -259,7 +259,7 @@ fn compile_file_impl(
     }
 
     // DEBUG: Print Item::Mod entries in the AST
-    if std::env::var("WJ_DEBUG_AST").is_ok() {
+    if crate::debug_env::enabled("WJ_DEBUG_AST") {
         let file_name = input_path.file_name().unwrap().to_string_lossy();
         eprintln!("\n=== AST for {} ===", file_name);
         for (idx, item) in program.items.iter().enumerate() {

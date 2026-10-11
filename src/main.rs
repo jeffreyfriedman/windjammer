@@ -21,7 +21,9 @@ pub mod plugin; // Plugin discovery and delegation // High-quality error message
                 // Removed: codegen_legacy is now codegen::rust::generator
 mod compilation_error_handling;
 pub mod compiler_database;
+pub mod compiler_config;
 pub mod config;
+pub mod debug_env;
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
 pub mod error_codes;
@@ -72,7 +74,7 @@ mod cli_project_build;
 pub use cli_args::CompilationTarget;
 pub use cli_commands::run_main_cli;
 pub use cli_output::{colorize_diagnostic, detect_rust_file_type, load_source_maps, RustFileType};
-pub use cli_project_build::{build_project, build_project_ext};
+pub use cli_project_build::{build_project, build_project_ext, build_project_with_config};
 
 /// Run the legacy `windjammer` CLI binary (`windjammer` crate root).
 fn main() {

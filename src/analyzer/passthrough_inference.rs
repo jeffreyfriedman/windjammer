@@ -252,7 +252,7 @@ impl<'ast> Analyzer<'ast> {
         let mut passthrough_calls: Vec<(String, usize, bool, bool)> = Vec::new();
         self.collect_passthrough_calls(param_name, body, func, &mut passthrough_calls);
 
-        if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
+        if crate::debug_env::enabled("WJ_DEBUG_PASSTHROUGH") {
             eprintln!(
                 "[PASSTHROUGH] fn={} param={} calls={:?}",
                 current_func_name, param_name, passthrough_calls
@@ -305,7 +305,7 @@ impl<'ast> Analyzer<'ast> {
                             match registry.get_signature(simple) {
                                 Some(s) => s,
                                 None => {
-                                    if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
+                                    if crate::debug_env::enabled("WJ_DEBUG_PASSTHROUGH") {
                                         let matching: Vec<_> = registry
                                             .all_signatures()
                                             .filter(|(k, _)| {
@@ -328,7 +328,7 @@ impl<'ast> Analyzer<'ast> {
                     }
                 }
             };
-            if std::env::var("WJ_DEBUG_PASSTHROUGH").is_ok() {
+            if crate::debug_env::enabled("WJ_DEBUG_PASSTHROUGH") {
                 eprintln!(
                     "[PASSTHROUGH] fn={} callee={} found sig ownership={:?} has_self={}",
                     current_func_name, func_name, sig.param_ownership, sig.has_self_receiver
