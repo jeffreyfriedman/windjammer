@@ -1,4 +1,8 @@
+---
+status: accepted
+---
 # WJ-LANG-04: Universal String Conversion for Windjammer
+
 
 **Status**: Draft  
 **Author**: Windjammer Team  

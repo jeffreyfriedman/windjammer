@@ -1,3 +1,10 @@
+// expect: Color: red
+// expect: Is primary color: true
+// expect: Circle with radius 5
+// expect: Area: 75
+// expect: Square with side 4
+// expect: Area: 16
+// expect: Result 1: 52
 // Example 3: Enums and Pattern Matching
 
 // Simple enum

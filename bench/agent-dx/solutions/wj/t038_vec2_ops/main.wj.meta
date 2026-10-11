@@ -1,0 +1,206 @@
+{
+  "module_path": "main",
+  "functions": {
+    "Vec2::dot": {
+      "params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "formal_params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Vec2",
+      "param_ownership": [
+        "Borrowed",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        false,
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false,
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Vec2::show": {
+      "params": [
+        "Custom(\"Vec2\")"
+      ],
+      "formal_params": [
+        "Custom(\"Vec2\")"
+      ],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "Vec2",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "emitted_rust_ref_params": [],
+      "string_ref_string_formal_params": [],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Vec2::sub": {
+      "params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "formal_params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "return_type": "Custom(\"Vec2\")",
+      "is_associated": true,
+      "parent_type": "Vec2",
+      "param_ownership": [
+        "Owned",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        false,
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false,
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Vec2::add": {
+      "params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "formal_params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "return_type": "Custom(\"Vec2\")",
+      "is_associated": true,
+      "parent_type": "Vec2",
+      "param_ownership": [
+        "Owned",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        false,
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false,
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Vec2::cross": {
+      "params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "formal_params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"Vec2\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Vec2",
+      "param_ownership": [
+        "Borrowed",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        false,
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false,
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Vec2::mul": {
+      "params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"i64\")"
+      ],
+      "formal_params": [
+        "Custom(\"Vec2\")",
+        "Custom(\"i64\")"
+      ],
+      "return_type": "Custom(\"Vec2\")",
+      "is_associated": true,
+      "parent_type": "Vec2",
+      "param_ownership": [
+        "Owned",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        false,
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false,
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    }
+  },
+  "structs": {
+    "Vec2": {
+      "x": "Custom(\"i64\")",
+      "y": "Custom(\"i64\")"
+    }
+  },
+  "trait_impls": {},
+  "copy_structs": [
+    "Vec2"
+  ],
+  "non_copy_structs": [],
+  "version": "0.50.0",
+  "analysis_fingerprint": {
+    "content_hash": 8088955120076561785,
+    "compiler_version": "0.50.0:765a91302c4a0920",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 10814054349763632242
+  }
+}

@@ -1,0 +1,48 @@
+use std::fs
+use std::collections::HashMap
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut values: HashMap<string, string> = HashMap::new()
+    let mut section = ""
+    let mut in_queries = false
+    for raw in text.lines() {
+        if in_queries {
+            let q = raw.to_string()
+            let key = match q.find(".") {
+                Some(p) => q,
+                None => "." + q,
+            }
+            match values.get(key) {
+                Some(v) => { println(v) }
+                None => { println("<none>") }
+            }
+            continue
+        }
+        let t = raw.trim()
+        let rawline = raw.to_string()
+        if t == "---" && rawline == "---" {
+            in_queries = true
+            continue
+        }
+        if t.len() == 0 || t.starts_with(";") || t.starts_with("#") {
+            continue
+        }
+        if t.starts_with("[") && t.ends_with("]") {
+            section = sub(t.clone(), 1, t.len() - 1).to_string()
+        } else {
+            match t.find("=") {
+                Some(p) => {
+                    let k = sub(t.clone(), 0, p).trim().to_string()
+                    let v = sub(t.clone(), p + 1, t.len()).trim().to_string()
+                    values.insert(section.clone() + "." + k, v)
+                }
+                None => {}
+            }
+        }
+    }
+}

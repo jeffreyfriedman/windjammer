@@ -76,12 +76,14 @@ fn every_parse_error_is_located_inside_the_source() {
                 }
                 Err(e) => {
                     errors += 1;
-                    match location_in_message(&e) {
-                        None => bad.push(format!("{name}: parse error has no line:col: {e}")),
-                        Some((l, c)) if offset_of(&m, l, c).is_none() => {
-                            bad.push(format!("{name}: parse error at {l}:{c} is outside the source: {e}"))
+                    for line in e.lines().filter(|l| !l.trim().is_empty()) {
+                        match location_in_message(line) {
+                            None => bad.push(format!("{name}: parse error has no position: {line}")),
+                            Some((l, c)) if offset_of(&m, l, c).is_none() => {
+                                bad.push(format!("{name}: parse error at {l}:{c} is outside the source: {line}"))
+                            }
+                            Some(_) => {}
                         }
-                        Some(_) => {}
                     }
                 }
             }

@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: 203e43d114c9
+---
 # ADR-0003: The `owned` keyword
 
 - **Status:** Proposed

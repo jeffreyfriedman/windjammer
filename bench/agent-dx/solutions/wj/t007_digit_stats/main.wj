@@ -1,0 +1,36 @@
+use std::fs
+
+fn digit_sum(n: i64) -> i64 {
+    let mut s: i64 = 0
+    let mut x = n
+    while x > 0 {
+        s += x % 10
+        x = x / 10
+    }
+    s
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut first = true
+    for w in text.split_whitespace() {
+        if first {
+            first = false
+            continue
+        }
+        let n = w.parse::<i64>().unwrap_or(0)
+        let ds = digit_sum(n)
+        let mut root = n
+        while root >= 10 {
+            root = digit_sum(root)
+        }
+        let mut rev: i64 = 0
+        let mut x = n
+        while x > 0 {
+            rev = rev * 10 + x % 10
+            x = x / 10
+        }
+        let pal = if rev == n { "yes" } else { "no" }
+        println("${ds} ${root} ${rev} ${pal}")
+    }
+}

@@ -7,11 +7,12 @@ Turns Windjammer source text into tokens (identifiers, numbers with suffixes, st
 In: `&str`. Out: `Vec<Token>` or `Vec<TokenWithLocation>`.
 
 ## Invariants
-- Pure and total: never panics on input; unknown input becomes error tokens.
+- Pure and total: never panics on input; unknown characters and malformed literals become `Token::Invalid(message)` (reported with line:column by the parser). Property test: `tests/lexer_parser_never_panic_test.rs`.
+- Integer literal typing is one function (`number_lexing::int_token`); spec in `docs/design/lexical-grammar.md`.
 - Imports nothing above the syntax layer (one known exception, below).
 
 ## Owns
-Token definitions and lexing rules.
+Token definitions and lexing rules; `keywords.rs` is the documented keyword table (source of docs/reference/keywords.md, pinned to the lexer by tests).
 
 ## Never decides
 Syntax structure, types, semantics.
@@ -32,4 +33,4 @@ Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test
 recording the position, so token columns are 1-based and start at the token itself.
 
 ## Spans (gate 1)
-`TokenWithLocation` carries `line`/`column` (1-based; columns count Unicode scalar values; lines end at `\n` only), `byte_start`/`byte_end` (0-based, half-open), `end_line`/`end_column` (exclusive end) and, for interpolated strings, `interpolation_starts`. Whitespace and plain `//` comments are trivia and belong to no token. Unlexable text (unexpected character, malformed or out-of-range number, empty/unterminated char literal) becomes `Token::Unknown(text)`, never a panic. Verified against an independent oracle by tests/span_oracle_suite.rs (every `.wj` in the repo + generated unicode/CRLF/tab/comment sources + mutation self-tests).
+`TokenWithLocation` carries `line`/`column` (1-based; columns count Unicode scalar values; lines end at `\n` only), `byte_start`/`byte_end` (0-based, half-open), `end_line`/`end_column` (exclusive end) and, for interpolated strings, `interpolation_starts`. Whitespace and plain `//` comments are trivia and belong to no token. Unlexable text (unexpected character, malformed or out-of-range number, empty/unterminated char or string literal) becomes `Token::Invalid(message)` spanning the offending text, never a panic. Verified against an independent oracle by tests/span_oracle_suite.rs (every `.wj` in the repo + generated unicode/CRLF/tab/comment sources + mutation self-tests).

@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 36,
+    "status": "pass",
+    "total": 36
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import sys\n\ndef gcd(a, b):\n    while b:\n        a, b = b, a % b\n    return a\n\ndata = sys.stdin.read().split()\nt = int(data[0])\nfor i in range(t):\n    a, b = int(data[1 + 2 * i]), int(data[2 + 2 * i])\n    g = gcd(a, b)\n    print(g, a // g * b)\n",
+   "usage": null,
+   "wall_seconds": 0.06
+  }
+ ],
+ "lang": "python",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.06
+ },
+ "recorded_at": "2026-10-11T15:15:51",
+ "schema": 1,
+ "task": "t001_gcd_lcm",
+ "trial": 0
+}

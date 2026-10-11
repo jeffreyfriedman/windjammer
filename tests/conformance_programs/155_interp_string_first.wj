@@ -1,0 +1,11 @@
+// expect: 3
+// expect: abc!
+// expect: 5 HELLO
+// expect: x}y
+fn main() {
+    println("${"abc".len()}")
+    println("${"abc".to_string() + "!"}")
+    println("${"hello".len()} ${"hello".to_uppercase()}")
+    let c = "x}y"
+    println("${c}")
+}

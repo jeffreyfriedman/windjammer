@@ -29,11 +29,11 @@ impl Room {
         }
     }
     
-    pub fn add_member(mut self, user_id: string) -> bool {
+    pub fn add_member(self, user_id: string) -> bool {
         self.members.insert(user_id)
     }
     
-    pub fn remove_member(mut self, user_id: string) -> bool {
+    pub fn remove_member(self, user_id: string) -> bool {
         self.members.remove(&user_id)
     }
     
@@ -45,7 +45,7 @@ impl Room {
         self.members.len()
     }
     
-    pub fn add_message(mut self, msg: InternalMessage) {
+    pub fn add_message(self, msg: InternalMessage) {
         self.message_history.push(msg)
         
         // Trim history if too large

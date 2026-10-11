@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-03-05T14:07:09 INFO web started\n2024-03-05T14:07:10 ERROR db connection lost\ngarbage\n",
+  "stdout": "levels: DEBUG=0 INFO=1 WARN=0 ERROR=1\ntop components:\n  db 1\n  web 1\nfirst: 2024-03-05T14:07:09\nlast: 2024-03-05T14:07:10\nerrors:\n  [db] connection lost\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "levels: DEBUG=0 INFO=0 WARN=0 ERROR=0\ntop components:\nfirst: -\nlast: -\nerrors:\nmalformed: 0\n"
+ }
+]

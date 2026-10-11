@@ -167,7 +167,7 @@ impl<'w, 'c, 'a> Walker<'w, 'c, 'a> {
             Pattern::Tuple(ps) | Pattern::Or(ps) => ps.iter().for_each(|q| self.bind_pattern(q)),
             Pattern::Reference(q) => self.bind_pattern(q),
             Pattern::EnumVariant(_, b) => self.bind_enum_binding(b),
-            Pattern::Wildcard | Pattern::Literal(_) => {}
+            Pattern::Wildcard | Pattern::Literal(_) | Pattern::Range { .. } => {}
         }
     }
 

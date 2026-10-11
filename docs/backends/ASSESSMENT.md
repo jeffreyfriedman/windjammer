@@ -1,8 +1,8 @@
 # Go / JavaScript / WASM backend assessment
 
-Method: read the code, generated output for a 98-program corpus (`tests/conformance_programs`) with the compiler built from
+Method: read the code, generated output for the conformance corpus (`tests/conformance_programs`) with the compiler built from
 this branch, and executed it (`go 1.26.1`, `node 24.17`; `tsc` is not installed, TypeScript was run through Node type
-stripping only). "Before" numbers use the pre-change compiler on the first 35 hand-written programs.
+stripping only). "Before" numbers use the pre-change compiler on the first hand-written programs.
 
 ## Verified facts (all true at the start)
 
@@ -39,7 +39,7 @@ Architecture: `codegen/portable` (typed IR: exact integer widths, inference vari
 of expression control flow, `Unsupported` errors instead of placeholder code) + `go/emit` + `javascript/emit` (JS and TS) +
 runtimes `std/runtime/{go,js}/wj_core.*`, `wj_std.*`. `wj build --target go|js|ts` writes a ready-to-run directory.
 
-| corpus (98 programs, seeds 1-5 for seeded ones) | pass | listed unsupported | fail |
+| corpus (seeds 1-5 for seeded ones) | pass | listed unsupported | fail |
 |---|---|---|---|
 | Rust | 75 | 23 (Rust-target codegen defects, `docs/known-issues/rust-*`) | 0 |
 | Go | 98 | 0 | 0 |
@@ -97,7 +97,7 @@ that asserted their output (`enhanced_javascript_tests.rs`, `conformance_{go,js}
 
 1. Multi-file projects/imports on Go/JS/TS (single `.wj` or `main.wj` only).
 2. Async/spawn/channels and decorators-as-semantics.
-3. Rust target defects exposed by the corpus (23 programs; see `docs/known-issues/rust-*`).
+3. Rust target defects exposed by the corpus (see `docs/known-issues/rust-*`).
 4. Lazy iterators; user `Display` impls; `HashMap` with struct/tuple keys; generic Go methods; trait objects over enums.
 5. `json`, `http`, and the Rust-only std modules (`std/README.md` tiers).
 6. `tsc` type-checking of TS output (needs a `wj_core.d.mts`); WASM has no execution test.

@@ -29,6 +29,14 @@ pub fn types_in_stmts(ss: &mut [PStmt], v: TyFn) {
 fn types_in_pat(p: &mut PPat, v: TyFn) {
     match p {
         PPat::Lit(e) => types_in_expr(e, v),
+        PPat::Range { lo, hi, .. } => {
+            if let Some(e) = lo {
+                types_in_expr(e, v);
+            }
+            if let Some(e) = hi {
+                types_in_expr(e, v);
+            }
+        }
         PPat::Tuple(ps) | PPat::Or(ps) => ps.iter_mut().for_each(|p| types_in_pat(p, v)),
         PPat::Variant { fields, .. } => fields.iter_mut().for_each(|(_, p)| types_in_pat(p, v)),
         PPat::Some(p) | PPat::Ok(p) | PPat::Err(p) => types_in_pat(p, v),
@@ -86,7 +94,8 @@ pub fn types_in_stmt(s: &mut PStmt, v: TyFn) {
             }
         }
         PStmt::Defer(s) => types_in_stmt(s, v),
-        PStmt::Break | PStmt::Continue => {}
+        PStmt::Labeled { stmt, .. } => types_in_stmt(stmt, v),
+        PStmt::Break | PStmt::Continue | PStmt::BreakTo(_) | PStmt::ContinueTo(_) => {}
     }
 }
 
@@ -211,7 +220,8 @@ pub fn exprs_in_stmt(s: &mut PStmt, f: &mut dyn FnMut(&mut PExpr)) {
             }
         }
         PStmt::Defer(s) => exprs_in_stmt(s, f),
-        PStmt::Break | PStmt::Continue => {}
+        PStmt::Labeled { stmt, .. } => exprs_in_stmt(stmt, f),
+        PStmt::Break | PStmt::Continue | PStmt::BreakTo(_) | PStmt::ContinueTo(_) => {}
     }
 }
 

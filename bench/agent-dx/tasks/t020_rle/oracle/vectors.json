@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aaabcc\nD 3a1b2c\n",
+  "stdout": "3a1b2c\naaabcc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E z\nD 1z\nE \nD \n",
+  "stdout": "1z\nz\n\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nD 12a100b\nD 10z1y\n",
+  "stdout": "12a100b\naaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\nzzzzzzzzzzy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E abcabc\nE aabbaa\n",
+  "stdout": "1a1b1c1a1b1c\n2a2b2a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 12c15b11a\nD 28c14b\nE aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccccccccccccccccccccc\nD 15c9a11b\nE bbbbbbbbbbbbcccccccccccccaaaaaaaccccca\nE aaaaaaaaaaaaaaaaaaaa\nD 27b\nD 15a22b15a4c\n",
+  "stdout": "ccccccccccccbbbbbbbbbbbbbbbaaaaaaaaaaa\nccccccccccccccccccccccccccccbbbbbbbbbbbbbb\n32a22c\ncccccccccccccccaaaaaaaaabbbbbbbbbbb\n12b13c7a5c1a\n20a\nbbbbbbbbbbbbbbbbbbbbbbbbbbb\naaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaacccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbbbbbbbbbbbbbbbbbbbbbbcccccccccccc\n",
+  "stdout": "26b12c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 4c11a12b\n",
+  "stdout": "ccccaaaaaaaaaaabbbbbbbbbbbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E \nE aaaaaacccccccccbbbbbaaaaaaaa\n",
+  "stdout": "\n6a9c5b8a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbbbbbbbbbbbbbbbbbbbb\nE aaaaaaaaaaccccccaaaaaaa\nE ccccccccc\nE aaaaaaaaaaaaaaccccccccccccccccccccccccccaaaaaacccccccccccccccaaaaaaaaaaaaaaa\n",
+  "stdout": "24b\n10a6c7a\n9c\n14a26c6a15c15a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbccccccccccccccccccccccccbbbbbbbbbbbbbbbcccccccccccccc\nE aaaaaaccccccccccccbb\nD 1a\nE bbbbbbbbbbbbbbbccccccccccccc\nD 16c\nE aaaaaaaa\nD 7b4a13b14c15b\n",
+  "stdout": "3b24c15b14c\n6a12c2b\na\n15b13c\ncccccccccccccccc\n8a\nbbbbbbbaaaabbbbbbbbbbbbbccccccccccccccbbbbbbbbbbbbbbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbbbbbbbbbbbbbbb\nD 9b7c\nE aaaaaaaaaaaaaacccccccccccccccccccccccc\nE caaaaaaaaccccccccccccccccccccccccaaaaaaaaaaa\n",
+  "stdout": "19b\nbbbbbbbbbccccccc\n14a24c\n1c8a24c11a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aa\nE bbbbbbbbbccccc\nD 19c10a11b2a\nE caaaaaaacccccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nD 5b1c2b6a\nD 20b3c7b\nE \n",
+  "stdout": "2a\n9b5c\ncccccccccccccccccccaaaaaaaaaabbbbbbbbbbbaa\n1c7a15c30a\nbbbbbcbbaaaaaa\nbbbbbbbbbbbbbbbbbbbbcccbbbbbbb\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbcccccbbb\n",
+  "stdout": "5b5c3b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 19b\nD 24c\nE \nD \n",
+  "stdout": "bbbbbbbbbbbbbbbbbbb\ncccccccccccccccccccccccc\n\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E ccccccbbbbbbbbbbbbbb\nE cccc\nD 10b\n",
+  "stdout": "6c14b\n4c\nbbbbbbbbbb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbbbbbbbbaaaaaaaaaa\nD 12c\nE \nE c\nE cccccccccccaaaaaaaaaaaabbbbbccccccccbbb\n",
+  "stdout": "12b10a\ncccccccccccc\n\n1c\n11c12a5b8c3b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D \nE ccccccccccccccc\nE \nD \nE bbbbbbbbbbbbbbcccccccccccc\nE aaaaaaaaaaaaaaabbbbbbbbbbb\n",
+  "stdout": "\n15c\n\n\n14b12c\n15a11b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E cccaaaaaaaaaacccccc\n",
+  "stdout": "3c10a6c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbbbcccccccccbbbbbbbaaaaaaaaaaaaaa\nD 4b11a26c\n",
+  "stdout": "7b9c7b14a\nbbbbaaaaaaaaaaacccccccccccccccccccccccccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 8b5c2b5a7c13a\nD 8b\nD 50a\nE cccccccaaaabbbbbbbbbbbbcccccc\n",
+  "stdout": "bbbbbbbbcccccbbaaaaacccccccaaaaaaaaaaaaa\nbbbbbbbb\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n7c4a12b6c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 10a\nD 18a14c4b\nE \n",
+  "stdout": "aaaaaaaaaa\naaaaaaaaaaaaaaaaaaccccccccccccccbbbb\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D \nD 19a13c\nE aaaaaaaaaaacccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nE ccccccccccccaaaaaaaaa\nD 14a27b\nD \nE bbbbbbbbbbbbbbbbcccccccbbbbbbbbbbccccccc\n",
+  "stdout": "\naaaaaaaaaaaaaaaaaaaccccccccccccc\n11a13c32a\n12c9a\naaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbb\n\n16b7c10b7c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 30c21a\nD 6a3c7a10c\nE \nD 13b16c\nE aaaaaaaaaacccaaaaaaaaaaaaaaaa\nD 12b\nE cccccccccccccaaaaaaaaaaaaaaa\nD 14b3a8c6b15c\n",
+  "stdout": "ccccccccccccccccccccccccccccccaaaaaaaaaaaaaaaaaaaaa\naaaaaacccaaaaaaacccccccccc\n\nbbbbbbbbbbbbbcccccccccccccccc\n10a3c16a\nbbbbbbbbbbbb\n13c15a\nbbbbbbbbbbbbbbaaaccccccccbbbbbbccccccccccccccc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D \nD 29b13a2b12a\nE aaaaaaaaa\n",
+  "stdout": "\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaabbaaaaaaaaaaaa\n9a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E \nE bbbbbbbbbbbbbbbbbb\nE bbbbbbbbbbccccccccaaaaaaaaa\nE cccccccccccccccaaaaaccccccccccccccc\nD 6a\nD 7b16a11c14a6b\nD 13b18a\n",
+  "stdout": "\n18b\n10b8c9a\n15c5a15c\naaaaaa\nbbbbbbbaaaaaaaaaaaaaaaacccccccccccaaaaaaaaaaaaaabbbbbb\nbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaa\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E bbbbbbbbbbbbccccccaaaaaaaaaaaaaacccccccccccccbbbbbbbbbbbbbb\nD 7b17a12b6c\nE cccaaaaaaaaaaaaaa\nE aaaabbbbbaaaaaaaaacccccc\nD 8a7c11a2c\nE \nE cccccccccaaaaaaaaaaaaaaa\n",
+  "stdout": "12b6c14a13c14b\nbbbbbbbaaaaaaaaaaaaaaaaabbbbbbbbbbbbcccccc\n3c14a\n4a5b9a6c\naaaaaaaacccccccaaaaaaaaaaacc\n\n9c15a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 11c12a\n",
+  "stdout": "cccccccccccaaaaaaaaaaaa\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 6a4b\nD 13c13b7c4b\nE aaaaaaaaaaaaabbbbbbbbbbbbbbbbbb\nE bbbbbbbbbccccccccccccccccccccccccccccccccccbbbbbb\n",
+  "stdout": "aaaaaabbbb\ncccccccccccccbbbbbbbbbbbbbcccccccbbbb\n13a18b\n9b34c6b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aaaaaaacccccaaaaaabbbbbbbbbbbb\nD 15a12c\nD 12a13b7a\n",
+  "stdout": "7a5c6a12b\naaaaaaaaaaaaaaacccccccccccc\naaaaaaaaaaaabbbbbbbbbbbbbaaaaaaa\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E ccccccccccccabbbbbbb\nD \nE ccccccccccbbbbbbbbbbbbbbbbbbbbccccccaa\nE cccccccc\n",
+  "stdout": "12c1a7b\n\n10c20b6c2a\n8c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aaabbbbbbb\nE bbbbbbb\nD 21b18c\nE cccccccccccccccccccc\nD 25c1a4c\nE bbbbbbbbbbbbbb\nE ccccccccc\n",
+  "stdout": "3a7b\n7b\nbbbbbbbbbbbbbbbbbbbbbcccccccccccccccccc\n20c\ncccccccccccccccccccccccccacccc\n14b\n9c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "D 6b13c\nE bbbbbbaaaaaaaaacccccccc\nE cccccccccccccccbbbaaa\nD 2c\nE bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbaaaaaaaaaaaaaaa\n",
+  "stdout": "bbbbbbccccccccccccc\n6b9a8c\n15c3b3a\ncc\n30b15a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E \nE aaaa\n",
+  "stdout": "\n4a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aaaaaaaaaaaaaaabbbbbbbbbaaaabbbbbbbbbbbbbcc\nE aaaaaaaaaaaaaaaaaaaaaaa\n",
+  "stdout": "15a9b4a13b2c\n23a\n"
+ }
+]

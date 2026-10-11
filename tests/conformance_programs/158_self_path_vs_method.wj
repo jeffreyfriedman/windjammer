@@ -1,0 +1,30 @@
+// expect: 1
+// expect: 7
+// expect: 8
+fn f() -> int {
+    7
+}
+
+struct S {
+}
+
+impl S {
+    fn f(self) -> int {
+        1
+    }
+
+    fn method(self) -> int {
+        self.f()
+    }
+
+    fn path(self) -> int {
+        self::f()
+    }
+}
+
+fn main() {
+    let s = S {}
+    println("${s.method()}")
+    println("${s.path()}")
+    println("${s.method() + s.path()}")
+}

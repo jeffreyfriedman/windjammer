@@ -1380,12 +1380,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         use std::path::Path;
 
         let mut names = HashSet::new();
-        let std_dir = [
-            Path::new("std").to_path_buf(),
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        ]
-        .into_iter()
-        .find(|p| p.is_dir());
+        let std_dir =
+            crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj);
         let Some(std_dir) = std_dir else {
             return names;
         };

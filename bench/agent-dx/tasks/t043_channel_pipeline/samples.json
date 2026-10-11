@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10\nmul:2 gt:5\n",
+  "stdout": "8\n6 8 10 12 14 16 18 20\nsum=104\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\n\n",
+  "stdout": "5\n1 2 3 4 5\nsum=15\n"
+ }
+]

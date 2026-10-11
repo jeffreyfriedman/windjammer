@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n2 2\n1 2\n3 4\n2 2\n5 6\n7 8\n",
+  "stdout": "19 22\n43 50\n---\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n1 3\n1 2 3\n3 1\n1\n2\n3\n1 1\n1\n1 2\n1 2\n1 2\n1 2\n1 2\n1 2\n",
+  "stdout": "14\n---\n1 2\n---\ndimension mismatch\n---\n"
+ }
+]

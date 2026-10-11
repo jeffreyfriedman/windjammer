@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npush 1\npush 2\npush 3\ndump\npop\nsize\n",
+  "stdout": "ok\nok\nfull\n1 2\n1\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npop\npeek\ndump\n",
+  "stdout": "empty\nempty\n<empty>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\npush 5\npush 6\npop\npush 7\npeek\ndump\npop\npop\n",
+  "stdout": "ok\nfull\n5\nok\n7\n7\n7\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npush -1\npush 0\npush 9\npop\npush 4\npush 5\ndump\nsize\n",
+  "stdout": "ok\nok\nok\n-1\nok\nfull\n0 9 4\n3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npop\npush -44\npop\npush 40\npush 22\npop\npeek\nsize\npush 36\npush -16\ndump\nsize\npop\npeek\npop\nsize\npush 18\npush 17\npop\npush -1\npop\nsize\nsize\npeek\nsize\npush -15\npush -14\npush -26\npop\npush -41\ndump\npush -19\npush -16\npush -31\npop\npush 19\npop\npush -14\npush 29\npush 29\n",
+  "stdout": "empty\nok\n-44\nok\nok\n40\n22\n1\nok\nfull\n22 36\n2\n22\n36\n36\n0\nok\nok\n18\nok\n17\n1\n1\n-1\n1\nok\nfull\nfull\n-1\nok\n-15 -41\nfull\nfull\nfull\n-15\nok\n-41\nok\nfull\nfull\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nsize\npush -36\npop\npop\npeek\nsize\nsize\npeek\npush -42\npush -38\npeek\npop\npop\npeek\npop\npeek\npush 25\npop\ndump\npush 8\n",
+  "stdout": "0\nok\n-36\nempty\nempty\n0\n0\nempty\nok\nok\n-42\n-42\n-38\nempty\nempty\nempty\nok\n25\n<empty>\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\npush -27\npop\npush -29\nsize\npush 27\nsize\npush 9\npop\npush 23\npush -27\n",
+  "stdout": "ok\n-27\nok\n1\nok\n2\nok\n-29\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npush -7\npush 36\npop\ndump\npush -35\nsize\npeek\npush -28\npeek\ndump\npeek\npush 0\nsize\npush 10\npop\npush 28\npop\npeek\npop\npush -22\npush -21\npeek\npush -13\npush -23\npop\npush -36\nsize\npop\n",
+  "stdout": "ok\nok\n-7\n36\nok\n2\n36\nok\n36\n36 -35 -28\n36\nfull\n3\nfull\n36\nok\n-35\n-28\n-28\nok\nok\n28\nfull\nfull\n28\nok\n3\n-22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\npop\npush -18\npeek\ndump\npop\npush 33\npush -31\npush 34\npush -18\npush 31\npeek\npop\npeek\npush -10\npush 21\npop\npop\ndump\npush -45\npush 38\n",
+  "stdout": "empty\nok\n-18\n-18\n-18\nok\nok\nok\nok\nok\n33\n33\n-31\nok\nfull\n-31\n34\n-18 31 -10\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\npop\ndump\npush 14\npush -37\npush -46\npop\npush 41\nsize\npop\npop\npush 37\npop\n",
+  "stdout": "empty\n<empty>\nok\nok\nok\n14\nok\n3\n-37\n-46\nok\n41\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nsize\nsize\npush -10\nsize\npop\npush 30\npeek\npush -8\npush -16\npop\ndump\ndump\npush 39\npop\ndump\npush 35\npush -10\npeek\npeek\npush 19\npeek\npush 22\npush -49\npop\nsize\npop\npush -12\npop\npop\npush 33\ndump\npop\npush 30\npush 3\npop\n",
+  "stdout": "0\n0\nok\n1\n-10\nok\n30\nok\nfull\n30\n-8\n-8\nok\n-8\n39\nok\nfull\n39\n39\nfull\n39\nfull\nfull\n39\n1\n35\nok\n-12\nempty\nok\n33\n33\nok\nok\n30\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nsize\npop\npush -36\npop\ndump\npeek\npeek\ndump\ndump\npush 48\n",
+  "stdout": "0\nempty\nok\n-36\n<empty>\nempty\nempty\n<empty>\n<empty>\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npop\npeek\npush -30\npop\npush 12\npush 32\npush 23\npush -47\ndump\npush 23\n",
+  "stdout": "empty\nempty\nok\n-30\nok\nok\nfull\nfull\n12 32\nfull\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\ndump\npush -10\npush -10\npush 5\npop\npop\npush 22\npop\npush 22\npush -28\npush -45\npop\npush -18\npush -5\npush 37\nsize\npush -33\nsize\npeek\npush -39\ndump\npeek\npeek\npeek\npush 15\npush -37\npush 20\npop\nsize\npop\n",
+  "stdout": "<empty>\nok\nok\nok\n-10\n-10\nok\n5\nok\nok\nok\n22\nok\nok\nfull\n5\nfull\n5\n22\nfull\n22 -28 -45 -18 -5\n22\n22\n22\nfull\nfull\nfull\n22\n4\n-28\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npeek\npush -26\npush 42\nsize\npop\nsize\npeek\npop\ndump\npop\npop\nsize\npush 28\npush 28\ndump\ndump\npop\n",
+  "stdout": "empty\nok\nok\n2\n-26\n1\n42\n42\n<empty>\nempty\nempty\n0\nok\nok\n28 28\n28 28\n28\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\npeek\nsize\npush 26\npop\nsize\npop\npop\npop\npop\ndump\ndump\nsize\npush 48\npush 15\npush -24\ndump\npop\ndump\npush -28\npeek\npush -4\npush -23\npeek\n",
+  "stdout": "empty\n0\nok\n26\n0\nempty\nempty\nempty\nempty\n<empty>\n<empty>\n0\nok\nok\nok\n48 15 -24\n48\n15 -24\nok\n15\nok\nok\n15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npeek\npush -25\nsize\npop\npush -25\ndump\nsize\npop\npush 17\npop\npop\npush 41\npop\npop\npush 25\npush 16\npop\npop\npush -18\npush -16\npop\npop\npeek\n",
+  "stdout": "empty\nok\n1\n-25\nok\n-25\n1\n-25\nok\n17\nempty\nok\n41\nempty\nok\nok\n25\n16\nok\nok\n-18\n-16\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\ndump\npush 5\npush -13\npeek\npush -39\ndump\npush 25\npop\npush -25\npush -9\ndump\npeek\npush 47\npop\npop\npush 21\npush -35\nsize\npush -31\npush -37\nsize\npush -27\nsize\npop\n",
+  "stdout": "<empty>\nok\nok\n5\nfull\n5 -13\nfull\n5\nok\nfull\n-13 -25\n-13\nfull\n-13\n-25\nok\nok\n2\nfull\nfull\n2\nfull\n2\n21\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\ndump\npush 30\npop\npush 3\nsize\npush -33\npush -25\npeek\npush 47\npeek\npeek\npush 31\npop\npush -35\npop\ndump\nsize\npush 12\npush -15\npush 28\nsize\nsize\ndump\npop\npop\npop\npeek\npop\nsize\npop\npush -21\n",
+  "stdout": "<empty>\nok\n30\nok\n1\nok\nok\n3\nfull\n3\n3\nfull\n3\nok\n-33\n-25 -35\n2\nok\nfull\nfull\n3\n3\n-25 -35 12\n-25\n-35\n12\nempty\nempty\n0\nempty\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npop\npeek\npush 13\npush -23\npush 27\npeek\npush 12\nsize\npush -43\npeek\npop\npush 37\npush -33\npop\npush -10\nsize\nsize\npush 28\npush -42\npush -5\npop\npop\npeek\npop\n",
+  "stdout": "empty\nempty\nok\nok\nok\n13\nfull\n3\nfull\n13\n13\nok\nfull\n-23\nok\n3\n3\nfull\nfull\nfull\n27\n37\n-10\n-10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\npop\ndump\npush -7\npush -27\npop\nsize\npush 49\npop\npop\npush -29\npop\npush 32\npop\npush -22\npush 19\n",
+  "stdout": "empty\n<empty>\nok\nok\n-7\n1\nok\n-27\n49\nok\n-29\nok\n32\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\npush -15\npop\nsize\npop\npush -2\npop\npush -26\npush 38\npush 11\npop\n",
+  "stdout": "ok\n-15\n0\nempty\nok\n-2\nok\nok\nok\n-26\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npeek\npush 49\npush 45\npush -49\npush -31\npush -24\ndump\npop\npush 7\npeek\nsize\npush -33\npop\npeek\npush 11\npush -50\npop\npush -16\npush -47\npush -45\npush 9\ndump\npop\npop\npop\npop\nsize\npush 1\npush 4\n",
+  "stdout": "empty\nok\nok\nfull\nfull\nfull\n49 45\n49\nok\n45\n2\nfull\n45\n7\nok\nfull\n7\nok\nfull\nfull\nfull\n11 -16\n11\n-16\nempty\nempty\n0\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\ndump\npush 39\npush 17\npush 36\npush 17\npush -23\ndump\npush -16\npeek\npush 5\npop\npush -12\npeek\npush 15\npop\npop\ndump\npop\npush -44\npush -5\ndump\npeek\npush -1\npop\nsize\npop\npush -24\ndump\npush 14\npush 9\ndump\npush 31\npush -10\npush -29\npop\n",
+  "stdout": "<empty>\nok\nok\nok\nok\nfull\n39 17 36 17\nfull\n39\nfull\n39\nok\n17\nfull\n17\n36\n17 -12\n17\nok\nok\n-12 -44 -5\n-12\nok\n-12\n3\n-44\nok\n-5 -1 -24\nok\nfull\n-5 -1 -24 14\nfull\nfull\nfull\n-5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npop\npush 20\ndump\ndump\nsize\npush -14\npop\npop\n",
+  "stdout": "empty\nok\n20\n20\n1\nok\n20\n-14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nsize\npush -21\npush -26\npop\npush -17\npop\ndump\npop\npop\npop\npush -7\npush -49\n",
+  "stdout": "0\nok\nfull\n-21\nok\n-17\n<empty>\nempty\nempty\nempty\nok\nfull\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nsize\npop\npush 43\npop\npop\npush 3\nsize\npush 40\npop\npop\npush -18\npush 40\npeek\npush -41\npop\npop\npush -45\npush 27\npush -29\npeek\nsize\npush -44\npush -13\npop\npush -36\npop\nsize\npush -43\npeek\npop\n",
+  "stdout": "0\nempty\nok\n43\nempty\nok\n1\nok\n3\n40\nok\nok\n-18\nok\n-18\n40\nok\nok\nok\n-41\n4\nok\nfull\n-41\nok\n-45\n4\nok\n27\n27\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\npush -12\npush -41\npush 41\npop\npush -34\npop\npop\npeek\nsize\npop\npush 11\npop\npop\npop\npush -37\npush -9\npop\ndump\n",
+  "stdout": "ok\nok\nok\n-12\nok\n-41\n41\n-34\n1\n-34\nok\n11\nempty\nempty\nok\nok\n-37\n-9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\ndump\npush 50\npop\npush 28\nsize\nsize\npush -28\npush 37\npop\npush -36\npush -20\npush 40\npeek\npush -2\npeek\npush -39\npush 44\ndump\npush 39\npop\npush 13\npush 15\npush -46\npush 9\npush 42\npush -8\npush 16\npeek\nsize\npush -50\ndump\npush -39\npop\npush -34\npush 29\npush 48\nsize\n",
+  "stdout": "<empty>\nok\n50\nok\n1\n1\nok\nok\n28\nok\nok\nok\n-28\nfull\n-28\nfull\nfull\n-28 37 -36 -20 40\nfull\n-28\nok\nfull\nfull\nfull\nfull\nfull\nfull\n37\n5\nfull\n37 -36 -20 40 13\nfull\n37\nok\nfull\nfull\n5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\ndump\npush 18\npop\npush 7\nsize\npop\npush -23\npop\npush 41\npeek\npush 20\npop\nsize\npush -22\npeek\npush 6\npop\n",
+  "stdout": "<empty>\nok\n18\nok\n1\n7\nok\n-23\nok\n41\nok\n41\n1\nok\n20\nok\n20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npush 13\ndump\npush 38\npush 49\npush 20\npop\nsize\ndump\npop\npush -18\npop\nsize\npop\n",
+  "stdout": "ok\n13\nok\nok\nfull\n13\n2\n38 49\n38\nok\n49\n1\n-18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\ndump\nsize\nsize\npush 31\npush -39\npop\nsize\npop\npush -20\npop\nsize\npush -33\npush 49\nsize\ndump\npush -20\npush -47\npeek\npush 48\npush 21\ndump\npush 31\npush -43\npop\npush -25\npush 1\npop\npush -5\npush 41\nsize\npush 20\npush 28\n",
+  "stdout": "<empty>\n0\n0\nok\nok\n31\n1\n-39\nok\n-20\n0\nok\nok\n2\n-33 49\nok\nok\n-33\nok\nfull\n-33 49 -20 -47 48\nfull\nfull\n-33\nok\nfull\n49\nok\nfull\n5\nfull\nfull\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\npop\npush 1\npush -13\npop\npush -49\npush 12\npop\npush -12\npop\npop\npush -12\ndump\npop\nsize\npop\npush -16\npush -48\n",
+  "stdout": "empty\nok\nok\n1\nok\nok\n-13\nok\n-49\n12\nok\n-12 -12\n-12\n1\n-12\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\npop\npush 43\npush 34\npeek\npeek\npush 25\npop\npop\npop\npop\npush -40\npush -3\npop\npush -50\npush 34\npush 46\ndump\npush 6\nsize\npush -15\npush -21\npop\npop\npush -11\npop\npop\npush -6\npush 25\npop\npush 33\npop\npop\npush 26\npop\npush -48\ndump\npush -8\nsize\n",
+  "stdout": "empty\nok\nok\n43\n43\nok\n43\n34\n25\nempty\nok\nok\n-40\nok\nok\nok\n-3 -50 34 46\nfull\n4\nfull\nfull\n-3\n-50\nok\n34\n46\nok\nok\n-11\nok\n-6\n25\nok\n33\nok\n26 -48\nok\n3\n"
+ }
+]

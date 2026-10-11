@@ -1,0 +1,49 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let cs: Vec<char> = line.chars().collect()
+        let n = cs.len()
+        let mut best_len: usize = 0
+        let mut best_start: usize = 0
+        let mut count: i64 = 0
+        let mut i: usize = 0
+        while i < n {
+            let mut j = i
+            while j < n {
+                let mut a = i
+                let mut b = j
+                let mut ok = true
+                while a < b {
+                    if cs[a] != cs[b] {
+                        ok = false
+                        break
+                    }
+                    a += 1
+                    b -= 1
+                }
+                if ok {
+                    count += 1
+                    if j - i + 1 > best_len {
+                        best_len = j - i + 1
+                        best_start = i
+                    }
+                }
+                j += 1
+            }
+            i += 1
+        }
+        if best_len == 0 {
+            println("0 - 0")
+        } else {
+            let mut sub = ""
+            let mut k = best_start
+            while k < best_start + best_len {
+                sub = sub + cs[k].to_string()
+                k += 1
+            }
+            println("${best_len} ${sub} ${count}")
+        }
+    }
+}

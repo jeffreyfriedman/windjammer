@@ -1,0 +1,36 @@
+use std::fs
+
+fn gcd(a: i64, b: i64) -> i64 {
+    let mut x = a
+    let mut y = b
+    while y != 0 {
+        let t = x % y
+        x = y
+        y = t
+    }
+    x
+}
+
+fn main() {
+    match fs::read_to_string("/dev/stdin") {
+        Ok(text) => {
+            let mut nums: Vec<i64> = Vec::new()
+            for w in text.split_whitespace() {
+                match w.parse::<i64>() {
+                    Ok(v) => { nums.push(v) }
+                    Err(_) => {}
+                }
+            }
+            let t = nums[0]
+            let mut i: i64 = 0
+            while i < t {
+                let a = nums[(1 + 2 * i) as usize]
+                let b = nums[(2 + 2 * i) as usize]
+                let g = gcd(a, b)
+                println("${g} ${a / g * b}")
+                i += 1
+            }
+        }
+        Err(_) => {}
+    }
+}

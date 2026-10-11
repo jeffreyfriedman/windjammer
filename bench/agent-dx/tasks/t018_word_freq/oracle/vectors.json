@@ -1,0 +1,218 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nthe cat and the dog. The end!\n",
+  "stdout": "the 3\nand 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\na b a\nB c\n",
+  "stdout": "a 2\nb 2\nc 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n...!!!\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10\nDon't stop: don't\n",
+  "stdout": "don 2\nt 2\nstop 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nx9 X9 x_9 9x 42 042\n",
+  "stdout": "x9 2\n042 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nDog .a\n\n",
+  "stdout": "a 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nif -and -run -and -and -the -run\n",
+  "stdout": "and 3\nrun 2\nif 1\nthe 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nx9 -a -the\ndog -x9 -a\n",
+  "stdout": "a 2\nx9 2\ndog 1\nthe 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nand .THE .or .THE .it's .a .or .the\nand \nor \nor \nthe \nit's \nor \nor \nRun\nx9 ,42 ,Run\ndog ,the ,Dog ,the ,x9 ,Dog\nrun a or THE Dog THE Run\n",
+  "stdout": "the 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nrun or it's the dog dog and\nDog .42 .a .a .dog\nTHE \nRun \nit's \nit's \nit's \na \ndog \n42\n\nx9  or  Run  cat  THE  Dog\n",
+  "stdout": "dog 6\nit 4\ns 4\na 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nrun  if  cat  42\n",
+  "stdout": "42 1\ncat 1\nif 1\nrun 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nRun \na \nif\ncat .it's .cat .it's .x9 .42 .Dog .the\nDog  or  THE\n",
+  "stdout": "cat 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nx9 ,x9 ,x9 ,cat ,the ,THE ,if\n\nDog  THE  run  Run\n42 \nand \ncat \nand \nit's \nif \na \nif\n",
+  "stdout": "if 3\nthe 3\nx9 3\nand 2\ncat 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\n42\ncat ,THE ,run ,Dog ,if ,Dog ,or ,run\nDog .dog .Dog .if .or .it's .Dog .x9\n\n",
+  "stdout": "dog 6\nif 2\nor 2\nrun 2\n42 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nDog\nand  a\na ,dog ,x9 ,a ,it's ,it's ,THE\ndog a run x9 x9\n42 -and\n",
+  "stdout": "a 4\ndog 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nand  and  or  or  and  cat  THE\nrun  run  THE  THE  run  and  42  and\n\nit's -if\ndog ,dog ,cat ,THE ,run\nit's\n",
+  "stdout": "and 5\nrun 4\nthe 4\ncat 2\ndog 2\nit 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nrun a a Run the\nDog run Dog run\nx9 Run or it's if Dog 42\nDog -the\nx9 .Dog .or .run .x9 .the .THE\nif .and .Run .a .and .or .THE\n",
+  "stdout": "run 7\ndog 5\nthe 5\na 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nDog  dog  cat  dog  dog  it's\nTHE  it's  and  the\ncat -dog\n",
+  "stdout": "dog 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\ndog ,a ,Run ,or ,42 ,cat ,42 ,THE\ncat\nit's  a  a  the  and  run\n\nand .run .dog .THE\nit's  cat  run  Dog\n",
+  "stdout": "run 4\na 3\ncat 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nrun\nor  run  cat  x9\n",
+  "stdout": "run 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\na a or 42 a THE cat\n\nif ,or ,Dog ,it's ,dog ,the ,Run\nx9 ,and ,or\n",
+  "stdout": "a 3\nor 3\ndog 2\nthe 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\ncat \nTHE \ndog \ncat \nit's \nif \n42 \nDog\n",
+  "stdout": "cat 2\ndog 2\n42 1\nif 1\nit 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nrun -Run -it's\nthe  it's\n42 ,it's ,Dog ,or ,cat ,dog ,dog ,42\nTHE .the .x9 .if .and .and .or .a\nif -it's\nRun ,Dog\n",
+  "stdout": "dog 4\nit 4\ns 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nand .cat .or .the\ndog\nit's -x9 -or -it's -the -cat\ndog or THE Run cat a and\nTHE \nand \nDog \nthe\nor .the .Dog .42 .cat .the .if .cat\n",
+  "stdout": "the 7\ncat 5\ndog 4\nor 4\nand 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\n\nTHE  a  dog  Dog\nTHE  Run  x9  if  Dog  THE\n",
+  "stdout": "dog 3\nthe 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nif\nor ,it's ,dog ,dog ,run ,Dog ,run ,42\nif\nit's ,run ,x9 ,x9\n",
+  "stdout": "dog 3\nrun 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nit's\nit's .if .x9 .and .and .a\n",
+  "stdout": "and 2\nit 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n\n\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nit's  x9  dog  the\nor the x9 Dog the\nrun cat the cat it's and and the\ncat it's THE Run it's it's or dog\nDog  and  the  and  if  x9  the\n",
+  "stdout": "the 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n42 .42 .the .x9 .the .THE\n",
+  "stdout": "the 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nand \nthe \nthe \n42 \nTHE \nit's\nTHE\nx9 -it's -run\n\n",
+  "stdout": "the 4\nit 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nif it's 42 a Dog it's\n",
+  "stdout": "it 2\ns 2\n42 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nDog \n42 \na\nDog  Run  x9  and  and  the  cat\n",
+  "stdout": "and 2\ndog 2\n42 1\na 1\ncat 1\nrun 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nx9\ncat  cat  run  THE\nif .Run .x9 .it's .dog .Dog .Dog .42\nRun the and THE if\nDog ,it's ,the ,THE ,42 ,run ,x9\n",
+  "stdout": "the 5\ndog 4\nrun 4\nx9 3\n42 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nit's -x9 -Dog -if\nTHE ,Run ,Dog ,Run ,dog ,a ,if ,it's\na\n",
+  "stdout": "dog 3\na 2\nif 2\nit 2\n"
+ }
+]

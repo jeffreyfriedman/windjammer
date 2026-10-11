@@ -15,7 +15,8 @@ pub fn check_lexeme(tok: &Token, lexeme: &str, at_eof: bool) -> Result<(), Strin
         Lifetime(n) => eq(lexeme, &format!("'{n}")),
         Decorator(n) => eq(lexeme, &format!("@{n}")),
         Newline => eq(lexeme, "\n"),
-        Unknown(text) => eq(lexeme, text),
+        // The payload is a diagnostic message; the span must cover the offending text.
+        Invalid(_) => (!lexeme.is_empty()).then_some(()).ok_or_else(|| "invalid token with empty span".to_string()),
         Eof => eq(lexeme, ""),
         DocComment(content) => {
             let rest = lexeme.strip_prefix("///").ok_or("doc comment must start with ///")?;

@@ -254,7 +254,8 @@ pub fn create_cargo_toml_with_deps(
 
     // If ANY stdlib module is used, add windjammer-runtime
     if !imported_modules.is_empty() {
-        let windjammer_runtime_path = find_windjammer_runtime_path_with(config.runtime_path.as_deref());
+        let windjammer_runtime_path =
+            find_windjammer_runtime_path_with(config.runtime_path.as_deref());
         let mut runtime_features: Vec<&str> = Vec::new();
         if imported_modules.iter().any(|m| m == "http") {
             runtime_features.push("server");
@@ -362,27 +363,13 @@ pub fn create_cargo_toml_with_deps(
                 }
             }
 
-            // Second, try to find it relative to the compiler source
-            // This works when compiling from source
-            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")); // /path/to/windjammer
-            let src_root = manifest_dir.parent().unwrap(); // /path/to (parent of windjammer)
-
-            // THE WINDJAMMER WAY: Determine the correct path based on which crate is imported
+            // Second: the runtime crate resolves via the explicit override, else the
+            // embedded copy. Sibling checkouts are never probed (cwd/checkout-independent);
+            // other engine crates must come from `config.game_path` or Cargo.toml.
             let final_path = if crate_name.contains("_runtime") || crate_name.contains("-runtime") {
-                // windjammer-runtime is in windjammer/crates/windjammer-runtime
-                src_root.join("windjammer/crates/windjammer-runtime")
+                crate::cargo_toml::find_windjammer_runtime_path_with(config.runtime_path.as_deref())
             } else {
-                // windjammer-app is in <game-root>/<game-core>
-                let game_path = src_root.join("game-host/game-host-core");
-                let legacy_game_path = src_root.join("game-host/game-host");
-
-                if game_path.exists() {
-                    game_path
-                } else if legacy_game_path.exists() {
-                    legacy_game_path
-                } else {
-                    PathBuf::new() // Empty path, will fallback to crates.io
-                }
+                PathBuf::new() // Empty path, will fallback to crates.io
             };
 
             if !final_path.as_os_str().is_empty() && final_path.exists() {

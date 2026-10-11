@@ -638,47 +638,8 @@ pub(crate) fn find_stdlib_dir_for_api_types(override_dir: Option<&Path>) -> Opti
             return Some(pb.to_path_buf());
         }
     }
-    let manifest_std = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std");
-    if manifest_std.is_dir() {
-        return Some(manifest_std);
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            // `target/release/wj` → crate `std/`
-            let from_wj = parent
-                .parent()
-                .and_then(|p| p.parent())
-                .map(|root| root.join("std"));
-            if let Some(dev) = from_wj {
-                if dev.is_dir() {
-                    return Some(dev);
-                }
-            }
-            // `target/release/deps/all-*` (cargo test) → walk up to crate `std/`
-            let mut walk = parent.to_path_buf();
-            for _ in 0..6 {
-                let candidate = walk.join("std");
-                if candidate.is_dir() {
-                    return Some(candidate);
-                }
-                if !walk.pop() {
-                    break;
-                }
-            }
-            // Installed: ~/.cargo/bin/wj → ~/.cargo/wj-stdlib/
-            if let Some(cargo_home) = parent.parent() {
-                let installed = cargo_home.join("wj-stdlib");
-                if installed.is_dir() {
-                    return Some(installed);
-                }
-            }
-        }
-    }
-    let cwd = PathBuf::from("./std");
-    if cwd.is_dir() {
-        return Some(cwd);
-    }
-    None
+    // Embedded stdlib (never the cwd, the build checkout, or exe-relative dirs).
+    crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj)
 }
 
 /// Rust module path for a Windjammer `std::{module}` that maps to `windjammer_runtime`.

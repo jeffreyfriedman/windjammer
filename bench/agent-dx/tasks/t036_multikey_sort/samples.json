@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:desc,name:asc\nbob 30 paris\namy 25 rome\ncat 30 oslo\ndan 25 rome\namy 31 bern\n",
+  "stdout": "amy 31 bern\nbob 30 paris\ncat 30 oslo\namy 25 rome\ndan 25 rome\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc\nbob 30 paris\namy 25 rome\ncat 30 oslo\ndan 25 rome\namy 31 bern\n",
+  "stdout": "amy 31 bern\ncat 30 oslo\nbob 30 paris\namy 25 rome\ndan 25 rome\n"
+ }
+]

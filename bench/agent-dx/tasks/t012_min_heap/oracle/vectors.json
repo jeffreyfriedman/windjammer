@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 5 a\npush 1 b\npush 3 c\npop\npeek\nsize\npop\npop\npop\n",
+  "stdout": "1 b\n3 c\n2\n3 c\n5 a\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 2 x\npush 2 y\npop\npop\n",
+  "stdout": "2 x\n2 y\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\npeek\nsize\n",
+  "stdout": "empty\nempty\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -5 neg\npush 0 zero\npush -5 neg2\npop\npop\npop\n",
+  "stdout": "-5 neg\n-5 neg2\n0 zero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 0 n0\npush 1 n1\npush 2 n2\npush 3 n3\npush 4 n4\npush 5 n5\npush 6 n6\npush 0 n7\npush 1 n8\npush 2 n9\npush 3 n10\npush 4 n11\npush 5 n12\npush 6 n13\npush 0 n14\npush 1 n15\npush 2 n16\npush 3 n17\npush 4 n18\npush 5 n19\npush 6 n20\npush 0 n21\npush 1 n22\npush 2 n23\npush 3 n24\npush 4 n25\npush 5 n26\npush 6 n27\npush 0 n28\npush 1 n29\npush 2 n30\npush 3 n31\npush 4 n32\npush 5 n33\npush 6 n34\npush 0 n35\npush 1 n36\npush 2 n37\npush 3 n38\npush 4 n39\npush 5 n40\npush 6 n41\npush 0 n42\npush 1 n43\npush 2 n44\npush 3 n45\npush 4 n46\npush 5 n47\npush 6 n48\npush 0 n49\npush 1 n50\npush 2 n51\npush 3 n52\npush 4 n53\npush 5 n54\npush 6 n55\npush 0 n56\npush 1 n57\npush 2 n58\npush 3 n59\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\npop\n",
+  "stdout": "0 n0\n0 n7\n0 n14\n0 n21\n0 n28\n0 n35\n0 n42\n0 n49\n0 n56\n1 n1\n1 n8\n1 n15\n1 n22\n1 n29\n1 n36\n1 n43\n1 n50\n1 n57\n2 n2\n2 n9\n2 n16\n2 n23\n2 n30\n2 n37\n2 n44\n2 n51\n2 n58\n3 n3\n3 n10\n3 n17\n3 n24\n3 n31\n3 n38\n3 n45\n3 n52\n3 n59\n4 n4\n4 n11\n4 n18\n4 n25\n4 n32\n4 n39\n4 n46\n4 n53\n5 n5\n5 n12\n5 n19\n5 n26\n5 n33\n5 n40\n5 n47\n5 n54\n6 n6\n6 n13\n6 n20\n6 n27\n6 n34\n6 n41\n6 n48\n6 n55\nempty\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nsize\npush -4 w0\npush 1 w1\npush 1 w2\npop\npush 5 w3\npush -4 w4\npop\npush -4 w5\npush -4 w6\npeek\npush -4 w7\npush -1 w8\npush 5 w9\npop\npop\npush 3 w10\npush -3 w11\npush -2 w12\npush 5 w13\npop\npush 0 w14\nsize\npush -1 w15\npeek\nsize\npush 3 w16\npop\npush -4 w17\npush 3 w18\npop\n",
+  "stdout": "empty\n0\n-4 w0\n-4 w4\n-4 w5\n-4 w5\n-4 w6\n-4 w7\n10\n-3 w11\n11\n-3 w11\n-4 w17\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\npop\nsize\npop\npeek\npush 3 w0\npop\npush 0 w1\npeek\npush 2 w2\npush -5 w3\npush -4 w4\npush 3 w5\npush -2 w6\nsize\nsize\nsize\npeek\npush 0 w7\npush 5 w8\n",
+  "stdout": "empty\nempty\n0\nempty\nempty\n3 w0\n0 w1\n6\n6\n6\n-5 w3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\npush -2 w0\npop\npush -4 w1\npeek\npush 0 w2\npeek\npush 4 w3\npush 2 w4\nsize\npush -4 w5\npush -1 w6\nsize\npeek\npop\npeek\npush 1 w7\nsize\npush 4 w8\npop\npush 5 w9\npush 2 w10\npeek\npop\npop\nsize\npush -1 w11\npop\npush 3 w12\npush -1 w13\npush 3 w14\n",
+  "stdout": "empty\n-2 w0\n-4 w1\n-4 w1\n4\n6\n-4 w1\n-4 w1\n-4 w5\n6\n-4 w5\n-1 w6\n-1 w6\n0 w2\n6\n-1 w11\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\npop\npop\npush 2 w0\npush -3 w1\npeek\npush 1 w2\npush 0 w3\npush 5 w4\npush -3 w5\npush -5 w6\npop\nsize\npush 4 w7\npush 4 w8\npop\nsize\npush -5 w9\npush -3 w10\npush -5 w11\npush -2 w12\npeek\npop\npeek\npeek\npush 3 w13\npop\npop\nsize\npush -5 w14\npop\npeek\nsize\npeek\npeek\npeek\npush 2 w15\npush 1 w16\npush 3 w17\npush 2 w18\npush 3 w19\nsize\npop\n",
+  "stdout": "empty\nempty\nempty\n-3 w1\n-5 w6\n6\n-3 w1\n7\n-5 w9\n-5 w9\n-5 w11\n-5 w11\n-5 w11\n-3 w5\n9\n-5 w14\n-3 w10\n9\n-3 w10\n-3 w10\n-3 w10\n14\n-3 w10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\npush 3 w0\npush 5 w1\npop\npush 1 w2\npush -1 w3\npop\nsize\npeek\npush 3 w4\npop\npop\npush -5 w5\npush -1 w6\npush -2 w7\npeek\npush 5 w8\npop\npeek\npush 1 w9\npush 2 w10\npush 0 w11\npush -3 w12\npush -3 w13\npop\nsize\nsize\npop\npop\npush 1 w14\npop\npop\npush 4 w15\npush -1 w16\npeek\npeek\npush 4 w17\npush -5 w18\npush 1 w19\npush -4 w20\nsize\npop\npush 0 w21\npush 4 w22\npop\npush 3 w23\npop\npush -3 w24\npush -3 w25\npop\npush 4 w26\npush -5 w27\n",
+  "stdout": "0\n3 w0\n-1 w3\n2\n1 w2\n1 w2\n3 w4\n-5 w5\n-5 w5\n-2 w7\n-3 w12\n8\n8\n-3 w13\n-2 w7\n-1 w6\n0 w11\n-1 w16\n-1 w16\n11\n-5 w18\n-4 w20\n-1 w16\n-3 w24\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 0 w0\npop\npush -1 w1\nsize\npush -2 w2\npop\nsize\npop\npush 3 w3\nsize\npush -3 w4\npush 4 w5\npush 1 w6\npeek\npeek\npush -2 w7\npeek\npop\npop\npush -2 w8\npeek\npop\npush 3 w9\nsize\npeek\npeek\npeek\npop\npush -4 w10\nsize\npush 5 w11\npop\nsize\npop\npop\npush -2 w12\npush -1 w13\npeek\npeek\npush 4 w14\n",
+  "stdout": "0 w0\n1\n-2 w2\n1\n-1 w1\n1\n-3 w4\n-3 w4\n-3 w4\n-3 w4\n-2 w7\n-2 w8\n-2 w8\n4\n1 w6\n1 w6\n1 w6\n1 w6\n4\n-4 w10\n4\n3 w3\n3 w9\n-2 w12\n-2 w12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\npush 5 w0\npush -5 w1\npush -4 w2\npeek\npush -4 w3\nsize\nsize\npush -5 w4\npush -2 w5\npeek\npop\npop\npeek\npop\npush -4 w6\npop\npush 5 w7\npeek\nsize\npush -3 w8\npush 1 w9\npush 1 w10\npeek\npush 3 w11\npush 5 w12\npeek\npop\npeek\n",
+  "stdout": "empty\n-5 w1\n4\n4\n-5 w1\n-5 w1\n-5 w4\n-4 w2\n-4 w2\n-4 w3\n-4 w6\n4\n-4 w6\n-4 w6\n-4 w6\n-3 w8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -1 w0\nsize\npop\npush 1 w1\npush 1 w2\npush 5 w3\npush -3 w4\nsize\npush 0 w5\nsize\npush 3 w6\npush -4 w7\npush -3 w8\nsize\npop\nsize\nsize\npush -4 w9\nsize\npop\npush 2 w10\npop\npush 4 w11\npush -5 w12\npush 3 w13\npeek\npop\npush -5 w14\npush 0 w15\npush 2 w16\npop\npush 5 w17\npush 4 w18\npush -2 w19\npop\npeek\nsize\npush -4 w20\nsize\npush -1 w21\npush 0 w22\npush 1 w23\npush -3 w24\npop\npop\npush 5 w25\n",
+  "stdout": "1\n-1 w0\n4\n5\n8\n-4 w7\n7\n7\n8\n-4 w9\n-3 w4\n-5 w12\n-5 w12\n-5 w14\n-3 w8\n-2 w19\n13\n14\n-4 w20\n-3 w24\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -1 w0\npop\npush -5 w1\npush 1 w2\nsize\nsize\npop\nsize\npop\nsize\npush 5 w3\npeek\npush 1 w4\npush -4 w5\nsize\npop\npeek\npop\npush -1 w6\npush -4 w7\npush 2 w8\npush -5 w9\npush -5 w10\npush -2 w11\npush 2 w12\npush 1 w13\npush 3 w14\nsize\npop\npop\npush -4 w15\npop\npush -3 w16\npop\npush -2 w17\npush -1 w18\npeek\npop\npush 5 w19\npush -1 w20\npeek\npush -5 w21\npush 1 w22\npush 5 w23\npush -4 w24\nsize\npush 1 w25\npush 2 w26\npush 1 w27\npush 0 w28\npush 0 w29\npop\npush -1 w30\npop\npop\npop\npush -1 w31\npush 3 w32\npush -5 w33\npop\npop\nsize\npush -1 w34\npeek\npush -1 w35\npop\npeek\npush 0 w36\npush -3 w37\n",
+  "stdout": "-1 w0\n2\n2\n-5 w1\n1\n1 w2\n0\n5 w3\n3\n-4 w5\n1 w4\n1 w4\n10\n-5 w9\n-5 w10\n-4 w7\n-4 w15\n-3 w16\n-3 w16\n-2 w11\n15\n-5 w21\n-4 w24\n-2 w11\n-2 w17\n-5 w33\n-1 w6\n18\n-1 w18\n-1 w18\n-1 w20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -4 w0\npush 1 w1\npop\npush 4 w2\npeek\npush -2 w3\npop\npush -3 w4\npush -4 w5\npop\npop\npush 3 w6\npop\npush -4 w7\npush -2 w8\npush -4 w9\npush 3 w10\nsize\npush 0 w11\npush 5 w12\npop\npush -1 w13\npush 5 w14\npeek\npeek\npop\npop\npush 5 w15\npush -3 w16\npush 3 w17\npop\npush -2 w18\npush -5 w19\npeek\npush -4 w20\n",
+  "stdout": "-4 w0\n1 w1\n-2 w3\n-4 w5\n-3 w4\n1 w1\n6\n-4 w7\n-4 w9\n-4 w9\n-4 w9\n-2 w8\n-3 w16\n-5 w19\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 5 w0\npush 0 w1\nsize\npush 1 w2\npush -4 w3\npop\npush 1 w4\npush -2 w5\npop\npush 4 w6\npush 2 w7\npop\nsize\npush -2 w8\n",
+  "stdout": "2\n-4 w3\n-2 w5\n0 w1\n5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\npeek\npop\npush 4 w0\npop\npeek\npop\npop\nsize\npop\npop\npush -5 w1\npush 1 w2\npop\npop\npush 3 w3\npush 3 w4\npush -1 w5\npush -3 w6\npeek\npush -4 w7\nsize\nsize\npush -1 w8\npop\npush 5 w9\npush 5 w10\npush -2 w11\npush -5 w12\npush 3 w13\npush -5 w14\npush 3 w15\npush -4 w16\npop\npush -4 w17\npush 1 w18\npush 0 w19\npush 5 w20\npop\npush 3 w21\npush -2 w22\nsize\npush 1 w23\npush -1 w24\npeek\npop\npush 0 w25\npop\nsize\npop\npeek\npeek\nsize\npop\npush -4 w26\nsize\npush -1 w27\nsize\npush -3 w28\npop\npush -5 w29\npop\npush -3 w30\npop\nsize\npush 0 w31\npeek\npeek\nsize\npush 1 w32\n",
+  "stdout": "empty\nempty\nempty\n4 w0\nempty\nempty\nempty\n0\nempty\nempty\n-5 w1\n1 w2\n-3 w6\n5\n5\n-4 w7\n-5 w12\n-5 w14\n17\n-4 w16\n-4 w16\n-4 w17\n18\n-3 w6\n-2 w11\n-2 w11\n17\n-2 w11\n17\n18\n-4 w26\n-5 w29\n-3 w28\n18\n-3 w30\n-3 w30\n19\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -1 w0\npush -4 w1\npush 3 w2\npop\npush 0 w3\npeek\npop\npush 0 w4\npush 4 w5\npeek\npop\npeek\nsize\npop\nsize\npop\npop\npush -3 w6\nsize\npop\npeek\nsize\npush 1 w7\npeek\npush 1 w8\npush 2 w9\npush -2 w10\npush 4 w11\npop\npush 1 w12\npush -5 w13\npush 4 w14\npush -5 w15\npush -4 w16\npush 2 w17\npush -3 w18\npop\npeek\npeek\npush 2 w19\npush 1 w20\npop\n",
+  "stdout": "-4 w1\n-1 w0\n-1 w0\n0 w3\n0 w3\n0 w4\n3\n0 w4\n2\n3 w2\n4 w5\n1\n-3 w6\nempty\n0\n1 w7\n-2 w10\n-5 w13\n-5 w15\n-5 w15\n-5 w15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop\nsize\npop\npeek\npeek\npush -1 w0\npush 4 w1\npush 3 w2\npush 1 w3\npush -3 w4\nsize\npeek\nsize\nsize\nsize\npush -5 w5\npush -3 w6\npush 0 w7\npush 1 w8\npop\npop\npush 3 w9\n",
+  "stdout": "empty\n0\nempty\nempty\nempty\n5\n-3 w4\n5\n5\n5\n-5 w5\n-3 w4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\nsize\nsize\npop\npush 5 w0\npush -3 w1\npush 1 w2\npeek\npush 0 w3\npush -1 w4\npop\npeek\npush 5 w5\nsize\npop\nsize\npop\npush 1 w6\npush -1 w7\npush 3 w8\npop\npush -1 w9\npush 2 w10\npush 2 w11\nsize\npeek\npop\npeek\n",
+  "stdout": "empty\n0\n0\nempty\n-3 w1\n-3 w1\n-1 w4\n5\n-1 w4\n4\n0 w3\n-1 w7\n8\n-1 w9\n-1 w9\n1 w2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -5 w0\nsize\npush 2 w1\npush 4 w2\npeek\npush -4 w3\npop\npush 4 w4\nsize\npush -5 w5\npop\npeek\npush 4 w6\npop\npeek\npush 3 w7\npop\npush -3 w8\npush 3 w9\npush -5 w10\npush -3 w11\npush 3 w12\nsize\nsize\npush -1 w13\npush -3 w14\npush 5 w15\npop\npush 0 w16\npop\npop\nsize\nsize\npop\npush 5 w17\npush -5 w18\npush 2 w19\npush 2 w20\npush -1 w21\npop\npush 1 w22\npeek\npush 3 w23\nsize\npush 3 w24\npop\npush 3 w25\npush -5 w26\nsize\npeek\npush -3 w27\npush 5 w28\npeek\nsize\npush 3 w29\npush 3 w30\npush -2 w31\npush -1 w32\npush -1 w33\nsize\npop\npop\npush 3 w34\npush 3 w35\npop\n",
+  "stdout": "1\n-5 w0\n-5 w0\n4\n-5 w5\n-4 w3\n-4 w3\n2 w1\n2 w1\n9\n9\n-5 w10\n-3 w8\n-3 w11\n10\n10\n-3 w14\n-5 w18\n-1 w13\n15\n-1 w13\n17\n-5 w26\n-5 w26\n19\n24\n-5 w26\n-3 w27\n-2 w31\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 0 w0\nsize\npop\npeek\npush 1 w1\npop\npop\npop\npeek\npop\npush -2 w2\npush 5 w3\npop\npush -4 w4\nsize\npush -1 w5\npush 2 w6\nsize\npop\npop\npush 5 w7\npush 0 w8\npeek\npush 0 w9\npush -4 w10\nsize\npeek\npeek\npush 0 w11\npop\npush 5 w12\npush 4 w13\npush 4 w14\npush 1 w15\npush -5 w16\npeek\npush 4 w17\npush 4 w18\npush 2 w19\npop\npop\npop\npeek\npop\npop\npush 5 w20\npush 2 w21\npush 4 w22\npush 2 w23\npop\npop\npop\npush 1 w24\nsize\nsize\npush 1 w25\npush -4 w26\npush 3 w27\npeek\npop\npush 1 w28\npush 0 w29\npop\n",
+  "stdout": "1\n0 w0\nempty\n1 w1\nempty\nempty\nempty\nempty\n-2 w2\n2\n4\n-4 w4\n-1 w5\n0 w8\n6\n-4 w10\n-4 w10\n-4 w10\n-5 w16\n-5 w16\n0 w8\n0 w9\n0 w11\n0 w11\n1 w15\n2 w6\n2 w19\n2 w21\n11\n11\n-4 w26\n-4 w26\n0 w29\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 3 w0\npop\npop\npush -4 w1\npush -4 w2\npush 2 w3\npush 4 w4\npush 5 w5\npop\npush -3 w6\npush 4 w7\nsize\npush 1 w8\npop\npush 5 w9\npush 3 w10\npush -2 w11\npush 0 w12\npush -4 w13\npop\npush -1 w14\npush 2 w15\npop\npush 4 w16\n",
+  "stdout": "3 w0\nempty\n-4 w1\n6\n-4 w2\n-4 w13\n-3 w6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\nsize\nsize\nsize\npop\npush 1 w0\npush -4 w1\npush 4 w2\npop\npop\npush -1 w3\npop\npop\npush 5 w4\npeek\npush 1 w5\npush 3 w6\nsize\npeek\npush 0 w7\npush -3 w8\npush -2 w9\npop\npeek\npush 3 w10\npop\npop\npop\npush 3 w11\npop\npeek\npop\npush 3 w12\npush -1 w13\npush 4 w14\npush -1 w15\npush -2 w16\npop\nsize\npush 2 w17\npush 3 w18\npush -5 w19\npush 1 w20\npush 2 w21\npush -3 w22\npeek\npeek\npeek\npeek\npop\npush 5 w23\npop\npush -5 w24\npeek\npush -4 w25\n",
+  "stdout": "0\n0\n0\n0\nempty\n-4 w1\n1 w0\n-1 w3\n4 w2\n5 w4\n3\n1 w5\n-3 w8\n-2 w9\n-2 w9\n0 w7\n1 w5\n3 w6\n3 w10\n3 w10\n-2 w16\n6\n-5 w19\n-5 w19\n-5 w19\n-5 w19\n-5 w19\n-3 w22\n-5 w24\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -4 w0\npop\npush 5 w1\npush 1 w2\npeek\npop\npop\npeek\npop\npush 4 w3\nsize\npush 0 w4\npush 1 w5\npush -5 w6\npop\npush 5 w7\npush -4 w8\npush 0 w9\n",
+  "stdout": "-4 w0\n1 w2\n1 w2\n5 w1\nempty\nempty\n1\n-5 w6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\npush -3 w0\npush 3 w1\npush 4 w2\npop\npush 2 w3\npush 4 w4\npush 1 w5\npush -4 w6\npop\npeek\npush -4 w7\npop\npush -5 w8\npush 4 w9\nsize\nsize\npush -3 w10\nsize\npop\npush 3 w11\npeek\npush -3 w12\npeek\npush -3 w13\npop\nsize\npush -5 w14\npush -1 w15\npop\npush 4 w16\npush -1 w17\nsize\npop\npeek\nsize\npush -1 w18\npush 3 w19\npush -4 w20\npush 0 w21\npeek\npeek\npush -4 w22\npeek\nsize\npush 3 w23\npush -1 w24\npop\nsize\npush 3 w25\npop\npush -4 w26\n",
+  "stdout": "empty\n-3 w0\n-4 w6\n1 w5\n-4 w7\n7\n7\n8\n-5 w8\n-3 w10\n-3 w10\n-3 w10\n9\n-5 w14\n12\n-3 w12\n-3 w13\n11\n-4 w20\n-4 w20\n-4 w20\n16\n-4 w20\n17\n-4 w22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -2 w0\npush -3 w1\npop\npush -3 w2\npop\npop\npop\npop\npush 5 w3\npop\nsize\nsize\npush 5 w4\npeek\npop\npeek\npop\npush 1 w5\npush -3 w6\n",
+  "stdout": "-3 w1\n-3 w2\n-2 w0\nempty\nempty\n5 w3\n0\n0\n5 w4\n5 w4\nempty\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 5 w0\npeek\npop\npush -2 w1\npeek\npush -3 w2\npeek\npush 1 w3\npop\npush 2 w4\npop\npush 1 w5\nsize\npop\npop\npeek\nsize\npush -4 w6\npop\npop\npush 1 w7\npeek\npush 2 w8\npop\npop\npush -5 w9\npush 3 w10\npush -3 w11\npop\npush 3 w12\npush -1 w13\npush 1 w14\npush 2 w15\npush -1 w16\npush -4 w17\npop\npeek\n",
+  "stdout": "5 w0\n5 w0\n-2 w1\n-3 w2\n-3 w2\n-2 w1\n3\n1 w3\n1 w5\n2 w4\n1\n-4 w6\n2 w4\n1 w7\n1 w7\n2 w8\n-5 w9\n-4 w17\n-3 w11\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "size\npeek\npush -2 w0\npop\npush 4 w1\npush 4 w2\npush 3 w3\npop\npush 5 w4\npop\npop\npop\npeek\npush 2 w5\npop\npush -4 w6\npeek\nsize\npush 2 w7\npush -5 w8\nsize\npush 1 w9\npush -2 w10\npop\npush -1 w11\npush -5 w12\npush -1 w13\npush -3 w14\npop\nsize\npush 4 w15\npop\npush 3 w16\npush -5 w17\npop\npush 1 w18\npop\npop\npush -5 w19\npush 0 w20\nsize\npush 5 w21\npop\nsize\npush -5 w22\npush -3 w23\npeek\npush 1 w24\npush 4 w25\npush 5 w26\npush 0 w27\npeek\npop\npush 5 w28\npush 3 w29\npush -3 w30\npush 1 w31\npop\nsize\npop\npush 5 w32\npop\npush -5 w33\npush -3 w34\nsize\n",
+  "stdout": "0\nempty\n-2 w0\n3 w3\n4 w1\n4 w2\n5 w4\nempty\n2 w5\n-4 w6\n1\n3\n-5 w8\n-5 w12\n7\n-4 w6\n-5 w17\n-3 w14\n-2 w10\n9\n-5 w19\n9\n-5 w22\n-5 w22\n-5 w22\n-3 w23\n17\n-3 w30\n-1 w11\n18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 3 w0\npop\npush 3 w1\npush 5 w2\npush -3 w3\npop\npush -1 w4\npop\npush 1 w5\npush 1 w6\npop\npush -2 w7\npop\npop\npop\npop\npush 3 w8\npop\nsize\npeek\npush -5 w9\nsize\npop\npop\nsize\npop\npush 0 w10\npop\npush 4 w11\npush 3 w12\npop\npop\npeek\npop\npush -3 w13\npush 3 w14\npop\npop\n",
+  "stdout": "3 w0\n-3 w3\n-1 w4\n1 w5\n-2 w7\n1 w6\n3 w1\n5 w2\n3 w8\n0\nempty\n1\n-5 w9\nempty\n0\nempty\n0 w10\n3 w12\n4 w11\nempty\nempty\n-3 w13\n3 w14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -1 w0\npush -2 w1\npop\nsize\npush 2 w2\nsize\npush 4 w3\npush 1 w4\npush -2 w5\npeek\npop\npush 2 w6\npush 5 w7\npop\npop\npush 5 w8\npush 0 w9\npush -1 w10\nsize\npush 0 w11\npop\npop\nsize\npop\npush 5 w12\npush -1 w13\npush 3 w14\npush -5 w15\npop\npush -4 w16\npush -5 w17\npush 2 w18\npop\npush 1 w19\npush 5 w20\npush -4 w21\npush 3 w22\npush 5 w23\nsize\npush -4 w24\npush 0 w25\npeek\npush -1 w26\npush 0 w27\npeek\nsize\npeek\npush 1 w28\npush -5 w29\npush -5 w30\npush 4 w31\npush 0 w32\npeek\npop\npush 5 w33\npop\npop\npop\npop\nsize\npop\npop\npop\npush 0 w34\npush -3 w35\npeek\npush 5 w36\npush -4 w37\npop\npop\npeek\npush 3 w38\npop\npush -3 w39\npop\n",
+  "stdout": "-2 w1\n1\n2\n-2 w5\n-2 w5\n-1 w0\n1 w4\n7\n-1 w10\n0 w9\n6\n0 w11\n-5 w15\n-5 w17\n15\n-4 w16\n-4 w16\n19\n-4 w16\n-5 w29\n-5 w29\n-5 w30\n-4 w16\n-4 w21\n-4 w24\n20\n-1 w13\n-1 w26\n0 w25\n-3 w35\n-4 w37\n-3 w35\n0 w27\n0 w27\n-3 w39\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -1 w0\npush 2 w1\npush -4 w2\npop\npush 2 w3\npop\npop\npush 3 w4\npeek\npush -3 w5\npeek\npop\npeek\nsize\nsize\npush 3 w6\npush 0 w7\npush -4 w8\npop\npush -3 w9\npush 4 w10\npush -1 w11\npush 5 w12\npush -5 w13\npush 0 w14\npop\npeek\npush 3 w15\npush 1 w16\npush 0 w17\npush 5 w18\npush -1 w19\nsize\npush -1 w20\npush 0 w21\nsize\npush 5 w22\n",
+  "stdout": "-4 w2\n-1 w0\n2 w1\n2 w3\n-3 w5\n-3 w5\n2 w3\n2\n2\n-4 w8\n-5 w13\n-3 w9\n14\n16\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -1 w0\npush 2 w1\npush -3 w2\npop\npush 0 w3\npush -1 w4\npush -3 w5\npop\npeek\npush 5 w6\npush 1 w7\npush -3 w8\npeek\npop\npush 1 w9\npeek\npush -2 w10\npop\npop\npush 3 w11\npush -5 w12\nsize\npush 4 w13\nsize\npop\npeek\npush 1 w14\npop\npush -2 w15\npush -5 w16\npush -3 w17\npush 5 w18\npush 0 w19\npush -1 w20\npush -1 w21\npush -5 w22\nsize\npop\npop\npush 4 w23\npush 5 w24\npush 4 w25\npeek\npush 2 w26\npop\npush -3 w27\npush -2 w28\npush 5 w29\npeek\npush -3 w30\npush 2 w31\npush 4 w32\nsize\npeek\n",
+  "stdout": "-3 w2\n-3 w5\n-1 w0\n-3 w8\n-3 w8\n-1 w0\n-2 w10\n-1 w0\n8\n9\n-5 w12\n-1 w4\n-1 w4\n16\n-5 w16\n-5 w22\n-3 w17\n-3 w17\n-3 w27\n23\n-3 w27\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push -2 w0\npush -1 w1\npop\npeek\npop\npush 3 w2\npush 5 w3\npop\npop\npush -1 w4\npush -3 w5\npush -2 w6\npop\npush 3 w7\npush 0 w8\nsize\npop\npop\npeek\nsize\npop\npeek\npeek\npop\npush 0 w9\npop\nsize\npeek\npeek\npop\npeek\npush 4 w10\npush 1 w11\nsize\npush -2 w12\nsize\npush 3 w13\npush 0 w14\npush 5 w15\npush -3 w16\npush 1 w17\npop\npeek\npush 0 w18\npush 5 w19\npop\npush -2 w20\nsize\npop\npop\nsize\n",
+  "stdout": "-2 w0\n-1 w1\n-1 w1\n3 w2\n5 w3\n-3 w5\n4\n-2 w6\n-1 w4\n0 w8\n2\n0 w8\n3 w7\n3 w7\n3 w7\n0 w9\n0\nempty\nempty\nempty\nempty\n2\n3\n-3 w16\n-2 w12\n-2 w12\n9\n-2 w20\n0 w14\n7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "peek\npop\npop\npop\nsize\nsize\npeek\npeek\npush 0 w0\npop\npeek\npush 2 w1\npop\npush 1 w2\npush -4 w3\npop\npush 1 w4\npush -3 w5\npop\npop\npush 2 w6\npush 5 w7\npush -1 w8\npush 1 w9\npush 0 w10\nsize\npush 2 w11\npop\npush 1 w12\npop\npush -4 w13\npop\npush 2 w14\npush -3 w15\npush 0 w16\npush 0 w17\npush -1 w18\npush -2 w19\npush -4 w20\npeek\npop\nsize\nsize\npush 2 w21\npush -1 w22\npush -2 w23\npush -2 w24\npeek\npush -3 w25\npush 0 w26\npush -3 w27\nsize\npop\npush 0 w28\npush -3 w29\nsize\npop\nsize\npush 2 w30\npush -2 w31\npush -5 w32\nsize\npush 2 w33\nsize\npush 5 w34\npop\npush -2 w35\npop\npush 0 w36\n",
+  "stdout": "empty\nempty\nempty\nempty\n0\n0\nempty\nempty\n0 w0\nempty\n2 w1\n-4 w3\n-3 w5\n1 w2\n6\n-1 w8\n0 w10\n-4 w13\n-4 w20\n-4 w20\n12\n12\n-3 w15\n19\n-3 w15\n20\n-3 w25\n19\n22\n23\n-5 w32\n-3 w27\n"
+ }
+]

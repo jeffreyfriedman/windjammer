@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n12321\n",
+  "stdout": "9 9 12321 yes\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n0\n120\n987654321\n",
+  "stdout": "0 0 0 yes\n3 3 21 no\n45 9 123456789 no\n"
+ }
+]

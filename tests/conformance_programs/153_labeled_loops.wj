@@ -1,0 +1,76 @@
+// expect: 9
+// expect: 14
+// expect: 42
+// expect: 3 1
+// expect: 12
+// expect: 7
+fn main() {
+    let mut count = 0
+    'outer: for i in 0..5 {
+        for j in 0..5 {
+            if j == 3 {
+                continue 'outer
+            }
+            if i == 3 {
+                break 'outer
+            }
+            count += 1
+        }
+    }
+    println("${count}")
+    let r = 'search: loop {
+        let mut k = 0
+        loop {
+            k += 1
+            if k == 7 {
+                break 'search k * 2
+            }
+        }
+    }
+    println("${r}")
+    let v = loop {
+        break 42
+    }
+    println("${v}")
+    let mut a = 0
+    let mut b = 0
+    'w: while a < 10 {
+        a += 1
+        let mut inner = 0
+        while inner < 10 {
+            inner += 1
+            if a == 3 {
+                b = inner
+                break 'w
+            }
+            if inner == 1 {
+                continue 'w
+            }
+        }
+    }
+    println("${a} ${b}")
+    let mut total = 0
+    'rows: for r in 0..4 {
+        for c in 0..4 {
+            if c > r {
+                continue 'rows
+            }
+            total += 1
+            if total >= 12 {
+                break 'rows
+            }
+        }
+    }
+    println("${total + 2}")
+    let mut n = 0
+    let w = loop {
+        n += 1
+        if n % 2 == 0 {
+            continue
+        }
+        if n > 5 {
+            break n
+        }
+    }
+    println("${w}")
+}

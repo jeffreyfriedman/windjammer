@@ -1,173 +1,281 @@
 # Windjammer
 
-**A high-level language that compiles to Rust, with ownership and borrowing inferred by the compiler.**
+**Write Rust-class programs without writing ownership.** Windjammer is a high-level language that compiles to Rust and
+infers borrows, moves and clones for you, then shows its reasoning. The same source runs instantly in an interpreter
+and can be emitted as Rust, Go, JavaScript or WebAssembly. Built for people and for coding agents.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![CI](https://github.com/jeffreyfriedman/windjammer/actions/workflows/test.yml/badge.svg)](https://github.com/jeffreyfriedman/windjammer/actions/workflows/test.yml)
+![Version](https://img.shields.io/badge/version-0.50.0-blue)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)](#license)
 
-Windjammer source (`.wj`) is parsed, analysed and translated to Rust, which `cargo` then builds. You write plain
-function signatures and bodies; the compiler decides where `&`, `&mut`, moves and clones go.
+Pre-1.0 and experimental. [Status](#status) says what works; [Why Windjammer](docs/WHY.md) says where it does not win yet.
 
-This README describes only what exists in the repository today. Items that are being built or only proposed are in
-separate sections. The honest, ranked list of gaps is in [docs/known-gaps.md](docs/known-gaps.md); open design
-decisions are in [docs/adr/](docs/adr/README.md).
+## Three reasons to care
 
-**Version:** 0.50.0 (`Cargo.toml`). Pre-1.0: language and compiler behaviour can change between minor versions.
+1. **Ownership is inferred, and the decision is visible.** Parameters and `self` become `&`, `&mut` or moves by
+   analysis, not annotation. `wj build --no-cargo FILE` writes the Rust it chose, so nothing is hidden. See the
+   [side-by-side](#same-program-less-noise).
+2. **One source, instant feedback, several targets.** `wj run --interpret FILE` runs with no build step. The same file
+   compiles to Rust (primary), and to Go, JavaScript and WebAssembly at lower maturity ([status](#status)).
+3. **Built for agents.** JSON diagnostics (`wj check --json`), offline docs search (`wj docs`), an MCP server, an agent
+   guide whose examples run in CI, and a benchmark harness. See [For AI agents](#for-ai-agents).
 
----
+## For AI agents
 
-## Today
+You have probably seen little Windjammer in training. Do not guess from Rust or Python.
 
-### Language
-- Functions, structs, enums, traits, `impl` blocks, generics, closures, pattern matching with guards.
-- Ownership of function parameters and `self` inferred (borrow, mutable borrow, move); clones inserted by the compiler.
-- Local `let` bindings that are mutated are emitted as `let mut` even if you omit `mut` (see
-  [ADR-0002](docs/adr/0002-local-mutability.md) for the open decision on whether this is the intended rule).
-- String interpolation (`"${name}"`), pipe operator (`|>`: `x |> f(a)`, `x |> .method()`, `x |> f(a, _)`, closures, `?` per stage, multi-line chains; see [docs/design/pipe-operator.md](docs/design/pipe-operator.md)), `defer`, `if`/`else` as expressions, `?` error propagation,
-  decorators (`@name`), `mod`, `extern`, `unsafe`, `static`, `where` clauses.
-- Concurrency keywords that exist in the lexer: `thread { }`, `async`/`await`, `async fn`. Channel send/receive operators (`ch <- v`, `<-ch`) are parsed. There is no `go` keyword,
-  no `chan::new()` and no `select`; see [ADR-0004](docs/adr/0004-concurrency-surface.md).
-- Effect checking against an `[app_capabilities]` section in `wj.toml` (fails the build on violations).
+- Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md): the loop, idioms and pitfalls; its code runs in CI.
+- Machine-readable index: [llms.txt](llms.txt). Everything inline: [llms-full.txt](llms-full.txt). Both are generated and drift-checked.
+- Check with `wj check --json FILE`, run with `wj run --interpret FILE`, look things up with `wj docs <terms>`.
+- MCP server: [crates/windjammer-mcp](crates/windjammer-mcp/README.md) (check, run, test, format, docs search, explain error, more).
+- Changing the compiler itself: [AGENTS.md](AGENTS.md).
+- Benchmark: [bench/agent-dx](bench/agent-dx/README.md) holds the same 60 tasks in six languages. Its checked-in report
+  grades reference solutions, not LLM runs. There is no published claim yet that agents do better in Windjammer.
 
-Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [docs/MODULE_SYSTEM.md](docs/MODULE_SYSTEM.md).
+## Quickstart
 
-### Tooling (the `wj` binary)
-| Command | What it does |
-|---------|--------------|
-| `wj new`, `wj build`, `wj run`, `wj test` | Create, transpile + build, build and run, run tests |
-| `wj lint` | Rust-leakage lint rules (W0001-W0004) on `.wj` files |
-| `wj add` / `wj remove` / `wj update` | Edit `wj.toml` dependencies / update the toolchain |
-| `wj run --interpret`, `wj test --interpret`, `wj repl` | Interpreted dev loop, no cargo (experimental subset; see [docs/INTERPRETER.md](docs/INTERPRETER.md)) |
-| `wj explain`, `wj errors`, `wj stats`, `wj docs` | Error catalogue and diagnostics browsing |
-| `wj shader-compile`, `wj validate-wjsl` | WJSL shader front end to WGSL |
-| `wj cache`, `wj clean`, `wj self-install`, `wj agent-index` | Shared cargo cache, cleanup, install, agent artifacts |
+Requires Rust 1.90 or newer. Packaged installs (`brew`, `cargo install`) are not verified here; build from source.
 
-Caveats, each tracked in [docs/known-gaps.md](docs/known-gaps.md):
-- `wj fmt` runs `cargo fmt --all`; it does not format `.wj` files.
-- `wj check` runs `cargo check` in the current directory; it does not check `.wj` sources.
-- `wj eject` does not exist. The older `windjammer` binary has an `eject` subcommand that writes a standalone Rust project.
-- A language server (`crates/windjammer-lsp`) and an MCP server (`crates/windjammer-mcp`) exist as workspace crates.
-
-### Targets
-| Target | Status |
-|--------|--------|
-| Rust (`--target rust`, default) | Primary; the only backend that consumes the ownership IR solver |
-| WebAssembly (`--target wasm`), JavaScript (`--target javascript`) | Implemented; not held to the same conformance bar |
-| Go (legacy `windjammer` binary, "experimental") | Implemented as source translation; does not use the IR |
-| WGSL | Via WJSL (`.wjsl`) shaders |
-
-Tiers and the conformance contract are proposed in [ADR-0007](docs/adr/0007-target-tiers-conformance.md).
-
----
-
-## Install and build
-
-Requirements: Rust 1.90 or newer (`rust-version` in `Cargo.toml`).
-
-```bash
+<!-- ignore: builds the compiler itself; CI builds wj before running the verified fences below -->
+```bash,ignore
 git clone https://github.com/jeffreyfriedman/windjammer.git
-cd windjammer
-cargo build --release
-./target/release/wj --version        # wj 0.50.0
+cd windjammer && cargo build --release
+export PATH="$PWD/target/release:$PATH"
 ```
 
-Optional, to keep build artifacts outside repositories:
+Write a program and run it with no build step:
 
-```bash
-./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory
-wj cache status | wj cache path | wj cache prune
-```
-
-Override the cache root with `WJ_CARGO_TARGET_ROOT`; set `WJ_USE_LOCAL_TARGET=1` to force `./target`.
-Design notes: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md).
-
-Package-manager installs (`brew`, `cargo install windjammer`) are not verified by this repository's CI; build from source.
-
-### Hello world
-
-```windjammer
+```sh,verify
+$ wj --version
+wj
+$ cat > hello.wj <<'EOF'
 fn main() {
     let name = "World"
     println("Hello, ${name}!")
 }
+EOF
+$ wj run --interpret hello.wj
+Hello, World!
+$ wj check --json hello.wj
+"success": true
+$ wj build --no-cargo hello.wj -o out
+$ cat out/hello.rs
+println!("Hello, {}!", name);
 ```
 
-```bash
-wj run hello.wj
-```
+`wj check --json` prints diagnostics for tools; `wj build --no-cargo` shows the Rust the program compiles to.
 
-### Ownership inference
+`wj run hello.wj` (no flag) takes the production path: transpile to Rust, then build with cargo.
+
+## Same program, less noise
+
+A playlist with one mutating and two reading functions. Windjammer has no `&`, `&mut`, `.to_string()` or `format!` here;
+the compiler infers them. The generated Rust has exactly the signatures `fn add_song(list: &mut Playlist, song: String)`,
+`fn count(list: &Playlist)` and `fn describe(list: &Playlist)`. Both programs below are compiled and compared by
+[tests/readme_samples_test.rs](tests/readme_samples_test.rs); each prints `Road trip: Africa, Hey Jude` then `2 songs`.
 
 ```windjammer
-fn longest(s1: string, s2: string) -> string {
-    if s1.len() > s2.len() { s1 } else { s2 }
+struct Playlist {
+    name: string,
+    songs: Vec<string>,
+}
+
+fn add_song(list: Playlist, song: string) {
+    list.songs.push(song)
+}
+
+fn count(list: Playlist) -> int {
+    list.songs.len()
+}
+
+fn describe(list: Playlist) -> string {
+    "${list.name}: ${list.songs.join(", ")}"
+}
+
+fn main() {
+    let mut list = Playlist { name: "Road trip", songs: [] }
+    add_song(list, "Africa")
+    add_song(list, "Hey Jude")
+    println(describe(list))
+    println("${count(list)} songs")
 }
 ```
 
-You do not write `&` or lifetimes; the generated Rust carries whatever the solver decides. The specification of what is
-inferred is in [docs/language-design/ownership-inference.md](docs/language-design/ownership-inference.md).
+```rust
+struct Playlist {
+    name: String,
+    songs: Vec<String>,
+}
 
-## Test
+fn add_song(list: &mut Playlist, song: &str) {
+    list.songs.push(song.to_string());
+}
 
-```bash
-cargo test --release --test all --no-fail-fast      # about 5,500 tests; 15-20 minutes
-cargo test --release --test all <name-filter>       # targeted
+fn count(list: &Playlist) -> usize {
+    list.songs.len()
+}
+
+fn describe(list: &Playlist) -> String {
+    format!("{}: {}", list.name, list.songs.join(", "))
+}
+
+fn main() {
+    let mut list = Playlist { name: "Road trip".to_string(), songs: vec![] };
+    add_song(&mut list, "Africa");
+    add_song(&mut list, "Hey Jude");
+    println!("{}", describe(&list));
+    println!("{} songs", count(&list));
+}
 ```
 
-Known failing tests are listed in `.config/known-test-failures.txt` (a ratchet: it may only shrink).
-Backend-neutral behaviour tests live in [tests/conformance/](tests/conformance/README.md). Strategy:
-[docs/TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md).
+This helps most in code that is mostly data and calls. When you need precise control over ownership, Rust gives you more.
 
----
+## Tour
 
-## In progress
+Every snippet is executed in CI by the interpreter and its output checked.
 
-Work described in [docs/ARCHITECTURE_IMPROVEMENT_PLAN.md](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md):
-- Single ownership/clone/numeric-width owner (the IR solver) replacing the legacy analyzer patches.
-- Name resolution to stable identities instead of string lookups.
-- Layering and fitness tests, per-module `MODULE.md` documents, removal of global state and environment toggles.
-- A `.wj` formatter and a real `wj check`.
+String interpolation with format specs, and `if` as an expression:
 
-## Planned (not implemented)
+```windjammer
+// expect: Ada is 36, pi=3.14, [   42], small
+fn size(n: int) -> string {
+    if n < 10 { "small" } else { "large" }
+}
 
-Status per RFC, with evidence, is in [docs/proposals/rfcs/README.md](docs/proposals/rfcs/README.md).
-- Package registry and dependency resolver (today: path/git/version entries in `wj.toml` are forwarded to Cargo; `src/package/` is a stub).
-- Caller-controlled `async expr` / `spawn expr` syntax (AST nodes exist, the parser does not produce them).
-- Comptime evaluation, const generics, `owned` argument convention, map type hierarchy.
-- `wj doc`, `wj watch`, `wj publish`, `wj optimize`, `wj economics`.
-- Capability lock file enforcement, taint errors failing the build, capability profiles.
-- An optimizer. The optimizer module exists but is disabled in the pipeline ([ADR-0006](docs/adr/0006-optimizer-fate.md)).
+fn main() {
+    let name = "Ada"
+    let age = 36
+    println("${name} is ${age}, pi=${3.14159:.2}, [${42:>5}], ${size(3)}")
+}
+```
 
-Performance claims (speed relative to Rust, incremental-build multipliers) are intentionally absent until they are
-produced by a benchmark that runs in CI.
+Pipe operator (`x |> f(a)` is `f(x, a)`):
 
----
+```windjammer
+// expect: 16
+fn add(a: int, b: int) -> int { a + b }
+fn square(a: int) -> int { a * a }
 
-## Repository map
+fn main() {
+    let r = 1 |> add(1) |> add(2) |> square
+    println("${r}")
+}
+```
 
-| Path | Contents |
-|------|----------|
-| `src/` | Compiler: lexer, parser, analyzer, `ir/` (solver), `codegen/` (Rust, Go, JS, WASM, WGSL), CLI |
-| `crates/` | `windjammer-runtime`, `windjammer-lsp`, `windjammer-mcp` |
-| `std/` | Standard library written in `.wj` (wrappers over the runtime crate) |
-| `tests/`, `tests_wj/` | Rust integration tests, `.wj` fixtures, conformance suite |
-| `docs/` | Architecture, RFCs, ADRs, language design, known gaps |
-| `editors/`, `vscode-extension/` | Editor support |
-| `examples/` | Example programs (not all are maintained; see `examples/README.md`) |
+Enums and pattern matching with guards:
 
-## Documentation
-- [Architecture](docs/ARCHITECTURE.md) and [improvement plan](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md)
-- [Architecture decision records](docs/adr/README.md) and [RFCs](docs/proposals/rfcs/README.md)
-- [Known gaps](docs/known-gaps.md), [Roadmap](ROADMAP.md), [Changelog](CHANGELOG.md)
-- [API reference](docs/API_REFERENCE.md), [Comparison with Rust and Go](docs/COMPARISON.md)
-- [Contributing](CONTRIBUTING.md), [Security policy](SECURITY.md), [Agent instructions](AGENTS.md)
-- [Documentation index](docs/INDEX.md)
+```windjammer
+// expect: circle 12
+// expect: big
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+}
 
-## Related projects
-- [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui) - UI framework written in Windjammer
+fn describe(s: Shape) -> string {
+    match s {
+        Shape::Circle(r) => "circle ${r * r * 3}",
+        Shape::Rect(w, h) if w * h > 100 => "big",
+        Shape::Rect(w, h) => "rect ${w * h}",
+    }
+}
+
+fn main() {
+    println(describe(Shape::Circle(2)))
+    println(describe(Shape::Rect(20, 20)))
+}
+```
+
+Traits (derives are inferred; you never write `#[derive]`):
+
+```windjammer
+// expect: Circle r=2
+trait Named {
+    fn label(self) -> string
+}
+
+struct Circle { r: int }
+
+impl Named for Circle {
+    fn label(self) -> string { "Circle r=${self.r}" }
+}
+
+fn main() {
+    println(Circle { r: 2 }.label())
+}
+```
+
+Tests live in `*_test.wj` files and run without a build:
+
+```sh,verify
+$ cat > math_test.wj <<'EOF'
+fn double(n: int) -> int { n * 2 }
+
+@test
+fn doubles_numbers() {
+    assert_eq(double(21), 42)
+}
+EOF
+$ wj test --interpret .
+test result: ok. 1 passed; 0 failed
+```
+
+More: [agent guide](docs/agent/WINDJAMMER_FOR_AGENTS.md), [grammar](docs/windjammer.ebnf),
+[keywords](docs/reference/keywords.md), [standard library](docs/reference/stdlib.md), and cheatsheets from
+[Rust](docs/agent/cheatsheet_from_rust.md), [Go](docs/agent/cheatsheet_from_go.md),
+[Python](docs/agent/cheatsheet_from_python.md) and [TypeScript](docs/agent/cheatsheet_from_typescript.md).
+
+## Status
+
+Pre-1.0: language and compiler behaviour change between minor versions. Conformance results per backend, generated from
+`tests/conformance_programs/` (causes of each failure: [docs/reference/targets.md](docs/reference/targets.md)):
+
+<!-- wj:gen name=targets_summary -->
+| Backend | Conformance programs passing | Known unsupported |
+|---|---|---|
+| `rust` | 103 | 24 |
+| `go` | 124 | 3 |
+| `js` | 124 | 3 |
+| `ts` | 125 | 2 |
+<!-- wj:end -->
+
+| Area | Tier |
+|---|---|
+| Rust backend and ownership inference | Primary. The only backend that uses the ownership IR solver. Type and borrow errors still come from rustc and are translated ([known gaps](docs/known-gaps.md)). |
+| Interpreter (`--interpret`) | Experimental. Accepts a subset of the language: [what it rejects](docs/INTERPRETER.md). |
+| Go, JavaScript, TypeScript | Experimental source translation; they do not use the IR. |
+| WebAssembly | Implemented but outside the conformance corpus. Experimental. |
+| WGSL shaders (`.wjsl`) | Experimental. |
+| Formatter for `.wj`, package registry, async surface | Not available yet ([roadmap](ROADMAP.md)). |
+
+Ranked gaps: [docs/known-gaps.md](docs/known-gaps.md). Open design decisions: [ADRs](docs/adr/README.md).
+
+### Performance
+
+No speed claims are made. `benchmarks/rust_parity/` holds Windjammer programs next to hand-written Rust, with a runner
+and its last recorded results. Numbers appear here only when a CI job records them in `docs/generated/measured.json`.
+See [benchmarks/README.md](benchmarks/README.md).
+
+## Ecosystem
+
+- [windjammer-ecosystem](https://github.com/jeffreyfriedman/windjammer-ecosystem): small packages and apps written in Windjammer (experimental).
+- [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui): UI components and a reactive runtime (experimental).
+- Editors: language server in [crates/windjammer-lsp](crates/windjammer-lsp), VS Code extension in [vscode-extension/](vscode-extension/).
+
+## The `wj` command
+
+`wj new`, `wj run`, `wj build`, `wj check`, `wj test`, `wj docs`, `wj explain` and more: see the generated
+[CLI reference](docs/reference/cli.md).
+
+## Roadmap and contributing
+
+[ROADMAP.md](ROADMAP.md) lists work with a concrete plan; [docs/WHY.md](docs/WHY.md) labels goals as goals. To contribute,
+read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) (tests, architecture rules, and the docs-truth system
+that keeps this page honest). Report a compiler bug as a minimal failing test.
+
+Documentation index: [docs/index.md](docs/index.md). Changelog: [CHANGELOG.md](CHANGELOG.md). Security: [SECURITY.md](SECURITY.md).
 
 ## License
 
-Dual-licensed under MIT OR Apache-2.0.
-
+Dual-licensed under MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)).
 Created by [Jeffrey Friedman](https://github.com/jeffreyfriedman) and contributors.

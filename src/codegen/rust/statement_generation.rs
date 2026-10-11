@@ -759,19 +759,34 @@ impl<'ast> CodeGenerator<'ast> {
                 // explicit `return match` (E0308 otherwise — wj-todo-cli edit branch).
                 self.maybe_return_value_match_in_void_block(generated, arms)
             }
-            Statement::Loop { body, .. } => self.generate_loop_statement(body),
+            Statement::Loop { body, label, .. } => {
+                let out = self.generate_loop_statement(body);
+                super::loop_statement_generation::with_loop_label(out, label.as_deref())
+            }
             Statement::While {
-                condition, body, ..
-            } => self.generate_while_statement(condition, body),
+                condition,
+                body,
+                label,
+                ..
+            } => {
+                let out = self.generate_while_statement(condition, body);
+                super::loop_statement_generation::with_loop_label(out, label.as_deref())
+            }
             Statement::For {
                 pattern,
                 iterable,
                 body,
+                label,
                 location,
                 ..
-            } => self.generate_for_statement(pattern, iterable, body, location),
-            Statement::Break { .. } => self.generate_break_statement(),
-            Statement::Continue { .. } => self.generate_continue_statement(),
+            } => {
+                let out = self.generate_for_statement(pattern, iterable, body, location);
+                super::loop_statement_generation::with_loop_label(out, label.as_deref())
+            }
+            Statement::Break { label, value, .. } => {
+                self.generate_break_statement(label.as_deref(), *value)
+            }
+            Statement::Continue { label, .. } => self.generate_continue_statement(label.as_deref()),
             Statement::Use {
                 path,
                 alias,

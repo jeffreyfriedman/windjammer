@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 5\n1 1 2 9 0\n",
+  "stdout": "hist: 1 2 1 0 0 0 0 0 0 1\nworker 0: 3\nworker 1: 2\nchecksum: 13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 0\n\n",
+  "stdout": "hist: 0 0 0 0 0 0 0 0 0 0\nworker 0: 0\nworker 1: 0\nworker 2: 0\nchecksum: 0\n"
+ }
+]

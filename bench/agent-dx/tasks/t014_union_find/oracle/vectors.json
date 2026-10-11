@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nunion 0 1\nunion 1 2\nfind 0 2\nfind 0 4\nsize 2\nunion 0 2\n",
+  "stdout": "merged\nmerged\nyes\nno\n3\nsame\ncomponents 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nsize 0\n",
+  "stdout": "1\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1000\nunion 0 999\nsize 999\nfind 0 500\n",
+  "stdout": "merged\n2\nno\ncomponents 999\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n",
+  "stdout": "components 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "30\nunion 20 27\nsize 21\nunion 16 20\nunion 2 7\nunion 17 10\nunion 24 24\nunion 24 28\nfind 11 3\nunion 20 0\nunion 13 1\n",
+  "stdout": "merged\n1\nmerged\nmerged\nmerged\nsame\nmerged\nno\nmerged\nmerged\ncomponents 23\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nunion 0 0\nunion 0 0\nsize 0\nunion 0 0\nfind 0 0\nunion 0 0\nunion 0 0\nunion 0 0\nunion 0 0\nfind 0 0\nfind 0 0\nunion 0 0\nfind 0 0\nunion 0 0\nfind 0 0\nsize 0\nunion 0 0\nunion 0 0\nfind 0 0\nunion 0 0\nfind 0 0\nsize 0\nfind 0 0\nfind 0 0\nfind 0 0\nunion 0 0\nfind 0 0\nunion 0 0\nfind 0 0\nunion 0 0\nsize 0\nunion 0 0\nsize 0\nsize 0\n",
+  "stdout": "same\nsame\n1\nsame\nyes\nsame\nsame\nsame\nsame\nyes\nyes\nsame\nyes\nsame\nyes\n1\nsame\nsame\nyes\nsame\nyes\n1\nyes\nyes\nyes\nsame\nyes\nsame\nyes\nsame\n1\nsame\n1\n1\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "22\nfind 3 7\nunion 8 3\nunion 19 10\nsize 6\nsize 17\nsize 19\nunion 1 19\nfind 15 9\nfind 4 0\nfind 4 5\nunion 10 3\n",
+  "stdout": "no\nmerged\nmerged\n1\n1\n2\nmerged\nno\nno\nno\nmerged\ncomponents 18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nsize 0\nfind 1 0\nfind 1 3\nunion 3 1\nfind 1 1\nunion 2 3\nunion 0 2\nunion 1 0\nunion 2 1\nunion 0 2\nunion 1 0\nunion 3 3\nunion 1 3\nfind 2 3\nunion 2 1\nunion 0 3\nunion 1 3\nsize 1\nunion 1 3\nfind 2 3\nfind 0 3\nunion 1 2\nunion 3 0\nsize 0\nunion 3 3\nsize 2\nfind 2 2\nunion 3 0\nunion 2 0\nsize 2\nunion 2 3\nunion 3 2\nunion 2 3\nunion 3 2\nfind 1 1\nsize 0\nfind 0 1\nfind 1 0\nfind 2 0\nunion 2 3\nunion 1 3\nsize 1\nunion 2 1\nunion 1 2\nsize 1\nunion 2 3\nfind 0 2\nfind 0 2\n",
+  "stdout": "1\nno\nno\nmerged\nyes\nmerged\nmerged\nsame\nsame\nsame\nsame\nsame\nsame\nyes\nsame\nsame\nsame\n4\nsame\nyes\nyes\nsame\nsame\n4\nsame\n4\nyes\nsame\nsame\n4\nsame\nsame\nsame\nsame\nyes\n4\nyes\nyes\nyes\nsame\nsame\n4\nsame\nsame\n4\nsame\nyes\nyes\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "16\nunion 15 14\nunion 14 3\nunion 9 1\n",
+  "stdout": "merged\nmerged\nmerged\ncomponents 13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "25\nsize 9\nfind 20 18\nunion 21 10\nunion 16 13\nsize 21\nunion 24 20\nfind 10 19\nsize 0\nsize 6\nfind 20 15\nsize 1\nunion 1 16\nsize 11\nfind 13 15\nfind 21 21\nfind 10 12\nunion 10 17\nfind 16 10\nfind 14 18\nsize 24\nsize 10\nunion 16 13\nsize 11\nunion 2 2\nunion 5 10\nunion 10 17\nfind 11 19\nunion 5 11\nunion 24 23\nsize 14\nsize 12\nfind 4 13\nunion 10 8\nsize 9\nfind 6 24\nfind 14 12\nfind 14 6\nfind 16 20\nsize 2\nfind 2 0\nfind 4 21\nfind 11 24\nfind 15 16\nfind 12 22\nunion 22 14\nfind 18 19\nunion 4 7\nsize 8\nfind 16 10\nunion 5 11\nunion 18 17\nfind 15 15\nunion 10 8\nunion 19 16\nfind 7 0\n",
+  "stdout": "1\nno\nmerged\nmerged\n2\nmerged\nno\n1\n1\nno\n1\nmerged\n1\nno\nyes\nno\nmerged\nno\nno\n2\n3\nsame\n1\nsame\nmerged\nsame\nno\nmerged\nmerged\n1\n1\nno\nmerged\n1\nno\nno\nno\nno\n1\nno\nno\nno\nno\nno\nmerged\nno\nmerged\n6\nno\nsame\nmerged\nyes\nsame\nmerged\nno\ncomponents 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6\nfind 1 1\nsize 0\nunion 5 5\nsize 3\nfind 4 4\nunion 3 0\nunion 4 5\nfind 4 0\nsize 5\nunion 0 5\nunion 4 3\nunion 2 4\nunion 0 3\nsize 2\nunion 1 4\nsize 5\nsize 0\nfind 2 5\nfind 4 5\nunion 5 5\nsize 5\nunion 4 1\nunion 2 2\nunion 0 2\nsize 4\nunion 2 3\nfind 3 2\nfind 0 1\nunion 2 4\nfind 2 0\nunion 5 4\nsize 2\nunion 0 5\n",
+  "stdout": "yes\n1\nsame\n1\nyes\nmerged\nmerged\nno\n2\nmerged\nsame\nmerged\nsame\n5\nmerged\n6\n6\nyes\nyes\nsame\n6\nsame\nsame\nsame\n6\nsame\nyes\nyes\nsame\nyes\nsame\n6\nsame\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nunion 3 1\nfind 2 0\nfind 3 3\nfind 3 1\nfind 1 0\nsize 2\nunion 3 2\nunion 0 0\nunion 2 0\nunion 1 2\nfind 3 1\nfind 0 1\nunion 3 2\nfind 3 2\nunion 2 1\nunion 2 2\nsize 1\nfind 1 1\nfind 3 2\nfind 0 2\nfind 0 2\nsize 1\nsize 3\nunion 0 1\nunion 1 0\nfind 0 3\nfind 3 2\nunion 1 1\nsize 2\nfind 3 0\nunion 1 1\nunion 1 3\nfind 1 3\nunion 1 3\nunion 0 2\nunion 0 2\nunion 1 2\nunion 1 0\nfind 2 0\nunion 2 2\n",
+  "stdout": "merged\nno\nyes\nyes\nno\n1\nmerged\nsame\nmerged\nsame\nyes\nyes\nsame\nyes\nsame\nsame\n4\nyes\nyes\nyes\nyes\n4\n4\nsame\nsame\nyes\nyes\nsame\n4\nyes\nsame\nsame\nyes\nsame\nsame\nsame\nsame\nsame\nyes\nsame\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "23\nunion 14 21\nsize 12\nsize 0\nunion 18 9\nunion 9 11\nunion 7 8\nunion 4 20\nunion 19 12\nunion 12 16\nfind 14 18\nunion 20 13\nfind 19 7\nunion 7 19\nunion 11 22\nunion 1 6\nunion 14 18\nunion 15 2\nunion 12 16\nunion 19 5\nfind 19 17\nunion 10 0\nsize 3\nfind 15 13\nunion 1 6\nsize 21\nfind 15 1\nunion 9 13\nunion 21 10\nunion 11 12\nunion 22 18\nfind 12 20\nunion 0 9\nunion 3 19\n",
+  "stdout": "merged\n1\n1\nmerged\nmerged\nmerged\nmerged\nmerged\nmerged\nno\nmerged\nno\nmerged\nmerged\nmerged\nmerged\nmerged\nsame\nmerged\nno\nmerged\n1\nno\nsame\n6\nno\nmerged\nmerged\nmerged\nsame\nyes\nsame\nmerged\ncomponents 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\nunion 5 2\nunion 2 3\nunion 5 0\nsize 7\nfind 1 1\nfind 3 7\nunion 1 5\nfind 4 4\nunion 5 4\nunion 0 4\nfind 4 1\nunion 7 5\nunion 3 0\nunion 5 0\nsize 4\nunion 3 3\nunion 7 5\nsize 4\nsize 6\nsize 4\nunion 2 3\nunion 4 0\nunion 1 4\nfind 3 3\nunion 4 7\nfind 4 1\nfind 6 3\nunion 7 0\nfind 7 4\nunion 7 4\nsize 1\nunion 3 5\nunion 3 3\nunion 4 3\nunion 3 4\nunion 3 4\nsize 7\nunion 2 1\nsize 5\nunion 5 0\nsize 6\nfind 4 7\nfind 6 2\nunion 2 1\nfind 7 4\nfind 1 2\nsize 7\nfind 7 6\n",
+  "stdout": "merged\nmerged\nmerged\n1\nyes\nno\nmerged\nyes\nmerged\nsame\nyes\nmerged\nsame\nsame\n7\nsame\nsame\n7\n1\n7\nsame\nsame\nsame\nyes\nsame\nyes\nno\nsame\nyes\nsame\n7\nsame\nsame\nsame\nsame\nsame\n7\nsame\n7\nsame\n1\nyes\nno\nsame\nyes\nyes\n7\nno\ncomponents 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "29\nunion 23 2\nunion 17 3\nunion 2 4\nfind 14 26\nunion 22 18\nunion 2 21\nunion 12 2\nsize 4\nunion 25 17\nunion 7 25\nfind 16 16\nfind 14 15\n",
+  "stdout": "merged\nmerged\nmerged\nno\nmerged\nmerged\nmerged\n5\nmerged\nmerged\nyes\nno\ncomponents 21\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "23\nfind 2 13\nfind 13 9\nunion 15 15\nunion 11 12\nunion 0 19\nunion 0 3\nunion 20 22\nfind 0 10\nfind 20 10\nsize 6\nfind 18 6\nunion 1 10\nsize 20\nsize 14\nunion 14 1\nunion 19 22\nfind 5 7\nfind 17 22\nfind 20 3\nsize 22\nsize 20\nsize 4\nsize 17\nunion 3 5\nfind 17 16\nsize 16\nunion 1 0\nfind 14 8\nsize 4\nsize 16\nsize 4\nfind 14 6\nfind 20 3\nunion 8 13\nunion 22 6\n",
+  "stdout": "no\nno\nsame\nmerged\nmerged\nmerged\nmerged\nno\nno\n1\nno\nmerged\n2\n1\nmerged\nmerged\nno\nno\nyes\n5\n5\n1\n1\nmerged\nno\n1\nmerged\nno\n1\n1\n1\nno\nyes\nmerged\nmerged\ncomponents 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "24\nsize 8\nsize 10\nfind 8 20\nunion 10 7\nsize 4\nsize 14\n",
+  "stdout": "1\n1\nno\nmerged\n1\n1\ncomponents 23\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "14\nsize 10\nsize 2\nunion 0 10\nfind 5 12\nsize 10\nfind 9 6\nunion 4 6\nfind 7 13\nfind 0 2\nunion 0 9\nunion 3 6\nsize 12\nfind 8 8\nfind 12 13\nfind 0 6\nfind 5 2\nunion 4 2\nunion 2 9\nfind 9 9\n",
+  "stdout": "1\n1\nmerged\nno\n2\nno\nmerged\nno\nno\nmerged\nmerged\n1\nyes\nno\nno\nno\nmerged\nmerged\nyes\ncomponents 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12\nunion 9 0\nunion 1 8\nsize 8\nunion 11 9\nsize 4\nunion 7 6\nfind 1 5\nunion 2 6\nunion 9 10\nfind 0 8\nunion 2 9\nunion 3 5\nfind 2 9\nunion 10 4\nunion 7 4\nsize 3\nunion 8 6\nfind 6 9\nunion 2 5\nsize 9\nunion 6 6\nfind 6 7\nunion 0 7\nunion 9 3\nfind 0 9\nfind 1 3\n",
+  "stdout": "merged\nmerged\n2\nmerged\n1\nmerged\nno\nmerged\nmerged\nno\nmerged\nmerged\nyes\nmerged\nsame\n2\nmerged\nyes\nmerged\n12\nsame\nyes\nsame\nsame\nyes\nyes\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "24\nsize 5\nunion 15 11\nunion 19 22\nunion 5 3\nsize 9\nfind 21 4\nunion 7 19\nunion 15 5\nfind 9 0\nunion 20 1\nfind 20 16\nunion 2 20\nsize 20\nfind 18 7\nunion 3 21\nfind 7 23\nfind 16 14\nsize 22\nfind 7 3\nfind 18 14\nsize 15\nfind 4 7\nfind 15 5\nsize 9\nsize 15\nunion 16 4\nunion 23 23\nunion 22 5\nfind 7 22\nunion 6 8\nunion 5 8\nunion 6 20\nsize 15\nunion 10 1\nsize 13\nunion 1 12\nfind 15 1\nunion 20 9\nfind 23 22\nsize 3\nsize 2\nsize 19\nfind 1 22\nsize 7\nunion 16 20\nfind 0 13\nunion 11 12\nunion 15 10\nunion 15 3\nfind 15 16\nunion 23 9\nfind 12 3\nsize 15\n",
+  "stdout": "1\nmerged\nmerged\nmerged\n1\nno\nmerged\nmerged\nno\nmerged\nno\nmerged\n3\nno\nmerged\nno\nno\n3\nno\nno\n5\nno\nyes\n1\n5\nmerged\nsame\nmerged\nyes\nmerged\nmerged\nmerged\n13\nmerged\n1\nmerged\nyes\nmerged\nno\n16\n16\n16\nyes\n16\nmerged\nno\nsame\nsame\nsame\nyes\nmerged\nyes\n19\ncomponents 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "23\nunion 19 12\nfind 3 5\nfind 21 20\nfind 16 4\nfind 19 7\nunion 10 19\nsize 19\nunion 19 13\nunion 9 6\nsize 4\nunion 2 3\nsize 14\nfind 8 8\nsize 9\nfind 16 3\nunion 1 2\nunion 18 0\nunion 5 3\nsize 20\nfind 4 21\nunion 14 0\nunion 12 15\nunion 6 4\nfind 22 19\nsize 22\nfind 21 21\nfind 21 8\nfind 6 9\nunion 4 8\nunion 11 20\nfind 9 11\nunion 0 0\nunion 10 11\nunion 4 21\nfind 16 17\nunion 11 14\nunion 15 19\nunion 8 0\nunion 13 7\nunion 15 14\nunion 4 14\nsize 12\nunion 18 19\nsize 10\nsize 6\nsize 15\nunion 18 12\nunion 14 9\nfind 15 7\nsize 17\nsize 5\nunion 4 3\nunion 10 10\nunion 5 9\nunion 10 16\nfind 9 21\nfind 20 17\nunion 10 20\nunion 18 0\nsize 12\n",
+  "stdout": "merged\nno\nno\nno\nno\nmerged\n3\nmerged\nmerged\n1\nmerged\n1\nyes\n2\nno\nmerged\nmerged\nmerged\n1\nno\nmerged\nmerged\nmerged\nno\n1\nyes\nno\nyes\nmerged\nmerged\nno\nsame\nmerged\nmerged\nno\nmerged\nsame\nmerged\nmerged\nsame\nsame\n16\nsame\n16\n16\n16\nsame\nsame\nyes\n1\n4\nmerged\nsame\nsame\nmerged\nyes\nno\nsame\nsame\n21\ncomponents 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "24\nunion 8 2\nfind 23 11\nsize 23\nfind 19 16\nunion 8 5\nunion 10 6\nsize 11\nfind 15 5\nsize 14\nsize 23\nfind 1 22\nfind 7 19\nunion 18 21\nfind 12 5\nfind 12 7\nsize 22\nsize 2\nfind 18 16\nunion 1 13\nsize 11\nunion 17 14\nunion 12 6\nunion 22 4\nsize 21\nunion 0 19\nfind 11 21\nunion 11 20\nsize 19\nsize 4\nsize 6\nunion 11 21\nunion 3 2\nfind 13 6\nsize 19\nunion 4 5\nfind 9 13\nunion 3 4\nsize 22\nunion 14 2\nunion 2 2\nunion 9 19\nunion 15 6\nfind 7 9\nunion 3 5\nunion 5 23\nunion 5 17\nfind 8 17\nsize 14\nunion 18 13\nunion 12 16\nunion 6 8\nunion 14 3\nfind 14 20\nunion 14 6\nfind 4 4\nfind 9 6\nunion 6 14\nunion 16 15\nunion 18 19\n",
+  "stdout": "merged\nno\n1\nno\nmerged\nmerged\n1\nno\n1\n1\nno\nno\nmerged\nno\nno\n1\n3\nno\nmerged\n1\nmerged\nmerged\nmerged\n2\nmerged\nno\nmerged\n2\n2\n3\nmerged\nmerged\nno\n2\nmerged\nno\nsame\n6\nmerged\nsame\nmerged\nmerged\nno\nsame\nmerged\nsame\nyes\n9\nmerged\nmerged\nmerged\nsame\nno\nsame\nyes\nno\nsame\nsame\nmerged\ncomponents 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "29\nfind 16 21\nfind 0 20\nsize 26\nsize 11\nsize 19\nunion 22 19\nunion 26 17\nunion 20 13\nfind 13 13\nunion 16 6\nunion 22 25\nsize 12\nunion 6 22\nunion 7 18\nfind 24 6\nunion 20 12\nfind 23 13\nunion 15 0\nunion 18 28\nfind 4 5\nunion 18 4\nunion 17 23\nfind 21 22\nunion 4 1\nfind 24 23\nunion 7 7\nunion 18 23\nsize 0\nsize 23\nunion 9 17\nfind 13 15\nunion 15 22\nsize 28\n",
+  "stdout": "no\nno\n1\n1\n1\nmerged\nmerged\nmerged\nyes\nmerged\nmerged\n1\nmerged\nmerged\nno\nmerged\nno\nmerged\nmerged\nno\nmerged\nmerged\nno\nmerged\nno\nsame\nmerged\n2\n8\nmerged\nno\nmerged\n9\ncomponents 13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "23\nsize 6\nunion 1 11\nunion 2 20\nunion 7 15\nunion 4 4\nfind 20 8\nunion 2 13\nunion 7 9\nunion 18 7\nunion 21 20\nunion 18 12\nunion 22 5\nunion 1 7\nunion 22 3\nsize 6\nunion 16 15\nunion 7 20\nunion 13 4\nunion 8 13\nunion 6 8\nunion 21 15\nunion 9 11\nunion 8 19\nunion 8 18\nunion 18 1\nfind 11 0\nunion 15 6\nunion 13 18\nsize 8\nunion 1 12\nfind 18 9\nfind 5 8\nsize 6\nunion 18 4\nunion 13 16\nsize 21\nfind 16 7\nsize 21\nsize 3\nunion 0 1\nsize 22\nfind 22 21\nunion 0 3\nunion 10 17\nunion 9 22\nunion 22 12\nunion 12 11\nfind 10 14\n",
+  "stdout": "1\nmerged\nmerged\nmerged\nsame\nno\nmerged\nmerged\nmerged\nmerged\nmerged\nmerged\nmerged\nmerged\n1\nmerged\nmerged\nmerged\nmerged\nmerged\nsame\nsame\nmerged\nsame\nsame\nno\nsame\nsame\n16\nsame\nyes\nno\n16\nsame\nsame\n16\nyes\n16\n3\nmerged\n3\nno\nmerged\nmerged\nsame\nsame\nsame\nno\ncomponents 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "24\nunion 15 23\nfind 2 11\nfind 11 2\nsize 13\nsize 1\nunion 10 20\nsize 8\nunion 8 13\nfind 13 20\nfind 16 11\nunion 17 23\nsize 13\n",
+  "stdout": "merged\nno\nno\n1\n1\nmerged\n1\nmerged\nno\nno\nmerged\n2\ncomponents 20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "30\nsize 21\nfind 23 21\nunion 22 28\nunion 22 5\nfind 18 16\nfind 18 2\nunion 29 28\nunion 28 10\nunion 23 2\nfind 28 26\nfind 20 11\nsize 1\nunion 19 21\nunion 23 26\nunion 9 8\nunion 15 24\nfind 17 11\nfind 2 27\nunion 23 19\nunion 12 25\nunion 20 0\nfind 9 9\nfind 19 15\nfind 8 26\nunion 23 6\nunion 3 19\nsize 22\nunion 9 8\nsize 27\nunion 1 7\nunion 12 11\nfind 5 3\nfind 16 22\nsize 27\nfind 9 28\nsize 27\nsize 13\nunion 18 7\nfind 11 15\nunion 16 13\nunion 3 21\nfind 3 1\nsize 15\nunion 15 0\nsize 21\nsize 20\nsize 27\nunion 21 5\nfind 27 5\nunion 26 3\n",
+  "stdout": "1\nno\nmerged\nmerged\nno\nno\nmerged\nmerged\nmerged\nno\nno\n1\nmerged\nmerged\nmerged\nmerged\nno\nno\nmerged\nmerged\nmerged\nyes\nno\nno\nmerged\nmerged\n5\nsame\n1\nmerged\nmerged\nno\nno\n1\nno\n1\n1\nmerged\nno\nmerged\nsame\nno\n2\nmerged\n7\n4\n1\nmerged\nno\nsame\ncomponents 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "21\nunion 6 19\nsize 6\nunion 12 3\nunion 7 4\nfind 4 8\nunion 10 7\nfind 7 3\nfind 11 3\nunion 13 12\nunion 5 15\nunion 8 3\nunion 16 13\nunion 16 13\nfind 5 17\nfind 2 12\nsize 13\nunion 4 11\nfind 1 3\nsize 10\nunion 14 9\nfind 14 16\nsize 17\nunion 16 9\nunion 14 18\nunion 16 7\nunion 10 7\nunion 2 11\nfind 2 6\nunion 3 16\nunion 5 10\nunion 19 16\n",
+  "stdout": "merged\n2\nmerged\nmerged\nno\nmerged\nno\nno\nmerged\nmerged\nmerged\nmerged\nsame\nno\nno\n5\nmerged\nno\n4\nmerged\nno\n1\nmerged\nmerged\nmerged\nsame\nmerged\nno\nsame\nmerged\nmerged\ncomponents 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nunion 2 1\nunion 1 0\nunion 3 0\nunion 1 1\nunion 4 2\nunion 0 1\nfind 2 1\nunion 0 2\nfind 2 4\nfind 4 1\nunion 0 2\nunion 1 4\nunion 2 3\nfind 4 1\nunion 4 4\nunion 0 0\nfind 3 1\nfind 2 1\nunion 0 3\nsize 3\nsize 0\nunion 4 4\nfind 3 0\nfind 3 1\nfind 3 1\nsize 4\nunion 0 3\nunion 1 0\nunion 4 4\nunion 1 0\nunion 1 3\n",
+  "stdout": "merged\nmerged\nmerged\nsame\nmerged\nsame\nyes\nsame\nyes\nyes\nsame\nsame\nsame\nyes\nsame\nsame\nyes\nyes\nsame\n5\n5\nsame\nyes\nyes\nyes\n5\nsame\nsame\nsame\nsame\nsame\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "23\nfind 14 18\nunion 10 13\nsize 6\n",
+  "stdout": "no\nmerged\n1\ncomponents 22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "16\nsize 2\nsize 4\nunion 6 13\nsize 1\nfind 14 3\nunion 12 5\nsize 13\nunion 4 3\nunion 2 3\nunion 10 8\nsize 5\nsize 5\nunion 11 2\nfind 5 7\nfind 5 13\nunion 10 0\nfind 8 3\nunion 14 11\nunion 7 15\nunion 7 8\nunion 13 15\nunion 13 3\nfind 8 13\nunion 0 0\nfind 0 4\nunion 4 13\nunion 13 2\nunion 15 11\nunion 15 15\nunion 11 7\nsize 1\nunion 10 3\nunion 4 8\nunion 1 12\nunion 14 12\nunion 5 12\nfind 5 5\nunion 9 5\nunion 4 3\nfind 14 2\nunion 9 8\n",
+  "stdout": "1\n1\nmerged\n1\nno\nmerged\n2\nmerged\nmerged\nmerged\n2\n2\nmerged\nno\nno\nmerged\nno\nmerged\nmerged\nmerged\nmerged\nmerged\nyes\nsame\nyes\nsame\nsame\nsame\nsame\nsame\n1\nsame\nsame\nmerged\nmerged\nsame\nyes\nmerged\nsame\nyes\nsame\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12\nunion 1 2\nfind 7 7\nunion 8 9\nunion 5 9\nunion 3 5\nunion 11 2\nunion 9 4\nunion 11 0\nunion 10 6\nfind 10 2\nunion 2 7\nsize 0\nunion 11 2\nunion 10 7\nsize 3\nfind 10 2\nunion 5 0\nsize 10\nunion 5 9\nfind 9 11\nfind 4 4\nunion 1 2\nsize 5\nunion 9 7\nsize 0\nunion 5 6\nsize 11\nunion 7 7\nsize 9\nunion 6 7\nunion 4 7\nunion 5 5\nsize 5\nunion 11 4\nfind 3 5\nunion 4 4\nfind 6 8\nfind 10 6\nunion 1 11\nunion 5 8\nfind 4 1\nfind 9 0\nfind 3 3\nfind 2 6\n",
+  "stdout": "merged\nyes\nmerged\nmerged\nmerged\nmerged\nmerged\nmerged\nmerged\nno\nmerged\n5\nsame\nmerged\n5\nyes\nmerged\n12\nsame\nyes\nyes\nsame\n12\nsame\n12\nsame\n12\nsame\n12\nsame\nsame\nsame\n12\nsame\nyes\nsame\nyes\nyes\nsame\nsame\nyes\nyes\nyes\nyes\ncomponents 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "11\nunion 4 4\nunion 1 3\nunion 3 10\nunion 4 8\nfind 5 8\nsize 9\nfind 9 8\nunion 5 3\nunion 5 5\nfind 5 3\nunion 4 10\nfind 0 0\nsize 6\nunion 7 8\n",
+  "stdout": "same\nmerged\nmerged\nmerged\nno\n1\nno\nmerged\nsame\nyes\nmerged\nyes\n1\nmerged\ncomponents 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "29\nunion 10 11\nsize 22\nsize 18\nunion 5 10\nunion 3 8\nfind 11 4\nsize 25\nfind 7 2\nsize 1\nfind 2 8\nunion 21 13\nunion 8 1\nsize 21\nsize 26\nunion 0 17\nfind 13 12\n",
+  "stdout": "merged\n1\n1\nmerged\nmerged\nno\n1\nno\n1\nno\nmerged\nmerged\n2\n1\nmerged\nno\ncomponents 23\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "19\nfind 10 15\nunion 13 10\nfind 13 14\nfind 18 12\nfind 3 4\nunion 7 7\nunion 4 0\nunion 14 5\nsize 7\nunion 11 18\nfind 3 16\nsize 10\nunion 1 0\nsize 17\nunion 7 6\nfind 9 16\nunion 3 16\nfind 10 6\nsize 6\nunion 10 7\nunion 6 7\nunion 4 16\nunion 9 1\nsize 2\nunion 7 14\nsize 7\nunion 17 13\nfind 14 5\nfind 18 7\nunion 2 6\nunion 17 10\nfind 16 1\nfind 6 11\nsize 13\nfind 9 10\nsize 11\nsize 10\nfind 3 9\nunion 8 13\nfind 11 14\nfind 14 5\nsize 16\nunion 12 15\nunion 17 17\nsize 8\nunion 1 15\nfind 5 12\nfind 15 1\nunion 14 18\nunion 13 2\nfind 4 3\nfind 0 18\nfind 16 17\nsize 10\nsize 1\nfind 8 7\nunion 18 18\n",
+  "stdout": "no\nmerged\nno\nno\nno\nsame\nmerged\nmerged\n1\nmerged\nno\n2\nmerged\n1\nmerged\nno\nmerged\nno\n2\nmerged\nsame\nmerged\nmerged\n1\nmerged\n6\nmerged\nyes\nno\nmerged\nsame\nyes\nno\n8\nno\n2\n8\nyes\nmerged\nno\nyes\n6\nmerged\nsame\n9\nmerged\nno\nyes\nmerged\nsame\nyes\nno\nno\n11\n8\nyes\nsame\ncomponents 2\n"
+ }
+]

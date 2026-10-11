@@ -124,6 +124,7 @@ fn scan_stmt(it: &mut Interpreter, module: usize, s: &'static Statement<'static>
             }
         }
         Statement::Defer { statement, .. } => scan_stmt(it, module, statement, out),
+        Statement::Break { value: Some(v), .. } => scan_expr(it, module, v, out),
         Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
     }
 }

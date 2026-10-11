@@ -144,7 +144,7 @@ When adding a conformance test:
 ## Relation to Go Backend Plan
 
 This conformance suite is a **prerequisite** for the Go backend (see
-`docs/GO_BACKEND_PLAN.md`). The readiness criteria state:
+the Go backend plan (not committed)). The readiness criteria state:
 
 > A conformance test suite exists (backend-independent tests)
 
