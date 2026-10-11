@@ -173,6 +173,21 @@ fn compiled(h: &ExampleHeader, path: &Path) -> Result<Vec<String>, String> {
     Ok(lines(&o))
 }
 
+/// Ratchet: the compiled-path gap count only shrinks. Lower this when a gap is fixed; never raise it.
+/// North star: zero (`// rust: gap` must disappear from the corpus).
+const MAX_RUST_GAPS: usize = 61;
+
+#[test]
+fn rust_gap_count_only_shrinks() {
+    let all = load_examples(&dir()).unwrap();
+    let gaps = all.iter().filter(|(h, _)| matches!(h.rust, RustStatus::Gap(_))).count();
+    assert!(gaps <= MAX_RUST_GAPS, "{gaps} gap programs > ratchet {MAX_RUST_GAPS}: a regression moved a program back to `rust: gap`");
+    assert!(
+        gaps == MAX_RUST_GAPS,
+        "{gaps} gap programs < ratchet {MAX_RUST_GAPS}: lower MAX_RUST_GAPS to {gaps} to lock in the progress"
+    );
+}
+
 #[test]
 fn rust_ok_programs_compile_and_match() {
     if Command::new("rustc").arg("--version").output().map(|o| !o.status.success()).unwrap_or(true) {
