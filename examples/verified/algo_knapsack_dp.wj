@@ -1,0 +1,19 @@
+// tags: algorithm, dynamic-programming
+// rust: gap error[E0308]: arguments to this function are incorrect
+// expect: best value: 9
+fn knapsack(weights: Vec<int>, values: Vec<int>, cap: int) -> int {
+    let mut dp = [0; 8]
+    for i in 0..weights.len() {
+        let mut c = cap
+        while c >= weights[i] {
+            let cand = dp[c - weights[i]] + values[i]
+            if cand > dp[c] { dp[c] = cand }
+            c -= 1
+        }
+    }
+    dp[cap]
+}
+
+fn main() {
+    println("best value: ${knapsack([1, 3, 4, 5], [1, 4, 5, 7], 7)}")
+}

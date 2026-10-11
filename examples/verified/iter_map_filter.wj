@@ -1,0 +1,14 @@
+// tags: iterators, map, filter, collect
+// rust: gap error[E0599]: no method named 'map' found for struct 'Vec<i32>' in the current s
+// expect: [1, 4, 9, 16, 25]
+// expect: [2, 4]
+// expect: [11, 12, 13]
+fn main() {
+    let v = [1, 2, 3, 4, 5]
+    let squares: Vec<int> = v.map(|x| x * x).collect()
+    println("${squares:?}")
+    let evens: Vec<int> = v.filter(|x| *x % 2 == 0).cloned().collect()
+    println("${evens:?}")
+    let shifted: Vec<int> = [1, 2, 3].map(|x| x + 10).collect()
+    println("${shifted:?}")
+}

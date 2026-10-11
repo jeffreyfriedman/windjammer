@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-426: Copy module `const` `u32` must not `.clone()` on assign.
+//! Copy module `const` `u32` must not `.clone()` on assign.
 //!
 //! Product `voxel/svo64_convert.rs`:
 //!   `nodes[node_index] = LEAF_FLAG.clone()`
 //! WJ is `nodes[node_index] = LEAF_FLAG`.
-//! Distinct from WDB-385 (`f32::MAX.clone()`), WDB-393 (local i32 assign),
-//! and WDB-422 (Copy f32 index arith).
+//! Distinct from (`f32::MAX.clone()`), (local i32 assign),
+//! and (Copy f32 index arith).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

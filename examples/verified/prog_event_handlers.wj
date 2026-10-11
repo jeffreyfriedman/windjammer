@@ -1,0 +1,19 @@
+// tags: program, closures, vec, callbacks
+// rust: gap error[E0308]: mismatched types
+// expect: log: started
+// expect: log: clicked 3
+// expect: total handled: 2
+struct Bus { handlers: Vec<fn(string) -> string> }
+
+fn main() {
+    let mut bus = Bus { handlers: [] }
+    bus.handlers.push(|e| "log: ${e}")
+    bus.handlers.push(|e| "log: ${e} 3")
+    let events = ["started", "clicked"]
+    let mut handled = 0
+    for (i, h) in bus.handlers.enumerate() {
+        println(h(events[i]))
+        handled += 1
+    }
+    println("total handled: ${handled}")
+}

@@ -136,11 +136,8 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check {
-            path: _path,
-            json: _json,
-        } => {
-            windjammer::cli::check::execute()?;
+        Commands::Check { path, json } => {
+            windjammer::cli::check::run(path.as_deref(), json)?;
         }
         Commands::Add {
             package,
@@ -173,7 +170,13 @@ pub fn run(cli: Cli) -> Result<()> {
                 println!("{}", stats.format());
             }
         }
-        Commands::Docs { output, format } => cmd_generate_docs(&output, &format)?,
+        Commands::Docs { query, limit, json, output, format } => {
+            if query.is_empty() {
+                cmd_generate_docs(&output, &format)?
+            } else {
+                windjammer::agent_index::docs_search::run_cli(&query.join(" "), limit, json)
+            }
+        }
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;

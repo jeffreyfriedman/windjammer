@@ -9,14 +9,13 @@ use serde::Serialize
 use serde::Deserialize
 use tokio
 
-@derive(Clone, Serialize, Deserialize)
+@derive(Clone)
 struct User {
     id: int,
     name: string,
     email: string,
 }
 
-@derive(Deserialize)
 struct CreateUserRequest {
     name: string,
     email: string,
@@ -63,7 +62,7 @@ async fn create_user(state: State<AppState>, req: Json<CreateUserRequest>) -> Re
         email: req.email.clone(),
     }
     
-    let new_id = current_id + 1
+    let new_id = current_id + 1;
     *next_id_guard = new_id
     users.push(user.clone())
     

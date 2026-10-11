@@ -1,0 +1,13 @@
+// tags: vec, search, contains
+// rust: gap error[E0599]: no method named 'position' found for struct 'Vec<i32>' in the curr
+// expect: true
+// expect: false
+// expect: Some(2)
+// expect: None
+fn main() {
+    let v = [4, 8, 15, 16, 23, 42]
+    println("${v.contains(&15)}")
+    println("${v.contains(&5)}")
+    println("${v.position(|x| *x == 15):?}")
+    println("${v.position(|x| *x == 5):?}")
+}

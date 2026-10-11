@@ -71,6 +71,9 @@ echo "----------------------------------------"
 
 test_command "Lib tests" "cargo test --workspace --lib --release" true
 test_command "Compiler integration tests" "cargo test --release --test all compiler_tests" true
+# Every program under examples/ runs or is checked (examples/EXAMPLES.toml); an unlisted or failing example fails here.
+test_command "Examples gate (examples/EXAMPLES.toml)" "cargo test --release --features cli --test examples_gate" true
+test_command "Verified example corpus (examples/verified)" "cargo test --release --test all verified_examples" true
 echo ""
 
 # ============================================================================

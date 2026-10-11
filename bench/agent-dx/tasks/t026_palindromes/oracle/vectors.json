@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "babad\ncbbd\n",
+  "stdout": "3 bab 7\n2 bb 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "aaa\n\nabc\n",
+  "stdout": "3 aaa 6\n0 - 0\n1 a 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nabababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab\nabcdefghijklmnopqrstuvwxyz\nracecar\nabacdfgdcaba\nz\n",
+  "stdout": "200 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 20100\n199 abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababa 10100\n1 a 26\n7 racecar 10\n3 aba 14\n1 z 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bbababba\naabbaababaababbaabbabcaaabbaaabaabb\n",
+  "stdout": "7 bbababb 16\n10 babbaabbab 79\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abbbaababaabbaccabbcabbaaababbbbbbbba\nbbac\nbbcbaaaaacbbaacababacabbcbbabbc\nba\nabababbabbbcbbbcaabbbbaabbaabbbbbacba\nabaaaabbbb\n",
+  "stdout": "11 bbaababaabb 96\n2 bb 5\n9 acababaca 63\n1 b 2\n14 bbbbaabbaabbbb 91\n6 baaaab 24\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abbacaaacbbacaaa\nbbbbaabcaaacbaabbab\naababababaacbaaaaabb\nab\naab\n",
+  "stdout": "5 caaac 28\n15 bbaabcaaacbaabb 41\n11 aababababaa 51\n1 a 2\n2 aa 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abbbaaabcabaacabaaaaaaaaaaaaa\ncaaababbabbbbaaa\nabbbaabbaaabbbbbbabababbbabbb\nabbabaa\n",
+  "stdout": "13 aaaaaaaaaaaaa 119\n6 babbab 36\n11 bbbabababbb 82\n4 abba 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abbba\ncbaabababbabacaacab\nbaabbbaaabbababcbbcabbbaaabbaa\ncacbbaaaaabbacbcababbccbcabbbabaaaacbb\n",
+  "stdout": "5 abbba 9\n8 ababbaba 39\n7 aabbbaa 64\n9 bbaaaaabb 76\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bcaabbbbaaabcbabcaabbbaacb\ncbbbbbbbbaabaababbbababbab\ncbbacbb\ncaabbababbbaabbbaaba\naaabbb\n",
+  "stdout": "11 bcaabbbaacb 52\n9 ababbbaba 79\n2 bb 9\n10 abbbaabbba 46\n3 aaa 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bbbbaaabcabaabc\nacbaacbbaabcabaabbbbbbabbbbaaabaabbbbab\naaabbabb\nbabcababbbaaaabbab\n",
+  "stdout": "5 baaab 28\n9 bbbbabbbb 89\n5 bbabb 16\n8 bbaaaabb 36\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abaaa\n",
+  "stdout": "3 aba 9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ababbaababababba\nba\naab\naabbbabbbaaacbbbabaaacbbaabbcaac\n",
+  "stdout": "7 abababa 36\n1 b 2\n2 aa 4\n12 aacbbaabbcaa 67\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "aca\nabbbbbbcabbaacbaba\n",
+  "stdout": "3 aca 4\n6 bbbbbb 38\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ba\n\n",
+  "stdout": "1 b 2\n0 - 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abaaaacaaabbbaac\nb\n",
+  "stdout": "7 aaacaaa 35\n1 b 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "b\ncbbaaaababbbaabbbbbabbaba\naabaacabbbbabcaabbaa\n",
+  "stdout": "1 b 1\n8 bbbaabbb 61\n6 abbbba 38\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bcabbbbb\naab\nacbabacaaaaaaaaaaabbabbaabbcababbb\nbbaab\nbbaaabbbabbaabaababaababbbaccbbcbbc\n",
+  "stdout": "5 bbbbb 18\n2 aa 4\n11 aaaaaaaaaaa 109\n4 baab 8\n11 abaababaaba 82\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ababaaaaabbbbaaaaaabaabccbacaacabaabbbbb\n",
+  "stdout": "14 aaaaabbbbaaaaa 108\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "babbaabbbbbacbbcbbaaababababa\nbabbcaaaaaabaaabaaabababaababbabbaaa\n",
+  "stdout": "9 ababababa 71\n11 aaabaaabaaa 100\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ababababbaca\nbabbaabaacbabbaaaabcababbcc\nbbabb\n",
+  "stdout": "7 abababa 27\n6 baaaab 49\n5 bbabb 9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cbaa\n",
+  "stdout": "2 aa 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "acbb\nbbbbbaaa\nbabbababbabbabbbbbaabacbbabcbccaaaaabab\naaaaaccbabaababbbaabbaabaabbacbabaab\ncbabbbaaabbaabbabbbbbbbabcbaabaaabb\nbaaabbaabbbccbaacbcbaaabaaaabbabaccbb\n",
+  "stdout": "2 bb 5\n5 bbbbb 21\n11 babbababbab 94\n11 abbaabaabba 81\n11 babbbbbbbab 91\n7 aaabaaa 75\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abcbbbacabbaacaacababbbbba\nb\nbabacbbabab\n",
+  "stdout": "7 bbacabb 55\n1 b 1\n5 babab 18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bbbba\nbbbaabababbbacaabababbbacb\ncabbaabbbbababcacabcaabbaabbbacbbbabaa\nbbcabbaaaabbaaba\n",
+  "stdout": "4 bbbb 11\n5 ababa 53\n6 bbaabb 73\n10 abbaaaabba 34\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bac\nc\nbbbaacabbabbbaccaaaaaacbaaabbaaaababbb\n",
+  "stdout": "1 b 3\n1 c 1\n8 caaaaaac 89\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bbbaabcbbabbbbbabbbbacaaaacaaaaaaba\nabaabaaabbbcbaabaababbcaaba\nbaaacabbbbcabcbb\nbbbaaaacbaababaabababa\n",
+  "stdout": "11 bbabbbbbabb 97\n7 baabaab 54\n4 bbbb 28\n10 ababaababa 53\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "baacbbaaaaabaab\nbc\nabccbbbabbbab\nbabbabaababbbaaabaac\n",
+  "stdout": "7 baaaaab 32\n1 b 2\n7 bbbabbb 27\n10 bbabaababb 44\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "aba\nbcbbbcac\nbcaccbbbcababcbcbcbbbbbbaaaabbcaa\n",
+  "stdout": "3 aba 4\n5 cbbbc 14\n8 bbaaaabb 75\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "acbabbcb\naabababbbbaabb\n",
+  "stdout": "3 bab 11\n6 abbbba 32\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "aabbabbabcbcbbbaaabaaaabbbaacbbabb\nbabaaac\nbb\ncaab\naabaaabaacbbaaabbbbbaaaaabaabbbc\n",
+  "stdout": "7 abbabba 75\n3 bab 12\n2 bb 3\n2 aa 5\n11 aaabbbbbaaa 81\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bbabbaababbaaacaca\ncc\nbbcaabaabb\na\n",
+  "stdout": "5 bbabb 36\n2 cc 3\n5 aabaa 17\n1 a 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cababababbbbabbaabbababbbaababbbbbaaba\n",
+  "stdout": "10 babbaabbab 96\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "bbbababcbbabaabbbbabab\n",
+  "stdout": "6 abbbba 46\n"
+ }
+]

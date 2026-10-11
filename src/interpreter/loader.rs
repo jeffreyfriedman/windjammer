@@ -172,8 +172,10 @@ impl Interpreter {
                 if !last {
                     // e.g. `use Enum::Variant` or type path; keep as item import of the type
                 }
-                let local = alias.map(|s| s.to_string()).unwrap_or(seg.clone());
-                self.modules[module].imports.insert(local, Import::Item(cur, seg));
+                if last {
+                    let local = alias.map(|s| s.to_string()).unwrap_or(seg.clone());
+                    self.modules[module].imports.insert(local, Import::Item(cur, seg));
+                }
                 if !last {
                     // `use Color::Red`: import the variant name as an item path
                     let full = segs[i..].join("::");

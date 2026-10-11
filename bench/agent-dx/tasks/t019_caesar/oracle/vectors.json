@@ -1,0 +1,224 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 3\nHello, World!\n",
+  "stdout": "Khoor, Zruog!\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 3\nKhoor, Zruog!\n",
+  "stdout": "Hello, World!\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 26\nabc XYZ\n",
+  "stdout": "abc XYZ\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -1\naA zZ\n",
+  "stdout": "zZ yY\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 53\nZebra 123\n",
+  "stdout": "Afcsb 123\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -30\nmixed\nlines\n\n",
+  "stdout": "qmbih\npmriw\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 0\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -16\nt6FsJeJx8m3uqDbZY\n",
+  "stdout": "d6PcToTh8w3eaNlJI\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 54\nQuV6\n",
+  "stdout": "OsT6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -28\nP7AZq \n",
+  "stdout": "R7CBs \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 4\n8w,\n.?D3\n",
+  "stdout": "8s,\n.?Z3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -58\nx95qqy6 IwVPFjJgyfhZHlAF5EHc0.M\n",
+  "stdout": "d95wwe6 OcBVLpPmelnFNrGL5KNi0.S\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -29\n,4v25MBoXJVrunZPa19.nkkIU1DC4woEaGKP?\n",
+  "stdout": ",4s25JYlUGSorkWMx19.khhFR1AZ4tlBxDHM?\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -44\nmtxmj?SFDc7r\n",
+  "stdout": "elpeb?KXVu7j\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 20\ndFWpQzbwa,ums9e7yT,I8Fs1MgXnFoBjgS3rOkzM,J.BnphP21klx1\noX4Ea\n",
+  "stdout": "jLCvWfhcg,asy9k7eZ,O8Ly1SmDtLuHpmY3xUqfS,P.HtvnV21qrd1\nuD4Kg\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 57\nS5\n",
+  "stdout": "X5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 56\nI\n",
+  "stdout": "M\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 28\nUB1.\n",
+  "stdout": "WD1.\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -12\nJz,DL! BLc?sxg,rrXcvlxm\nd\n",
+  "stdout": "Xn,RZ! PZq?glu,ffLqjzla\nr\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 9\n\n",
+  "stdout": "\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 55\nkumFI7IF.?Cbqo!odrzISc,RoYfSxnA12?6OD\n",
+  "stdout": "hrjCF7FC.?Zynl!laowFPz,OlVcPukX12?6LA\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -13\nQ\nnHmj73c?xT2.LGlZdxh8l,YbzSpdG4Ds dLW,dPHdUnX?6dwbst\n",
+  "stdout": "D\naUzw73p?kG2.YTyMqku8y,LomFcqT4Qf qYJ,qCUqHaK?6qjofg\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -53\npB4wk8wz\n",
+  "stdout": "qC4xl8xa\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -54\nFP zfd6T, hcc1OhN.9Oes.KEWnDR.YHuYl\n",
+  "stdout": "DN xdb6R, faa1MfL.9Mcq.ICUlBP.WFsWj\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 28\n4jYzoJehEzjd0SrwLum8XyLTDE?eL05B\n",
+  "stdout": "4lAbqLgjGblf0UtyNwo8ZaNVFG?gN05D\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -28\n\n",
+  "stdout": "\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -60\nqyR9FMPCunuF0Y!BIAH,\n",
+  "stdout": "ygZ9NUXKcvcN0G!JQIP,\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -44\nj?MuW9uSYlHvz3X\nezl2Nyw4zoQRHtD6GcXY!vApQAGBgx7EE,8!.c?BxRK\n",
+  "stdout": "b?EmO9mKQdZnr3P\nwrd2Fqo4rgIJZlV6YuPQ!nShISYTyp7WW,8!.u?TpJC\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 7\nnFIBkGlAeAxSLNPfx?gSId7v.S VbX\n",
+  "stdout": "uMPIrNsHlHeZSUWme?nZPk7c.Z CiE\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -5\neV!x?Fwlh0pHviMcqJbZ0A9KY1\n",
+  "stdout": "zQ!s?Argc0kCqdHxlEwU0V9FT1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -11\n20XaLSGwwxiFPR4Ar2WNwrpRxLfqMLq\n",
+  "stdout": "20IlWDRhhitQAC4Lc2HYhcaCiWqbXWb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec -58\n ,lCelk7Lwx KXXnIsr1GcSCXrGGRT20bOwhjRNjnUERLpHV\n",
+  "stdout": " ,rIkrq7Rcd QDDtOyx1MiYIDxMMXZ20hUcnpXTptAKXRvNB\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -52\nJZwn8p4agjrmy 338Wr5B0L?WL.Oa0oShjGAKDYB\nVyv\n\n",
+  "stdout": "JZwn8p4agjrmy 338Wr5B0L?WL.Oa0oShjGAKDYB\nVyv\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc -13\n0xh1C0fpksB6f6ZJ6fGhVhVRdJfps2nt5k,dbk104q7J.2cDTc3oK?N\n",
+  "stdout": "0ku1P0scxfO6s6MW6sTuIuIEqWscf2ag5x,qox104d7W.2pQGp3bX?A\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 59\na6PMP!9cccfm2k UEG5U.G6qM36W7hAfcOmBnrBfe MY gGM\n",
+  "stdout": "t6IFI!9vvvyf2d NXZ5N.Z6jF36P7aTyvHfUgkUyx FR zZF\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 7\n47yb7BAExNY163yzlhnmFJ3ZFIWK4XlJZHk3b.4pT5KC3M\n",
+  "stdout": "47fi7IHLeUF163fgsoutMQ3GMPDR4EsQGOr3i.4wA5RJ3T\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 13\nV0m1LO5rw55yq775BhT4UygjD.wze 5UkmAWjr.9!A.d93Npl8p2mb\n",
+  "stdout": "I0z1YB5ej55ld775OuG4HltwQ.jmr 5HxzNJwe.9!N.q93Acy8c2zo\n"
+ }
+]

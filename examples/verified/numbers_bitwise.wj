@@ -1,0 +1,14 @@
+// tags: numbers, bitwise
+// rust: ok
+// expect: 1
+// expect: 7
+// expect: 6
+// expect: 40
+// expect: 5
+fn main() {
+    println("${5 & 3}")
+    println("${5 | 3}")
+    println("${5 ^ 3}")
+    println("${5 << 3}")
+    println("${20 >> 2}")
+}

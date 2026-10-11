@@ -1,0 +1,43 @@
+// tags: algorithm, strings, chars, enum, parsing
+// rust: gap error[E0308]: mismatched types
+// expect: Num(12) Plus Num(7) Star LParen Num(3) RParen
+enum Token { Num(int), Plus, Star, LParen, RParen }
+
+fn show(t: Token) -> string {
+    match t {
+        Token::Num(n) => "Num(${n})",
+        Token::Plus => "Plus",
+        Token::Star => "Star",
+        Token::LParen => "LParen",
+        Token::RParen => "RParen",
+    }
+}
+
+fn tokenize(src: string) -> Vec<Token> {
+    let chars: Vec<char> = src.chars().collect()
+    let mut toks: Vec<Token> = []
+    let mut i = 0
+    while i < chars.len() {
+        let c = chars[i]
+        if c.is_numeric() {
+            let mut n = 0
+            while i < chars.len() && chars[i].is_numeric() {
+                n = n * 10 + chars[i].to_digit(10).unwrap_or(0) as int
+                i += 1
+            }
+            toks.push(Token::Num(n))
+            continue
+        }
+        if c == '+' { toks.push(Token::Plus) }
+        if c == '*' { toks.push(Token::Star) }
+        if c == '(' { toks.push(Token::LParen) }
+        if c == ')' { toks.push(Token::RParen) }
+        i += 1
+    }
+    toks
+}
+
+fn main() {
+    let strs: Vec<string> = tokenize("12 + 7 * (3)").into_iter().map(|t| show(t)).collect()
+    println(strs.join(" "))
+}

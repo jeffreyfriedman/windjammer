@@ -1,0 +1,94 @@
+use std::fs
+
+struct MinMaxStack<T> {
+    items: Vec<T>,
+}
+
+impl<T: Ord + Clone> MinMaxStack<T> {
+    fn new() -> MinMaxStack<T> {
+        MinMaxStack { items: Vec::new() }
+    }
+
+    fn push(self, x: T) {
+        self.items.push(x)
+    }
+
+    fn pop(self) -> Option<T> {
+        self.items.pop()
+    }
+
+    fn min(self) -> Option<T> {
+        let mut best: Option<T> = None
+        for x in self.items {
+            best = match best {
+                Some(b) => if x.clone() < b { Some(x.clone()) } else { Some(b) },
+                None => Some(x.clone()),
+            }
+        }
+        best
+    }
+
+    fn max(self) -> Option<T> {
+        let mut best: Option<T> = None
+        for x in self.items {
+            best = match best {
+                Some(b) => if x.clone() > b { Some(x.clone()) } else { Some(b) },
+                None => Some(x.clone()),
+            }
+        }
+        best
+    }
+}
+
+fn show<T: ToString>(o: Option<T>) -> string {
+    match o {
+        Some(v) => v.to_string(),
+        None => "empty",
+    }
+}
+
+fn run_ints(lines: Vec<string>) {
+    let mut st: MinMaxStack<i64> = MinMaxStack::new()
+    for ln in lines {
+        if ln.starts_with("push") {
+            st.push(sub(ln.clone(), 5, ln.len()).trim().parse::<i64>().unwrap_or(0))
+        } else if ln == "pop" {
+            println(show(st.pop()))
+        } else if ln == "size" {
+            println("${st.items.len()}")
+        } else if ln == "min" {
+            println(show(st.min()))
+        } else {
+            println(show(st.max()))
+        }
+    }
+}
+
+fn run_strs(lines: Vec<string>) {
+    let mut st: MinMaxStack<string> = MinMaxStack::new()
+    for ln in lines {
+        if ln.starts_with("push") {
+            let x = if ln.len() > 5 { sub(ln.clone(), 5, ln.len()).to_string() } else { "" }
+            st.push(x)
+        } else if ln == "pop" {
+            println(show(st.pop()))
+        } else if ln == "size" {
+            println("${st.items.len()}")
+        } else if ln == "min" {
+            println(show(st.min()))
+        } else {
+            println(show(st.max()))
+        }
+    }
+}
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut lines: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let kind = lines.remove(0)
+    if kind == "int" { run_ints(lines) } else { run_strs(lines) }
+}

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 5\n1 2 3 4 5\n",
+  "stdout": "chunk 0: 6\nchunk 1: 9\ntotal: 15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 3\n10 -10 7\n",
+  "stdout": "chunk 0: 10\nchunk 1: -10\nchunk 2: 7\ntotal: 7\n"
+ }
+]

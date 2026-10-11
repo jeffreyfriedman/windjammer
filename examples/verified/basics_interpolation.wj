@@ -1,0 +1,20 @@
+// tags: basics, strings, interpolation
+// rust: ok
+// expect: Ada is 36 years old
+// expect: next year: 37
+// expect: price: 4.50
+// expect: padded: [   42]
+// expect: left:   [42   ]
+// expect: zero:   [00042]
+fn main() {
+    let name = "Ada"
+    let age = 36
+    let price = 4.5
+    let n = 42
+    println("${name} is ${age} years old")
+    println("next year: ${age + 1}")
+    println("price: ${price:.2}")
+    println("padded: [${n:>5}]")
+    println("left:   [${n:<5}]")
+    println("zero:   [${n:05}]")
+}

@@ -1,0 +1,85 @@
+// expect: 7
+// expect: 12
+// expect: 41
+// expect: 30
+// expect: 11
+// expect: 110
+// expect: 11
+// expect: 12
+// expect: 20
+// Pipe operator: every stage form on every backend. Values are worked out by hand.
+struct Num {
+    v: i32,
+}
+
+impl Num {
+    fn make(v: i32) -> Num {
+        Num { v: v }
+    }
+    fn plus(self, k: i32) -> Num {
+        Num { v: self.v + k }
+    }
+    fn times(self, k: i32) -> Num {
+        Num { v: self.v * k }
+    }
+    fn get(self) -> i32 {
+        self.v
+    }
+    fn scale(k: i32, n: i32) -> i32 {
+        k * n
+    }
+}
+
+fn inc(x: i32) -> i32 {
+    x + 1
+}
+
+fn add(x: i32, y: i32) -> i32 {
+    x + y
+}
+
+fn sub(x: i32, y: i32) -> i32 {
+    x - y
+}
+
+fn halve_even(x: i32) -> Result<i32, string> {
+    if x % 2 == 0 {
+        Ok(x / 2)
+    } else {
+        Err("odd")
+    }
+}
+
+fn run() -> Result<i32, string> {
+    let r = 40 |> halve_even()? |> halve_even()? |> add(1)
+    Ok(r)
+}
+
+fn main() {
+    // plain, call-with-args, closure
+    println("{}", 3 |> inc |> add(3))
+    // closure stage followed by a parenthesised closure stage
+    println("{}", 5 |> |v| v + 1 |> inc |> inc |> inc |> inc |> inc |> inc)
+    // placeholder: sub(100, _) = 100 - 59
+    println("{}", 59 |> sub(100, _))
+    // method form and Type::assoc form
+    println("{}", 2 |> Num::make |> .plus(3) |> .times(6) |> .get())
+    // Type::assoc stage with piped value as second arg via placeholder
+    println("{}", 5 |> Num::scale(2, _) |> inc)
+    // chain mixing all forms
+    let all = 4 |> inc |> add(5) |> sub(_, 4) |> (|v| v * 10) |> Num::make |> .plus(0) |> .get()
+    println("{}", all + 50)
+    // ? on a stage
+    match run() {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+    // closure literal immediately applied inside a larger expression
+    println("{}", (6 |> |q| q * 2) + 0)
+    // multi-line chain with comments
+    let total = 1
+        |> add(1)       // 2
+        // times 10
+        |> (|a| a * 10) // 20
+    println("{}", total)
+}

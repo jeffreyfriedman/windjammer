@@ -1,0 +1,3 @@
+The first line holds an integer K. The next K lines each hold `key=value` (split at the FIRST `=`; the value may be empty or contain `=`). The remaining lines (to end of input) are the template.
+
+In the template replace every occurrence of `{{ name }}` (two opening braces, optional spaces, an identifier of letters/digits/underscore, optional spaces, two closing braces) with the value of `name`. If `name` was not defined, substitute `<missing:name>` instead. Text that does not match this pattern (for example `{{ not valid }}` or a lone `{`) is copied unchanged. Substituted values are not re-scanned. Print the rendered template.

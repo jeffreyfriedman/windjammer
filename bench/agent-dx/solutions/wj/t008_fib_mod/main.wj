@@ -1,0 +1,33 @@
+use std::fs
+
+// returns (F(n), F(n+1)) mod m using fast doubling; products stay below 2^63 because m <= 1e9
+fn fib_pair(n: i64, m: i64) -> (i64, i64) {
+    if n == 0 {
+        return (0 % m, 1 % m)
+    }
+    let (a, b) = fib_pair(n / 2, m)
+    let c = a * ((2 * b - a + m) % m) % m
+    let d = (a * a + b * b) % m
+    if n % 2 == 0 {
+        (c, d)
+    } else {
+        (d, (c + d) % m)
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut nums: Vec<i64> = Vec::new()
+    for w in text.split_whitespace() {
+        nums.push(w.parse::<i64>().unwrap_or(0))
+    }
+    let t = nums[0]
+    let mut i: i64 = 0
+    while i < t {
+        let n = nums[(1 + 2 * i) as usize]
+        let m = nums[(2 + 2 * i) as usize]
+        let (f, _) = fib_pair(n, m)
+        println("${f}")
+        i += 1
+    }
+}

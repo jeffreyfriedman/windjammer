@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 3\nrect 2 5\nrtri 3 4\n",
+  "stdout": "square corners=4 area2=18\nrect corners=4 area2=20\nrtri corners=3 area2=12\ntotal area2=50\nlargest=rect area2=20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 2 4 3\n",
+  "stdout": "trap corners=4 area2=18\ntotal area2=18\nlargest=trap area2=18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "total area2=0\nlargest=none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 1000000000\nrect 1000000000 1000000000\n",
+  "stdout": "square corners=4 area2=2000000000000000000\nrect corners=4 area2=2000000000000000000\ntotal area2=4000000000000000000\nlargest=square area2=2000000000000000000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rtri 2 3\nrect 1 3\nsquare 1\n",
+  "stdout": "rtri corners=3 area2=6\nrect corners=4 area2=6\nsquare corners=4 area2=2\ntotal area2=14\nlargest=rtri area2=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 36 9 45\nrtri 13 32\ntrap 23 4 22\nsquare 18\nrtri 22 42\n",
+  "stdout": "trap corners=4 area2=2025\nrtri corners=3 area2=416\ntrap corners=4 area2=594\nsquare corners=4 area2=648\nrtri corners=3 area2=924\ntotal area2=4607\nlargest=trap area2=2025\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 3 38\ntrap 17 29 44\nsquare 5\n",
+  "stdout": "rect corners=4 area2=228\ntrap corners=4 area2=2024\nsquare corners=4 area2=50\ntotal area2=2302\nlargest=trap area2=2024\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 13 2\nrect 23 21\n",
+  "stdout": "rect corners=4 area2=52\nrect corners=4 area2=966\ntotal area2=1018\nlargest=rect area2=966\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rtri 33 41\nsquare 13\nsquare 50\nsquare 48\ntrap 43 48 19\nrtri 25 35\n",
+  "stdout": "rtri corners=3 area2=1353\nsquare corners=4 area2=338\nsquare corners=4 area2=5000\nsquare corners=4 area2=4608\ntrap corners=4 area2=1729\nrtri corners=3 area2=875\ntotal area2=13903\nlargest=square area2=5000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 5 11\ntrap 22 43 28\nrect 39 41\ntrap 42 41 1\ntrap 4 46 40\nrect 43 29\ntrap 22 17 41\ntrap 13 44 36\n",
+  "stdout": "rect corners=4 area2=110\ntrap corners=4 area2=1820\nrect corners=4 area2=3198\ntrap corners=4 area2=83\ntrap corners=4 area2=2000\nrect corners=4 area2=2494\ntrap corners=4 area2=1599\ntrap corners=4 area2=2052\ntotal area2=13356\nlargest=rect area2=3198\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 39 16 19\nsquare 15\nrtri 2 45\ntrap 28 24 5\nrect 38 50\nrect 21 19\nrtri 4 4\n",
+  "stdout": "trap corners=4 area2=1045\nsquare corners=4 area2=450\nrtri corners=3 area2=90\ntrap corners=4 area2=260\nrect corners=4 area2=3800\nrect corners=4 area2=798\nrtri corners=3 area2=16\ntotal area2=6459\nlargest=rect area2=3800\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rtri 9 38\nsquare 15\nsquare 45\nrtri 20 40\nsquare 36\ntrap 7 43 15\nrtri 4 30\n",
+  "stdout": "rtri corners=3 area2=342\nsquare corners=4 area2=450\nsquare corners=4 area2=4050\nrtri corners=3 area2=800\nsquare corners=4 area2=2592\ntrap corners=4 area2=750\nrtri corners=3 area2=120\ntotal area2=9104\nlargest=square area2=4050\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 23\nrtri 21 20\n",
+  "stdout": "square corners=4 area2=1058\nrtri corners=3 area2=420\ntotal area2=1478\nlargest=square area2=1058\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 38\ntrap 4 4 24\n",
+  "stdout": "square corners=4 area2=2888\ntrap corners=4 area2=192\ntotal area2=3080\nlargest=square area2=2888\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 38 9\nrect 6 25\ntrap 26 1 25\nrect 19 48\nrtri 42 41\nrect 5 1\nsquare 41\n",
+  "stdout": "rect corners=4 area2=684\nrect corners=4 area2=300\ntrap corners=4 area2=675\nrect corners=4 area2=1824\nrtri corners=3 area2=1722\nrect corners=4 area2=10\nsquare corners=4 area2=3362\ntotal area2=8577\nlargest=square area2=3362\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rtri 10 36\n",
+  "stdout": "rtri corners=3 area2=360\ntotal area2=360\nlargest=rtri area2=360\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 7 7 5\nrtri 40 32\n",
+  "stdout": "trap corners=4 area2=70\nrtri corners=3 area2=1280\ntotal area2=1350\nlargest=rtri area2=1280\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 20\nrtri 19 36\nsquare 15\ntrap 37 26 9\n",
+  "stdout": "square corners=4 area2=800\nrtri corners=3 area2=684\nsquare corners=4 area2=450\ntrap corners=4 area2=567\ntotal area2=2501\nlargest=square area2=800\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 5 28 9\ntrap 49 18 30\nrect 34 31\ntrap 32 19 32\nrtri 45 34\nrect 24 14\ntrap 24 16 32\nrect 16 28\n",
+  "stdout": "trap corners=4 area2=297\ntrap corners=4 area2=2010\nrect corners=4 area2=2108\ntrap corners=4 area2=1632\nrtri corners=3 area2=1530\nrect corners=4 area2=672\ntrap corners=4 area2=1280\nrect corners=4 area2=896\ntotal area2=10425\nlargest=rect area2=2108\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 25 26\ntrap 37 30 48\nsquare 19\nrtri 3 39\nsquare 28\nrect 5 1\nrtri 8 46\n",
+  "stdout": "rect corners=4 area2=1300\ntrap corners=4 area2=3216\nsquare corners=4 area2=722\nrtri corners=3 area2=117\nsquare corners=4 area2=1568\nrect corners=4 area2=10\nrtri corners=3 area2=368\ntotal area2=7301\nlargest=trap area2=3216\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 32 35 22\nsquare 14\nrtri 42 36\nrect 43 6\nrect 47 35\nsquare 31\nrect 14 45\n",
+  "stdout": "trap corners=4 area2=1474\nsquare corners=4 area2=392\nrtri corners=3 area2=1512\nrect corners=4 area2=516\nrect corners=4 area2=3290\nsquare corners=4 area2=1922\nrect corners=4 area2=1260\ntotal area2=10366\nlargest=rect area2=3290\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 9 7\ntrap 35 38 41\nsquare 29\nsquare 6\n",
+  "stdout": "rect corners=4 area2=126\ntrap corners=4 area2=2993\nsquare corners=4 area2=1682\nsquare corners=4 area2=72\ntotal area2=4873\nlargest=trap area2=2993\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rect 1 11\nrect 14 48\ntrap 48 49 9\nrtri 46 47\ntrap 23 44 41\ntrap 4 30 27\nrtri 24 3\ntrap 6 40 43\n",
+  "stdout": "rect corners=4 area2=22\nrect corners=4 area2=1344\ntrap corners=4 area2=873\nrtri corners=3 area2=2162\ntrap corners=4 area2=2747\ntrap corners=4 area2=918\nrtri corners=3 area2=72\ntrap corners=4 area2=1978\ntotal area2=10116\nlargest=trap area2=2747\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 49\nrtri 40 39\nrtri 38 23\nrtri 16 13\n",
+  "stdout": "square corners=4 area2=4802\nrtri corners=3 area2=1560\nrtri corners=3 area2=874\nrtri corners=3 area2=208\ntotal area2=7444\nlargest=square area2=4802\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 20\ntrap 16 11 8\nrtri 50 15\nsquare 22\nrect 12 23\n",
+  "stdout": "square corners=4 area2=800\ntrap corners=4 area2=216\nrtri corners=3 area2=750\nsquare corners=4 area2=968\nrect corners=4 area2=552\ntotal area2=3286\nlargest=square area2=968\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rtri 9 28\ntrap 48 41 45\nrect 29 20\nsquare 15\ntrap 9 9 3\ntrap 12 43 4\nsquare 34\nrtri 12 12\n",
+  "stdout": "rtri corners=3 area2=252\ntrap corners=4 area2=4005\nrect corners=4 area2=1160\nsquare corners=4 area2=450\ntrap corners=4 area2=54\ntrap corners=4 area2=220\nsquare corners=4 area2=2312\nrtri corners=3 area2=144\ntotal area2=8597\nlargest=trap area2=4005\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 38\nsquare 24\nrtri 50 1\ntrap 48 18 13\n",
+  "stdout": "square corners=4 area2=2888\nsquare corners=4 area2=1152\nrtri corners=3 area2=50\ntrap corners=4 area2=858\ntotal area2=4948\nlargest=square area2=2888\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 37 35 3\n",
+  "stdout": "trap corners=4 area2=216\ntotal area2=216\nlargest=trap area2=216\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rtri 22 16\nsquare 12\nrtri 39 38\nrtri 5 23\ntrap 45 14 49\nrtri 39 13\n",
+  "stdout": "rtri corners=3 area2=352\nsquare corners=4 area2=288\nrtri corners=3 area2=1482\nrtri corners=3 area2=115\ntrap corners=4 area2=2891\nrtri corners=3 area2=507\ntotal area2=5635\nlargest=trap area2=2891\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 27 35 48\nsquare 1\ntrap 50 3 17\n",
+  "stdout": "trap corners=4 area2=2976\nsquare corners=4 area2=2\ntrap corners=4 area2=901\ntotal area2=3879\nlargest=trap area2=2976\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 10\n",
+  "stdout": "square corners=4 area2=200\ntotal area2=200\nlargest=square area2=200\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 5 29 11\n",
+  "stdout": "trap corners=4 area2=374\ntotal area2=374\nlargest=trap area2=374\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 12 28 34\n",
+  "stdout": "trap corners=4 area2=1360\ntotal area2=1360\nlargest=trap area2=1360\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 27 25 18\nsquare 11\nrect 23 13\ntrap 15 17 42\nsquare 36\nrtri 4 32\nrtri 12 39\nsquare 38\n",
+  "stdout": "trap corners=4 area2=936\nsquare corners=4 area2=242\nrect corners=4 area2=598\ntrap corners=4 area2=1344\nsquare corners=4 area2=2592\nrtri corners=3 area2=128\nrtri corners=3 area2=468\nsquare corners=4 area2=2888\ntotal area2=9196\nlargest=square area2=2888\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 46 32 24\ntrap 28 37 26\nrtri 6 32\ntrap 30 14 38\nrect 19 32\n",
+  "stdout": "trap corners=4 area2=1872\ntrap corners=4 area2=1690\nrtri corners=3 area2=192\ntrap corners=4 area2=1672\nrect corners=4 area2=1216\ntotal area2=6642\nlargest=trap area2=1872\n"
+ }
+]

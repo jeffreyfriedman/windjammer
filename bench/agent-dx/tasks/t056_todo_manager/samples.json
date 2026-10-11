@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add buy milk\nadd write code\ndone 1\nlist\nlist open\ncount\n",
+  "stdout": "added 1\nadded 2\ndone 1\n1 [x] buy milk\n2 [ ] write code\n2 [ ] write code\nopen=1 done=1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list\ndone 3\nbogus\n",
+  "stdout": "(none)\nerror: no such item 3\nerror: unknown command bogus\n"
+ }
+]

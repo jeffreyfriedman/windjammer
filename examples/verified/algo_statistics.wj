@@ -1,0 +1,18 @@
+// tags: algorithm, math, float, statistics
+// rust: gap error[E0599]: no method named 'sum' found for struct 'Vec<f32>' in the current s
+// expect: mean=5.0 stddev=2.0
+// expect: median=4.5
+use std::cmp::Ordering
+
+fn main() {
+    let data = [2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0]
+    let n = data.len() as float
+    let mean = data.sum::<float>() / n
+    let var = data.map(|x| (*x - mean) * (*x - mean)).sum::<float>() / n
+    println("mean=${mean:.1} stddev=${var.sqrt():.1}")
+    let mut sorted = data
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+    let mid = sorted.len() / 2
+    let median = (sorted[mid - 1] + sorted[mid]) / 2.0
+    println("median=${median:.1}")
+}

@@ -1,0 +1,16 @@
+// tags: vec, grid, nested
+// rust: gap error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied
+// expect: 1 2 3
+// expect: 4 5 6
+// expect: diag=6 total=21
+fn main() {
+    let grid = [[1, 2, 3], [4, 5, 6]]
+    let mut total = 0
+    for row in grid {
+        let strs: Vec<string> = row.map(|x| x.to_string()).collect()
+        println(strs.join(" "))
+        for x in row { total += *x }
+    }
+    let diag = grid[0][0] + grid[1][1]
+    println("diag=${diag} total=${total}")
+}

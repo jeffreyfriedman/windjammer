@@ -37,6 +37,7 @@ fn entry_value(map: Place, key: Value) -> Value {
         name: Rc::from("__Entry"),
         fields: vec![(Rc::from("map"), Value::Ref(map)), (Rc::from("key"), key)],
         copy: false,
+        uid: 0,
     }))
 }
 

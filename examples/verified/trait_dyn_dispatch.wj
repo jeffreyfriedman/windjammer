@@ -1,0 +1,26 @@
+// tags: trait, dynamic-dispatch, vec
+// rust: gap error[E0308]: mismatched types
+// expect: 12
+// expect: 6
+// expect: 12
+trait Shape { fn area(self) -> int }
+
+struct Sq { s: int }
+struct Rc { w: int, h: int }
+
+impl Shape for Sq { fn area(self) -> int { self.s * self.s } }
+impl Shape for Rc { fn area(self) -> int { self.w * self.h } }
+
+fn total(shapes: Vec<Box<dyn Shape>>) -> int {
+    let mut t = 0
+    for s in shapes { t += s.area() }
+    t
+}
+
+fn main() {
+    let a: Box<dyn Shape> = Box::new(Sq { s: 3 })
+    let b: Box<dyn Shape> = Box::new(Rc { w: 2, h: 3 })
+    println("${a.area() + 3}")
+    println("${b.area()}")
+    println("${total([a, b]) - 3}")
+}

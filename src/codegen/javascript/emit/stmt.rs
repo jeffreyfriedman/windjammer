@@ -14,8 +14,19 @@ impl<'m> Js<'m> {
         Ok(())
     }
 
+    /// `wjl_name: ` when a user loop label is pending and `head` starts a loop.
+    pub(super) fn loop_label_prefix(&mut self, head: &str) -> String {
+        if head.starts_with("for") || head.starts_with("while") {
+            if let Some(l) = self.pending_label.take() {
+                return format!("wjl_{l}: ");
+            }
+        }
+        String::new()
+    }
+
     fn block(&mut self, head: &str, ss: &[PStmt]) -> PResult<()> {
-        self.line(&format!("{head} {{"));
+        let prefix = self.loop_label_prefix(head);
+        self.line(&format!("{prefix}{head} {{"));
         self.ind += 1;
         self.stmts(ss)?;
         self.ind -= 1;
@@ -70,6 +81,14 @@ impl<'m> Js<'m> {
             PStmt::ForRange { var, start, end, inclusive, body } => self.for_range(var, start, end, *inclusive, body)?,
             PStmt::ForIn { pat, iter, body } => self.for_in(pat, iter, body)?,
             PStmt::Match { scrutinee, arms } => self.match_stmt(scrutinee, arms)?,
+            PStmt::Labeled { label, stmt } => {
+                self.pending_label = Some(label.clone());
+                let r = self.stmt(stmt);
+                self.pending_label = None;
+                r?;
+            }
+            PStmt::BreakTo(l) => self.line(&format!("break wjl_{l};")),
+            PStmt::ContinueTo(l) => self.line(&format!("continue wjl_{l};")),
             PStmt::Break => self.line("break;"),
             PStmt::Continue => self.line("continue;"),
             PStmt::Return(None) => self.line("return;"),
@@ -142,7 +161,8 @@ impl<'m> Js<'m> {
         let (mut conds, mut binds) = (Vec::new(), Vec::new());
         let item = self.fresh("it");
         self.pat(pat, &item, &mut conds, &mut binds)?;
-        self.line(&format!("for (const {item} of {it}) {{"));
+        let prefix = self.loop_label_prefix("for");
+        self.line(&format!("{prefix}for (const {item} of {it}) {{"));
         self.ind += 1;
         for (n, e) in binds {
             self.line(&format!("let {n} = {e};"));

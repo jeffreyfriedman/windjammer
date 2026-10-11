@@ -1,0 +1,420 @@
+[
+ {
+  "args": [],
+  "files": {
+   "a.txt": "hello",
+   "src/main.rs": "fn main() {}\n"
+  },
+  "stdin": "",
+  "stdout": "a.txt (5 bytes)\nsrc/\n  main.rs (13 bytes)\n1 directories, 2 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "x": ""
+  },
+  "stdin": "",
+  "stdout": "x (0 bytes)\n0 directories, 1 files\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "0 directories, 0 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "Bee": "upper",
+   "a b": "space",
+   "a/z": "zz",
+   "b/a": "1",
+   "b/c/d/e.txt": "deep"
+  },
+  "stdin": "",
+  "stdout": "Bee (5 bytes)\na/\n  z (2 bytes)\na b (5 bytes)\nb/\n  a (1 bytes)\n  c/\n    d/\n      e.txt (4 bytes)\n4 directories, 5 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/Z": "xxxxxxxxxxxxxxxxxxx",
+   "D/a/b/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/a/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/a/f1": "xxx",
+   "b/a/a/f1": "xxxxxxxxxxxxxxxxx",
+   "cc/cc/cc/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/cc/f2.txt": "xxxxxxxxxxxxxx",
+   "g": "xxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  Z (19 bytes)\n  a/\n    b/\n      g (40 bytes)\na/\n  a/\n    Z (31 bytes)\n    f1 (3 bytes)\nb/\n  a/\n    a/\n      f1 (17 bytes)\ncc/\n  cc/\n    cc/\n      f2.txt (27 bytes)\n    f2.txt (14 bytes)\ng (16 bytes)\n11 directories, 8 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/a/g": "xxxxxxxxxxxxxxxxxxxx",
+   "a/a/D/f2.txt": "xxxxxxxxxxxxxxxxxxxx",
+   "a/g": "xxxxxxxxxxxxxxxxxxxx",
+   "b/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/g": "xxxxxxxxxxxxxx",
+   "f1": ""
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    a/\n      g (20 bytes)\na/\n  a/\n    D/\n      f2.txt (20 bytes)\n  g (20 bytes)\nb/\n  D/\n    f2.txt (29 bytes)\n  g (14 bytes)\nf1 (0 bytes)\n8 directories, 6 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "cc/g": "xxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "cc/\n  g (12 bytes)\n1 directories, 1 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/b/f1": "",
+   "a/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/D/b/Z": "xxxxxxxxxxxxxxxxxxxxxxx",
+   "b/D/b/g": "xxxxxxxxxxxxxx",
+   "b/Z": "x",
+   "b/a/a/Z": "xxxxxxxxxxxxxxx",
+   "b/g": "xxxxxxxxxxxxxxxxx",
+   "cc/D/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/f2.txt": "xxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  b/\n    f1 (0 bytes)\na/\n  f2.txt (26 bytes)\nb/\n  D/\n    b/\n      Z (23 bytes)\n      g (14 bytes)\n  Z (1 bytes)\n  a/\n    a/\n      Z (15 bytes)\n  g (17 bytes)\ncc/\n  D/\n    D/\n      f2.txt (32 bytes)\n  f2.txt (4 bytes)\n11 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/D/b/f1": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/cc/D/f2.txt": "xx",
+   "f1": "xx"
+  },
+  "stdin": "",
+  "stdout": "Z (39 bytes)\ncc/\n  D/\n    b/\n      f1 (24 bytes)\n  cc/\n    D/\n      f2.txt (2 bytes)\nf1 (2 bytes)\n5 directories, 4 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/D/D/f2.txt": "xxxxxxxx",
+   "a/D/cc/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/b/g": "xxxxxxxx",
+   "b/Z": "xxxxxxxxxxxxxxxx",
+   "b/g": "xxxxxxxxxxxx",
+   "cc/D/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/D/a/g": "xxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  D/\n    D/\n      f2.txt (8 bytes)\na/\n  D/\n    cc/\n      Z (32 bytes)\n    f2.txt (33 bytes)\n  b/\n    g (8 bytes)\nb/\n  Z (16 bytes)\n  g (12 bytes)\ncc/\n  D/\n    Z (40 bytes)\n    a/\n      g (8 bytes)\n11 directories, 8 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/a/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/cc/f1": "xxxxxxxxx",
+   "cc/cc/D/Z": "xxxxxxxxxxxxx",
+   "cc/g": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f2.txt": "xxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    a/\n      Z (37 bytes)\nb/\n  cc/\n    f1 (9 bytes)\ncc/\n  cc/\n    D/\n      Z (13 bytes)\n  g (26 bytes)\nf2.txt (15 bytes)\n8 directories, 5 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/f2.txt": "xxxxxxx",
+   "Z": "xxxxxxxxxxxxxx",
+   "b/a/g": "xxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    f2.txt (7 bytes)\nZ (14 bytes)\nb/\n  a/\n    g (26 bytes)\n4 directories, 3 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "b/cc/g": "xxxxxxxxxxxx",
+   "f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "b/\n  cc/\n    g (12 bytes)\nf1 (39 bytes)\n2 directories, 2 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "a/b/cc/f2.txt": "xxxxx",
+   "f1": "xxxxxxx",
+   "f2.txt": "xxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "a/\n  b/\n    cc/\n      f2.txt (5 bytes)\nf1 (7 bytes)\nf2.txt (12 bytes)\n3 directories, 3 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "a/D/cc/f2.txt": "xxxxxxxxxxxxx",
+   "a/cc/D/g": "xxxxxxxxxxxxxxxxxxxxxxx",
+   "b/a/b/g": "xxxxxxxxx",
+   "b/b/a/Z": "xxxx",
+   "cc/b/cc/f1": "xxxxxxxxxxxxxxxxxxx",
+   "cc/g": "xxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "a/\n  D/\n    cc/\n      f2.txt (13 bytes)\n  cc/\n    D/\n      g (23 bytes)\nb/\n  a/\n    b/\n      g (9 bytes)\n  b/\n    a/\n      Z (4 bytes)\ncc/\n  b/\n    cc/\n      f1 (19 bytes)\n  g (23 bytes)\n13 directories, 6 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/a/g": "xxxxx",
+   "b/b/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f2.txt": "xxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  D/\n    f2.txt (31 bytes)\nb/\n  a/\n    g (5 bytes)\n  b/\n    f2.txt (39 bytes)\nf2.txt (20 bytes)\n5 directories, 4 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/D/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/a/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/a/a/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/g": "",
+   "b/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  D/\n    D/\n      f2.txt (26 bytes)\n  a/\n    f2.txt (24 bytes)\na/\n  a/\n    a/\n      f1 (28 bytes)\n  g (0 bytes)\nb/\n  g (32 bytes)\n8 directories, 5 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/D/Z": "xxxxxxxxxxxxxxxxxxx",
+   "Z": "xxxxxxxxxxxxxxxx",
+   "cc/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f1": "xxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  D/\n    Z (19 bytes)\nZ (16 bytes)\ncc/\n  Z (29 bytes)\nf1 (20 bytes)\n3 directories, 4 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "a/a/b/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/cc/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/D/b/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/D/f2.txt": "xxx",
+   "b/Z": "xxxxxxxxxx",
+   "cc/b/Z": "xxxxxxxxxxxxxxxxxxxx",
+   "f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "a/\n  a/\n    b/\n      f2.txt (36 bytes)\n  cc/\n    g (35 bytes)\nb/\n  D/\n    b/\n      Z (31 bytes)\n    f2.txt (3 bytes)\n  Z (10 bytes)\ncc/\n  b/\n    Z (20 bytes)\nf1 (35 bytes)\nf2.txt (34 bytes)\n9 directories, 8 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/D/f1": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/a/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/b/b/g": "",
+   "a/cc/f2.txt": "xxx",
+   "a/cc/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/b/a/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/f2.txt": "xxxxxxxxxxxxxxxxx",
+   "cc/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    D/\n      f1 (24 bytes)\n    f2.txt (27 bytes)\n  b/\n    b/\n      g (0 bytes)\na/\n  cc/\n    f2.txt (3 bytes)\n    g (35 bytes)\nb/\n  b/\n    a/\n      f1 (32 bytes)\ncc/\n  f1 (26 bytes)\n  f2.txt (17 bytes)\n  g (37 bytes)\ng (32 bytes)\n11 directories, 10 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/b/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/cc/cc/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "Z": "x",
+   "a/a/f1": "xxxxxxxxxxxxxxxxxxxxxx",
+   "b/a/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/f2.txt": "xxxxxxxxxxxxxxxxx",
+   "cc/D/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/b/g": "",
+   "g": "xxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  b/\n    Z (40 bytes)\n  cc/\n    cc/\n      Z (31 bytes)\nZ (1 bytes)\na/\n  a/\n    f1 (22 bytes)\nb/\n  a/\n    D/\n      f2.txt (29 bytes)\n  f2.txt (17 bytes)\ncc/\n  D/\n    f1 (28 bytes)\n  b/\n    g (0 bytes)\ng (25 bytes)\n12 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "Z": "xxxxxxxxxxx",
+   "a/D/a/f2.txt": "xxxxxxxxxxxxxxxxxxxxx",
+   "b/D/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/D/D/f1": "xxxxxxxx",
+   "cc/cc/f1": "xx",
+   "cc/g": "xxx",
+   "f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f2.txt": "xxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  g (32 bytes)\nZ (11 bytes)\na/\n  D/\n    a/\n      f2.txt (21 bytes)\nb/\n  D/\n    g (33 bytes)\ncc/\n  D/\n    D/\n      f1 (8 bytes)\n  cc/\n    f1 (2 bytes)\n  g (3 bytes)\nf1 (37 bytes)\nf2.txt (8 bytes)\n10 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/a/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/cc/f2.txt": "xx",
+   "a/b/cc/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/cc/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/Z": "xxxxxxxxxxxxxx",
+   "b/b/cc/Z": "xx",
+   "cc/Z": "xxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/cc/D/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f1": "xxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    a/\n      Z (37 bytes)\n  cc/\n    f2.txt (2 bytes)\na/\n  b/\n    cc/\n      f2.txt (26 bytes)\n  cc/\n    f2.txt (32 bytes)\nb/\n  Z (14 bytes)\n  b/\n    cc/\n      Z (2 bytes)\ncc/\n  Z (23 bytes)\n  cc/\n    D/\n      Z (40 bytes)\nf1 (10 bytes)\n14 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "b/b/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "b/\n  b/\n    f1 (28 bytes)\n2 directories, 1 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "b/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "b/\n  Z (36 bytes)\n  g (31 bytes)\nf1 (28 bytes)\n1 directories, 3 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/g": "xxxxxxxxxxxx",
+   "D/f2.txt": "xxxxxxx",
+   "Z": "xxxxxx",
+   "a/cc/b/g": "xxxxxxxx",
+   "b/b/D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/b/f1": "xxxxxxxxxxxxxxxxxxxxxx",
+   "cc/a/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f1": "xx",
+   "g": "xxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    g (12 bytes)\n  f2.txt (7 bytes)\nZ (6 bytes)\na/\n  cc/\n    b/\n      g (8 bytes)\nb/\n  b/\n    D/\n      f2.txt (38 bytes)\n    f1 (22 bytes)\ncc/\n  a/\n    g (29 bytes)\nf1 (2 bytes)\ng (20 bytes)\n10 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "a/Z": "xxxx",
+   "a/f2.txt": "xxxxxxxxxxxxxxxxx",
+   "b/b/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/f1": "xxxxxxxxxxxxxxxxxxxx",
+   "cc/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "g": "xxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "a/\n  Z (4 bytes)\n  f2.txt (17 bytes)\nb/\n  b/\n    f2.txt (33 bytes)\ncc/\n  f1 (20 bytes)\n  f2.txt (32 bytes)\ng (12 bytes)\n4 directories, 6 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "a/a/f1": "xxxxxxxxxxxxxxxxxxx",
+   "b/b/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "a/\n  a/\n    f1 (19 bytes)\nb/\n  b/\n    f1 (31 bytes)\n4 directories, 2 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/D/b/Z": "xxxxxxxxxxx",
+   "Z": "xxxxxxxxxx",
+   "a/b/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/a/cc/f1": "xxxxx",
+   "b/f1": "",
+   "b/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/cc/a/f2.txt": "xxxxxxx",
+   "f1": "xxxxxxxxxxxxxxxxx",
+   "g": "x"
+  },
+  "stdin": "",
+  "stdout": "D/\n  D/\n    b/\n      Z (11 bytes)\nZ (10 bytes)\na/\n  b/\n    g (40 bytes)\nb/\n  a/\n    cc/\n      f1 (5 bytes)\n  f1 (0 bytes)\n  f2.txt (24 bytes)\ncc/\n  cc/\n    a/\n      f2.txt (7 bytes)\nf1 (17 bytes)\ng (1 bytes)\n11 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "Z": "xx",
+   "a/f1": "xxxxxxxxxx",
+   "b/f1": "xx",
+   "f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f2.txt": "xxxxxxxxxxxxxx",
+   "g": "xxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  f2.txt (24 bytes)\nZ (2 bytes)\na/\n  f1 (10 bytes)\nb/\n  f1 (2 bytes)\nf1 (32 bytes)\nf2.txt (14 bytes)\ng (22 bytes)\n3 directories, 7 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "b/b/cc/Z": "xxxxxxxxxxxxxxxx",
+   "cc/cc/f1": "xx",
+   "f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "b/\n  b/\n    cc/\n      Z (16 bytes)\ncc/\n  cc/\n    f1 (2 bytes)\nf1 (39 bytes)\n5 directories, 3 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/b/f1": "xxxxxxxxxxxxx",
+   "D/f2.txt": "xxx",
+   "D/g": "xxxxxxxxxxxxxxxxxxxxxxxx",
+   "a/D/b/Z": "xxxxxxxxxxxxxxxxxxxxx",
+   "a/f1": "xxxxx",
+   "cc/Z": "",
+   "cc/f2.txt": "xxxxxxxxxxxxxxxxxxx",
+   "cc/g": "xxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  Z (27 bytes)\n  b/\n    f1 (13 bytes)\n  f2.txt (3 bytes)\n  g (24 bytes)\na/\n  D/\n    b/\n      Z (21 bytes)\n  f1 (5 bytes)\ncc/\n  Z (0 bytes)\n  f2.txt (19 bytes)\n  g (22 bytes)\n6 directories, 9 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/D/Z": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "D/a/g": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "Z": "xxxxxxxxxxxxxxxxxxxxxx",
+   "a/D/D/Z": "xxxxxxxxxxxxxxxxxxxx",
+   "b/f1": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "b/g": "x",
+   "cc/a/b/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "cc/b/f2.txt": "xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "f2.txt": "xx",
+   "g": "xxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  D/\n    Z (35 bytes)\n  a/\n    g (38 bytes)\nZ (22 bytes)\na/\n  D/\n    D/\n      Z (20 bytes)\nb/\n  f1 (30 bytes)\n  g (1 bytes)\ncc/\n  a/\n    b/\n      f2.txt (37 bytes)\n  b/\n    f2.txt (27 bytes)\nf2.txt (2 bytes)\ng (22 bytes)\n11 directories, 10 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "D/a/f2.txt": "xxxxxxxxxxxxxxxxx"
+  },
+  "stdin": "",
+  "stdout": "D/\n  a/\n    f2.txt (17 bytes)\n2 directories, 1 files\n"
+ }
+]

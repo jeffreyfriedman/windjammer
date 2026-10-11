@@ -1,0 +1,26 @@
+// tags: std, fs, io, file, result
+// rust: gap error[E0433]: cannot find module or crate 'windjammer_runtime' in this scope
+// expect: wrote 2 lines
+// expect: line1
+// expect: line2
+// expect: exists: false
+use std::fs
+
+fn roundtrip(path: string) -> Result<string, string> {
+    fs::write(path, "line1\nline2\n")?
+    let text = fs::read_to_string(path)?
+    fs::remove_file(path)?
+    Ok(text)
+}
+
+fn main() {
+    let path = "/tmp/wj_verified_fs_roundtrip.txt"
+    match roundtrip(path) {
+        Ok(text) => {
+            println("wrote ${text.lines().count()} lines")
+            for l in text.lines() { println(l) }
+        }
+        Err(e) => println("io error: ${e}"),
+    }
+    println("exists: ${fs::exists(path)}")
+}

@@ -1,0 +1,16 @@
+// tags: vec, collections, insert, remove
+// rust: gap error[E0308]: mismatched types
+// expect: [10, 99, 20, 30]
+// expect: 20
+// expect: [10, 99, 30]
+// expect: [30, 99, 10]
+fn main() {
+    let mut v = [10, 20, 30]
+    v.insert(1, 99)
+    println("${v:?}")
+    let removed = v.remove(2)
+    println("${removed}")
+    println("${v:?}")
+    v.reverse()
+    println("${v:?}")
+}

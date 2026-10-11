@@ -43,7 +43,7 @@ pub fn from_args(args: Args) -> Result<Config, string> {
     }
     
     // Determine color usage
-    let use_color = match args.color.as_str() {
+    let use_color = match args.color {
         "always" => true,
         "never" => false,
         _ => io::is_terminal(),  // auto

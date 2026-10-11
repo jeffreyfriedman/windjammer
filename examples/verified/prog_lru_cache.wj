@@ -1,0 +1,41 @@
+// tags: program, data-structure, hashmap, vec
+// rust: gap error[E0308]: mismatched types
+// expect: get a = Some(1)
+// expect: get b = None
+// expect: keys = [a, c]
+use std::collections::HashMap
+
+struct Lru { cap: int, order: Vec<string>, data: HashMap<string, int> }
+
+impl Lru {
+    fn new(cap: int) -> Lru {
+        Lru { cap: cap, order: [], data: HashMap::new() }
+    }
+    fn touch(self, k: string) {
+        self.order.retain(|x| *x != k)
+        self.order.push(k)
+    }
+    fn put(self, k: string, v: int) {
+        if !self.data.contains_key(&k) && self.order.len() as int >= self.cap {
+            let oldest = self.order.remove(0)
+            self.data.remove(&oldest)
+        }
+        self.data.insert(k, v)
+        self.touch(k)
+    }
+    fn get(self, k: string) -> Option<int> {
+        let v = self.data.get(&k).copied()
+        if v.is_some() { self.touch(k) }
+        v
+    }
+}
+
+fn main() {
+    let mut c = Lru::new(2)
+    c.put("a", 1)
+    c.put("b", 2)
+    println("get a = ${c.get("a"):?}")
+    c.put("c", 3)
+    println("get b = ${c.get("b"):?}")
+    println("keys = [${c.order.join(", ")}]")
+}

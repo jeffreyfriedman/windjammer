@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 5\ninsert 3\ninsert 8\ninsert 3\ninorder\nheight\ncontains 8\nmin\nmax\n",
+  "stdout": "ok\nok\nok\ndup\n3 5 8\n2\nyes\n3\n8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "inorder\nheight\nmin\ndelete 1\n",
+  "stdout": "<empty>\n0\nempty\nmissing\n"
+ }
+]

@@ -11,15 +11,15 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-430: Copy unit-enum **field** of a local/loop binding must not `.clone()`
+//! Copy unit-enum **field** of a local/loop binding must not `.clone()`
 //! into an owned formal.
 //!
 //! Product `rendering/shader_graph_builder.rs` / `shader_graph_compiler.rs`:
 //!   `is_storage_write(binding.binding_type.clone())`
 //! WJ is `is_storage_write(binding.binding_type)`.
-//! Distinct from WDB-375 (nested index clone **chain**
-//! `].clone().bindings[j].clone().binding_type.clone()`), WDB-402 (`HostType::F32.clone()`
-//! path), and WDB-392 (`Direction::PosX.clone()`).
+//! Distinct from (nested index clone **chain**
+//! `].clone().bindings[j].clone().binding_type.clone()`), (`HostType::F32.clone()`
+//! path), and (`Direction::PosX.clone()`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

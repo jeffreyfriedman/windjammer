@@ -1,0 +1,40 @@
+// tags: struct, hashmap, domain, option
+// rust: gap error[E0308]: mismatched types
+// expect: widget: 8
+// expect: gadget: out of stock
+// expect: unknown: not found
+use std::collections::HashMap
+
+struct Inventory { stock: HashMap<string, int> }
+
+impl Inventory {
+    fn new() -> Inventory {
+        Inventory { stock: HashMap::new() }
+    }
+    fn add(self, item: string, n: int) {
+        let cur = self.stock.get(item).copied().unwrap_or(0)
+        self.stock.insert(item, cur + n)
+    }
+    fn take(self, item: string, n: int) {
+        let cur = self.stock.get(item).copied().unwrap_or(0)
+        self.stock.insert(item, cur - n)
+    }
+    fn report(self, item: string) -> string {
+        match self.stock.get(item) {
+            Some(0) => "out of stock",
+            Some(n) => "${n}",
+            None => "not found",
+        }
+    }
+}
+
+fn main() {
+    let mut inv = Inventory::new()
+    inv.add("widget", 10)
+    inv.add("gadget", 1)
+    inv.take("widget", 2)
+    inv.take("gadget", 1)
+    println("widget: ${inv.report("widget")}")
+    println("gadget: ${inv.report("gadget")}")
+    println("unknown: ${inv.report("unknown")}")
+}

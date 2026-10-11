@@ -1,0 +1,224 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 2 3\n",
+  "stdout": "1\nFizz\nBuzz\nFizz\n5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "15 3 5\n",
+  "stdout": "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 1 1\n",
+  "stdout": "FizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 2 3\n",
+  "stdout": "1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "30 1 7\n",
+  "stdout": "Fizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1000 7 11\n",
+  "stdout": "1\n2\n3\n4\n5\n6\nFizz\n8\n9\n10\nBuzz\n12\n13\nFizz\n15\n16\n17\n18\n19\n20\nFizz\nBuzz\n23\n24\n25\n26\n27\nFizz\n29\n30\n31\n32\nBuzz\n34\nFizz\n36\n37\n38\n39\n40\n41\nFizz\n43\nBuzz\n45\n46\n47\n48\nFizz\n50\n51\n52\n53\n54\nBuzz\nFizz\n57\n58\n59\n60\n61\n62\nFizz\n64\n65\nBuzz\n67\n68\n69\nFizz\n71\n72\n73\n74\n75\n76\nFizzBuzz\n78\n79\n80\n81\n82\n83\nFizz\n85\n86\n87\nBuzz\n89\n90\nFizz\n92\n93\n94\n95\n96\n97\nFizz\nBuzz\n100\n101\n102\n103\n104\nFizz\n106\n107\n108\n109\nBuzz\n111\nFizz\n113\n114\n115\n116\n117\n118\nFizz\n120\nBuzz\n122\n123\n124\n125\nFizz\n127\n128\n129\n130\n131\nBuzz\nFizz\n134\n135\n136\n137\n138\n139\nFizz\n141\n142\nBuzz\n144\n145\n146\nFizz\n148\n149\n150\n151\n152\n153\nFizzBuzz\n155\n156\n157\n158\n159\n160\nFizz\n162\n163\n164\nBuzz\n166\n167\nFizz\n169\n170\n171\n172\n173\n174\nFizz\nBuzz\n177\n178\n179\n180\n181\nFizz\n183\n184\n185\n186\nBuzz\n188\nFizz\n190\n191\n192\n193\n194\n195\nFizz\n197\nBuzz\n199\n200\n201\n202\nFizz\n204\n205\n206\n207\n208\nBuzz\nFizz\n211\n212\n213\n214\n215\n216\nFizz\n218\n219\nBuzz\n221\n222\n223\nFizz\n225\n226\n227\n228\n229\n230\nFizzBuzz\n232\n233\n234\n235\n236\n237\nFizz\n239\n240\n241\nBuzz\n243\n244\nFizz\n246\n247\n248\n249\n250\n251\nFizz\nBuzz\n254\n255\n256\n257\n258\nFizz\n260\n261\n262\n263\nBuzz\n265\nFizz\n267\n268\n269\n270\n271\n272\nFizz\n274\nBuzz\n276\n277\n278\n279\nFizz\n281\n282\n283\n284\n285\nBuzz\nFizz\n288\n289\n290\n291\n292\n293\nFizz\n295\n296\nBuzz\n298\n299\n300\nFizz\n302\n303\n304\n305\n306\n307\nFizzBuzz\n309\n310\n311\n312\n313\n314\nFizz\n316\n317\n318\nBuzz\n320\n321\nFizz\n323\n324\n325\n326\n327\n328\nFizz\nBuzz\n331\n332\n333\n334\n335\nFizz\n337\n338\n339\n340\nBuzz\n342\nFizz\n344\n345\n346\n347\n348\n349\nFizz\n351\nBuzz\n353\n354\n355\n356\nFizz\n358\n359\n360\n361\n362\nBuzz\nFizz\n365\n366\n367\n368\n369\n370\nFizz\n372\n373\nBuzz\n375\n376\n377\nFizz\n379\n380\n381\n382\n383\n384\nFizzBuzz\n386\n387\n388\n389\n390\n391\nFizz\n393\n394\n395\nBuzz\n397\n398\nFizz\n400\n401\n402\n403\n404\n405\nFizz\nBuzz\n408\n409\n410\n411\n412\nFizz\n414\n415\n416\n417\nBuzz\n419\nFizz\n421\n422\n423\n424\n425\n426\nFizz\n428\nBuzz\n430\n431\n432\n433\nFizz\n435\n436\n437\n438\n439\nBuzz\nFizz\n442\n443\n444\n445\n446\n447\nFizz\n449\n450\nBuzz\n452\n453\n454\nFizz\n456\n457\n458\n459\n460\n461\nFizzBuzz\n463\n464\n465\n466\n467\n468\nFizz\n470\n471\n472\nBuzz\n474\n475\nFizz\n477\n478\n479\n480\n481\n482\nFizz\nBuzz\n485\n486\n487\n488\n489\nFizz\n491\n492\n493\n494\nBuzz\n496\nFizz\n498\n499\n500\n501\n502\n503\nFizz\n505\nBuzz\n507\n508\n509\n510\nFizz\n512\n513\n514\n515\n516\nBuzz\nFizz\n519\n520\n521\n522\n523\n524\nFizz\n526\n527\nBuzz\n529\n530\n531\nFizz\n533\n534\n535\n536\n537\n538\nFizzBuzz\n540\n541\n542\n543\n544\n545\nFizz\n547\n548\n549\nBuzz\n551\n552\nFizz\n554\n555\n556\n557\n558\n559\nFizz\nBuzz\n562\n563\n564\n565\n566\nFizz\n568\n569\n570\n571\nBuzz\n573\nFizz\n575\n576\n577\n578\n579\n580\nFizz\n582\nBuzz\n584\n585\n586\n587\nFizz\n589\n590\n591\n592\n593\nBuzz\nFizz\n596\n597\n598\n599\n600\n601\nFizz\n603\n604\nBuzz\n606\n607\n608\nFizz\n610\n611\n612\n613\n614\n615\nFizzBuzz\n617\n618\n619\n620\n621\n622\nFizz\n624\n625\n626\nBuzz\n628\n629\nFizz\n631\n632\n633\n634\n635\n636\nFizz\nBuzz\n639\n640\n641\n642\n643\nFizz\n645\n646\n647\n648\nBuzz\n650\nFizz\n652\n653\n654\n655\n656\n657\nFizz\n659\nBuzz\n661\n662\n663\n664\nFizz\n666\n667\n668\n669\n670\nBuzz\nFizz\n673\n674\n675\n676\n677\n678\nFizz\n680\n681\nBuzz\n683\n684\n685\nFizz\n687\n688\n689\n690\n691\n692\nFizzBuzz\n694\n695\n696\n697\n698\n699\nFizz\n701\n702\n703\nBuzz\n705\n706\nFizz\n708\n709\n710\n711\n712\n713\nFizz\nBuzz\n716\n717\n718\n719\n720\nFizz\n722\n723\n724\n725\nBuzz\n727\nFizz\n729\n730\n731\n732\n733\n734\nFizz\n736\nBuzz\n738\n739\n740\n741\nFizz\n743\n744\n745\n746\n747\nBuzz\nFizz\n750\n751\n752\n753\n754\n755\nFizz\n757\n758\nBuzz\n760\n761\n762\nFizz\n764\n765\n766\n767\n768\n769\nFizzBuzz\n771\n772\n773\n774\n775\n776\nFizz\n778\n779\n780\nBuzz\n782\n783\nFizz\n785\n786\n787\n788\n789\n790\nFizz\nBuzz\n793\n794\n795\n796\n797\nFizz\n799\n800\n801\n802\nBuzz\n804\nFizz\n806\n807\n808\n809\n810\n811\nFizz\n813\nBuzz\n815\n816\n817\n818\nFizz\n820\n821\n822\n823\n824\nBuzz\nFizz\n827\n828\n829\n830\n831\n832\nFizz\n834\n835\nBuzz\n837\n838\n839\nFizz\n841\n842\n843\n844\n845\n846\nFizzBuzz\n848\n849\n850\n851\n852\n853\nFizz\n855\n856\n857\nBuzz\n859\n860\nFizz\n862\n863\n864\n865\n866\n867\nFizz\nBuzz\n870\n871\n872\n873\n874\nFizz\n876\n877\n878\n879\nBuzz\n881\nFizz\n883\n884\n885\n886\n887\n888\nFizz\n890\nBuzz\n892\n893\n894\n895\nFizz\n897\n898\n899\n900\n901\nBuzz\nFizz\n904\n905\n906\n907\n908\n909\nFizz\n911\n912\nBuzz\n914\n915\n916\nFizz\n918\n919\n920\n921\n922\n923\nFizzBuzz\n925\n926\n927\n928\n929\n930\nFizz\n932\n933\n934\nBuzz\n936\n937\nFizz\n939\n940\n941\n942\n943\n944\nFizz\nBuzz\n947\n948\n949\n950\n951\nFizz\n953\n954\n955\n956\nBuzz\n958\nFizz\n960\n961\n962\n963\n964\n965\nFizz\n967\nBuzz\n969\n970\n971\n972\nFizz\n974\n975\n976\n977\n978\nBuzz\nFizz\n981\n982\n983\n984\n985\n986\nFizz\n988\n989\nBuzz\n991\n992\n993\nFizz\n995\n996\n997\n998\n999\n1000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12 4 4\n",
+  "stdout": "1\n2\n3\nFizzBuzz\n5\n6\n7\nFizzBuzz\n9\n10\n11\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "144 6 3\n",
+  "stdout": "1\n2\nBuzz\n4\n5\nFizzBuzz\n7\n8\nBuzz\n10\n11\nFizzBuzz\n13\n14\nBuzz\n16\n17\nFizzBuzz\n19\n20\nBuzz\n22\n23\nFizzBuzz\n25\n26\nBuzz\n28\n29\nFizzBuzz\n31\n32\nBuzz\n34\n35\nFizzBuzz\n37\n38\nBuzz\n40\n41\nFizzBuzz\n43\n44\nBuzz\n46\n47\nFizzBuzz\n49\n50\nBuzz\n52\n53\nFizzBuzz\n55\n56\nBuzz\n58\n59\nFizzBuzz\n61\n62\nBuzz\n64\n65\nFizzBuzz\n67\n68\nBuzz\n70\n71\nFizzBuzz\n73\n74\nBuzz\n76\n77\nFizzBuzz\n79\n80\nBuzz\n82\n83\nFizzBuzz\n85\n86\nBuzz\n88\n89\nFizzBuzz\n91\n92\nBuzz\n94\n95\nFizzBuzz\n97\n98\nBuzz\n100\n101\nFizzBuzz\n103\n104\nBuzz\n106\n107\nFizzBuzz\n109\n110\nBuzz\n112\n113\nFizzBuzz\n115\n116\nBuzz\n118\n119\nFizzBuzz\n121\n122\nBuzz\n124\n125\nFizzBuzz\n127\n128\nBuzz\n130\n131\nFizzBuzz\n133\n134\nBuzz\n136\n137\nFizzBuzz\n139\n140\nBuzz\n142\n143\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "57 1 1\n",
+  "stdout": "FizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "159 7 7\n",
+  "stdout": "1\n2\n3\n4\n5\n6\nFizzBuzz\n8\n9\n10\n11\n12\n13\nFizzBuzz\n15\n16\n17\n18\n19\n20\nFizzBuzz\n22\n23\n24\n25\n26\n27\nFizzBuzz\n29\n30\n31\n32\n33\n34\nFizzBuzz\n36\n37\n38\n39\n40\n41\nFizzBuzz\n43\n44\n45\n46\n47\n48\nFizzBuzz\n50\n51\n52\n53\n54\n55\nFizzBuzz\n57\n58\n59\n60\n61\n62\nFizzBuzz\n64\n65\n66\n67\n68\n69\nFizzBuzz\n71\n72\n73\n74\n75\n76\nFizzBuzz\n78\n79\n80\n81\n82\n83\nFizzBuzz\n85\n86\n87\n88\n89\n90\nFizzBuzz\n92\n93\n94\n95\n96\n97\nFizzBuzz\n99\n100\n101\n102\n103\n104\nFizzBuzz\n106\n107\n108\n109\n110\n111\nFizzBuzz\n113\n114\n115\n116\n117\n118\nFizzBuzz\n120\n121\n122\n123\n124\n125\nFizzBuzz\n127\n128\n129\n130\n131\n132\nFizzBuzz\n134\n135\n136\n137\n138\n139\nFizzBuzz\n141\n142\n143\n144\n145\n146\nFizzBuzz\n148\n149\n150\n151\n152\n153\nFizzBuzz\n155\n156\n157\n158\n159\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "126 8 1\n",
+  "stdout": "Buzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "146 3 4\n",
+  "stdout": "1\n2\nFizz\nBuzz\n5\nFizz\n7\nBuzz\nFizz\n10\n11\nFizzBuzz\n13\n14\nFizz\nBuzz\n17\nFizz\n19\nBuzz\nFizz\n22\n23\nFizzBuzz\n25\n26\nFizz\nBuzz\n29\nFizz\n31\nBuzz\nFizz\n34\n35\nFizzBuzz\n37\n38\nFizz\nBuzz\n41\nFizz\n43\nBuzz\nFizz\n46\n47\nFizzBuzz\n49\n50\nFizz\nBuzz\n53\nFizz\n55\nBuzz\nFizz\n58\n59\nFizzBuzz\n61\n62\nFizz\nBuzz\n65\nFizz\n67\nBuzz\nFizz\n70\n71\nFizzBuzz\n73\n74\nFizz\nBuzz\n77\nFizz\n79\nBuzz\nFizz\n82\n83\nFizzBuzz\n85\n86\nFizz\nBuzz\n89\nFizz\n91\nBuzz\nFizz\n94\n95\nFizzBuzz\n97\n98\nFizz\nBuzz\n101\nFizz\n103\nBuzz\nFizz\n106\n107\nFizzBuzz\n109\n110\nFizz\nBuzz\n113\nFizz\n115\nBuzz\nFizz\n118\n119\nFizzBuzz\n121\n122\nFizz\nBuzz\n125\nFizz\n127\nBuzz\nFizz\n130\n131\nFizzBuzz\n133\n134\nFizz\nBuzz\n137\nFizz\n139\nBuzz\nFizz\n142\n143\nFizzBuzz\n145\n146\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "13 3 3\n",
+  "stdout": "1\n2\nFizzBuzz\n4\n5\nFizzBuzz\n7\n8\nFizzBuzz\n10\n11\nFizzBuzz\n13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "197 2 8\n",
+  "stdout": "1\nFizz\n3\nFizz\n5\nFizz\n7\nFizzBuzz\n9\nFizz\n11\nFizz\n13\nFizz\n15\nFizzBuzz\n17\nFizz\n19\nFizz\n21\nFizz\n23\nFizzBuzz\n25\nFizz\n27\nFizz\n29\nFizz\n31\nFizzBuzz\n33\nFizz\n35\nFizz\n37\nFizz\n39\nFizzBuzz\n41\nFizz\n43\nFizz\n45\nFizz\n47\nFizzBuzz\n49\nFizz\n51\nFizz\n53\nFizz\n55\nFizzBuzz\n57\nFizz\n59\nFizz\n61\nFizz\n63\nFizzBuzz\n65\nFizz\n67\nFizz\n69\nFizz\n71\nFizzBuzz\n73\nFizz\n75\nFizz\n77\nFizz\n79\nFizzBuzz\n81\nFizz\n83\nFizz\n85\nFizz\n87\nFizzBuzz\n89\nFizz\n91\nFizz\n93\nFizz\n95\nFizzBuzz\n97\nFizz\n99\nFizz\n101\nFizz\n103\nFizzBuzz\n105\nFizz\n107\nFizz\n109\nFizz\n111\nFizzBuzz\n113\nFizz\n115\nFizz\n117\nFizz\n119\nFizzBuzz\n121\nFizz\n123\nFizz\n125\nFizz\n127\nFizzBuzz\n129\nFizz\n131\nFizz\n133\nFizz\n135\nFizzBuzz\n137\nFizz\n139\nFizz\n141\nFizz\n143\nFizzBuzz\n145\nFizz\n147\nFizz\n149\nFizz\n151\nFizzBuzz\n153\nFizz\n155\nFizz\n157\nFizz\n159\nFizzBuzz\n161\nFizz\n163\nFizz\n165\nFizz\n167\nFizzBuzz\n169\nFizz\n171\nFizz\n173\nFizz\n175\nFizzBuzz\n177\nFizz\n179\nFizz\n181\nFizz\n183\nFizzBuzz\n185\nFizz\n187\nFizz\n189\nFizz\n191\nFizzBuzz\n193\nFizz\n195\nFizz\n197\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "119 10 6\n",
+  "stdout": "1\n2\n3\n4\n5\nBuzz\n7\n8\n9\nFizz\n11\nBuzz\n13\n14\n15\n16\n17\nBuzz\n19\nFizz\n21\n22\n23\nBuzz\n25\n26\n27\n28\n29\nFizzBuzz\n31\n32\n33\n34\n35\nBuzz\n37\n38\n39\nFizz\n41\nBuzz\n43\n44\n45\n46\n47\nBuzz\n49\nFizz\n51\n52\n53\nBuzz\n55\n56\n57\n58\n59\nFizzBuzz\n61\n62\n63\n64\n65\nBuzz\n67\n68\n69\nFizz\n71\nBuzz\n73\n74\n75\n76\n77\nBuzz\n79\nFizz\n81\n82\n83\nBuzz\n85\n86\n87\n88\n89\nFizzBuzz\n91\n92\n93\n94\n95\nBuzz\n97\n98\n99\nFizz\n101\nBuzz\n103\n104\n105\n106\n107\nBuzz\n109\nFizz\n111\n112\n113\nBuzz\n115\n116\n117\n118\n119\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "184 2 9\n",
+  "stdout": "1\nFizz\n3\nFizz\n5\nFizz\n7\nFizz\nBuzz\nFizz\n11\nFizz\n13\nFizz\n15\nFizz\n17\nFizzBuzz\n19\nFizz\n21\nFizz\n23\nFizz\n25\nFizz\nBuzz\nFizz\n29\nFizz\n31\nFizz\n33\nFizz\n35\nFizzBuzz\n37\nFizz\n39\nFizz\n41\nFizz\n43\nFizz\nBuzz\nFizz\n47\nFizz\n49\nFizz\n51\nFizz\n53\nFizzBuzz\n55\nFizz\n57\nFizz\n59\nFizz\n61\nFizz\nBuzz\nFizz\n65\nFizz\n67\nFizz\n69\nFizz\n71\nFizzBuzz\n73\nFizz\n75\nFizz\n77\nFizz\n79\nFizz\nBuzz\nFizz\n83\nFizz\n85\nFizz\n87\nFizz\n89\nFizzBuzz\n91\nFizz\n93\nFizz\n95\nFizz\n97\nFizz\nBuzz\nFizz\n101\nFizz\n103\nFizz\n105\nFizz\n107\nFizzBuzz\n109\nFizz\n111\nFizz\n113\nFizz\n115\nFizz\nBuzz\nFizz\n119\nFizz\n121\nFizz\n123\nFizz\n125\nFizzBuzz\n127\nFizz\n129\nFizz\n131\nFizz\n133\nFizz\nBuzz\nFizz\n137\nFizz\n139\nFizz\n141\nFizz\n143\nFizzBuzz\n145\nFizz\n147\nFizz\n149\nFizz\n151\nFizz\nBuzz\nFizz\n155\nFizz\n157\nFizz\n159\nFizz\n161\nFizzBuzz\n163\nFizz\n165\nFizz\n167\nFizz\n169\nFizz\nBuzz\nFizz\n173\nFizz\n175\nFizz\n177\nFizz\n179\nFizzBuzz\n181\nFizz\n183\nFizz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "26 11 4\n",
+  "stdout": "1\n2\n3\nBuzz\n5\n6\n7\nBuzz\n9\n10\nFizz\nBuzz\n13\n14\n15\nBuzz\n17\n18\n19\nBuzz\n21\nFizz\n23\nBuzz\n25\n26\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "174 12 4\n",
+  "stdout": "1\n2\n3\nBuzz\n5\n6\n7\nBuzz\n9\n10\n11\nFizzBuzz\n13\n14\n15\nBuzz\n17\n18\n19\nBuzz\n21\n22\n23\nFizzBuzz\n25\n26\n27\nBuzz\n29\n30\n31\nBuzz\n33\n34\n35\nFizzBuzz\n37\n38\n39\nBuzz\n41\n42\n43\nBuzz\n45\n46\n47\nFizzBuzz\n49\n50\n51\nBuzz\n53\n54\n55\nBuzz\n57\n58\n59\nFizzBuzz\n61\n62\n63\nBuzz\n65\n66\n67\nBuzz\n69\n70\n71\nFizzBuzz\n73\n74\n75\nBuzz\n77\n78\n79\nBuzz\n81\n82\n83\nFizzBuzz\n85\n86\n87\nBuzz\n89\n90\n91\nBuzz\n93\n94\n95\nFizzBuzz\n97\n98\n99\nBuzz\n101\n102\n103\nBuzz\n105\n106\n107\nFizzBuzz\n109\n110\n111\nBuzz\n113\n114\n115\nBuzz\n117\n118\n119\nFizzBuzz\n121\n122\n123\nBuzz\n125\n126\n127\nBuzz\n129\n130\n131\nFizzBuzz\n133\n134\n135\nBuzz\n137\n138\n139\nBuzz\n141\n142\n143\nFizzBuzz\n145\n146\n147\nBuzz\n149\n150\n151\nBuzz\n153\n154\n155\nFizzBuzz\n157\n158\n159\nBuzz\n161\n162\n163\nBuzz\n165\n166\n167\nFizzBuzz\n169\n170\n171\nBuzz\n173\n174\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "58 12 10\n",
+  "stdout": "1\n2\n3\n4\n5\n6\n7\n8\n9\nBuzz\n11\nFizz\n13\n14\n15\n16\n17\n18\n19\nBuzz\n21\n22\n23\nFizz\n25\n26\n27\n28\n29\nBuzz\n31\n32\n33\n34\n35\nFizz\n37\n38\n39\nBuzz\n41\n42\n43\n44\n45\n46\n47\nFizz\n49\nBuzz\n51\n52\n53\n54\n55\n56\n57\n58\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "152 7 5\n",
+  "stdout": "1\n2\n3\n4\nBuzz\n6\nFizz\n8\n9\nBuzz\n11\n12\n13\nFizz\nBuzz\n16\n17\n18\n19\nBuzz\nFizz\n22\n23\n24\nBuzz\n26\n27\nFizz\n29\nBuzz\n31\n32\n33\n34\nFizzBuzz\n36\n37\n38\n39\nBuzz\n41\nFizz\n43\n44\nBuzz\n46\n47\n48\nFizz\nBuzz\n51\n52\n53\n54\nBuzz\nFizz\n57\n58\n59\nBuzz\n61\n62\nFizz\n64\nBuzz\n66\n67\n68\n69\nFizzBuzz\n71\n72\n73\n74\nBuzz\n76\nFizz\n78\n79\nBuzz\n81\n82\n83\nFizz\nBuzz\n86\n87\n88\n89\nBuzz\nFizz\n92\n93\n94\nBuzz\n96\n97\nFizz\n99\nBuzz\n101\n102\n103\n104\nFizzBuzz\n106\n107\n108\n109\nBuzz\n111\nFizz\n113\n114\nBuzz\n116\n117\n118\nFizz\nBuzz\n121\n122\n123\n124\nBuzz\nFizz\n127\n128\n129\nBuzz\n131\n132\nFizz\n134\nBuzz\n136\n137\n138\n139\nFizzBuzz\n141\n142\n143\n144\nBuzz\n146\nFizz\n148\n149\nBuzz\n151\n152\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "104 8 12\n",
+  "stdout": "1\n2\n3\n4\n5\n6\n7\nFizz\n9\n10\n11\nBuzz\n13\n14\n15\nFizz\n17\n18\n19\n20\n21\n22\n23\nFizzBuzz\n25\n26\n27\n28\n29\n30\n31\nFizz\n33\n34\n35\nBuzz\n37\n38\n39\nFizz\n41\n42\n43\n44\n45\n46\n47\nFizzBuzz\n49\n50\n51\n52\n53\n54\n55\nFizz\n57\n58\n59\nBuzz\n61\n62\n63\nFizz\n65\n66\n67\n68\n69\n70\n71\nFizzBuzz\n73\n74\n75\n76\n77\n78\n79\nFizz\n81\n82\n83\nBuzz\n85\n86\n87\nFizz\n89\n90\n91\n92\n93\n94\n95\nFizzBuzz\n97\n98\n99\n100\n101\n102\n103\nFizz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "101 2 12\n",
+  "stdout": "1\nFizz\n3\nFizz\n5\nFizz\n7\nFizz\n9\nFizz\n11\nFizzBuzz\n13\nFizz\n15\nFizz\n17\nFizz\n19\nFizz\n21\nFizz\n23\nFizzBuzz\n25\nFizz\n27\nFizz\n29\nFizz\n31\nFizz\n33\nFizz\n35\nFizzBuzz\n37\nFizz\n39\nFizz\n41\nFizz\n43\nFizz\n45\nFizz\n47\nFizzBuzz\n49\nFizz\n51\nFizz\n53\nFizz\n55\nFizz\n57\nFizz\n59\nFizzBuzz\n61\nFizz\n63\nFizz\n65\nFizz\n67\nFizz\n69\nFizz\n71\nFizzBuzz\n73\nFizz\n75\nFizz\n77\nFizz\n79\nFizz\n81\nFizz\n83\nFizzBuzz\n85\nFizz\n87\nFizz\n89\nFizz\n91\nFizz\n93\nFizz\n95\nFizzBuzz\n97\nFizz\n99\nFizz\n101\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "39 1 10\n",
+  "stdout": "Fizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\nFizz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8 9 11\n",
+  "stdout": "1\n2\n3\n4\n5\n6\n7\n8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "14 9 11\n",
+  "stdout": "1\n2\n3\n4\n5\n6\n7\n8\nFizz\n10\nBuzz\n12\n13\n14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "170 1 5\n",
+  "stdout": "Fizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "135 4 9\n",
+  "stdout": "1\n2\n3\nFizz\n5\n6\n7\nFizz\nBuzz\n10\n11\nFizz\n13\n14\n15\nFizz\n17\nBuzz\n19\nFizz\n21\n22\n23\nFizz\n25\n26\nBuzz\nFizz\n29\n30\n31\nFizz\n33\n34\n35\nFizzBuzz\n37\n38\n39\nFizz\n41\n42\n43\nFizz\nBuzz\n46\n47\nFizz\n49\n50\n51\nFizz\n53\nBuzz\n55\nFizz\n57\n58\n59\nFizz\n61\n62\nBuzz\nFizz\n65\n66\n67\nFizz\n69\n70\n71\nFizzBuzz\n73\n74\n75\nFizz\n77\n78\n79\nFizz\nBuzz\n82\n83\nFizz\n85\n86\n87\nFizz\n89\nBuzz\n91\nFizz\n93\n94\n95\nFizz\n97\n98\nBuzz\nFizz\n101\n102\n103\nFizz\n105\n106\n107\nFizzBuzz\n109\n110\n111\nFizz\n113\n114\n115\nFizz\nBuzz\n118\n119\nFizz\n121\n122\n123\nFizz\n125\nBuzz\n127\nFizz\n129\n130\n131\nFizz\n133\n134\nBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10 1 1\n",
+  "stdout": "FizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "27 7 10\n",
+  "stdout": "1\n2\n3\n4\n5\n6\nFizz\n8\n9\nBuzz\n11\n12\n13\nFizz\n15\n16\n17\n18\n19\nBuzz\nFizz\n22\n23\n24\n25\n26\n27\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "96 1 5\n",
+  "stdout": "Fizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "83 2 12\n",
+  "stdout": "1\nFizz\n3\nFizz\n5\nFizz\n7\nFizz\n9\nFizz\n11\nFizzBuzz\n13\nFizz\n15\nFizz\n17\nFizz\n19\nFizz\n21\nFizz\n23\nFizzBuzz\n25\nFizz\n27\nFizz\n29\nFizz\n31\nFizz\n33\nFizz\n35\nFizzBuzz\n37\nFizz\n39\nFizz\n41\nFizz\n43\nFizz\n45\nFizz\n47\nFizzBuzz\n49\nFizz\n51\nFizz\n53\nFizz\n55\nFizz\n57\nFizz\n59\nFizzBuzz\n61\nFizz\n63\nFizz\n65\nFizz\n67\nFizz\n69\nFizz\n71\nFizzBuzz\n73\nFizz\n75\nFizz\n77\nFizz\n79\nFizz\n81\nFizz\n83\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "45 9 1\n",
+  "stdout": "Buzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nBuzz\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "120 8 12\n",
+  "stdout": "1\n2\n3\n4\n5\n6\n7\nFizz\n9\n10\n11\nBuzz\n13\n14\n15\nFizz\n17\n18\n19\n20\n21\n22\n23\nFizzBuzz\n25\n26\n27\n28\n29\n30\n31\nFizz\n33\n34\n35\nBuzz\n37\n38\n39\nFizz\n41\n42\n43\n44\n45\n46\n47\nFizzBuzz\n49\n50\n51\n52\n53\n54\n55\nFizz\n57\n58\n59\nBuzz\n61\n62\n63\nFizz\n65\n66\n67\n68\n69\n70\n71\nFizzBuzz\n73\n74\n75\n76\n77\n78\n79\nFizz\n81\n82\n83\nBuzz\n85\n86\n87\nFizz\n89\n90\n91\n92\n93\n94\n95\nFizzBuzz\n97\n98\n99\n100\n101\n102\n103\nFizz\n105\n106\n107\nBuzz\n109\n110\n111\nFizz\n113\n114\n115\n116\n117\n118\n119\nFizzBuzz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "63 11 2\n",
+  "stdout": "1\nBuzz\n3\nBuzz\n5\nBuzz\n7\nBuzz\n9\nBuzz\nFizz\nBuzz\n13\nBuzz\n15\nBuzz\n17\nBuzz\n19\nBuzz\n21\nFizzBuzz\n23\nBuzz\n25\nBuzz\n27\nBuzz\n29\nBuzz\n31\nBuzz\nFizz\nBuzz\n35\nBuzz\n37\nBuzz\n39\nBuzz\n41\nBuzz\n43\nFizzBuzz\n45\nBuzz\n47\nBuzz\n49\nBuzz\n51\nBuzz\n53\nBuzz\nFizz\nBuzz\n57\nBuzz\n59\nBuzz\n61\nBuzz\n63\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "106 1 4\n",
+  "stdout": "Fizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\nFizz\nFizzBuzz\nFizz\nFizz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "143 7 10\n",
+  "stdout": "1\n2\n3\n4\n5\n6\nFizz\n8\n9\nBuzz\n11\n12\n13\nFizz\n15\n16\n17\n18\n19\nBuzz\nFizz\n22\n23\n24\n25\n26\n27\nFizz\n29\nBuzz\n31\n32\n33\n34\nFizz\n36\n37\n38\n39\nBuzz\n41\nFizz\n43\n44\n45\n46\n47\n48\nFizz\nBuzz\n51\n52\n53\n54\n55\nFizz\n57\n58\n59\nBuzz\n61\n62\nFizz\n64\n65\n66\n67\n68\n69\nFizzBuzz\n71\n72\n73\n74\n75\n76\nFizz\n78\n79\nBuzz\n81\n82\n83\nFizz\n85\n86\n87\n88\n89\nBuzz\nFizz\n92\n93\n94\n95\n96\n97\nFizz\n99\nBuzz\n101\n102\n103\n104\nFizz\n106\n107\n108\n109\nBuzz\n111\nFizz\n113\n114\n115\n116\n117\n118\nFizz\nBuzz\n121\n122\n123\n124\n125\nFizz\n127\n128\n129\nBuzz\n131\n132\nFizz\n134\n135\n136\n137\n138\n139\nFizzBuzz\n141\n142\n143\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "190 12 9\n",
+  "stdout": "1\n2\n3\n4\n5\n6\n7\n8\nBuzz\n10\n11\nFizz\n13\n14\n15\n16\n17\nBuzz\n19\n20\n21\n22\n23\nFizz\n25\n26\nBuzz\n28\n29\n30\n31\n32\n33\n34\n35\nFizzBuzz\n37\n38\n39\n40\n41\n42\n43\n44\nBuzz\n46\n47\nFizz\n49\n50\n51\n52\n53\nBuzz\n55\n56\n57\n58\n59\nFizz\n61\n62\nBuzz\n64\n65\n66\n67\n68\n69\n70\n71\nFizzBuzz\n73\n74\n75\n76\n77\n78\n79\n80\nBuzz\n82\n83\nFizz\n85\n86\n87\n88\n89\nBuzz\n91\n92\n93\n94\n95\nFizz\n97\n98\nBuzz\n100\n101\n102\n103\n104\n105\n106\n107\nFizzBuzz\n109\n110\n111\n112\n113\n114\n115\n116\nBuzz\n118\n119\nFizz\n121\n122\n123\n124\n125\nBuzz\n127\n128\n129\n130\n131\nFizz\n133\n134\nBuzz\n136\n137\n138\n139\n140\n141\n142\n143\nFizzBuzz\n145\n146\n147\n148\n149\n150\n151\n152\nBuzz\n154\n155\nFizz\n157\n158\n159\n160\n161\nBuzz\n163\n164\n165\n166\n167\nFizz\n169\n170\nBuzz\n172\n173\n174\n175\n176\n177\n178\n179\nFizzBuzz\n181\n182\n183\n184\n185\n186\n187\n188\nBuzz\n190\n"
+ }
+]

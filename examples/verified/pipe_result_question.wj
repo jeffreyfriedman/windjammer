@@ -1,0 +1,16 @@
+// tags: pipe, result, question-mark
+// rust: ok
+// expect: Ok(2)
+// expect: Err("odd 3")
+fn half(n: int) -> Result<int, string> {
+    if n % 2 != 0 { Err("odd ${n}") } else { Ok(n / 2) }
+}
+
+fn quarter(n: int) -> Result<int, string> {
+    n |> half()? |> half()
+}
+
+fn main() {
+    println("${quarter(8):?}")
+    println("${quarter(6):?}")
+}
