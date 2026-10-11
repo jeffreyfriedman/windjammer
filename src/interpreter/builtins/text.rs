@@ -340,10 +340,10 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Str, "is_char_boundary", |_, v, a| Ok(Value::Bool(sv(v).is_char_boundary(arg_usize(&a, 0, "is_char_boundary")?))));
     r.pure(Kind::Str, "eq_ignore_ascii_case", |_, v, a| Ok(Value::Bool(sv(v).eq_ignore_ascii_case(&arg_str(&a, 0, "eq_ignore_ascii_case")?))));
     r.pure(Kind::Str, "char_count", |_, v, _| Ok(Value::usize(sv(v).chars().count())));
-    r.pure(Kind::Str, "substring", |_, v, a| {
-        let s = sv(v);
-        let (x, y) = (arg_usize(&a, 0, "substring")?, arg_usize(&a, 1, "substring")?);
-        Ok(Value::str(s.chars().skip(x).take(y.saturating_sub(x)).collect::<String>()))
+    r.pure(Kind::Str, "substring", |it, v, a| {
+        // byte offsets, like slicing
+        let (x, y) = (arg_int(&a, 0, "substring")?, arg_int(&a, 1, "substring")?);
+        it.index_value(v, &Value::Range(x, y, IntTy::Usize))
     });
     r.pure(Kind::Str, "capacity", |_, v, _| Ok(Value::usize(sv(v).capacity())));
 

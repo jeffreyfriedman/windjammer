@@ -563,6 +563,21 @@ impl Interpreter {
         loc: Option<&'static Location>,
     ) -> R {
         let _ = whole;
+        // match-scrutinee parser quirk: `x.parse::<T>()` arrives as MethodCall{ FieldAccess(x, parse), method: "" }
+        if method.is_empty() {
+            match object {
+                Expression::FieldAccess { object: inner, field, .. } => {
+                    return self.eval_method_call(whole, inner, field.as_str(), type_args, arguments, loc);
+                }
+                Expression::Identifier { name, .. } => {
+                    // `f::<T>(args)` is a plain call with a turbofish
+                    self.mark(loc);
+                    self.type_hint = type_args.and_then(|t| t.first().cloned());
+                    return self.call_named(name.as_str(), arguments);
+                }
+                _ => {}
+            }
+        }
         // `Type.method` on a type name used like a path (e.g. `Self.new()`) is not valid; ignore.
         let place = if Self::is_place_expr(object) { self.resolve_place(object)? } else { None };
         let recv = match &place {

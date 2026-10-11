@@ -319,6 +319,104 @@ pub fn register(r: &mut Registry) {
     r.pure(Kind::Struct, "as_micros", |_, v, _| Ok(Value::Int((secs(v) * 1e6) as i128, IntTy::U128)));
     r.pure(Kind::Struct, "as_nanos", |_, v, _| Ok(Value::Int((secs(v) * 1e9) as i128, IntTy::U128)));
     let _ = call;
+    register_std_modules(r);
+}
+
+fn f1(a: &[Value], what: &str) -> R<f64> {
+    arg_f64(a, 0, what)
+}
+
+/// Native versions of the `std::math`, `std::strings`, `std::time` stubs plus `fs::append`.
+fn register_std_modules(r: &mut Registry) {
+    macro_rules! math1 {
+        ($($name:literal => $f:expr),* $(,)?) => {$(
+            r.func($name, |_, a| {
+                let f: fn(f64) -> f64 = $f;
+                Ok(Value::float(f(f1(&a, $name)?)))
+            });
+        )*};
+    }
+    math1! {
+        "math::abs_f64" => |x| x.abs(), "math::sqrt" => |x| x.sqrt(), "math::cbrt" => |x| x.cbrt(),
+        "math::round" => |x| x.round(), "math::floor" => |x| x.floor(), "math::ceil" => |x| x.ceil(),
+        "math::trunc" => |x| x.trunc(), "math::sin" => |x| x.sin(), "math::cos" => |x| x.cos(),
+        "math::tan" => |x| x.tan(), "math::asin" => |x| x.asin(), "math::acos" => |x| x.acos(),
+        "math::atan" => |x| x.atan(), "math::sinh" => |x| x.sinh(), "math::cosh" => |x| x.cosh(),
+        "math::tanh" => |x| x.tanh(), "math::exp" => |x| x.exp(), "math::exp2" => |x| x.exp2(),
+        "math::ln" => |x| x.ln(), "math::log2" => |x| x.log2(), "math::log10" => |x| x.log10(),
+        "math::signum" => |x| x.signum(), "math::to_radians" => |x| x.to_radians(),
+        "math::to_degrees" => |x| x.to_degrees(),
+    }
+    r.func("math::abs_i64", |_, a| Ok(Value::Int(arg_int(&a, 0, "abs_i64")?.abs(), IntTy::I64)));
+    r.func("math::pow", |_, a| Ok(Value::float(f1(&a, "pow")?.powf(arg_f64(&a, 1, "pow")?))));
+    r.func("math::atan2", |_, a| Ok(Value::float(f1(&a, "atan2")?.atan2(arg_f64(&a, 1, "atan2")?))));
+    r.func("math::hypot", |_, a| Ok(Value::float(f1(&a, "hypot")?.hypot(arg_f64(&a, 1, "hypot")?))));
+    r.func("math::log", |_, a| Ok(Value::float(f1(&a, "log")?.ln() / arg_f64(&a, 1, "log")?.ln())));
+    r.func("math::copysign", |_, a| Ok(Value::float(f1(&a, "copysign")?.copysign(arg_f64(&a, 1, "copysign")?))));
+    r.func("math::fma", |_, a| Ok(Value::float(f1(&a, "fma")?.mul_add(arg_f64(&a, 1, "fma")?, arg_f64(&a, 2, "fma")?))));
+    r.func("math::min_f64", |_, a| Ok(Value::float(f1(&a, "min_f64")?.min(arg_f64(&a, 1, "min_f64")?))));
+    r.func("math::max_f64", |_, a| Ok(Value::float(f1(&a, "max_f64")?.max(arg_f64(&a, 1, "max_f64")?))));
+    r.func("math::clamp_f64", |_, a| {
+        Ok(Value::float(f1(&a, "clamp_f64")?.clamp(arg_f64(&a, 1, "clamp_f64")?, arg_f64(&a, 2, "clamp_f64")?)))
+    });
+    r.func("math::min_i64", |_, a| Ok(Value::Int(arg_int(&a, 0, "min_i64")?.min(arg_int(&a, 1, "min_i64")?), IntTy::I64)));
+    r.func("math::max_i64", |_, a| Ok(Value::Int(arg_int(&a, 0, "max_i64")?.max(arg_int(&a, 1, "max_i64")?), IntTy::I64)));
+    r.func("math::clamp_i64", |_, a| {
+        Ok(Value::Int(arg_int(&a, 0, "clamp_i64")?.clamp(arg_int(&a, 1, "clamp_i64")?, arg_int(&a, 2, "clamp_i64")?), IntTy::I64))
+    });
+    r.func("math::is_nan", |_, a| Ok(Value::Bool(f1(&a, "is_nan")?.is_nan())));
+    r.func("math::is_infinite", |_, a| Ok(Value::Bool(f1(&a, "is_infinite")?.is_infinite())));
+    r.func("math::is_finite", |_, a| Ok(Value::Bool(f1(&a, "is_finite")?.is_finite())));
+
+    // std::strings: free-function forms of the String methods
+    r.func("strings::to_upper", |_, a| Ok(Value::str(arg_str(&a, 0, "to_upper")?.to_uppercase())));
+    r.func("strings::to_lower", |_, a| Ok(Value::str(arg_str(&a, 0, "to_lower")?.to_lowercase())));
+    r.func("strings::trim", |_, a| Ok(Value::str(arg_str(&a, 0, "trim")?.trim())));
+    r.func("strings::len", |_, a| Ok(Value::usize(arg_str(&a, 0, "len")?.len())));
+    r.func("strings::char_count", |_, a| Ok(Value::usize(arg_str(&a, 0, "char_count")?.chars().count())));
+    r.func("strings::contains", |_, a| Ok(Value::Bool(arg_str(&a, 0, "contains")?.contains(&**arg_str(&a, 1, "contains")?))));
+    r.func("strings::starts_with", |_, a| Ok(Value::Bool(arg_str(&a, 0, "starts_with")?.starts_with(&**arg_str(&a, 1, "starts_with")?))));
+    r.func("strings::ends_with", |_, a| Ok(Value::Bool(arg_str(&a, 0, "ends_with")?.ends_with(&**arg_str(&a, 1, "ends_with")?))));
+    r.func("strings::replace", |_, a| {
+        Ok(Value::str(arg_str(&a, 0, "replace")?.replace(&**arg_str(&a, 1, "replace")?, &arg_str(&a, 2, "replace")?)))
+    });
+    r.func("strings::repeat", |_, a| Ok(Value::str(arg_str(&a, 0, "repeat")?.repeat(arg_usize(&a, 1, "repeat")?))));
+    r.func("strings::split", |_, a| {
+        let s = arg_str(&a, 0, "split")?;
+        let sep = arg_str(&a, 1, "split")?;
+        Ok(Value::vec(s.split(&**sep).map(Value::str).collect()))
+    });
+    r.func("strings::join", |it, a| {
+        let items = it.to_items(arg(&a, 0, "join")?)?;
+        let sep = arg_str(&a, 1, "join")?;
+        let mut parts = Vec::new();
+        for x in &items {
+            parts.push(it.display_string(x)?);
+        }
+        Ok(Value::str(parts.join(&sep)))
+    });
+
+    // std::time / std::fs extras
+    fn now() -> std::time::Duration {
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+    }
+    r.func("time::now_millis", |_, _| Ok(Value::Int(now().as_millis() as i128, IntTy::I64)));
+    r.func("time::now_unix", |_, _| Ok(Value::Int(now().as_secs() as i128, IntTy::I64)));
+    r.func("time::now_unix_nano", |_, _| Ok(Value::Int(now().as_nanos() as i128, IntTy::I64)));
+    r.func("time::sleep_millis", |_, a| {
+        std::thread::sleep(std::time::Duration::from_millis(arg_int(&a, 0, "sleep_millis")?.max(0) as u64));
+        Ok(Value::Unit)
+    });
+    r.func("fs::append", |_, a| {
+        use std::io::Write;
+        let p = arg_str(&a, 0, "fs::append")?;
+        let c = arg_str(&a, 1, "fs::append")?;
+        let r = std::fs::OpenOptions::new().append(true).create(true).open(&*p).and_then(|mut f| f.write_all(c.as_bytes()));
+        Ok(match r {
+            Ok(()) => Value::ok(Value::Unit),
+            Err(e) => io_err(e),
+        })
+    });
 }
 
 /// `u8::from(x)`, `i64::try_from(x)`, `u32::from_str_radix(s, 16)`, `f64::from(x)`, `char::from_u32`, `T::default()`.
