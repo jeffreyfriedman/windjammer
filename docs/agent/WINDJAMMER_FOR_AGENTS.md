@@ -6,7 +6,8 @@ Python: look things up (`wj docs <terms>`), and check every edit. Every code blo
 
 ## The loop
 
-```bash
+<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->
+```bash,ignore
 wj check --json FILE_OR_DIR     # parse + lint + transpile, no cargo; JSON diagnostics with spans
 wj run --interpret FILE         # instant run, no cargo/rustc; stdout is program output only
 wj test --interpret DIR         # runs @test and test_* functions in *_test.wj
@@ -290,7 +291,8 @@ fn main() {
 }
 ```
 
-```windjammer,bad
+<!-- should_fail: Rust attribute syntax `#[derive]` is rejected (use `@derive`) -->
+```windjammer,should_fail,bad
 #[derive(Debug, Clone)]
 struct P { x: int }
 

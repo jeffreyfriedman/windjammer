@@ -9,8 +9,7 @@ produced by these commands; nothing is quoted from existing docs.
 
 | Component | What it does | Runs where | Tests | Status / why | Risk |
 |---|---|---|---|---|---|
-| `src/optimizer/` phases 11-15 (string interning, DCE, loop invariant hoisting/unrolling, escape analysis, SIMD) ~5000 lines | AST-to-AST rewrites over arena `Program<'ast>` | Nowhere. Declared as `pub mod optimizer` in `main.rs` only; the one caller was `compiler_database::optimize_program`, which is an identity function ("INTENTIONALLY DISABLED ... 150 lifetime errors") and itself is only reached from `compiler_database::compile_file`, which no CLI path calls | 21 unit tests in phases 11-13 (never run against real programs) | DEAD. Arena owned by `Optimizer` vs Salsa `'db` lifetimes; `alloc_expr` used `unsafe` lifetime laundering. Phases 14/15 default off | High: unsafe lifetime transmute; no differential tests |
-| `src/ir/optimizations.rs` (`DeferDropPass`, `SmallVecPass`, `CowPass`, `AoSoAPass`, `OptimizationPipeline`) | Only counts analyzer hints and estimates savings ("Stub: actual IR rewrite would ...") | Re-exported from `ir/mod.rs`; no consumer in `src/`, `tests/`, `benches/` | none | DEAD stub | None (inert) |
+| `src/optimizer/` phases 11-15 (string interning, DCE, loop invariant hoisting/unrolling, escape analysis, SIMD) ~5000 lines | AST-to-AST rewrites over arena `Program<'ast>` | Nowhere. Declared as `pub mod optimizer` in `main.rs` only; the one caller was `compiler_database::optimize_program`, which is an identity function ("INTENTIONALLY DISABLED ... 150 lifetime errors") and itself is only reached from `compiler_database::compile_file`, which no CLI path calls | unit tests in phases 11-13 (never run against real programs) | DEAD. Arena owned by `Optimizer` vs Salsa `'db` lifetimes; `alloc_expr` used `unsafe` lifetime laundering. Phases 14/15 default off | High: unsafe lifetime transmute; no differential tests |
 | `src/ir/cost_model.rs` | `CompilationCostTracker` timing record | Re-exported, no consumer | small | DEAD (kept, not mine to delete) | None |
 | `src/auto_clone.rs` (4055 lines) | Decides where clones must be INSERTED so by-value WJ semantics compile | Live: `analyzer/function_analysis`, `ir/annotations`, codegen | extensive | LIVE; it adds, never removes, clones | Correctness-critical |
 | `analyzer/string_optimization.rs` + `optimization_detectors/*` (cow, defer-drop, smallvec/const, loops, struct mapping) | Annotate functions with hints | Live in analyzer; codegen consumes `clone_optimizations`, `smallvec_optimizations`, `cow_optimizations` (`function_generation_prepare.rs`, `let_statement_generation.rs`) | unit tests in analyzer; benches `cow_bench`, `smallvec_bench`, `string_optimization_bench` benchmark hand-written Rust, not generated code | LIVE, effect on the corpus not measured before this work | Hints gated by analyzer; not audited here |
@@ -92,7 +91,7 @@ kernels are in `docs/known-issues/`.
   Rust.
 - `benchmarks/README.md`: Rust-only criterion numbers for a TaskFlow API; "Windjammer: TBD",
   "Build equivalent Windjammer benchmarks" unchecked.
-- README "99%+ measured": no benchmark in the repository produces it. `docs/COMPILER_OPTIMIZATIONS.md`
+- README "99%+ measured": no benchmark in the repository produces it. `COMPILER_OPTIMIZATIONS.md` (deleted)
   states a target (">= 95%"), not a measurement.
 - New: `benchmarks/rust_parity/` (10 kernels, WJ vs idiomatic Rust, release builds); results and their
   limits are in `RESULTS.md`.
@@ -102,8 +101,8 @@ kernels are in `docs/known-issues/`.
 - Added `src/optimizer/` v2 (7 pass families, 8 switches, one entry `optimizer::run`), hooked after
   `generate_program` in `compiler/mod.rs` (the live path), `file_compiler.rs`, `output_generation.rs`,
   `compiler_database.rs`. Defaults ON only for passes with a soundness argument in PASSES.md.
-- Verification: 20 reference-checked fixtures (independent Python model, 5 seeds each), a seeded
-  generative differential suite with shrinking (200 programs; 5000 with `--features optimizer-soak`),
+- Verification: reference-checked fixtures (independent Python model, 5 seeds each), a seeded
+  generative differential suite with shrinking (a larger soak run with `--features optimizer-soak`),
   metamorphic checks (idempotence, alpha-renaming, dead-statement insertion), a mutation self-test
   (9 unsound variants, each must be caught by fixtures AND generator), and a ratchet on
   clone/to_string/format/inline/cast counts of a fixed corpus.

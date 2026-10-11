@@ -1,6 +1,6 @@
 //! Registry of lint (W-code) diagnostics. `docs/reference/errors.md` is generated from it.
 //!
-//! Every `"W####"` literal in `src/linter/` must be registered here; `tests/docs_truth_test.rs`
+//! Every `"W####"` string literal anywhere in `src/` (linter, parser, CLI) must be registered here; `tests/docs_truth_test.rs`
 //! scans the sources to enforce it. W0007/W0008 are registered in the error catalog
 //! (`intrinsics::register_catalog`) and are not repeated here.
 
@@ -20,4 +20,5 @@ pub const LINT_CODES: &[LintCode] = &[
     LintCode { code: "W0004", name: "explicit-borrow", default_level: "error", summary: "explicit borrow in a function call" },
     LintCode { code: "W0005", name: "explicit-clone", default_level: "warning", summary: "explicit `.clone()` call" },
     LintCode { code: "W0006", name: "string-literal-to-string", default_level: "error", summary: "string literal `.to_string()` is Rust leakage" },
+    LintCode { code: "W0010", name: "non-canonical-string-type", default_level: "error", summary: "`String`/`&str` spelled in source; Windjammer has one string type, `string` (emitted by the parser)" },
 ];

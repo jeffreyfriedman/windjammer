@@ -4,7 +4,7 @@ use std::http
 use std::time
 use std::json
 
-@derive(Serialize, Debug)
+@derive(Debug)
 struct HealthStatus {
     pub status: string,
     pub timestamp: int,

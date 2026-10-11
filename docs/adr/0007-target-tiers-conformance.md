@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: 3406ef05bb35
+---
 # ADR-0007: Target tiers and conformance contract
 
 - **Status:** Proposed
@@ -13,7 +17,7 @@ binary also lists `go`, `node`, `python`, `c` (the last three marked "future"). 
 - WASM: goes through the Rust generator (`src/codegen/wasm.rs`, component generator).
 - WGSL: a separate shader path (WJSL), with three overlapping shader stacks noted in the plan.
 - Interpreter (`src/interpreter/`, `wj repl`): exists, undocumented as a target.
-`tests/conformance/` holds about 25 `.wj` programs with expected stdout and a runner script that today compiles only to Rust;
+`tests/conformance/` holds a small set of `.wj` programs with expected stdout and a runner script that today compiles only to Rust;
 its README says every backend must give identical output, but nothing enforces that.
 
 ## Options

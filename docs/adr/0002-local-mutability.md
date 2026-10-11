@@ -1,3 +1,7 @@
+---
+status: accepted
+last_verified: 3406ef05bb35
+---
 # ADR-0002: Local mutability: inferred vs explicit
 
 - **Status:** Accepted (2026-10-10) — explicit `let mut` (Rust-like). Rationale (owner): inferred mutability can cause surprising, unintended behavior. Ownership of references (&, &mut, owned) stays inferred; only local binding mutability is explicit. Migration: compiler diagnostic with an automatic fix (`wj fix`) that adds `mut`, then remove `auto_needs_mut`.

@@ -56,7 +56,7 @@ impl SortParams {
         
         for field in self.fields {
             // Validate field name to prevent SQL injection
-            if allowed_fields.contains(&field.name.as_str()) {
+            if allowed_fields.contains(&field.name) {
                 let direction = if field.descending { "DESC" } else { "ASC" }
                 order_clauses.push("${field.name} ${direction}")
             }
@@ -76,7 +76,7 @@ impl SortParams {
         ]
         
         for field in &self.fields {
-            if !allowed_fields.contains(&field.name.as_str()) {
+            if !allowed_fields.contains(&field.name) {
                 return Err("Invalid sort field: ${field.name}")
             }
         }
