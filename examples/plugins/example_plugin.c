@@ -131,7 +131,7 @@ Windows (MinGW):
 
 Usage:
     // In Rust
-    use windjammer_game_framework::prelude::*;
+    use game_framework::prelude::*;
     
     let mut app = App::new();
     let plugin = DynamicPlugin::load("libexample_plugin.so")?;

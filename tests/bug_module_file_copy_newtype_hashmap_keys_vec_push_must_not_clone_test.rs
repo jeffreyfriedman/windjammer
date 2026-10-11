@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! WDB-462: Copy **newtype** from `HashMap.keys()` into `Vec::push` must not `.clone()`.
+//! Copy **newtype** from `HashMap.keys()` into `Vec::push` must not `.clone()`.
 //!
 //! Product `state_machine/machine.rs` `all_state_ids`:
 //!   `for id in self.states.keys() { result.push(id.clone()) }`
 //! WJ uses bare `result.push(id)` (`StateId` is `u32` newtype, Copy).
-//! Distinct from WDB-457 (owned Copy newtype **local** into push), WDB-459
-//! (Copy **struct** local into push), WDB-431 (Copy u64 **field** into push).
+//! Distinct from (owned Copy newtype **local** into push), 
+//! (Copy **struct** local into push), (Copy u64 **field** into push).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;
