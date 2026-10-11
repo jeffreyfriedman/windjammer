@@ -7,6 +7,7 @@ use crate::parser::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+pub mod arena_escape;
 mod borrow_analysis;
 mod cache_locality;
 pub(crate) mod field_enum_borrow;
@@ -374,7 +375,8 @@ impl<'ast> Analyzer<'ast> {
     /// Check for forbidden Rust-specific patterns that should not appear in Windjammer source.
     /// These are implementation details that the compiler should handle automatically.
     pub fn check_forbidden_rust_patterns(&self, program: &Program<'ast>) -> Result<(), String> {
-        forbidden_patterns::check_forbidden_rust_patterns(program)
+        forbidden_patterns::check_forbidden_rust_patterns(program)?;
+        arena_escape::gate(program)
     }
 }
 

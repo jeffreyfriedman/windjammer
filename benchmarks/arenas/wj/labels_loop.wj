@@ -1,0 +1,15 @@
+// Per-iteration scratch String in a loop: the auto-arena pass (scratch_reuse) target.
+fn main() {
+    let mut total = 0
+    for frame in 0..200 {
+        for i in 0..5000 {
+            let mut s = String::new()
+            s.push_str("entity#")
+            s.push_str(i.to_string())
+            s.push_str(" hp=")
+            s.push_str(((i * 7 + frame) % 100).to_string())
+            total = total + s.len()
+        }
+    }
+    println("${total}")
+}

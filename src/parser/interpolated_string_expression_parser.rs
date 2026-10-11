@@ -36,7 +36,8 @@ impl Parser {
                         expr_tokens.push(tok_with_loc);
                     }
 
-                    let expr_parser = Box::leak(Box::new(Parser::new(expr_tokens)));
+                    // Allocate into this parser's arena bundle so the nodes are sealed into the same Program.
+                    let mut expr_parser = Parser::new_sharing_arenas(expr_tokens, self);
                     let expr = expr_parser.parse_expression().map_err(|e| {
                         format!("invalid expression in string interpolation `{trimmed}`: {e}")
                     })?;

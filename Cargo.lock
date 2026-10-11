@@ -4480,6 +4480,7 @@ dependencies = [
  "axum",
  "base64 0.21.7",
  "bcrypt",
+ "bumpalo",
  "chrono",
  "clap",
  "console_error_panic_hook",

@@ -145,8 +145,8 @@ pub fn parse<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ParsedProgr
     // Lex and parse
     let mut lexer = lexer::Lexer::new(text);
     let tokens = lexer.tokenize_with_locations();
-    // Leak parser to keep arena alive for 'static lifetime (required by Salsa)
-    let parser = Box::leak(Box::new(parser::Parser::new(tokens)));
+    // The Program owns its arenas (`AstOwner`): when Salsa drops a stale revision, the AST memory goes too.
+    let mut parser = parser::Parser::new(tokens);
 
     let program = match parser.parse() {
         Ok(prog) => prog,

@@ -12,7 +12,7 @@ In: `parser::Program` (+ global/external `SignatureRegistry`). Out: `Vec<Analyze
 - `signature_registry.rs` is the only place that should look signatures up by name (`get_signature(&str)` is ratcheted).
 
 ## Owns
-Parameter ownership inference (`parameter_analysis`, `borrow_analysis`, `passthrough_inference`), self receiver inference (`self_*`), mutation detection, signature registry, type/trait collection, optimization detectors (`optimization_detectors/`), usage tracking (`usage_tracking/`).
+Parameter ownership inference (`parameter_analysis`, `borrow_analysis`, `passthrough_inference`), self receiver inference (`self_*`), mutation detection, signature registry, type/trait collection, optimization detectors (`optimization_detectors/`), usage tracking (`usage_tracking/`), the `std::arena` escape check and feature gate (`arena_escape.rs`, WJ0160/WJ0161, ADR-0016; also run by the interpreter loader).
 
 ## Never decides
 Rust text generation, numeric widths (`type_inference`/`ir::numeric_solver`), call-site coercion, name resolution to DefIds (not yet built).

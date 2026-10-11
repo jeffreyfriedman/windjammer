@@ -21,7 +21,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
-- `builtins/`            native stdlib registry (`Registry`): `num`, `text`, `seq`, `map`, `option`, `std_fns`
+- `builtins/`            native stdlib registry (`Registry`): `num`, `text`, `seq`, `map`, `option`, `std_fns`, `arena` (`std::arena`: Arena/Handle/Scratch with debug-build handle checks)
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
 - `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists
 
