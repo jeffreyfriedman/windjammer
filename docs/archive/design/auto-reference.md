@@ -1,5 +1,8 @@
 # Automatic Reference Insertion Design
 
+> **Archived / superseded.** Ownership and reference insertion are now decided by the IR constraint solver (`src/ir/`); see [ADR-0001](../../adr/0001-ownership-truth.md) and [IR_SOLVER_CODEGEN_ARCHITECTURE.md](../../IR_SOLVER_CODEGEN_ARCHITECTURE.md). Kept for history only.
+
+
 ## Problem
 
 **Current Behavior**:
