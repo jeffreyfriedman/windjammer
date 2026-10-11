@@ -314,6 +314,18 @@ pub fn top_module(rel: &str) -> Option<String> {
     Some(first.strip_suffix(".rs").unwrap_or(first).to_string())
 }
 
+/// Names of `mod x;` / `pub mod x;` declarations (any visibility) at line start in stripped code.
+pub fn declared_mods(code: &str) -> std::collections::BTreeSet<String> {
+    code.lines()
+        .filter_map(|l| {
+            let l = l.trim_start();
+            let l = l.strip_prefix("pub(crate) ").or_else(|| l.strip_prefix("pub ")).unwrap_or(l);
+            let name = l.strip_prefix("mod ")?.strip_suffix(';')?;
+            Some(name.trim().to_string())
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------------------------
 // Line pattern counters (on stripped code)
 // ---------------------------------------------------------------------------------------------
@@ -512,6 +524,13 @@ mod tests {
         assert_eq!(top_module("src/analyzer/mod.rs").as_deref(), Some("analyzer"));
         assert_eq!(top_module("src/config.rs").as_deref(), Some("config"));
         assert_eq!(top_module("tests/x.rs"), None);
+    }
+
+    #[test]
+    fn declared_mods_reads_visibility_variants() {
+        let code = "pub mod a;\n  mod b;\npub(crate) mod c;\nmod d { }\nuse x;";
+        let got: Vec<_> = declared_mods(code).into_iter().collect();
+        assert_eq!(got, vec!["a", "b", "c"]);
     }
 
     #[test]
