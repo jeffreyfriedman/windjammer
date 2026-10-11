@@ -346,7 +346,7 @@ std::async:         N/A         (not for CPU work)
 let results = parallel(items, |x| process(x))
 
 // Avoid: Manual thread management
-let mut handles = vec![]
+let mut handles = []
 for chunk in items.chunks(100) {
     handles.push(thread::spawn(move || {
         chunk.map(|x| process(x))

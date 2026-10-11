@@ -4,7 +4,7 @@
 // EXPECTED: All backends produce identical output ending with PASSED
 
 fn main() {
-    let mut v = vec![1, 2, 3]
+    let mut v = [1, 2, 3]
     println("[collections] len: ${v.len()}")
 
     v.push(4)
@@ -18,7 +18,7 @@ fn main() {
     }
     println("[collections] sum: ${sum}")
 
-    let mut squares: Vec<int> = vec![]
+    let mut squares: Vec<int> = []
     for i in 0..5 {
         squares.push(i * i)
     }
@@ -31,7 +31,7 @@ fn main() {
     }
     println("[collections] squares: ${result}")
 
-    let empty: Vec<int> = vec![]
+    let empty: Vec<int> = []
     println("[collections] empty: ${empty.is_empty()}")
 
     println("PASSED")

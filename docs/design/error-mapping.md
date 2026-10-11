@@ -8,7 +8,7 @@
 ```windjammer
 // user.wj:10
 fn greet(name: string) {
-    println!("Hello, ${name}!")
+    println("Hello, ${name}!")
 }
 ```
 

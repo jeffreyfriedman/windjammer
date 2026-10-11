@@ -29,6 +29,6 @@ struct Config {
 fn main() {
     let p = Point { x: 1, y: 2 }
     let u = User { name: "Alice", age: 30 }
-    println!("Point: ({}, {})", p.x, p.y)
+    println("Point: (${p.x}, ${p.y})")
 }
 

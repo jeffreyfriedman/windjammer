@@ -49,13 +49,13 @@ fn main() {
     // While loop
     let mut i = 0
     while i < 3 {
-        println("[while] {}", i)
+        println("[while] ${i}")
         i += 1
     }
 
     // For range loop
     for j in 0..5 {
-        println("[for] {}", j)
+        println("[for] ${j}")
     }
 
     println("PASSED")

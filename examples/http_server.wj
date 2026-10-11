@@ -6,11 +6,11 @@ use std::fs::*
 use std::async::*
 
 fn main() {
-    println!("🚀 Windjammer HTTP Server")
-    println!("Starting server on http://localhost:8080")
-    println!("Serving files from: /tmp/windjammer_editor_wasm")
-    println!("Press Ctrl+C to stop")
-    println!("")
+    println("🚀 Windjammer HTTP Server")
+    println("Starting server on http://localhost:8080")
+    println("Serving files from: /tmp/windjammer_editor_wasm")
+    println("Press Ctrl+C to stop")
+    println("")
     
     // Start the server
     run_server()
@@ -19,10 +19,10 @@ fn main() {
 async fn run_server() {
     // For now, use a simple message
     // Full implementation would use std::net HTTP server
-    println!("✅ Server running!")
-    println!("📂 Directory: /tmp/windjammer_editor_wasm")
-    println!("")
-    println!("Note: Full HTTP server implementation coming soon!")
-    println!("For now, use: cargo run --example http_server")
+    println("✅ Server running!")
+    println("📂 Directory: /tmp/windjammer_editor_wasm")
+    println("")
+    println("Note: Full HTTP server implementation coming soon!")
+    println("For now, use: cargo run --example http_server")
 }
 

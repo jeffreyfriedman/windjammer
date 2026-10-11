@@ -2,7 +2,7 @@
 // When calling functions with borrowed enum match bindings
 
 fn process(name: string, value: i32) {
-    println!("Name: {}, Value: {}", name, value);
+    println("Name: ${name}, Value: ${value}");
 }
 
 enum Action {

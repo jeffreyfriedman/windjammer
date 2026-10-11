@@ -26,7 +26,7 @@ pub fn list(req: Request, pool: DbPool) -> Response {
         }
     }
     
-    let mut projects = vec![]
+    let mut projects = []
     for row in rows {
         let project = ProjectResponse {
             id: db.get_int(row, "id"),

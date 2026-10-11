@@ -5,12 +5,12 @@ fn add(a: i64, b: i64) -> i64 {
 }
 
 fn main() {
-    println!("=== Simple Language Test ===\n")
+    println("=== Simple Language Test ===\n")
     
     let x = 10
     let y = 20
     let sum = add(x, y)
     
-    println!("{} + {} = {}", x, y, sum)
-    println!("\n✅ Test complete!")
+    println("${x} + ${y} = ${sum}")
+    println("\n✅ Test complete!")
 }

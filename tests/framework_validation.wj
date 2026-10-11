@@ -28,8 +28,8 @@ fn test_basic_assertions() {
 
 @test
 fn test_advanced_assertions() {
-    let nums = vec![1, 2, 3, 4, 5];
-    let empty: Vec<int> = vec![];
+    let nums = [1, 2, 3, 4, 5];
+    let empty: Vec<int> = [];
     
     assert_contains(&nums, &3);
     assert_not_empty(&nums);
@@ -207,7 +207,7 @@ fn test_with_fixture() {
 @test
 fn test_with_setup() {
     // Setup
-    let data = vec![1, 2, 3, 4, 5];
+    let data = [1, 2, 3, 4, 5];
     
     // Test
     assert_eq(data.len(), 5);
@@ -233,7 +233,7 @@ impl Player {
             health: 100,
             position_x: 0.0,
             position_y: 0.0,
-            inventory: vec![],
+            inventory: [],
         }
     }
     

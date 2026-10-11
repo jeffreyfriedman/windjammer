@@ -3,20 +3,20 @@
 
 // Define a generic From trait
 trait From<T> {
-    fn from(value: T) -> Self { panic!("not implemented") }
+    fn from(value: T) -> Self { panic("not implemented") }
 }
 
 // Implement From<int> for String
 impl From<int> for string {
     fn from(value: int) -> Self {
         // Convert int to string
-        format!("{}", value)
+        "${value}"
     }
 }
 
 // Define a generic converter trait
 trait Converter<Input, Output> {
-    fn convert(&self, input: Input) -> Output { panic!("not implemented") }
+    fn convert(&self, input: Input) -> Output { panic("not implemented") }
 }
 
 // A simple converter struct
@@ -27,13 +27,13 @@ struct IntToString {
 // Implement Converter<int, string> for IntToString
 impl Converter<int, string> for IntToString {
     fn convert(&self, input: int) -> string {
-        format!("{}: {}", self.prefix, input)
+        "${self.prefix}: ${input}"
     }
 }
 
 // Define a generic Into trait
 trait Into<T> {
-    fn into(self) -> T { panic!("not implemented") }
+    fn into(self) -> T { panic("not implemented") }
 }
 
 // Wrapper type for demonstrating Into
@@ -44,25 +44,25 @@ struct MyNumber {
 // Implement Into<string> for MyNumber
 impl Into<string> for MyNumber {
     fn into(self) -> string {
-        format!("{}", self.value)
+        "${self.value}"
     }
 }
 
 fn main() {
     // Test From<int> for String
     let s1 = String::from(42)
-    println!("From<int>: {}", s1)
+    println("From<int>: ${s1}")
     
     // Test Converter<int, string>
     let converter = IntToString { prefix: "Number" }
     let s2 = converter.convert(123)
-    println!("Converter: {}", s2)
+    println("Converter: ${s2}")
     
     // Test Into<string> for MyNumber
     let num = MyNumber { value: 456 }
     let s3: string = num.into()
-    println!("Into<string>: {}", s3)
+    println("Into<string>: ${s3}")
     
-    println!("All generic trait implementations working!")
+    println("All generic trait implementations working!")
 }
 

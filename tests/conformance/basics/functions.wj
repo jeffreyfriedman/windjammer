@@ -16,7 +16,7 @@ fn add(a: int, b: int) -> int {
 }
 
 fn greet(name: string) {
-    println("[greet] Hello {}", name)
+    println("[greet] Hello ${name}")
 }
 
 fn fibonacci(n: int) -> int {
@@ -28,12 +28,12 @@ fn fibonacci(n: int) -> int {
 
 fn main() {
     let result = add(10, 20)
-    println("[add] {}", result)
+    println("[add] ${result}")
 
     greet("Alice")
 
     let fib = fibonacci(10)
-    println("[fib] {}", fib)
+    println("[fib] ${fib}")
 
     println("PASSED")
 }

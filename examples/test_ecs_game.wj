@@ -11,8 +11,8 @@ struct TestGame {
 
 @init
 fn init(game: TestGame) {
-    println!("🎮 Test Game Initialized!")
-    println!("ECS integration working!")
+    println("🎮 Test Game Initialized!")
+    println("ECS integration working!")
     game.frame_count = 0
     game.score = 0
 }
@@ -23,7 +23,7 @@ fn update(game: TestGame, delta: float, input: Input) {
     game.score += 1
     
     if game.frame_count % 60 == 0 {
-        println!("Frame: {}, Score: {}, Delta: {}", game.frame_count, game.score, delta)
+        println("Frame: ${game.frame_count}, Score: ${game.score}, Delta: ${delta}")
     }
 }
 

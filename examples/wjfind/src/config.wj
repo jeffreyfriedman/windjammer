@@ -91,7 +91,7 @@ pub fn get_file_extensions(file_type: string) -> Vec<string> {
         "css" => vec!["css".to_string(), "scss".to_string(), "sass".to_string()],
         "sql" => vec!["sql".to_string()],
         "shell" | "sh" => vec!["sh".to_string(), "bash".to_string(), "zsh".to_string()],
-        _ => vec![],
+        _ => [],
     }
 }
 

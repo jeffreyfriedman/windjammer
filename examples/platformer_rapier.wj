@@ -14,9 +14,9 @@ struct Platformer {
 
 @init
 fn init(game: Platformer) {
-    println!("🎮 2D Platformer with Rapier2D!")
-    println!("Controls: Arrow keys to move, Space to jump")
-    println!("Using: Rapier2D physics engine")
+    println("🎮 2D Platformer with Rapier2D!")
+    println("Controls: Arrow keys to move, Space to jump")
+    println("Using: Rapier2D physics engine")
     
     game.score = 0
     game.player_x = 100.0
@@ -48,7 +48,7 @@ fn update(game: Platformer, delta: float, input: Input) {
     // Jump
     if input.is_key_just_pressed(Key::Space) && game.player_on_ground {
         game.score += 1
-        println!("Jump! Score: {}", game.score)
+        println("Jump! Score: ${game.score}")
     }
     
     // TODO: Step Rapier2D physics world

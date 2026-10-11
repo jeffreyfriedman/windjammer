@@ -12,9 +12,9 @@ pub fn test_enum_string_literal() {
     let speaker = Speaker::NPC("Silas Crane")
     
     match speaker {
-        Speaker::Player => assert!(false),
+        Speaker::Player => assert(false),
         Speaker::NPC(name) => {
-            assert_eq!(name, "Silas Crane")
+            assert_eq(name, "Silas Crane")
         }
     }
 }
@@ -29,7 +29,7 @@ pub fn test_enum_variants_multiple() {
     let msg2 = Message::Error("Failed")
     
     match msg1 {
-        Message::Text(s) => assert_eq!(s, "Hello"),
-        Message::Error(_) => assert!(false),
+        Message::Text(s) => assert_eq(s, "Hello"),
+        Message::Error(_) => assert(false),
     }
 }

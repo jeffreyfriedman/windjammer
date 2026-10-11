@@ -17,57 +17,57 @@ pub fn metrics(req: Request) -> Response {
     // Process uptime
     let now = time.now().timestamp()
     let uptime = now - START_TIME
-    output.push_str(&format!("# HELP process_uptime_seconds Process uptime in seconds\n"))
-    output.push_str(&format!("# TYPE process_uptime_seconds gauge\n"))
-    output.push_str(&format!("process_uptime_seconds {}\n\n", uptime))
+    output.push_str(&"# HELP process_uptime_seconds Process uptime in seconds\n")
+    output.push_str(&"# TYPE process_uptime_seconds gauge\n")
+    output.push_str(&"process_uptime_seconds ${uptime}\n\n")
     
     // Request count by endpoint
-    output.push_str(&format!("# HELP http_requests_total Total number of HTTP requests\n"))
-    output.push_str(&format!("# TYPE http_requests_total counter\n"))
+    output.push_str(&"# HELP http_requests_total Total number of HTTP requests\n")
+    output.push_str(&"# TYPE http_requests_total counter\n")
     
     unsafe {
         for (endpoint, count) in REQUEST_COUNT {
-            output.push_str(&format!("http_requests_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
+            output.push_str(&"http_requests_total{endpoint=\"${endpoint}\"} ${count}\n")
         }
     }
     output.push_str("\n")
     
     // Request duration
-    output.push_str(&format!("# HELP http_request_duration_seconds HTTP request duration in seconds\n"))
-    output.push_str(&format!("# TYPE http_request_duration_seconds summary\n"))
+    output.push_str(&"# HELP http_request_duration_seconds HTTP request duration in seconds\n")
+    output.push_str(&"# TYPE http_request_duration_seconds summary\n")
     
     unsafe {
         for (endpoint, duration_sum) in REQUEST_DURATION_SUM {
             let count = REQUEST_COUNT.get(endpoint).unwrap_or(&0)
             if *count > 0 {
                 let avg_duration = (*duration_sum as f64) / (*count as f64) / 1000.0
-                output.push_str(&format!("http_request_duration_seconds_sum{{endpoint=\"{}\"}} {:.3}\n", endpoint, avg_duration))
-                output.push_str(&format!("http_request_duration_seconds_count{{endpoint=\"{}\"}} {}\n", endpoint, count))
+                output.push_str(&"http_request_duration_seconds_sum{endpoint=\"${endpoint}\"} ${avg_duration:.3}\n")
+                output.push_str(&"http_request_duration_seconds_count{endpoint=\"${endpoint}\"} ${count}\n")
             }
         }
     }
     output.push_str("\n")
     
     // Error count
-    output.push_str(&format!("# HELP http_errors_total Total number of HTTP errors\n"))
-    output.push_str(&format!("# TYPE http_errors_total counter\n"))
+    output.push_str(&"# HELP http_errors_total Total number of HTTP errors\n")
+    output.push_str(&"# TYPE http_errors_total counter\n")
     
     unsafe {
         for (endpoint, count) in ERROR_COUNT {
-            output.push_str(&format!("http_errors_total{{endpoint=\"{}\"}} {}\n", endpoint, count))
+            output.push_str(&"http_errors_total{endpoint=\"${endpoint}\"} ${count}\n")
         }
     }
     output.push_str("\n")
     
     // Active connections (placeholder)
-    output.push_str(&format!("# HELP http_active_connections Current number of active connections\n"))
-    output.push_str(&format!("# TYPE http_active_connections gauge\n"))
-    output.push_str(&format!("http_active_connections 0\n\n"))
+    output.push_str(&"# HELP http_active_connections Current number of active connections\n")
+    output.push_str(&"# TYPE http_active_connections gauge\n")
+    output.push_str(&"http_active_connections 0\n\n")
     
     // Database connection pool (placeholder)
-    output.push_str(&format!("# HELP db_connections_active Active database connections\n"))
-    output.push_str(&format!("# TYPE db_connections_active gauge\n"))
-    output.push_str(&format!("db_connections_active 5\n\n"))
+    output.push_str(&"# HELP db_connections_active Active database connections\n")
+    output.push_str(&"# TYPE db_connections_active gauge\n")
+    output.push_str(&"db_connections_active 5\n\n")
     
     http.text_response(200, output, "text/plain; version=0.0.4")
 }

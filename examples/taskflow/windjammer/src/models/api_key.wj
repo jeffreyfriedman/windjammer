@@ -44,7 +44,7 @@ impl ApiKey {
     pub fn generate_key() -> string {
         // Generate a secure random API key
         let random_bytes = crypto.random_bytes(32)
-        let key = format!("wj_{}", crypto.base64_encode(&random_bytes))
+        let key = "wj_${crypto.base64_encode(&random_bytes)}"
         key
     }
     

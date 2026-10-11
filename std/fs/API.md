@@ -87,7 +87,7 @@ fn backup_config() -> Result<(), Error> {
     // Write
     fs::write("config.backup.toml", processed)?
     
-    println!("Backup created successfully")
+    println("Backup created successfully")
     Ok(())
 }
 
@@ -98,7 +98,7 @@ fn process_logs() -> Result<(), Error> {
     for entry in entries {
         if entry.name.ends_with(".log") {
             let content = fs::read_to_string(entry.path)?
-            println!("Processing: ${entry.name}")
+            println("Processing: ${entry.name}")
             analyze_log(content)
         }
     }
@@ -138,8 +138,8 @@ Common errors:
 
 ```windjammer
 match fs::read_to_string("data.txt") {
-    Ok(content) => println!("Read ${content.len()} bytes"),
-    Err(e) => println!("Error: ${e}"),
+    Ok(content) => println("Read ${content.len()} bytes"),
+    Err(e) => println("Error: ${e}"),
 }
 ```
 

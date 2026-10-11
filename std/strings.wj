@@ -49,7 +49,7 @@ fn join(parts: Vec<string>, delimiter: string) -> string {
 
 /// Unicode characters in a string.
 fn chars(s: string) -> Vec<char> {
-    vec![]
+    []
 }
 
 /// Build a string from character codepoints.

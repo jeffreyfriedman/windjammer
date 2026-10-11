@@ -18,7 +18,7 @@ fn main() {
     count.set(current_count + 1)
     
     let current_name = name.get()
-    println!("Count: {}, Name: {}", current_count, current_name)
+    println("Count: ${current_count}, Name: ${current_name}")
     
     // Test Signal in struct
     let state = AppState {
@@ -26,6 +26,6 @@ fn main() {
         message: Signal::new("Test"),
     }
     
-    println!("State counter: {}", state.counter.get())
+    println("State counter: ${state.counter.get()}")
 }
 

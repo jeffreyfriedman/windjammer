@@ -53,7 +53,7 @@ use std.json
 fn main() {
     let response = http.get("https://api.example.com/data").await?
     let data = response.json::<MyType>().await?
-    println!("Received: {:?}", data)
+    println("Received: ${data:?}")
 }
 ```
 

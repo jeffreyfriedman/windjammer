@@ -3,7 +3,7 @@
 
 fn main() {
     // Test 1: Undefined variable
-    println!("{}", undefined_var)
+    println("${undefined_var}")
     
     // Test 2: Undefined function
     undefined_function()

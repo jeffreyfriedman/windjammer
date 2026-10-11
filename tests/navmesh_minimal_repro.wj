@@ -25,6 +25,6 @@ impl NavmeshPath {
 fn main() {
     let path = NavmeshPath::new()
     let count = path.len()
-    println("Path has {} waypoints", count)
+    println("Path has ${count} waypoints")
     println("✅ Navmesh imports work!")
 }

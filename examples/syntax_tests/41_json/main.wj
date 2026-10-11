@@ -11,11 +11,11 @@ struct User {
 }
 
 fn main() {
-    println!("=== JSON Demo ===")
-    println!()
+    println("=== JSON Demo ===")
+    println()
     
     // 1. Serialize struct to JSON
-    println!("1. Serialize to JSON:")
+    println("1. Serialize to JSON:")
     let user = User {
         id: 1,
         name: "Alice",
@@ -25,24 +25,24 @@ fn main() {
     // Use Windjammer's json abstraction - no direct serde_json access!
     match json.stringify(&user) {
         Ok(json_compact) => {
-            println!("   Compact: {}", json_compact)
-            println!()
+            println("   Compact: ${json_compact}")
+            println()
         }
-        Err(e) => println!("   Error: {}", e)
+        Err(e) => println("   Error: ${e}")
     }
     
     // 2. Pretty-print JSON
-    println!("2. Pretty-print JSON:")
+    println("2. Pretty-print JSON:")
     match json.pretty(&user) {
         Ok(json_pretty) => {
-            println!("{}", json_pretty)
-            println!()
+            println("${json_pretty}")
+            println()
         }
-        Err(e) => println!("   Error: {}", e)
+        Err(e) => println("   Error: ${e}")
     }
     
-    println!("✨ JSON serialization with Windjammer!")
-    println!("   ✅ Using std.json abstraction (not serde_json directly)")
-    println!("   ✅ Dependencies added automatically")
-    println!("   ✅ Clean, Windjammer-native API")
+    println("✨ JSON serialization with Windjammer!")
+    println("   ✅ Using std.json abstraction (not serde_json directly)")
+    println("   ✅ Dependencies added automatically")
+    println("   ✅ Clean, Windjammer-native API")
 }

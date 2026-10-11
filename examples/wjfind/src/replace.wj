@@ -29,7 +29,7 @@ impl ReplaceManager {
         let mut stats = ReplaceStats {
             files_modified: 0,
             total_replacements: 0,
-            errors: vec![],
+            errors: [],
         }
         
         // Group matches by file
@@ -37,7 +37,7 @@ impl ReplaceManager {
         
         for m in matches {
             files_to_replace.entry(m.file.clone())
-                .or_insert(vec![])
+                .or_insert([])
                 .push(m)
         }
         
@@ -75,7 +75,7 @@ impl ReplaceManager {
         
         // Create backup if requested
         if self.backup && !self.dry_run {
-            let backup_path = format!("{}.bak", file_path)
+            let backup_path = "${file_path}.bak"
             fs::copy(file_path.clone(), backup_path)?
         }
         
@@ -132,7 +132,7 @@ impl ReplaceManager {
         matches: Vec<Match>,
         replacement: &string
     ) -> Vec<ReplacementPreview> {
-        let mut previews = vec![]
+        let mut previews = []
         
         for m in matches {
             let new_text = m.line_text.replace(&m.match_text, &replacement)
@@ -151,10 +151,10 @@ impl ReplaceManager {
     }
     
     pub fn restore_from_backup(file_path: string) -> Result<(), string> {
-        let backup_path = format!("{}.bak", file_path)
+        let backup_path = "${file_path}.bak"
         
         if !fs::exists(backup_path.clone()) {
-            return Err(format!("Backup file not found: {}", backup_path))
+            return Err("Backup file not found: ${backup_path}")
         }
         
         fs::copy(backup_path, file_path.clone())?

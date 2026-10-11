@@ -21,11 +21,11 @@ fn test_empty_grid_creates_empty_octree() {
     let grid = VoxelGrid::new(8, 8, 8)
     let svo = voxelgrid_to_svo64_flat(grid)
     
-    assert_eq!(svo.len(), 1, "Empty grid should have 1 node")
+    assert_eq(svo.len(), 1, "Empty grid should have 1 node")
     
     let (material, is_leaf, _) = decode_node(svo[0])
     assert(is_leaf, "Root should be leaf for empty grid")
-    assert_eq!(material, 0, "Empty grid should have material 0")
+    assert_eq(material, 0, "Empty grid should have material 0")
 }
 
 @test
@@ -40,7 +40,7 @@ fn test_single_voxel_creates_path_to_leaf() {
     assert(!is_leaf, "Root should be interior node for single voxel")
     assert(child_ptr > 0, "Root should have valid child pointer")
     
-    println!("[test] Single voxel test: {} nodes generated", svo.len())
+    println("[test] Single voxel test: ${svo.len()} nodes generated")
 }
 
 @test
@@ -54,7 +54,7 @@ fn test_octree_respects_octant_ordering() {
     let (_, is_leaf, _) = decode_node(svo[0])
     assert(!is_leaf, "Root should be interior for multiple voxels")
     
-    println!("[test] Octant ordering test: {} nodes generated", svo.len())
+    println("[test] Octant ordering test: ${svo.len()} nodes generated")
 }
 
 @test
@@ -73,6 +73,6 @@ fn test_homogeneous_regions_collapse() {
     let svo = voxelgrid_to_svo64_flat(grid)
     
     // Should be more compact than 8 leaf nodes
-    println!("[test] Homogeneous collapse: {} nodes for 8 voxels", svo.len())
+    println("[test] Homogeneous collapse: ${svo.len()} nodes for 8 voxels")
     assert(svo.len() < 20, "Homogeneous regions should collapse")
 }

@@ -131,7 +131,7 @@ fn test_string_concatenation() {
 
 @test
 fn test_vector_operations() {
-    let mut vec = vec![1, 2, 3]
+    let mut vec = [1, 2, 3]
     vec.push(4)
     
     assert_len(vec, 4)

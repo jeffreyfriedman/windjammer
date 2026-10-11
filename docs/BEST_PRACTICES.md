@@ -178,7 +178,7 @@ fn load_config(path: string) -> Config {
 ```windjammer
 fn connect_database(url: string) -> Result<DbPool, Error> {
     db.connect(url).map_err(|e| {
-        format!("Failed to connect to database at {}: {}", url, e)
+        "Failed to connect to database at ${url}: ${e}"
     })
 }
 ```
@@ -188,11 +188,7 @@ fn connect_database(url: string) -> Result<DbPool, Error> {
 ```windjammer
 fn validate_message(msg: ClientMessage) -> Result<(), Error> {
     if msg.text.len() > MAX_MESSAGE_LENGTH {
-        return Err(format!(
-            "Message too long: {} chars (max: {})",
-            msg.text.len(),
-            MAX_MESSAGE_LENGTH
-        ))
+        return Err("Message too long: ${msg.text.len()} chars (max: ${MAX_MESSAGE_LENGTH})")
     }
     Ok(())
 }
@@ -304,7 +300,7 @@ let mut result = String::with_capacity(11)  // Automatic!
 **Phase 8: SmallVec** - Stack allocation
 ```windjammer
 // You write:
-let items = vec![1, 2, 3]
+let items = [1, 2, 3]
 
 // Compiler generates:
 let items: SmallVec<[i32; 8]> = smallvec![1, 2, 3]  // Stack-allocated!
@@ -411,16 +407,16 @@ async fn test_user_registration_flow() {
         .json({ "email": "test@example.com", "password": "secure123" })
         .send().await?
     
-    assert_eq!(response.status(), 201)
+    assert_eq(response.status(), 201)
     
     // Login
     let login_response = client.post("/api/auth/login")
         .json({ "email": "test@example.com", "password": "secure123" })
         .send().await?
     
-    assert_eq!(login_response.status(), 200)
+    assert_eq(login_response.status(), 200)
     let token = login_response.json::<LoginResponse>()?.token
-    assert!(!token.is_empty())
+    assert(!token.is_empty())
 }
 ```
 
@@ -437,8 +433,8 @@ fn test_search_finds_all_matches() {
         let pattern = select_random_substring(content)
         
         let matches = search(content, pattern)
-        assert!(matches.len() > 0)
-        assert!(all_matches_contain_pattern(matches, pattern))
+        assert(matches.len() > 0)
+        assert(all_matches_contain_pattern(matches, pattern))
     }
 }
 ```
@@ -537,7 +533,7 @@ let query = "SELECT * FROM users WHERE email = $1"
 let user = db.query_one(pool, query, vec![email])?
 
 // NEVER concatenate
-let query = format!("SELECT * FROM users WHERE email = '{}'", email)  // DANGEROUS!
+let query = "SELECT * FROM users WHERE email = '${email}'"  // DANGEROUS!
 ```
 
 ### Password Hashing

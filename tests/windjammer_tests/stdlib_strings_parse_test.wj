@@ -41,7 +41,7 @@ pub fn test_byte_at_ascii() {
 }
 
 pub fn test_join_delimiter() {
-    let parts = vec!["a", "b", "c"]
+    let parts = ["a", "b", "c"]
     let joined = strings.join(parts, "-")
     assert(joined == "a-b-c", "joined")
 }

@@ -2,7 +2,7 @@
 use std::log
 
 fn main() {
-    println!("Testing std/log module...")
+    println("Testing std/log module...")
     
     // Initialize logger
     init()
@@ -14,5 +14,5 @@ fn main() {
     warn("This is a warning message")
     error("This is an error message")
     
-    println!("std/log works! ✓")
+    println("std/log works! ✓")
 }

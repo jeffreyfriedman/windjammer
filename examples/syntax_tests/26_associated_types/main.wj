@@ -29,5 +29,5 @@ impl Container for IntBox {
 }
 
 fn main() {
-    println!("test")
+    println("test")
 }

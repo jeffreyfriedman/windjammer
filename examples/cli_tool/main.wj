@@ -38,7 +38,7 @@ struct ProcessResult {
 
 fn process_file(path: string, args: &Args) -> Result<ProcessResult, string> {
     if args.verbose {
-        println("Processing: {}", path)
+        println("Processing: ${path}")
     }
     
     // Read the file
@@ -60,10 +60,10 @@ fn process_file(path: string, args: &Args) -> Result<ProcessResult, string> {
     let output_path = match &args.output_dir {
         Some(dir) => {
             let filename = Path::new(&path).file_name().unwrap()
-            format!("{}/{}", dir, filename.to_string_lossy())
+            "${dir}/${filename.to_string_lossy()}"
         }
         None => {
-            format!("{}.processed", path)
+            "${path}.processed"
         }
     }
     
@@ -87,7 +87,7 @@ fn main() -> Result<(), string> {
     }
     
     if args.verbose {
-        println("Processing {} files with {} workers", args.files.len(), args.workers)
+        println("Processing ${args.files.len()} files with ${args.workers} workers")
     }
     
     // Process files concurrently using channels
@@ -122,26 +122,23 @@ fn main() -> Result<(), string> {
                 total_lines += res.lines_processed
                 
                 if args.verbose {
-                    println("✓ {} -> {} ({} lines)", 
-                        res.input_file, 
-                        res.output_file, 
-                        res.lines_processed)
+                    println("✓ ${res.input_file} -> ${res.output_file} (${res.lines_processed} lines)")
                 }
             }
             Err(e) => {
                 error_count += 1
-                eprintln("✗ Error: {}", e)
+                eprintln("✗ Error: ${e}")
             }
         }
     }
     
     // Print summary
     println("\nSummary:")
-    println("  Files processed: {}/{}", success_count, file_count)
-    println("  Total lines: {}", total_lines)
+    println("  Files processed: ${success_count}/${file_count}")
+    println("  Total lines: ${total_lines}")
     
     if error_count > 0 {
-        println("  Errors: {}", error_count)
+        println("  Errors: ${error_count}")
     }
     
     Ok(())

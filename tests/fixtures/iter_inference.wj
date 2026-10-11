@@ -26,7 +26,7 @@ impl TestData {
     // Should infer .iter() - field access
     fn print_names(self) {
         for name in self.names {
-            println!("{}", name)
+            println("${name}")
         }
     }
     
@@ -44,7 +44,7 @@ impl TestData {
     // Should NOT add .iter() after .enumerate()
     fn print_with_index(self) {
         for (i, item) in self.items.enumerate() {
-            println!("{}: {}", i, item)
+            println("${i}: ${item}")
         }
     }
 }
@@ -52,15 +52,15 @@ impl TestData {
 // Simple vec iteration
 fn process_vec(items: Vec<i32>) {
     for item in items {
-        println!("{}", item)
+        println("${item}")
     }
 }
 
 fn main() {
     let data = TestData::new()
-    println!("Sum: {}", data.sum_items())
+    println("Sum: ${data.sum_items()}")
     data.print_names()
-    println!("Positive count: {}", data.count_positive())
+    println("Positive count: ${data.count_positive()}")
     data.print_with_index()
     
     let items = Vec::new()

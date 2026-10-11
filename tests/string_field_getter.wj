@@ -40,7 +40,7 @@ fn use_quest(q: Quest) {
     let title = q.title()
     let done = q.is_completed()
     
-    println("Quest: {}, completed: {}", title, done)
+    println("Quest: ${title}, completed: ${done}")
 }
 
 fn main() {
@@ -51,7 +51,7 @@ fn main() {
     
     // Now consume it
     let title = quest.take_title()
-    println("Took title: {}", title)
+    println("Took title: ${title}")
     
     println("✅ string field getters work correctly!")
 }

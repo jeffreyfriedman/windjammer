@@ -7,7 +7,7 @@
 // - Comparisons should work with consistent types
 
 pub fn test_integer_comparison_before_indexing() {
-    let data = vec![1.0, 2.0, 3.0, 4.0, 5.0]
+    let data = [1.0, 2.0, 3.0, 4.0, 5.0]
     let n = data.len() as i32  // n is i32
     
     // idx should be i32 based on RHS type
@@ -25,7 +25,7 @@ pub fn test_integer_comparison_before_indexing() {
 }
 
 pub fn test_integer_arithmetic_then_indexing() {
-    let nums = vec![10, 20, 30, 40, 50]
+    let nums = [10, 20, 30, 40, 50]
     let count = nums.len() as i32
     
     // Should be i32 based on arithmetic operands
@@ -40,7 +40,7 @@ pub fn test_integer_arithmetic_then_indexing() {
 }
 
 pub fn test_percentage_calculation_then_indexing() {
-    let values = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     let n = values.len() as i32
     let pct = 50
     

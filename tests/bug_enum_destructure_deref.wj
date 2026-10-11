@@ -23,5 +23,5 @@ fn check_condition(cond: Condition) -> bool {
 fn main() {
     let cond = Condition::ThresholdCheck(30);
     let result = check_condition(cond);
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }

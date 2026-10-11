@@ -48,7 +48,7 @@ use std::json
 
 fn main() {
     let data = json::parse("{\"name\": \"Alice\"}")
-    println!("{:?}", data)
+    println("${data:?}")
 }
 ```
 
@@ -171,7 +171,7 @@ Example:
 @test
 fn test_parse() {
     let result = parse("{\"name\": \"Alice\"}")
-    assert!(result.is_ok())
+    assert(result.is_ok())
 }
 ```
 

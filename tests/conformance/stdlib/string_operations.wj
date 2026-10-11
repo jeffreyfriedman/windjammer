@@ -70,7 +70,7 @@ fn test_str_equality() {
 
 // --- Multi-step concatenation ---
 fn test_str_multi_concat() {
-    let parts = vec!["a", "b", "c", "d"]
+    let parts = ["a", "b", "c", "d"]
     let mut result = ""
     for part in parts {
         if result.len() > 0 {

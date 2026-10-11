@@ -84,17 +84,17 @@ fn main() {
     }
     
     // Use Drawable trait
-    println!("${circle.draw()}")
-    println!("Circle area: ${circle.area()}")
+    println("${circle.draw()}")
+    println("Circle area: ${circle.area()}")
     
-    println!("${square.draw()}")
-    println!("Square area: ${square.area()}")
+    println("${square.draw()}")
+    println("Square area: ${square.area()}")
     
     // Use Movable trait
     circle.move_by(3, 4)
-    println!("After moving: ${circle.draw()}")
+    println("After moving: ${circle.draw()}")
     
     square.move_by(-5, -5)
-    println!("After moving: ${square.draw()}")
+    println("After moving: ${square.draw()}")
 }
 

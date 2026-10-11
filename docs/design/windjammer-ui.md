@@ -146,7 +146,7 @@ struct App {
     
     // Automatically re-computes when first_name or last_name changes
     computed full_name: string {
-        format!("{} {}", first_name, last_name)
+        "${first_name} ${last_name}"
     }
     
     fn render() -> Html {
@@ -228,7 +228,7 @@ struct App {
 @ssr  // Enable server-side rendering
 struct Page {
     props title: string
-    state data: Vec<Item> = vec![]
+    state data: Vec<Item> = []
     
     // Server-only code
     #[server]
@@ -439,7 +439,7 @@ struct LoginForm {
 struct AppStore {
     state user: Option<User> = None
     state theme: Theme = Theme::Light
-    state notifications: Vec<Notification> = vec![]
+    state notifications: Vec<Notification> = []
     
     fn login(user: User) {
         self.user = Some(user)
@@ -485,7 +485,7 @@ struct Header {
 ```windjammer
 @component
 struct Chat {
-    state messages: Vec<Message> = vec![]
+    state messages: Vec<Message> = []
     state socket: WebSocket
     
     async fn on_mount() {
@@ -645,7 +645,7 @@ use windjammer::native::*
 @component
 struct NativeFeatures {
     state location: Option<Location> = None
-    state contacts: Vec<Contact> = vec![]
+    state contacts: Vec<Contact> = []
     
     // Platform detection (compile-time)
     #[platform(desktop)]
@@ -678,7 +678,7 @@ struct NativeFeatures {
 @component
 @platform(desktop)
 struct DesktopApp {
-    state files: Vec<PathBuf> = vec![]
+    state files: Vec<PathBuf> = []
     
     async fn open_file_dialog() {
         files = desktop::file_dialog()
@@ -714,7 +714,7 @@ struct DesktopApp {
 @component
 @platform(mobile)
 struct MobileApp {
-    state contacts: Vec<Contact> = vec![]
+    state contacts: Vec<Contact> = []
     state photo: Option<Image> = None
     
     async fn request_permissions() {
@@ -897,7 +897,7 @@ impl GameLoop for MyGame {
             enemy.render(ctx);
         }
         
-        ctx.draw_text(format!("Score: {score}"), Vec2::new(10, 10));
+        ctx.draw_text("Score: ${score}", Vec2::new(10, 10));
     }
 }
 
@@ -927,7 +927,7 @@ fn main() {
 
 4. **Format String Auto-Borrow** - Variables in `{}` auto-borrowed
    ```windjammer
-   format!("Score: {score}")  // Becomes: format!("Score: {}", &score)
+   "Score: ${score}"  // Becomes: format!("Score: {}", &score)
    ```
 
 5. **Parameter Borrow Inference** - Function calls auto-add `&` where needed

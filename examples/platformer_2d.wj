@@ -10,8 +10,8 @@ struct Platformer {
 
 @init
 fn init(game: Platformer) {
-    println!("🎮 2D Platformer Starting!")
-    println!("Controls: Arrow keys to move, Space to jump")
+    println("🎮 2D Platformer Starting!")
+    println("Controls: Arrow keys to move, Space to jump")
     
     game.score = 0
     
@@ -28,18 +28,18 @@ fn update(game: Platformer, delta: float, input: Input) {
     // Left/Right movement
     if input.is_key_pressed(Key::Left) {
         // TODO: Apply velocity to player
-        println!("Moving left")
+        println("Moving left")
     }
     
     if input.is_key_pressed(Key::Right) {
         // TODO: Apply velocity to player
-        println!("Moving right")
+        println("Moving right")
     }
     
     // Jump
     if input.is_key_just_pressed(Key::Space) {
         // TODO: Apply jump force
-        println!("Jump!")
+        println("Jump!")
         game.score += 1
     }
     
@@ -47,7 +47,7 @@ fn update(game: Platformer, delta: float, input: Input) {
     
     // Display score every 60 frames
     if game.score > 0 && game.score % 10 == 0 {
-        println!("Score: {}", game.score)
+        println("Score: ${game.score}")
     }
 }
 

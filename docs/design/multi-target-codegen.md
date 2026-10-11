@@ -289,7 +289,7 @@ impl OptimizationPipeline {
 ```windjammer
 // Input: hello.wj
 fn greet(name: string) {
-    println!("Hello, ${name}!")
+    println("Hello, ${name}!")
 }
 
 fn main() {

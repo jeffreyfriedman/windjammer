@@ -58,14 +58,14 @@ The compiler automatically inserts `.clone()` calls when:
 Example:
 ```windjammer
 // User writes:
-let data = vec![1, 2, 3]
+let data = [1, 2, 3]
 process(data)
-println!("{}", data.len())
+println("${data.len()}")
 
 // Compiler generates:
-let data = vec![1, 2, 3]
+let data = [1, 2, 3]
 process(data.clone())  // Auto-inserted!
-println!("{}", data.len())
+println("${data.len()}")
 ```
 
 ## Success Criteria

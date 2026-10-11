@@ -11,7 +11,7 @@ impl State {
     }
     
     pub fn change_value(self, name: string, delta: i32) {
-        println!("Changing: {}, delta: {}", name, delta);
+        println("Changing: ${name}, delta: ${delta}");
     }
 }
 
