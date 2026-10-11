@@ -12,3 +12,7 @@ stale or superseded; do not treat them as current. For the live state see
 | `language-design/consistency-audit.md` | Nov 2025 audit snapshot. |
 | `PLATFORM_ABSTRACTION.md` | Aspirational platform layer; not implemented (see ADR-0007, ADR-0008). |
 | `implementation/*` | Dated status/bug-list snapshots (test status, compiler fix lists, WGSL transpiler status). |
+| `ARCHITECTURE_2025-ui-components.md` | Previous ARCHITECTURE.md: UI-component compiler behind a `ui-components` feature that no longer exists. |
+| `ROADMAP_2025-11.md` | Previous 860-line roadmap (versions 0.34 to 0.41); most items never shipped as described. |
+| `VERSIONING_STRATEGY_2025.md`, `VERSIONING_POLICY_0.46.md` | Replaced by `docs/VERSIONING.md`. |
+| `INDEX_game-framework-era.md` | Old docs index for a game-framework product; links were dead. |
