@@ -229,6 +229,16 @@ impl Interpreter {
                 return self.call_named(name, arguments);
             }
         }
+        if let Expression::FieldAccess { object, field, location } = function {
+            // `a.b(args)` parsed as field access + call (e.g. inside match scrutinees)
+            if let Expression::Identifier { name, .. } = object {
+                if self.lookup_var(name).is_none() && (self.structs.contains_key(name.as_str()) || self.enums.contains_key(name.as_str())) {
+                    let path: &'static str = Box::leak(format!("{}::{}", name, field).into_boxed_str());
+                    return self.call_named(path, arguments);
+                }
+            }
+            return self.eval_method_call(function, object, field.as_str(), None, arguments, location.as_ref());
+        }
         let f = self.eval(function)?;
         let args = self.eval_args(arguments, None, false)?;
         self.call_value(&f, args)
@@ -432,7 +442,7 @@ impl Interpreter {
     }
 
     fn bind_closure_param(&mut self, p: &'static str, a: Value) {
-        let p = p.trim().trim_start_matches('&').trim();
+        let p = p.split(':').next().unwrap_or(p).trim().trim_start_matches('&').trim();
         let p = p.strip_prefix("mut ").unwrap_or(p).trim();
         if p.starts_with('(') {
             let names: Vec<&'static str> = p

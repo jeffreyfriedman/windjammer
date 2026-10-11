@@ -29,6 +29,10 @@ impl Interpreter {
             (Value::Int(i, it), _) => {
                 if let Some(target) = IntTy::from_type(ty) {
                     if *it == IntTy::Lit && !target.fits(*i) {
+                        if *i < 0 && !target.signed() && target.bits() == 64 {
+                            // literals >= 2^63 are lexed as wrapped i64
+                            return Ok(Value::Int(target.wrap(*i), target));
+                        }
                         return Err(semantic(format!(
                             "literal out of range for `{}`: {}",
                             target.name(),

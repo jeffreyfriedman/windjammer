@@ -157,7 +157,7 @@ impl Interpreter {
             out: std::io::BufWriter::new(std::io::stdout()),
             builtins: Registry::standard(),
             depth: 0,
-            max_depth: 50_000,
+            max_depth: 10_000,
             args: Vec::new(),
             closure_counter: 0,
             mutating_analysis: HashSet::new(),

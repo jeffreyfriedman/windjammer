@@ -1,0 +1,37 @@
+// seeds: 1 2 3 9
+// Enum state machine with data-carrying variants, match guards and methods.
+enum State {
+    Idle,
+    Running(int),
+    Done { total: int },
+}
+
+impl State {
+    fn step(self, input: int) -> State {
+        match self {
+            State::Idle => State::Running(input),
+            State::Running(n) if n > 50 => State::Done { total: n },
+            State::Running(n) => State::Running(n * 2 + input % 3),
+            State::Done { total } => State::Done { total: total },
+        }
+    }
+    fn label(self) -> string {
+        match self {
+            State::Idle => "idle",
+            State::Running(n) => "run:${n}",
+            State::Done { total } => "done:${total}",
+        }
+    }
+}
+
+fn main() {
+    let mut s = State::Idle
+    let mut i: int = __SEED__
+    let mut step = 0
+    while step < 8 {
+        s = s.step(i)
+        println("{}", s.label())
+        i = i * 7 + 3
+        step += 1
+    }
+}

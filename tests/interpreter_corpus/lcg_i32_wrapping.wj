@@ -1,0 +1,15 @@
+// seeds: 1 7 12345 2147483647
+// i32 linear congruential generator with wrapping arithmetic; checkpoints every 1000 steps.
+fn main() {
+    let mut x: i32 = __SEED__
+    let mut acc: i64 = 0
+    let mut i = 1
+    while i <= 5000 {
+        x = x.wrapping_mul(1103515245).wrapping_add(12345)
+        acc = acc + (x as i64)
+        if i % 1000 == 0 {
+            println("{} {} {}", i, x, acc)
+        }
+        i += 1
+    }
+}

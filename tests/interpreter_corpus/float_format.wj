@@ -1,0 +1,16 @@
+// seeds: 1 2 3 10
+// IEEE double arithmetic (sqrt/mul/add are exactly rounded) and fixed-precision formatting.
+fn main() {
+    let n: int = __SEED__
+    let mut acc: f64 = 0.0
+    let mut i = 1
+    while i <= 50 {
+        let x = (i * n) as f64
+        acc = acc + x.sqrt() * 0.5 + x / 7.0
+        i += 1
+    }
+    println("{:.6}", acc)
+    println("{:.3}", acc / 3.0)
+    println("{}", (acc as i64) % 1000)
+    println("{:>12.2}|", acc)
+}

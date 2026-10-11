@@ -172,6 +172,12 @@ impl Interpreter {
             }
 
             Expression::FieldAccess { object, field, location } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if self.lookup_var(name).is_none() && (self.enums.contains_key(name.as_str()) || self.structs.contains_key(name.as_str())) {
+                        self.mark(location.as_ref());
+                        return self.eval_path_value(&format!("{}::{}", name, field));
+                    }
+                }
                 let obj = self.eval(object)?;
                 self.mark(location.as_ref());
                 self.field_of(&obj, field)

@@ -1,0 +1,41 @@
+// seeds: 1 2 3 4
+// Result + `?` propagation across functions, with a seed-dependent failure position.
+fn parse_num(s: string) -> Result<int, string> {
+    let r = s.parse::<int>()
+    match r {
+        Ok(n) => Ok(n),
+        Err(_) => Err("bad:" + s),
+    }
+}
+
+fn add_all(items: Vec<string>) -> Result<int, string> {
+    let mut total = 0
+    for it in items {
+        let n = parse_num(it)?
+        total += n
+    }
+    Ok(total)
+}
+
+fn main() {
+    let seed: int = __SEED__
+    let mut items: Vec<string> = Vec::new()
+    let mut i = 0
+    while i < 6 {
+        if i == seed {
+            items.push("x${i}")
+        } else {
+            items.push((i * seed).to_string())
+        }
+        i += 1
+    }
+    match add_all(items) {
+        Ok(t) => println("ok {}", t),
+        Err(e) => println("err {}", e),
+    }
+    let mut good: Vec<string> = Vec::new()
+    good.push("10")
+    good.push("20")
+    good.push("-5")
+    println("{:?}", add_all(good))
+}
