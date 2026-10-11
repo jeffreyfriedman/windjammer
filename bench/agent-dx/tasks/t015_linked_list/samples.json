@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 1\npush_back 2\npush_front 0\nprint\nreverse\nprint\nnth 1\nnth 7\n",
+  "stdout": "0 1 2\n2 1 0\n1\nnone\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop_front\npop_back\nremove 3\nprint\n",
+  "stdout": "empty\nempty\nmissing\n<empty>\n"
+ }
+]

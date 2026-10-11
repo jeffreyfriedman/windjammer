@@ -1,0 +1,483 @@
+[
+ {
+  "args": [
+   "--name=bob",
+   "-v",
+   "a",
+   "b"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: bob\ncount: 1\nverbosity: 1\ndry-run: false\npositional: a b\n"
+ },
+ {
+  "args": [
+   "--count",
+   "3",
+   "-vv",
+   "--dry-run",
+   "x"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 3\nverbosity: 2\ndry-run: true\npositional: x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "--"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "--",
+   "-v",
+   "--name=x"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: -v --name=x\n"
+ },
+ {
+  "args": [
+   "-"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: -\n"
+ },
+ {
+  "args": [
+   "--name"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: missing value for --name\n"
+ },
+ {
+  "args": [
+   "--count"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: missing value for --count\n"
+ },
+ {
+  "args": [
+   "--count=-1"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count -1\n"
+ },
+ {
+  "args": [
+   "--count=abc"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count abc\n"
+ },
+ {
+  "args": [
+   "--count",
+   "007"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 7\nverbosity: 0\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "--bogus"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --bogus\n"
+ },
+ {
+  "args": [
+   "-x"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option -x\n"
+ },
+ {
+  "args": [
+   "--name",
+   "--dry-run"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: --dry-run\ncount: 1\nverbosity: 0\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "-vvv",
+   "-v"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 4\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "--name=a",
+   "--name=b"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: b\ncount: 1\nverbosity: 0\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "--name="
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: \ncount: 1\nverbosity: 0\ndry-run: false\npositional: \n"
+ },
+ {
+  "args": [
+   "pos",
+   "--",
+   "--count",
+   "9"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: pos --count 9\n"
+ },
+ {
+  "args": [
+   "-vx"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option -vx\n"
+ },
+ {
+  "args": [
+   "--count=",
+   "--bogus"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count \n"
+ },
+ {
+  "args": [
+   "--dry-run=1"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --dry-run=1\n"
+ },
+ {
+  "args": [
+   "--oops",
+   "2",
+   "--count=5",
+   "-vv",
+   "--count=5",
+   "--name=n"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --oops\n"
+ },
+ {
+  "args": [
+   "-v",
+   "--name",
+   "--count=x",
+   "7"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: --count=x\ncount: 1\nverbosity: 1\ndry-run: false\npositional: 7\n"
+ },
+ {
+  "args": [
+   "zed",
+   "--count=5",
+   "--",
+   "--count=5",
+   "--count"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 5\nverbosity: 0\ndry-run: false\npositional: zed --count=5 --count\n"
+ },
+ {
+  "args": [
+   "-",
+   "-q"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option -q\n"
+ },
+ {
+  "args": [
+   "--count=x"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count x\n"
+ },
+ {
+  "args": [
+   "-vv",
+   "-v",
+   "-q"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option -q\n"
+ },
+ {
+  "args": [
+   "--count",
+   "zed",
+   "-q",
+   "--name",
+   "-q",
+   "zed",
+   "--count=5"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count zed\n"
+ },
+ {
+  "args": [
+   "--count=x",
+   "--count",
+   "pos",
+   "-",
+   "-q",
+   "2",
+   "pos"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count x\n"
+ },
+ {
+  "args": [
+   "--",
+   "pos",
+   "--count=5"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: pos --count=5\n"
+ },
+ {
+  "args": [
+   "--",
+   "--",
+   "2",
+   "--name"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: -- 2 --name\n"
+ },
+ {
+  "args": [
+   "--count",
+   "zed",
+   "--dry-run",
+   "pos",
+   "--oops"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count zed\n"
+ },
+ {
+  "args": [
+   "--name",
+   "-q",
+   "zed",
+   "7"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: -q\ncount: 1\nverbosity: 0\ndry-run: false\npositional: zed 7\n"
+ },
+ {
+  "args": [
+   "2",
+   "--oops",
+   "zed"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --oops\n"
+ },
+ {
+  "args": [
+   "7",
+   "2",
+   "zed",
+   "-q",
+   "-v",
+   "--count",
+   "--count=5"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option -q\n"
+ },
+ {
+  "args": [
+   "7"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 0\ndry-run: false\npositional: 7\n"
+ },
+ {
+  "args": [
+   "--oops",
+   "2"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --oops\n"
+ },
+ {
+  "args": [
+   "-v",
+   "-"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 1\ndry-run: false\npositional: -\n"
+ },
+ {
+  "args": [
+   "--oops"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --oops\n"
+ },
+ {
+  "args": [
+   "--count=5",
+   "--count",
+   "-vv"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count -vv\n"
+ },
+ {
+  "args": [
+   "-vv",
+   "-",
+   "-vv"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 4\ndry-run: false\npositional: -\n"
+ },
+ {
+  "args": [
+   "--dry-run",
+   "-",
+   "-v",
+   "zed"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 1\ndry-run: true\npositional: - zed\n"
+ },
+ {
+  "args": [
+   "--oops",
+   "--name=n",
+   "--name",
+   "--count",
+   "2",
+   "-",
+   "--name"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --oops\n"
+ },
+ {
+  "args": [
+   "--name=n",
+   "--name=n",
+   "zed",
+   "--oops",
+   "--oops",
+   "--name=n",
+   "-v"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: unknown option --oops\n"
+ },
+ {
+  "args": [
+   "--dry-run",
+   "-",
+   "--count=x",
+   "--dry-run",
+   "zed"
+  ],
+  "code": 2,
+  "files": {},
+  "stdin": "",
+  "stdout": "error: invalid count x\n"
+ },
+ {
+  "args": [
+   "7",
+   "-v",
+   "zed"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 1\nverbosity: 1\ndry-run: false\npositional: 7 zed\n"
+ }
+]

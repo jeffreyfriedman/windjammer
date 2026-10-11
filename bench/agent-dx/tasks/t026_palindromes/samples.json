@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "babad\ncbbd\n",
+  "stdout": "3 bab 7\n2 bb 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "aaa\n\nabc\n",
+  "stdout": "3 aaa 6\n0 - 0\n1 a 3\n"
+ }
+]

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npush 3\npush 1\npush 2\nmin\nmax\npop\npop\nmin\nsize\n",
+  "stdout": "1\n3\n2\n1\n3\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush pear\npush apple\nmin\nmax\npop\nmin\n",
+  "stdout": "apple\npear\napple\npear\n"
+ }
+]

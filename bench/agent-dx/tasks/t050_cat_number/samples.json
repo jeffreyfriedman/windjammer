@@ -1,0 +1,29 @@
+[
+ {
+  "args": [
+   "a",
+   "b"
+  ],
+  "files": {
+   "a": "one\ntwo\n",
+   "b": "three\n\nfive",
+   "e": ""
+  },
+  "stdin": "",
+  "stdout": "one\ntwo\nthree\n\nfive"
+ },
+ {
+  "args": [
+   "-n",
+   "a",
+   "b"
+  ],
+  "files": {
+   "a": "one\ntwo\n",
+   "b": "three\n\nfive",
+   "e": ""
+  },
+  "stdin": "",
+  "stdout": "     1\tone\n     2\ttwo\n     3\tthree\n     4\t\n     5\tfive\n"
+ }
+]

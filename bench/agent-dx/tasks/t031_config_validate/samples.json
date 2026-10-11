@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=example.org\nport=8080\n",
+  "stdout": "ok host=example.org port=8080 debug=false workers=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=0\ndebug=maybe\ncolor=red\nworkers=64\n",
+  "stdout": "error: host: missing\nerror: port: invalid value 0\nerror: debug: invalid value maybe\nerror: unknown key color\n"
+ }
+]
