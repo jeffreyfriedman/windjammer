@@ -70,6 +70,37 @@ pub fn strip_redundant_same_width_int_cast(expr: &mut String) {
     }
 }
 
+/// True when `s` is exactly `(<expr>) as <target>`, possibly wrapped in redundant parentheses:
+/// the cast already covers the whole expression (an unparenthesized `a + b as f32` only casts
+/// the last operand and does not count).
+fn is_whole_expression_cast(s: &str, target: &str) -> bool {
+    /// Index of the `)` matching the leading `(`, if `s` starts with one.
+    fn matching_close(s: &str) -> Option<usize> {
+        let mut depth = 0i32;
+        for (i, c) in s.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+    let t = s.trim();
+    if let Some(inner) = t.strip_suffix(&format!(" as {target}")) {
+        return inner.starts_with('(') && matching_close(inner) == Some(inner.len() - 1);
+    }
+    if t.starts_with('(') && matching_close(t) == Some(t.len() - 1) {
+        return is_whole_expression_cast(&t[1..t.len() - 1], target);
+    }
+    false
+}
+
 /// Auto-cast an integer call argument to float when the parameter expects f32/f64.
 ///
 /// Returns `true` (and mutates `arg_str`) if a cast was applied.
@@ -87,9 +118,20 @@ pub fn maybe_cast_int_arg_to_float(
         return false;
     }
 
+    // Earlier coercion stages may already have wrapped the expression; never stack casts.
+    for target in ["f32", "f64"] {
+        let stacked = format!(" as {target}) as {target}");
+        let single = format!(" as {target})");
+        while arg_str.contains(&stacked) {
+            *arg_str = arg_str.replace(&stacked, &single);
+        }
+    }
     // Binary int args need a whole-expression cast; partial inner literal casts break precedence.
     if matches!(arg_expr, Expression::Binary { .. }) {
         let target = if param_is_f32 { "f32" } else { "f64" };
+        if is_whole_expression_cast(arg_str, target) {
+            return false;
+        }
         let normalized = strip_partial_literal_float_casts(arg_str);
         *arg_str = format!("({}) as {}", normalized, target);
         return true;
@@ -102,7 +144,7 @@ pub fn maybe_cast_int_arg_to_float(
             ..
         }
     ) || arg_type.is_some_and(|t| {
-        matches!(t, Type::Int)
+        matches!(t, Type::Int | Type::Int32 | Type::Uint)
             || matches!(t, Type::Custom(n) if crate::type_classification::is_integer_type(n))
     });
     if !arg_is_int {

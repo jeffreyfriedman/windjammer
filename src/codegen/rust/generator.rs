@@ -2808,7 +2808,6 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         name: &str,
     ) -> bool {
-        
         if self.current_function_body.is_empty() {
             return false;
         }
