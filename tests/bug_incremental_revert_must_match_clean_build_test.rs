@@ -60,14 +60,21 @@ fn ordered(map: std::collections::HashMap<String, String>) -> BTreeMap<String, S
 fn run_cycle(first: &str, second: &str) {
     let clean = ordered(project(first).compile().expect("clean build"));
 
+    let clean_second = ordered(project(second).compile().expect("clean build of edit"));
+    assert_ne!(
+        clean_second.get("caller.rs"),
+        clean.get("caller.rs"),
+        "precondition: the edit must change the caller's emitted calls"
+    );
+
     let mut t = project(first);
     t.compile().expect("initial build");
     t.add_file("callee.wj", second);
     let edited = ordered(t.compile().expect("edited build"));
-    assert_ne!(
+    assert_eq!(
         edited.get("caller.rs"),
-        clean.get("caller.rs"),
-        "precondition: the edit must change the caller's emitted calls"
+        clean_second.get("caller.rs"),
+        "incremental build after editing a dependency must re-emit its unchanged dependents"
     );
     t.add_file("callee.wj", first);
     let reverted = ordered(t.compile().expect("reverted build"));
