@@ -348,6 +348,7 @@ impl<'m> Go<'m> {
                 "MAX" => Ok(num::lit_int(hi, k)),
                 "MIN" => Ok(num::lit_int(lo, k)),
                 "from" => Ok(num::cast(&args[0].ty, &Ty::Int(k), a)),
+                "from_str_radix" => Ok(format!("wjParseIntRadix[{}]({a})", super::types::int_name(k))),
                 _ => self.unsupported(format!("`{owner}::{name}`")),
             };
         }

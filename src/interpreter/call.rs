@@ -372,6 +372,11 @@ impl Interpreter {
                     if self.builtins.has_function(name) {
                         return self.call_builtin_fn(name, args);
                     }
+                    // `i64::from_str_radix(s, 16)`, `u8::try_from(x)`: associated numeric functions come before
+                    // first-argument UFCS dispatch (which would treat `s` as the receiver).
+                    if let Some(r) = super::builtins::assoc_numeric(self, name, &args) {
+                        return r;
+                    }
                     if !args.is_empty() && (self.traits.contains_key(ty) || self.builtins.has_type(ty)) {
                         let mut args = args;
                         let recv = args.remove(0);
