@@ -8,6 +8,29 @@ use crate::parser_impl::Parser;
 use crate::lexer::Token;
 
 impl Parser {
+    /// `start..` with no end (`(1..)`, `for i in 0.. {`) is `std::ops::RangeFrom { start }`.
+    /// Called with the current token on `..`; consumes it and returns the node, or `None`.
+    pub(in crate::parser) fn try_parse_range_from(
+        &mut self,
+        start: &'static Expression<'static>,
+    ) -> Option<&'static Expression<'static>> {
+        if self.current_token() != &Token::DotDot
+            || !matches!(
+                self.peek(1),
+                Some(Token::RParen | Token::Comma | Token::Semicolon | Token::RBrace | Token::LBrace)
+            )
+        {
+            return None;
+        }
+        self.advance();
+        let location = self.current_location();
+        Some(self.alloc_expr(Expression::StructLiteral {
+            name: "std::ops::RangeFrom".to_string(),
+            fields: vec![("start".to_string(), start)],
+            location,
+        }))
+    }
+
     /// Called with the opening `(` already consumed; consumes through the closing `)`.
     pub(in crate::parser) fn parse_matches_macro(&mut self) -> Result<&'static Expression<'static>, String> {
         let value = self.parse_expression()?;

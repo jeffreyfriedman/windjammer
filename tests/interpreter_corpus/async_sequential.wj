@@ -1,0 +1,23 @@
+// seeds: 2 3 6 10
+// interp-only: async needs an executor crate (tokio) that the plain `rustc` step of the differential test lacks
+// `async fn` is lazy: calling it runs nothing; `.await` runs it to completion, in program order.
+async fn fetch(id: int) -> int {
+    println("fetch {}", id)
+    id * 10
+}
+
+async fn total(a: int, b: int) -> int {
+    let x = fetch(a).await
+    let y = fetch(b).await
+    x + y
+}
+
+async fn main() {
+    let s: int = __SEED__
+    let pending = fetch(s)
+    println("created")
+    let v = pending.await
+    println("got {}", v)
+    let t = total(s, s + 1).await
+    println("total {}", t)
+}

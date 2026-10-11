@@ -178,12 +178,11 @@
 "src/compiler/library_multipass.rs::build_library_multipass" = 1439
 "src/file_compilation_pipeline.rs::compile_file_impl" = 403
 "src/interpreter/builtins/option.rs::register" = 316
-"src/interpreter/builtins/seq.rs::register_iter" = 444
 "src/interpreter/builtins/seq.rs::register_vec" = 360
 "src/ir/constraint_gen.rs::walk_expression" = 377
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 308
-"src/parser/call_expression_parser.rs::parse_postfix_expression" = 492
+"src/parser/call_expression_parser.rs::parse_postfix_expression" = 489
 "src/parser/pattern_parser.rs::parse_pattern" = 373
 "src/parser/primary_expression_parser.rs::parse_primary_expression" = 574
 "src/parser/type_parser.rs::parse_type" = 428
