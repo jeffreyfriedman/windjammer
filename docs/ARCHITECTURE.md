@@ -1,521 +1,111 @@
 # Windjammer Compiler Architecture
 
-## Overview
+Status: describes the code as of 0.50.0 (2026-10) and the target layering from
+[ARCHITECTURE_IMPROVEMENT_PLAN.md](ARCHITECTURE_IMPROVEMENT_PLAN.md). Every statement under "Today" was checked against
+`src/`; every statement under "Target" is a plan, not a fact. Open decisions are in [adr/](adr/README.md).
 
-Windjammer is a systems programming language that transpiles to Rust, designed to provide 80% of Rust's power with 20% of its complexity.
+## 1. What the compiler is
 
-## Crate Structure
+`.wj` source is lexed, parsed, analysed, lowered to a safety-typed IR and printed as Rust (or Go, JavaScript, WASM,
+WGSL). For the Rust target the output is then built by `cargo`. Windjammer has no code generator of its own below Rust:
+rustc is the type checker of last resort (see [ADR-0005](adr/0005-error-strategy.md)).
 
-```
-windjammer/
-├── windjammer (main compiler)
-│   ├── Parser
-│   ├── Type inference
-│   ├── Code generation
-│   └── component/ (optional, feature-gated)
-│       └── UI component compilation
-│
-└── crates/
-    ├── windjammer-runtime      (stdlib implementations)
-    ├── windjammer-ui           (UI framework runtime)
-    ├── windjammer-ui-macro     (procedural macros)
-    ├── windjammer-lsp          (Language Server Protocol)
-    ├── windjammer-mcp          (Model Context Protocol)
-    └── game-host-framework (game engine)
-```
+Workspace crates (`Cargo.toml`): `windjammer` (compiler library plus the `wj`, `windjammer` and `wj-lint` binaries),
+`windjammer-runtime`, `windjammer-lsp`, `windjammer-mcp`. Rust 1.90+.
 
-## Dependency Graph
+## 2. Target layering (what the plan enforces)
 
-### Core Dependencies
+Dependencies point downward only. Each layer owns specific decisions; no other layer may re-decide them.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      windjammer (compiler)                   │
-│                                                              │
-│  Core:                                                       │
-│  - Parser                                                    │
-│  - Type inference                                            │
-│  - Code generation                                           │
-│                                                              │
-│  Optional (feature = "ui-components"):                       │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ component/                                              │ │
-│  │  - Parse .wj component files                           │ │
-│  │  - Analyze reactive dependencies                       │ │
-│  │  - Transform to signals                                │ │
-│  │  - Generate component code                             │ │
-│  └────────────────────────────────────────────────────────┘ │
-└────────────────────────┬─────────────────────────────────────┘
-                         │ optional dependency
-                         │ (feature = "ui-components")
-                         ▼
-         ┌───────────────────────────────┐
-         │     windjammer-ui             │
-         │     (runtime only)            │
-         │                               │
-         │  - Signal<T>                  │
-         │  - Computed<T>                │
-         │  - Effect                     │
-         │  - Virtual DOM                │
-         │  - Platform abstraction       │
-         └───────────────────────────────┘
-                         ▲
-                         │ NO dependencies
-                         │ (pure runtime)
+ driver        one compile() entry: config, ports (source, sink, cargo, cache)       src/bin, src/cli*, src/compiler
+ backends      printers over the IR: Rust, Go, JS, WASM, WGSL                         src/codegen
+ IR            lowering + solvers: ownership, clones, numeric width, effects, taint   src/ir
+ types         type facts, numeric inference                                          src/type_inference (to merge into ir)
+ resolve       names -> DefIds                                                        (not yet present)
+ syntax        lexer, parser, AST                                                     src/lexer, src/parser
 ```
 
-### Key Principle: No Circular Dependencies
+| Decision | Owner (target) | Today |
+|----------|----------------|-------|
+| Ownership of params/`self`, clone insertion | `src/ir` solver | Split between `src/analyzer`, `src/ir`, and post-IR patches in `src/codegen/rust` and `src/compiler` |
+| Integer/float width | `src/ir/numeric_solver` | Spread over `type_inference`, `analyzer`, `ir`, `codegen` (11 places) |
+| Call-site coercion | `src/ir/coercion` | Rust backend uses it; other backends do not |
+| Name resolution | resolver (`DefId`) | Bare-string registries (`get_signature(&str)`) |
+| Configuration | one `CompilerConfig` | `IrCutoverConfig::from_env()` plus about 8 env toggles |
 
-**Decision**: The compiler can optionally depend on the UI runtime, but the runtime NEVER depends on the compiler.
+Principles and fitness tests: plan sections 2 and 4. The layering is encoded in `docs/MODULE_MAP.toml` and checked by
+`tests/architecture.rs` once those land (work packages Q1 to Q3).
 
-**Rationale**:
-1. **Runtime is standalone** - Can be used without the compiler for hand-written components
-2. **Clean separation** - Compile-time vs. runtime concerns are separate
-3. **Smaller binaries** - Users can use runtime without compiler overhead
-4. **Easier testing** - Runtime can be tested independently
-
-**Implementation**:
-```toml
-# Cargo.toml
-[features]
-default = []
-ui-components = ["windjammer-ui"]
-
-[dependencies]
-windjammer-ui = { path = "crates/windjammer-ui", optional = true }
-```
-
-```rust
-// src/main.rs
-#[cfg(feature = "ui-components")]
-pub mod component;
-```
-
-### Why Not Other Approaches?
-
-#### ❌ Component Compiler in Main Compiler (Always)
-```
-windjammer → windjammer-ui (always)
-```
-**Problem**: Tight coupling, can't use UI without full compiler
-
-#### ❌ Component Compiler in UI Crate
-```
-windjammer ↔ windjammer-ui (circular!)
-```
-**Problem**: Circular dependency, runtime depends on compiler
-
-#### ❌ Separate Component Compiler Crate
-```
-windjammer → windjammer-component-compiler → windjammer-ui
-```
-**Problem**: More crates to manage, potential code duplication
-
-#### ✅ Feature-Gated in Main Compiler (Chosen)
-```
-windjammer --[feature="ui-components"]--> windjammer-ui
-```
-**Benefits**: 
-- Clean one-way dependency
-- Optional compilation
-- Code reuse (shared parser)
-- Single crate to manage
-
----
-
-## UI Component Architecture
-
-### Design Philosophy
-
-**Goal**: 80% of React/Svelte's power with 20% of the complexity
-
-**Strategy**: Progressive disclosure
-- **Simple components**: Minimal syntax (no boilerplate)
-- **Complex components**: JSX-style with full control
-
-### Component Syntax
-
-#### Primary: Minimal Syntax (for 80% of cases)
-
-```windjammer
-// counter.wj - Simple component
-
-// State (compiler makes reactive automatically)
-count: int = 0
-
-// Computed values
-@computed
-doubled: int = count * 2
-
-// Functions
-fn increment() {
-    count += 1
-}
-
-// View (declarative)
-view {
-    div {
-        p { "Count: {count}" }
-        p { "Doubled: {doubled}" }
-        button(on_click: increment) { "+" }
-    }
-}
-```
-
-**Features**:
-- ✅ No boilerplate (no struct, no impl, no @component)
-- ✅ Compiler infers reactivity automatically
-- ✅ Pure Windjammer syntax (no HTML/XML)
-- ✅ Declarative view definition
-- ✅ Type-safe
-
-**Compilation**:
-1. Parse top-level declarations
-2. Identify reactive variables
-3. Transform to `Signal<T>`
-4. Generate component struct
-5. Generate render function
-
-#### Advanced: JSX-Style (for 20% of cases)
-
-```windjammer
-// todo_list.wj - Complex component
-
-@component
-struct TodoList {
-    todos: Vec<Todo>,
-    filter: Filter,
-}
-
-impl TodoList {
-    @computed
-    fn filtered_todos(&self) -> Vec<&Todo> {
-        self.todos.iter()
-            .filter(|t| self.filter.matches(t))
-            .collect()
-    }
-    
-    fn render(&self) -> View {
-        view! {
-            <div class="todo-list">
-                <FilterBar filter={self.filter} />
-                {#each self.filtered_todos() as todo}
-                    <TodoItem todo={todo} on:delete={self.delete} />
-                {/each}
-            </div>
-        }
-    }
-}
-```
-
-**Features**:
-- ✅ Explicit control (manual struct definition)
-- ✅ Familiar to React developers
-- ✅ Type-safe (macro validates at compile time)
-- ✅ Composable (can use in any expression)
-
-**Use Cases**:
-- Complex state management
-- Multiple lifecycle hooks
-- Props and composition
-- Advanced patterns
-
-### State Management: Hybrid Approach
-
-**User writes**: Simple reactive variables
-```windjammer
-count: int = 0
-```
-
-**Compiler generates**: Signal-based reactivity
-```rust
-struct Counter {
-    count: Signal<i32>,
-}
-```
-
-**Benefits**:
-- ✅ Simple syntax for users
-- ✅ Powerful runtime (fine-grained reactivity)
-- ✅ Automatic dependency tracking
-- ✅ Optimal performance
-
-**Advanced users can use signals directly**:
-```windjammer
-count: Signal<int> = signal(0)  // Explicit signal
-
-fn increment() {
-    count.set(count.get() + 1)  // Manual control
-}
-```
-
----
-
-## Compilation Pipeline
-
-### Standard Windjammer Compilation
+## 3. Today: pipeline
 
 ```
-.wj file
-   ↓
-[Lexer] → Tokens
-   ↓
-[Parser] → AST
-   ↓
-[Type Inference] → Typed AST
-   ↓
-[Optimizer] → Optimized AST
-   ↓
-[Codegen] → Rust code
-   ↓
-rustc → Binary/WASM
+ .wj ──> lexer ──> parser ──> analyzer ──> IR (constraint_gen -> solver) ──> codegen ──> target source ──> cargo (Rust)
+          src/lexer  src/parser  src/analyzer   src/ir                       src/codegen
 ```
 
-### UI Component Compilation (feature = "ui-components")
+- **Entry points:** `wj build/run/test/...` (`src/bin/wj.rs`, `wj_cli_args.rs`, `wj_cli_cmds.rs`) and the older `windjammer`
+  binary (`src/main.rs`, `cli_args.rs`, `cli_commands.rs`, which also has `eject`). Single-file and multipass project
+  builds are in `src/compiler/compilation_pipeline.rs`; Salsa-backed library builds in `src/compiler/salsa_library_build.rs`
+  and `src/compiler_database.rs`.
+- **Lexer/parser:** `src/lexer`, `src/parser`. Keywords include `thread`, `async`, `await`, `defer`, `extern`, `unsafe`,
+  `mod`, `where`; pipe operator `|>`; string interpolation `${...}`. Ternary `?:` is not parsed (removed; use `if` expressions).
+  The grammar is in [windjammer.ebnf](windjammer.ebnf).
+- **Analyzer (`src/analyzer`):** per-function analysis (parameter and `self` usage, mutation, borrow, passthrough),
+  signature registry, trait analysis. Still produces results that codegen consumes and patches.
+- **IR (`src/ir`):** `constraint_gen` walks the AST and emits constraints; `solver` (union-find) produces a `SafetyType` per node;
+  `numeric_solver`, `effects`, `taint`, `coercion`, `target_encodings`, `shadow` (parity check with the analyzer). The IR pipeline
+  (`pipeline.rs`) runs the Effect, Taint and Execution solvers. Details and status: [IR_SOLVER_CODEGEN_ARCHITECTURE.md](IR_SOLVER_CODEGEN_ARCHITECTURE.md).
+- **Backends (`src/codegen`):** `rust/` (about 90 files, production, consumes the IR via `set_ir_module`), `go/` and
+  `javascript/` (compute an IR context and discard it), `wasm.rs` (through the Rust generator), `wgsl/`. A second shader stack
+  (`src/shader`) and the WJSL front end (`src/wjsl`) coexist; consolidation is plan WP 12.
+- **Optimizer (`src/optimizer`):** compiled but disabled in the pipeline (`optimize_program` in `src/compiler_database.rs`). See [ADR-0006](adr/0006-optimizer-fate.md).
+- **Diagnostics:** parser/lint/IR errors in `.wj` terms; Rust type/borrow errors are produced by cargo and mapped back by
+  `src/error_mapper.rs` with `src/source_map.rs`. Catalogue: `src/error_catalog.rs`, [errors/](errors/errors.md).
+- **Modules and packages:** `src/module_system`, `wj.toml` handling in `src/config.rs`, `src/cargo_toml`, `src/package` (stub). See [MODULE_SYSTEM.md](MODULE_SYSTEM.md).
+- **Tooling:** `src/linter`, `src/interpreter` (REPL), `src/ide_analysis` plus `crates/windjammer-lsp`, `crates/windjammer-mcp`, `src/agent_index`.
+- **Standard library:** `std/*.wj` over `crates/windjammer-runtime` ([STDLIB_ARCHITECTURE.md](STDLIB_ARCHITECTURE.md), [ADR-0008](adr/0008-stdlib-portability.md)).
 
-```
-.wj component file
-   ↓
-[Component Parser] → Parse state, computed, functions, view
-   ↓
-[Dependency Analyzer] → Track reactive dependencies
-   ↓
-[Signal Transformer] → Transform reactive vars → Signal<T>
-   ↓
-[Template Compiler] → Compile view { } → DOM operations
-   ↓
-[Component Codegen] → Generate component struct + impl
-   ↓
-[Standard Pipeline] → Rust code → Binary/WASM
-```
+## 4. Module documents
 
----
+Each top-level module is meant to carry a `MODULE.md` (purpose, inputs/outputs, invariants, owns/never-decides, allowed imports,
+entry points, how to test) next to its code. They are added by the module-documentation work package; where one exists it is
+authoritative for that module:
 
-## Module Organization
+| Module | Document |
+|--------|----------|
+| Lexer | `src/lexer/MODULE.md` |
+| Parser | `src/parser/MODULE.md` |
+| Analyzer | `src/analyzer/MODULE.md` |
+| IR / solvers | `src/ir/MODULE.md` |
+| Backends | `src/codegen/MODULE.md` |
+| Compiler driver | `src/compiler/MODULE.md` |
+| Type inference | `src/type_inference/MODULE.md` |
+| Module system / packages | `src/module_system/MODULE.md`, `src/package/MODULE.md` |
 
-### Main Compiler (`src/`)
+Links in this table may be missing on branches where that work has not merged yet.
 
-```
-src/
-├── main.rs              # Entry point, CLI
-├── parser.rs            # Core parser
-├── lexer.rs             # Lexer
-├── analyzer.rs          # Type inference
-├── codegen/             # Code generation
-│   ├── mod.rs
-│   ├── rust.rs          # Rust backend
-│   ├── javascript.rs    # JavaScript backend
-│   └── wasm.rs          # WASM backend
-│
-└── component/           # UI component compilation (optional)
-    ├── mod.rs           # Public API
-    ├── ast.rs           # Component AST
-    ├── parser.rs        # Parse .wj components
-    ├── analyzer.rs      # Dependency analysis
-    ├── transformer.rs   # Reactive var → Signal
-    ├── template.rs      # Template compilation
-    └── codegen.rs       # Component code generation
-```
+## 5. Key design decisions (all in `docs/adr/`, all Proposed)
 
-### UI Runtime (`crates/windjammer-ui/src/`)
+| Topic | ADR |
+|-------|-----|
+| Single ownership truth; end state of `src/analyzer` | [0001](adr/0001-ownership-truth.md) |
+| Local mutability inferred vs explicit | [0002](adr/0002-local-mutability.md) |
+| `owned` keyword | [0003](adr/0003-owned-keyword.md) |
+| Concurrency surface | [0004](adr/0004-concurrency-surface.md) |
+| Error strategy | [0005](adr/0005-error-strategy.md) |
+| Optimizer | [0006](adr/0006-optimizer-fate.md) |
+| Target tiers and conformance | [0007](adr/0007-target-tiers-conformance.md) |
+| Stdlib portability | [0008](adr/0008-stdlib-portability.md) |
+| Security enforcement | [0009](adr/0009-security-enforcement.md) |
+| Packages | [0010](adr/0010-package-source-of-truth.md) |
+| Releases | [0011](adr/0011-release-version-policy.md) |
+| Rust interop | [0012](adr/0012-rust-interop-boundary.md) |
+| Bug triage | [0013](adr/0013-bug-triage-tracker.md) |
 
-```
-crates/windjammer-ui/src/
-├── lib.rs               # Public API
-├── reactivity.rs        # Signal, Computed, Effect
-├── vdom.rs              # Virtual DOM
-├── component.rs         # Component trait
-├── platform/            # Platform abstraction
-│   ├── web.rs           # Web (WASM)
-│   ├── desktop.rs       # Desktop (Tauri)
-│   └── mobile.rs        # Mobile
-└── renderer.rs          # Rendering
-```
-
----
-
-## Design Decisions
-
-### 1. Feature-Gated Component Compilation
-
-**Decision**: UI component compilation is behind `ui-components` feature flag
-
-**Rationale**:
-- Not all users need UI features
-- Keeps default build small
-- Clean separation of concerns
-- Optional dependency on runtime
-
-**Trade-offs**:
-- ✅ Smaller default binary
-- ✅ Faster compilation (when not needed)
-- ⚠️ Users must enable feature explicitly
-
-### 2. Minimal Syntax as Primary
-
-**Decision**: Simple syntax without boilerplate is the primary way to write components
-
-**Rationale**:
-- Matches "20% complexity" mission
-- Lowers barrier to entry
-- Reduces cognitive load
-- Most components are simple
-
-**Trade-offs**:
-- ✅ Simplest possible for common cases
-- ✅ Less code to write
-- ⚠️ Less explicit (more "magic")
-- ⚠️ Less familiar to Rust developers
-
-### 3. JSX as Escape Hatch
-
-**Decision**: Provide JSX-style syntax for complex components
-
-**Rationale**:
-- Familiar to React developers
-- Provides full control when needed
-- Progressive disclosure of complexity
-- Handles edge cases
-
-**Trade-offs**:
-- ✅ Powerful for complex cases
-- ✅ Familiar syntax
-- ⚠️ Requires proc macro
-- ⚠️ More verbose
-
-### 4. Signal-Based Reactivity
-
-**Decision**: Use fine-grained signals for reactivity, not Virtual DOM diffing
-
-**Rationale**:
-- Better performance (no full tree diff)
-- Simpler mental model (direct updates)
-- Proven pattern (Solid.js, Vue 3, Leptos)
-- Composable primitives
-
-**Trade-offs**:
-- ✅ Excellent performance
-- ✅ Fine-grained updates
-- ⚠️ Requires automatic dependency tracking
-- ⚠️ More complex compiler
-
-### 5. Hybrid State Management
-
-**Decision**: Users write simple variables, compiler generates signals
-
-**Rationale**:
-- Best ergonomics (simple syntax)
-- Best performance (signal runtime)
-- Progressive disclosure (can use signals explicitly)
-- Matches mission (80/20)
-
-**Trade-offs**:
-- ✅ Simple for beginners
-- ✅ Powerful for experts
-- ⚠️ Compiler must infer reactivity
-- ⚠️ Two mental models (simple vs. explicit)
-
----
-
-## Future Considerations
-
-### Potential Additions
-
-1. **Server-Side Rendering (SSR)**
-   - Render components to HTML on server
-   - Hydration on client
-   - SEO benefits
-
-2. **Hot Module Replacement (HMR)**
-   - Update components without full reload
-   - Preserve state across updates
-   - Better DX
-
-3. **Component Library**
-   - Standard components (Button, Input, etc.)
-   - Accessible by default
-   - Themeable
-
-4. **DevTools**
-   - Inspect component tree
-   - Track signal updates
-   - Performance profiling
-
-### Potential Changes
-
-1. **Separate Component Compiler Crate**
-   - If component compilation becomes very complex
-   - If other tools need to use it
-   - If we want to version independently
-
-2. **Multiple Syntax Styles**
-   - Support both minimal and JSX simultaneously
-   - Let users choose their preference
-   - Provide migration tools
-
-3. **Alternative Runtimes**
-   - Different reactivity systems
-   - Different rendering strategies
-   - Platform-specific optimizations
-
----
-
-## References
-
-### Inspiration
-
-- **Svelte**: Compiled reactivity, minimal syntax
-- **Solid.js**: Fine-grained signals
-- **React**: JSX, component model
-- **Vue 3**: Hybrid reactivity (Proxy + signals)
-- **Leptos**: Rust + signals + WASM
-
-### Related Documents
-
-- `docs/GUIDE.md` - User guide
-- `docs/COMPARISON.md` - Comparison with other languages
-- `ROADMAP.md` - Future plans
-- `crates/windjammer-ui/README.md` - UI framework documentation
-
----
-
-## Conclusion
-
-This architecture provides:
-- ✅ Clean separation between compiler and runtime
-- ✅ No circular dependencies
-- ✅ Progressive disclosure of complexity
-- ✅ Simple syntax for common cases
-- ✅ Powerful escape hatches for complex cases
-- ✅ Production-quality reactivity system
-- ✅ Matches Windjammer's mission (80% power, 20% complexity)
-
-The feature-gated approach allows us to:
-- Keep the default build small
-- Provide optional UI features
-- Maintain clean architecture
-- Enable future growth
-
-The minimal syntax with JSX escape hatch provides:
-- Simple syntax for beginners
-- Powerful tools for experts
-- Familiar patterns for web developers
-- Pure Windjammer (no HTML/XML in files)
-
----
-
-## Safety-Typed IR and Solver-Driven Codegen
-
-Windjammer is migrating from heuristic ownership codegen to a unified IR constraint solver consumed by all backends.
-
-**Full architecture:** [IR_SOLVER_CODEGEN_ARCHITECTURE.md](IR_SOLVER_CODEGEN_ARCHITECTURE.md)
-
-Key components live in `src/ir/`:
-
-- `constraint_gen` — AST walk emitting type/ownership constraints (including call-site unification)
-- `solver` — unified union-find solver producing `SafetyType` per node
-- `coercion` — target-agnostic `(actual, expected) → CoercionKind`
-- `target_encodings` — per-backend emit (Rust, Go, JS, WASM)
-- `shadow` — IR vs legacy analyzer parity validation (`wj build --ir-shadow-validate`)
-
-Codegen cutover is controlled incrementally via `IrCutoverConfig` in `src/codegen/rust/generator.rs`.
+## 6. Related documents
+- [ARCHITECTURE_IMPROVEMENT_PLAN.md](ARCHITECTURE_IMPROVEMENT_PLAN.md): work packages and fitness tests
+- [known-gaps.md](known-gaps.md): ranked gaps against the docs and RFCs
+- [IR_SOLVER_CODEGEN_ARCHITECTURE.md](IR_SOLVER_CODEGEN_ARCHITECTURE.md), [SALSA_ARCHITECTURE.md](SALSA_ARCHITECTURE.md) (LSP incremental queries)
+- [proposals/rfcs/README.md](proposals/rfcs/README.md): proposals and their implementation status
+- [archive/ARCHITECTURE_2025-ui-components.md](archive/ARCHITECTURE_2025-ui-components.md): the previous version of this file (UI component compiler design, not current)

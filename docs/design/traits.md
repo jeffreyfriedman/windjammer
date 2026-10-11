@@ -1,5 +1,7 @@
 # Windjammer Trait System Design
 
+> **Style note (2026-10-10).** Windjammer examples write `self`, never `&self` / `&mut self`: the compiler infers the receiver mode from the method body (see the "Self parameter inference" section and [language-guide/self-parameter.md](../language-guide/self-parameter.md)). Rust blocks below show the generated output. Code fences labelled `go` are Windjammer syntax highlighted as Go.
+
 ## Philosophy
 
 Windjammer uses **Rust-style traits** with **ergonomic enhancements** to reduce verbosity while maintaining clarity and type safety.
@@ -13,8 +15,8 @@ Windjammer uses **Rust-style traits** with **ergonomic enhancements** to reduce 
 ### Trait Definition
 ```go
 trait Drawable {
-    fn draw(&self)
-    fn area(&self) -> f64
+    fn draw(self)
+    fn area(self) -> f64
 }
 ```
 
@@ -25,11 +27,11 @@ struct Circle {
 }
 
 impl Drawable for Circle {
-    fn draw(&self) {
+    fn draw(self) {
         println!("Drawing circle with radius ${self.radius}")
     }
     
-    fn area(&self) -> f64 {
+    fn area(self) -> f64 {
         3.14159 * self.radius * self.radius
     }
 }
@@ -93,11 +95,11 @@ fn process<T: Clone + Debug + Send>(item: T) {
 ```go
 // Windjammer - clean syntax
 trait Iterator<Item> {
-    fn next(&mut self) -> Option<Item>
+    fn next(self) -> Option<Item>
 }
 
 impl Iterator<int> for Counter {
-    fn next(&mut self) -> Option<int> {
+    fn next(self) -> Option<int> {
         // ...
     }
 }
@@ -105,12 +107,12 @@ impl Iterator<int> for Counter {
 // Transpiles to Rust:
 trait Iterator {
     type Item;
-    fn next(&mut self) -> Option<Self::Item>;
+    fn next(self) -> Option<Self::Item>;
 }
 
 impl Iterator for Counter {
     type Item = i64;
-    fn next(&mut self) -> Option<Self::Item> { ... }
+    fn next(self) -> Option<Self::Item> { ... }
 }
 ```
 

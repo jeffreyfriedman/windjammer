@@ -11,18 +11,9 @@ use crate::CompilationTarget;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::compiler_config::CompilerConfig;
 
 use toml_generation::{infer_project_name, write_cargo_toml};
-
-/// When true, `generate_single_file_cargo_toml` is a no-op.
-/// Set via `--no-generate-cargo-toml` CLI flag for projects that maintain
-/// their own Cargo.toml.
-static SKIP_CARGO_TOML_GENERATION: AtomicBool = AtomicBool::new(false);
-
-pub fn set_skip_cargo_toml_generation(skip: bool) {
-    SKIP_CARGO_TOML_GENERATION.store(skip, Ordering::Relaxed);
-}
 
 /// File type for Cargo target generation
 #[derive(Debug, PartialEq)]
@@ -57,10 +48,25 @@ pub fn generate_single_file_cargo_toml(
     source_dir: &Path,
     target: CompilationTarget,
 ) -> Result<()> {
+    generate_single_file_cargo_toml_with_config(
+        output_dir,
+        source_dir,
+        target,
+        &CompilerConfig::default(),
+    )
+}
+
+/// Generate Cargo.toml honoring `config` (`skip_cargo_toml_generation`, `runtime_path`).
+pub fn generate_single_file_cargo_toml_with_config(
+    output_dir: &Path,
+    source_dir: &Path,
+    target: CompilationTarget,
+    config: &CompilerConfig,
+) -> Result<()> {
     if target != CompilationTarget::Rust {
         return Ok(());
     }
-    if SKIP_CARGO_TOML_GENERATION.load(Ordering::Relaxed) {
+    if config.skip_cargo_toml_generation {
         return Ok(());
     }
 
@@ -140,7 +146,7 @@ pub fn generate_single_file_cargo_toml(
                                 target_name.replace('-', "_"),
                                 filename
                             );
-                            return write_cargo_toml(output_dir, source_dir, &lib_section);
+                            return write_cargo_toml(output_dir, source_dir, &lib_section, config);
                         }
                     }
                 }
@@ -156,15 +162,17 @@ pub fn generate_single_file_cargo_toml(
         return Ok(());
     }
 
-    write_cargo_toml(output_dir, source_dir, &lib_or_bin_section)
+    write_cargo_toml(output_dir, source_dir, &lib_or_bin_section, config)
 }
 
 pub(crate) use toml_generation::find_wj_config;
-pub use toml_generation::generate_wasm_cargo_toml;
+pub use toml_generation::{generate_wasm_cargo_toml, generate_wasm_cargo_toml_with_config};
 pub use toml_generation::infer_configured_package_name;
 pub use toml_generation::infer_project_name_from;
 
-pub(crate) use dependency_management::{find_windjammer_runtime_path, path_to_toml_string};
+pub(crate) use dependency_management::{
+    find_windjammer_runtime_path, find_windjammer_runtime_path_with, path_to_toml_string,
+};
 
 #[cfg(test)]
 mod tests {

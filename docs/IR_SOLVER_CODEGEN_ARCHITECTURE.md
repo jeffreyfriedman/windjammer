@@ -1,6 +1,6 @@
 # IR and Solver-Driven Codegen Architecture
 
-**Status:** Active migration (2026-07). Replaces heuristic ownership/borrow codegen with a unified constraint solver consumed by all backends.
+**Status:** Active migration (2026-07), corrected 2026-10-10. Replaces heuristic ownership/borrow codegen with a unified constraint solver. **Today only the Rust backend consumes the solver**; Go and JavaScript compute an IR context and discard it (see "Backend Consumption"). The end state and its owner are [ADR-0001](adr/0001-ownership-truth.md) and [ADR-0007](adr/0007-target-tiers-conformance.md).
 
 ## Problem Statement
 
@@ -21,7 +21,7 @@ This causes ping-pong fixes (dogfood E0308s, engine multipass regressions) and d
 (actual SafetyType, expected SafetyType) → CoercionKind → target-specific emit
 ```
 
-No method-name lists. No backend-specific ownership guessing. The IR constraint solver is the single source of truth; backends consume resolved `SafetyType` values via `target_encodings`.
+No method-name lists. No backend-specific ownership guessing. The IR constraint solver is intended to be the single source of truth; backends consume resolved `SafetyType` values via `target_encodings`. **Caveat (verified 2026-10-10):** this is only partly true today. The legacy analyzer (`src/analyzer`) still runs first and the Rust code generator still applies post-IR reconciliation (`reconcile_post_ir_*`, demotion passes in `src/compiler`), so ownership is not yet decided in exactly one place. Call-site coercion for the Rust backend is the part that is solver-owned.
 
 ## Pipeline Overview
 
@@ -97,13 +97,13 @@ Target-agnostic coercion decision:
 | Backend | IR integration | Coercion path |
 |---------|----------------|---------------|
 | **Rust** | Full (production) | `encode_call_argument(..., Target::Rust)` |
-| **Go** | Analyzer + IrPipeline | Go mutex/ref wrappers per encoding |
-| **JavaScript** | Analyzer + IrPipeline | Pass-through + Readonly hints in `.d.ts` |
+| **Go** | Not consumed: `prepare_ir_context` result is bound to `_ir` and dropped (`src/codegen/go/generator/mod.rs`) | Go translation without IR ownership |
+| **JavaScript** | Not consumed: `let _ir = ...prepare_ir_context(...)` is dropped (`src/codegen/javascript/mod.rs`) | Pass-through; no IR-driven coercion |
 | **WASM** | Via Rust CodeGenerator | Linear memory pointer semantics |
 | **WGSL** | Out of scope | GPU types only, no ownership |
 | **Interpreter** | N/A (runtime refs) | Must pass cross-backend conformance |
 
-Go and JavaScript backends run the same Analyzer + IrPipeline as Rust (parallel migration requirement).
+Go and JavaScript run the analysis (`analyze_and_lower`) but do not use its output; `encode_go_call_argument` and the JS equivalent have no callers outside tests. Wiring them is the Phase 3 work below.
 
 ## Incremental Cutover
 
@@ -151,7 +151,7 @@ For every coercion rule or constraint change:
 | 0 | Shadow validation wired, cutover flags extended, integration tests |
 | 1 | Expression IR, call-site constraints, solver write-back, analyzer on all backends |
 | 2 | Shared `coercion.rs` + `target_encodings` emit |
-| 3 | Parallel backend cutover (Rust, Go, JS, WASM) |
+| 3 | Parallel backend cutover (Rust, Go, JS, WASM). **Status: Rust only.** Go/JS discard the IR; WASM goes through the Rust generator. |
 | 4 | Multipass IR merge, dogfood + sample-game dogfooding |
 | 5 | Delete legacy heuristics (`call_site_borrow`, `correct_legacy_output`) — **in progress** |
 
@@ -191,7 +191,7 @@ For every coercion rule or constraint change:
 ## Related Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — compiler crate structure
-- [design/auto-reference.md](design/auto-reference.md) — historical auto-borrow design (being superseded)
+- [archive/design/auto-reference.md](archive/design/auto-reference.md) — historical auto-borrow design (archived, superseded by this document)
 - [design/multi-target-codegen.md](design/multi-target-codegen.md) — multi-target vision
 - [proposals/rfcs/WJ-SEC-01-effect-capabilities.md](proposals/rfcs/WJ-SEC-01-effect-capabilities.md) — effect system
 - [proposals/rfcs/WJ-SEC-02-taint-tracking.md](proposals/rfcs/WJ-SEC-02-taint-tracking.md) — taint tracking

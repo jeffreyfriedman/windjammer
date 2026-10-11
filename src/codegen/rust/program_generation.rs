@@ -1321,7 +1321,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         }
         drop(boundary_errors);
 
-        if std::env::var("WJ_EMIT_AOSOA_HINTS").ok().as_deref() == Some("1") {
+        if self.config.emit_aosoa_hints {
             let hints = crate::codegen::rust::aosoa_transform::emit_aosoa_hints(program, analyzed);
             if !hints.is_empty() {
                 output
@@ -1330,12 +1330,13 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
             }
         }
 
-        if let Ok(report_path) = std::env::var("WJ_CACHE_LOCALITY_JSON") {
+        if let Some(report_path) = self.config.cache_locality_json.as_ref() {
             let json = crate::analyzer::cache_locality_json_report(analyzed);
-            if let Err(e) = std::fs::write(&report_path, json) {
+            if let Err(e) = std::fs::write(report_path, json) {
                 eprintln!(
-                    "windjammer: WJ_CACHE_LOCALITY_JSON failed to write {}: {}",
-                    report_path, e
+                    "windjammer: cache locality report failed to write {}: {}",
+                    report_path.display(),
+                    e
                 );
             }
         }

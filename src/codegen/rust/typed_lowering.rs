@@ -11,6 +11,7 @@
 //! The core invariant: **one call to `compute_arg_coercion` per argument, one coercion
 //! applied**. No sequential phases that add-then-strip-then-re-add.
 
+use crate::compiler_config::CompilerConfig;
 use crate::analyzer::{FunctionSignature, OwnershipMode};
 use crate::codegen::rust::call_signature_resolution::effective_param_ownership;
 use crate::codegen::rust::string_utilities;
@@ -128,13 +129,6 @@ pub struct ArgContext<'a> {
     pub method_name: &'a str,
 }
 
-/// Whether to use the shared IR coercion engine inside `compute_arg_coercion`.
-pub fn use_ir_coercion_engine() -> bool {
-    std::env::var("WJ_IR_COERCION_ENGINE")
-        .map(|v| v == "1")
-        .unwrap_or(false)
-}
-
 fn coercion_kind_to_arg(kind: CoercionKind) -> ArgCoercion {
     match kind {
         CoercionKind::Identity => ArgCoercion::PassThrough,
@@ -190,8 +184,8 @@ pub fn compute_arg_coercion_ir(ctx: &ArgContext) -> ArgCoercion {
 /// 1. What the generated Rust formal parameter expects (type + ownership)
 /// 2. What the argument expression provides
 /// 3. Copy semantics
-pub fn compute_arg_coercion(ctx: &ArgContext) -> ArgCoercion {
-    if use_ir_coercion_engine() {
+pub fn compute_arg_coercion(ctx: &ArgContext, config: &CompilerConfig) -> ArgCoercion {
+    if config.ir_coercion_engine {
         return compute_arg_coercion_ir(ctx);
     }
 
@@ -407,7 +401,7 @@ mod tests {
             is_collection_key: false,
             method_name: "is_registered",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::BorrowString,
@@ -445,7 +439,7 @@ mod tests {
             is_collection_key: false,
             method_name: "upload",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::StripRef,
@@ -477,7 +471,7 @@ mod tests {
             is_collection_key: false,
             method_name: "set_name",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::ToOwnedString,
@@ -509,7 +503,7 @@ mod tests {
             is_collection_key: false,
             method_name: "render_voxels",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::PassThrough,
@@ -544,7 +538,7 @@ mod tests {
             is_collection_key: false,
             method_name: "contains",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::PassThrough,
@@ -579,7 +573,7 @@ mod tests {
             is_collection_key: true,
             method_name: "get",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::BorrowString,
@@ -611,7 +605,7 @@ mod tests {
             is_collection_key: false,
             method_name: "push",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(coercion, ArgCoercion::PassThrough);
     }
 
@@ -646,7 +640,7 @@ mod tests {
             is_collection_key: false,
             method_name: "check_collisions",
         };
-        let coercion = compute_arg_coercion(&ctx);
+        let coercion = compute_arg_coercion(&ctx, &CompilerConfig::default());
         assert_eq!(
             coercion,
             ArgCoercion::Borrow,

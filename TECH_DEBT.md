@@ -1,98 +1,29 @@
-# Technical Debt Tracker
+# Technical debt
 
-This document tracks known technical debt in the Windjammer compiler that needs to be addressed.
+The architecture-level debt, its ranking and the work packages that retire it live in:
 
-## Active Tech Debt
+- [docs/ARCHITECTURE_IMPROVEMENT_PLAN.md](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md) (what to change, in order)
+- [docs/known-gaps.md](docs/known-gaps.md) (what is missing relative to the docs and RFCs)
+- [docs/adr/README.md](docs/adr/README.md) (decisions blocking some of the work)
 
-### 1. UI Integration Tests (Priority: Medium)
-**Status**: Quick-fixed with `is_extern: false`  
-**TODO ID**: `fix-ui-integration-tests`, `remove-component-decorator`
+Individual compiler bugs are not tracked here; see [ADR-0013](docs/adr/0013-bug-triage-tracker.md).
 
-**Problem**:
-- `tests/ui_integration_tests.rs` contains outdated tests for `@component` decorator
-- Quick-fixed by adding `is_extern: false` to all `FunctionDecl` structs
-- Tests still fail compilation (26 errors remaining)
+## Current debt (measured 2026-10-10; numbers are ratchets and may only fall)
 
-**Root Cause**:
-- `@component` decorator is being removed from the compiler (v0.40+)
-- Tests were written for old UI system that's being replaced
-- `FunctionDecl` struct evolved but tests weren't updated
+| Item | Evidence | Retired by |
+|------|----------|------------|
+| Ownership decided in at least five places, clones in at least three | plan section 1 | WP 9, ADR-0001 |
+| Layers import each other (analyzer, ir, codegen, type_inference) | plan section 1 | WP 4, Q1 |
+| Registries keyed by bare strings (`get_signature(&str)` about 469 call sites) | plan section 1 | WP 6, 7 |
+| Hidden state: 7 `thread_local!`, process-global registries, behaviour-changing env toggles | `grep thread_local! src` | WP 1, 3 |
+| Crate-wide `#![allow(dead_code)]` | `src/lib.rs:8` | WP 5 |
+| Optimizer module disabled | `src/compiler_database.rs` (`optimize_program`) | ADR-0006 |
+| Two shader stacks beside `src/wjsl` (`src/shader`, `src/codegen/wgsl`) | directory listing | WP 5, 12 |
+| Go/JS backends compute the IR and discard it | `let _ir = ...` in `codegen/go/generator/mod.rs`, `codegen/javascript/mod.rs` | WP 11, ADR-0007 |
+| `src/package/` is a stub resolver and registry client | file headers | ADR-0010 |
+| `wj fmt` and `wj check` wrap cargo instead of operating on `.wj` | `src/cli/fmt.rs`, `src/cli/check.rs` | known-gaps 3 |
+| Parser has AST nodes for `async expr`/`spawn expr` that nothing constructs | `grep AsyncCall src/parser` | ADR-0004 |
 
-**Proper Fix**:
-1. Remove `@component` decorator support from compiler
-2. Remove `tests/ui_integration_tests.rs` entirely
-3. Remove `src/ui/` directory
-4. Remove `Signal` type mapping from `types.rs`
-5. Remove `windjammer-ui` from WASM Cargo.toml generation
-6. Implement new template-based decorator system (v0.40+)
-
-**Impact**:
-- Low: Tests are for deprecated features
-- Library compiles fine, only test compilation fails
-- Pattern matching tests (20/20) pass successfully
-
-**Timeline**: Address in v0.40 cleanup phase
-
----
-
-## Resolved Tech Debt
-
-### Pattern Matching Implementation ✅
-**Resolved**: November 29, 2025
-
-- Implemented tuple enum variants
-- Added refutable pattern detection
-- Created comprehensive test suite (20/20 passing)
-- No workarounds, proper implementation
-
----
-
-## Guidelines
-
-**When Adding Tech Debt**:
-1. Document the problem clearly
-2. Explain why the quick fix was chosen
-3. Describe the proper long-term solution
-4. Assign a priority and timeline
-5. Link to related TODO items
-
-**Priorities**:
-- **Critical**: Blocks development or causes bugs
-- **High**: Affects code quality or maintainability significantly
-- **Medium**: Should be fixed but not urgent
-- **Low**: Nice to have, can wait
-
-**Our Commitment**:
-> "No workarounds, no tech debt, only proper fixes" - unless explicitly documented here with a plan to address it.
-
----
-
-Last Updated: November 29, 2025
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+## Rule
+Debt that is knowingly left in place needs a row above with evidence and a retiring work package or ADR. Resolved items are
+deleted from the table, not struck through; history is in `git log` and [CHANGELOG.md](CHANGELOG.md).

@@ -1,9 +1,10 @@
 //! Salsa-backed library build entry point (default for `wj build --library`).
 //!
 //! Uses the incremental framework + optimized multipass pipeline.
-//! Set `WJ_LEGACY_MULTIPASS=1` to force the pre-Salsa path during transition.
+//! `CompilerConfig::legacy_multipass` forces the pre-Salsa path during transition.
 
 use crate::compiler::library_multipass::build_library_multipass;
+use crate::compiler_config::CompilerConfig;
 use crate::compiler_database::CompilerDatabase;
 use crate::metadata::CrateMetadata;
 use crate::CompilationTarget;
@@ -26,6 +27,7 @@ pub fn build_library_salsa(
     enable_lint: bool,
     external_paths: &HashMap<String, PathBuf>,
     crate_metadata: CrateMetadata,
+    config: &CompilerConfig,
 ) -> Result<()> {
     let _db = CompilerDatabase::new();
     build_library_multipass(
@@ -37,6 +39,7 @@ pub fn build_library_salsa(
         enable_lint,
         external_paths,
         crate_metadata,
+        config,
     )
 }
 
@@ -51,8 +54,9 @@ pub fn build_library(
     enable_lint: bool,
     external_paths: &HashMap<String, PathBuf>,
     crate_metadata: CrateMetadata,
+    config: &CompilerConfig,
 ) -> Result<()> {
-    if std::env::var("WJ_LEGACY_MULTIPASS").is_ok_and(|v| v == "1" || v == "true") {
+    if config.legacy_multipass {
         eprintln!("Using legacy multipass build (WJ_LEGACY_MULTIPASS=1)");
         build_library_multipass(
             wj_files,
@@ -63,6 +67,7 @@ pub fn build_library(
             enable_lint,
             external_paths,
             crate_metadata,
+            config,
         )
     } else {
         build_library_salsa(
@@ -74,6 +79,7 @@ pub fn build_library(
             enable_lint,
             external_paths,
             crate_metadata,
+            config,
         )
     }
 }
