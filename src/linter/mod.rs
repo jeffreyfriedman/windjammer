@@ -7,6 +7,7 @@
 //!
 //! This follows the Rust/Clippy model: code compiles, but warnings guide toward better patterns.
 
+pub mod codes;
 pub mod rust_leakage;
 pub mod surface_syntax;
 

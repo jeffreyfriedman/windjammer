@@ -57,6 +57,12 @@ required-features = ["cli"]
 name = "wj-lint"
 path = "src/bin/wj-lint.rs"
 
+# Documentation generator/verifier (docs/CONTRIBUTING-docs.md); sources in tools/docs_truth/.
+[[bin]]
+name = "wj-docs"
+path = "src/bin/wj-docs.rs"
+required-features = ["cli"]
+
 [[bin]]
 name = "windjammer"
 path = "src/main.rs"
@@ -127,6 +133,12 @@ path = "tests/all.rs"
 [[test]]
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
+
+# Docs truth also runs standalone: cargo test --release --test docs_truth
+[[test]]
+name = "docs_truth"
+path = "tests/docs_truth_test.rs"
+required-features = ["cli"]
 
 [[bench]]
 name = "string_optimization_bench"

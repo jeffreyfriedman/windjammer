@@ -1,4 +1,5 @@
 mod identifier_lexing;
+pub mod keywords;
 mod number_lexing;
 mod string_lexing;
 mod token_types;
