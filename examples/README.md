@@ -16,8 +16,6 @@ An example that fits no mode is deleted. The verified idiom corpus is [verified/
 
 ## Running
 
-Run from outside the compiler checkout (see [known issue](../docs/known-issues/wj-test-inside-compiler-checkout.md)).
-
 <!-- ignore: command shapes: `wj run FILE` compiles with cargo; the interpreter runs of these examples are the examples gate -->
 ```bash,ignore
 wj run examples/hello_world/main.wj      # adjust to the file in that directory
