@@ -1,0 +1,32 @@
+// From regression/bug_nested_field_access_test.rs — nested fields through borrowed Vec iteration (stack.item.id style).
+
+struct Item {
+    id: int,
+}
+
+struct Stack {
+    item: Item,
+    quantity: int,
+}
+
+fn sum_nested_ids(stacks: Vec<Stack>) -> int {
+    let mut acc = 0
+    for s in &stacks {
+        acc = acc + s.item.id
+    }
+    acc
+}
+
+pub fn test_fold_nested_ids_over_borrowed_stacks() {
+    let stacks = vec![
+        Stack {
+            item: Item { id: 10 },
+            quantity: 1,
+        },
+        Stack {
+            item: Item { id: 32 },
+            quantity: 2,
+        },
+    ]
+    assert_eq(sum_nested_ids(stacks), 42)
+}

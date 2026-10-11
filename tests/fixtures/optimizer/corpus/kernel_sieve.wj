@@ -1,0 +1,34 @@
+fn sieve(n: usize) -> Vec<bool> {
+    let mut flags = Vec::new()
+    for i in 0..n + 1 {
+        flags.push(true)
+    }
+    flags[0] = false
+    flags[1] = false
+    let mut i = 2
+    while i * i <= n {
+        if flags[i] {
+            let mut j = i * i
+            while j <= n {
+                flags[j] = false
+                j += i
+            }
+        }
+        i += 1
+    }
+    flags
+}
+
+fn main() {
+    let n = 20000000
+    let flags = sieve(n)
+    let mut count = 0
+    let mut sum: u64 = 0
+    for i in 0..n + 1 {
+        if flags[i] {
+            count += 1
+            sum = sum + i as u64
+        }
+    }
+    println!("{} {}", count, sum)
+}

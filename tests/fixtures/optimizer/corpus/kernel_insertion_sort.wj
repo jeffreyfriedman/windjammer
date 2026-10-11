@@ -1,0 +1,31 @@
+fn sort(v: Vec<u64>) -> Vec<u64> {
+    let mut a = v
+    let n = a.len()
+    for i in 1..n {
+        let key = a[i]
+        let mut j = i
+        while j > 0 && a[j - 1] > key {
+            a[j] = a[j - 1]
+            j -= 1
+        }
+        a[j] = key
+    }
+    a
+}
+
+fn main() {
+    let mut v = Vec::new()
+    let mut x: u64 = 88172645463325252
+    for i in 0..20000 {
+        x = x ^ (x << 13)
+        x = x ^ (x >> 7)
+        x = x ^ (x << 17)
+        v.push(x % 100000)
+    }
+    let s = sort(v)
+    let mut h: u64 = 0
+    for i in 0..s.len() {
+        h = h + s[i] * (i as u64 + 1)
+    }
+    println!("{}", h)
+}

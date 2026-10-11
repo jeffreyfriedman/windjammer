@@ -35,6 +35,7 @@ pub mod lexer;
 pub mod linter;
 pub mod metadata;
 pub mod module_system;
+pub mod optimizer;
 pub mod package;
 pub mod parser;
 pub mod parser_impl;
