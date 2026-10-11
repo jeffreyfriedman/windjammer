@@ -47,9 +47,18 @@ impl<'m> Js<'m> {
             }
             PStmt::If { cond, then, els } => {
                 let c = self.expr(cond)?;
-                self.block(&format!("if ({c})"), then)?;
-                if !els.is_empty() {
-                    self.line_else(els)?;
+                self.line(&format!("if ({c}) {{"));
+                self.ind += 1;
+                self.stmts(then)?;
+                self.ind -= 1;
+                if els.is_empty() {
+                    self.line("}");
+                } else {
+                    self.line("} else {");
+                    self.ind += 1;
+                    self.stmts(els)?;
+                    self.ind -= 1;
+                    self.line("}");
                 }
             }
             PStmt::While { cond, body } => {
@@ -70,15 +79,6 @@ impl<'m> Js<'m> {
             }
             PStmt::Defer(_) => return self.unsupported("defer"),
         }
-        Ok(())
-    }
-
-    fn line_else(&mut self, els: &[PStmt]) -> PResult<()> {
-        self.line("else {");
-        self.ind += 1;
-        self.stmts(els)?;
-        self.ind -= 1;
-        self.line("}");
         Ok(())
     }
 
