@@ -6,7 +6,7 @@ use super::config::Config;
 use super::{md, util, Ctx, Finding};
 use std::process::Command;
 
-pub const STATUSES: &[&str] = &["draft", "proposed", "accepted", "superseded", "rejected", "current", "stale", "archived"];
+pub const STATUSES: &[&str] = &["draft", "proposed", "proposal", "accepted", "superseded", "rejected", "current", "stale", "archived"];
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Meta {
@@ -72,7 +72,8 @@ fn referenced_paths(ctx: &Ctx, text: &str) -> Vec<String> {
 
 pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str) -> Vec<Finding> {
     let Some(m) = front_matter(text) else {
-        return vec![Finding::warn("freshness", file, 1, "no front matter (status, last_verified); run `wj-docs stamp`")];
+        let msg = "no front matter (status, last_verified); run `wj-docs stamp`";
+        return vec![if cfg.freshness.require { Finding::fail("freshness", file, 1, msg) } else { Finding::warn("freshness", file, 1, msg) }];
     };
     let mut out = Vec::new();
     match &m.status {
@@ -80,8 +81,18 @@ pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str) -> Vec<Finding
         Some(s) if !STATUSES.contains(&s.to_lowercase().as_str()) => out.push(Finding::fail("freshness", file, 1, format!("unknown status `{s}` (one of {STATUSES:?})"))),
         _ => {}
     }
+    // An ADR states its status twice (front matter, and the `- **Status:**` bullet the index reads): they must agree.
+    if file.starts_with("docs/adr/") {
+        let body = text.lines().find_map(|l| l.strip_prefix("- **Status:**")).map(|s| s.trim().split(|c: char| !c.is_alphabetic()).next().unwrap_or("").to_lowercase());
+        if let (Some(b), Some(fm)) = (body, &m.status) {
+            if !b.is_empty() && &b != &fm.to_lowercase() {
+                out.push(Finding::fail("freshness", file, 1, format!("front matter status `{fm}` disagrees with the `- **Status:** {b}` line")));
+            }
+        }
+    }
     let Some(sha) = &m.last_verified else {
-        out.push(Finding::warn("freshness", file, 1, "front matter lacks `last_verified`"));
+        let msg = "front matter lacks `last_verified`; run `wj-docs stamp`";
+        out.push(if cfg.freshness.require { Finding::fail("freshness", file, 1, msg) } else { Finding::warn("freshness", file, 1, msg) });
         return out;
     };
     if git(ctx, &["cat-file", "-e", &format!("{sha}^{{commit}}")]).is_none() {

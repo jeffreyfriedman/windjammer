@@ -1,11 +1,11 @@
 //! Registry of generated files and region generators; the only place that maps names to code.
 
-use super::{gen_cli, gen_errors, gen_lang, gen_meta, gen_stdlib, gen_targets, util, Ctx, Finding};
+use super::{gen_cli, gen_errors, gen_interp, gen_lang, gen_meta, gen_stdlib, gen_targets, util, Ctx, Finding};
 use std::collections::BTreeMap;
 
 pub const HEADER_MARK: &str = "GENERATED FILE - DO NOT EDIT";
 
-/// (path, generator name). Every file under `docs/reference/` must appear here.
+/// (path, generator name). Every file under `docs/reference/` (and any GENERATED-header file) must appear here.
 pub const FILES: &[(&str, &str)] = &[
     ("docs/reference/cli.md", "cli"),
     ("docs/reference/keywords.md", "keywords"),
@@ -14,6 +14,8 @@ pub const FILES: &[(&str, &str)] = &[
     ("docs/reference/targets.md", "targets"),
     ("docs/reference/stdlib.md", "stdlib"),
     ("docs/generated/metrics.json", "metrics"),
+    // Output of `wj docs -f markdown` (the error catalog); determinism is a test in src/error_catalog.rs.
+    ("docs/errors/errors.md", "error_catalog"),
 ];
 
 fn header(name: &str) -> String {
@@ -27,6 +29,7 @@ pub fn body(ctx: &Ctx, name: &str) -> Result<String, String> {
         "keywords" => gen_lang::keywords(),
         "intrinsics" => gen_lang::intrinsics(),
         "errors" => gen_errors::errors(),
+        "error_catalog" => windjammer::error_catalog::ErrorCatalog::new().generate_markdown(),
         "targets" => gen_targets::targets(ctx),
         "stdlib" => gen_stdlib::stdlib(ctx),
         "metrics" => gen_meta::metrics_json(ctx),
@@ -44,6 +47,9 @@ pub fn region(ctx: &Ctx, name: &str, args: &BTreeMap<String, String>) -> Result<
     match name {
         "cli_commands" => Ok(gen_cli::command_table(&ctx.cli)),
         "adr_index" => Ok(gen_meta::adr_index(ctx)),
+        "vscode_package" => Ok(gen_meta::vscode_package(ctx)),
+        "interpreter_supported" => Ok(gen_interp::supported()),
+        "interpreter_unsupported" => Ok(gen_interp::unsupported()),
         "lint_range" => Ok(gen_errors::lint_range()),
         "metric" => gen_meta::metric(ctx, args.get("key").ok_or("metric needs key=")?),
         other if FILES.iter().any(|(_, g)| *g == other) && other != "metrics" => body(ctx, other),

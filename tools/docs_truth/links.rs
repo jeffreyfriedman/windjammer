@@ -45,10 +45,17 @@ fn clean_path(span: &str) -> Option<String> {
     (s.ends_with('/') || last.contains('.')).then(|| s.to_string())
 }
 
+/// Sections under a heading containing one of these words describe what does not exist yet (or what is missing),
+/// so the commands they name are not checked against the CLI.
+const FUTURE_HEADINGS: &[&str] = &["planned", "not implemented", "future", "roadmap", "gaps", "unsupported", "not started", "open question"];
+
+/// A line that says a command is missing may name it: status documents list what does not exist yet.
+const NEGATIONS: &[&str] = &["does not exist", "do not exist", "no longer", "removed", "not a ", "no such", "not started", "unstarted", "not implemented", "does not ship", "never existed"];
+
 fn check_wj_command(cli: &Command, text: &str) -> Vec<String> {
     let mut errs = Vec::new();
     let low = text.to_lowercase();
-    if low.contains("does not exist") || low.contains("no longer") || low.contains("removed") || low.contains("not a ") {
+    if NEGATIONS.iter().any(|n| low.contains(n)) {
         return errs;
     }
     let toks: Vec<&str> = text.split_whitespace().collect();
@@ -107,9 +114,16 @@ fn rule_ids(ctx: &Ctx, cfg: &Config, files: &[String]) -> Vec<(String, BTreeSet<
 
 pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str, known: &BTreeSet<String>, adrs: &BTreeSet<String>, rules: &[(String, BTreeSet<String>)], all: &BTreeSet<String>) -> Vec<Finding> {
     let mut out = Vec::new();
+    // `status: proposal` documents name commands, flags and codes that do not exist yet.
+    let future = super::proposal::is_proposal(text);
     let dir = Path::new(file).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
     let mut fail = |line: usize, msg: String| out.push(Finding::fail("links", file, line, msg));
+    let mut future_section = false;
     for (ln, line) in md::prose_lines(text) {
+        if let Some(h) = line.strip_prefix('#') {
+            let h = h.trim_start_matches('#').trim().to_lowercase();
+            future_section = FUTURE_HEADINGS.iter().any(|k| h.contains(k));
+        }
         for t in md::link_targets(line) {
             if t.starts_with("http") || t.starts_with("mailto:") || t.contains("://") {
                 continue;
@@ -133,11 +147,14 @@ pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str, known: &BTreeS
         let spans = md::code_spans(line);
         for s in &spans {
             if let Some(p) = clean_path(s) {
-                if !util::exists(&ctx.root, &p) && !all.iter().any(|f| f.starts_with(&p)) {
+                // A path may be given from the repository root or relative to the document's directory.
+                let local = normalize(&format!("{dir}/{p}"));
+                let found = |q: &str| util::exists(&ctx.root, q) || all.iter().any(|f| f.starts_with(q));
+                if !found(&p) && !found(&local) {
                     fail(ln, format!("referenced path `{p}` does not exist"));
                 }
             }
-            if s.starts_with("wj ") {
+            if s.starts_with("wj ") && !future && !future_section && !NEGATIONS.iter().any(|n| line.to_lowercase().contains(n)) {
                 for e in check_wj_command(&ctx.cli, s) {
                     fail(ln, e);
                 }
@@ -150,7 +167,7 @@ pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str, known: &BTreeS
             }
         }
         for c in scan_ids(&scan, "WJ", 4).into_iter().chain(scan_ids(&scan, "W", 4)) {
-            if !known.contains(&c) {
+            if !future && !known.contains(&c) {
                 fail(ln, format!("error/lint code {c} is not registered in the compiler"));
             }
         }
@@ -167,7 +184,7 @@ pub fn check_doc(ctx: &Ctx, cfg: &Config, file: &str, text: &str, known: &BTreeS
     }
     for f in md::fences(text) {
         let sh = matches!(f.info.split([',', ' ']).next().unwrap_or(""), "sh" | "bash" | "shell" | "console");
-        if !sh {
+        if !sh || future {
             continue;
         }
         for (i, l) in f.body.lines().enumerate() {
