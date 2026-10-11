@@ -9,7 +9,7 @@ struct Memo {
 
 impl Memo {
     fn lookup(self, key: string) -> Option<i64> {
-        match self.cache.get(key.as_str()) {
+        match self.cache.get(key) {
             Some(v) => {
                 self.hits += 1
                 Some(*v)

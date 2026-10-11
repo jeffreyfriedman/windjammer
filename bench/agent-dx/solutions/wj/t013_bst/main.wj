@@ -61,37 +61,57 @@ impl Tree {
         cur
     }
 
-    fn remove_at(self, node: i64, k: i64) -> i64 {
-        if node < 0 { return -1 }
-        let n = node as usize
-        if k < self.keys[n] {
-            self.left[n] = self.remove_at(self.left[n], k)
-            return node
+    fn replace_link(self, parent: i64, was_left: bool, child: i64) {
+        if parent < 0 {
+            self.root = child
+        } else if was_left {
+            self.left[parent as usize] = child
+        } else {
+            self.right[parent as usize] = child
         }
-        if k > self.keys[n] {
-            self.right[n] = self.remove_at(self.right[n], k)
-            return node
-        }
-        if self.left[n] < 0 { return self.right[n] }
-        if self.right[n] < 0 { return self.left[n] }
-        let s = self.min_node(self.right[n])
-        let sk = self.keys[s as usize]
-        self.keys[n] = sk
-        self.right[n] = self.remove_at(self.right[n], sk)
-        node
     }
 
     fn delete(self, k: i64) -> bool {
         if !self.contains(k) { return false }
-        self.root = self.remove_at(self.root, k)
+        let mut cur = self.root
+        let mut parent: i64 = -1
+        let mut was_left = false
+        while self.keys[cur as usize] != k {
+            parent = cur
+            if k < self.keys[cur as usize] {
+                was_left = true
+                cur = self.left[cur as usize]
+            } else {
+                was_left = false
+                cur = self.right[cur as usize]
+            }
+        }
+        let l = self.left[cur as usize]
+        let r = self.right[cur as usize]
+        if l >= 0 && r >= 0 {
+            // two children: take the in-order successor (leftmost node of the right subtree)
+            let mut sp = cur
+            let mut s = r
+            while self.left[s as usize] >= 0 {
+                sp = s
+                s = self.left[s as usize]
+            }
+            self.keys[cur as usize] = self.keys[s as usize]
+            let sr = self.right[s as usize]
+            self.replace_link(sp, sp != cur, sr)
+        } else if l >= 0 {
+            self.replace_link(parent, was_left, l)
+        } else {
+            self.replace_link(parent, was_left, r)
+        }
         true
     }
 
-    fn collect(self, node: i64, out: Vec<i64>) {
+    fn gather(self, node: i64, out: Vec<i64>) {
         if node < 0 { return }
-        self.collect(self.left[node as usize], out)
+        self.gather(self.left[node as usize], out)
         out.push(self.keys[node as usize])
-        self.collect(self.right[node as usize], out)
+        self.gather(self.right[node as usize], out)
     }
 
     fn height_of(self, node: i64) -> i64 {
@@ -100,6 +120,17 @@ impl Tree {
         let b = self.height_of(self.right[node as usize])
         if a > b { 1 + a } else { 1 + b }
     }
+}
+
+fn join_ints(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
 }
 
 fn main() {
@@ -122,13 +153,13 @@ fn main() {
             println("${t.height_of(t.root)}")
         } else {
             let mut items: Vec<i64> = Vec::new()
-            t.collect(t.root, items)
+            t.gather(t.root, items)
             if cmd == "inorder" {
                 if items.len() == 0 {
                     println("<empty>")
                 } else {
-                    let strs: Vec<string> = items.iter().map(|x| x.to_string()).collect()
-                    println(strs.join(" "))
+                    let strs = join_ints(items.clone())
+                    println(strs)
                 }
             } else if items.len() == 0 {
                 println("empty")

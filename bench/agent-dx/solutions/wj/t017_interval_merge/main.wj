@@ -18,7 +18,15 @@ fn main() {
         ivs.push(Interval { lo: nums[1 + 2 * i], hi: nums[2 + 2 * i] })
         i += 1
     }
-    ivs.sort_by(|a, b| a.lo.cmp(b.lo))
+    let mut si: usize = 1
+    while si < ivs.len() {
+        let mut sj = si
+        while sj > 0 && ivs[sj].lo < ivs[sj - 1].lo {
+            ivs.swap(sj, sj - 1)
+            sj -= 1
+        }
+        si += 1
+    }
     let mut merged: Vec<Interval> = Vec::new()
     for iv in ivs {
         let m = merged.len()

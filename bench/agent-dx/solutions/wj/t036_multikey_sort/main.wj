@@ -16,10 +16,26 @@ fn compare_by(a: Rec, b: Rec, field: string) -> i64 {
     }
 }
 
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
-    let mut lines = text.lines()
-    let spec = lines.next().unwrap_or("")
+    let all: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let spec = line_at(all.clone(), cursor)
+    cursor += 1
     let mut fields: Vec<string> = Vec::new()
     let mut descs: Vec<bool> = Vec::new()
     for part in spec.split(",") {
@@ -28,7 +44,7 @@ fn main() {
         descs.push(kv[1] == "desc")
     }
     let mut recs: Vec<Rec> = Vec::new()
-    for l in lines {
+    for l in rest_lines(all.clone(), cursor) {
         let p: Vec<string> = l.split_whitespace().map(|s| s.to_string()).collect()
         if p.len() < 3 { continue }
         recs.push(Rec { name: p[0].clone(), age: p[1].parse::<i64>().unwrap_or(0), city: p[2].clone() })

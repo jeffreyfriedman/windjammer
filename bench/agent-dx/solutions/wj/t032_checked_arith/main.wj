@@ -13,15 +13,23 @@ fn compute(op: string, a: i32, b: i32) -> string {
     if op == "div" || op == "rem" {
         if b == 0 { return "divzero" }
         if a == -2147483648 && b == -1 {
-            return if op == "div" { "overflow" } else { "0" }
+            let special = if op == "div" { "overflow" } else { "0" }
+            return special
         }
-        return if op == "div" { "${a / b}" } else { "${a % b}" }
+        let normal = if op == "div" { "${a / b}" } else { "${a % b}" }
+        return normal
     }
     // pow
     if b < 0 { return "invalid" }
-    if a == 0 { return if b == 0 { "1" } else { "0" } }
+    if a == 0 {
+        let zero_pow = if b == 0 { "1" } else { "0" }
+        return zero_pow
+    }
     if a == 1 { return "1" }
-    if a == -1 { return if b % 2 == 0 { "1" } else { "-1" } }
+    if a == -1 {
+        let neg_one_pow = if b % 2 == 0 { "1" } else { "-1" }
+        return neg_one_pow
+    }
     let mut result: i32 = 1
     let mut i: i32 = 0
     while i < b {

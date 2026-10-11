@@ -28,7 +28,8 @@ def hardcoded_solution(task_id):
 def run_src(task_id, src, lang="python"):
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "main.py")
-        open(p, "w").write(src)
+        with open(p, "w") as f:
+            f.write(src)
         return baseline.grade_solution(lang, task_id, src=p)
 
 
@@ -92,7 +93,8 @@ class GraderMutation(unittest.TestCase):
             src = hardcoded_solution(t)
             with tempfile.TemporaryDirectory() as d:
                 p = os.path.join(d, "main.py")
-                open(p, "w").write(src)
+                with open(p, "w") as f:
+                    f.write(src)
                 from agentdx import grade
                 vis = grade.grade("python", t, d, hidden=False)
                 hid = grade.grade("python", t, d, hidden=True)
@@ -121,9 +123,11 @@ class GraderMutation(unittest.TestCase):
     def test_exit_code_is_graded(self):
         # t048 expects exit status 1 for a missing file: a solution that prints right but exits 0 must fail
         t = "t048_wc_clone"
-        src = open(solution_path("python", t)).read().replace("sys.exit(1)", "sys.exit(0)")
-        if src == open(solution_path("python", t)).read():
-            self.skipTest("solution does not use sys.exit(1) literal")
+        with open(solution_path("python", t)) as f:
+            orig = f.read()
+        src = orig.replace("sys.exit(1 if failed else 0)", "sys.exit(0)")
+        self.assertNotEqual(src, orig, "solution layout changed; update this mutation")
+        self.assertEqual(run_src(t, orig)["status"], "pass")
         self.assertEqual(run_src(t, src)["status"], "fail")
 
     def test_reference_mutants_are_killed(self):
@@ -131,7 +135,8 @@ class GraderMutation(unittest.TestCase):
         survivors = []
         per_task = 8 if FULL else 5
         for t in IDS:
-            src = open(solution_path("python", t)).read()
+            with open(solution_path("python", t)) as f:
+                src = f.read()
             for m in make_mutants(src, per_task, seed=hash(t) & 0xFFFF):
                 total += 1
                 if run_src(t, m)["status"] != "pass":

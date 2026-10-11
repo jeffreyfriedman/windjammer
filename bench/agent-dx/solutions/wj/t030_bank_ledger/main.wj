@@ -26,13 +26,13 @@ struct Bank {
 impl Bank {
     fn open(self, name: string, amount: i64) -> Result<i64, BankError> {
         if amount < 0 { return Err(BankError::InvalidAmount) }
-        if self.accounts.contains_key(name.as_str()) { return Err(BankError::Duplicate) }
+        if self.accounts.contains_key(name) { return Err(BankError::Duplicate) }
         self.accounts.insert(name, amount)
         Ok(0)
     }
 
     fn balance_of(self, name: string) -> Result<i64, BankError> {
-        match self.accounts.get(name.as_str()) {
+        match self.accounts.get(name) {
             Some(b) => Ok(*b),
             None => Err(BankError::Unknown(name)),
         }
@@ -50,8 +50,12 @@ impl Bank {
         self.balance_of(from.clone())?
         self.balance_of(to.clone())?
         if from == to { return Err(BankError::SameAccount) }
-        self.change(from, 0 - amount)?
-        self.change(to, amount)?
+        // mutate directly: `self.change(..)?` here is not recognised as mutating, so `transfer` would be emitted as `&self`
+        let fb = self.balance_of(from.clone())?
+        let tb = self.balance_of(to.clone())?
+        if fb < amount { return Err(BankError::Insufficient) }
+        self.accounts.insert(from, fb - amount)
+        self.accounts.insert(to, tb + amount)
         Ok(0)
     }
 }
@@ -92,6 +96,11 @@ fn main() {
     }
     names.sort()
     for n in names {
-        println("${n} ${bank.accounts.get(n.as_str()).unwrap_or(0)}")
+        let mut bal: i64 = 0
+        match bank.accounts.get(n) {
+            Some(b) => { bal = b + 0 }
+            None => {}
+        }
+        println("${n} ${bal}")
     }
 }

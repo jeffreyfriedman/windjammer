@@ -14,9 +14,16 @@ fn all_digits(s: string) -> bool {
     true
 }
 
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
 fn main() {
-    let args: Vec<string> = env::args().collect()
-    let mut name = "anonymous".to_string()
+    let mut args: Vec<string> = Vec::new()
+    for a0 in env::args() {
+        args.push(a0)
+    }
+    let mut name = "anonymous"
     let mut count: i64 = 1
     let mut verbosity: i64 = 0
     let mut dry = false
@@ -37,19 +44,19 @@ fn main() {
             name = args[i].clone()
             i += 1
         } else if a.starts_with("--name=") {
-            name = a.as_str()[7..].to_string()
+            name = sub(a.clone(), 7, a.len()).to_string()
         } else if a == "--count" || a.starts_with("--count=") {
-            let mut v = "".to_string()
+            let mut v = ""
             if a == "--count" {
                 if i >= args.len() { fail("error: missing value for --count") }
                 v = args[i].clone()
                 i += 1
             } else {
-                v = a.as_str()[8..].to_string()
+                v = sub(a.clone(), 8, a.len()).to_string()
             }
             if !all_digits(v.clone()) { fail("error: invalid count ${v}") }
             count = v.parse::<i64>().unwrap_or(0)
-        } else if !a.starts_with("--") && a.as_str()[1..].chars().all(|c| c == 'v') {
+        } else if !a.starts_with("--") && sub(a.clone(), 1, a.len()).chars().all(|c| c == 'v') {
             verbosity += (a.len() as i64) - 1
         } else {
             fail("error: unknown option ${a}")

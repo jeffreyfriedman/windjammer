@@ -8,15 +8,18 @@ fn fail(msg: string, code: i32) {
 }
 
 fn main() {
-    let args: Vec<string> = env::args().collect()
+    let mut args: Vec<string> = Vec::new()
+    for a0 in env::args() {
+        args.push(a0)
+    }
     let file = args[1].clone()
     let col = args[2].clone()
     let op = args[3].clone()
-    let text = match fs::read_to_string(file.as_str()) {
+    let text = match fs::read_to_string(file) {
         Ok(t) => t,
         Err(_) => {
             fail("error: cannot read ${file}", 1)
-            "".to_string()
+            ""
         }
     }
     let lines: Vec<string> = text.lines().map(|s| s.to_string()).collect()
@@ -36,7 +39,7 @@ fn main() {
     let mut r: usize = 1
     while r < lines.len() {
         let p: Vec<string> = lines[r].split(",").map(|s| s.to_string()).collect()
-        let v = if ci < (p.len() as i64) { p[ci as usize].clone() } else { "".to_string() }
+        let v = if ci < (p.len() as i64) { p[ci as usize].clone() } else { "" }
         vals.push(v)
         line_nos.push(r + 1)
         r += 1
@@ -64,10 +67,10 @@ fn main() {
     let mut sum: i64 = 0
     let mut mn = nums[0]
     let mut mx = nums[0]
-    for x in nums.iter() {
-        sum += *x
-        if *x < mn { mn = *x }
-        if *x > mx { mx = *x }
+    for x in nums {
+        sum += x
+        if x < mn { mn = x }
+        if x > mx { mx = x }
     }
     if op == "sum" {
         println("${sum}")

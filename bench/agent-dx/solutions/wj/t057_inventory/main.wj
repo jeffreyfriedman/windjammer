@@ -21,7 +21,7 @@ fn main() {
                 println("error: bad quantity")
                 continue
             }
-            let existing = match inv.get(sku.as_str()) {
+            let existing = match inv.get(sku) {
                 Some(s) => Some(Stock { qty: s.qty, price: s.price }),
                 None => None,
             }
@@ -46,7 +46,7 @@ fn main() {
                 println("error: bad quantity")
                 continue
             }
-            let existing = match inv.get(sku.as_str()) {
+            let existing = match inv.get(sku) {
                 Some(s) => Some(Stock { qty: s.qty, price: s.price }),
                 None => None,
             }
@@ -63,7 +63,7 @@ fn main() {
             }
         } else if cmd == "remove" {
             let sku = p[1].clone()
-            let existing = match inv.get(sku.as_str()) {
+            let existing = match inv.get(sku) {
                 Some(s) => Some(Stock { qty: s.qty, price: s.price }),
                 None => None,
             }
@@ -72,7 +72,7 @@ fn main() {
                     if s.qty > 0 {
                         println("error: not empty ${sku}")
                     } else {
-                        inv.remove(sku.as_str())
+                        inv.remove(sku)
                         println("removed ${sku}")
                     }
                 }
@@ -84,13 +84,16 @@ fn main() {
                 continue
             }
             let mut skus: Vec<string> = Vec::new()
-            for (k, v) in inv.iter() {
+            for (k, v) in inv {
                 skus.push(k.clone())
             }
             skus.sort()
             let mut total: i64 = 0
             for k in skus {
-                let s = inv.get(k.as_str()).unwrap()
+                let s = match inv.get(k) {
+                    Some(x) => Stock { qty: x.qty, price: x.price },
+                    None => Stock { qty: 0, price: 0 },
+                }
                 println("${k} ${s.qty} x ${s.price} = ${s.qty * s.price}")
                 total += s.qty * s.price
             }

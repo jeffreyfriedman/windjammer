@@ -25,7 +25,7 @@ fn render(tpl: string, defs: HashMap<string, string>) -> string {
                     name = name + chars[k].to_string()
                     k += 1
                 }
-                match defs.get(name.as_str()) {
+                match defs.get(name) {
                     Some(v) => { out = out + v }
                     None => { out = out + "<missing:" + name + ">" }
                 }
@@ -39,22 +39,44 @@ fn render(tpl: string, defs: HashMap<string, string>) -> string {
     out
 }
 
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
-    let mut lines = text.split("\n")
-    let k = lines.next().unwrap_or("0").trim().parse::<usize>().unwrap_or(0)
+    let all: Vec<string> = text.split("
+").map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let k = line_at(all.clone(), cursor).trim().parse::<usize>().unwrap_or(0)
+    cursor += 1
     let mut defs: HashMap<string, string> = HashMap::new()
     let mut i: usize = 0
     while i < k {
-        let l = lines.next().unwrap_or("")
+        let l = line_at(all.clone(), cursor)
+        cursor += 1
         match l.find("=") {
-            Some(p) => { defs.insert(l.as_str()[0..p].to_string(), l.as_str()[p + 1..].to_string()) }
+            Some(p) => { defs.insert(sub(l.clone(), 0, p).to_string(), sub(l.clone(), p + 1, l.len()).to_string()) }
             None => {}
         }
         i += 1
     }
     let mut rest: Vec<string> = Vec::new()
-    for l in lines {
+    for l in rest_lines(all.clone(), cursor) {
         rest.push(l.to_string())
     }
     print(render(rest.join("\n"), defs))

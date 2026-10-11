@@ -19,7 +19,7 @@ impl<T: Ord + Clone> MinMaxStack<T> {
 
     fn min(self) -> Option<T> {
         let mut best: Option<T> = None
-        for x in self.items.iter() {
+        for x in self.items {
             best = match best {
                 Some(b) => if x.clone() < b { Some(x.clone()) } else { Some(b) },
                 None => Some(x.clone()),
@@ -30,7 +30,7 @@ impl<T: Ord + Clone> MinMaxStack<T> {
 
     fn max(self) -> Option<T> {
         let mut best: Option<T> = None
-        for x in self.items.iter() {
+        for x in self.items {
             best = match best {
                 Some(b) => if x.clone() > b { Some(x.clone()) } else { Some(b) },
                 None => Some(x.clone()),
@@ -43,7 +43,7 @@ impl<T: Ord + Clone> MinMaxStack<T> {
 fn show<T: ToString>(o: Option<T>) -> string {
     match o {
         Some(v) => v.to_string(),
-        None => "empty".to_string(),
+        None => "empty",
     }
 }
 
@@ -51,7 +51,7 @@ fn run_ints(lines: Vec<string>) {
     let mut st: MinMaxStack<i64> = MinMaxStack::new()
     for ln in lines {
         if ln.starts_with("push") {
-            st.push(ln.as_str()[5..].trim().parse::<i64>().unwrap_or(0))
+            st.push(sub(ln.clone(), 5, ln.len()).trim().parse::<i64>().unwrap_or(0))
         } else if ln == "pop" {
             println(show(st.pop()))
         } else if ln == "size" {
@@ -68,7 +68,7 @@ fn run_strs(lines: Vec<string>) {
     let mut st: MinMaxStack<string> = MinMaxStack::new()
     for ln in lines {
         if ln.starts_with("push") {
-            let x = if ln.len() > 5 { ln.as_str()[5..].to_string() } else { "".to_string() }
+            let x = if ln.len() > 5 { sub(ln.clone(), 5, ln.len()).to_string() } else { "" }
             st.push(x)
         } else if ln == "pop" {
             println(show(st.pop()))
@@ -80,6 +80,10 @@ fn run_strs(lines: Vec<string>) {
             println(show(st.max()))
         }
     }
+}
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
 }
 
 fn main() {

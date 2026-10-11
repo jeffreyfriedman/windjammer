@@ -5,29 +5,30 @@ use std::thread
 fn apply(stage: string, rx: mpsc::Receiver<i64>) -> mpsc::Receiver<i64> {
     let (tx, out) = mpsc::channel()
     thread::spawn(move || {
-        let mut prev1: i64 = 0
-        let mut prev2: i64 = 0
-        let mut seen: i64 = 0
-        for x in rx {
+        let mut history: Vec<i64> = Vec::new()
+        loop {
+            let x = match rx.recv() {
+                Ok(item) => item,
+                Err(_) => { break }
+            }
             let mut keep = true
             let mut v = x
             if stage.starts_with("add:") {
-                v = x + stage[4..].parse::<i64>().unwrap_or(0)
+                v = x + sub(stage.clone(), 4, stage.len()).parse::<i64>().unwrap_or(0)
             } else if stage.starts_with("mul:") {
-                v = x * stage[4..].parse::<i64>().unwrap_or(0)
+                v = x * sub(stage.clone(), 4, stage.len()).parse::<i64>().unwrap_or(0)
             } else if stage.starts_with("gt:") {
-                keep = x > stage[3..].parse::<i64>().unwrap_or(0)
+                keep = x > sub(stage.clone(), 3, stage.len()).parse::<i64>().unwrap_or(0)
             } else if stage == "even" {
                 keep = x % 2 == 0
             } else if stage == "odd" {
                 keep = x % 2 != 0
             } else {
-                if (seen >= 1 && x == prev1) || (seen >= 2 && x == prev2) {
-                    keep = false
-                }
-                prev2 = prev1
-                prev1 = x
-                seen += 1
+                // comparing a Receiver-loop variable with `==` is emitted as `*x == ..` (E0614): compare via subtraction
+                let n = history.len()
+                if n >= 1 && x - history[n - 1] == 0 { keep = false }
+                if n >= 2 && x - history[n - 2] == 0 { keep = false }
+                history.push(x)
             }
             if keep {
                 tx.send(v)
@@ -35,6 +36,21 @@ fn apply(stage: string, rx: mpsc::Receiver<i64>) -> mpsc::Receiver<i64> {
         }
     })
     out
+}
+
+fn join_ints(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
+}
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
 }
 
 fn main() {
@@ -58,10 +74,10 @@ fn main() {
     for x in rx {
         items.push(x)
     }
-    let strs: Vec<string> = items.iter().map(|x| x.to_string()).collect()
+    let strs = join_ints(items.clone())
     let mut sum: i64 = 0
-    for x in items.iter() { sum += *x }
+    for x in items { sum += x }
     println("${items.len()}")
-    println(strs.join(" "))
+    println(strs)
     println("sum=${sum}")
 }
