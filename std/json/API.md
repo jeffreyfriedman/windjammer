@@ -73,7 +73,7 @@ fn parse_config() -> Result<(), Error> {
     let value = json::parse(text)?
     
     if let Some(name) = value.get("name").as_str() {
-        println!("Name: ${name}")
+        println("Name: ${name}")
     }
     
     Ok(())
@@ -138,7 +138,7 @@ fn process_api_response(response: string) -> Result<(), Error> {
         for user in users {
             let name = user.get("name").as_str().unwrap_or("Unknown")
             let age = user.get("age").as_i64().unwrap_or(0)
-            println!("${name} is ${age} years old")
+            println("${name} is ${age} years old")
         }
     }
     
@@ -198,10 +198,10 @@ fn create_json_object() -> Value {
 ```windjammer
 match json::parse(text) {
     Ok(value) => {
-        println!("Parsed successfully")
+        println("Parsed successfully")
     }
     Err(e) => {
-        println!("Parse error: ${e}")
+        println("Parse error: ${e}")
         // Handle malformed JSON
     }
 }
@@ -227,7 +227,7 @@ let product = Product {
     name: "Widget",
     price: 29.99,
     in_stock: true,
-    tags: vec!["gadget", "useful"],
+    tags: ["gadget", "useful"],
 }
 
 let json_text = json::stringify(&product)?

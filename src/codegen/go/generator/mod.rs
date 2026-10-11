@@ -59,6 +59,7 @@ struct GoGenerator {
     indent_level: usize,
     needs_fmt_import: bool,
     needs_math_import: bool,
+    needs_debug_helper: bool,
     declared_structs: Vec<String>,
     declared_vars: Vec<std::collections::HashSet<String>>,
     declared_enums: std::collections::HashMap<String, Vec<String>>,
@@ -72,6 +73,7 @@ impl GoGenerator {
             indent_level: 0,
             needs_fmt_import: false,
             needs_math_import: false,
+            needs_debug_helper: false,
             declared_structs: Vec::new(),
             declared_vars: vec![std::collections::HashSet::new()],
             declared_enums: std::collections::HashMap::new(),
@@ -225,6 +227,7 @@ include!("type_generation.rs");
 include!("function_generation.rs");
 include!("statement_generation.rs");
 include!("expression_generation.rs");
+include!("intrinsics.rs");
 
 fn capitalize_first(s: &str) -> String {
     let mut chars = s.chars();

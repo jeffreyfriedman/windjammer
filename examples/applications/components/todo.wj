@@ -9,7 +9,7 @@ struct TodoApp {
 impl TodoApp {
     fn new() -> TodoApp {
         TodoApp {
-            todos: vec![],
+            todos: [],
             input: "",
             filter: "all",
         }
@@ -29,7 +29,7 @@ impl TodoApp {
     }
     
     fn clear_completed(&mut self) {
-        self.todos = vec![]
+        self.todos = []
     }
     
     fn set_filter(&mut self, new_filter: string) {
@@ -61,7 +61,7 @@ impl TodoApp {
         
         html.push_str("</div>")
         html.push_str("<div class=\"todo-footer\">")
-        html.push_str(&format!("<span class=\"todo-count\">{} items left</span>", self.active_count()))
+        html.push_str(&"<span class=\"todo-count\">${self.active_count()} items left</span>")
         html.push_str("</div>")
         html.push_str("</div>")
         
@@ -71,5 +71,5 @@ impl TodoApp {
 
 fn main() {
     let mut app = TodoApp::new()
-    println!("{}", app.render())
+    println("${app.render()}")
 }

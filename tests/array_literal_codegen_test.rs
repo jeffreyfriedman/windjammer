@@ -72,7 +72,7 @@ fn make_pair(a: i32, b: i32) -> [i32; 2] {
 
 fn use_array() {
     let pair = make_pair(1, 2)
-    let arr = [10, 20, 30]
+    let arr: [i32; 3] = [10, 20, 30]
 }
 "#,
     )?;

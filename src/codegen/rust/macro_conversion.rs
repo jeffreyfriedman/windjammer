@@ -350,11 +350,7 @@ impl<'ast> CodeGenerator<'ast> {
         func_name: &str,
         arguments: &[(Option<String>, &Expression<'ast>)],
     ) -> Option<String> {
-        let target_macro = if func_name == "print" {
-            "println"
-        } else {
-            func_name
-        };
+        let target_macro = func_name;
 
         if let Some((_, first_arg)) = arguments.first() {
             if let Expression::MacroInvocation {

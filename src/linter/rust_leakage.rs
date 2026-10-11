@@ -437,6 +437,13 @@ impl<'ast> RustLeakageLinter<'ast> {
         }
     }
 
+    /// Source-level checks (ADR-0014 W0007/W0008): macro spellings and `{}` format strings.
+    pub fn lint_source(&mut self, source: &str) {
+        for diag in super::surface_syntax::diagnostics(&self.default_file, source) {
+            self.collector.add(diag);
+        }
+    }
+
     pub fn into_diagnostics(self) -> Vec<LintDiagnostic> {
         self.collector.into_diagnostics()
     }

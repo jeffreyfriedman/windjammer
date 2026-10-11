@@ -28,7 +28,7 @@ fn start() {
                         inc_runs.set(current + 1)
                     })))
             .child(Panel::new("Status")
-                .child(Text::new(format!("Games run: {}", display_runs.get()))))
+                .child(Text::new("Games run: ${display_runs.get()}")))
             .to_vnode()
     }
     

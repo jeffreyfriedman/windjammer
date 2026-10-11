@@ -22,7 +22,7 @@ fn main() {
     let v1 = Vec2 { x: 1.0, y: 2.0 }
     let v2 = Vec2 { x: 3.0, y: 4.0 }
     let v3 = v1 + v2
-    println!("v3 = ({}, {})", v3.x, v3.y)
+    println("v3 = (${v3.x}, ${v3.y})")
 }
 
 

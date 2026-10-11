@@ -31,3 +31,16 @@ Unchanged: explicit `let mut` (ADR-0002), `match`, `impl`, `Self`, `fn`, inferre
 ## Consequences
 Parser/lexer accept intrinsics as calls; analyzer/IR treat them as intrinsics; stdlib/docs/examples/tests
 and all dogfood repos are migrated by `wj fix`; formatter normalises to the new forms.
+
+## Phase 1 implementation notes (2026-10-11)
+- One registry: `src/intrinsics/` (`Intrinsic` enum, `from_call_name` / `from_macro_name`, template helpers). The
+  parser lowers the `!` spellings to the same `Call` node as the plain forms (`stderr.println` -> `eprintln`,
+  `dbg!` -> `debug`); `format!` is the existing interpolation node. Rust, Go, JS and the interpreter lower from it.
+- `"${x:spec}"` accepts Rust-style specs (`.2`, `?`, `>8`, `04`, `x`...). A string literal with braces and no
+  interpolation prints verbatim.
+- `[a, b]` is a growable `Vec` in `let` initialisers and `Vec` struct fields (like `vec![..]`); elsewhere the
+  existing contextual array rules apply, and `let a: [T; N] = [..]` stays a fixed array.
+- Diagnostics: W0007 (`name!(..)` / `vec![..]`), W0008 (`{}` format string), parse-time warnings and `wj lint`, with
+  span + replacement. `wj fix [--check] [--docs] <path>` (script: `scripts/wj-fix-surface.sh`) is idempotent and
+  never guesses: `vec![..]` in call-argument/assignment position and dynamic `{:w$}` specs are reported for manual
+  migration. See `docs/design/surface-syntax.md`.

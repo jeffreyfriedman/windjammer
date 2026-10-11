@@ -247,6 +247,21 @@ pub enum Commands {
         paths: Vec<PathBuf>,
     },
 
+    /// Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms
+    Fix {
+        /// File or directory to rewrite in place
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Do not write; exit non-zero if any file would change
+        #[arg(long)]
+        check: bool,
+
+        /// Also migrate ```windjammer / ```wj code fences in .md files
+        #[arg(long)]
+        docs: bool,
+    },
+
     /// Run Rust leakage linter on .wj files (W0001-W0004)
     Lint {
         /// File or directory to lint

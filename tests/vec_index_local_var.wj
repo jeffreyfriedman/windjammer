@@ -35,5 +35,5 @@ pub fn test_local_var_indexing() {
     node.children.unwrap().push(Node::new(5))
     
     let child = node.direct_access(0)
-    assert_eq!(child.value, 5)
+    assert_eq(child.value, 5)
 }

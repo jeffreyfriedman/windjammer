@@ -99,8 +99,8 @@ impl Game {
     }
     
     fn render(&self) {
-        println("=== BREAKOUT (Frame {}) ===", self.frame)
-        println("Score: {}", self.score)
+        println("=== BREAKOUT (Frame ${self.frame}) ===")
+        println("Score: ${self.score}")
         
         // Simple ASCII "rendering"
         for y in 0..SCREEN_HEIGHT {
@@ -145,7 +145,7 @@ pub fn main() {
         }
         
         if !game.ball.active {
-            println("Game Over! Final Score: {}", game.score)
+            println("Game Over! Final Score: ${game.score}")
             break
         }
     }

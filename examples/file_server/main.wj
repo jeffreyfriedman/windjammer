@@ -67,7 +67,7 @@ async fn index() -> Html<string> {
 @get("/:filename")
 async fn serve_file(filename: UrlPath<string>) -> Result<Response, StatusCode> {
     let base_path = "../../crates/windjammer-ui/examples"
-    let file_path = format!("{}/{}", base_path, filename.0)
+    let file_path = "${base_path}/${filename.0}"
     
     match fs::read_to_string(&file_path) {
         Ok(content) => {
@@ -98,15 +98,15 @@ async fn main() {
     
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await.unwrap()
     
-    println!("🚀 Windjammer File Server running on http://127.0.0.1:8080")
-    println!("📁 Serving UI examples")
-    println!("")
-    println!("Try these examples:")
-    println!("  - http://127.0.0.1:8080/counter_wasm.html")
-    println!("  - http://127.0.0.1:8080/minimal_working.html")
-    println!("  - http://127.0.0.1:8080/todo_simple.html")
-    println!("")
-    println!("Press Ctrl+C to stop")
+    println("🚀 Windjammer File Server running on http://127.0.0.1:8080")
+    println("📁 Serving UI examples")
+    println("")
+    println("Try these examples:")
+    println("  - http://127.0.0.1:8080/counter_wasm.html")
+    println("  - http://127.0.0.1:8080/minimal_working.html")
+    println("  - http://127.0.0.1:8080/todo_simple.html")
+    println("")
+    println("Press Ctrl+C to stop")
     
     axum::serve(listener, app).await.unwrap()
 }

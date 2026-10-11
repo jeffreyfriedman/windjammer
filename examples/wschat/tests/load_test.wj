@@ -48,7 +48,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
         p95_latency_ms: 0.0,
         p99_latency_ms: 0.0,
         max_latency_ms: 0.0,
-        errors: vec![],
+        errors: [],
     }))
     
     let latencies = Arc::new(Mutex::new(Vec::new()))
@@ -63,7 +63,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
     })
     
     // Spawn connections
-    let mut handles = vec![]
+    let mut handles = []
     
     for i in 0..config.target_connections {
         let server_url = config.server_url.clone()
@@ -90,7 +90,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
                     for msg_num in 0..messages_to_send {
                         let start_msg = time.now_unix_nano()
                         
-                        let message = format!("Test message {} from connection {}", msg_num, i)
+                        let message = "Test message ${msg_num} from connection ${i}"
                         
                         match conn.send_text(message) {
                             Ok(_) => {
@@ -107,13 +107,13 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
                                     }
                                     Err(e) => {
                                         let mut r = results.lock()
-                                        r.errors.push(format!("Receive error: {}", e))
+                                        r.errors.push("Receive error: ${e}")
                                     }
                                 }
                             }
                             Err(e) => {
                                 let mut r = results.lock()
-                                r.errors.push(format!("Send error: {}", e))
+                                r.errors.push("Send error: ${e}")
                             }
                         }
                         
@@ -130,7 +130,7 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
                     let mut r = results.lock()
                     r.failed_connections += 1
                     r.total_connections += 1
-                    r.errors.push(format!("Connection error: {}", e))
+                    r.errors.push("Connection error: ${e}")
                 }
             }
         })
@@ -182,39 +182,37 @@ pub async fn run_load_test(config: LoadTestConfig) -> Result<LoadTestResults, Er
 }
 
 pub fn print_results(results: LoadTestResults) {
-    println!("\n=== Load Test Results ===\n")
+    println("\n=== Load Test Results ===\n")
     
-    println!("Connections:")
-    println!("  Total:      {}", results.total_connections)
-    println!("  Successful: {}", results.successful_connections)
-    println!("  Failed:     {}", results.failed_connections)
-    println!("  Success %:  {:.2}%", 
-        (results.successful_connections as float / results.total_connections as float) * 100.0)
+    println("Connections:")
+    println("  Total:      ${results.total_connections}")
+    println("  Successful: ${results.successful_connections}")
+    println("  Failed:     ${results.failed_connections}")
+    println("  Success %:  ${(results.successful_connections as float / results.total_connections as float) * 100.0:.2}%")
     
-    println!("\nMessages:")
-    println!("  Sent:       {}", results.total_messages_sent)
-    println!("  Received:   {}", results.total_messages_received)
-    println!("  Success %:  {:.2}%",
-        (results.total_messages_received as float / results.total_messages_sent as float) * 100.0)
+    println("\nMessages:")
+    println("  Sent:       ${results.total_messages_sent}")
+    println("  Received:   ${results.total_messages_received}")
+    println("  Success %:  ${(results.total_messages_received as float / results.total_messages_sent as float) * 100.0:.2}%")
     
-    println!("\nLatency:")
-    println!("  Average:    {:.2} ms", results.average_latency_ms)
-    println!("  p50:        {:.2} ms", results.p50_latency_ms)
-    println!("  p95:        {:.2} ms", results.p95_latency_ms)
-    println!("  p99:        {:.2} ms", results.p99_latency_ms)
-    println!("  Max:        {:.2} ms", results.max_latency_ms)
+    println("\nLatency:")
+    println("  Average:    ${results.average_latency_ms:.2} ms")
+    println("  p50:        ${results.p50_latency_ms:.2} ms")
+    println("  p95:        ${results.p95_latency_ms:.2} ms")
+    println("  p99:        ${results.p99_latency_ms:.2} ms")
+    println("  Max:        ${results.max_latency_ms:.2} ms")
     
     if !results.errors.is_empty() {
-        println!("\nErrors ({}):", results.errors.len())
+        println("\nErrors (${results.errors.len()}):")
         for (i, error) in results.errors.iter().take(10).enumerate() {
-            println!("  {}: {}", i + 1, error)
+            println("  ${i + 1}: ${error}")
         }
         if results.errors.len() > 10 {
-            println!("  ... and {} more", results.errors.len() - 10)
+            println("  ... and ${results.errors.len() - 10} more")
         }
     }
     
-    println!("\n=========================\n")
+    println("\n=========================\n")
 }
 
 // Tests module
@@ -232,8 +230,8 @@ async fn test_100_connections() {
         
         let results = run_load_test(config).await.unwrap()
         
-        assert!(results.successful_connections >= 95)  // At least 95% success
-        assert!(results.p99_latency_ms < 100.0)  // p99 < 100ms
+        assert(results.successful_connections >= 95)  // At least 95% success
+        assert(results.p99_latency_ms < 100.0)  // p99 < 100ms
 }
 
 @test
@@ -248,8 +246,8 @@ async fn test_1000_connections() {
         
         let results = run_load_test(config).await.unwrap()
         
-        assert!(results.successful_connections >= 950)  // At least 95% success
-        assert!(results.p99_latency_ms < 200.0)  // p99 < 200ms
+        assert(results.successful_connections >= 950)  // At least 95% success
+        assert(results.p99_latency_ms < 200.0)  // p99 < 200ms
 }
 
 // CLI entry point
@@ -274,7 +272,7 @@ fn main() -> Result<(), Error> {
         messages_per_connection: 10,
     }
     
-    println!("Running load test with {} connections...", connections)
+    println("Running load test with ${connections} connections...")
     
     let results = run_load_test(config).await?
     

@@ -116,7 +116,7 @@ function process(data: Data): void {
 ```windjammer
 // String interpolation (like Python/JS)
 let name = "World"
-println!("Hello, ${name}!")
+println("Hello, ${name}!")
 
 // Automatic ownership inference
 fn process(items: Vec<Item>) {  // No & needed
@@ -125,8 +125,8 @@ fn process(items: Vec<Item>) {  // No & needed
 
 // Pattern matching (like Rust)
 match result {
-    Ok(val) => println!("Success: ${val}"),
-    Err(e) => println!("Error: ${e}")
+    Ok(val) => println("Success: ${val}"),
+    Err(e) => println("Error: ${e}")
 }
 
 // Pipe operator (data flow)

@@ -47,10 +47,10 @@ fn main() {
     list.add_hello()
     
     if list.has_item("test") {
-        println!("Found test!")
+        println("Found test!")
     }
     
     if is_rust_file("main.rs") {
-        println!("It's a Rust file!")
+        println("It's a Rust file!")
     }
 }

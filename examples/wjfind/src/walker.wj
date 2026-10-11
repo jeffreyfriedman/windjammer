@@ -9,7 +9,7 @@ use ./config
 use ./gitignore::GitignoreCache
 
 pub fn collect_files(paths: Vec<string>, config: &Config) -> Result<Vec<string>, string> {
-    let mut all_files = vec![]
+    let mut all_files = []
     let mut gitignore_cache = GitignoreCache::new()
     
     for path in paths {
@@ -21,11 +21,11 @@ pub fn collect_files(paths: Vec<string>, config: &Config) -> Result<Vec<string>,
 }
 
 fn walk_path(path: string, config: &Config, gitignore_cache: &mut GitignoreCache) -> Result<Vec<string>, string> {
-    let mut files = vec![]
+    let mut files = []
     
     // Check if path exists
     if !fs::exists(&path) {
-        return Err(format!("Path does not exist: {}", path))
+        return Err("Path does not exist: ${path}")
     }
     
     // If it's a file, return it directly
@@ -123,7 +123,7 @@ fn should_include_file(path: &string, config: &Config, gitignore_cache: &mut Git
 
 fn is_ignored(name: &string) -> bool {
     // Common directories to ignore
-    let ignored_dirs = vec![
+    let ignored_dirs = [
         "target",
         "node_modules",
         ".git",
@@ -142,7 +142,7 @@ fn is_ignored(name: &string) -> bool {
 
 fn is_likely_binary(path: &string) -> bool {
     // Check by extension
-    let binary_extensions = vec![
+    let binary_extensions = [
         "exe", "dll", "so", "dylib", "a", "o",
         "png", "jpg", "jpeg", "gif", "bmp", "ico",
         "pdf", "zip", "ta", "gz", "bz2", "xz",

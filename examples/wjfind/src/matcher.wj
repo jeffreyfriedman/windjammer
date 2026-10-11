@@ -26,7 +26,7 @@ pub fn find_match(line: &string, line_num: int, file: &string, config: &Config) 
 }
 
 pub fn find_all_matches(line: &string, line_num: int, file: &string, config: &Config) -> Vec<Match> {
-    let mut matches = vec![]
+    let mut matches = []
     
     for capture in config.pattern.captures_iter(line) {
         match capture.get(0) {

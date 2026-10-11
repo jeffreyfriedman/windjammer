@@ -201,7 +201,7 @@ impl DirEntry {
 // Join path components
 fn join(base: string, component: string) -> string {
     // Wraps: Path::new(base).join(component).to_string_lossy()
-    format!("{}/{}", base, component)
+    "${base}/${component}"
 }
 
 // Get file extension

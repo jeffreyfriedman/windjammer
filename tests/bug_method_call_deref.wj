@@ -12,7 +12,7 @@ impl State {
     }
     
     pub fn update(self, name: string, value: i32) {
-        println!("Updating: {}, {}", name, value);
+        println("Updating: ${name}, ${value}");
     }
 }
 

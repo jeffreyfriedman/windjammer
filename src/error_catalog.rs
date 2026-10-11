@@ -71,6 +71,7 @@ impl ErrorCatalog {
 
         // Add common Rust errors with Windjammer translations
         catalog.add_common_errors();
+        crate::intrinsics::register_catalog(&mut catalog);
         catalog
     }
 

@@ -10,5 +10,5 @@ fn main() {
     // Error 3: Unknown type
     let y: UnknownType = 42
     
-    println!("This won't compile")
+    println("This won't compile")
 }

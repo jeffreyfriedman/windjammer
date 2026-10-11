@@ -86,8 +86,8 @@ fn main() {
     let v1 = container.get_item_value(1)
     let v2 = container.get_item_value(2)
     
-    println("Item 0: {}", v0)  // Should be 11 (incremented from 10)
-    println("Item 1: {}", v1)  // Should be 25
-    println("Item 2: {}", v2)  // Should be 35
+    println("Item 0: ${v0}")  // Should be 11 (incremented from 10)
+    println("Item 1: ${v1}")  // Should be 25
+    println("Item 2: ${v2}")  // Should be 35
     println("✅ Indexed field mutations work!")
 }

@@ -32,7 +32,7 @@ fn init() -> FirstPerson3D {
         camera_z: 10.0,
         camera_yaw: 0.0,
         camera_pitch: 0.0,
-        level: vec![
+        level: [
             // Ground plane
             Cube { x: 0.0, y: -0.5, z: 0.0, size: 30.0, r: 0.5, g: 0.5, b: 0.5 },
             
@@ -165,12 +165,12 @@ fn render(game: &FirstPerson3D) {
     
     // Draw UI
     draw::text(
-        format!("Position: ({:.1}, {:.1}, {:.1})", game.camera_x, game.camera_y, game.camera_z),
+        "Position: (${game.camera_x:.1}, ${game.camera_y:.1}, ${game.camera_z:.1})",
         10.0, 10.0, 16.0,
         Color::rgb(1.0, 1.0, 1.0)
     );
     draw::text(
-        format!("Rotation: Yaw {:.1}° Pitch {:.1}°", game.camera_yaw, game.camera_pitch),
+        "Rotation: Yaw ${game.camera_yaw:.1}° Pitch ${game.camera_pitch:.1}°",
         10.0, 30.0, 16.0,
         Color::rgb(1.0, 1.0, 1.0)
     );

@@ -39,24 +39,18 @@ pub fn list_with_filters(
     let order_by = sort.to_sql_order_by()
     
     // Add user access control
-    let access_filter = format!(
-        "AND EXISTS (
+    let access_filter = "AND EXISTS (
             SELECT 1 FROM projects p 
             LEFT JOIN project_members pm ON p.id = pm.project_id 
             WHERE p.id = tasks.project_id 
-            AND (p.owner_id = {} OR pm.user_id = {})
-        )",
-        auth_ctx.user_id, auth_ctx.user_id
-    )
+            AND (p.owner_id = ${auth_ctx.user_id} OR pm.user_id = ${auth_ctx.user_id})
+        )"
     
     // Fetch tasks (limit + 1 to check if there are more)
-    let query = format!(
-        "SELECT * FROM tasks 
-         WHERE {} {} AND deleted_at IS NULL
-         ORDER BY {} 
-         LIMIT {}",
-        where_clause, access_filter, order_by, pagination.limit + 1
-    )
+    let query = "SELECT * FROM tasks 
+         WHERE ${where_clause} ${access_filter} AND deleted_at IS NULL
+         ORDER BY ${order_by} 
+         LIMIT ${pagination.limit + 1}"
     
     let rows = match db.query_all(pool, query, params).await {
         Ok(r) => r,
@@ -69,7 +63,7 @@ pub fn list_with_filters(
     }
     
     // Convert to task responses
-    let mut tasks = vec![]
+    let mut tasks = []
     for row in rows {
         let task = Task {
             id: db.get_int(row, "id"),

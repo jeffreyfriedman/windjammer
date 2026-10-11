@@ -6,28 +6,28 @@ use std::net::*
 
 @export
 async fn main() {
-    println!("🌐 Windjammer Network API Demo")
-    println!("================================")
-    println!("")
+    println("🌐 Windjammer Network API Demo")
+    println("================================")
+    println("")
 
     // Example 1: Simple GET request
-    println!("Example 1: GET Request")
-    println!("----------------------")
+    println("Example 1: GET Request")
+    println("----------------------")
     
     match get("https://api.github.com/zen", None).await {
         Ok(response) => {
-            println!("Status: {}", response.status)
-            println!("Body: {}", response.body)
+            println("Status: ${response.status}")
+            println("Body: ${response.body}")
         },
         Err(e) => {
-            println!("Error: {}", e)
+            println("Error: ${e}")
         }
     }
-    println!("")
+    println("")
 
     // Example 2: GET with headers
-    println!("Example 2: GET with Headers")
-    println!("---------------------------")
+    println("Example 2: GET with Headers")
+    println("---------------------------")
     
     let mut headers = Map::new()
     headers.insert("User-Agent", "Windjammer/1.0")
@@ -35,19 +35,19 @@ async fn main() {
     
     match get("https://api.github.com/users/github", Some(headers)).await {
         Ok(response) => {
-            println!("Status: {}", response.status)
-            println!("Content-Type: {}", response.headers.get("content-type").unwrap_or("unknown"))
-            println!("Body (first 200 chars): {}...", response.body.chars().take(200).collect::<string>())
+            println("Status: ${response.status}")
+            println("Content-Type: ${response.headers.get("content-type").unwrap_or("unknown")}")
+            println("Body (first 200 chars): ${response.body.chars().take(200).collect::<string>()}...")
         },
         Err(e) => {
-            println!("Error: {}", e)
+            println("Error: ${e}")
         }
     }
-    println!("")
+    println("")
 
     // Example 3: POST request with JSON
-    println!("Example 3: POST Request")
-    println!("-----------------------")
+    println("Example 3: POST Request")
+    println("-----------------------")
     
     let mut post_headers = Map::new()
     post_headers.insert("Content-Type", "application/json")
@@ -55,18 +55,18 @@ async fn main() {
     let json_body = r#"{"title": "Test Post", "body": "This is a test", "userId": 1}"#    
     match post("https://jsonplaceholder.typicode.com/posts", Some(post_headers), json_body).await {
         Ok(response) => {
-            println!("Status: {}", response.status)
-            println!("Response: {}", response.body)
+            println("Status: ${response.status}")
+            println("Response: ${response.body}")
         },
         Err(e) => {
-            println!("Error: {}", e)
+            println("Error: ${e}")
         }
     }
-    println!("")
+    println("")
 
     // Example 4: PUT request
-    println!("Example 4: PUT Request")
-    println!("----------------------")
+    println("Example 4: PUT Request")
+    println("----------------------")
     
     let mut put_headers = Map::new()
     put_headers.insert("Content-Type", "application/json")
@@ -74,33 +74,33 @@ async fn main() {
     let update_body = r#"{"title": "Updated Title", "body": "Updated content", "userId": 1}"#    
     match put("https://jsonplaceholder.typicode.com/posts/1", Some(put_headers), update_body).await {
         Ok(response) => {
-            println!("Status: {}", response.status)
-            println!("Response: {}", response.body)
+            println("Status: ${response.status}")
+            println("Response: ${response.body}")
         },
         Err(e) => {
-            println!("Error: {}", e)
+            println("Error: ${e}")
         }
     }
-    println!("")
+    println("")
 
     // Example 5: DELETE request
-    println!("Example 5: DELETE Request")
-    println!("-------------------------")
+    println("Example 5: DELETE Request")
+    println("-------------------------")
     
     match delete("https://jsonplaceholder.typicode.com/posts/1", None).await {
         Ok(response) => {
-            println!("Status: {}", response.status)
-            println!("Deleted successfully!")
+            println("Status: ${response.status}")
+            println("Deleted successfully!")
         },
         Err(e) => {
-            println!("Error: {}", e)
+            println("Error: ${e}")
         }
     }
-    println!("")
+    println("")
 
     // Example 6: Custom request method
-    println!("Example 6: Custom Request")
-    println!("-------------------------")
+    println("Example 6: Custom Request")
+    println("-------------------------")
     
     let mut custom_headers = Map::new()
     custom_headers.insert("Accept", "application/json")
@@ -112,39 +112,39 @@ async fn main() {
         None
     ).await {
         Ok(response) => {
-            println!("Status: {}", response.status)
-            println!("Body (first 300 chars): {}...", response.body.chars().take(300).collect::<string>())
+            println("Status: ${response.status}")
+            println("Body (first 300 chars): ${response.body.chars().take(300).collect::<string>()}...")
         },
         Err(e) => {
-            println!("Error: {}", e)
+            println("Error: ${e}")
         }
     }
-    println!("")
+    println("")
 
     // Example 7: Error handling
-    println!("Example 7: Error Handling")
-    println!("-------------------------")
+    println("Example 7: Error Handling")
+    println("-------------------------")
     
     match get("https://this-domain-does-not-exist-12345.com", None).await {
         Ok(response) => {
-            println!("Unexpected success: {}", response.status)
+            println("Unexpected success: ${response.status}")
         },
         Err(e) => {
-            println!("Expected error caught: {}", e)
+            println("Expected error caught: ${e}")
         }
     }
-    println!("")
+    println("")
 
-    println!("✅ All examples completed!")
-    println!("")
-    println!("Platform Notes:")
-    println!("  • Native:  Uses reqwest for HTTP requests")
-    println!("  • WASM:    Uses browser Fetch API")
-    println!("  • Same code works everywhere! 🎉")
-    println!("")
-    println!("Next Steps:")
-    println!("  • Try WebSocket support (coming soon!)")
-    println!("  • Build a REST API client")
-    println!("  • Create a web scraper")
+    println("✅ All examples completed!")
+    println("")
+    println("Platform Notes:")
+    println("  • Native:  Uses reqwest for HTTP requests")
+    println("  • WASM:    Uses browser Fetch API")
+    println("  • Same code works everywhere! 🎉")
+    println("")
+    println("Next Steps:")
+    println("  • Try WebSocket support (coming soon!)")
+    println("  • Build a REST API client")
+    println("  • Create a web scraper")
 }
 

@@ -24,13 +24,14 @@ pub fn lint_file(path: &Path, strict: bool) -> Result<()> {
 
     let mut lexer = Lexer::new(&source);
     let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new_with_source(tokens, file_name.clone(), source);
+    let mut parser = Parser::new_with_source(tokens, file_name.clone(), source.clone());
     let program = parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
     let mut linter = RustLeakageLinter::new(&file_name);
     linter.lint_program(&program);
+    linter.lint_source(&source);
     let warnings = linter.into_diagnostics();
 
     if warnings.is_empty() {

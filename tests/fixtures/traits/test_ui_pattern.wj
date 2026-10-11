@@ -50,5 +50,5 @@ fn main() {
         .child(Text::new("World"))
         .render()
     
-    println!("{}", result)
+    println("${result}")
 }

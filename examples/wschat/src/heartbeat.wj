@@ -84,7 +84,7 @@ impl HeartbeatManager {
                 
                 // Check all connections
                 let now = time.now_unix()
-                let mut timed_out = vec![]
+                let mut timed_out = []
                 
                 {
                     let hb = heartbeats.read()
@@ -154,7 +154,7 @@ impl HeartbeatManager {
         let heartbeats = self.last_heartbeats.read()
         let now = time.now_unix()
         
-        let mut statuses = vec![]
+        let mut statuses = []
         
         for (connection_id, last_heartbeat) in heartbeats {
             let elapsed = now - last_heartbeat
@@ -233,7 +233,7 @@ impl RecoveryManager {
         })
         
         // Return token ID (in production, this would be a secure random token)
-        format!("recovery_{}_{}", user_id, token.created_at)
+        "recovery_${user_id}_${token.created_at}"
     }
     
     pub fn validate_recovery_token(
@@ -269,7 +269,7 @@ impl RecoveryManager {
         let mut tokens = self.recovery_tokens.write()
         let now = time.now_unix()
         
-        let mut expired_users = vec![];
+        let mut expired_users = [];
         
         for (user_id, token) in tokens {
             if now > token.expires_at {

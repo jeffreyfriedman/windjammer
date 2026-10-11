@@ -3,7 +3,7 @@
 
 @export
 fn greet(name: string) -> string {
-    format!("Hello, {}! 👋 from Windjammer", name)
+    "Hello, ${name}! 👋 from Windjammer"
 }
 
 @export

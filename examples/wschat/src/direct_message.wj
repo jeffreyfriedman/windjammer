@@ -66,7 +66,7 @@ impl DirectMessageManager {
         let conversation_id = self.get_conversation_id(user1, user2)
         
         self.store.get_history(
-            format!("dm:{}", conversation_id),
+            "dm:${conversation_id}",
             limit,
             before_timestamp
         ).await
@@ -106,7 +106,7 @@ impl DirectMessageManager {
         
         let rows = self.store.pool.query_all(query, vec![user_id]).await?
         
-        let mut conversations = vec![]
+        let mut conversations = []
         
         for row in rows {
             let info = ConversationInfo {
@@ -146,7 +146,7 @@ impl DirectMessageManager {
         let query = "DELETE FROM messages WHERE room_id = $1"
         let result = self.store.pool.execute(
             query,
-            vec![format!("dm:{}", conversation_id)]
+            vec!["dm:${conversation_id}"]
         ).await?
         
         // Remove from active conversations
@@ -196,9 +196,9 @@ impl DirectMessageManager {
     fn get_conversation_id(self, user1: string, user2: string) -> string {
         // Create deterministic conversation ID (alphabetically sorted)
         if user1 < user2 {
-            format!("{}:{}", user1, user2)
+            "${user1}:${user2}"
         } else {
-            format!("{}:{}", user2, user1)
+            "${user2}:${user1}"
         }
     }
     
@@ -207,12 +207,12 @@ impl DirectMessageManager {
         
         // Add user2 to user1's conversations
         conversations.entry(user1.clone())
-            .or_insert(vec![])
+            .or_insert([])
             .push(user2.clone())
         
         // Add user1 to user2's conversations
         conversations.entry(user2)
-            .or_insert(vec![])
+            .or_insert([])
             .push(user1)
     }
     

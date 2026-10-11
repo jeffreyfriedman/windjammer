@@ -26,7 +26,7 @@ fn test_copy_works() {
     let d1 = use_plane(plane)
     let d2 = use_plane(plane)  // <-- Should work (plane was copied, not moved)
     
-    println("Distances: {}, {}", d1, d2)
+    println("Distances: ${d1}, ${d2}")
 }
 
 fn use_plane(p: Plane) -> f32 {
@@ -46,7 +46,7 @@ fn test_array_indexing() {
     let d2 = use_plane(planes[1])
     let d3 = use_plane(planes[2])
     
-    println("Array distances: {}, {}, {}", d1, d2, d3)
+    println("Array distances: ${d1}, ${d2}, ${d3}")
 }
 
 fn main() {

@@ -9,5 +9,5 @@ fn test_comparison(name: string) -> bool {
 fn main() {
     let n = "hello".to_string();
     let result = test_comparison(n);
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }

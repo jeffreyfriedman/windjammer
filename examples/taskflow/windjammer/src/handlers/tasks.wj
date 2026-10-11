@@ -36,7 +36,7 @@ pub fn list_by_project(req: Request, pool: DbPool) -> Response {
         }
     }
     
-    let mut tasks = vec![]
+    let mut tasks = []
     for row in rows {
         let task = TaskResponse {
             id: db.get_int(row, "id"),
@@ -294,7 +294,7 @@ pub fn search(req: Request, pool: DbPool) -> Response {
         }
     }
     
-    let mut tasks = vec![]
+    let mut tasks = []
     for row in rows {
         let task = TaskResponse {
             id: db.get_int(row, "id"),

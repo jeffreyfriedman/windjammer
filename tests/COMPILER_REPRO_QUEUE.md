@@ -269,9 +269,9 @@ A `string` local pushed into a `Vec` and then used again must not `.clone().clon
 
 Product `rendering/material_node_graph.rs`:
 ```wj
-let var_name = format!("node_{}", n.id)
+let var_name = "node_${n.id}"
 node_vars.push(var_name)
-code = code + format!("    let {} = {};\n", var_name, expr)
+code = code + "    let ${var_name} = ${expr};\n"
 ```
 Tip MultiFile does not double-clone (isolate GREEN). Tip-out still has `node_vars.push(var_name.clone().clone())`.
 
@@ -402,7 +402,7 @@ A reused `string` inserted into a map must not `.clone().clone()`. `contains_key
 Product `scene_graph/scene_graph_state.rs` `set_tag`:
 ```wj
 if !self.tag_index.contains_key(tag) {
-    self.tag_index.insert(tag, vec![])
+    self.tag_index.insert(tag, [])
 }
 if let Some(list) = self.tag_index.get_mut(tag) {
     list.push(node_id)

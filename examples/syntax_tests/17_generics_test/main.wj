@@ -29,11 +29,11 @@ fn swap<A, B>(a: A, b: B) -> (B, A) {
 fn main() {
     // Test identity function with int
     let x = identity(42)
-    println!("identity(42) = {}", x)
+    println("identity(42) = ${x}")
     
     // Test identity function with string  
     let s = identity("hello")
-    println!("identity(string) = {}", s)
+    println("identity(string) = ${s}")
     
-    println!("Generic type parameters work! ✓")
+    println("Generic type parameters work! ✓")
 }

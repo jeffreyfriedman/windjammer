@@ -18,6 +18,6 @@ impl Point {
 
 fn main() {
     let p = Point { x: 3, y: 4 }
-    println!("Point: ({}, {})", p.x, p.y)
+    println("Point: (${p.x}, ${p.y})")
 }
 

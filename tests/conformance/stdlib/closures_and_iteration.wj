@@ -36,8 +36,8 @@ fn test_closure_capture() {
 
 // --- Map pattern (transform each element) ---
 fn test_closure_map() {
-    let numbers = vec![1, 2, 3, 4, 5]
-    let mut doubled: Vec<int> = vec![]
+    let numbers = [1, 2, 3, 4, 5]
+    let mut doubled: Vec<int> = []
     for n in numbers {
         doubled.push(n * 2)
     }
@@ -53,8 +53,8 @@ fn test_closure_map() {
 
 // --- Filter pattern (keep matching elements) ---
 fn test_closure_filter() {
-    let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    let mut evens: Vec<int> = vec![]
+    let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let mut evens: Vec<int> = []
     for n in numbers {
         if n % 2 == 0 {
             evens.push(n)
@@ -72,7 +72,7 @@ fn test_closure_filter() {
 
 // --- Fold/reduce pattern (accumulate) ---
 fn test_closure_fold() {
-    let numbers = vec![1, 2, 3, 4, 5]
+    let numbers = [1, 2, 3, 4, 5]
     let mut sum = 0
     for n in numbers {
         sum += n
@@ -82,8 +82,8 @@ fn test_closure_fold() {
 
 // --- Chained operations (filter + map) ---
 fn test_closure_chain() {
-    let numbers = vec![1, 2, 3, 4, 5]
-    let mut result_vec: Vec<int> = vec![]
+    let numbers = [1, 2, 3, 4, 5]
+    let mut result_vec: Vec<int> = []
 
     // Filter evens, then square them
     for n in numbers {
@@ -126,7 +126,7 @@ fn test_closure_counter() {
 
 // --- Enumerate pattern (index + value) ---
 fn test_enumerate() {
-    let fruits = vec!["apple", "banana", "cherry"]
+    let fruits = ["apple", "banana", "cherry"]
     let mut result = ""
     let mut idx = 0
     for fruit in fruits {
@@ -141,8 +141,8 @@ fn test_enumerate() {
 
 // --- Nested iteration ---
 fn test_nested_iter() {
-    let matrix = vec![vec![1, 2, 3], vec![4, 5, 6]]
-    let mut flat: Vec<int> = vec![]
+    let matrix = [[1, 2, 3], [4, 5, 6]]
+    let mut flat: Vec<int> = []
     for row in matrix {
         for item in row {
             flat.push(item)

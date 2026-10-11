@@ -13,6 +13,6 @@ fn main() {
 }
 
 fn process_number(n: int) {
-    println!("{}", n)
+    println("${n}")
 }
 

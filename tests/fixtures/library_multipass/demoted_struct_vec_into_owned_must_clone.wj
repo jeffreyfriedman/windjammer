@@ -13,7 +13,7 @@ pub fn by_ordinal(fields: Vec<Field>, ordinal: int) -> Vec<Field> {
 }
 
 pub fn cap_count() -> int {
-    let fields = vec![Field { ordinal: 1 }, Field { ordinal: 2 }]
+    let fields = [Field { ordinal: 1 }, Field { ordinal: 2 }]
     let attrs = by_ordinal(fields, 1)
     attrs.len() as int
 }

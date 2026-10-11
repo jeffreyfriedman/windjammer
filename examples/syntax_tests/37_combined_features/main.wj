@@ -3,7 +3,7 @@
 
 // Generic function with Display inference
 fn print_value<T>(value: T) {
-    println!("{}", value)
+    println("${value}")
 }
 
 // Generic function with Clone inference
@@ -13,7 +13,7 @@ fn duplicate<T>(value: T) -> T {
 
 // Multiple inferred bounds: Display + Clone
 fn process<T>(value: T) -> T {
-    println!("Processing: {}", value)
+    println("Processing: ${value}")
     value.clone()
 }
 
@@ -32,47 +32,47 @@ fn test_display_inference() {
 @test
 fn test_clone_inference() {
     let x = duplicate(100)
-    assert_eq!(x, 100)
+    assert_eq(x, 100)
 }
 
 @test
 fn test_multiple_bounds() {
     let result = process(42)
-    assert_eq!(result, 42)
+    assert_eq(result, 42)
 }
 
 @test
 fn test_comparison() {
-    assert!(are_equal(5, 5))
-    assert!(!are_equal(5, 10))
+    assert(are_equal(5, 5))
+    assert(!are_equal(5, 10))
 }
 
 fn main() {
-    println!("=== v0.10.0 Combined Features Demo ===")
-    println!()
+    println("=== v0.10.0 Combined Features Demo ===")
+    println()
     
-    println!("1. Display inference:")
+    println("1. Display inference:")
     print_value(123)
     print_value("Windjammer")
-    println!()
+    println()
     
-    println!("2. Clone inference:")
+    println("2. Clone inference:")
     let dup = duplicate(999)
-    println!("   Duplicated: {}", dup)
-    println!()
+    println("   Duplicated: ${dup}")
+    println()
     
-    println!("3. Multiple bounds (Display + Clone):")
+    println("3. Multiple bounds (Display + Clone):")
     let val = process(456)
-    println!("   Processed: {}", val)
-    println!()
+    println("   Processed: ${val}")
+    println()
     
-    println!("4. Comparison inference:")
-    println!("   10 == 10: {}", are_equal(10, 10))
-    println!("   10 == 20: {}", are_equal(10, 20))
-    println!()
+    println("4. Comparison inference:")
+    println("   10 == 10: ${are_equal(10, 10)}")
+    println("   10 == 20: ${are_equal(10, 20)}")
+    println()
     
-    println!("5. Run tests with: cargo test")
-    println!()
+    println("5. Run tests with: cargo test")
+    println()
     
-    println!("✨ All v0.10.0 features working together!")
+    println("✨ All v0.10.0 features working together!")
 }

@@ -50,6 +50,10 @@ impl JavaScriptGenerator {
             } => {
                 let func_expr = self.generate_expression(function);
 
+                if let Some(intrinsic) = self.try_generate_intrinsic_call(&func_expr, arguments) {
+                    return intrinsic;
+                }
+
                 // Handle special functions
                 match func_expr.as_str() {
                     "println!" | "println" => {
@@ -213,23 +217,11 @@ impl JavaScriptGenerator {
                             } else {
                                 fmt.as_str()
                             };
-                            // Replace {} placeholders with ${arg} expressions
-                            let mut result = String::new();
-                            let mut arg_idx = 0;
-                            let mut chars = inner.chars().peekable();
-                            while let Some(ch) = chars.next() {
-                                if ch == '{' && chars.peek() == Some(&'}') {
-                                    chars.next(); // consume }
-                                    if arg_idx + 1 < args_str.len() {
-                                        result.push_str(&format!("${{{}}}", args_str[arg_idx + 1]));
-                                        arg_idx += 1;
-                                    } else {
-                                        result.push_str("{}");
-                                    }
-                                } else {
-                                    result.push(ch);
-                                }
-                            }
+                            // `{}` / `{:.2}` / `{:?}` placeholders -> `${arg}` (shared registry helper)
+                            let result = crate::intrinsics::template::js_template_from_format(
+                                inner,
+                                &args_str[1..],
+                            );
                             format!("`{}`", result)
                         }
                     }

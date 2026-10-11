@@ -56,31 +56,31 @@ fn init_with_level(level: LogLevel) {
 // Trace level - very detailed debugging
 fn trace(message: string) {
     // Wraps: log::trace!("{}", message)
-    println!("[TRACE] {}", message)
+    println("[TRACE] ${message}")
 }
 
 // Debug level - debugging information
 fn debug(message: string) {
     // Wraps: log::debug!("{}", message)
-    println!("[DEBUG] {}", message)
+    println("[DEBUG] ${message}")
 }
 
 // Info level - general information
 fn info(message: string) {
     // Wraps: log::info!("{}", message)
-    println!("[INFO] {}", message)
+    println("[INFO] ${message}")
 }
 
 // Warn level - warning messages
 fn warn(message: string) {
     // Wraps: log::warn!("{}", message)
-    println!("[WARN] {}", message)
+    println("[WARN] ${message}")
 }
 
 // Error level - error messages
 fn error(message: string) {
     // Wraps: log::error!("{}", message)
-    println!("[ERROR] {}", message)
+    println("[ERROR] ${message}")
 }
 
 //===============================================
@@ -90,31 +90,31 @@ fn error(message: string) {
 // Trace with context
 fn trace_with(message: string, key: string, value: string) {
     // Wraps: log::trace!("{} - {}: {}", message, key, value)
-    println!("[TRACE] {} - {}: {}", message, key, value)
+    println("[TRACE] ${message} - ${key}: ${value}")
 }
 
 // Debug with context
 fn debug_with(message: string, key: string, value: string) {
     // Wraps: log::debug!("{} - {}: {}", message, key, value)
-    println!("[DEBUG] {} - {}: {}", message, key, value)
+    println("[DEBUG] ${message} - ${key}: ${value}")
 }
 
 // Info with context
 fn info_with(message: string, key: string, value: string) {
     // Wraps: log::info!("{} - {}: {}", message, key, value)
-    println!("[INFO] {} - {}: {}", message, key, value)
+    println("[INFO] ${message} - ${key}: ${value}")
 }
 
 // Warn with context
 fn warn_with(message: string, key: string, value: string) {
     // Wraps: log::warn!("{} - {}: {}", message, key, value)
-    println!("[WARN] {} - {}: {}", message, key, value)
+    println("[WARN] ${message} - ${key}: ${value}")
 }
 
 // Error with context
 fn error_with(message: string, key: string, value: string) {
     // Wraps: log::error!("{} - {}: {}", message, key, value)
-    println!("[ERROR] {} - {}: {}", message, key, value)
+    println("[ERROR] ${message} - ${key}: ${value}")
 }
 
 //===============================================

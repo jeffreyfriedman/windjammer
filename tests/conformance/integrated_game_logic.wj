@@ -161,7 +161,7 @@ fn main() {
     println("[game] Created player: ${player.name} (HP: ${player.stats.hp}, ATK: ${player.stats.attack})")
 
     // Create enemies
-    let mut enemies: Vec<Enemy> = vec![]
+    let mut enemies: Vec<Enemy> = []
     enemies.push(Enemy::new(EnemyType::Goblin, 30, 5))
     enemies.push(Enemy::new(EnemyType::Skeleton, 40, 8))
     enemies.push(Enemy::new(EnemyType::Dragon, 100, 15))

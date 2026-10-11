@@ -130,7 +130,7 @@ async fn check_database(pool: DbPool) -> HealthCheck {
     let start = time.now().timestamp_millis()
     
     let query = "SELECT 1 as health_check"
-    let result = db.query_one(pool, query, vec![]).await
+    let result = db.query_one(pool, query, []).await
     
     let duration = time.now().timestamp_millis() - start
     

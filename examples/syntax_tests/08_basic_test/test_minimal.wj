@@ -31,10 +31,10 @@ fn fibonacci(n: i64) -> i64 {
 
 fn main() {
     let p = Point::new(3, 4)
-    println!("Point({}, {})", p.x, p.y)
+    println("Point(${p.x}, ${p.y})")
     
     let circle = Shape.Circle(5.0)
-    println!("Circle area: {}", area(&circle))
+    println("Circle area: ${area(&circle)}")
     
-    println!("fibonacci(10) = {}", fibonacci(10))
+    println("fibonacci(10) = ${fibonacci(10)}")
 }

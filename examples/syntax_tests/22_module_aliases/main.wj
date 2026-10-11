@@ -20,40 +20,40 @@ use std::math
 use std::strings
 
 fn main() {
-    println!("===== Module Aliases Demo =====")
-    println!("")
-    println!("Module aliases make imports cleaner:")
-    println!("  Windjammer: use std::math as m")
-    println!("  Rust:       use std::math as m")
-    println!("")
+    println("===== Module Aliases Demo =====")
+    println("")
+    println("Module aliases make imports cleaner:")
+    println("  Windjammer: use std::math as m")
+    println("  Rust:       use std::math as m")
+    println("")
     
     // Using the imported modules directly
-    println!("Using math functions:")
+    println("Using math functions:")
     let pi_value = PI
-    println!("  PI = {}", pi_value)
+    println("  PI = ${pi_value}")
     
     let sqrt_result = sqrt(16.0)
-    println!("  sqrt(16) = {}", sqrt_result)
+    println("  sqrt(16) = ${sqrt_result}")
     
     let power = pow(2.0, 8.0)
-    println!("  2^8 = {}", power)
+    println("  2^8 = ${power}")
     
-    println!("")
+    println("")
     
-    println!("Using string functions:")
+    println("Using string functions:")
     let text = "  windjammer  "
     let cleaned = trim(text)
-    println!("  trim('{}') = '{}'", text, cleaned)
+    println("  trim('${text}') = '${cleaned}'")
     
     let upper = to_upper("hello")
-    println!("  to_upper('hello') = '{}'", upper)
+    println("  to_upper('hello') = '${upper}'")
     
     let contains_result = contains("windjamme", "jam")
-    println!("  contains('windjammer', 'jam') = {}", contains_result)
+    println("  contains('windjammer', 'jam') = ${contains_result}")
     
-    println!("")
-    println!("✓ Module aliases work!")
-    println!("✓ (Full :: expression support coming in future version)")
+    println("")
+    println("✓ Module aliases work!")
+    println("✓ (Full :: expression support coming in future version)")
 }
 
 // 🎯 The Win:

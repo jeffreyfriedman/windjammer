@@ -4,7 +4,7 @@ pub fn adj_key(edge_kind: string, vertex: int) -> string {
     // `key.push_str(&edge_kind)` → expected &str, found &impl Into<String>.
     key.push_str(edge_kind)
     key.push_str(":")
-    key.push_str(format!("{}", vertex))
+    key.push_str("${vertex}")
     key
 }
 

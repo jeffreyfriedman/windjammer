@@ -108,7 +108,7 @@ fn update(game: PongGame, delta: float, input: Input) {
     // Scoring - left side
     if game.ball_x <= 0.0 {
         game.score_right += 1
-        println("Right scores! Score: {} - {}", game.score_left, game.score_right)
+        println("Right scores! Score: ${game.score_left} - ${game.score_right}")
         
         // Reset ball
         game.ball_x = 400.0
@@ -120,7 +120,7 @@ fn update(game: PongGame, delta: float, input: Input) {
     // Scoring - right side
     if game.ball_x >= 800.0 {
         game.score_left += 1
-        println("Left scores! Score: {} - {}", game.score_left, game.score_right)
+        println("Left scores! Score: ${game.score_left} - ${game.score_right}")
         
         // Reset ball
         game.ball_x = 400.0
@@ -163,7 +163,7 @@ fn handle_input(game: PongGame, input: Input) {
 
 @cleanup
 fn cleanup(game: PongGame) {
-    println("Final Score: {} - {}", game.score_left, game.score_right)
+    println("Final Score: ${game.score_left} - ${game.score_right}")
     println("Thanks for playing PONG!")
 }
 

@@ -41,7 +41,7 @@ impl PresenceTracker {
                 user_id: user_id,
                 status: PresenceStatus::Online,
                 last_seen: time.now_unix(),
-                rooms: vec![room],
+                rooms: [room],
             })
     }
     

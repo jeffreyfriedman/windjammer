@@ -13,23 +13,23 @@ fn time_examples() {
     
     // Current time
     let now = time.now()
-    log.info(format!("Current time: {}", time.to_rfc3339(&now)))
+    log.info("Current time: ${time.to_rfc3339(&now)}")
     
     // Format time
     let formatted = time.format(&now, "%Y-%m-%d %H:%M:%S")
-    log.info(format!("Formatted: {}", formatted))
+    log.info("Formatted: ${formatted}")
     
     // Time arithmetic
     let future = time.add(&now, time.hours(24))
-    log.info(format!("24 hours from now: {}", time.to_rfc3339(&future)))
+    log.info("24 hours from now: ${time.to_rfc3339(&future)}")
     
     // Unix timestamp
     let timestamp = time.timestamp(&now)
-    log.info(format!("Unix timestamp: {}", timestamp))
+    log.info("Unix timestamp: ${timestamp}")
     
     // Duration
     let duration = time.minutes(30)
-    log.debug(format!("Duration created: {:?}", duration))
+    log.debug("Duration created: ${duration:?}")
 }
 
 // === STRING EXAMPLES ===
@@ -40,21 +40,21 @@ fn string_examples() {
     // Splitting
     let text = "hello,world,rust"
     let parts = strings.split(text, ",")
-    log.info(format!("Split: {:?}", parts))
+    log.info("Split: ${parts:?}")
     
     // Joining
     let joined = strings.join(&parts, " | ")
-    log.info(format!("Joined: {}", joined))
+    log.info("Joined: ${joined}")
     
     // Case conversion
     let upper = strings.to_uppercase("hello world")
     let lower = strings.to_lowercase("HELLO WORLD")
     let cap = strings.capitalize("hello")
-    log.info(format!("Upper: {}, Lower: {}, Cap: {}", upper, lower, cap))
+    log.info("Upper: ${upper}, Lower: ${lower}, Cap: ${cap}")
     
     // Trimming
     let trimmed = strings.trim("  spaces  ")
-    log.info(format!("Trimmed: '{}'", trimmed))
+    log.info("Trimmed: '${trimmed}'")
     
     // Searching
     if strings.contains("hello world", "world") {
@@ -63,11 +63,11 @@ fn string_examples() {
     
     // Replacement
     let replaced = strings.replace("foo bar foo", "foo", "baz")
-    log.info(format!("Replaced: {}", replaced))
+    log.info("Replaced: ${replaced}")
     
     // Substring
     let sub = strings.substring("hello world", 0, 5)
-    log.info(format!("Substring: {}", sub))
+    log.info("Substring: ${sub}")
 }
 
 // === MATH EXAMPLES ===
@@ -76,35 +76,35 @@ fn math_examples() {
     log.info("\n=== Math Examples ===")
     
     // Constants
-    log.info(format!("PI = {}", math.PI))
-    log.info(format!("E = {}", math.E))
+    log.info("PI = ${math.PI}")
+    log.info("E = ${math.E}")
     
     // Basic operations
     let sqrt_result = math.sqrt(16.0)
     let pow_result = math.pow(2.0, 8.0)
-    log.info(format!("sqrt(16) = {}", sqrt_result))
-    log.info(format!("2^8 = {}", pow_result))
+    log.info("sqrt(16) = ${sqrt_result}")
+    log.info("2^8 = ${pow_result}")
     
     // Rounding
     let x = 3.7
-    log.info(format!("round({}) = {}", x, math.round(x)))
-    log.info(format!("floor({}) = {}", x, math.floor(x)))
-    log.info(format!("ceil({}) = {}", x, math.ceil(x)))
+    log.info("round(${x}) = ${math.round(x)}")
+    log.info("floor(${x}) = ${math.floor(x)}")
+    log.info("ceil(${x}) = ${math.ceil(x)}")
     
     // Trigonometry
     let angle = math.to_radians(45.0)
     let sine = math.sin(angle)
-    log.info(format!("sin(45°) = {}", sine))
+    log.info("sin(45°) = ${sine}")
     
     // Min/Max
     let min_val = math.min_f64(10.0, 20.0)
     let max_val = math.max_f64(10.0, 20.0)
-    log.info(format!("min(10, 20) = {}, max(10, 20) = {}", min_val, max_val))
+    log.info("min(10, 20) = ${min_val}, max(10, 20) = ${max_val}")
     
     // Random
     let random_num = math.random()
     let random_range = math.random_range(1, 100)
-    log.info(format!("Random: {}, Random range: {}", random_num, random_range))
+    log.info("Random: ${random_num}, Random range: ${random_range}")
 }
 
 // === LOGGING EXAMPLES ===
@@ -145,11 +145,11 @@ fn process_data() {
             let age = &fields[1]
             let role = &fields[2]
             
-            log.info(format!("Name: {}, Age: {}, Role: {}", name, age, role))
+            log.info("Name: ${name}, Age: ${age}, Role: ${role}")
             
             // Do some processing
             let age_in_months = age.parse::<i64>().unwrap() * 12
-            log.debug(format!("{} is {} months old", name, age_in_months))
+            log.debug("${name} is ${age_in_months} months old")
         }
     }
 }
@@ -188,11 +188,11 @@ fn calculate_statistics(numbers: &[f64]) {
     let std_dev = math.sqrt(variance)
     
     // Log results
-    log.info(format!("Count: {}", numbers.len()))
-    log.info(format!("Sum: {:.2}", sum))
-    log.info(format!("Mean: {:.2}", mean))
-    log.info(format!("Min: {:.2}, Max: {:.2}", min, max))
-    log.info(format!("Std Dev: {:.2}", std_dev))
+    log.info("Count: ${numbers.len()}")
+    log.info("Sum: ${sum:.2}")
+    log.info("Mean: ${mean:.2}")
+    log.info("Min: ${min:.2}, Max: ${max:.2}")
+    log.info("Std Dev: ${std_dev:.2}")
 }
 
 // === MAIN ===
@@ -212,7 +212,7 @@ fn main() {
     process_data()
     
     // Statistics example
-    let numbers = vec![10.0, 20.0, 30.0, 40.0, 50.0]
+    let numbers = [10.0, 20.0, 30.0, 40.0, 50.0]
     calculate_statistics(&numbers)
     
     log.info("\n✅ All examples completed successfully!")

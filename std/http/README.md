@@ -32,8 +32,8 @@ use std::http
 
 fn main() {
     let response = http::get("https://api.example.com/data").unwrap()
-    println!("Status: {}", response.status)
-    println!("Body: {}", response.body)
+    println("Status: ${response.status}")
+    println("Body: ${response.body}")
 }
 ```
 
@@ -124,17 +124,17 @@ use std::http::{Server, ServerRequest, ServerResponse}
 use std::fs
 
 fn main() {
-    println!("Starting server on http://localhost:3000")
+    println("Starting server on http://localhost:3000")
     
     let server = Server::new("127.0.0.1", 3000)
     match server.serve(handle_request) {
-        Ok(_) => println!("Server stopped"),
-        Err(e) => println!("Error: {}", e),
+        Ok(_) => println("Server stopped"),
+        Err(e) => println("Error: ${e}"),
     }
 }
 
 fn handle_request(req: ServerRequest) -> ServerResponse {
-    println!("{} {}", req.method, req.path)
+    println("${req.method} ${req.path}")
     
     match req.path.as_str() {
         "/" => serve_home(),
@@ -273,7 +273,7 @@ fn handle_api(req: ServerRequest) -> ServerResponse {
 ### 3. Serve Static Files
 ```windjammer
 fn serve_static(path: string) -> ServerResponse {
-    let content = fs::read(format!("public{}", path)).unwrap()
+    let content = fs::read("public${path}").unwrap()
     ServerResponse::binary(200, content)
         .header("Content-Type", mime::from_path(path))
 }

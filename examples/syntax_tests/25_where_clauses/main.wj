@@ -7,8 +7,8 @@ where
     T: Display,
     U: Display
 {
-    println!("First: {}", first)
-    println!("Second: {}", second)
+    println("First: ${first}")
+    println("Second: ${second}")
 }
 
 // Complex where clause with multiple bounds
@@ -20,10 +20,10 @@ where
     let a_copy = a.clone()
     let b_copy = b.clone()
     
-    println!("A: {}", a)
-    println!("A copy: {}", a_copy)
-    println!("B: {}", b)
-    println!("B copy: {}", b_copy)
+    println("A: ${a}")
+    println("A copy: ${a_copy}")
+    println("B: ${b}")
+    println("B copy: ${b_copy}")
 }
 
 // Struct with where clause
@@ -42,8 +42,8 @@ where
     U: Clone + Display
 {
     fn display(&self) {
-        println!("First: {}", self.first)
-        println!("Second: {}", self.second)
+        println("First: ${self.first}")
+        println("Second: ${self.second}")
     }
     
     fn clone_first(&self) -> T {
@@ -52,23 +52,23 @@ where
 }
 
 fn main() {
-    println!("=== Where Clauses Example ===")
+    println("=== Where Clauses Example ===")
     
     // Test simple where clause
-    println!("\n1. Simple where clause:")
+    println("\n1. Simple where clause:")
     print_both(42, "Hello")
     
     // Test complex where clause with multiple bounds
-    println!("\n2. Complex where clause (multiple bounds):")
+    println("\n2. Complex where clause (multiple bounds):")
     display_and_clone(100, "test")
     
     // Test struct with where clause
-    println!("\n3. Struct with where clause:")
+    println("\n3. Struct with where clause:")
     let pair = Pair { first: 100, second: 200 }
     pair.display()
     let first_copy = pair.clone_first()
-    println!("Cloned first: {}", first_copy)
+    println("Cloned first: ${first_copy}")
     
-    println!("\n=== Done ===")
+    println("\n=== Done ===")
 }
 

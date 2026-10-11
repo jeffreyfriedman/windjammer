@@ -132,11 +132,11 @@ fn fetch_and_process() -> Result<Vec<ProcessedData>, Error> {
 ```windjammer
 match http::get("https://api.example.com/data") {
     Ok(response) => {
-        println!("Status: ${response.status}")
-        println!("Body: ${response.body}")
+        println("Status: ${response.status}")
+        println("Body: ${response.body}")
     }
     Err(e) => {
-        println!("Request failed: ${e}")
+        println("Request failed: ${e}")
     }
 }
 ```
