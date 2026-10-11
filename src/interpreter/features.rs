@@ -133,7 +133,7 @@ pub const FEATURES: &[Feature] = &[
     ok("std.data", "Std modules", "`csv`, `url`, `mime`, `crypto` (sha/base64/bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`",
        "use std::crypto\nfn main() {\n    println(crypto::base64_encode(\"hi\"))\n}\n", "aGk="),
     no("std.http_network", "Std modules", "`std::http` client without a capability flag (use `--mock-http FILE` or `--allow-network`); `http::serve` servers",
-       "use std::http\nfn main() {\n    match http::serve_fn(\"127.0.0.1:0\", |r| r) { Ok(_) => println(\"x\"), Err(e) => println(e) }\n}\n", "http::serve_fn"),
+       "use std::http\nfn main() {\n    match http::serve_fn(\"127.0.0.1:0\", |r| r) { Ok(_) => println(\"x\"), Err(e) => println(e) }\n}\n", "serve_fn` is not implemented"),
     no("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)",
        "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\n", "thread {}"),
     no("ffi.extern_fn", "FFI", "calls to `extern fn`",
