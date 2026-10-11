@@ -469,6 +469,7 @@ impl LanguageServer for WindjammerLanguageServer {
 
                 // Formatting
                 document_formatting_provider: Some(OneOf::Left(true)),
+                document_range_formatting_provider: Some(OneOf::Left(true)),
 
                 // Inlay hints (ownership annotations)
                 inlay_hint_provider: Some(OneOf::Left(true)),
@@ -861,13 +862,26 @@ impl LanguageServer for WindjammerLanguageServer {
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
-        tracing::debug!("Format document: {}", params.text_document.uri);
+        let uri = params.text_document.uri;
+        tracing::debug!("Format document: {}", uri);
+        let Some(text) = self.documents.get(&uri).map(|d| d.clone()) else {
+            return Ok(None);
+        };
+        let opts = crate::formatting::options_for(&uri, &params.options);
+        Ok(crate::formatting::format_document(&text, &opts))
+    }
 
-        // TODO: Integrate with `wj fmt`
-        // - Format the document
-        // - Return text edits
-
-        Ok(None)
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        let uri = params.text_document.uri;
+        tracing::debug!("Format range: {} {:?}", uri, params.range);
+        let Some(text) = self.documents.get(&uri).map(|d| d.clone()) else {
+            return Ok(None);
+        };
+        let opts = crate::formatting::options_for(&uri, &params.options);
+        Ok(crate::formatting::format_range(&text, &opts, params.range))
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {

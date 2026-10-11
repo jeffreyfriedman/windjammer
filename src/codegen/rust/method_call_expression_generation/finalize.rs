@@ -18,7 +18,7 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
-        if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
+        if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
         let mut obj_str = obj_str;
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);
@@ -1784,7 +1784,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .is_some_and(|sig| {
                         self.is_collection_key_lookup_at_site(sig, i, receiver_type_name.as_deref())
                     });
-            if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
+            if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
             // Do not undo IR ToOwnedString on emit-owned `String` slots. `expects_pattern`
             // can be true from a stale all-`&str` snapshot after a sibling demote
             // (notes-api `handle(method: &str, origin: String)`).
@@ -1829,7 +1829,7 @@ impl<'ast> CodeGenerator<'ast> {
                     arg_expr,
                     arg_str,
                 );
-                if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() && method == "find" {}
+                if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
             }
             // P3.402: always peel `&'.'` even when Pattern formal lookup missed.
             crate::codegen::rust::string_utilities::peel_amp_from_char_literal_arg(

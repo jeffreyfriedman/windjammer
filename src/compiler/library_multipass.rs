@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 fn profiling_enabled() -> bool {
-    std::env::var("WJ_PROFILE").is_ok_and(|v| v == "1" || v == "true")
+    crate::debug_env::truthy("WJ_PROFILE")
 }
 
 fn profile_phase(phase: &str, start: Instant) {
@@ -146,8 +146,8 @@ fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
 ///
 /// Shared by multipass + single-file API-type collection. Prefer env / crate
 /// manifest over `current_exe()` so `cargo test` binaries still resolve `std/`.
-pub(crate) fn find_stdlib_dir() -> Option<PathBuf> {
-    crate::compiler::library_copy_registry::find_stdlib_dir_for_api_types()
+pub(crate) fn find_stdlib_dir(override_dir: Option<&Path>) -> Option<PathBuf> {
+    crate::compiler::library_copy_registry::find_stdlib_dir_for_api_types(override_dir)
 }
 
 /// Match a step-2 metadata key (`Type::method`) to the converged multipass registry entry.
@@ -183,6 +183,7 @@ pub(crate) fn build_library_multipass(
     enable_lint: bool,
     external_paths: &HashMap<String, PathBuf>,
     mut crate_metadata: CrateMetadata,
+    config: &crate::compiler_config::CompilerConfig,
 ) -> Result<()> {
     let phase_start = Instant::now();
 
@@ -199,7 +200,7 @@ pub(crate) fn build_library_multipass(
 
     // If stdlib is needed, prepend stdlib source files FIRST
     if !needed_stdlib_modules.is_empty() {
-        if let Some(stdlib_dir) = find_stdlib_dir() {
+        if let Some(stdlib_dir) = find_stdlib_dir(config.stdlib_path.as_deref()) {
             for module in &needed_stdlib_modules {
                 let stdlib_file = stdlib_dir.join(format!("{}.wj", module));
                 if stdlib_file.exists() {
@@ -1046,7 +1047,7 @@ pub(crate) fn build_library_multipass(
     }
 
     // Diagnostic: dump registry state for key methods before codegen.
-    if std::env::var("WJ_REGISTRY_TRACE").is_ok() {
+    if crate::debug_env::enabled("WJ_REGISTRY_TRACE") {
         for key in &[
             "DialogueTree::get_node",
             "dialogue_tree::DialogueTree::get_node",
@@ -1233,7 +1234,7 @@ pub(crate) fn build_library_multipass(
         .collect();
     codegen_indices = dependency_graph.sort_indices_for_codegen(&codegen_indices);
 
-    if std::env::var_os("WJ_DEBUG_CODEGEN_ORDER").is_some() {
+    if crate::debug_env::enabled("WJ_DEBUG_CODEGEN_ORDER") {
         let order: Vec<String> = codegen_indices
             .iter()
             .filter_map(|i| {
@@ -1296,7 +1297,7 @@ pub(crate) fn build_library_multipass(
         for i in batch {
             let file = &sources[*i].0;
             let file_progress =
-                total_codegen > 50 || std::env::var_os("WJ_DEBUG_CODEGEN_FILE").is_some();
+                total_codegen > 50 || crate::debug_env::enabled("WJ_DEBUG_CODEGEN_FILE");
             let file_start = Instant::now();
             if file_progress {
                 let rel = file
@@ -1386,6 +1387,7 @@ pub(crate) fn build_library_multipass(
             } else {
                 CodeGenerator::new_for_module(full_registry, target)
             };
+            codegen.set_config(config.clone());
             codegen.set_global_signature_registry(std::sync::Arc::clone(&final_global_registry));
             codegen.merge_function_emitted_mut_arg_indices(&accumulated_emitted_mut_arg_indices);
             codegen.set_copy_types_registry((*global_copy_structs).clone());
@@ -1401,6 +1403,7 @@ pub(crate) fn build_library_multipass(
                 let (std_fields, std_variants, std_paths) =
                     super::library_copy_registry::collect_stdlib_api_types_for_modules(
                         &needed_stdlib_modules,
+                        config.stdlib_path.as_deref(),
                     );
                 if !std_fields.is_empty() {
                     codegen.set_global_struct_field_types(std_fields);
@@ -1577,7 +1580,7 @@ pub(crate) fn build_library_multipass(
             }
         }
 
-        super::generate_cargo_manifests(base_path, output, target, true)?;
+        super::generate_cargo_manifests(base_path, output, target, true, config)?;
 
         let stale = super::cache_management::find_stale_codegen_outputs_with_dep_epoch(
             &sources,

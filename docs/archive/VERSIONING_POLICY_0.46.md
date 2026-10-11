@@ -1,3 +1,5 @@
+> **Archived.** Replaced by [../VERSIONING.md](../VERSIONING.md). Versions and release plans in this file are out of date.
+
 # Windjammer Versioning Policy
 
 ## Current Versions

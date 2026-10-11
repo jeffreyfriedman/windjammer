@@ -1,0 +1,17 @@
+mod shapes {
+    pub fn describe() -> int { 1 }
+    pub mod inner {
+        pub fn describe() -> int { 2 }
+        pub fn both() -> int { describe() + super::describe() }
+    }
+}
+
+mod util {
+    pub fn describe() -> int { 3 }
+}
+
+use util::describe as util_describe
+
+pub fn run() -> int {
+    shapes::describe() + shapes::inner::describe() + util_describe() + shapes::inner::both()
+}

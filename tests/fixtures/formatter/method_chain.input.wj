@@ -1,0 +1,6 @@
+fn f() {
+let v = items
+.iter()
+.map(|x| x * 2)
+.collect()
+}

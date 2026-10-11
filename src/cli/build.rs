@@ -56,7 +56,10 @@ pub fn execute(
     json_output: bool,
     ir_shadow_validate: bool,
 ) -> Result<()> {
-    crate::ir::shadow::set_shadow_validate_strict(ir_shadow_validate);
+    // Driver edge: the one place the environment is turned into explicit configuration.
+    let config = crate::compiler_config::CompilerConfig::from_env()
+        .with_shadow_validate_strict(ir_shadow_validate)
+        .with_skip_cargo_toml_generation(no_generate_cargo_toml);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
 
     if json_output {
@@ -68,7 +71,7 @@ pub fn execute(
             library,
             module_file,
             enable_lint,
-            no_generate_cargo_toml,
+            &config,
             metadata,
         );
     }
@@ -129,14 +132,14 @@ pub fn execute(
 
     let external_metadata = parse_external_metadata_args(metadata);
 
-    crate::cargo_toml::set_skip_cargo_toml_generation(no_generate_cargo_toml);
-    crate::build_project_ext(
+    crate::build_project_with_config(
         path,
         output_dir,
         target,
         enable_lint,
         library,
         &external_metadata,
+        &config,
     )?;
 
     crate::build_utils::apply_library_build_post_steps(path, output_dir, library, module_file)?;
@@ -228,7 +231,7 @@ fn build_with_json_output(
     library: bool,
     _module_file: bool,
     enable_lint: bool,
-    no_generate_cargo_toml: bool,
+    config: &crate::compiler_config::CompilerConfig,
     metadata: &[String],
 ) -> Result<()> {
     use crate::cli::json_diagnostics::{JsonCompilationOutput, JsonDiagnostic, Severity};
@@ -248,15 +251,14 @@ fn build_with_json_output(
         }
     };
 
-    crate::cargo_toml::set_skip_cargo_toml_generation(no_generate_cargo_toml);
-
-    match crate::build_project_ext(
+    match crate::build_project_with_config(
         path,
         output_dir,
         target,
         enable_lint,
         library,
         &external_metadata,
+        config,
     ) {
         Ok(()) => {
             let mut output = JsonCompilationOutput::new_success();

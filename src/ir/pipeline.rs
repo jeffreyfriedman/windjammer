@@ -478,8 +478,10 @@ impl IrPipeline {
     /// Check if the IR pipeline is ready to fully replace the legacy path.
     ///
     /// Returns true only when all IR cutover categories are enabled and validated.
-    pub fn is_ready_for_cutover(&self) -> bool {
-        let config = crate::codegen::rust::generator::IrCutoverConfig::from_env();
+    pub fn is_ready_for_cutover(
+        &self,
+        config: &crate::codegen::rust::generator::IrCutoverConfig,
+    ) -> bool {
         config.all_enabled()
     }
 }

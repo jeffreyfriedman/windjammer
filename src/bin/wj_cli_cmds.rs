@@ -123,8 +123,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 allow_empty,
             })?;
         }
-        Commands::Fmt { check } => {
-            windjammer::cli::fmt::execute(check)?;
+        Commands::Fmt { check, rust, paths } => {
+            windjammer::cli::fmt::execute(check, &paths, rust)?;
         }
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
