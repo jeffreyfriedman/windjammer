@@ -113,10 +113,10 @@ impl Panel {
     let result = test_utils::compile_single_result(code);
     assert!(result.is_ok(), "Compilation failed: {:?}", result);
     let generated = result.unwrap();
-    // Check that we clone the field before matching
+    // The field must not be moved out of `self`: either borrowed (preferred) or cloned.
     assert!(
-        generated.contains("self.selected_id.clone()"),
-        "Should clone self.field to avoid partial move: {}",
+        generated.contains("&self.selected_id") || generated.contains("self.selected_id.clone()"),
+        "Should borrow or clone self.field to avoid partial move: {}",
         generated
     );
 }
