@@ -48,6 +48,9 @@ pub fn head(ctx: &Ctx) -> Option<String> {
 
 /// Lines changed in `paths` between `sha` and HEAD (None when git cannot tell).
 pub fn changed_lines(ctx: &Ctx, sha: &str, paths: &[String]) -> Option<usize> {
+    if paths.is_empty() {
+        return Some(0); // `git diff -- ` with no paths would count the whole repository
+    }
     let mut args = vec!["diff", "--numstat", sha, "HEAD", "--"];
     args.extend(paths.iter().map(|p| p.as_str()));
     let out = git(ctx, &args)?;

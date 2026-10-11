@@ -98,8 +98,9 @@ wj
 
 Optional, to keep build artifacts outside repositories:
 
+<!-- ignore: changes the user's environment (cache directory and env files), so CI does not run it -->
 ```bash,ignore
-./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory (changes the user's environment: not run in CI)
+./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory
 wj cache status | wj cache path | wj cache prune
 ```
 

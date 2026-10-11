@@ -29,7 +29,7 @@ require = true
 
 # Shell fences that run `wj` in these documents must be `sh,verify` (executed in CI with the built wj).
 [verify]
-required = ["README.md"]
+required = ["README.md", "AGENTS.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "examples/README.md", "examples/*/README.md", "templates/*/README.md"]
 
 # Rule-id namespaces: ids cited in docs must be defined in the matching files. A namespace is
 # inactive until at least one defining file exists.

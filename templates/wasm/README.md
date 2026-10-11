@@ -6,7 +6,8 @@ A WebAssembly application built with Windjammer.
 
 ### Build for WASM
 
-```bash
+<!-- ignore: template for a new project: needs the wasm toolchain -->
+```bash,ignore
 wj build --target wasm
 ```
 
