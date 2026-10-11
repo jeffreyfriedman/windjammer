@@ -11,6 +11,9 @@ const ALLOWED: &[&str] = &[
     "src/debug_env.rs",
     "src/test_runner/",
     "src/error_statistics.rs",
+    // Not compiler configuration: this is the interpreted *user program's* `std::env::var`
+    // (stdlib semantics, same as fs/io there). It must read the real process environment.
+    "src/interpreter/builtins/std_fns.rs",
 ];
 
 fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {

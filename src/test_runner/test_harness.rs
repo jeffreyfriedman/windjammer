@@ -37,23 +37,30 @@ pub(crate) fn mark_tests(mut rust_code: String, tests: &[TestFunction]) -> Strin
 }
 
 fn mark_free_function(rust_code: String, name: &str) -> String {
-    let already_marked = [
-        format!("#[test]\npub fn {name}()"),
-        format!("#[test]\nfn {name}()"),
-        format!("#[test]\n#[inline]\npub fn {name}()"),
-        format!("#[test]\n#[inline]\nfn {name}()"),
-    ]
-    .iter()
-    .any(|pat| rust_code.contains(pat));
-    if already_marked {
-        return rust_code;
-    }
     for sig in [format!("pub fn {name}()"), format!("fn {name}()")] {
-        if rust_code.contains(&sig) {
+        if let Some(pos) = rust_code.find(&sig) {
+            if preceded_by_test_attribute(&rust_code[..pos]) {
+                return rust_code;
+            }
             return rust_code.replacen(&sig, &format!("#[test]\n{sig}"), 1);
         }
     }
     rust_code
+}
+
+/// True when the attribute block directly above an item (attribute lines and blank lines, in
+/// any order) already contains `#[test]`. Codegen may separate it from the `fn` by a blank line.
+fn preceded_by_test_attribute(before: &str) -> bool {
+    for line in before.lines().rev() {
+        let t = line.trim();
+        if t == "#[test]" {
+            return true;
+        }
+        if !(t.is_empty() || t.starts_with("#[")) {
+            return false;
+        }
+    }
+    false
 }
 
 fn assoc_wrapper(ty: &str, name: &str) -> String {
@@ -119,5 +126,16 @@ mod tests {
         assert!(out.contains("Suite::test_assoc();"));
         let again = mark_tests(out.clone(), &tests[..1]);
         assert_eq!(again.matches("#[test]\npub fn test_free()").count(), 1);
+    }
+
+    #[test]
+    fn codegen_marked_test_separated_by_blank_line_is_not_marked_twice() {
+        let tests = vec![TestFunction {
+            name: "test_smoke".into(),
+            file: PathBuf::new(),
+            scope: TestScope::TopLevel,
+        }];
+        let src = "#[test]\n\n#[inline]\npub fn test_smoke() {}\n";
+        assert_eq!(mark_tests(src.into(), &tests), src);
     }
 }

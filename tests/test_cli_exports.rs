@@ -18,15 +18,19 @@
 #[cfg(feature = "cli")]
 #[test]
 fn test_run_tests_is_exported() {
-    // Verify run_tests exists and can be called - use temp dir with no .wj files
+    // Finding zero tests is an error by default (a silently green empty run hides misconfiguration)...
     let temp = tempfile::tempdir().unwrap();
     let result = windjammer::run_tests(Some(temp.path()), None, false, true, false);
-    // Empty dir: no test files found, returns Ok(())
-    assert!(
-        result.is_ok(),
-        "run_tests should succeed for empty dir: {:?}",
-        result
-    );
+    assert!(result.is_err(), "empty dir must be an error by default: {:?}", result);
+
+    // ...and `--allow-empty` (exported `TestRunOptions`) opts back in to success.
+    let opts = windjammer::TestRunOptions {
+        path: Some(temp.path().to_path_buf()),
+        allow_empty: true,
+        ..Default::default()
+    };
+    let result = windjammer::run_tests_with_options(opts);
+    assert!(result.is_ok(), "allow_empty should succeed for empty dir: {:?}", result);
 }
 
 #[cfg(feature = "cli")]
