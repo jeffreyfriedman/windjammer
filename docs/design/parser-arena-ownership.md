@@ -15,10 +15,11 @@ the parser was leaked by hand at the call site.
 
 ## Current fix (shipped)
 
-The arenas are `ArenaSlot`s that are never freed. Dropping a `Parser` retires its arenas (counted in
-`parser_impl::retired_arenas()`), so every `Program<'static>` stays valid for the life of the process.
+The parser's arenas are a wrapper (`parser_impl::Arena`, same API as `typed_arena::Arena`) that is never freed. Dropping a `Parser` retires its arenas (counted in a per-parser
+`ArenaLedger`s, reachable through `Parser::arena_ledger()`), so every `Program<'static>` stays valid for the life of the process.
 `tests/parser_arena_soundness_test.rs` drops the parser first, then walks the whole program, and asserts that
-`parser_impl::freed_arenas()` stays 0; a mutation test shows the counter fires if an arena is ever freed.
+the ledger's `freed()` stays 0; a mutation test shows the ledger fires if an arena is ever freed. (The ledger is per parser because
+the architecture ratchet forbids new process-global state.)
 
 Cost: AST memory of every parse lives until process exit. That is fine for `wj build/run/check` and for tests,
 and a growth risk for long-lived processes (the LSP) that re-parse on every edit.
