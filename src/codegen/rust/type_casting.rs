@@ -105,7 +105,7 @@ pub fn assignment_int_peer_from_formal(formal: Option<&Type>) -> Option<Type> {
     {
         return Some(Type::Uint);
     }
-    // Signature width for `u64`/`usize`/narrow ints — `vec![10]` into `Vec<u64>` (DB-127).
+    // Signature width for `u64`/`usize`/narrow ints — `vec![10]` into `Vec<u64>`.
     if let Some(Type::Custom(n)) = formal {
         if matches!(
             n.as_str(),
@@ -128,7 +128,7 @@ pub fn assignment_int_peer_from_owner_type_name(type_name: &str) -> Option<Type>
     None
 }
 
-/// Coerce a WJ `int`/`i64` argument to an `i32` formal (DB-160 / `process::exit`).
+// Coerce a WJ `int`/`i64` argument to an `i32` formal (`process::exit`).
 ///
 /// Signature-driven: only when the resolved formal is `i32`. Literals already
 /// suffixed `_i32` are left alone; identifiers/`i64` bindings get `as i32`.
@@ -196,7 +196,7 @@ fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
         return;
     }
     // Integer/float casts yield Copy scalars. If auto-clone already appended `.clone()`
-    // on a multi-use binding, drop it — never emit `(x as i32).clone()` (DB-343).
+    // on a multi-use binding, drop it — never emit `(x as i32).clone()`.
     let without_clone = arg_str
         .strip_suffix(".clone()")
         .map(str::trim)
@@ -417,7 +417,7 @@ pub fn coerce_arg_str_for_usize_formal(
     if !formal.is_some_and(type_is_usize) {
         return;
     }
-    // DB-329: stale `&idx as usize` (borrow prefixed without parens onto a cast) — peel
+    // stale `&idx as usize` (borrow prefixed without parens onto a cast) — peel
     // so Owned usize formals receive `idx as usize`.
     if let Some(rest) = arg_str.strip_prefix('&') {
         if !rest.starts_with("mut ") && rest.contains(" as usize") && !rest.starts_with('(') {
@@ -428,7 +428,7 @@ pub fn coerce_arg_str_for_usize_formal(
         return;
     }
     // Whole-expression casts are done. Do **not** treat `i + j + 1_usize` as already
-    // usize — that mixes i64 counters with a usize literal suffix (haystack / DownstreamApp).
+    // usize — that mixes i64 counters with a usize literal suffix (haystack / a downstream application).
     // Must run *before* `arg_already_usize`: loop-vs-`.len()` inference can mark the
     // Binary usize while identifiers still emit i64.
     // Only rewrite when `strip_embedded_usize_literal_suffixes` actually removes a
@@ -458,7 +458,7 @@ pub fn coerce_arg_str_for_usize_formal(
     // Never usize-cast text / constructed values. A wrong suffix signature
     // (Vec::insert vs HashMap::insert) must not turn `"key".to_string()` into usize.
     // Struct / tuple literals into owned Custom formals must never become `as usize`
-    // (DB-133 `drain(DenseCsr { n: 3 })`).
+    // (`drain(DenseCsr { n: 3 })`).
     if matches!(
         arg,
         Expression::Literal {
@@ -505,7 +505,7 @@ pub fn coerce_arg_str_for_usize_formal(
             let needs_deref =
                 gen.is_some_and(|g| g.identifier_already_ref(name)) && !base.starts_with('*');
             // Auto-clone may already be present (`n.clone()`); cast yields Copy usize —
-            // drop the clone (DB-343). Never `n as usize.clone()` (DB-300).
+            // drop the clone. Never `n as usize.clone()`.
             if let Some(inner) = base.strip_suffix(".clone()") {
                 let core = if needs_deref && !inner.starts_with('*') {
                     format!("*{inner}")

@@ -2,7 +2,7 @@
 
 use std::time
 
-@derive(Debug, Clone, Serialize, Deserialize)
+@derive(Debug, Clone)
 pub struct Task {
     pub id: int,
     pub project_id: int,
@@ -17,7 +17,7 @@ pub struct Task {
     pub due_date: Option<int>,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct CreateTaskRequest {
     pub title: string,
     pub description: string,
@@ -25,7 +25,7 @@ pub struct CreateTaskRequest {
     pub due_date: Option<int>,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct UpdateTaskRequest {
     pub title: Option<string>,
     pub description: Option<string>,
@@ -34,12 +34,12 @@ pub struct UpdateTaskRequest {
     pub due_date: Option<int>,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct AssignTaskRequest {
     pub user_id: int,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct TaskResponse {
     pub id: int,
     pub project_id: int,

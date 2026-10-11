@@ -21,7 +21,7 @@ pub struct ModuleCompiler {
     pub stdlib_path: PathBuf,
     /// Explicit compiler configuration shared by every file this compiler handles.
     pub config: crate::compiler_config::CompilerConfig,
-    pub source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../game-host-core/src)
+    pub source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../game_core/src)
     pub imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     pub external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
     pub trait_registry: HashMap<String, parser::TraitDecl<'static>>, // Global trait registry for cross-file trait resolution
@@ -65,7 +65,10 @@ impl ModuleCompiler {
         let stdlib_path = config
             .stdlib_path
             .clone()
-            .unwrap_or_else(|| PathBuf::from("./std"));
+            .or_else(|| {
+                crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj)
+            })
+            .unwrap_or_default();
 
         Self {
             compiled_modules: HashMap::new(),

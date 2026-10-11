@@ -122,7 +122,7 @@ impl<'ast> Analyzer<'ast> {
 
         // 2. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
-            // DB-414: `Vox::new(self.scene)` then `self.grid = 1` is a partial
+            // `Vox::new(self.scene)` then `self.grid = 1` is a partial
             // move of a non-Copy field plus a remaining-field write. Keep Owned
             // so the ctor can take the field; MutBorrowed would force `.clone()`.
             if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body) {
@@ -180,7 +180,7 @@ impl<'ast> Analyzer<'ast> {
 
         // 2.5 Field/index move: `let x = param.field` moves the field out — keep Owned
         // (`MemoryEngine::get` → `let bytes = key.bytes`, not `&Key`).
-        // DB-366: text field lets (`let name = tree.nodes[i].name`) are cloned from `&T`,
+        // text field lets (`let name = tree.nodes[i].name`) are cloned from `&T`,
         // and Copy field lets (`let kind = tree.nodes[i].kind`) copy from `&T` — neither
         // pins the parent Owned.
         if self.param_has_field_or_index_move_binding(param_name, body)
@@ -191,7 +191,7 @@ impl<'ast> Analyzer<'ast> {
 
         // 2.5b Non-Copy field projected into a call/method arg is a partial move of the
         // binding (`return_f64(buf.scores)`). Keep Owned so codegen can move fields
-        // without demoting to `&Buf` + `.clone()` (DB-096).
+        // without demoting to `&Buf` + `.clone()`.
         // P3.570: `lookup_note(store.notes, id)` into a Borrowed map formal is a reborrow
         // of the field, not a consume of `store`.
         if self.param_projects_non_copy_field_into_call_arg(param_name, param_type, body)
@@ -273,7 +273,7 @@ impl<'ast> Analyzer<'ast> {
                 let defer_string_owned = Self::is_windjammer_text_param_type(param_type)
                     && func.parent_type.is_none()
                     && matches!(mode, OwnershipMode::Owned);
-                // DB-366: Custom free-fn peers (`tick_node` ↔ `tick_decorator`) inherit
+                // Custom free-fn peers (`tick_node` ↔ `tick_decorator`) inherit
                 // Owned from each other with no local consume. Earlier steps already
                 // returned Owned for real stores/field-moves/consuming methods. Prefer
                 // Borrowed so mutual read-only walks converge; multipass restore still
@@ -344,7 +344,7 @@ impl<'ast> Analyzer<'ast> {
                 OwnershipMode::Borrowed => {
                     // Copy map keys stay owned on the wrapper; HashMap::get borrows at the
                     // inner call site (`get(&label)`), not on `get_label(label)` callers.
-                    // (P3.635 / DB-134 — must beat early Borrowed return before the
+                    // (P3.635 — must beat early Borrowed return before the
                     // is_only_hashmap_lookup_key_param check below.)
                     if self.is_copy_type(param_type)
                         && self.is_only_hashmap_lookup_key_param(param_name, body, func)
@@ -370,7 +370,7 @@ impl<'ast> Analyzer<'ast> {
                     return Ok(OwnershipMode::MutBorrowed);
                 }
                 OwnershipMode::Owned => {
-                    // DB-366: same Custom mutual-recursion defer as step 6d.
+                    // same Custom mutual-recursion defer as step 6d.
                     if matches!(param_type, Type::Custom(_))
                         && !Self::is_windjammer_text_param_type(param_type)
                     {
@@ -414,7 +414,7 @@ impl<'ast> Analyzer<'ast> {
         // and the compiler infers `&Vec<f32>` when data is only read.
         // Call sites naturally pass `&self.data` which matches `&Vec<f32>`.
         //
-        // Dogfooding evidence: 6+ E0308 errors in game-host-editor
+        // Dogfooding evidence: 6+ E0308 errors in a game engine project
         // from read-only params generating owned types while call sites pass &T.
         //
         // Module-level `string`: Phase-2 `&str` for read-only usage including
@@ -439,9 +439,9 @@ impl<'ast> Analyzer<'ast> {
                 return Ok(OwnershipMode::Borrowed);
             }
             // Unused **pub** `string` formals keep Owned (API/FFI contract) — same
-            // policy as unused Vec / DB-152 multipass siblings.
+            // policy as unused Vec / multipass siblings.
             // Unused **private** helpers (`start(line, key)` that never reads `line`)
-            // demote to Borrowed so callers can reuse `line` without `.clone()` (DB-413).
+            // demote to Borrowed so callers can reuse `line` without `.clone()`.
             if !body
                 .iter()
                 .any(|stmt| self.statement_uses_identifier(param_name, stmt))
@@ -506,7 +506,7 @@ impl<'ast> Analyzer<'ast> {
         }
         // Composition facades (`deps.writer.append` on a user Custom port) stay Owned
         // so callers can forward the bag by value. Data wrappers whose fields are
-        // stdlib collections (`csr.out_offsets.len()`) still Borrowed (DB-097).
+        // stdlib collections (`csr.out_offsets.len()`) still Borrowed.
         if !self.is_copy_type(param_type)
             && matches!(param_type, Type::Custom(_))
             && self.param_is_owned_custom_port_facade(param_name, body, registry, func)

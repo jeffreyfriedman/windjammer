@@ -1,4 +1,4 @@
-// REPRO — typed int + `len() as int` while must not emit usize into i64 (DownstreamApp product).
+// REPRO — typed int + `len() as int` while must not emit usize into i64 (a downstream application product).
 // Tip HEAD after nested-counter / WAL usize work: isolate increment may GREEN, but product
 // `let mut idx: int = 0` + `let _len = x.len() as int; while idx < _len; idx = idx + 1`
 // emits `+= 1_usize` / usize vs i64 → tip api-check E0277 (~100+).

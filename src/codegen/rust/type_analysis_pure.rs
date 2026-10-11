@@ -11,7 +11,7 @@ pub fn is_copy_type(ty: &Type) -> bool {
         Type::RawPointer { .. } => true,      // TDD: Raw pointers are Copy (like &T)
         Type::FunctionPointer { .. } => true, // TDD FIX: Function pointers are Copy!
         Type::Tuple(types) => types.iter().all(is_copy_type),
-        // `[u8; N]` from `to_le_bytes` is Copy when the element is (DB-467).
+        // `[u8; N]` from `to_le_bytes` is Copy when the element is.
         Type::Array(inner, _) => is_copy_type(inner),
         Type::Custom(name) => crate::type_classification::is_copy_primitive(name),
         _ => false,

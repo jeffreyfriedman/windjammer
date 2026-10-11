@@ -92,7 +92,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Copy `self.field` reads (`pos_x: f32` into `Vec3::new`) are not partial moves.
-    /// Missing field types stay moves so non-Copy ctor moves (DB-414) keep `mut self`.
+    // Missing field types stay moves so non-Copy ctor moves keep `mut self`.
     pub(super) fn self_field_partial_move_needs_owned_receiver(&self, func: &FunctionDecl) -> bool {
         let struct_name = self.current_struct_name.clone();
         super::self_analysis::function_partial_moves_self_field_then_assigns_other_if(
@@ -134,7 +134,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else if body_modifies && super::self_analysis::function_consumes_self(func) {
             // P3.520: `self.buckets = put(take(self.buckets))` writes back the moved
             // field — `&mut self` so callers can continue.
-            // DB-414: move field A into a ctor then assign field B → owned `mut self`.
+            // move field A into a ctor then assign field B → owned `mut self`.
             // P3.584 / P3.570: other field moves into Owned formals under a mutating
             // method are Clone under `&mut self` (notes-api `dispatch`).
             // P3.522: thin wrappers (`handle_http` → `handle_method(&mut self)`) are
@@ -230,7 +230,7 @@ impl<'ast> CodeGenerator<'ast> {
         analyzer_ownership: Option<OwnershipMode>,
         actual_receiver: &str,
     ) {
-        // `mut self` is by-value owned (builder / DB-414 partial move) — not `&mut self`.
+        // `mut self` is by-value owned (builder / partial move) — not `&mut self`.
         // Collapsing it into MutBorrowed made the upgrade table force `&mut self` on
         // re-emit and broke owned field moves (P3.584).
         let actual_mode = match actual_receiver {

@@ -1,6 +1,6 @@
 //! Statement lowering, including value-producing tails.
 
-use super::{Lowerer, PResult};
+use super::{LoopCtx, Lowerer, PResult};
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{from_ast, Ty};
 use crate::parser::{CompoundOp, Expression, MatchArm, Pattern, Statement, UnaryOp};
@@ -39,12 +39,71 @@ impl<'e> Lowerer<'e> {
                         tail = Some(self.stmt_as_expr(s, want)?);
                         continue;
                     }
+                    // `loop { .. break v .. }` as the value of a block: a result local receives
+                    // each `break v`, and the block's value is that local.
+                    Statement::Loop { body, label, .. } if loop_has_break_value(body, label.as_deref()) => {
+                        let result = self.fresh("loop_val");
+                        let ty = want.cloned().filter(|t| !t.is_unknown()).unwrap_or_else(|| self.new_var());
+                        out.push(PStmt::Let { name: result.clone(), ty: ty.clone(), mutable: true, init: None });
+                        self.loop_stack.push(LoopCtx { label: label.clone(), used: false, result: Some((result.clone(), ty.clone())) });
+                        let r = self.stmts(body).map(|b| vec![PStmt::Loop { body: b }]);
+                        out.extend(self.finish_loop(r)?);
+                        let ty = self.resolve(&ty);
+                        tail = Some(PExpr::new(ty, PK::Local(result)));
+                        continue;
+                    }
                     _ => {}
                 }
             }
             out.extend(self.stmt(s)?);
         }
         Ok(PBlock { stmts: out, tail })
+    }
+
+    /// Pop the loop context pushed for a loop whose statements were lowered to `r`; wrap in
+    /// `Labeled` when a labeled jump targeted it.
+    fn finish_loop(&mut self, r: PResult<Vec<PStmt>>) -> PResult<Vec<PStmt>> {
+        let ctx = self.loop_stack.pop().expect("loop context");
+        let mut stmts = r?;
+        if let (Some(label), true) = (ctx.label, ctx.used) {
+            if let Some(last) = stmts.pop() {
+                stmts.push(PStmt::Labeled { label, stmt: Box::new(last) });
+            }
+        }
+        Ok(stmts)
+    }
+
+    fn mark_label_used(&mut self, label: &str) -> PResult<()> {
+        match self.loop_stack.iter_mut().rev().find(|c| c.label.as_deref() == Some(label)) {
+            Some(ctx) => {
+                ctx.used = true;
+                Ok(())
+            }
+            None => self.err(format!("`'{label}` does not name an enclosing loop")),
+        }
+    }
+
+    fn break_stmt(&mut self, label: Option<&str>, value: Option<&Expression>) -> PResult<Vec<PStmt>> {
+        let idx = match label {
+            Some(l) => {
+                self.mark_label_used(l)?;
+                self.loop_stack.iter().rposition(|c| c.label.as_deref() == Some(l))
+            }
+            None => self.loop_stack.len().checked_sub(1),
+        };
+        let jump = match label {
+            Some(l) => PStmt::BreakTo(l.to_string()),
+            None => PStmt::Break,
+        };
+        let Some(v) = value else { return Ok(vec![jump]) };
+        let Some((name, ty)) = idx.and_then(|i| self.loop_stack[i].result.clone()) else {
+            return self.err("`break` with a value outside a value-producing `loop`");
+        };
+        let want = Some(&ty).filter(|t| !t.is_unknown()).cloned();
+        let e = self.expr(v, want.as_ref())?;
+        self.constrain(&ty, &e.ty);
+        let target = PExpr::new(ty, PK::Local(name));
+        Ok(vec![PStmt::Assign { target, op: None, value: e }, jump])
     }
 
     pub(super) fn stmts(&mut self, stmts: &[&Statement]) -> PResult<Vec<PStmt>> {
@@ -142,14 +201,34 @@ impl<'e> Lowerer<'e> {
                     _ => self.err("match lowering"),
                 }
             }
-            Statement::For { pattern, iterable, body, .. } => self.for_stmt(pattern, iterable, body),
-            Statement::Loop { body, .. } => Ok(vec![PStmt::Loop { body: self.stmts(body)? }]),
-            Statement::While { condition, body, .. } => {
-                let cond = self.expr(condition, Some(&Ty::Bool))?;
-                Ok(vec![PStmt::While { cond, body: self.stmts(body)? }])
+            Statement::For { pattern, iterable, body, label, .. } => {
+                self.loop_stack.push(LoopCtx { label: label.clone(), used: false, result: None });
+                let r = self.for_stmt(pattern, iterable, body);
+                self.finish_loop(r)
             }
-            Statement::Break { .. } => Ok(vec![PStmt::Break]),
-            Statement::Continue { .. } => Ok(vec![PStmt::Continue]),
+            Statement::Loop { body, label, .. } => {
+                self.loop_stack.push(LoopCtx { label: label.clone(), used: false, result: None });
+                let r = self.stmts(body).map(|b| vec![PStmt::Loop { body: b }]);
+                self.finish_loop(r)
+            }
+            Statement::While { condition, body, label, .. } => {
+                self.loop_stack.push(LoopCtx { label: label.clone(), used: false, result: None });
+                let r = (|| {
+                    let cond = self.expr(condition, Some(&Ty::Bool))?;
+                    Ok(vec![PStmt::While { cond, body: self.stmts(body)? }])
+                })();
+                self.finish_loop(r)
+            }
+            Statement::Break { label, value, .. } => self.break_stmt(label.as_deref(), *value),
+            Statement::Continue { label, .. } => {
+                match label {
+                    None => Ok(vec![PStmt::Continue]),
+                    Some(l) => {
+                        self.mark_label_used(l)?;
+                        Ok(vec![PStmt::ContinueTo(l.clone())])
+                    }
+                }
+            }
             Statement::Defer { statement, .. } => {
                 let inner = self.stmt(statement)?;
                 Ok(inner.into_iter().map(|s| PStmt::Defer(Box::new(s))).collect())
@@ -274,4 +353,31 @@ impl<'e> Lowerer<'e> {
         self.pop();
         Ok(vec![PStmt::ForRange { var: out, start: s, end: e, inclusive, body: body? }])
     }
+}
+
+/// Does `body` contain a `break` carrying a value that targets the loop with `label` (or, for an
+/// unlabeled break, this loop)? Nested loops shadow unlabeled breaks only.
+fn loop_has_break_value(body: &[&Statement], label: Option<&str>) -> bool {
+    fn walk(ss: &[&Statement], label: Option<&str>, nested: bool) -> bool {
+        ss.iter().any(|s| match s {
+            Statement::Break { value: Some(_), label: l, .. } => match l {
+                None => !nested,
+                Some(l) => Some(l.as_str()) == label,
+            },
+            Statement::If { then_block, else_block, .. } => {
+                walk(then_block, label, nested) || else_block.as_ref().is_some_and(|b| walk(b, label, nested))
+            }
+            Statement::Match { arms, .. } => arms.iter().any(|a| expr_has(a.body, label, nested)),
+            Statement::Loop { body, .. } | Statement::While { body, .. } | Statement::For { body, .. } => walk(body, label, true),
+            Statement::Expression { expr, .. } => expr_has(expr, label, nested),
+            _ => false,
+        })
+    }
+    fn expr_has(e: &Expression, label: Option<&str>, nested: bool) -> bool {
+        match e {
+            Expression::Block { statements, .. } => walk(statements, label, nested),
+            _ => false,
+        }
+    }
+    walk(body, label, false)
 }

@@ -10,14 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! DB-172: owned CatalogResolver / `.clone()` into demoted `&CatalogResolver` must borrow.
+//! owned CatalogResolver / `.clone()` into demoted `&CatalogResolver` must borrow.
 //!
 //! Product census (~6×):
 //!   `relational_sql_bind_ast(ast, resolver)` while formal is `&RelationalCatalogResolver`
 //!   `resolve_select(resolver.clone(), sel)` while formal is `&RelationalCatalogResolver`
 //! → E0308 expected `&RelationalCatalogResolver`, found `RelationalCatalogResolver`.
 //!
-//! Distinct from DB-167 (Provider / tuple field). Signature-driven — no hardcoded names.
+//! Distinct from (Provider / tuple field). Signature-driven — no hardcoded names.
 //! Prefer tip greens over downstream/tip-cluster.
 
 #[path = "common/integration_test_helpers.rs"]

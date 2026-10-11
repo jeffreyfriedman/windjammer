@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 + 2 * 3\n(1 + 2) * 3\n-4 + 10\n",
+  "stdout": "7\n9\n6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7 / 2\n-7 / 2\n-7 % 3\n1 / 0\n(1\n\n",
+  "stdout": "3\n-3\n-1\nerror\nerror\nerror\n"
+ }
+]

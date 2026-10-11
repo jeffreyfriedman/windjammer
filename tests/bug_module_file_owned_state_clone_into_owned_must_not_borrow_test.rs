@@ -10,12 +10,12 @@
     feature = "integration_tests",
 ))]
 
-//! DB-184: `state.clone()` into owned formal must not emit `&state.clone()`.
+//! `state.clone()` into owned formal must not emit `&state.clone()`.
 //!
 //! Product residual (~6× PgWireServeState←&PgWireServeState), tip/product pg_serve:
 //!   `pg_wire_serve_on_parse(state: PgWireServeState, …)`
 //!   call site `pg_wire_serve_on_parse(&state.clone(), …)` → E0308.
-//! Same class as DB-169 (owned helper/temp into owned must not invent `&`).
+//! Same class as (owned helper/temp into owned must not invent `&`).
 //! Signature-driven.
 
 #[path = "common/integration_test_helpers.rs"]

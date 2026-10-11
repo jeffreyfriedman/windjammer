@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-450: Copy `u32` **formal** into **indexed field** assign must not `.clone()`.
+//! Copy `u32` **formal** into **indexed field** assign must not `.clone()`.
 //!
 //! Product `voxel/chunk_manager.rs` `mark_uploaded`:
 //!   `self.chunks[i].gpu_buffer_id = buffer_id.clone()`
 //! WJ uses bare `buffer_id`.
-//! Distinct from DB-447 (u32 formal into `tiles[i] = …` element assign),
-//! DB-376 (indexed **read** `.buffer_id.clone()`), and DB-441 (i64 local index assign).
+//! Distinct from (u32 formal into `tiles[i] = …` element assign),
+//! (indexed **read** `.buffer_id.clone()`), and (i64 local index assign).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

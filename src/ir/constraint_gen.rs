@@ -1144,6 +1144,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 emit_numeric_class_constraint(&mut self.cs, var, &base);
                 var
             }
+            Pattern::Range { start, end, .. } => {
+                let var = self.cs.fresh_var();
+                if let Some(lit) = start.as_ref().or(end.as_ref()) {
+                    let base = literal_to_base_type(lit);
+                    self.cs.add(Constraint::TypeIs(var, base.clone()));
+                    emit_numeric_class_constraint(&mut self.cs, var, &base);
+                }
+                var
+            }
             Pattern::EnumVariant(_, _) => self.cs.fresh_var(),
             Pattern::Or(pats) => {
                 let var = self.cs.fresh_var();

@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-124: multipass demotes read-only `Vec<i64>` formal to `&Vec<i64>`; call sites must borrow.
+//! multipass demotes read-only `Vec<i64>` formal to `&Vec<i64>`; call sites must borrow.
 //!
 //! a downstream database project CQ-C5 product class (~22× when gen stale):
 //!   `bench_validation_vertex_in_list(csr_vertices.clone(), …)` without `&`.

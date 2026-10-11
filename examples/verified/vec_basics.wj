@@ -1,0 +1,19 @@
+// tags: vec, collections, push, pop
+// rust: ok
+// expect: [1, 2, 3]
+// expect: 3
+// expect: Some(3)
+// expect: [1, 2]
+// expect: 1
+// expect: false
+fn main() {
+    let mut v = [1, 2]
+    v.push(3)
+    println("${v:?}")
+    println("${v.len()}")
+    println("${v.last():?}")
+    v.pop()
+    println("${v:?}")
+    println("${v[0]}")
+    println("${v.is_empty()}")
+}

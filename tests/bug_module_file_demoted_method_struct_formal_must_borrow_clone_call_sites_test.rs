@@ -10,13 +10,13 @@
     feature = "integration_tests",
 ))]
 
-//! DB-128: multipass demotes method first-arg struct formal to `&T` but call sites still
+//! multipass demotes method first-arg struct formal to `&T` but call sites still
 //! pass `view.clone()` owned → E0308 (`expected &GraphAdjacencyView, found GraphAdjacencyView`).
 //!
 //! a downstream database project CQ-C5 (~56× Graph* residual before downstream):
 //!   `port.out_degree(view.clone(), vertex)` while formal is `&GraphAdjacencyView`
 //!
-//! Distinct from DB-125 (free-fn). This gate is **method** call sites.
+//! Distinct from (free-fn). This gate is **method** call sites.
 //! Expected: `port.out_degree(&view.clone(), …)` / `port.out_degree(&view, …)`.
 
 #[path = "common/integration_test_helpers.rs"]

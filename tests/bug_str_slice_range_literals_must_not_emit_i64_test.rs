@@ -13,7 +13,7 @@
 
 //! P3.354 — `string`/`&str` slice ranges `s[0..1]` must use `usize` bounds, not `_i64`.
 //!
-//! Product residual (downstream-screens tip regen `theme.rs`):
+//! Product residual (a large downstream application tip regen `theme.rs`):
 //!   `hex_digit_value(&(pair[0_i64..1_i64]))` → E0277 slice index expects usize.
 
 #[path = "common/test_utils.rs"]

@@ -1,0 +1,3 @@
+The first line holds N. The next N lines are employee records `name manager salary`, where manager is another employee's name or `-` for none, and salary is an integer. Then come query lines, each a single name, until end of input.
+
+For each query print the salary of the query person's manager's manager (the "skip-level" manager). If the chain breaks print `none: <reason>` where reason is `unknown <name>` if the query name is not an employee, `no manager <name>` if the person at the first step has no manager, or `no skip-level <name>` if the manager exists but has no manager (in that last case `<name>` is the manager's name; in the previous case it is the query name). A manager name that is not itself an employee record counts as `unknown <that name>`.

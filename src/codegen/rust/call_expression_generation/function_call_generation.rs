@@ -137,7 +137,7 @@ fn apply_callee_mut_borrow_to_call_args<'ast>(
             if arg_str.starts_with('&') {
                 continue;
             }
-            // Mut borrow needs an lvalue — never `&mut binding.clone()` (DB-336/337/342).
+            // Mut borrow needs an lvalue — never `&mut binding.clone()`.
             crate::codegen::rust::expression_utilities::apply_mut_borrow_prefix(arg_str);
         }
     }
@@ -189,7 +189,7 @@ fn apply_owned_string_literal_coercion<'ast>(
                     .is_some_and(crate::codegen::rust::string_utilities::param_is_rust_str_ref)
         };
         // AsRef-runtime bodies preregister `path: String`. A stale analyzer
-        // `Reference(str)` must not peel the literal (DB-107).
+        // `Reference(str)` must not peel the literal.
         let prereg_owned_string = gen.preregistered_free_call_arg_emits_owned_string(func_name, i);
         let path_dep_shared = !prereg_owned_string
             && (signature.as_ref().is_some_and(slot_shared)
@@ -360,7 +360,7 @@ fn apply_owned_string_literal_coercion<'ast>(
             // Analyzer Borrowed on a WJ `string` formal is `&str` only when
             // emission agrees. AsRef-runtime bodies (`strings::is_empty` + `.len()`)
             // keep `String` (`emitted_rust_ref_params == false`) — the literal
-            // must still `.to_string()` (DB-107).
+            // must still `.to_string()`.
             if matches!(
                 s.param_ownership.get(idx),
                 Some(crate::analyzer::OwnershipMode::Borrowed)
@@ -675,7 +675,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
                         ..
                     }
                 ) {
-                    // DB-341: `coerce_string_literals_to_owned` may already emit
+                    // `coerce_string_literals_to_owned` may already emit
                     // `String::from("…")` — never stack `.to_string()` on top.
                     crate::codegen::rust::string_utilities::coerce_expr_to_owned_string(&result)
                 } else if payload_wants_owned_string
@@ -1002,7 +1002,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     let import_alias = gen.is_import_alias_cross_crate_call(func_name);
     // Same-crate bare names (`touch`) must not be treated as path-dep just because
     // the global/multipass registry also lists them — that re-prefixes `&` onto
-    // already-`&T` caller formals (DB-217 `touch(&csr)`).
+    // already-`&T` caller formals (`touch(&csr)`).
     let cross_crate_import = import_alias || lookup_ref.contains("::");
     if cross_crate_import {
         let resolved_dep = gen.resolve_cross_crate_dep_signature(func_name);
@@ -1050,7 +1050,7 @@ pub(in crate::codegen::rust) fn generate_plain_function_call<'ast>(
     // Legacy heuristic auto-borrow deleted (Phase 5): IR call-site coercion owns this.
 
     apply_callee_mut_borrow_to_call_args(gen, func_name, &signature, arguments, &mut args);
-    // Terminal sanitize: never leave `&mut place.clone()` temps (DB-336/337/342).
+    // Terminal sanitize: never leave `&mut place.clone()` temps.
     // `&x.clone()` is never a valid shared-ref encoding (Connection has no Clone).
     // Shared-borrow last-writer must not undo Identity reborrow of `&mut T` / `&T`.
     for (i, arg) in args.iter_mut().enumerate() {

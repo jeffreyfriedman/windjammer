@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-144: when tip demotes `string` → `&str`, call sites must pass `&str`
+//! when tip demotes `string` → `&str`, call sites must pass `&str`
 //! (not `String` / `.clone()` of a `String` binding).
 //!
 //! Product CQ-C5 (tip-synced `document_otlp_dremel_kv_pipeline_port`):

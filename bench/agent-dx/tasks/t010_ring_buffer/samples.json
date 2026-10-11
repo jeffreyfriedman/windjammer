@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\npush 1\npush 2\npush 3\ndump\npop\nsize\n",
+  "stdout": "ok\nok\nfull\n1 2\n1\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\npop\npeek\ndump\n",
+  "stdout": "empty\nempty\n<empty>\n"
+ }
+]

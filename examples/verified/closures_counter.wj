@@ -1,0 +1,19 @@
+// tags: closures, mutation, capture
+// rust: ok
+// expect: 1
+// expect: 2
+// expect: 3
+// expect: total 6
+fn main() {
+    let mut count = 0
+    let mut inc = || {
+        count += 1
+        count
+    }
+    println("${inc()}")
+    println("${inc()}")
+    println("${inc()}")
+    let mut total = 0
+    for x in [1, 2, 3] { total += x }
+    println("total ${total}")
+}

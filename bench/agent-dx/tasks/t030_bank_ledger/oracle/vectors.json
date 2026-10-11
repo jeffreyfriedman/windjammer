@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open a 100\nopen b 0\ntransfer a b 30\nbalance a\nwithdraw b 50\ndeposit b 5\n",
+  "stdout": "ok\nok\nok\n70\nerror: insufficient funds\nok\na 70\nb 35\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit z 5\nopen a 1\nopen a 2\n",
+  "stdout": "error: unknown account z\nok\nerror: duplicate account\na 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open a 5\ntransfer a a 1\ntransfer a a 100\ntransfer a q 1\ntransfer q a 1\ndeposit a 0\nwithdraw a -3\nopen b -1\nbalance q\n",
+  "stdout": "ok\nerror: same account\nerror: same account\nerror: unknown account q\nerror: unknown account q\nerror: invalid amount\nerror: invalid amount\nerror: invalid amount\nerror: unknown account q\na 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "transfer cy al 8\nwithdraw al 9\nbalance bo\nbalance bo\ndeposit cy 62\nopen cy 119\ndeposit cy 101\ndeposit bo 9\ndeposit al 91\ntransfer bo cy 45\nopen cy 74\nwithdraw bo 79\nwithdraw cy 12\ntransfer al bo 37\ndeposit cy 70\ntransfer cy bo 81\nwithdraw bo 12\ndeposit al 44\ntransfer bo cy 114\ntransfer cy cy 99\nopen cy 90\nbalance bo\ndeposit bo 59\nopen bo 80\nopen al 48\nopen al 17\ndeposit bo 102\ntransfer cy al 61\ntransfer al cy 103\nbalance al\nopen cy 83\nwithdraw cy 63\ntransfer al cy 49\nbalance cy\nbalance bo\ntransfer bo bo 48\nopen al 61\ndeposit bo 95\n",
+  "stdout": "error: unknown account cy\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account cy\nok\nok\nerror: unknown account bo\nerror: unknown account al\nerror: unknown account bo\nerror: duplicate account\nerror: unknown account bo\nok\nerror: unknown account al\nok\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account al\nerror: unknown account bo\nerror: same account\nerror: duplicate account\nerror: unknown account bo\nerror: unknown account bo\nok\nok\nerror: duplicate account\nok\nok\nok\n6\nerror: duplicate account\nok\nerror: insufficient funds\n257\n182\nerror: same account\nerror: duplicate account\nok\nal 6\nbo 277\ncy 257\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open bo 103\ntransfer cy bo 52\ntransfer al bo 98\nbalance bo\ndeposit al 25\ntransfer bo bo 115\ntransfer cy bo 117\nopen cy 75\ndeposit bo 84\ntransfer bo al 10\ntransfer bo al 93\ndeposit cy -2\nopen bo 116\ndeposit bo 58\nwithdraw al 72\ntransfer cy cy 110\nopen cy 22\ntransfer cy bo 11\nbalance bo\ndeposit cy 115\ntransfer cy cy 112\ndeposit cy 19\nbalance bo\nopen cy 9\ntransfer bo bo 2\n",
+  "stdout": "ok\nerror: unknown account cy\nerror: unknown account al\n103\nerror: unknown account al\nerror: same account\nerror: unknown account cy\nok\nok\nerror: unknown account al\nerror: unknown account al\nerror: invalid amount\nerror: duplicate account\nok\nerror: unknown account al\nerror: same account\nerror: duplicate account\nok\n256\nok\nerror: same account\nok\n256\nerror: duplicate account\nerror: same account\nbo 256\ncy 198\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "transfer cy al 38\nbalance al\nbalance bo\ndeposit bo 113\nwithdraw bo 19\nbalance al\nopen bo 45\ndeposit cy 75\ndeposit cy 105\nopen cy 73\ndeposit bo 77\ntransfer bo bo 34\ntransfer al cy 32\ntransfer bo bo 97\nopen cy 84\n",
+  "stdout": "error: unknown account cy\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account al\nok\nerror: unknown account cy\nerror: unknown account cy\nok\nok\nerror: same account\nerror: unknown account al\nerror: same account\nerror: duplicate account\nbo 122\ncy 73\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open bo 91\nwithdraw cy 61\ntransfer cy al 64\ndeposit al 47\ndeposit bo 73\ntransfer cy al 109\ntransfer bo bo 4\nwithdraw bo 120\ndeposit al 111\nwithdraw cy 88\nbalance bo\n",
+  "stdout": "ok\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account al\nok\nerror: unknown account cy\nerror: same account\nok\nerror: unknown account al\nerror: unknown account cy\n44\nbo 44\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open bo 46\nwithdraw al 66\nbalance al\nopen bo 103\nwithdraw cy 21\nwithdraw bo 35\nopen cy 93\nopen cy -1\ndeposit bo 97\ntransfer bo bo 70\ntransfer al cy 60\ntransfer al cy 106\ndeposit bo 34\ndeposit cy 64\ntransfer cy cy 31\ntransfer al bo 17\nbalance bo\n",
+  "stdout": "ok\nerror: unknown account al\nerror: unknown account al\nerror: duplicate account\nerror: unknown account cy\nok\nok\nerror: invalid amount\nok\nerror: same account\nerror: unknown account al\nerror: unknown account al\nok\nok\nerror: same account\nerror: unknown account al\n142\nbo 142\ncy 157\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "transfer cy al 49\ndeposit cy 61\ndeposit al 57\ndeposit cy 19\nbalance cy\nbalance al\nwithdraw cy 87\ntransfer bo al 11\nbalance cy\ntransfer bo al 5\nwithdraw bo 58\nopen al 27\nbalance cy\nbalance cy\nbalance al\ndeposit cy 32\ndeposit bo 33\nopen al 33\nwithdraw cy 8\ntransfer bo al 59\ndeposit cy 72\nopen bo 8\n",
+  "stdout": "error: unknown account cy\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nok\nerror: unknown account cy\nerror: unknown account cy\n27\nerror: unknown account cy\nerror: unknown account bo\nerror: duplicate account\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account cy\nok\nal 27\nbo 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open al 104\nopen al 35\nopen cy 115\nwithdraw cy 111\ndeposit bo 46\nbalance bo\nbalance cy\nwithdraw al 10\ntransfer cy al 116\nwithdraw al 59\nopen al 70\ntransfer bo bo 97\nopen bo 82\ntransfer bo al 94\ndeposit cy 39\nbalance bo\ntransfer bo cy 72\ndeposit al 56\n",
+  "stdout": "ok\nerror: duplicate account\nok\nok\nerror: unknown account bo\nerror: unknown account bo\n4\nok\nerror: insufficient funds\nok\nerror: duplicate account\nerror: unknown account bo\nok\nerror: insufficient funds\nok\n82\nok\nok\nal 91\nbo 10\ncy 115\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "balance al\nbalance cy\nwithdraw al 59\ndeposit bo 2\ntransfer al al 119\ntransfer cy al 35\nopen al 62\nbalance al\nopen cy 17\ndeposit bo 110\nopen al 39\nwithdraw bo 29\ntransfer cy bo 86\nopen al 111\n",
+  "stdout": "error: unknown account al\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account al\nerror: unknown account cy\nok\n62\nok\nerror: unknown account bo\nerror: duplicate account\nerror: unknown account bo\nerror: unknown account bo\nerror: duplicate account\nal 62\ncy 17\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open bo 11\ntransfer bo bo 116\ntransfer al al 85\nwithdraw cy 46\ntransfer cy bo 60\ndeposit cy 19\ndeposit cy 2\ndeposit al 78\ntransfer cy al 119\ndeposit bo 92\ntransfer cy bo 9\ntransfer bo cy 56\ndeposit al 70\nbalance al\ndeposit cy 78\n",
+  "stdout": "ok\nerror: same account\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nok\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account al\nerror: unknown account cy\nbo 103\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit al 7\nopen cy 113\ntransfer bo bo 6\nopen bo 73\ndeposit bo 37\ndeposit bo 10\ndeposit al 24\nopen bo 84\ndeposit al 87\nwithdraw cy 33\nbalance al\ntransfer cy al 72\ntransfer al al 63\nopen bo 38\nbalance cy\nopen cy 5\nwithdraw al 91\ntransfer cy al 108\nbalance al\nwithdraw al 102\ndeposit al 11\nopen cy 95\ndeposit cy 94\nopen cy 102\nopen al 90\ntransfer al cy 77\nbalance cy\nwithdraw cy 93\nopen cy 52\nopen bo 9\nbalance bo\nwithdraw al 46\ndeposit cy 15\ntransfer cy al 108\ndeposit al 38\n",
+  "stdout": "error: unknown account al\nok\nerror: unknown account bo\nok\nok\nok\nerror: unknown account al\nerror: duplicate account\nerror: unknown account al\nok\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: duplicate account\n80\nerror: duplicate account\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: duplicate account\nok\nerror: duplicate account\nok\nok\n251\nok\nerror: duplicate account\nerror: duplicate account\n120\nerror: insufficient funds\nok\nok\nok\nal 159\nbo 120\ncy 65\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit al 53\nopen bo 88\ndeposit cy 106\nwithdraw bo 100\nwithdraw cy 41\ntransfer al cy 113\ndeposit cy 28\ntransfer al bo 67\ntransfer bo al 59\nopen cy 116\nopen al 62\nwithdraw cy 29\ndeposit bo 86\ndeposit bo 70\ntransfer cy cy 107\ntransfer cy al 41\ndeposit cy 73\nbalance al\ntransfer bo al 36\ntransfer cy al 77\nopen bo 48\nopen cy 28\ntransfer bo al 5\nwithdraw bo 70\nwithdraw al 120\n",
+  "stdout": "error: unknown account al\nok\nerror: unknown account cy\nerror: insufficient funds\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account al\nok\nok\nok\nok\nok\nerror: same account\nok\nok\n103\nok\nok\nerror: duplicate account\nerror: duplicate account\nok\nok\nok\nal 101\nbo 133\ncy 42\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open al 96\ndeposit cy 41\nopen bo 110\nwithdraw al 55\nopen al 71\nbalance al\nwithdraw bo 112\nbalance bo\nopen cy 87\nopen bo 73\nwithdraw cy 22\ndeposit bo 49\nopen al 51\nbalance cy\nwithdraw al 71\n",
+  "stdout": "ok\nerror: unknown account cy\nok\nok\nerror: duplicate account\n41\nerror: insufficient funds\n110\nok\nerror: duplicate account\nok\nok\nerror: duplicate account\n65\nerror: insufficient funds\nal 41\nbo 159\ncy 65\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "transfer al cy 42\nopen bo 8\ntransfer bo cy 80\ntransfer cy al 4\nopen bo 78\nwithdraw al 33\ntransfer cy cy 4\ntransfer al cy 100\ndeposit cy 59\nopen cy 117\nwithdraw al 6\nbalance bo\ntransfer al cy 74\nopen cy 29\ndeposit al 15\nwithdraw cy 13\nopen cy 73\nwithdraw al 76\ntransfer cy al 33\nopen bo 5\ntransfer cy bo 85\nopen cy 51\ndeposit cy 16\nopen bo 110\nwithdraw cy 114\nopen al 101\nbalance al\nbalance al\ntransfer bo cy 48\nwithdraw al 58\nbalance bo\nopen bo 120\nbalance al\nopen cy 57\ntransfer al bo 14\n",
+  "stdout": "error: unknown account al\nok\nerror: unknown account cy\nerror: unknown account cy\nerror: duplicate account\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nok\nerror: unknown account al\n8\nerror: unknown account al\nerror: duplicate account\nerror: unknown account al\nok\nerror: duplicate account\nerror: unknown account al\nerror: unknown account al\nerror: duplicate account\nok\nerror: duplicate account\nok\nerror: duplicate account\nerror: insufficient funds\nok\n101\n101\nok\nok\n45\nerror: duplicate account\n43\nerror: duplicate account\nok\nal 29\nbo 59\ncy 83\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "withdraw al 27\nwithdraw al 77\ntransfer bo al 18\nbalance bo\nopen bo 28\nopen cy 21\ndeposit cy 66\ntransfer bo bo 117\ntransfer cy cy 24\nbalance cy\nopen al 28\ndeposit al 19\nbalance bo\nbalance bo\ntransfer cy al 27\nopen cy 65\ntransfer cy al 108\nopen al 101\nwithdraw cy 3\ntransfer bo cy 44\nwithdraw cy 33\ntransfer cy al 20\ndeposit bo 22\ntransfer cy al 116\ndeposit cy 41\ntransfer bo al 40\nopen al 90\nwithdraw cy 85\ntransfer cy bo 114\nbalance al\ntransfer cy bo 113\nbalance bo\ntransfer cy bo 21\ntransfer bo al 61\nopen cy 84\ntransfer cy bo 1\ntransfer al cy 76\ntransfer bo bo -1\nwithdraw bo 65\n",
+  "stdout": "error: unknown account al\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account bo\nok\nok\nok\nerror: same account\nerror: same account\n87\nok\nok\n28\n28\nok\nerror: duplicate account\nerror: insufficient funds\nerror: duplicate account\nok\nerror: insufficient funds\nok\nok\nok\nerror: insufficient funds\nok\nok\nerror: duplicate account\nerror: insufficient funds\nerror: insufficient funds\n134\nerror: insufficient funds\n10\nok\nerror: insufficient funds\nerror: duplicate account\nok\nok\nerror: invalid amount\nerror: insufficient funds\nal 58\nbo 32\ncy 99\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit al 23\nwithdraw al 79\nbalance al\ntransfer bo cy 3\ndeposit al 51\nwithdraw cy 63\ntransfer cy cy 22\ntransfer bo cy 29\ntransfer bo al 36\nwithdraw al 19\n",
+  "stdout": "error: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account al\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open al 104\nbalance bo\ntransfer cy al 58\ntransfer bo cy 40\nopen cy 100\nwithdraw bo 54\nbalance al\nwithdraw al 96\nwithdraw cy 23\nbalance cy\ntransfer cy cy 51\nwithdraw al 105\nopen bo 115\nbalance al\nwithdraw cy 34\ntransfer bo al 118\ntransfer bo cy 14\nbalance al\nopen bo 107\ndeposit al 55\nbalance bo\ntransfer bo cy 106\ntransfer bo al 1\nwithdraw al 102\ntransfer al al 14\ndeposit bo 90\nwithdraw al 9\nwithdraw cy 8\nopen cy 26\ntransfer cy al -2\n",
+  "stdout": "ok\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nok\nerror: unknown account bo\n104\nok\nok\n77\nerror: same account\nerror: insufficient funds\nok\n8\nok\nerror: insufficient funds\nok\n8\nerror: duplicate account\nok\n101\nerror: insufficient funds\nok\nerror: insufficient funds\nerror: same account\nok\nok\nok\nerror: duplicate account\nerror: invalid amount\nal 55\nbo 190\ncy 49\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "balance al\ntransfer cy cy 105\nwithdraw al 59\nbalance cy\nbalance al\nwithdraw al 40\ndeposit al 17\nbalance bo\nopen cy 16\nbalance cy\ntransfer cy bo 0\ntransfer al cy 112\ntransfer al cy 120\nwithdraw bo 69\ndeposit cy 13\ntransfer cy bo 70\nwithdraw cy 83\ndeposit cy 5\ntransfer cy bo 37\ndeposit bo 27\nopen cy 20\ntransfer cy al 100\nbalance cy\nwithdraw cy 116\nbalance cy\nwithdraw bo 1\nopen al 25\nbalance bo\nbalance bo\nbalance al\nopen bo 69\ndeposit cy 38\nwithdraw bo 40\nbalance al\ntransfer bo cy 102\ndeposit cy 66\ntransfer bo bo 79\ntransfer bo bo 92\ntransfer cy al 62\nwithdraw cy 16\n",
+  "stdout": "error: unknown account al\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: unknown account bo\nok\n16\nerror: invalid amount\nerror: unknown account al\nerror: unknown account al\nerror: unknown account bo\nok\nerror: unknown account bo\nerror: insufficient funds\nok\nerror: unknown account bo\nerror: unknown account bo\nerror: duplicate account\nerror: unknown account al\n34\nerror: insufficient funds\n34\nerror: unknown account bo\nok\nerror: unknown account bo\nerror: unknown account bo\n25\nok\nok\nok\n25\nerror: insufficient funds\nok\nerror: same account\nerror: same account\nok\nok\nal 87\nbo 29\ncy 60\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "withdraw al 48\nopen al 66\nwithdraw cy 70\ntransfer al al 15\nwithdraw al 106\ntransfer cy bo 73\nopen bo 0\nopen bo 36\nopen al 36\nbalance al\ntransfer bo al 21\ntransfer cy cy 14\nopen al 7\ntransfer cy bo 19\nwithdraw bo 47\ntransfer al bo 89\ndeposit bo 81\nbalance al\n",
+  "stdout": "error: unknown account al\nok\nerror: unknown account cy\nerror: same account\nerror: insufficient funds\nerror: unknown account cy\nok\nerror: duplicate account\nerror: duplicate account\n66\nerror: insufficient funds\nerror: unknown account cy\nerror: duplicate account\nerror: unknown account cy\nerror: insufficient funds\nerror: insufficient funds\nok\n66\nal 66\nbo 81\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit al 119\ndeposit cy 20\ndeposit al 102\nbalance bo\nbalance cy\nopen al 79\ntransfer al al 4\nbalance cy\nbalance bo\nbalance bo\nbalance al\nwithdraw al 36\ndeposit bo 20\nwithdraw bo 34\nopen bo 19\nopen bo 37\ntransfer bo bo 77\nwithdraw cy 115\ntransfer bo al 18\ndeposit al 84\ndeposit bo 48\ndeposit cy 46\nopen cy 100\ntransfer bo cy 118\nbalance al\nwithdraw al 94\ntransfer al al 53\ntransfer bo bo 85\ndeposit bo 119\nwithdraw cy 79\nwithdraw bo 84\n",
+  "stdout": "error: unknown account al\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account cy\nok\nerror: same account\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\n79\nok\nerror: unknown account bo\nerror: unknown account bo\nok\nerror: duplicate account\nerror: same account\nerror: unknown account cy\nok\nok\nok\nerror: unknown account cy\nok\nerror: insufficient funds\n145\nok\nerror: same account\nerror: same account\nok\nok\nok\nal 51\nbo 84\ncy 21\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit bo 104\nopen cy 63\nopen cy 65\ndeposit bo 12\nopen bo 30\nwithdraw cy 105\nwithdraw cy 3\nwithdraw bo 112\nwithdraw cy 103\nwithdraw cy 13\ntransfer al cy 119\nopen bo 42\nopen al 21\ndeposit al 24\nopen bo 87\ntransfer al al 84\nbalance cy\ntransfer cy al 30\ntransfer bo al 101\nopen al 95\nwithdraw bo 4\ntransfer cy cy 52\nopen cy 73\ntransfer cy al 119\ntransfer bo cy 88\nwithdraw bo 14\ndeposit cy 27\nwithdraw al 30\nwithdraw bo 75\ntransfer bo al 63\nbalance cy\ntransfer bo cy 56\nopen bo 33\n",
+  "stdout": "error: unknown account bo\nok\nerror: duplicate account\nerror: unknown account bo\nok\nerror: insufficient funds\nok\nerror: insufficient funds\nerror: insufficient funds\nok\nerror: unknown account al\nerror: duplicate account\nok\nok\nerror: duplicate account\nerror: same account\n47\nok\nerror: insufficient funds\nerror: duplicate account\nok\nerror: same account\nerror: duplicate account\nerror: insufficient funds\nerror: insufficient funds\nok\nok\nok\nerror: insufficient funds\nerror: insufficient funds\n44\nerror: insufficient funds\nerror: duplicate account\nal 45\nbo 12\ncy 44\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "withdraw cy 24\nwithdraw cy 73\ntransfer bo bo 81\nbalance bo\ndeposit cy 92\nwithdraw cy 7\nbalance cy\ndeposit cy 22\ntransfer bo al 5\ndeposit al 4\nopen cy 11\nwithdraw bo 89\ndeposit cy 68\ndeposit bo 113\ntransfer cy bo 10\ndeposit cy 120\nwithdraw bo 108\nwithdraw al -1\nopen bo 119\ndeposit al 68\nopen cy 105\nwithdraw cy 36\ntransfer bo cy 26\nwithdraw al 77\nwithdraw bo 5\ntransfer al bo 118\ntransfer cy cy 115\nopen al 94\ndeposit bo 53\ntransfer al cy -1\nwithdraw cy 77\ntransfer cy al 1\n",
+  "stdout": "error: unknown account cy\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account al\nok\nerror: unknown account bo\nok\nerror: unknown account bo\nerror: unknown account bo\nok\nerror: unknown account bo\nerror: invalid amount\nok\nerror: unknown account al\nerror: duplicate account\nok\nok\nerror: unknown account al\nok\nerror: unknown account al\nerror: same account\nok\nok\nerror: invalid amount\nok\nok\nal 95\nbo 141\ncy 111\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open al 117\ntransfer cy cy 99\nbalance bo\nopen cy 93\nopen bo 120\ndeposit bo 102\nwithdraw al 31\ntransfer cy cy 120\nopen cy 113\ntransfer bo al 11\ndeposit bo 68\nwithdraw bo 94\ntransfer cy cy 115\ntransfer bo cy 12\nopen bo 104\nwithdraw bo 91\nwithdraw al 89\nbalance al\nwithdraw al 37\nwithdraw bo 3\nopen al 80\nopen bo 117\nwithdraw al 21\ntransfer cy bo 95\ndeposit bo 24\ntransfer cy cy 38\nwithdraw bo 22\nopen bo 18\nwithdraw bo 2\ndeposit al 75\nopen al 105\nwithdraw cy 120\ndeposit bo 23\n",
+  "stdout": "ok\nerror: unknown account cy\nerror: unknown account bo\nok\nok\nok\nok\nerror: same account\nerror: duplicate account\nok\nok\nok\nerror: same account\nok\nerror: duplicate account\nok\nok\n8\nerror: insufficient funds\nok\nerror: duplicate account\nerror: duplicate account\nerror: insufficient funds\nok\nok\nerror: same account\nok\nerror: duplicate account\nok\nok\nerror: duplicate account\nerror: insufficient funds\nok\nal 83\nbo 197\ncy 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit al 54\nbalance al\ntransfer cy al 5\nwithdraw bo 16\ndeposit bo 111\nwithdraw cy 92\ntransfer bo cy 28\ntransfer bo bo 79\ntransfer bo bo 95\nbalance bo\ntransfer bo al 23\nopen cy 66\ndeposit al 100\ndeposit cy 105\nwithdraw cy 39\ndeposit al 116\ndeposit al 5\ntransfer al bo 87\nwithdraw bo 109\nopen al 103\nopen bo 116\ndeposit al 27\nwithdraw cy 21\n",
+  "stdout": "error: unknown account al\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account bo\nok\nerror: unknown account al\nok\nok\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: unknown account bo\nok\nok\nok\nok\nal 130\nbo 116\ncy 111\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "transfer al al -1\nopen al 106\nwithdraw bo 44\nbalance cy\nbalance bo\ntransfer al bo 58\nwithdraw bo 109\nwithdraw cy 116\ntransfer cy al 43\nbalance bo\nopen al 91\nopen bo 90\ntransfer al al 105\ntransfer cy al 97\nopen cy 107\nopen cy 0\ntransfer cy bo 14\nwithdraw al 72\nopen bo 2\ntransfer bo bo 37\nwithdraw bo 74\nopen bo 3\nopen bo 34\nopen bo 59\nopen cy 15\ndeposit bo 97\nwithdraw bo 75\ndeposit bo 81\nwithdraw cy 36\ntransfer cy cy 61\n",
+  "stdout": "error: invalid amount\nok\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account bo\nerror: duplicate account\nok\nerror: same account\nerror: unknown account cy\nok\nerror: duplicate account\nok\nok\nerror: duplicate account\nerror: same account\nok\nerror: duplicate account\nerror: duplicate account\nerror: duplicate account\nerror: duplicate account\nok\nok\nok\nok\nerror: same account\nal 34\nbo 133\ncy 57\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open cy 107\nbalance al\nbalance al\ntransfer al cy 57\ndeposit bo 36\ntransfer al bo 13\ntransfer al bo 108\nopen al 73\nopen cy 42\ndeposit bo 40\ntransfer al al 72\nopen cy 78\nopen cy 120\n",
+  "stdout": "ok\nerror: unknown account al\nerror: unknown account al\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account al\nerror: unknown account al\nok\nerror: duplicate account\nerror: unknown account bo\nerror: same account\nerror: duplicate account\nerror: duplicate account\nal 73\ncy 107\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "withdraw cy -2\nwithdraw cy 36\nwithdraw cy 7\nwithdraw cy 109\nopen al 69\nbalance bo\nwithdraw al 82\nopen al 33\nbalance cy\ndeposit al 73\ntransfer cy bo 38\ndeposit bo 27\ntransfer cy al 11\ntransfer al bo 104\ndeposit bo 61\nopen bo 102\nwithdraw cy 112\nopen bo 89\nopen cy 78\ndeposit cy 51\nbalance cy\nbalance cy\ntransfer al al 77\nopen cy 3\ntransfer bo al 17\n",
+  "stdout": "error: invalid amount\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account cy\nok\nerror: unknown account bo\nerror: insufficient funds\nerror: duplicate account\nerror: unknown account cy\nok\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account bo\nok\nerror: unknown account cy\nerror: duplicate account\nok\nok\n129\n129\nerror: same account\nerror: duplicate account\nok\nal 159\nbo 85\ncy 129\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "transfer cy al 75\nopen cy 4\ndeposit al 46\ndeposit cy 115\nopen al 42\nwithdraw al 58\ntransfer cy bo 87\ndeposit al 21\nopen al 76\nwithdraw cy 54\nbalance al\nwithdraw bo 41\ntransfer cy al 108\ntransfer cy cy 89\nbalance al\ntransfer al bo 91\ntransfer bo al 27\ndeposit al 69\nwithdraw cy 56\ntransfer bo al 100\ntransfer bo al 92\ntransfer bo al 65\n",
+  "stdout": "error: unknown account cy\nok\nerror: unknown account al\nok\nok\nerror: insufficient funds\nerror: unknown account bo\nok\nerror: duplicate account\nok\n63\nerror: unknown account bo\nerror: insufficient funds\nerror: same account\n63\nerror: unknown account bo\nerror: unknown account bo\nok\nok\nerror: unknown account bo\nerror: unknown account bo\nerror: unknown account bo\nal 132\ncy 9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit bo 120\ntransfer cy al 98\nbalance al\ntransfer cy bo 70\nwithdraw bo 94\nopen al 111\ndeposit cy 84\ndeposit bo 119\ntransfer cy al 7\ntransfer bo al 62\nbalance cy\nopen bo 106\nopen al 70\nwithdraw al 35\ntransfer cy cy 66\nwithdraw al 71\nwithdraw bo 85\nopen cy 105\nopen al 32\nwithdraw cy 1\nwithdraw bo 30\ndeposit al 49\ndeposit al 29\ndeposit cy 4\nopen al 59\ntransfer cy cy 54\ndeposit al 72\ndeposit al 27\nopen cy 118\nbalance al\ntransfer al al 52\nbalance cy\ndeposit bo 40\nopen cy 89\ndeposit bo 40\n",
+  "stdout": "error: unknown account bo\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account cy\nerror: unknown account bo\nok\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nerror: unknown account cy\nok\nerror: duplicate account\nok\nerror: unknown account cy\nok\nok\nok\nerror: duplicate account\nok\nerror: insufficient funds\nok\nok\nok\nerror: duplicate account\nerror: same account\nok\nok\nerror: duplicate account\n182\nerror: same account\n108\nok\nerror: duplicate account\nok\nal 182\nbo 101\ncy 108\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "withdraw al 70\ntransfer bo cy 94\ntransfer cy cy 101\ndeposit cy 86\nbalance al\ntransfer bo bo 114\nwithdraw cy 68\ndeposit bo 9\nopen al 31\nopen bo 16\ndeposit al 112\nwithdraw al 116\nopen bo 14\nopen bo 39\nopen bo 18\n",
+  "stdout": "error: unknown account al\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account cy\nerror: unknown account al\nerror: unknown account bo\nerror: unknown account cy\nerror: unknown account bo\nok\nok\nok\nok\nerror: duplicate account\nerror: duplicate account\nerror: duplicate account\nal 27\nbo 16\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open bo 100\nopen bo 50\nopen al 28\nbalance al\ntransfer cy al 74\ndeposit cy 39\ndeposit bo 45\ntransfer al bo 86\nopen al 64\nwithdraw cy 43\ntransfer bo cy 100\nbalance bo\ndeposit cy 84\nopen al 54\nopen bo 49\nwithdraw bo 120\nopen cy 104\ntransfer al bo 40\nwithdraw cy 57\nopen cy -1\nopen al 0\ndeposit al 117\nwithdraw cy 51\nbalance bo\nopen cy 67\ntransfer al cy 84\ntransfer al al 84\nopen cy 93\nbalance cy\ntransfer al al 109\ntransfer bo bo 4\nwithdraw cy 33\nopen bo 31\nopen bo 36\nopen bo 13\ntransfer al bo 91\ndeposit cy 94\n",
+  "stdout": "ok\nerror: duplicate account\nok\n28\nerror: unknown account cy\nerror: unknown account cy\nok\nerror: insufficient funds\nerror: duplicate account\nerror: unknown account cy\nerror: unknown account cy\n145\nerror: unknown account cy\nerror: duplicate account\nerror: duplicate account\nok\nok\nerror: insufficient funds\nok\nerror: invalid amount\nerror: duplicate account\nok\nerror: insufficient funds\n25\nerror: duplicate account\nok\nerror: same account\nerror: duplicate account\n131\nerror: same account\nerror: same account\nok\nerror: duplicate account\nerror: duplicate account\nerror: duplicate account\nerror: insufficient funds\nok\nal 61\nbo 25\ncy 192\n"
+ }
+]

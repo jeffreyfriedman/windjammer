@@ -644,7 +644,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|t| matches!(t, Type::Custom(s) if s == "usize"))
     }
 
-    /// DB-308/303: index expressions involving u32/i32 locals need an outer `as usize`
+    // index expressions involving u32/i32 locals need an outer `as usize`
     /// even when binary peers temporarily look like usize (`i + 1`).
     fn index_expr_needs_u32_or_i32_usize_cast(&self, index: &Expression<'ast>) -> bool {
         match index {
@@ -674,7 +674,7 @@ impl<'ast> CodeGenerator<'ast> {
         idx_str: &mut String,
         index: &Expression<'ast>,
     ) {
-        // Binding already emits `usize` (`let mut i: usize`) — never `(i as usize)` (DB-361).
+        // Binding already emits `usize` (`let mut i: usize`) — never `(i as usize)`.
         if let Expression::Identifier { name, .. } = index {
             if self.identifier_emits_as_usize(name) {
                 return;
@@ -693,7 +693,7 @@ impl<'ast> CodeGenerator<'ast> {
             *idx_str = idx_str.replace(" as f64", " as usize");
             return;
         }
-        // DB-383 / DB-353: user wrote `as i64` / `as i32` on an index place —
+        // user wrote `as i64` / `as i32` on an index place —
         // retarget the cast to usize instead of stacking (`clamped as i64 as usize`).
         for mid in [" as i64", " as i32", " as int"] {
             if let Some(base) = idx_str.strip_suffix(mid) {
@@ -701,7 +701,7 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
         }
-        // DB-308 / DB-303: u32 (and i32) locals — including `i + 1` binaries — must index as usize.
+        // u32 (and i32) locals — including `i + 1` binaries — must index as usize.
         // Do this before expression_produces_usize early-return (binary peers often look like usize).
         // Binaries: `({}) as usize` so `as` does not bind tighter than `+`.
         // Identifiers: `(i as usize)` — not `(i) as usize` (array_indexing_i32_test / field index).
@@ -923,7 +923,7 @@ impl<'ast> CodeGenerator<'ast> {
         if expr_str.contains(" as i32") || expr_str.contains(" as i64") {
             return;
         }
-        // Already emitted at target width — never `0_i32 as i32` / `1_i32 as i32` (DB-352).
+        // Already emitted at target width — never `0_i32 as i32` / `1_i32 as i32`.
         if to == IntType::I32 && expr_str.ends_with("_i32") {
             return;
         }
@@ -979,7 +979,7 @@ impl<'ast> CodeGenerator<'ast> {
         let suffix = get_cast_suffix(to);
         if let Some(base) = expr_str.strip_suffix(".clone()") {
             if !base.contains(" as ") {
-                // Cast to a Copy scalar — drop auto-clone (DB-343). Keep parens so a
+                // Cast to a Copy scalar — drop auto-clone. Keep parens so a
                 // later `.clone()` cannot bind tighter than `as` (P3.372).
                 *expr_str = format!("({base} as {suffix})");
                 return;
@@ -1021,7 +1021,7 @@ impl<'ast> CodeGenerator<'ast> {
         if expr_str.contains(" as ") {
             return;
         }
-        // Already emitted at unified width — never `0_i32 as i32` (DB-352).
+        // Already emitted at unified width — never `0_i32 as i32`.
         let already_at_width = match unified {
             crate::type_inference::IntType::I32 => expr_str.ends_with("_i32"),
             crate::type_inference::IntType::I64 => expr_str.ends_with("_i64"),
@@ -1035,7 +1035,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let suffix = get_cast_suffix(unified);
         if let Some(base) = expr_str.strip_suffix(".clone()") {
-            // Copy scalar cast — drop auto-clone (DB-343).
+            // Copy scalar cast — drop auto-clone.
             *expr_str = format!("({base} as {suffix})");
             return;
         }

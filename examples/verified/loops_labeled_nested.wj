@@ -1,0 +1,17 @@
+// tags: loops, break, nested, search
+// rust: gap error[E0308]: arguments to this function are incorrect
+// expect: first pair summing to 10: 1 + 9
+fn find_pair(a: Vec<int>, b: Vec<int>) -> string {
+    for x in a {
+        for y in b {
+            if x + y == 10 {
+                return "${x} + ${y}"
+            }
+        }
+    }
+    "none"
+}
+
+fn main() {
+    println("first pair summing to 10: ${find_pair([1, 3, 5], [2, 7, 9])}")
+}

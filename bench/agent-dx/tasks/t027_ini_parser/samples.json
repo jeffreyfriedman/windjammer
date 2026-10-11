@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[a]\nx = 1\ny=2\n---\na.x\na.y\na.z\nb.x\n",
+  "stdout": "1\n2\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "g = top\n[s]\nk = v = w\n; c\n# d\n---\ng\ns.k\n.g\ns.c\n",
+  "stdout": "top\nv = w\ntop\n<none>\n"
+ }
+]

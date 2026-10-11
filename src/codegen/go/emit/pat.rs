@@ -14,6 +14,16 @@ impl<'m> Go<'m> {
                 let lit = self.expr(e)?;
                 conds.push(format!("{scrut} == {lit}"));
             }
+            PPat::Range { lo, hi, inclusive } => {
+                if let Some(lo) = lo {
+                    let l = self.expr(lo)?;
+                    conds.push(format!("{scrut} >= {l}"));
+                }
+                if let Some(hi) = hi {
+                    let h = self.expr(hi)?;
+                    conds.push(format!("{scrut} {} {h}", if *inclusive { "<=" } else { "<" }));
+                }
+            }
             PPat::Tuple(ps) => {
                 let tys = match ty {
                     Ty::Tuple(ts) => ts.clone(),

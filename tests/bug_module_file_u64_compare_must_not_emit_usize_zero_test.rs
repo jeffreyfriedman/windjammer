@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-204: `u64` compare must not emit `0_usize` literal.
+//! `u64` compare must not emit `0_usize` literal.
 //!
 //! Product residual (~3× u64←usize), tip-out/gen sysbench:
 //!   `if median == 0_usize` while `median: u64` → E0308 + E0277.

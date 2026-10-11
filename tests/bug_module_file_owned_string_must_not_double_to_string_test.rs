@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-340: owned String store must not emit `.to_string().to_string()`.
+//! owned String store must not emit `.to_string().to_string()`.
 //!
 //! Tip output for a game project cluster:
 //!   `ai/bt_serialization.rs`: `rec.params = value.to_string().to_string()`

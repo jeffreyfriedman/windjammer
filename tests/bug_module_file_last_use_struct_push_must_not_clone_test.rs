@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-474: a last-use local struct moved into `Vec::push` must not `.clone()`.
+//! a last-use local struct moved into `Vec::push` must not `.clone()`.
 //!
 //! Product `editor/csg.rs` `bsp_build_into`:
 //!   `tree.nodes.push(empty.clone())` and `tree.nodes.push(empty.clone().clone())`
 //! WJ is `tree.nodes.push(empty)` and `empty` is not used again.
-//! Distinct from DB-471 (a reused `Vec` argument `.clone().clone()`).
+//! Distinct from (a reused `Vec` argument `.clone().clone()`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

@@ -1,5 +1,5 @@
 // FAILING REPRO — thin Vec forwarder must not demote to `&Vec` while callee stays owned.
-// Product tip api-check (DownstreamApp request_context): `post_request` → `post_request_query`.
+// Product tip api-check (a downstream application request_context): `post_request` → `post_request_query`.
 
 pub struct Req {
     pub headers: Vec<(string, string)>,

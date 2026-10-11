@@ -1,5 +1,8 @@
 //! Generate agent-facing index artifacts for MCP resources and tools.
 
+pub mod docs_search;
+pub mod verified;
+
 use anyhow::{Context, Result};
 use serde_json::json;
 use std::fs;
@@ -52,11 +55,23 @@ pub fn generate_agent_index(output: &Path) -> Result<()> {
     });
     write_json(output.join("lint_policy.json"), &lint_policy)?;
 
+    // Offline docs index (`wj docs <query>`) and the verified-example manifest. Both are derived
+    // from files in the repository, so they are only (re)generated when run from a checkout.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if root.join("examples/verified").exists() {
+        write_json(
+            root.join("examples/verified/manifest.json"),
+            &verified::build_manifest(&root.join("examples/verified"))?,
+        )?;
+    }
+    let docs = docs_search::build_index(&root)?;
+    write_json(output.join("docs_index.json"), &serde_json::to_value(&docs)?)?;
+
     let meta = json!({
         "generated_by": "wj agent-index",
         "windjammer_version": env!("CARGO_PKG_VERSION"),
         "generated_at": chrono::Utc::now().to_rfc3339(),
-        "artifact_count": 6
+        "artifact_count": 7
     });
     write_json(output.join("index_meta.json"), &meta)?;
 
@@ -173,7 +188,7 @@ fn generate_effects_taint_surface() -> serde_json::Value {
 }
 
 fn generate_spec_index() -> Result<serde_json::Value> {
-    let spec_md = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/LANGUAGE_SPEC_TESTS.md");
+    let spec_md = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/README.md");
     Ok(json!({
         "index_file": repo_relative_path(&spec_md),
         "exists": spec_md.exists(),

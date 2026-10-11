@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 10\nfib 10\ntri 4\ncollatz 6\n",
+  "stdout": "55 miss\n55 hit\n10 miss\n8 miss\nhits=1 misses=3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 0\nfact 3\ntri 0\ntri 0\n",
+  "stdout": "0 miss\nunknown function\n0 miss\n0 hit\nhits=1 misses=2\n"
+ }
+]

@@ -17,11 +17,6 @@ pub(crate) fn resolve_runtime_src_for_scan() -> Option<std::path::PathBuf> {
     if from_finder.is_dir() {
         return Some(from_finder);
     }
-    // Dev convenience when CWD is the windjammer crate root.
-    let cwd_relative = Path::new("crates/windjammer-runtime/src");
-    if cwd_relative.is_dir() {
-        return Some(cwd_relative.to_path_buf());
-    }
     None
 }
 
@@ -428,7 +423,7 @@ pub(crate) fn register_rust_std_boundary_signatures(registry: &mut SignatureRegi
     registry.register_runtime_std_module("thread");
     // Runtime `strings::{contains,starts_with,ends_with}`: haystack `AsRef<str>`,
     // needle `&str`. WJ `std/strings.wj` stubs list owned `string` and must not
-    // last-write `String::from("lit")` into the needle (DB-144).
+    // last-write `String::from("lit")` into the needle.
     for name in [
         "strings::contains",
         "strings::starts_with",
@@ -577,10 +572,10 @@ fn register_runtime_modules_from_signature_keys(registry: &mut SignatureRegistry
 /// WJ `std/*.wj` and `std/*/mod.wj` stems (`async`, `process`, …) so aliases that
 /// have no matching runtime file stem still classify as runtime std modules.
 fn register_wj_std_module_names(registry: &mut SignatureRegistry) {
-    let candidates = [
-        Path::new("std").to_path_buf(),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-    ];
+    let candidates: Vec<std::path::PathBuf> =
+        crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj)
+            .into_iter()
+            .collect();
     for dir in &candidates {
         if !dir.is_dir() {
             continue;

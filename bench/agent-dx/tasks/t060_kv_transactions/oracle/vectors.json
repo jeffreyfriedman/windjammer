@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set a 10\nget a\ncount 10\nbegin\nset a 20\nget a\nrollback\nget a\n",
+  "stdout": "10\n1\n20\n10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rollback\ncommit\nget zz\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set a 1\nbegin\nset b 1\nbegin\ndelete a\ncount 1\nrollback\ncount 1\ncommit\nrollback\nget b\n",
+  "stdout": "1\n2\nNO TRANSACTION\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "begin\nset x 5\nbegin\nset x 6\ncommit\nget x\ncount 6\ncount 5\n",
+  "stdout": "6\n1\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set a 1\nset a 2\ncount 1\ncount 2\ndelete a\ndelete a\nget a\n",
+  "stdout": "0\n1\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "count 1\nset a 3\nset c 2\nrollback\nget c\nset a 2\nget c\ncount 1\nrollback\ncount 2\ncount 1\ncount 1\nset a 1\nget a\nrollback\nset c 2\ncount 2\nset a 1\nset c 2\nrollback\nset b 2\ncount 1\nrollback\nset c 3\nset b 2\ncount 1\ndelete a\nbegin\ncount 3\nbegin\nget b\n",
+  "stdout": "0\nNO TRANSACTION\n2\n2\n0\nNO TRANSACTION\n2\n0\n0\n1\nNO TRANSACTION\n1\nNO TRANSACTION\n1\nNO TRANSACTION\n1\n1\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get a\nbegin\nrollback\nrollback\nset b 1\ncount 2\nset a 2\nset c 2\nset c 1\nget c\nget a\ncount 2\nget a\nget c\ncommit\ncommit\nrollback\nget c\nbegin\nget a\nbegin\nget b\nset a 2\ncommit\nbegin\nset a 1\nset b 1\ncount 2\nbegin\ncount 1\nget c\ncommit\nrollback\nbegin\nrollback\nrollback\nrollback\ncommit\ndelete b\ndelete a\n",
+  "stdout": "NULL\nNO TRANSACTION\n0\n1\n2\n1\n2\n1\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n1\n2\n1\n0\n3\n1\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "commit\nrollback\nrollback\nset a 3\ncommit\ncount 3\nbegin\nset a 3\nget a\nget b\nset a 1\ncount 2\nset b 3\nrollback\ncount 1\nrollback\ndelete a\ncount 2\ncommit\ncount 3\nget a\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n1\n3\nNULL\n0\n0\nNO TRANSACTION\n0\nNO TRANSACTION\n0\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete c\ndelete a\nget c\nget c\nset c 3\nrollback\nbegin\ncommit\nset b 1\ndelete a\nset a 1\nset c 3\ncount 1\nget a\nrollback\nbegin\nget b\ncommit\nget c\nget c\nset a 3\nget a\ncount 3\ndelete c\nget c\nset b 1\ncommit\ncount 2\nbegin\nget c\n",
+  "stdout": "NULL\nNULL\nNO TRANSACTION\n2\n1\nNO TRANSACTION\n1\n3\n3\n3\n2\nNULL\nNO TRANSACTION\n0\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete a\nset c 2\ncount 3\nset a 1\ncount 1\nset a 3\nbegin\nbegin\nbegin\ndelete b\nget b\nset a 3\nset a 1\ncommit\nset c 2\nset c 3\nget b\nset a 2\ncount 1\nbegin\nrollback\ncommit\nget b\nset b 3\ncount 2\nset a 2\nget b\nset a 1\nget a\ncommit\nset c 3\nbegin\nset a 1\nset b 2\ndelete c\ndelete a\nbegin\ncommit\nbegin\ndelete c\ncommit\nget b\nget b\ndelete b\nbegin\ncommit\ncount 2\nset b 3\nget c\n",
+  "stdout": "0\n1\nNULL\nNULL\n0\nNO TRANSACTION\nNULL\n1\n3\n1\nNO TRANSACTION\n2\n2\n0\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rollback\nrollback\nset a 2\nbegin\nset c 3\nrollback\nset b 1\ncommit\ncount 2\nset b 2\nset a 1\nset c 1\ndelete c\nset c 1\nbegin\nbegin\nget b\nset c 3\nget a\nset c 3\ncommit\nset b 2\nset c 3\nset a 1\ncount 2\ndelete a\ncount 3\nget c\nget c\nget b\nset c 2\nrollback\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n1\n2\n1\n1\n1\n3\n3\n2\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set c 1\nbegin\ndelete a\ncommit\nget b\ncount 2\ndelete a\nrollback\nset a 1\nget c\ndelete b\ncount 1\ncount 3\ndelete c\nget c\nget c\nget b\nset b 3\nrollback\nrollback\ndelete b\nrollback\nset c 1\nbegin\ncommit\nbegin\ncommit\nset c 3\nbegin\nbegin\nset a 2\nset c 3\n",
+  "stdout": "NULL\n0\nNO TRANSACTION\n1\n2\n0\nNULL\nNULL\nNULL\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rollback\nset c 2\nbegin\ncount 1\nset c 1\nrollback\nset c 3\nbegin\ncount 2\nset a 2\ndelete c\ncount 3\nset b 2\ncommit\nbegin\nrollback\nbegin\nrollback\nset a 3\ncommit\nrollback\nbegin\nget b\nset c 1\nbegin\ndelete b\nset c 1\nset b 2\nget a\nrollback\ndelete c\nget b\nget c\ncount 3\nbegin\ncount 1\nset a 2\n",
+  "stdout": "NO TRANSACTION\n0\n0\n0\nNO TRANSACTION\nNO TRANSACTION\n2\n3\n2\nNULL\n1\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "commit\nset a 3\ncount 1\ncount 2\nset b 3\ndelete c\ncommit\ncount 2\ndelete c\ndelete a\nset a 3\ncount 1\nset b 3\nset b 2\nset a 2\n",
+  "stdout": "NO TRANSACTION\n0\n0\nNO TRANSACTION\n0\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "begin\ncommit\nbegin\nrollback\nset b 2\ndelete c\nget a\nget b\ncommit\nget b\nset c 1\nset a 1\ndelete c\nget b\nset a 2\nget c\nset b 3\nget c\nset a 2\nbegin\ncount 1\n",
+  "stdout": "NULL\n2\nNO TRANSACTION\n2\n2\nNULL\nNULL\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set a 3\nset b 2\nrollback\nset b 1\nset a 2\ncommit\ncount 2\ncount 1\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\n1\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get b\nget b\ncommit\ndelete c\nset b 2\nset c 1\ncount 1\nset b 1\nset c 2\nrollback\ncount 2\ncommit\nget c\n",
+  "stdout": "NULL\nNULL\nNO TRANSACTION\n1\nNO TRANSACTION\n1\nNO TRANSACTION\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "commit\nrollback\nget b\ncommit\nset b 1\ncommit\nset b 1\nrollback\nrollback\nset c 1\nset c 3\ncommit\nget c\ndelete c\ncount 2\nbegin\ncount 3\ncount 1\ncount 1\ndelete a\nrollback\nset a 1\nset c 2\nset c 3\nset b 3\nset b 3\nset c 3\nget c\nset a 3\nget a\ndelete b\nrollback\ndelete b\nget c\nget c\ncount 2\nset a 1\nset a 3\ndelete b\ncommit\nset a 1\ncount 2\ncount 3\nset c 3\ncount 2\nset b 2\nset a 3\nset b 2\nset b 3\ncount 1\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\nNULL\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n3\n0\n0\n1\n1\n3\n3\nNO TRANSACTION\n3\n3\n0\nNO TRANSACTION\n0\n1\n0\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete b\nrollback\ncount 2\nrollback\nset b 1\nrollback\nrollback\ncommit\nget a\ncommit\nbegin\nset c 1\ncount 3\nset c 2\nset a 1\nbegin\nset c 1\nbegin\ncount 3\nrollback\nset b 1\nset b 2\ncount 1\nget b\nbegin\ncount 1\nget a\ndelete a\ncount 3\n",
+  "stdout": "NO TRANSACTION\n0\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNULL\nNO TRANSACTION\n0\n0\n2\n2\n2\n1\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete a\nbegin\nrollback\nbegin\nset a 3\nget b\ndelete a\nset a 2\ncount 1\nbegin\nset a 2\ncommit\nset a 2\ncount 1\ncount 3\nbegin\nset a 1\nget c\nset a 1\ncommit\nbegin\nset a 3\nbegin\nbegin\n",
+  "stdout": "NULL\n0\n0\n0\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "count 1\ncommit\ncount 2\nrollback\nset a 2\ncommit\nset a 1\ncount 1\ndelete c\nbegin\nset c 2\ncount 3\nget c\nget b\ndelete c\ndelete c\nset c 2\ncount 3\nrollback\nset b 3\nget c\nset a 1\nbegin\ndelete c\ncommit\nset b 3\ncommit\nget c\ndelete a\nget b\nset c 1\ncount 1\ncount 1\ncount 3\nrollback\nset c 2\ncount 2\n",
+  "stdout": "0\nNO TRANSACTION\n0\nNO TRANSACTION\nNO TRANSACTION\n1\n0\n2\nNULL\n0\nNULL\nNO TRANSACTION\nNULL\n3\n1\n1\n1\nNO TRANSACTION\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "count 3\ncommit\nbegin\ndelete c\nset c 3\nget c\nbegin\ncount 2\nrollback\nset c 1\n",
+  "stdout": "0\nNO TRANSACTION\n3\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "commit\ncount 1\ncommit\nget a\nrollback\nset b 2\nrollback\ncommit\nget c\ndelete c\ncount 3\ncount 2\ndelete a\ndelete a\ncount 3\ncount 1\nbegin\nset a 3\nget b\nset a 2\nbegin\nset c 3\ndelete a\nset c 2\nset c 1\ncount 3\ndelete a\ncommit\ncount 3\ncommit\nset c 3\nrollback\nset b 3\ncommit\nset b 1\nget c\nrollback\ncommit\nset b 3\ncount 3\nset a 2\ncommit\ndelete c\ncount 1\nrollback\ncommit\n",
+  "stdout": "NO TRANSACTION\n0\nNO TRANSACTION\nNULL\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\nNULL\n0\n1\n0\n0\n2\n0\n0\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n3\nNO TRANSACTION\nNO TRANSACTION\n2\nNO TRANSACTION\n0\nNO TRANSACTION\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "get c\nset a 1\nset a 3\nrollback\nget c\ndelete c\ncount 2\nget c\nbegin\ncount 2\nbegin\ncount 1\nrollback\nrollback\nget b\nset a 3\nget c\nset b 2\ncount 2\nset b 3\nbegin\nget b\nget c\nrollback\nset a 3\nget c\nget a\nset b 2\n",
+  "stdout": "NULL\nNO TRANSACTION\nNULL\n0\nNULL\n0\n0\nNULL\nNULL\n1\n3\nNULL\nNULL\n3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set c 1\ndelete b\nbegin\nbegin\nset a 1\nget b\ncount 3\ncount 1\ncount 1\nget c\ncommit\nset b 3\n",
+  "stdout": "NULL\n0\n2\n2\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set c 1\ndelete c\nset b 3\nbegin\nset b 3\ncount 3\ncommit\ndelete a\ncommit\ncount 1\nset a 1\nget b\ncount 3\nset b 1\nset b 3\nget c\ncount 1\nset a 3\ndelete a\nbegin\nset a 3\nbegin\nrollback\nset b 3\nset b 2\nrollback\ncount 2\nset b 2\nbegin\ncount 1\nset a 3\ncount 3\nset b 2\nbegin\nget b\nget b\nset b 2\nbegin\nset c 3\nset a 2\nset c 1\nset b 2\nget b\nset a 1\ncount 1\ncount 3\n",
+  "stdout": "1\nNO TRANSACTION\n0\n3\n1\nNULL\n1\n0\n0\n1\n2\n2\n2\n2\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete b\nset b 2\nset b 2\nset c 1\ncommit\ncount 1\ndelete b\ncommit\n",
+  "stdout": "NO TRANSACTION\n1\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "count 1\ncount 1\ncommit\nset c 2\nset b 3\ndelete a\nget c\nset c 3\nrollback\nset a 2\ndelete a\n",
+  "stdout": "0\n0\nNO TRANSACTION\n2\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rollback\ncommit\nbegin\ncount 3\nset b 2\ncommit\nset b 3\nset b 1\nget c\ndelete a\nrollback\nset b 2\nset c 2\nset b 2\nget c\ndelete a\nbegin\nrollback\ncommit\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\n0\nNULL\nNO TRANSACTION\n2\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set c 3\nget b\ncount 3\ndelete a\nget a\nset b 2\nset b 2\nrollback\nrollback\nbegin\n",
+  "stdout": "NULL\n1\nNULL\nNO TRANSACTION\nNO TRANSACTION\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set c 2\nset a 2\nset c 2\nrollback\nset b 3\ncount 1\nget c\ncount 2\ndelete b\nget a\ncount 3\nbegin\ndelete b\ncount 3\ndelete b\nbegin\ndelete a\ncount 2\ndelete c\nrollback\nget c\ncount 3\nget a\ncount 1\ncount 2\nbegin\nset b 1\ncount 2\ncount 2\nset b 3\nbegin\nset c 1\ncommit\ncommit\ncount 1\ndelete a\ndelete b\n",
+  "stdout": "NO TRANSACTION\n0\n2\n2\n2\n0\n0\n1\n2\n0\n2\n0\n2\n2\n2\nNO TRANSACTION\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "begin\nset a 3\nset c 2\nrollback\nbegin\nget c\nrollback\nrollback\nget c\ncount 1\ncount 2\ncount 1\nset c 3\nset b 3\nbegin\nset b 2\ncount 2\nset a 1\nset a 3\nset a 1\ndelete a\nrollback\ncount 3\nrollback\nset a 1\nrollback\ncommit\ncount 3\nget c\nrollback\nset a 3\nget a\nget b\nget b\nget b\ndelete c\nset a 3\nget c\nbegin\nset a 1\ndelete c\nset b 2\nget c\nset a 1\nset b 3\nget a\ncount 2\nset a 1\n",
+  "stdout": "NULL\nNO TRANSACTION\nNULL\n0\n0\n0\n1\n2\nNO TRANSACTION\nNO TRANSACTION\nNO TRANSACTION\n2\n3\nNO TRANSACTION\n3\n3\n3\n3\nNULL\nNULL\n1\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete c\nset b 1\ndelete a\nbegin\nset b 2\nset b 3\ndelete c\nset c 1\ndelete a\nset b 3\nset b 2\ndelete b\ncount 3\ncount 1\nbegin\ncommit\nbegin\ndelete b\nbegin\nget a\nset c 2\nset b 1\ncount 1\ndelete a\nset c 1\nset a 3\ncount 2\nbegin\ncommit\nset a 1\nset c 3\nrollback\nset c 2\nbegin\nset b 3\nset a 1\nget c\nset a 3\nset b 1\ncommit\nset b 1\n",
+  "stdout": "0\n1\nNULL\n1\n0\nNO TRANSACTION\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set c 3\ncommit\ndelete a\ncount 2\ncount 3\ndelete c\nset b 3\nrollback\nget c\ndelete b\nbegin\nget a\ndelete b\nset b 3\nset c 3\nset a 1\nbegin\nrollback\ndelete a\nget b\nset c 3\ncount 1\nbegin\nset c 3\nset a 1\nbegin\ndelete c\ndelete c\ndelete a\nget a\nrollback\nset c 3\nset c 2\nset b 3\ndelete a\nget b\nget a\n",
+  "stdout": "NO TRANSACTION\n0\n1\nNO TRANSACTION\nNULL\nNULL\n3\n0\nNULL\n3\nNULL\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set b 2\ncommit\nset b 2\ncount 1\nset a 1\nget b\nbegin\ncommit\nget b\nbegin\ncount 2\nrollback\nrollback\nbegin\nset c 3\ndelete b\nbegin\ncount 1\ncommit\n",
+  "stdout": "NO TRANSACTION\n0\n2\n2\n1\nNO TRANSACTION\n1\n"
+ }
+]

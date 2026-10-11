@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-486: a `string` inserted into different maps on successive `if` arms
+//! a `string` inserted into different maps on successive `if` arms
 //! must not `.clone().clone()`. One clone per arm that is not the last use
 //! is enough.
 //!
@@ -21,8 +21,8 @@
 //!   `data.bool_fields.insert(key.clone().clone(), ...)`
 //!   `data.string_fields.insert(key.clone(), val.clone())`
 //! WJ inserts `key` once per `if section == ...` arm.
-//! Distinct from DB-479 (one map: `contains_key`, `insert`, `get_mut`) and
-//! DB-485 (one call plus a later `match` arm).
+//! Distinct from (one map: `contains_key`, `insert`, `get_mut`) and
+//! (one call plus a later `match` arm).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

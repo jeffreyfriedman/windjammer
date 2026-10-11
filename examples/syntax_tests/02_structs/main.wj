@@ -1,3 +1,10 @@
+// expect: Point 1: (3, 4)
+// expect: Distance from origin: 25
+// expect: Point 2 after translation: (5, 5)
+// expect: As tuple: (1, 2)
+// expect: Rectangle 1 area: 200
+// expect: Rectangle 1 is square: false
+// expect: Rectangle 2 is square: true
 // Example 2: Structs, impl blocks, and methods
 
 // Struct with automatic trait derivation

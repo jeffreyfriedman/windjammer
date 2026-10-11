@@ -1,0 +1,21 @@
+// tags: algorithm, recursion, loops, u64
+// rust: ok
+// expect: 0 1 1 2 3 5 8 13 21 34 55 89 144 233 377
+// expect: fib(50) = 12586269025
+fn fib(n: int) -> u64 {
+    let mut a: u64 = 0
+    let mut b: u64 = 1
+    for _ in 0..n {
+        let t = a + b
+        a = b
+        b = t
+    }
+    a
+}
+
+fn main() {
+    let mut parts: Vec<string> = []
+    for i in 0..15 { parts.push(fib(i).to_string()) }
+    println(parts.join(" "))
+    println("fib(50) = ${fib(50)}")
+}

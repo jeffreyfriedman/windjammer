@@ -15,7 +15,7 @@
 //! cargo-check. Demoting to `&Vec<(String,String)>` then moving fields → E0507;
 //! star-deref `*pair.0 == "…"` → E0277 (`str` vs `&str`).
 //!
-//! Preferred: keep Owned `Vec` when the loop moves non-Copy fields (not DB-412
+//! Preferred: keep Owned `Vec` when the loop moves non-Copy fields (not 
 //! compare-only). Alternate: borrowed for-in + `.clone()` on field extract.
 //! Do not reshape apps to `for (key, value) in headers` only.
 

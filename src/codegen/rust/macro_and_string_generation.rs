@@ -144,7 +144,7 @@ impl<'ast> CodeGenerator<'ast> {
         let prev_suppress = self.suppress_string_conversion.get();
         self.suppress_string_conversion.set(true);
 
-        // DB-379: never lower `format!` to `write!(&mut __s).unwrap()` (Rust leakage).
+        // never lower `format!` to `write!(&mut __s).unwrap()` (Rust leakage).
         // Capacity hints stay recorded for a future WJ-native prealloc, not rustc `write!`.
 
         // Special case: if this is println!/eprintln!/print!/eprint! and first arg is format!, flatten it

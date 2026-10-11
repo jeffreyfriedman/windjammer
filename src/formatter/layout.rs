@@ -13,9 +13,9 @@ pub struct Line {
     pub indent: usize,
 }
 
-const CONTINUATION_STARTS: &[&str] = &[".", "|>", "&&", "||", "?"];
+const CONTINUATION_STARTS: &[&str] = &[".", "|>", "|>?", "&&", "||", "?"];
 const CONTINUATION_ENDS: &[&str] = &[
-    "=", "+", "-", "/", "%", "&&", "||", "|>", "==", "!=", "<=", ">=", "+=", "-=", "*=",
+    "=", "+", "-", "/", "%", "&&", "||", "|>", "|>?", "==", "!=", "<=", ">=", "+=", "-=", "*=",
     "/=", "->", "=>",
 ];
 
@@ -29,7 +29,8 @@ pub fn layout(toks: &[Tok]) -> Vec<Line> {
         while e < toks.len() && toks[e].nl == 0 {
             e += 1;
         }
-        let indent = line_indent(&toks[s..e], &mut stack, prev_last, lines.len());
+        let pipe_next = toks[s].is_comment() && comment_precedes_pipe(&toks[e..]);
+        let indent = line_indent(&toks[s..e], &mut stack, prev_last, lines.len(), pipe_next);
         lines.push(Line { start: s, end: e, indent });
         if !toks[s].is_comment() {
             prev_last = toks[s..e].iter().rev().find(|t| !t.is_comment());
@@ -45,9 +46,10 @@ fn line_indent(
     stack: &mut Vec<(usize, usize)>,
     prev_last: Option<&Tok>,
     line_no: usize,
+    pipe_next: bool,
 ) -> usize {
     if line[0].is_comment() {
-        return stack.last().map_or(0, |e| e.0 + 1);
+        return stack.last().map_or(0, |e| e.0 + 1) + usize::from(pipe_next);
     }
     let leading = line.iter().take_while(|t| t.is_closer()).count();
     let mut popped = None;
@@ -69,6 +71,12 @@ fn line_indent(
         }
     }
     indent
+}
+
+/// A comment line sitting between two pipe stages is indented like the stages around it.
+fn comment_precedes_pipe(rest: &[Tok]) -> bool {
+    let mut line_starts = rest.iter().filter(|t| t.nl > 0);
+    line_starts.find(|t| !t.is_comment()).is_some_and(|t| t.is("|>") || t.is("|>?"))
 }
 
 fn is_continuation(line: &[Tok], prev_last: Option<&Tok>) -> bool {

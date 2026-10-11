@@ -1,0 +1,10 @@
+// tags: error-handling, assert
+// rust: ok
+// expect: all checks passed
+fn main() {
+    assert(1 + 1 == 2)
+    assert(2 > 1, "two exceeds one")
+    assert_eq(6 * 7, 42)
+    assert_ne(1, 2)
+    println("all checks passed")
+}

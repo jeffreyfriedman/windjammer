@@ -1,0 +1,14 @@
+// tags: basics, variables, mutability
+// rust: ok
+// expect: 10
+// expect: 11
+// expect: 30
+fn main() {
+    let x = 10
+    println("${x}")
+    let mut y = x
+    y += 1
+    println("${y}")
+    let x = x * 3
+    println("${x}")
+}

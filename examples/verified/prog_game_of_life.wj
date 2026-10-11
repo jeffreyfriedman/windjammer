@@ -1,0 +1,56 @@
+// tags: program, simulation, grid, loops
+// rust: gap error[E0308]: mismatched types
+// expect: gen 0: ..... / ..#.. / ..#.. / ..#.. / .....
+// expect: gen 1: ..... / ..... / .###. / ..... / .....
+// expect: gen 2: ..... / ..#.. / ..#.. / ..#.. / .....
+fn neighbors(g: Vec<Vec<bool>>, r: int, c: int) -> int {
+    let mut n = 0
+    for dr in [-1, 0, 1] {
+        for dc in [-1, 0, 1] {
+            if dr == 0 && dc == 0 { continue }
+            let rr = r + dr
+            let cc = c + dc
+            if rr >= 0 && rr < 5 && cc >= 0 && cc < 5 && g[rr][cc] {
+                n += 1
+            }
+        }
+    }
+    n
+}
+
+fn step(g: Vec<Vec<bool>>) -> Vec<Vec<bool>> {
+    let mut out: Vec<Vec<bool>> = []
+    for r in 0..5 {
+        let mut row: Vec<bool> = []
+        for c in 0..5 {
+            let n = neighbors(g, r, c)
+            let alive = g[r][c]
+            row.push(n == 3 || (alive && n == 2))
+        }
+        out.push(row)
+    }
+    out
+}
+
+fn render(g: Vec<Vec<bool>>) -> string {
+    let mut rows: Vec<string> = []
+    for r in 0..5 {
+        let mut s = ""
+        for c in 0..5 {
+            s = s + if g[r][c] { "#" } else { "." }
+        }
+        rows.push(s)
+    }
+    rows.join(" / ")
+}
+
+fn main() {
+    let mut g = [[false; 5]; 5]
+    g[1][2] = true
+    g[2][2] = true
+    g[3][2] = true
+    for gen in 0..3 {
+        println("gen ${gen}: ${render(g)}")
+        g = step(g)
+    }
+}

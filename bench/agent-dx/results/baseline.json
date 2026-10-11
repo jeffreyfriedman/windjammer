@@ -1,0 +1,6363 @@
+{
+ "toolchains": {
+  "wj-interp": {
+   "available": true,
+   "version": "wj 0.50.0",
+   "reason": ""
+  },
+  "wj": {
+   "available": true,
+   "version": "wj 0.50.0 + cargo (wj built from the scrub-compiler worktree release binary, 11:46 Oct 11)",
+   "reason": ""
+  },
+  "rust": {
+   "available": true,
+   "version": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+   "reason": ""
+  },
+  "go": {
+   "available": true,
+   "version": "go version go1.26.1 darwin/arm64",
+   "reason": ""
+  },
+  "python": {
+   "available": true,
+   "version": "Python 3.13.5",
+   "reason": ""
+  },
+  "ts": {
+   "available": true,
+   "version": "node v24.17.0; typecheck via deno",
+   "reason": ""
+  }
+ },
+ "results": [
+  {
+   "lang": "python",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.807,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 12.6
+  },
+  {
+   "lang": "go",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.361,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.34
+  },
+  {
+   "lang": "rust",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.022,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.99
+  },
+  {
+   "lang": "ts",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.06,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 66.38
+  },
+  {
+   "lang": "python",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.426,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.19
+  },
+  {
+   "lang": "go",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.737,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.09
+  },
+  {
+   "lang": "rust",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.476,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.07
+  },
+  {
+   "lang": "ts",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.896,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 95.81
+  },
+  {
+   "lang": "python",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.551,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.06
+  },
+  {
+   "lang": "go",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.192,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.74
+  },
+  {
+   "lang": "rust",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.977,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.7
+  },
+  {
+   "lang": "ts",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 18.652,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 154.4
+  },
+  {
+   "lang": "python",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.634,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 29.15
+  },
+  {
+   "lang": "go",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.434,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.5
+  },
+  {
+   "lang": "rust",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.177,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 21.0
+  },
+  {
+   "lang": "ts",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 29.658,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 103.81
+  },
+  {
+   "lang": "python",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.884,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 32.73
+  },
+  {
+   "lang": "go",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.096,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.52
+  },
+  {
+   "lang": "rust",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 11.773,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.99
+  },
+  {
+   "lang": "ts",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.089,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 88.59
+  },
+  {
+   "lang": "python",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.67,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.09
+  },
+  {
+   "lang": "go",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.751,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.51
+  },
+  {
+   "lang": "rust",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.835,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.11
+  },
+  {
+   "lang": "ts",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.937,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 71.38
+  },
+  {
+   "lang": "python",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.075,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.26
+  },
+  {
+   "lang": "go",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.967,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.24
+  },
+  {
+   "lang": "rust",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.241,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.94
+  },
+  {
+   "lang": "ts",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 21.421,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 70.27
+  },
+  {
+   "lang": "python",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.429,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.23
+  },
+  {
+   "lang": "go",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.606,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.17
+  },
+  {
+   "lang": "rust",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.036,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.87
+  },
+  {
+   "lang": "ts",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 22.143,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 58.44
+  },
+  {
+   "lang": "python",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.434,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.89
+  },
+  {
+   "lang": "go",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.691,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.94
+  },
+  {
+   "lang": "rust",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.163,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.23
+  },
+  {
+   "lang": "ts",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 22.003,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 78.59
+  },
+  {
+   "lang": "python",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.886,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 21.06
+  },
+  {
+   "lang": "go",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.226,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.67
+  },
+  {
+   "lang": "rust",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.5,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.73
+  },
+  {
+   "lang": "ts",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.57,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 46.67
+  },
+  {
+   "lang": "python",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.227,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.37
+  },
+  {
+   "lang": "go",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.655,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.93
+  },
+  {
+   "lang": "rust",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.397,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.1
+  },
+  {
+   "lang": "ts",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 16.815,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 55.59
+  },
+  {
+   "lang": "python",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.558,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.08
+  },
+  {
+   "lang": "go",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.027,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.81
+  },
+  {
+   "lang": "rust",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.516,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.4
+  },
+  {
+   "lang": "ts",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.12,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 60.34
+  },
+  {
+   "lang": "python",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.037,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.24
+  },
+  {
+   "lang": "go",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.068,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.12
+  },
+  {
+   "lang": "rust",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.898,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.93
+  },
+  {
+   "lang": "ts",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 24.616,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 84.66
+  },
+  {
+   "lang": "python",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.079,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.47
+  },
+  {
+   "lang": "go",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.02,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.42
+  },
+  {
+   "lang": "rust",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.653,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.82
+  },
+  {
+   "lang": "ts",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 27.177,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 86.41
+  },
+  {
+   "lang": "python",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.407,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.24
+  },
+  {
+   "lang": "go",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.094,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.89
+  },
+  {
+   "lang": "rust",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.37,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.11
+  },
+  {
+   "lang": "ts",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.023,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 85.26
+  },
+  {
+   "lang": "python",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.39,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 29.18
+  },
+  {
+   "lang": "go",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.877,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.19
+  },
+  {
+   "lang": "rust",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 11.318,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 17.68
+  },
+  {
+   "lang": "ts",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.937,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 102.17
+  },
+  {
+   "lang": "python",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.244,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.14
+  },
+  {
+   "lang": "go",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.333,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.32
+  },
+  {
+   "lang": "rust",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.631,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.38
+  },
+  {
+   "lang": "ts",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 19.996,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 83.96
+  },
+  {
+   "lang": "python",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.984,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.27
+  },
+  {
+   "lang": "go",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.356,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.38
+  },
+  {
+   "lang": "rust",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.246,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.28
+  },
+  {
+   "lang": "ts",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 24.455,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 78.4
+  },
+  {
+   "lang": "python",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.113,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.28
+  },
+  {
+   "lang": "go",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.658,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.55
+  },
+  {
+   "lang": "rust",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.552,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.78
+  },
+  {
+   "lang": "ts",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 12.237,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 64.69
+  },
+  {
+   "lang": "python",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.729,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.62
+  },
+  {
+   "lang": "go",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.298,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.47
+  },
+  {
+   "lang": "rust",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.546,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.77
+  },
+  {
+   "lang": "ts",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.837,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 61.23
+  },
+  {
+   "lang": "python",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.199,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.19
+  },
+  {
+   "lang": "go",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.639,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.07
+  },
+  {
+   "lang": "rust",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.096,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 23.75
+  },
+  {
+   "lang": "ts",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 21.504,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 65.82
+  },
+  {
+   "lang": "python",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.784,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 17.63
+  },
+  {
+   "lang": "go",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.948,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.96
+  },
+  {
+   "lang": "rust",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.404,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.96
+  },
+  {
+   "lang": "ts",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.827,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 61.52
+  },
+  {
+   "lang": "python",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.592,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.13
+  },
+  {
+   "lang": "go",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.106,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.11
+  },
+  {
+   "lang": "rust",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.153,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.81
+  },
+  {
+   "lang": "ts",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.925,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 59.89
+  },
+  {
+   "lang": "python",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.973,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.99
+  },
+  {
+   "lang": "go",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.41,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.79
+  },
+  {
+   "lang": "rust",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.293,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.91
+  },
+  {
+   "lang": "ts",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.632,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 48.21
+  },
+  {
+   "lang": "python",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.123,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.83
+  },
+  {
+   "lang": "go",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.54,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.11
+  },
+  {
+   "lang": "rust",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.365,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.25
+  },
+  {
+   "lang": "ts",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.073,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 55.19
+  },
+  {
+   "lang": "python",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.272,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.53
+  },
+  {
+   "lang": "go",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.674,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.25
+  },
+  {
+   "lang": "rust",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.091,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.29
+  },
+  {
+   "lang": "ts",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.636,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 49.01
+  },
+  {
+   "lang": "python",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.254,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.24
+  },
+  {
+   "lang": "go",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.858,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.88
+  },
+  {
+   "lang": "rust",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.991,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.7
+  },
+  {
+   "lang": "ts",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 29.136,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 109.07
+  },
+  {
+   "lang": "python",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.796,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 29.32
+  },
+  {
+   "lang": "go",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.652,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.57
+  },
+  {
+   "lang": "rust",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.857,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 12.31
+  },
+  {
+   "lang": "ts",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 16.47,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 96.44
+  },
+  {
+   "lang": "python",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.762,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.1
+  },
+  {
+   "lang": "go",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.434,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.88
+  },
+  {
+   "lang": "rust",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.767,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.6
+  },
+  {
+   "lang": "ts",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.369,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 56.22
+  },
+  {
+   "lang": "python",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.468,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.87
+  },
+  {
+   "lang": "go",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.572,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.61
+  },
+  {
+   "lang": "rust",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.636,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.15
+  },
+  {
+   "lang": "ts",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.734,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 62.39
+  },
+  {
+   "lang": "python",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.714,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 24.5
+  },
+  {
+   "lang": "go",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.197,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.28
+  },
+  {
+   "lang": "rust",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.451,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 30.67
+  },
+  {
+   "lang": "ts",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.171,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 120.34
+  },
+  {
+   "lang": "python",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.957,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.81
+  },
+  {
+   "lang": "go",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 12.634,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.31
+  },
+  {
+   "lang": "rust",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.942,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.87
+  },
+  {
+   "lang": "ts",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 19.038,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 46.68
+  },
+  {
+   "lang": "python",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.488,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.47
+  },
+  {
+   "lang": "go",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 11.188,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.86
+  },
+  {
+   "lang": "rust",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.836,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.91
+  },
+  {
+   "lang": "ts",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 19.394,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 52.25
+  },
+  {
+   "lang": "python",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.089,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.96
+  },
+  {
+   "lang": "go",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.977,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.34
+  },
+  {
+   "lang": "rust",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.401,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.93
+  },
+  {
+   "lang": "ts",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.665,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 57.06
+  },
+  {
+   "lang": "python",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.986,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.02
+  },
+  {
+   "lang": "go",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.952,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.52
+  },
+  {
+   "lang": "rust",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.256,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.44
+  },
+  {
+   "lang": "ts",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 18.414,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 39.4
+  },
+  {
+   "lang": "python",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.465,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.91
+  },
+  {
+   "lang": "go",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.828,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.68
+  },
+  {
+   "lang": "rust",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.145,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 17.36
+  },
+  {
+   "lang": "ts",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.964,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 56.16
+  },
+  {
+   "lang": "python",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.157,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.36
+  },
+  {
+   "lang": "go",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.238,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 12.8
+  },
+  {
+   "lang": "rust",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.347,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.34
+  },
+  {
+   "lang": "ts",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.298,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 66.53
+  },
+  {
+   "lang": "python",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.746,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.31
+  },
+  {
+   "lang": "go",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.784,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.45
+  },
+  {
+   "lang": "rust",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.36,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.46
+  },
+  {
+   "lang": "ts",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 16.976,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 52.96
+  },
+  {
+   "lang": "python",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.073,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 27.74
+  },
+  {
+   "lang": "go",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.554,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.94
+  },
+  {
+   "lang": "rust",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 12.646,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.09
+  },
+  {
+   "lang": "ts",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 12.543,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 47.58
+  },
+  {
+   "lang": "python",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.838,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.46
+  },
+  {
+   "lang": "go",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.483,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.95
+  },
+  {
+   "lang": "rust",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.826,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 12.43
+  },
+  {
+   "lang": "ts",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.602,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 56.83
+  },
+  {
+   "lang": "python",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.04,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.01
+  },
+  {
+   "lang": "go",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.81,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.43
+  },
+  {
+   "lang": "rust",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.076,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.46
+  },
+  {
+   "lang": "ts",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.958,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 53.16
+  },
+  {
+   "lang": "python",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.046,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.78
+  },
+  {
+   "lang": "go",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.121,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.41
+  },
+  {
+   "lang": "rust",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.031,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 26.24
+  },
+  {
+   "lang": "ts",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 18.185,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 56.79
+  },
+  {
+   "lang": "python",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.438,
+    "raw": ""
+   },
+   "total": 38,
+   "passed": 38,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.65
+  },
+  {
+   "lang": "go",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.165,
+    "raw": ""
+   },
+   "total": 38,
+   "passed": 38,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.02
+  },
+  {
+   "lang": "rust",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.502,
+    "raw": ""
+   },
+   "total": 38,
+   "passed": 38,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.02
+  },
+  {
+   "lang": "ts",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.143,
+    "raw": ""
+   },
+   "total": 38,
+   "passed": 38,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 58.4
+  },
+  {
+   "lang": "python",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.757,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.26
+  },
+  {
+   "lang": "go",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.421,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.3
+  },
+  {
+   "lang": "rust",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.485,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.95
+  },
+  {
+   "lang": "ts",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.768,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 45.66
+  },
+  {
+   "lang": "python",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.482,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.73
+  },
+  {
+   "lang": "go",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.477,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.44
+  },
+  {
+   "lang": "rust",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.753,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.36
+  },
+  {
+   "lang": "ts",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 21.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 70.75
+  },
+  {
+   "lang": "python",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.933,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.67
+  },
+  {
+   "lang": "go",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.477,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.36
+  },
+  {
+   "lang": "rust",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 12.046,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 23.95
+  },
+  {
+   "lang": "ts",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.58,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 69.38
+  },
+  {
+   "lang": "python",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.779,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 21.28
+  },
+  {
+   "lang": "go",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.045,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.33
+  },
+  {
+   "lang": "rust",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.798,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.69
+  },
+  {
+   "lang": "ts",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 28.894,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 74.32
+  },
+  {
+   "lang": "python",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.585,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.86
+  },
+  {
+   "lang": "go",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.954,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.0
+  },
+  {
+   "lang": "rust",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.435,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.43
+  },
+  {
+   "lang": "ts",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 21.138,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 81.5
+  },
+  {
+   "lang": "python",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.565,
+    "raw": ""
+   },
+   "total": 41,
+   "passed": 41,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 33.79
+  },
+  {
+   "lang": "go",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.71,
+    "raw": ""
+   },
+   "total": 41,
+   "passed": 41,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.4
+  },
+  {
+   "lang": "rust",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.678,
+    "raw": ""
+   },
+   "total": 41,
+   "passed": 41,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.66
+  },
+  {
+   "lang": "ts",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.042,
+    "raw": ""
+   },
+   "total": 41,
+   "passed": 41,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 116.45
+  },
+  {
+   "lang": "python",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.218,
+    "raw": ""
+   },
+   "total": 39,
+   "passed": 39,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 45.6
+  },
+  {
+   "lang": "go",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.209,
+    "raw": ""
+   },
+   "total": 39,
+   "passed": 39,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.46
+  },
+  {
+   "lang": "rust",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.224,
+    "raw": ""
+   },
+   "total": 39,
+   "passed": 39,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.45
+  },
+  {
+   "lang": "ts",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.78,
+    "raw": ""
+   },
+   "total": 39,
+   "passed": 39,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 123.17
+  },
+  {
+   "lang": "python",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.916,
+    "raw": ""
+   },
+   "total": 42,
+   "passed": 42,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 42.33
+  },
+  {
+   "lang": "go",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.192,
+    "raw": ""
+   },
+   "total": 42,
+   "passed": 42,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 21.12
+  },
+  {
+   "lang": "rust",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 12.009,
+    "raw": ""
+   },
+   "total": 42,
+   "passed": 42,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.4
+  },
+  {
+   "lang": "ts",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 18.126,
+    "raw": ""
+   },
+   "total": 42,
+   "passed": 42,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 67.78
+  },
+  {
+   "lang": "python",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.747,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.39
+  },
+  {
+   "lang": "go",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.606,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 12.41
+  },
+  {
+   "lang": "rust",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.503,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.91
+  },
+  {
+   "lang": "ts",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.547,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 61.74
+  },
+  {
+   "lang": "python",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.392,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.9
+  },
+  {
+   "lang": "go",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.265,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.52
+  },
+  {
+   "lang": "rust",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.941,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.69
+  },
+  {
+   "lang": "ts",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 16.063,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 52.88
+  },
+  {
+   "lang": "python",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.86,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.68
+  },
+  {
+   "lang": "go",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.83,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.7
+  },
+  {
+   "lang": "rust",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.999,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.59
+  },
+  {
+   "lang": "ts",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.948,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 49.17
+  },
+  {
+   "lang": "python",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.737,
+    "raw": ""
+   },
+   "total": 32,
+   "passed": 32,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.55
+  },
+  {
+   "lang": "go",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.343,
+    "raw": ""
+   },
+   "total": 32,
+   "passed": 32,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.3
+  },
+  {
+   "lang": "rust",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.345,
+    "raw": ""
+   },
+   "total": 32,
+   "passed": 32,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.71
+  },
+  {
+   "lang": "ts",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.282,
+    "raw": ""
+   },
+   "total": 32,
+   "passed": 32,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 72.73
+  },
+  {
+   "lang": "python",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.642,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.68
+  },
+  {
+   "lang": "go",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.393,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.86
+  },
+  {
+   "lang": "rust",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.153,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.13
+  },
+  {
+   "lang": "ts",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.317,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 53.99
+  },
+  {
+   "lang": "python",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.206,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.45
+  },
+  {
+   "lang": "go",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.556,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.84
+  },
+  {
+   "lang": "rust",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.872,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.76
+  },
+  {
+   "lang": "ts",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.175,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 27.24
+  },
+  {
+   "lang": "python",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.538,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.47
+  },
+  {
+   "lang": "go",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.114,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.9
+  },
+  {
+   "lang": "rust",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.404,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.41
+  },
+  {
+   "lang": "ts",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.541,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 34.5
+  },
+  {
+   "lang": "python",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.793,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.34
+  },
+  {
+   "lang": "go",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.762,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.53
+  },
+  {
+   "lang": "rust",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 1.908,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 3.71
+  },
+  {
+   "lang": "ts",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 4.456,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.57
+  },
+  {
+   "lang": "python",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.489,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.74
+  },
+  {
+   "lang": "go",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 3.078,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.79
+  },
+  {
+   "lang": "rust",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 2.714,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.14
+  },
+  {
+   "lang": "ts",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.407,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 79.85
+  },
+  {
+   "lang": "wj",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.489,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.12
+  },
+  {
+   "lang": "wj",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.187,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.31
+  },
+  {
+   "lang": "wj",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.856,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.58
+  },
+  {
+   "lang": "wj",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.174,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.86
+  },
+  {
+   "lang": "wj",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.29,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.97
+  },
+  {
+   "lang": "wj",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.805,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.08
+  },
+  {
+   "lang": "wj",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.082,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.39
+  },
+  {
+   "lang": "wj",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.313,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.05
+  },
+  {
+   "lang": "wj",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 11.637,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.62
+  },
+  {
+   "lang": "wj",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.912,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.29
+  },
+  {
+   "lang": "wj",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.185,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.53
+  },
+  {
+   "lang": "wj",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.781,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 12.52
+  },
+  {
+   "lang": "wj",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 16.377,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 20.63
+  },
+  {
+   "lang": "wj",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.517,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.08
+  },
+  {
+   "lang": "wj",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.667,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.87
+  },
+  {
+   "lang": "wj",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.802,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.39
+  },
+  {
+   "lang": "wj",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.425,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.84
+  },
+  {
+   "lang": "wj",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 23.054,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 26.74
+  },
+  {
+   "lang": "wj",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.938,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.56
+  },
+  {
+   "lang": "wj",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.147,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.93
+  },
+  {
+   "lang": "wj",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 21.453,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 22.87
+  },
+  {
+   "lang": "wj",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.253,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.45
+  },
+  {
+   "lang": "wj",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.993,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.73
+  },
+  {
+   "lang": "wj",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.544,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.77
+  },
+  {
+   "lang": "wj",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.222,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.9
+  },
+  {
+   "lang": "wj",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.295,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.28
+  },
+  {
+   "lang": "wj",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.468,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.62
+  },
+  {
+   "lang": "wj",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.419,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.46
+  },
+  {
+   "lang": "wj",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.936,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.69
+  },
+  {
+   "lang": "wj",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.566,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.81
+  },
+  {
+   "lang": "wj",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.502,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.11
+  },
+  {
+   "lang": "wj",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.248,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.17
+  },
+  {
+   "lang": "wj",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.355,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.89
+  },
+  {
+   "lang": "wj",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.56,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.08
+  },
+  {
+   "lang": "wj",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.966,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.78
+  },
+  {
+   "lang": "wj",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.029,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.69
+  },
+  {
+   "lang": "wj",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.516,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.33
+  },
+  {
+   "lang": "wj",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.676,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.34
+  },
+  {
+   "lang": "wj",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 11.611,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.71
+  },
+  {
+   "lang": "wj",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.732,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.68
+  },
+  {
+   "lang": "wj",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.222,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.39
+  },
+  {
+   "lang": "wj",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.748,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 13.69
+  },
+  {
+   "lang": "wj",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0277",
+      "message": "`std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely",
+      "detail": "error[E0277]: `std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely\n   --> main.rs:9:19\n    |\n  9 |       thread::spawn(move || {\n    |  _____-------------_^\n    | |     |\n    | |     required by a bound introduced by this call\n 10 | |         let mut history: Vec<i64> = Vec::new();\n 11 | |         loop {\n 12 | |             let x = match rx.recv() {\n...   |\n 52 | |     });\n    | |_____^ `std::sync::mpsc::Receiver<i64>` cannot be shared between threads safely\n    |\n    = help: the trait `Sync` is not implemented for `std::sync::mpsc::Receiver<i64>`\n    = note: required for `&std::sync::mpsc::Receiver<i64>` to implement `Send`\nnote: required because it's used within this closure\n   --> main.rs:9:19\n    |\n  9 |     thread::spawn(move || {\n    |                   ^^^^^^^\nnote: required by a bound in `std::thread::spawn`\n   --> /home/user/.rustup/toolchains/nig",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 8.609,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\n"
+   },
+   "total": 38,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 8.64
+  },
+  {
+   "lang": "wj",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 17.27,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 18.21
+  },
+  {
+   "lang": "wj",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.23,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 15.95
+  },
+  {
+   "lang": "wj",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 14.414,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 19.06
+  },
+  {
+   "lang": "wj",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 20.007,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 26.5
+  },
+  {
+   "lang": "wj",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 13.197,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 16.69
+  },
+  {
+   "lang": "wj",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 9.946,
+    "raw": ""
+   },
+   "total": 41,
+   "passed": 41,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 14.53
+  },
+  {
+   "lang": "wj",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 15.912,
+    "raw": ""
+   },
+   "total": 39,
+   "passed": 39,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 17.68
+  },
+  {
+   "lang": "wj",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 21.753,
+    "raw": ""
+   },
+   "total": 42,
+   "passed": 42,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 23.65
+  },
+  {
+   "lang": "wj",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 8.845,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.89
+  },
+  {
+   "lang": "wj",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.039,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.92
+  },
+  {
+   "lang": "wj",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.543,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.68
+  },
+  {
+   "lang": "wj",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 5.79,
+    "raw": ""
+   },
+   "total": 32,
+   "passed": 32,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.32
+  },
+  {
+   "lang": "wj",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.261,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.29
+  },
+  {
+   "lang": "wj",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 6.842,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.51
+  },
+  {
+   "lang": "wj",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 10.548,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 11.37
+  },
+  {
+   "lang": "wj",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.475,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 8.91
+  },
+  {
+   "lang": "wj",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 7.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 9.07
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.3
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.2
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 71.26
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.5
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.36
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.85
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.22
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.74
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.25
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.55
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.77
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.95
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.65
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.33
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.95
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.34
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.56
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.65
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.08
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.01
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 0.88
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.44
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.02
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.2
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.67
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.07
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.65
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.1
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.15
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 0.93
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.55
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.55
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.86
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.37
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.98
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 6.74
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.68
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.29
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 26.42
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 2.39
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.54
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [
+    {
+     "index": 0,
+     "category": "api-misuse",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
+     "stdin": "2 5\n1 2 3 4 5\n",
+     "args": [],
+     "expected": "chunk 0: 6\nchunk 1: 9\ntotal: 15\n",
+     "actual": "",
+     "exit_code": 1
+    },
+    {
+     "index": 1,
+     "category": "api-misuse",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
+     "stdin": "3 3\n10 -10 7\n",
+     "args": [],
+     "expected": "chunk 0: 10\nchunk 1: -10\nchunk 2: 7\ntotal: 7\n",
+     "actual": "",
+     "exit_code": 1
+    },
+    {
+     "index": 2,
+     "category": "api-misuse",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-epdmwamu/main.wj:38:11\nstack backtrace:\n  0: main",
+     "stdin": "1 0\n\n",
+     "args": [],
+     "expected": "chunk 0: 0\ntotal: 0\n",
+     "actual": "",
+     "exit_code": 1
+    }
+   ],
+   "categories": [
+    "api-misuse"
+   ],
+   "status": "fail",
+   "seconds": 2.27
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 38,
+   "passed": 0,
+   "failures": [
+    {
+     "index": 0,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "10\nmul:2 gt:5\n",
+     "args": [],
+     "expected": "8\n6 8 10 12 14 16 18 20\nsum=104\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 1,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "5\n\n",
+     "args": [],
+     "expected": "5\n1 2 3 4 5\nsum=15\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 2,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-0vc4u352/main.wj:62:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "0\nadd:1\n",
+     "args": [],
+     "expected": "0\n\nsum=0\n",
+     "actual": "",
+     "exit_code": 2
+    }
+   ],
+   "categories": [
+    "unsupported"
+   ],
+   "status": "fail",
+   "seconds": 2.62
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [
+    {
+     "index": 0,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "2 5\n1 1 2 9 0\n",
+     "args": [],
+     "expected": "hist: 1 2 1 0 0 0 0 0 0 1\nworker 0: 3\nworker 1: 2\nchecksum: 13\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 1,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "3 0\n\n",
+     "args": [],
+     "expected": "hist: 0 0 0 0 0 0 0 0 0 0\nworker 0: 0\nworker 1: 0\nworker 2: 0\nchecksum: 0\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 2,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::Mutex::new` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-nkcpp5oe/main.wj:24:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "8 50000\n9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9 ",
+     "args": [],
+     "expected": "hist: 0 0 0 0 0 0 0 0 0 50000\nworker 0: 6250\nworker 1: 6250\nworker 2: 6250\nworker 3: 6250\nworker 4: 6250\nworker 5: 6250\nworker 6: 6250\nworker 7: 6250\nchecksum: 450000\n",
+     "actual": "",
+     "exit_code": 2
+    }
+   ],
+   "categories": [
+    "unsupported"
+   ],
+   "status": "fail",
+   "seconds": 4.18
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [
+    {
+     "index": 0,
+     "category": "api-misuse",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
+     "stdin": "2 3\n12 7 1\n",
+     "args": [],
+     "expected": "12 6\n7 2\n1 1\n",
+     "actual": "",
+     "exit_code": 1
+    },
+    {
+     "index": 1,
+     "category": "api-misuse",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
+     "stdin": "1 1\n100\n",
+     "args": [],
+     "expected": "100 9\n",
+     "actual": "",
+     "exit_code": 1
+    },
+    {
+     "index": 2,
+     "category": "api-misuse",
+     "message": "error: no method named `spawn` found for value of type `fn`\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-6v5jzcok/main.wj:48:11\nstack backtrace:\n  0: main",
+     "stdin": "4 12\n1 2 3 4 999999937 1000000000 735134400 999999999 1000000000 4 9 16\n",
+     "args": [],
+     "expected": "1 1\n2 2\n3 2\n4 3\n999999937 2\n1000000000 100\n735134400 1344\n999999999 20\n1000000000 100\n4 3\n9 3\n16 5\n",
+     "actual": "",
+     "exit_code": 1
+    }
+   ],
+   "categories": [
+    "api-misuse"
+   ],
+   "status": "fail",
+   "seconds": 3.05
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [
+    {
+     "index": 0,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "2 3 2\n",
+     "args": [],
+     "expected": "items: 6\nchars: 24\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 6\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 1,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "1 0 1\n",
+     "args": [],
+     "expected": "items: 0\nchars: 0\nconsumers_total: 0\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 2,
+     "category": "unsupported",
+     "message": "error: unsupported in the interpreter: `std::sync::mpsc::sync_channel` is not implemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-995wjtx1/main.wj:14:1\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: main",
+     "stdin": "6 200 4\n",
+     "args": [],
+     "expected": "items: 1200\nchars: 6552\nfirst: p0-1\nfirst: p0-10\nfirst: p0-100\nconsumers_total: 1200\n",
+     "actual": "",
+     "exit_code": 2
+    }
+   ],
+   "categories": [
+    "unsupported"
+   ],
+   "status": "fail",
+   "seconds": 3.3
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.72
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 3.57
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 41,
+   "passed": 41,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 10.53
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 39,
+   "passed": 39,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 7.89
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 42,
+   "passed": 42,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 3.86
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.63
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 46,
+   "passed": 46,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.38
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [
+    {
+     "index": 0,
+     "category": "unsupported",
+     "message": "mplemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
+     "stdin": "",
+     "args": [],
+     "expected": "a.txt (5 bytes)\nsrc/\n  main.rs (13 bytes)\n1 directories, 2 files\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 1,
+     "category": "unsupported",
+     "message": "mplemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
+     "stdin": "",
+     "args": [],
+     "expected": "x (0 bytes)\n0 directories, 1 files\n",
+     "actual": "",
+     "exit_code": 2
+    },
+    {
+     "index": 2,
+     "category": "unsupported",
+     "message": "mplemented by the interpreter\n  --> /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:10:37\n  = help: use `wj run` (compiled) for this program\nstack backtrace:\n  0: walk\n        at /var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/agentdx-ws-8f29bg45/main.wj:38:54\n  1: main",
+     "stdin": "",
+     "args": [],
+     "expected": "0 directories, 0 files\n",
+     "actual": "",
+     "exit_code": 2
+    }
+   ],
+   "categories": [
+    "unsupported"
+   ],
+   "status": "fail",
+   "seconds": 2.99
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 32,
+   "passed": 32,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 1.72
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.86
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.53
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 5.79
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 26.42
+  },
+  {
+   "lang": "wj-interp",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 0.0,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 4.73
+  }
+ ]
+}

@@ -88,7 +88,7 @@ pub fn render() {
         stderr
     );
 
-    // draw_text forwards into owned FFI `String` → formal stays Owned (DB-216 /
+    // draw_text forwards into owned FFI `String` → formal stays Owned (
     // bare-pass skip). Last-use must move `label`, not auto-borrow `&label`.
     let game_rs = out.join("game.rs");
     assert!(game_rs.exists(), "game.rs not generated");

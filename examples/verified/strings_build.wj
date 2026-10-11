@@ -1,0 +1,21 @@
+// tags: strings, push, mutation
+// rust: ok
+// expect: abc
+// expect: ab-cd-ef
+// expect: ***
+// expect: Hi, Bob!
+fn main() {
+    let mut s = String::new()
+    s.push('a')
+    s.push_str("bc")
+    println(s)
+    let mut out = ""
+    for (i, chunk) in ["ab", "cd", "ef"].enumerate() {
+        if i > 0 { out = out + "-" }
+        out = out + chunk
+    }
+    println(out)
+    println("*".repeat(3))
+    let name = "Bob"
+    println("Hi, " + name + "!")
+}

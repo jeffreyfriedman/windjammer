@@ -1,0 +1,27 @@
+// tags: result, error-handling, question-mark
+// rust: ok
+// expect: Ok(7)
+// expect: Err("not a number: x")
+// expect: Err("negative: -4")
+fn parse(s: string) -> Result<int, string> {
+    match s.parse::<int>() {
+        Ok(n) => Ok(n),
+        Err(_) => Err("not a number: ${s}"),
+    }
+}
+
+fn check_positive(n: int) -> Result<int, string> {
+    if n < 0 { Err("negative: ${n}") } else { Ok(n) }
+}
+
+fn load(s: string) -> Result<int, string> {
+    let n = parse(s)?
+    let p = check_positive(n)?
+    Ok(p)
+}
+
+fn main() {
+    println("${load("7"):?}")
+    println("${load("x"):?}")
+    println("${load("-4"):?}")
+}

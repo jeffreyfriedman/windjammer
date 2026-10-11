@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-200: `u32` loop counter must not emit `i += 1_i64`.
+//! `u32` loop counter must not emit `i += 1_i64`.
 //!
 //! Product residual (~2× u32←i64 + E0277), tip-out/gen df_provider:
 //!   `let mut i = 0; while (i as u32) < column_count { …; i += 1_i64 }`

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nput 1 1\nput 2 2\nget 1\nput 3 3\nget 2\nkeys\n",
+  "stdout": "1\nevict 2\n-1\n3 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nput 1 10\nput 2 20\nget 1\nkeys\n",
+  "stdout": "evict 1\n-1\n2\n"
+ }
+]

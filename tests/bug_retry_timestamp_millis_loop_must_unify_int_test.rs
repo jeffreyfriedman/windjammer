@@ -15,7 +15,7 @@
 //!
 //! Ecosystem `a downstream package` `pause_ms`: `while now < deadline` emits
 //! `while (now as i32) < deadline` with `deadline: i64` (E0308).
-//! Blocks `a downstream package` `$WJ test`. Distinct from DB-395 (compare-to-zero usize)
+//! Blocks `a downstream package` `$WJ test`. Distinct from (compare-to-zero usize)
 //! and `std_time_utc_now_timestamp_millis_codegen` (link-only).
 
 use std::fs;

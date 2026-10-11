@@ -868,7 +868,7 @@ impl<'ast> CodeGenerator<'ast> {
             if self.param_consumed_as_for_loop_iterable(func.body.as_slice(), &param.name) {
                 continue;
             }
-            // DB-216/275/276: bare forward into owned FFI / owned siblings (`return_f64_ffi(buf)`)
+            // bare forward into owned FFI / owned siblings (`return_f64_ffi(buf)`)
             // must keep Owned — `expression_uses_param_as_read_operand` treats call args as
             // "readonly" and would otherwise demote to `&Vec` then bare-pass into `Vec` FFI.
             if self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
@@ -893,7 +893,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// Params that only forward explicit `.clone()` to demoted borrow callees stay owned (DB-112/113).
+    // Params that only forward explicit `.clone()` to demoted borrow callees stay owned.
     fn strip_borrow_inference_for_explicit_clone_demoted_callees(
         &mut self,
         func: &FunctionDecl<'ast>,
@@ -1413,7 +1413,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Completely unused siblings (e.g. unused `name: string` beside readonly
             // `tree.nodes.len()`) are not store/move partners — do not keep the
-            // projection param Owned (DB-366 BT tick_action).
+            // projection param Owned (BT tick_action).
             if !func
                 .body
                 .iter()
@@ -2101,11 +2101,11 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// WJ AST `Vec<T>` that only forwards as a call argument keeps the owned formal.
     /// The next callee may demote (`median_pair` readonly `&Vec`); reuse sites must still
-    /// `.clone()` into this owned slot (DB-285 / `workload_verdict`).
+    // `.clone()` into this owned slot (`workload_verdict`).
     ///
     /// Exception: forwarding into a MutBorrowed sibling (`tick_seq` → `tick_node`)
     /// must *not* keep owned — the SCC must emit `&mut Vec` so the mutator can
-    /// Identity-pass the binding (DB-396). Shared `&Vec` still stays owned.
+    // Identity-pass the binding. Shared `&Vec` still stays owned.
     pub(in crate::codegen::rust) fn vec_formal_only_forwards_as_call_arg(
         &self,
         param: &crate::parser::Parameter,
@@ -2787,7 +2787,7 @@ impl<'ast> CodeGenerator<'ast> {
                 };
 
                 // AST Copy pass-by-value scalars (`i64`, `bool`, …) emit and register as Owned
-                // even when stale body inference borrowed them for inner map-key calls (DB-134).
+                // even when stale body inference borrowed them for inner map-key calls.
                 if !matches!(param.type_, Type::Reference(_) | Type::MutableReference(_))
                     && crate::type_classification::is_copy_pass_by_value_formal(&param.type_)
                 {
@@ -3019,7 +3019,7 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .filter(|p| p.name != "self")
             .map(|param| {
-                // DB-398: pub associated owned Custom formals stay Owned in the
+                // pub associated owned Custom formals stay Owned in the
                 // method registry so call sites do not see stale Borrowed.
                 if self.is_public_owned_non_copy_formal_api(param, func) {
                     return false;
@@ -3121,7 +3121,7 @@ impl<'ast> CodeGenerator<'ast> {
                         if name == param_name {
                             // `for i in items { ... *i ... }` and field-read scans
                             // (`for m in metas { m.name == needle }`) are borrowed
-                            // iteration (DB-412), not a move of the Vec.
+                            // iteration, not a move of the Vec.
                             if let Pattern::Identifier(loop_var) = pattern {
                                 if Self::statements_deref_identifier(loop_var, body.as_slice())
                                     || Self::for_loop_var_only_borrowed_reads(
@@ -3177,7 +3177,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Loop variable is only borrowed: field/method reads, not moved as a value
-    /// (`for m in metas { if m.name == needle }` — DB-412).
+    // (`for m in metas { if m.name == needle }`).
     fn for_loop_var_only_borrowed_reads(name: &str, statements: &[&Statement<'ast>]) -> bool {
         !statements
             .iter()
@@ -3245,7 +3245,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Identifier { name: id, .. } => id == name,
             // P3.614: `let key = pair.0` / `return pair.1` moves non-Copy fields out of
             // the loop element — keep Owned `Vec` (do not demote to `&Vec`).
-            // Compare sites still use `expr_moves_for_loop_var_under_compare` (DB-412).
+            // Compare sites still use `expr_moves_for_loop_var_under_compare`.
             Expression::FieldAccess { object, .. } => {
                 matches!(
                     &**object,
@@ -3258,7 +3258,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Binary {
                 left, right, op, ..
             } => {
-                // P3.528 / DB-412: `v == version` / ordering compares Copy or use
+                // P3.528 / `v == version` / ordering compares Copy or use
                 // PartialEq by shared ref — not a move of the loop binding. Treating
                 // compare ids as moves forced `for v in applied` to keep Owned `Vec`
                 // and broke loop call sites (`apply_conn` E0382).
@@ -3502,7 +3502,7 @@ impl<'ast> CodeGenerator<'ast> {
                 ..
             } => {
                 // `for x in items` consumes `items` unless the body only borrows
-                // elements (`*i` or field/method reads — DB-412).
+                // elements (`*i` or field/method reads).
                 let iterable_consumes = matches!(
                     iterable,
                     Expression::Identifier { name, .. } if name == param_name
@@ -3613,7 +3613,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Leaf `param + ""` alone is a readonly empty-append temp (demote to `&str` —
     /// `parse_twice(json + "")`). Nested concat chains
     /// (`(left + "") + (right + "")`) still count as owned concat lhs so pub free-fn
-    /// formals stay `String` (DownstreamApp `concat2` / overlay_row).
+    /// formals stay `String` (a downstream application `concat2` / overlay_row).
     pub(in crate::codegen::rust) fn param_used_as_owned_string_add_operand(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -3800,7 +3800,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if arg_is_param_or_field {
                         // WJ AST / registry owned formals beat stale shared-ref metadata
                         // (`BasePart::has_key(key: Key)` → `get(&key)` must still move at
-                        // `latest.has_key(key)` — DB-209).
+                        // `latest.has_key(key)`).
                         if self.method_call_arg_formal_is_owned_non_copy(object, method, i, func)
                             || self
                                 .method_call_sibling_ast_expects_owned_arg(object, method, i, func)
@@ -4083,7 +4083,7 @@ impl<'ast> CodeGenerator<'ast> {
                         ) || Self::expr_is_field_or_index_of_param(arg, param_name);
                     if arg_is_param_or_field {
                         // Owned AST / emitted String formals beat stale borrow flags
-                        // (P3.601; DB-209: `has_key(key: Key)` must count before readonly
+                        // (P3.601; `has_key(key: Key)` must count before readonly
                         // `get` convergence marks the slot shared-ref).
                         if self.method_call_arg_formal_is_owned_non_copy(object, method, i, func)
                             || self
@@ -4128,7 +4128,7 @@ impl<'ast> CodeGenerator<'ast> {
                             self.resolve_free_call_signature(function, Some(call_arg_count))
                         {
                             // Runtime AsRef text helpers (`strings::len`, `is_empty`, …) are
-                            // readonly — must not block owned-formal retention (DB-110/111).
+                            // readonly — must not block owned-formal retention.
                             if self.callee_signature_is_asref_str_runtime(&sig) {
                                 continue;
                             }
@@ -7877,7 +7877,7 @@ impl<'ast> CodeGenerator<'ast> {
             _ => "",
         };
         let Some(sig) = self.resolve_free_call_signature(function, call_arg_count) else {
-            // DB-216/275/276: library multipass may omit extern stubs from the registry
+            // library multipass may omit extern stubs from the registry
             // while preparing wrappers — fall back to WJ AST bare owned formals.
             return !callee_name.is_empty()
                 && self.free_function_ast_arg_is_owned_wj_formal(callee_name, arg_index);
@@ -7895,7 +7895,7 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         // Converged Borrowed / MutBorrowed / `&T` / `&mut T` beats AST `Custom` ⇒ owned
-        // (DB-366 BT peers `tick_decorator` → `tick_node`: source still says `tree: Tree`
+        // (BT peers `tick_decorator` → `tick_node`: source still says `tree: Tree`
         // while analyzer/multipass demoted both — often to MutBorrowed for non-Copy Custom).
         // Treating AST bare as owned froze mutual recursion as Owned + `tree.clone()`.
         if matches!(
@@ -8275,12 +8275,12 @@ impl<'ast> CodeGenerator<'ast> {
         if crate::type_classification::is_copy_pass_by_value_formal(&param.type_) {
             return false;
         }
-        // DB-398: pub associated `new(palette: MaterialPalette)` must stay owned —
+        // pub associated `new(palette: MaterialPalette)` must stay owned —
         // delegation demotion would force `&palette.copy()` at call sites.
         if self.is_public_owned_non_copy_formal_api(param, func) {
             return false;
         }
-        // DB-101/102 keep-owned: opaque cross-module `&T` wrappers and Vec→`&[T]`
+        // keep-owned: opaque cross-module `&T` wrappers and Vec→`&[T]`
         // AsRef adapters. P3.669: pure Custom→same-type shared-ref forwarders
         // (`take_field(value: Value)` → `json.get(&Value)`) must demote instead.
         if (self.param_cross_module_borrowed_callee_keeps_owned_formal(
@@ -8359,7 +8359,7 @@ impl<'ast> CodeGenerator<'ast> {
                 &param.name,
                 func,
             )
-            // DB-209: `out.columns.push(col)` consumes owned `col` — do not demote the
+            // `out.columns.push(col)` consumes owned `col` — do not demote the
             // pub formal to `&mut T` + `.clone()` at the push site (catalog_push_column).
             && !self.param_has_owning_method_use(func.body.as_slice(), &param.name, func);
         let result = param.name != "self"
@@ -8938,7 +8938,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.param_only_forwarded_to_asref_str_runtime(body, param_name) {
             return true;
         }
-        // DB-110/111: `strings::is_empty(path)` + `path.len()` (or `==` + `starts_with`)
+        // `strings::is_empty(path)` + `path.len()` (or `==` + `starts_with`)
         // still keep owned `String` formals — mixed readonly use must not demote.
         let mut has_asref_forward = false;
         self.for_each_param_call_argument_site(body, param_name, func, &mut |sig, arg_idx| {
@@ -9154,7 +9154,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Runtime WJ-owned / Rust-borrowed forwards (`from_chars(parts: Vec<char>)` → `&[char]`)
-    /// keep owned container formals + call-site borrow (DB-102).
+    // keep owned container formals + call-site borrow.
     ///
     /// Bare Custom (`Value` → `&Value`) does **not** force owned — those demote via
     /// borrow-delegation so loop reuse can pass `&overlay` (P3.669).
@@ -9275,7 +9275,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Cross-module shared-ref callees (`graph_vertex_i64_get(map: &GraphVertexI64Map)`) keep
-    /// the outer owned Custom formal; borrow only at the call site (DB-101).
+    // the outer owned Custom formal; borrow only at the call site.
     pub(in crate::codegen::rust) fn param_cross_module_borrowed_callee_keeps_owned_formal(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -9351,7 +9351,7 @@ impl<'ast> CodeGenerator<'ast> {
             return module != current;
         }
         // Bare name: same-module only when `{current}::{callee}` was codegen-refreshed
-        // in this file. Import/analysis stubs must not beat cross-module borrow (DB-101).
+        // in this file. Import/analysis stubs must not beat cross-module borrow.
         let local_qualified = format!("{current}::{callee}");
         let same_module = self
             .get_signature_with_global(&local_qualified)
@@ -9447,7 +9447,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut visit = |sig: &crate::analyzer::FunctionSignature, arg_index: usize| {
             saw_site = true;
             // User impl methods with codegen-confirmed `&T` formals are delegation
-            // targets, not runtime WJ-owned/Rust-borrow stdlib adapters (DB-102).
+            // targets, not runtime WJ-owned/Rust-borrow stdlib adapters.
             if let Some((type_name, method_name)) = sig.name.rsplit_once("::") {
                 if self
                     .lookup_method_signature(type_name, method_name)
@@ -9919,7 +9919,7 @@ impl<'ast> CodeGenerator<'ast> {
     fn stmt_has_field_move_binding(&self, stmt: &Statement<'ast>, param_name: &str) -> bool {
         match stmt {
             // Text/Copy field lets are readable from `&T` (clone/copy) — do not treat
-            // as Owned-forcing moves (DB-366).
+            // as Owned-forcing moves.
             Statement::Let { value, .. } => {
                 Self::expr_is_field_move_from_param(param_name, value)
                     && !self.expr_field_move_is_copy_or_text(param_name, value)
@@ -11094,7 +11094,7 @@ impl<'ast> CodeGenerator<'ast> {
             return all_emitted_owned;
         }
         // Registry miss: AST-owned / preregistered same-file callees still count
-        // (DB-216/275/276: extern FFI often absent from the registry during multipass).
+        // (extern FFI often absent from the registry during multipass).
         let mut saw_ast_owned = false;
         for stmt in body {
             let expr = match stmt {
@@ -11176,9 +11176,9 @@ impl<'ast> CodeGenerator<'ast> {
         saw_site && all_borrowed_text
     }
 
-    /// Explicit WJ `.clone()` on `param` at any call site (DB-110/112/113 outer-formal guard).
+    // Explicit WJ `.clone()` on `param` at any call site (outer-formal guard).
     ///
-    /// Must walk `if`/`while`/`for`/`match` (DB-161): clones often sit in conditions and
+    // Must walk `if`/`while`/`for`/`match`: clones often sit in conditions and
     /// loop bodies — skipping those demoted `&str` while still emitting `.clone()` → E0308.
     pub(in crate::codegen::rust) fn param_used_via_explicit_user_clone(
         &self,
@@ -11371,7 +11371,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// `let mut param = param` rebind before mut-callee bare pass (DB-113 batch_mut).
+    // `let mut param = param` rebind before mut-callee bare pass (batch_mut).
     pub(in crate::codegen::rust) fn param_rebound_as_mutable_local(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -11401,7 +11401,7 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    /// Explicit WJ `.clone()` forwards into callees that still emit owned formals (DB-110).
+    // Explicit WJ `.clone()` forwards into callees that still emit owned formals.
     pub(in crate::codegen::rust) fn param_explicit_clone_forwards_to_undemoted_owned_wj_callee(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -11432,7 +11432,7 @@ impl<'ast> CodeGenerator<'ast> {
         saw_clone_site && all_owned_targets
     }
 
-    /// Explicit WJ `.clone()` into demoted `&T` / `&mut T` callees keeps caller owned (DB-112/113).
+    // Explicit WJ `.clone()` into demoted `&T` / `&mut T` callees keeps caller owned.
     pub(in crate::codegen::rust) fn param_explicit_clone_forwards_to_demoted_borrow_callee(
         &self,
         body: &[&'ast Statement<'ast>],
@@ -11463,7 +11463,7 @@ impl<'ast> CodeGenerator<'ast> {
         saw_clone_site && all_demoted_borrow
     }
 
-    /// Explicit `.clone()` into demoted `&mut T` callees needs `mut` on the owned formal (DB-113).
+    // Explicit `.clone()` into demoted `&mut T` callees needs `mut` on the owned formal.
     pub(in crate::codegen::rust) fn param_explicit_clone_targets_mut_borrow_callee(
         &self,
         body: &[&'ast Statement<'ast>],

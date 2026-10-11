@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-304: `return Some(x)` must not emit `Some(x.clone()).cloned()`.
+//! `return Some(x)` must not emit `Some(x.clone()).cloned()`.
 //!
 //! Product tip-out/gen semantic:
 //!   WJ: `return Some(m)` / `return Some(rel)`

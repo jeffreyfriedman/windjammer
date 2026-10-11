@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-344: Copy `f32` must not emit `.clone()` on locals / match payloads.
+//! Copy `f32` must not emit `.clone()` on locals / match payloads.
 //!
 //! Tip output for a game project `physics/collision2d.rs`:
 //!   `check_aabb_vs_aabb(…, *w1.clone(), *h1.clone(), …)` from `match &a.collider`

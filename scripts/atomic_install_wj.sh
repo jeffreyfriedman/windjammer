@@ -6,7 +6,7 @@
 #   scripts/atomic_install_wj.sh <src> <dest> [--allow-busy]
 #
 # Prefer isolated tips for concurrent agents:
-#   export WJ_COMPILER=/path/to/game-host/.cargo-target-wj/release/wj
+#   export WJ_COMPILER=/path/to/isolated-target/release/wj
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
@@ -38,7 +38,7 @@ fi
 if ((${#USERS[@]} > 0)) && [[ "$ALLOW_BUSY" -eq 0 ]]; then
   echo "error: refusing to replace $DEST — still executing in PIDs: ${USERS[*]}" >&2
   echo "Prefer: export WJ_COMPILER=<isolated tip wj>" >&2
-  echo "Or rebuild into game-host/.cargo-target-wj and leave dogfood alone." >&2
+  echo "Or rebuild into an isolated target dir and leave dogfood alone." >&2
   echo "Atomic rename is safe for old PIDs; re-run with --allow-busy to publish dogfood anyway." >&2
   exit 1
 fi

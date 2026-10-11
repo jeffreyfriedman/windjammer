@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-360: `encode(grid)` must not require `grid.clone()` when encode only reads.
+//! `encode(grid)` must not require `grid.clone()` when encode only reads.
 //!
 //! Tip output for a game project cluster:
 //!   `encoder.encode(self.grid.clone())` / `encode(self.chunks[i].clone().grid.clone())`
 //!   with `encode(&mut self, grid: VoxelGrid)` owned formal forcing a clone of a large grid.
 //! Prefer borrowed formal `encode(grid: &VoxelGrid)` + call `encode(&self.grid)`.
-//! Twin polarity of DB-335 (owned clone into demoted `&VoxelGrid`).
+//! Twin polarity of (owned clone into demoted `&VoxelGrid`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

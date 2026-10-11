@@ -18,7 +18,7 @@
 //!
 //! Tip p3520 (05:14): isolate + product emit `String::from` (E0308).
 //! `--metadata` library isolates false-GREEN with bare `get("access_token")`.
-//! P3.532 is the product gate; P3.536 is DB-424 (other agent).
+//! P3.532 is the product gate; P3.536 is (other agent).
 
 use std::fs;
 use std::process::Command;

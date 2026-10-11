@@ -12,7 +12,7 @@ pub fn execute_plugin(plugin_name: &str, args: &[String]) -> Result<i32> {
 
     // Search order (TDD: support multiple plugin locations):
     // 1. ./wj-plugins/wj-<plugin>/target/release/wj-<plugin> (standard)
-    // 2. ./wj-<plugin>/target/release/wj-<plugin> (alternate, e.g. game-host repo)
+    // 2. ./wj-<plugin>/target/release/wj-<plugin> (alternate, e.g. a game engine project repo)
     // 3. wj-<plugin> in $PATH (global)
 
     let locations = vec![

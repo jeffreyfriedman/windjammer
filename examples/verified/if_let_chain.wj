@@ -1,0 +1,22 @@
+// tags: if-let, option, result
+// rust: ok
+// expect: name = Ann
+// expect: no email
+// expect: error: boom
+struct User { name: string, email: Option<string> }
+
+fn main() {
+    let u = User { name: "Ann", email: None }
+    if let name = u.name {
+        println("name = ${name}")
+    }
+    if let Some(e) = u.email {
+        println("email = ${e}")
+    } else {
+        println("no email")
+    }
+    let r: Result<int, string> = Err("boom")
+    if let Err(m) = r {
+        println("error: ${m}")
+    }
+}

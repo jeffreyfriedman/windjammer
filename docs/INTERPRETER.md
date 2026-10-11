@@ -9,7 +9,7 @@ Module map and invariants: `src/interpreter/MODULE.md`.
 
 | Command | Effect |
 |---------|--------|
-| `wj run --interpret FILE_OR_DIR [args]` | Run a file, or a project directory (`main.wj` / `src/main.wj`), with `use`/`mod` resolved across files. No cargo, no rustc. stdout is program output only. |
+| `wj run --interpret FILE_OR_DIR [args]` | Run a file, or a project directory (`main.wj`, or `main.wj` under a `src` directory), with `use`/`mod` resolved across files. No cargo, no rustc. stdout is program output only. |
 | `wj test --interpret [PATH] [--filter S]` | Run `@test`, `@test_cases([...])` and `test_*` functions in `*_test.wj` files. cargo-test-like report, exit 1 on failure. |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
@@ -20,44 +20,58 @@ Latency (same machine, heavily loaded, warm cargo cache): `wj run hello.wj` (tra
 `wj run --interpret hello.wj` 0.016 s. A test asserts the interpreter never spawns `cargo`/`rustc`
 (shims on `PATH` that leave a marker file).
 
-## Before / after
+## Measurement
 
-Measured with `scripts/interpreter_coverage.py` over every `.wj` file with a `fn main` under `tests/` and `examples/`
-(244 files), the 98-program cross-backend conformance corpus (in the go-js-backends worktree: `// expect:` lines and
-Python reference vectors, an oracle independent of every backend), and the compiled-Rust output of each file
-(`wj build --no-cargo` + `rustc`, 90 of the 244 compile and run).
+Two oracles, neither of them a hand-typed number:
 
-| Metric | Before (frozen `wj` 923b4c67) | After |
-|--------|-------------------------------|-------|
-| Files exiting 0 | 231 / 244 (95%), but see below | 136 / 244 |
-| Output + exit code equal to compiled Rust, of the 90 that compile | 69 / 90 (77%) | 85 / 90 (94%) |
-| Conformance corpus equal to the independent oracle | 27 / 97 (28%) | 97 / 98 |
-| Quick feature probes (`scripts/interpreter_probes.py`, 30 programs) | 11 / 30 | 30 / 30 |
+- **Feature registry.** `src/interpreter/features.rs` lists every feature the interpreter is claimed to support or to reject, each with a
+  probe program. `tests/interpreter_features_test.rs` runs every probe through the real interpreter. The lists below are generated from it:
+  Currently:
 
-"Exit 0" is not a quality signal for the old engine: it evaluated unknown names, failed calls and unsupported
-constructs to `Nil` and carried on, so 231 files "ran" while producing wrong output (`2147483648` for an `i32` overflow,
-`None` for any iterator chain, unexpanded `{:>5}` format specs, a hang on `while let`). The new engine fails loudly
-instead: the 108 files that no longer exit 0 do so with a located diagnostic (unsupported feature, unknown name,
-parse error in the shared parser), never with silent wrong output. The meaningful numbers are the output-match and
-oracle rows.
+  <!-- wj:gen name=metric key=interpreter.features_supported -->
+26
+  <!-- wj:end -->
+
+  supported entries, and
+
+  <!-- wj:gen name=metric key=interpreter.features_unsupported -->
+2
+  <!-- wj:end -->
+
+  entries that must fail with "unsupported".
+- **Output equality with compiled Rust and independent reference models.** `scripts/interpreter_coverage.py` runs every `.wj` file with a
+  `fn main` under `tests/` and `examples/` through the interpreter and, where it compiles, through the Rust pipeline, and compares output
+  and exit code; the conformance corpus is compared with its `// expect:` lines and Python reference vectors (see "Differential testing").
+  Results are measurements of a given commit, so they are not typed here: CI writes them to `docs/generated/measured.json`.
+
+The old engine evaluated unknown names, failed calls and unsupported constructs to `Nil` and carried on, so programs "ran" while producing
+wrong output (`2147483648` for an `i32` overflow, `None` for any iterator chain, unexpanded `{:>5}` format specs, a hang on `while let`).
+The current engine fails loudly instead: an unsupported feature, an unknown name or a parse error in the shared parser is a located
+diagnostic, never silent wrong output. Exit 0 is therefore a meaningful signal, and the output-equality oracles are the quality measure.
 
 Reproduce: `python3 scripts/interpreter_coverage.py <wj> out.json --corpus <conformance_programs> --rust-diff --rust-cache c.json tests examples`
 (add `--driver <all-test-binary>` to run in-process through `interpreter_probe_test::probe_one`).
 
 ## What works
 
-Structs, impls, associated functions, `Self`; enums with unit/tuple/struct variants, `match` with guards, or-patterns,
-tuple/struct/enum patterns, `if let`, `while let`, `let else`; traits with default methods and dynamic dispatch by runtime
-type; generics (erased: dispatch is dynamic); closures with by-reference capture and mutation; function values; `?` on
-`Result`/`Option` with `From` conversion to a user error type; operator overloading (`add`, `neg`, `eq`, `partial_cmp`...);
-`impl Display`/`Debug` (via `write!`); `${}` interpolation, `format!` specs (width, fill, align, sign, `#`, `0`, precision,
-`x X b o e`, `?`, `#?`), named and positional arguments; integer widths i8..i128/u8..u128/isize/usize with Rust overflow
-panics, `wrapping_*`/`checked_*`/`saturating_*`/`overflowing_*`, shifts, `as` casts (wrap and saturate), f32 rounding;
-`Vec`/`VecDeque`, `HashMap`/`BTreeMap` (ordered by key), `HashSet`/`BTreeSet`, `entry` API, `Option`/`Result` combinators,
-strings and chars, eager iterator adaptors (`map filter fold sum zip enumerate rev take skip chain flat_map windows chunks
-sort_by ...`), `collect` into `Vec/String/HashMap/HashSet/Result/Option`, pipe operator `|>` (desugared by the parser),
-`const`/`static mut`, `defer`, multi-file projects, `std::{fs,env,process,io::stdin,time,mem,cmp,math,strings}` subsets,
-and the `std::test` assertion helpers. Ternary does not exist in the language (removed in the parser).
+Generated from the registry (do not edit; change `src/interpreter/features.rs`):
+
+<!-- wj:gen name=interpreter_supported -->
+- **Types**: structs, impls, associated functions, `Self`; enums with unit/tuple/struct variants; `match` with guards and or-patterns; tuples and destructuring
+- **Control flow**: `if let`, `while let`, `let else`; `for` over ranges and iterators, `while`, `loop`/`break`/`continue`; `defer`
+- **Traits and generics**: traits with default methods; dynamic dispatch by runtime type; generic functions (erased; dispatch is dynamic); operator overloading via `add`, `neg`, `eq`, ...
+- **Functions**: closures capturing by reference, mutation of captures, function values; pipe operator `|>`; `?` on `Result`/`Option`
+- **Formatting**: `${}` interpolation; format specs: width, fill, align, precision, radix, `?`; `{:?}` and `{:#?}` on collections and structs
+- **Numbers**: integer widths with Rust overflow semantics (`wrapping_*`, `checked_*`, `as` casts); arithmetic overflow panics (exit 101)
+- **Collections**: `Vec` push/len/index/sort/dedup, `VecDeque`; `HashMap`/`BTreeMap`, `HashSet`/`BTreeSet`, `entry` API; iterator adaptors (`map filter fold sum zip enumerate rev take skip chain flat_map windows chunks sort_by`), lazy `cycle`/`repeat`/`from_fn`; `Option`/`Result` combinators
+- **Strings**: string and char methods, `split`, `parse`
+- **Memory**: `impl Drop`: destructors at scope exit, in reverse declaration order; `Rc`/`Arc`, `RefCell`/`Cell`, `strong_count` by reachability
+- **Concurrency**: `async fn` and `.await` (lazy futures run on `.await`)
+- **Intrinsics**: `assert`, `assert_eq`, `panic`, `todo`, `debug`
+<!-- wj:end -->
+
+Also covered by the engine but not itemised in the registry yet: `std::{fs,env,process,io::stdin,time,mem,cmp,math,strings}` subsets and
+the `std::test` assertion helpers. Ternary does not exist in the language (removed in the parser).
 
 ## Semantics and design decisions
 
@@ -82,9 +96,15 @@ re-derives the two facts it needs, locally and testably:
 `called Option::unwrap() on a None value`, `attempt to add with overflow`) and the Windjammer call stack. The parser records a node's
 location after consuming it, so the reported line can be the line after the failing expression.
 
-**Unsupported means an error, never a guess.** `async/await`, `spawn`, channels, `thread {}` blocks, `impl Drop`,
-extern functions, `T::new()` through type parameters, and std modules that are not implemented (`http`, `json`, `ui`...)
-produce `unsupported in the interpreter: ...` and exit 2.
+**Unsupported means an error, never a guess.** Registered unsupported features (generated from the registry) produce
+`unsupported in the interpreter: ...` and exit 2:
+
+<!-- wj:gen name=interpreter_unsupported -->
+- **Concurrency**: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)
+- **FFI**: calls to `extern fn`
+<!-- wj:end -->
+
+Other unimplemented built-ins (for example std modules such as `http`, `json`, `ui`) fail the same way, with the name of the missing function.
 
 **Modularity.** Evaluator, value model, builtin registry, module loader and CLI port are separate files
 (`MODULE.md`). Adding stdlib is registering a function in `builtins/*.rs`; nothing else changes.
@@ -107,7 +127,7 @@ the compiler inferred (`x == 6_i64`).
 
 ## Differential testing
 
-`tests/interpreter_differential_test.rs` runs 16 seeded programs (`tests/interpreter_corpus/*.wj`, `__SEED__` template,
+`tests/interpreter_differential_test.rs` runs the seeded programs (`tests/interpreter_corpus/*.wj`, `__SEED__` template,
 3 to 5 seeds each) and compares the interpreter, through the real `wj run --interpret`, with (a) committed vectors that are
 re-derived from independent Python reference models on every run, and (b) the compiled-Rust pipeline. A print-faking
 interpreter cannot pass because each seed changes the data. Harness self-tests: a program that ignores its seed must be
@@ -127,22 +147,49 @@ Findings from running the same programs through the compiled path (compiler bugs
 - Capturing closures passed where a `fn(int) -> int` parameter is declared fail in rustc.
 - Statements starting with `*` after a line ending in `)` are parsed as a multiplication continuation (`*m.entry(k).or_insert(0) += 1`).
 
+## Added in the interp-gaps work
+
+- **Generic static dispatch** (`generics.rs`): `T::new()`, `T::default()`, `T::CONST` resolve through a per-call table
+  `T -> concrete type`, bound from a turbofish, then argument runtime types, then the expected type (`let x: Foo = make()`,
+  a function's declared return type). An uninferable parameter is a located `unsupported` error naming the fix.
+  Impl-level parameters are bound the same way; they are not recovered from `&self` field types.
+- **`matches!(e, pat [if guard])`** is lowered by the parser to a `match` (all backends). Open ranges `(a..)` parse as
+  `std::ops::RangeFrom { start }` (the Rust backend emits `(a..)`).
+- **Lazy iterators** (`iter.rs`, `builtins/iter.rs`): adaptors are pull-based nodes, so `cycle`, unbounded ranges,
+  `repeat`, `from_fn`, `successors` work under `take`/`take_while`/`find`/`break`, and closure side effects interleave exactly as in
+  Rust. Materialising more than 50M items from one iterator is a loud error. `rev` is lazy for double-ended sources
+  and materialises otherwise.
+- **`impl Drop`** (`heap.rs`): destructors run at block/function exit in reverse declaration order, on reassignment, `drop(x)`,
+  discarded temporaries and `let _ =`; owner before fields, `Vec` elements in order. Ownership is answered by reachability from
+  the live frames (the value model has no move tracking), so a value passed into a callee is dropped when its last holder dies
+  (the caller's scope exit), not at the callee's end. Panics unwind through destructors; `process::exit` does not.
+- **`Rc`/`Arc`/`Weak`, `RefCell`/`Cell`/`Mutex`/`RwLock`** (`builtins/shared.rs`): `Rc` is a shared slot; `strong_count`,
+  `weak_count` and `Weak::upgrade` are computed by reachability, so they follow scope exit and `drop`. Reference cycles
+  are not leaked (a cycle with no outside holder is considered dead). `borrow_mut()` never panics with "already borrowed"
+  and `lock()` never blocks or poisons.
+- **`async fn` / `.await`**: calling an async function returns a lazy future; `.await` (and an `async fn main`) runs it
+  to completion, so order matches Rust for single-task programs. There is no executor: `spawn`, `async expr`, channels,
+  `thread {}` stay unsupported.
+- Recursion is bounded by stack bytes used on the 4 GiB interpreter thread (about 120k interpreted frames in a debug
+  build), not a frame count; exceeding it is a panic, never a native stack overflow.
+- Smaller: `None` patterns no longer match everything; `module.func()` and `Enum.Variant()` legacy spellings; bare names
+  from `use std::math`; `math::*` float functions; `fs::is_dir/is_file`; an implicit `self` in `fn f()` impl methods.
+
 ## Remaining gaps
 
-- Not interpreted: async/spawn/channels/threads, `impl Drop`, extern/FFI, generic static dispatch (`T::default()`),
-  `Rc/RefCell/Mutex` interior mutability, infinite iterators (`cycle`, unbounded ranges: adaptors are eager), UI/http/json/db std modules,
-  macros other than the built-in set (the Phase 1 intrinsics and `write!/writeln!` are built in), `matches!`.
-- `u128` values above `i128::MAX` are not representable. `HashMap` iterates in key order (Rust's order is unspecified).
-- Performance: a tree walker, roughly two orders of magnitude slower than compiled code; fine for tests and dev, not for benchmarks.
-- 108 of 244 repository `.wj` files still fail, dominated by files that need the std modules above, `T::method()` dispatch, UI/engine
-  APIs and a few parser limitations; the breakdown is in the JSON the script emits.
-- Debug builds of `wj` limit recursion to 10,000 interpreted frames (reported as a stack-overflow panic).
+- Not interpreted: `spawn`/channels/threads (needs a settled ADR-0004 surface and a scheduler), extern/FFI, UI/http/json/db/regex/
+  subprocess std modules, wall-clock `time::now()` objects, `Rc::make_mut`/`get_mut`, RefCell borrow-state panics,
+  macros other than the built-in set plus `matches!`.
+- `u128` values above `i128::MAX` are not representable. `HashMap`/`HashSet` iterate in key order (Rust's order is
+  unspecified, so a correct program cannot depend on it; programs that print an unordered map differ from any single Rust run).
+- Drop/`Rc` reachability limits: values held only by a pending Rust-side temporary are invisible to the scan; a moved-in value
+  outlives the callee; iterator adaptors other than `Vec`-backed ones do not hold values alive for the scan.
+- Performance: a tree walker, roughly two orders of magnitude slower than compiled code; the optimizer kernel
+  benchmarks time out in debug builds.
+- Of the 382 repository `.wj` files with a `main`, 160 still do not exit 0: 37 are `__SEED__` corpus templates, about 25 are
+  tests that panic on purpose, and the rest need UI/engine/http/json/regex std modules or use syntax the shared parser rejects.
+  Re-measure with `scripts/interpreter_coverage.py`.
 
-## Proposed amendment to ADR-0007 (one paragraph, not applied)
+## ADR-0007
 
-> *Interpreter tier.* The interpreter (`wj run --interpret`, `wj test --interpret`, `wj repl`) is a Tier-2 development
-> target with a narrower contract than the compiled targets: it implements the language subset listed in
-> `docs/INTERPRETER.md` with Rust-identical stdout, panic behaviour and exit codes (debug-build integer semantics), and reports any
-> other construct as `unsupported in the interpreter` (exit 2). It is gated by `tests/interpreter_differential_test.rs`
-> (independent Python oracles plus compiled Rust) and `tests/interpreter_semantics_test.rs`; a regression in either blocks a
-> release. It is not a release path; `wj build` remains the production route.
+The interpreter tier paragraph is applied as an amendment in `docs/adr/0007-target-tiers-conformance.md`.

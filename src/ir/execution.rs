@@ -3,7 +3,8 @@
 //! Functions are NOT colored as async/sync. Instead, the caller chooses
 //! the execution mode at each call site:
 //!
-//! ```windjammer
+//! <!-- ignore: caller-controlled `async`/`spawn` expressions are IR-only: the parser does not construct them (ADR-0004) -->
+//! ```windjammer,ignore
 //! fn fetch_user(id: i32) -> User { ... }
 //!
 //! let user = fetch_user(1)         // sync — blocks until complete

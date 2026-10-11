@@ -118,7 +118,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// First let-init of `name` that is signed and not a bare int literal.
     /// Bare `let mut i = 0` loop counters may emit as usize (P3.527); call/field/index
     /// loads are definitive signed width even when a later shadow marks the name usize
-    /// (DB-395: `let ci = find_index(...)` then shadowed `let mut ci = 0` + `.len()`).
+    // (`let ci = find_index(...)` then shadowed `let mut ci = 0` + `.len()`).
     fn signed_definitive_nonliteral_init_type(&self, name: &str) -> Option<Type> {
         fn walk<'a>(
             this: &CodeGenerator<'a>,
@@ -200,7 +200,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(type_.clone())
             }
             Expression::Identifier { name, .. } => {
-                // DB-395: definitive signed init (find_index → i32) beats a later
+                // definitive signed init (find_index → i32) beats a later
                 // same-name usize loop counter in function-wide `usize_variables`.
                 if let Some(t) = self.signed_definitive_nonliteral_init_type(name) {
                     return Some(t);
@@ -367,7 +367,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else {
             None
         };
-        // DB-406: i32 local/field vs i32 field (`d < self.max_depth`) must not
+        // i32 local/field vs i32 field (`d < self.max_depth`) must not
         // inherit function-wide usize from `as usize` indexing / `.len()`.
         let signed_i32_field_compare = is_comparison
             && signed_zero_sentinel.is_none()
@@ -441,7 +441,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        // Drive int literal suffixes from a peer operand (DB-121 usize, DB-081 u32).
+        // Drive int literal suffixes from a peer operand (usize, u32).
         // P3.280: use full `infer_expression_type` so i32 locals from `CONST / 2` and
         // module consts peer-drive range/edge literals (`cx - 16` → `16_i32`, not `_i64`).
         let prev_bin_int = self.assignment_int_target_type.clone();
@@ -461,7 +461,7 @@ impl<'ast> CodeGenerator<'ast> {
                 })
             };
             if (left_is_usize && right_is_int_literal) || (right_is_usize && left_is_int_literal) {
-                // DB-315 / P3.705: a usize operand owns the literal (`i + 1` beside
+                // P3.705: a usize operand owns the literal (`i + 1` beside
                 // `i: usize`). An ambient i32 slot must not retarget that literal.
                 // Real i32 counters are excluded from `left_is_usize` (P3.679).
                 self.assignment_int_target_type = Some(Type::Custom("usize".into()));
@@ -469,7 +469,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if assign_slot_is_usize {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 } else if let Some(t) = peer_int_type(self, left) {
-                    // DB-330: `let bits: u32 = (x >> 16) & 0x7FFF` — keep the annotated
+                    // `let bits: u32 = (x >> 16) & 0x7FFF` — keep the annotated
                     // assign slot when a weak/default peer (WJ `int`/i64) would overwrite it
                     // before nested shift/mask literals are emitted.
                     // Comparisons follow the other operand (`int == 1` stays i64) even when
@@ -565,7 +565,7 @@ impl<'ast> CodeGenerator<'ast> {
         // - int < items.len()       →  int < (items.len() as i64)
         // - (done * 100) / total    →  (done * 100) / (total as i64)  when total is usize
         // - usize < items.len()     →  no cast (both usize)
-        // u32/u64 vs `.len()`/usize: cast the *unsigned* counter to `usize` (DB-081).
+        // u32/u64 vs `.len()`/usize: cast the *unsigned* counter to `usize`.
         // Signed i32 must NOT go this path — negatives wrap on `as usize`. Prefer
         // casting `.len()` to `i32` via `expression_narrow_signed_width_for_len_compare`
         // (P3.338 / `test_len_compared_to_i32_variable`).
@@ -1027,7 +1027,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // E0277: mixed f32/f64 (inference + `as f32` vs default `_f64` literals).
-        // DB-092: include comparisons (`distances[u] < 0.0`) so index-element f64
+        // include comparisons (`distances[u] < 0.0`) so index-element f64
         // promotes a default `_f32` literal on the other side.
         if (is_arithmetic || is_comparison)
             && matches!(

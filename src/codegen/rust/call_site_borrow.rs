@@ -131,7 +131,7 @@ pub(crate) fn maybe_borrow_owned_vec_local_for_ref_formal<'ast>(
     if coerced.starts_with('&') {
         return coerced;
     }
-    // DB-169/DB-190: helper/callee temps (`encode_startup()`, `empty_bakeoff_run()`)
+    // helper/callee temps (`encode_startup()`, `empty_bakeoff_run()`)
     // coerce to `&Vec<T>` / `&T` via Rust autoborrow — never prefix `&`.
     if matches!(
         arg_expr,
@@ -529,9 +529,9 @@ pub fn strip_double_ref_on_shared_binding(
 /// Bare formal at a user arg slot is a Copy pass-by-value scalar (`i64`, `bool`, …).
 ///
 /// Uses AST `formal_param_types` when present; otherwise unwraps converged `Reference(T)`.
-/// P3.635 / DB-134: stale `Borrowed` passthrough from inner `HashMap::get` must not
+// P3.635 / stale `Borrowed` passthrough from inner `HashMap::get` must not
 /// force `&label` at `get_label(label: i64)` call sites.
-/// P3.635 / DB-134 + P3.637 belt after terminal IR reconcile on method args.
+// P3.635 + P3.637 belt after terminal IR reconcile on method args.
 pub(crate) fn reconcile_method_call_owned_copy_scalar_identifier_arg(
     gen: &crate::codegen::rust::CodeGenerator<'_>,
     coerced: &mut String,
@@ -566,7 +566,7 @@ pub(crate) fn reconcile_method_call_owned_copy_scalar_identifier_arg(
         } else {
             *coerced = base;
         }
-        // DB-368: never leave `&*ident` for text into `&str` — bare/`&ident` coerces.
+        // never leave `&*ident` for text into `&str` — bare/`&ident` coerces.
         if coerced.starts_with("&*") {
             let rest = coerced["&*".len()..].trim();
             if rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
@@ -754,7 +754,7 @@ pub fn finalize_collection_key_call_site_arg(
             }
             return;
         }
-        // P3.635 / DB-134: owned Copy formals (`label: i64`) may still sit in
+        // P3.635 / owned Copy formals (`label: i64`) may still sit in
         // `inferred_borrowed_params` from stale map-key body inference — emit explicit
         // `&label` for collection-key callees (tip truth + product grep gates).
         // Only when the binding is *not* an emitted Rust shared ref (demoted `&str`).
@@ -875,7 +875,7 @@ pub(crate) fn callee_formal_is_owned_vec_container(sig: &FunctionSignature, pidx
         })
 }
 
-/// P3.353 / DB-108 balance: explicit `argv.clone()` into owned `Vec` callees is a move when
+// P3.353 balance: explicit `argv.clone()` into owned `Vec` callees is a move when
 /// the caller param is not reused; sequential multi-call reuse keeps `.clone()`.
 pub(crate) fn reconcile_explicit_user_clone_into_owned_vec_formal<'ast>(
     gen: &crate::codegen::rust::generator::CodeGenerator<'ast>,

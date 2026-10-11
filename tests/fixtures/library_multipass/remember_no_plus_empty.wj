@@ -1,4 +1,4 @@
-// DownstreamApp seed_bank_*_overlay `remember_*` class — loop + split + append
+// a downstream application seed_bank_*_overlay `remember_*` class — loop + split + append
 // without empty-concat. Tip must cargo-check index reuse + owned formals.
 
 use std::fs

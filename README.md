@@ -32,15 +32,36 @@ decisions are in [docs/adr/](docs/adr/README.md).
 Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [docs/MODULE_SYSTEM.md](docs/MODULE_SYSTEM.md).
 
 ### Tooling (the `wj` binary)
+<!-- wj:gen name=cli_commands -->
 | Command | What it does |
-|---------|--------------|
-| `wj new`, `wj build`, `wj run`, `wj test` | Create, transpile + build, build and run, run tests |
-| `wj lint` | Rust-leakage lint rules (W0001-W0004) on `.wj` files |
-| `wj add` / `wj remove` / `wj update` | Edit `wj.toml` dependencies / update the toolchain |
-| `wj run --interpret`, `wj test --interpret`, `wj repl` | Interpreted dev loop, no cargo (experimental subset; see [docs/INTERPRETER.md](docs/INTERPRETER.md)) |
-| `wj explain`, `wj errors`, `wj stats`, `wj docs` | Error catalogue and diagnostics browsing |
-| `wj shader-compile`, `wj validate-wjsl` | WJSL shader front end to WGSL |
-| `wj cache`, `wj clean`, `wj self-install`, `wj agent-index` | Shared cargo cache, cleanup, install, agent artifacts |
+|---|---|
+| `wj new` | Create a new Windjammer project |
+| `wj build` | Build a Windjammer project |
+| `wj run` | Compile and run a Windjammer file |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj test` | Run tests |
+| `wj fmt` | Format Windjammer code |
+| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
+| `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
+| `wj check` | Type check without building |
+| `wj add` | Add a dependency to wj.toml |
+| `wj remove` | Remove a dependency from wj.toml |
+| `wj update` | Update Windjammer to the latest version |
+| `wj stats` | Show error statistics |
+| `wj errors` | Interactive error navigator (TUI) |
+| `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
+| `wj explain` | Explain an error code |
+| `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
+| `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
+| `wj validate-wjsl` | Validate WJSL shader files (transpile to WGSL and check for errors) |
+| `wj clean` | Clean build artifacts and stale temp files |
+| `wj cache` | Manage the shared Cargo target cache (outside application repos) |
+| `wj cache path` | Print the shared (or --verify) Cargo target directory |
+| `wj cache status` | Show cache sizes and free disk |
+| `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) |
+| `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations |
+| `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH |
+<!-- wj:end -->
 
 Caveats, each tracked in [docs/known-gaps.md](docs/known-gaps.md):
 - `wj fmt` runs `cargo fmt --all`; it does not format `.wj` files.
@@ -68,12 +89,17 @@ Requirements: Rust 1.90 or newer (`rust-version` in `Cargo.toml`).
 git clone https://github.com/jeffreyfriedman/windjammer.git
 cd windjammer
 cargo build --release
-./target/release/wj --version        # wj 0.50.0
+```
+
+```sh,verify
+$ wj --version
+wj
 ```
 
 Optional, to keep build artifacts outside repositories:
 
-```bash
+<!-- ignore: changes the user's environment (cache directory and env files), so CI does not run it -->
+```bash,ignore
 ./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory
 wj cache status | wj cache path | wj cache prune
 ```
@@ -92,9 +118,18 @@ fn main() {
 }
 ```
 
-```bash
-wj run hello.wj
+```sh,verify
+$ cat > hello.wj <<'EOF'
+fn main() {
+    let name = "World"
+    println("Hello, ${name}!")
+}
+EOF
+$ wj run --interpret hello.wj
+Hello, World!
 ```
+
+`wj run hello.wj` (without `--interpret`) transpiles to Rust and builds with cargo; `--interpret` runs it directly with no build step.
 
 ### Ownership inference
 
@@ -159,9 +194,8 @@ produced by a benchmark that runs in CI.
 - [Architecture](docs/ARCHITECTURE.md) and [improvement plan](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md)
 - [Architecture decision records](docs/adr/README.md) and [RFCs](docs/proposals/rfcs/README.md)
 - [Known gaps](docs/known-gaps.md), [Roadmap](ROADMAP.md), [Changelog](CHANGELOG.md)
-- [API reference](docs/API_REFERENCE.md), [Comparison with Rust and Go](docs/COMPARISON.md)
 - [Contributing](CONTRIBUTING.md), [Security policy](SECURITY.md), [Agent instructions](AGENTS.md)
-- [Documentation index](docs/INDEX.md)
+- [Documentation index](docs/README.md)
 
 ## Related projects
 - [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui) - UI framework written in Windjammer

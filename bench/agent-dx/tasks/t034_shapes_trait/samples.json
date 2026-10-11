@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "square 3\nrect 2 5\nrtri 3 4\n",
+  "stdout": "square corners=4 area2=18\nrect corners=4 area2=20\nrtri corners=3 area2=12\ntotal area2=50\nlargest=rect area2=20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "trap 2 4 3\n",
+  "stdout": "trap corners=4 area2=18\ntotal area2=18\nlargest=trap area2=18\n"
+ }
+]

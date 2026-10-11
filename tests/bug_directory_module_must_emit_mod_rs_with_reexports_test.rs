@@ -13,7 +13,7 @@
 //! P3.720: Directory modules (`src/inventory/mod.wj` + siblings) must emit
 //! `inventory/mod.rs` with `pub mod` + `pub use` re-exports under `--output gen`.
 //!
-//! Sample Game tip transpile writes `gen/inventory/*.rs` but previously omitted (now tip GREEN; host guardrail remains)
+//! a game project tip transpile writes `gen/inventory/*.rs` but previously omitted (now tip GREEN; host guardrail remains)
 //! `gen/inventory/mod.rs`, so `lib.rs` `pub mod inventory` fails with E0583
 //! (wj-game restores from stale `build/` or synthesizes thin decls).
 

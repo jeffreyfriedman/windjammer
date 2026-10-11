@@ -11,14 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-478: a `for` binding moved into `Vec::push` on exclusive `if let` arms
+//! a `for` binding moved into `Vec::push` on exclusive `if let` arms
 //! must not `.clone()`, including `.clone().clone()` on the nested arms.
 //!
 //! Product `dialogue_system.rs` `filter_choices`:
 //!   `available.push(choice.clone().clone())` and `available.push(choice.clone())`
 //! WJ is `available.push(choice)` once per arm. `choice` comes from
 //! `for choice in choices` and is not used again after the push.
-//! Distinct from DB-474 (one last-use local, no exclusive arms) and DB-471
+//! Distinct from (one last-use local, no exclusive arms) and 
 //! (a reused `Vec` argument `.clone().clone()`).
 
 #[path = "common/integration_test_helpers.rs"]

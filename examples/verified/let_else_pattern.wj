@@ -1,0 +1,15 @@
+// tags: let-else, option, control-flow
+// rust: gap error[E0005]: refutable pattern in local binding
+// expect: got 5
+// expect: nothing
+fn describe(o: Option<int>) -> string {
+    let Some(v) = o else {
+        return "nothing"
+    }
+    "got ${v}"
+}
+
+fn main() {
+    println(describe(Some(5)))
+    println(describe(None))
+}

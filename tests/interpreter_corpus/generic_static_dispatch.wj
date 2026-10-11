@@ -1,0 +1,54 @@
+// seeds: 3 7 11 20
+// Static dispatch through type parameters: T::zero(), T::default(), turbofish,
+// annotated bindings and argument-based inference.
+trait Zero {
+    fn zero() -> Self
+    fn bump(self, by: int) -> Self
+}
+
+struct Acc { total: int }
+struct Cnt { n: int }
+
+impl Zero for Acc {
+    fn zero() -> Acc { Acc { total: 100 } }
+    fn bump(self, by: int) -> Acc { Acc { total: self.total + by } }
+}
+
+impl Zero for Cnt {
+    fn zero() -> Cnt { Cnt { n: 0 } }
+    fn bump(self, by: int) -> Cnt { Cnt { n: self.n + 1 } }
+}
+
+@derive(Default)
+struct Cfg { level: int, name: string }
+
+fn run<T: Zero>(steps: int) -> T {
+    let mut t = T::zero()
+    for i in 0..steps {
+        t = t.bump(i * __SEED__)
+    }
+    t
+}
+
+fn blank<T: Default>() -> T {
+    T::default()
+}
+
+fn restart<T: Zero>(old: T) -> T {
+    T::zero()
+}
+
+fn main() {
+    let five: int = 5
+    let a = run::<Acc>(five)
+    println("acc {}", a.total)
+    let four: int = 4
+    let c: Cnt = run(four)
+    println("cnt {}", c.n)
+    let n: int = blank()
+    let s = blank::<string>()
+    let cfg: Cfg = blank()
+    println("{} [{}] {} [{}]", n + __SEED__, s, cfg.level, cfg.name)
+    let fresh = restart(Acc { total: __SEED__ })
+    println("fresh {}", fresh.total)
+}

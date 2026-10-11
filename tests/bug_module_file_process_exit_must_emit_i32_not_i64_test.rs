@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-160: `process::exit(2)` / integer exit codes must emit `i32`, not `i64`.
+//! `process::exit(2)` / integer exit codes must emit `i32`, not `i64`.
 //!
 //! a downstream database project CQ-C5 cold tip gen (`wave1_artifact_cli.rs`):
 //!   `process::exit(2_i64)` → E0308 expected `i32`, found `i64`

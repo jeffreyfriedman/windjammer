@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a,b,c\n\"x,y\",z\n",
+  "stdout": "3: [a]|[b]|[c]\n2: [x,y]|[z]\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n,\n\"he said \"\"hi\"\"\",1\n",
+  "stdout": "1: []\n2: []|[]\n2: [he said \"hi\"]|[1]\n"
+ }
+]

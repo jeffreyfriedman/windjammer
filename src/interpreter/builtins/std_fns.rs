@@ -14,6 +14,7 @@ fn strukt(name: &str, fields: Vec<(&str, Value)>) -> Value {
         name: Rc::from(name),
         fields: fields.into_iter().map(|(n, v)| (Rc::from(n), v)).collect(),
         copy: false,
+        uid: 0,
     }))
 }
 
@@ -81,7 +82,7 @@ pub fn register(r: &mut Registry) {
     r.add_const("Ordering::Less", ordering(std::cmp::Ordering::Less));
     r.add_const("Ordering::Equal", ordering(std::cmp::Ordering::Equal));
     r.add_const("Ordering::Greater", ordering(std::cmp::Ordering::Greater));
-    for n in ["Box::new", "Rc::new", "Arc::new", "Cow::Borrowed", "Cow::Owned", "identity", "mem::drop", "convert::identity"] {
+    for n in ["Box::new", "Cow::Borrowed", "Cow::Owned", "identity", "convert::identity"] {
         r.func(n, |_, a| arg(&a, 0, "new"));
     }
     r.func("drop", |_, _| Ok(Value::Unit));
@@ -359,6 +360,27 @@ fn register_std_modules(r: &mut Registry) {
         std::thread::sleep(std::time::Duration::from_millis(arg_int(&a, 0, "sleep_millis")?.max(0) as u64));
         Ok(Value::Unit)
     });
+    macro_rules! unary_math {
+        ($($name:literal => $f:expr),* $(,)?) => {
+            $( r.func(concat!("math::", $name), |_, a| {
+                let f: fn(f64) -> f64 = $f;
+                Ok(Value::float(f(arg_f64(&a, 0, $name)?)))
+            }); )*
+        };
+    }
+    unary_math!(
+        "abs_f64" => f64::abs, "sqrt" => f64::sqrt, "cbrt" => f64::cbrt, "round" => f64::round,
+        "floor" => f64::floor, "ceil" => f64::ceil, "trunc" => f64::trunc, "sin" => f64::sin,
+        "cos" => f64::cos, "tan" => f64::tan, "asin" => f64::asin, "acos" => f64::acos,
+        "atan" => f64::atan, "sinh" => f64::sinh, "cosh" => f64::cosh, "tanh" => f64::tanh,
+        "exp" => f64::exp, "exp2" => f64::exp2, "ln" => f64::ln, "log2" => f64::log2,
+        "log10" => f64::log10, "signum" => f64::signum, "to_radians" => f64::to_radians,
+        "to_degrees" => f64::to_degrees,
+    );
+    r.add_const("math::PI", Value::float(std::f64::consts::PI));
+    r.add_const("math::E", Value::float(std::f64::consts::E));
+    r.func("fs::is_dir", |_, a| Ok(Value::Bool(std::path::Path::new(arg_str(&a, 0, "is_dir")?.as_str()).is_dir())));
+    r.func("fs::is_file", |_, a| Ok(Value::Bool(std::path::Path::new(arg_str(&a, 0, "is_file")?.as_str()).is_file())));
     r.func("fs::append", |_, a| {
         use std::io::Write;
         let p = arg_str(&a, 0, "fs::append")?;

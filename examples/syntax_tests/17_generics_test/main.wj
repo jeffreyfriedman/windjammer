@@ -1,3 +1,6 @@
+// expect: identity(42) = 42
+// expect: identity(string) = hello
+// expect: Generic type parameters work! ✓
 // Test generic type parameters
 
 // Generic function

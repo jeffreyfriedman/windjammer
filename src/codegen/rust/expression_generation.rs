@@ -27,7 +27,7 @@ impl<'ast> CodeGenerator<'ast> {
         if let Some(fields) = self.struct_field_types.get(struct_name) {
             return Some(fields);
         }
-        // DB-435: impl `ObjectPool<T>` uses parent_type `ObjectPool<T>` but struct
+        // impl `ObjectPool<T>` uses parent_type `ObjectPool<T>` but struct
         // field maps are keyed by the declared name `ObjectPool`.
         let base_without_generics = struct_name.split('<').next().unwrap_or(struct_name);
         if base_without_generics != struct_name {
@@ -127,7 +127,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // Strip `*` for owned Copy bindings (DB-134: HashMap::get + `.copied()`
+                // Strip `*` for owned Copy bindings (HashMap::get + `.copied()`
                 // then user-written `Some(*v)` — same policy as `generate_unary`).
                 if matches!(op, UnaryOp::Deref) {
                     if let Expression::Identifier { name, .. } = &**operand {
@@ -874,6 +874,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, field, .. } => {
                 self.generate_field_access(object, field, expr_to_generate)
             }
+            // `start..` (the parser lowers an open-ended range to `std::ops::RangeFrom { start }`)
+            Expression::StructLiteral { name, fields, .. }
+                if name == "std::ops::RangeFrom" && fields.len() == 1 =>
+            {
+                format!("({}..)", self.generate_expression(fields[0].1))
+            }
             Expression::StructLiteral { name, fields, .. } => {
                 self.generate_struct_literal(name, fields)
             }
@@ -943,7 +949,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Literal::IntSuffixed(i, suffix) => {
-                format!("{}_{}", i, suffix)
+                crate::codegen::rust::literals::int_suffixed_literal(*i, suffix)
             }
             Literal::Int(i) => {
                 // Index positions infer `usize` from context — bare literals avoid `_usize`.
@@ -953,7 +959,7 @@ impl<'ast> CodeGenerator<'ast> {
                 use crate::type_inference::IntType;
                 // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer
                 // must beat struct-field width. Otherwise `total_triangles: (total / 3) as u64`
-                // leaks `u64` onto the divisor → `3_u64` while `total` is i64 (DB-302).
+                // leaks `u64` onto the divisor → `3_u64` while `total` is i64.
                 if let Some(ctx_ty) = self
                     .assignment_int_target_type
                     .as_ref()
@@ -991,7 +997,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Branch unification may pick `usize` from `json::len` / `.len()` while the
                 // enclosing WJ `int` return casts those arms with `as i64`. Prefer `_i64`
                 // literals so if/else arms stay consistent (never `0_usize` vs `len as i64`).
-                // Skip when an explicit int/usize slot is in force (DB-121).
+                // Skip when an explicit int/usize slot is in force.
                 let inferred = if inferred == IntType::Usize
                     && self.assignment_int_target_type.is_none()
                     && self
@@ -1163,7 +1169,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Returns `false` when a bare `self` appears (overlaps every field). Used so
     /// `self.recording.add_event(InputEvent::key_down(self.current_frame, …))` sees
-    /// nested `current_frame` inside the call (DB-365).
+    // nested `current_frame` inside the call.
     pub(in crate::codegen::rust) fn collect_self_access_root_fields<'a>(
         expr: &'a Expression<'a>,
         out: &mut std::collections::HashSet<&'a str>,
@@ -1234,7 +1240,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Rust split-borrow: `self.a.method(self.b)` on different fields needs no temp extraction.
-    /// Also covers nested self-fields inside call args (DB-365).
+    // Also covers nested self-fields inside call args.
     pub(in crate::codegen::rust) fn disjoint_self_field_accesses(
         &self,
         receiver: &Expression,
@@ -1300,7 +1306,7 @@ impl<'ast> CodeGenerator<'ast> {
                 self.field_access_root_is_behind_reference(object)
             }
             Expression::Identifier { name, .. } => {
-                // DB-414: owned `mut self` is not behind a reference — only `&self` /
+                // owned `mut self` is not behind a reference — only `&self` /
                 // `&mut self` emit. Prefer emit/type truth over OwnershipHint::Mut alone.
                 let self_emits_owned = name == "self"
                     && !self.emitted_rust_ref_formals.contains("self")

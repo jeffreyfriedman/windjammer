@@ -1,7 +1,7 @@
 use std::db::Row
 use std::strings
 
-/// DownstreamApp `postgres_row_mapping.wj` dogfood shape after tip greened get_string
+/// a downstream application `postgres_row_mapping.wj` dogfood shape after tip greened get_string
 /// borrow, Ok/Err own, and owned `(Row, T)` chain moves (P3.237–P3.240).
 /// No `+ ""` workarounds.
 

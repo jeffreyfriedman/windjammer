@@ -1,0 +1,23 @@
+// tags: program, matrix, nested-vec
+// rust: gap error[E0308]: mismatched types
+// expect: 1 4
+// expect: 2 5
+// expect: 3 6
+fn transpose(m: Vec<Vec<int>>) -> Vec<Vec<int>> {
+    let rows = m.len()
+    let cols = m[0].len()
+    let mut out: Vec<Vec<int>> = []
+    for c in 0..cols {
+        let mut row: Vec<int> = []
+        for r in 0..rows { row.push(m[r][c]) }
+        out.push(row)
+    }
+    out
+}
+
+fn main() {
+    for row in transpose([[1, 2, 3], [4, 5, 6]]) {
+        let s: Vec<string> = row.map(|x| x.to_string()).collect()
+        println(s.join(" "))
+    }
+}

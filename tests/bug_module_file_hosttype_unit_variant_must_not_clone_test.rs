@@ -11,9 +11,9 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-402: Copy `HostType::F32` / `ShaderType::F32` must not emit `.clone()`.
+//! Copy `HostType::F32` / `ShaderType::F32` must not emit `.clone()`.
 //!
-//! DB-384/392/397/401 cover FaceDirection / Direction / TileType / StreamState;
+//! cover FaceDirection / Direction / TileType / StreamState;
 //! product gen/rendering/type_safety_validator.rs still has
 //! `HostType::F32.clone()` and `ShaderType::F32.clone()`.
 //! WJ source is `HostType::F32` / `ShaderType::F32` in UniformBinding::new.

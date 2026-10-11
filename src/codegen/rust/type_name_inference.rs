@@ -231,7 +231,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             // Chained `Type { .. }.method(...)` must resolve like let-bound struct literals
-            // (DB-091 / signature-driven string coercion).
+            // (signature-driven string coercion).
             Expression::StructLiteral { name, .. } => Some(name.clone()),
             Expression::Binary { .. } => self
                 .infer_expression_type(expr)

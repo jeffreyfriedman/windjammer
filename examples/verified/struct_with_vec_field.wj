@@ -1,0 +1,31 @@
+// tags: struct, vec, methods, mutation
+// rust: gap error[E0282]: type annotations needed
+// expect: 3 items, total 60
+// expect: cheapest: pen
+struct Item { name: string, price: int }
+struct Cart { items: Vec<Item> }
+
+impl Cart {
+    fn new() -> Cart { Cart { items: [] } }
+    fn add(self, name: string, price: int) {
+        self.items.push(Item { name: name, price: price })
+    }
+    fn total(self) -> int {
+        self.items.map(|i| i.price).sum()
+    }
+    fn cheapest(self) -> string {
+        match self.items.min_by_key(|i| i.price) {
+            Some(i) => i.name,
+            None => "",
+        }
+    }
+}
+
+fn main() {
+    let mut cart = Cart::new()
+    cart.add("book", 30)
+    cart.add("pen", 5)
+    cart.add("lamp", 25)
+    println("${cart.items.len()} items, total ${cart.total()}")
+    println("cheapest: ${cart.cheapest()}")
+}

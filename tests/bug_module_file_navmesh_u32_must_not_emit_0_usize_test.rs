@@ -11,11 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-324: a game project navmesh `find_triangle` — `u32 = 0_usize` must not emit.
+//! a game project navmesh `find_triangle` — `u32 = 0_usize` must not emit.
 //!
 //! Product tip gen (`a downstream game project/gen/ai/navmesh.rs`):
 //!   `let mut i: u32 = 0_usize;` inside `find_triangle(...) -> Option<u32>`
-//!   with `while i < self.triangles.len()`. Twin of DB-308/298.
+//! with `while i < self.triangles.len()`. Twin of .
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

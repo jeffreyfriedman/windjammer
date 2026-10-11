@@ -35,6 +35,7 @@ impl Interpreter {
         decl: &'static FunctionDecl<'static>,
         module: usize,
         self_ty: Option<&str>,
+        impl_params: &[crate::parser::TypeParam],
     ) -> Rc<FuncDef> {
         let qual: Rc<str> = match self_ty {
             Some(t) => Rc::from(format!("{}::{}", t, decl.name)),
@@ -50,6 +51,8 @@ impl Interpreter {
             self_ty: self_ty.map(Rc::from),
             decorators: &decl.decorators,
             is_extern: decl.is_extern,
+            is_async: decl.is_async,
+            type_params: impl_params.iter().chain(decl.type_params.iter()).map(|p| p.name.clone()).collect(),
             mutated: OnceCell::new(),
             self_mutated: OnceCell::new(),
         })
@@ -72,6 +75,8 @@ impl Interpreter {
             self_ty: Some(Rc::from(self_ty)),
             decorators: &[],
             is_extern: false,
+            is_async: false,
+            type_params: Vec::new(),
             mutated: OnceCell::new(),
             self_mutated: OnceCell::new(),
         }))
@@ -84,7 +89,7 @@ impl Interpreter {
         program: &'static Program<'static>,
     ) -> Result<(), RuntimeError> {
         self.register_items(module, &program.items)?;
-        self.finish_registration();
+        self.finish_registration()?;
         Ok(())
     }
 
@@ -96,7 +101,7 @@ impl Interpreter {
         for item in items {
             match item {
                 Item::Function { decl, .. } => {
-                    let f = self.func_from_decl(decl, module, None);
+                    let f = self.func_from_decl(decl, module, None, &[]);
                     self.modules[module].funcs.insert(decl.name.clone(), f);
                 }
                 Item::Struct { decl, .. } => {
@@ -142,14 +147,11 @@ impl Interpreter {
                 }
                 Item::Impl { block, .. } => {
                     if block.trait_name.as_deref() == Some("Drop") {
-                        return Err(RuntimeError::new(
-                            crate::interpreter::error::ErrorKind::Unsupported,
-                            "`impl Drop` (destructors that run at scope exit)",
-                        ));
+                        self.drop_types.insert(base_type_name(&block.type_name));
                     }
                     let ty = base_type_name(&block.type_name);
                     for func in &block.functions {
-                        let f = self.func_from_decl(func, module, Some(&ty));
+                        let f = self.func_from_decl(func, module, Some(&ty), &block.type_params);
                         if let Some(tr) = &block.trait_name {
                             // trait-qualified key disambiguates e.g. Display::fmt vs Debug::fmt
                             self.methods.insert((ty.clone(), format!("{}::{}", base_type_name(tr), func.name)), f.clone());
@@ -195,7 +197,13 @@ impl Interpreter {
     }
 
     /// After all definitions are known: fill trait default methods, compute mutating-method names.
-    pub(crate) fn finish_registration(&mut self) {
+    pub(crate) fn finish_registration(&mut self) -> Result<(), RuntimeError> {
+        if let Some(t) = self.drop_types.iter().find(|t| !self.structs.contains_key(*t)) {
+            return Err(RuntimeError::new(
+                crate::interpreter::error::ErrorKind::Unsupported,
+                format!("`impl Drop for {}`: only structs can have destructors in the interpreter", t),
+            ));
+        }
         let impls = self.trait_impls.clone();
         for (ty, tr) in impls {
             let mut chain = vec![tr.clone()];
@@ -215,5 +223,6 @@ impl Interpreter {
             }
         }
         self.trait_impls.clear();
+        Ok(())
     }
 }

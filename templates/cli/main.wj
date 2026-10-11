@@ -3,14 +3,14 @@ use std::env
 use std::process
 
 fn main() {
-    let args = env.args()
-    
+    let args: Vec<string> = env.args().collect()
+
     if args.len() < 2 {
         println("Usage: ${args[0]} <name>")
         println("Example: ${args[0]} World")
         process.exit(1)
     }
-    
+
     let name = args[1]
     println("Hello, ${name}!")
     println("Welcome to your new Windjammer CLI application!")

@@ -1,0 +1,53 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut nums: Vec<i64> = Vec::new()
+    for w in text.split_whitespace() {
+        nums.push(w.parse::<i64>().unwrap_or(0))
+    }
+    let limit: usize = 200001
+    let mut sieve: Vec<bool> = Vec::new()
+    let mut i: usize = 0
+    while i < limit {
+        sieve.push(true)
+        i += 1
+    }
+    sieve[0] = false
+    sieve[1] = false
+    let mut p: usize = 2
+    while p * p < limit {
+        if sieve[p] {
+            let mut m = p * p
+            while m < limit {
+                sieve[m] = false
+                m += p
+            }
+        }
+        p += 1
+    }
+    // prefix counts
+    let mut prefix: Vec<i64> = Vec::new()
+    let mut c: i64 = 0
+    let mut k: usize = 0
+    while k < limit {
+        if sieve[k] { c += 1 }
+        prefix.push(c)
+        k += 1
+    }
+    let t = nums[0] as usize
+    let mut q: usize = 1
+    while q <= t {
+        let n = nums[q] as usize
+        let mut last = n
+        while last >= 2 && !sieve[last] {
+            last -= 1
+        }
+        if n < 2 {
+            println("0 none")
+        } else {
+            println("${prefix[n]} ${last}")
+        }
+        q += 1
+    }
+}

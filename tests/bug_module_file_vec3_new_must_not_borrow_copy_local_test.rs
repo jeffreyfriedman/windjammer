@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-388: Copy locals into `Vec3::new(x: f32, …)` must not emit `Vec3::new(&x, …)`.
+//! Copy locals into `Vec3::new(x: f32, …)` must not emit `Vec3::new(&x, …)`.
 //!
 //! P3.442 isolate + navmesh tip exist; product `gen/` still over-borrows the first
 //! f32 ident in 30+ files (cameras, mesh_generator, voxel_mesh, terrain, …).

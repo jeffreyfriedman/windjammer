@@ -1,6 +1,6 @@
 //! Cache locality analysis: AoSoA / SoA candidates for ECS-style `Vec<Struct>` loops.
 //!
-//! See `game-host/CACHE_LOCALITY_DESIGN.md` for architecture and PGO integration.
+//! See the game engine project's cache-locality design document for architecture and PGO integration.
 
 use super::AnalyzedFunction;
 use crate::parser::*;
