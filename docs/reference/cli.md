@@ -190,7 +190,9 @@ Usage: wj check [OPTIONS] [PATH]
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `<PATH>` | PATH |  | Path to .wj file or directory (default: current directory) |
-| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json) |
+| `--watch` | WATCH |  | Re-check whenever a .wj file changes |
+| `--fix` | FIX |  | Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...) |
 
 ## `wj add`
 
