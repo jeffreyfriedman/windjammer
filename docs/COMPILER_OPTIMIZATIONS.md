@@ -1,5 +1,7 @@
 # Windjammer Compiler Optimizations Architecture
 
+> **Status warning (2026-10-10).** The compile-time optimizer described here (`src/optimizer/`, "15 phases") is disabled in the pipeline (`optimize_program` in `src/compiler_database.rs`), and no benchmark in the repository supports the performance figures below. Read this as a design history, not as shipped behaviour. Decision: [ADR-0006](adr/0006-optimizer-fate.md).
+
 **Goal:** Achieve ≥ 95% of Rust performance through zero-cost abstractions and intelligent code generation.
 
 **Philosophy:** Performance first, LOC reduction second. Focus on generating code that LLVM can optimize as well as hand-written Rust.
