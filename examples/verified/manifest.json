@@ -1887,8 +1887,7 @@
       "expect_lines": 4,
       "file": "vec_contains_position.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'position' found for struct 'Vec<i32>' in the curr",
+      "rust": "ok",
       "tags": [
         "vec",
         "search",
