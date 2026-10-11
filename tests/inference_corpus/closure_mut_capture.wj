@@ -1,0 +1,10 @@
+// D-CLOS-MUT: a closure that mutates a captured variable needs `let mut f` and `mut v`.
+fn fill(v: Vec<int>) -> int {
+    let mut f = |i: int| v.push(i)
+    f(0)
+    f(1)
+    v.len()
+}
+fn main() {
+    println("${fill(vec![9])}")
+}
