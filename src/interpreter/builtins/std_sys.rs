@@ -324,20 +324,26 @@ fn register_uuid_log_strings(r: &mut Registry) {
         Ok(Value::Unit)
     });
     macro_rules! log_fn {
-        ($($name:literal, $with:literal, $en:literal, $lvl:expr);*) => {$(
-            r.func(concat!("log::", $name), |it, a| {
-                it.log_emit($lvl, &arg_str(&a, 0, $name)?, None);
+        ($($path:literal, $with:literal, $en:literal, $lvl:expr);*) => {$(
+            r.func($path, |it, a| {
+                it.log_emit($lvl, &arg_str(&a, 0, $path)?, None);
                 Ok(Value::Unit)
             });
-            r.func(concat!("log::", $with), |it, a| {
+            r.func($with, |it, a| {
                 let kv = (arg_str(&a, 1, $with)?, arg_str(&a, 2, $with)?);
                 it.log_emit($lvl, &arg_str(&a, 0, $with)?, Some(kv));
                 Ok(Value::Unit)
             });
-            r.func(concat!("log::", $en), |it, _| Ok(Value::Bool(it.log_enabled($lvl))));
+            r.func($en, |it, _| Ok(Value::Bool(it.log_enabled($lvl))));
         )*};
     }
-    log_fn!("trace", "trace_with", "trace_enabled", 4; "debug", "debug_with", "debug_enabled", 3; "info", "info_with", "info_enabled", 2; "warn", "warn_with", "warn_enabled", 1; "error", "error_with", "error_enabled", 0);
+    log_fn!(
+        "log::trace", "log::trace_with", "log::trace_enabled", 4;
+        "log::debug", "log::debug_with", "log::debug_enabled", 3;
+        "log::info", "log::info_with", "log::info_enabled", 2;
+        "log::warn", "log::warn_with", "log::warn_enabled", 1;
+        "log::error", "log::error_with", "log::error_enabled", 0
+    );
 
     r.func("strings::trim_start", |_, a| Ok(s(arg_str(&a, 0, "trim_start")?.trim_start())));
     r.func("strings::trim_end", |_, a| Ok(s(arg_str(&a, 0, "trim_end")?.trim_end())));

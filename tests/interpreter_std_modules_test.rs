@@ -402,3 +402,46 @@ fn http_client_is_off_by_default_mockable_and_real_only_when_allowed() {
     server.join().unwrap();
     assert_eq!(out, "200 true\nworld\nreal\n", "{err}");
 }
+
+#[test]
+fn yaml_compress_jwt_and_password_hashing() {
+    let Some(_) = py("print(1)") else { return };
+    let (out, err, code) = run(
+        r##"
+use std::yaml
+use std::compress
+use std::jwt
+use std::crypto
+use std::testing
+fn main() {
+    println(yaml::parse("name: windjammer\nversion: 1\nlist:\n  - a\n  - b\n").unwrap_or("bad"))
+    match yaml::parse("   ") { Ok(_) => println("ok"), Err(e) => println(e) }
+    let z = compress::gzip_encode("hello compress world").unwrap_or("")
+    println(z)
+    println(compress::gunzip(z).unwrap_or("bad"))
+    let tok = jwt::sign_hs256("alice", "acme", "s3cret", 3600).unwrap_or("")
+    println(tok)
+    match jwt::verify_hs256(tok, "s3cret") { Ok(c) => println("${c.sub} ${c.tenant_slug}"), Err(e) => println(e) }
+    match jwt::verify_hs256(tok, "wrong") { Ok(_) => println("ok"), Err(_) => println("rejected") }
+    let h = crypto::hash_password("pw").unwrap_or("")
+    println(h.starts_with("$2b$12$"))
+    println(crypto::verify_password("pw", h).unwrap_or(false))
+    println(crypto::verify_password("nope", h).unwrap_or(true))
+    testing::assert_approx_eq(1.0, 1.0005, 0.001)
+}
+"##,
+    );
+    assert_eq!(code, 0, "{err}");
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines[0], r#"{"list":["a","b"],"name":"windjammer","version":1}"#);
+    assert_eq!(lines[1], "empty yaml");
+    // the base64 gzip blob must decompress to the original under Python's gzip
+    let check = py(&format!(
+        "import gzip,base64,hmac,hashlib,json\nprint(gzip.decompress(base64.b64decode('{}')).decode())\nh,p,s=('{}').split('.')\npad=lambda x:x+'='*(-len(x)%4)\nsig=hmac.new(b's3cret',(h+'.'+p).encode(),hashlib.sha256).digest()\nprint(base64.urlsafe_b64encode(sig).decode().rstrip('=')==s)\nc=json.loads(base64.urlsafe_b64decode(pad(p)))\nprint(c['sub'],c['tenant_slug'])",
+        lines[2], lines[4]
+    ))
+    .unwrap();
+    assert_eq!(check, "hello compress world\nTrue\nalice acme\n");
+    assert_eq!(&lines[3..4], ["hello compress world"]);
+    assert_eq!(&lines[5..], ["alice acme", "rejected", "true", "true", "false"]);
+}
