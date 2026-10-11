@@ -89,15 +89,35 @@ produce `unsupported in the interpreter: ...` and exit 2.
 **Modularity.** Evaluator, value model, builtin registry, module loader and CLI port are separate files
 (`MODULE.md`). Adding stdlib is registering a function in `builtins/*.rs`; nothing else changes.
 
+**Intrinsics (ADR-0014 Phase 1).** `crate::intrinsics::Intrinsic` is the only name registry the interpreter consults;
+`interpreter/intrinsics.rs` evaluates `print/println/eprint/eprintln` (and `stdout.*`/`stderr.*` sugar, lowered by the parser),
+`panic/todo/unreachable`, `assert/assert_eq/assert_ne`, `debug(x)`, `format` and the list literal, for both the plain call and the
+deprecated `name!(..)` macro spelling (same code path; `dbg!` is `debug`, `unimplemented!`/`debug_assert*!` map onto it). A user
+function, import or local variable with an intrinsic's name shadows it. Behaviour mirrors compiled Rust: stdout and stderr stay
+separate; panics exit 101 with Rust's text (`assertion failed: <cond>`, ``assertion `left == right` failed: <msg>\n  left: ..\n right: ..``,
+`not yet implemented: <msg>`, `internal error: entered unreachable code: <msg>`); `debug(x)` writes `[file:line:col] <expr> = <{:#?} value>`
+to stderr and returns `x`; a single message argument is printed verbatim (`println("{x}")` prints braces), several arguments are the
+legacy `{}` template and an argument the template never uses is an error, as in rustc. `[a, b]` is a growable `Vec`; a closure literal in call
+position (`(|v| v + 1)(x)`, which is what `x |> |v| v + 1` desugars to) is applied directly. Shapes the interpreter does not model
+(`debug(a, b)`, `assert()`, `assert_eq(a)`, named arguments to an intrinsic) are `unsupported` errors (exit 2).
+Known deviations: a `[T; N]` annotated array is not distinguished from a `Vec`, so `.push` on it is accepted (rustc rejects it);
+the `<cond>`/`<expr>` text is re-rendered from the AST (identifiers, literals, operators, calls, fields, indexing) and falls back to
+a bare `assertion failed` for other shapes, and rustc echoes the generated source, so an integer literal there carries the suffix
+the compiler inferred (`x == 6_i64`).
+
 ## Differential testing
 
-`tests/interpreter_differential_test.rs` runs 11 seeded programs (`tests/interpreter_corpus/*.wj`, `__SEED__` template,
+`tests/interpreter_differential_test.rs` runs 16 seeded programs (`tests/interpreter_corpus/*.wj`, `__SEED__` template,
 3 to 5 seeds each) and compares the interpreter, through the real `wj run --interpret`, with (a) committed vectors that are
 re-derived from independent Python reference models on every run, and (b) the compiled-Rust pipeline. A print-faking
 interpreter cannot pass because each seed changes the data. Harness self-tests: a program that ignores its seed must be
 rejected; an oracle for seed A must not accept the output of seed B; and source mutants (`+`->`-`, `*`->`+`, a literal bumped)
 must be killed (>= 80%) by the oracle comparison. The conventions (`// seeds:`, `// expect:`, `// exit:`, `.vectors/<seed>.out`)
-match the cross-backend conformance corpus, so these programs can be added to it unchanged.
+match the cross-backend conformance corpus, so these programs can be added to it unchanged. The `intrinsic_*` programs cover
+interpolation specs, list literals, pipe/closure-in-call-position, stream separation with `debug`, and a failing `assert_eq`
+(exit 101). `intrinsic_stderr_and_exit_match_compiled_rust` additionally compares stderr (locations and the backtrace footer normalised)
+for every panic/assert/todo/unreachable/debug/eprintln form against compiled Rust; its self-test checks that a message sent to the wrong
+stream or with wrong text is detected.
 
 Findings from running the same programs through the compiled path (compiler bugs, not interpreter bugs; the corpus avoids them):
 - `move` closure capture copies: `let mut c = 0; let mut f = || { c += 1 }; f(); f()` prints 0 when compiled, 2 interpreted (the language intent).
@@ -111,7 +131,7 @@ Findings from running the same programs through the compiled path (compiler bugs
 
 - Not interpreted: async/spawn/channels/threads, `impl Drop`, extern/FFI, generic static dispatch (`T::default()`),
   `Rc/RefCell/Mutex` interior mutability, infinite iterators (`cycle`, unbounded ranges: adaptors are eager), UI/http/json/db std modules,
-  macros other than the built-in set, `matches!`.
+  macros other than the built-in set (the Phase 1 intrinsics and `write!/writeln!` are built in), `matches!`.
 - `u128` values above `i128::MAX` are not representable. `HashMap` iterates in key order (Rust's order is unspecified).
 - Performance: a tree walker, roughly two orders of magnitude slower than compiled code; fine for tests and dev, not for benchmarks.
 - 108 of 244 repository `.wj` files still fail, dominated by files that need the std modules above, `T::method()` dispatch, UI/engine

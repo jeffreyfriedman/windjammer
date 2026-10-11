@@ -17,6 +17,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
+- `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
 - `builtins/`            native stdlib registry (`Registry`): `num`, `text`, `seq`, `map`, `option`, `std_fns`
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread. Only place with process I/O policy.
 - `error.rs`             `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces
@@ -31,11 +32,16 @@ Status and measurements: `docs/INTERPRETER.md`.
 - No `cargo`/`rustc` spawn anywhere in this module (asserted by `tests/interpreter_cli_test.rs`).
 
 ## Allowed imports
-`crate::parser` (AST), `crate::lexer`, `crate::source_map::Location`, std. Nothing from `codegen`,
+`crate::parser` (AST), `crate::lexer`, `crate::source_map::Location`, `crate::intrinsics` (name registry only), std. Nothing from `codegen`,
 `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*` and `Interpreter`.
 
 ## Entry points
 `runner::run_path`, `runner::run_tests`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
+
+## Intrinsics
+Names come only from `crate::intrinsics::Intrinsic` (plain call and `name!` spelling alike); do not register them in
+`builtins/`. Panic text mirrors rustc; unmodelled shapes return `unsupported` (exit 2). A user item or local of the
+same name shadows the intrinsic. Add a new intrinsic: extend the registry, then one arm in `eval_intrinsic`.
 
 ## Extending the stdlib
 Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in the matching
@@ -43,7 +49,7 @@ Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` i
 
 ## Testing
 - `cargo test --test interpreter_semantics_test` hand-derived Rust semantics
-- `cargo test --test interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests)
+- `cargo test --test interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
 - `cargo test --test interpreter_cli_test` real `wj` binary: no-cargo, multi-file, `wj test`, REPL, exit codes
 - `python3 scripts/interpreter_coverage.py <wj> out.json --corpus <dir> --rust-diff tests examples`
 - `python3 scripts/interpreter_probes.py <wj>` quick feature matrix

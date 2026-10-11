@@ -1,0 +1,29 @@
+// seeds: 2 5 9 14
+// Plain-call intrinsics: stdout/stderr separation, passing assert/assert_eq/assert_ne (with messages), debug() returning its argument.
+fn main() {
+    let n: int = __SEED__ * 11 + 1
+    let one: int = 1
+    let two: int = 2
+    let n2 = n * two
+    stdout.println("out ${n}")
+    stderr.println("err ${n}")
+    eprintln("err2 ${n}")
+    stderr.print("err3")
+    stdout.print("o")
+    stdout.println("k${n}")
+    assert(n > 0)
+    assert(n > 0, "n must be positive, was ${n}")
+    assert_eq(n, __SEED__ * 11 + 1)
+    assert_eq(n + one, __SEED__ * 11 + 2, "off by one for ${n}")
+    assert_ne(n, 0)
+    assert_ne(n, -1, "n ${n}")
+    let d = debug(n2)
+    println("d=${d}")
+    let w = debug(n) + debug(one)
+    println("w=${w}")
+    let s = debug("text")
+    println("s=${s}")
+    let list = [n, d, w]
+    let e = debug(list)
+    println("e=${e:?}")
+}

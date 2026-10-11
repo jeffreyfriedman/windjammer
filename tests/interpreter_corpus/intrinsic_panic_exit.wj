@@ -1,0 +1,14 @@
+// seeds: 3 6 10
+// exit: 101
+// A failing assert_eq with a message after seed-dependent output: stdout flushed, exit status 101.
+fn main() {
+    let n: int = __SEED__
+    let mut i = 0
+    while i < n {
+        println("step ${i * n}")
+        i += 1
+    }
+    assert_eq(n * 2, n + n, "doubling holds for ${n}")
+    assert_eq(n * 2, n * 3, "tripling fails for ${n}")
+    println("unreachable output")
+}

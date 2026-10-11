@@ -29,57 +29,9 @@ fn io_err(e: std::io::Error) -> Value {
 }
 
 pub fn register(r: &mut Registry) {
-    // ----- printing & assertions as plain functions (`println("{}", x)`) -----
-    r.func("println", |it, a| {
-        let mut s = it.format_args(&a)?;
-        s.push('\n');
-        it.write_out(&s);
-        Ok(Value::Unit)
-    });
-    r.func("print", |it, a| {
-        let s = it.format_args(&a)?;
-        it.write_out(&s);
-        Ok(Value::Unit)
-    });
-    r.func("eprintln", |it, a| {
-        let mut s = it.format_args(&a)?;
-        s.push('\n');
-        it.write_err(&s);
-        Ok(Value::Unit)
-    });
-    r.func("eprint", |it, a| {
-        let s = it.format_args(&a)?;
-        it.write_err(&s);
-        Ok(Value::Unit)
-    });
+    // print/println/eprint/eprintln/panic/assert/assert_eq/assert_ne/todo/unreachable/debug are
+    // language intrinsics (`crate::intrinsics::Intrinsic`), evaluated in `interpreter/intrinsics.rs`.
     r.func("format", |it, a| Ok(Value::str(it.format_args(&a)?)));
-    r.func("panic", |it, a| {
-        let m = if a.is_empty() { "explicit panic".to_string() } else { it.format_args(&a)? };
-        Err(panic_ctl(m))
-    });
-    r.func("assert", |it, a| {
-        if matches!(arg(&a, 0, "assert")?, Value::Bool(true)) {
-            return Ok(Value::Unit);
-        }
-        let m = if a.len() > 1 { it.format_args(&a[1..])? } else { "assertion failed".to_string() };
-        Err(panic_ctl(m))
-    });
-    r.func("assert_eq", |it, a| {
-        let (x, y) = (arg(&a, 0, "assert_eq")?, arg(&a, 1, "assert_eq")?);
-        if x.structural_eq(&y) {
-            return Ok(Value::Unit);
-        }
-        let (l, rr) = (it.debug_string(&x)?, it.debug_string(&y)?);
-        Err(panic_ctl(format!("assertion `left == right` failed\n  left: {}\n right: {}", l, rr)))
-    });
-    r.func("assert_ne", |it, a| {
-        let (x, y) = (arg(&a, 0, "assert_ne")?, arg(&a, 1, "assert_ne")?);
-        if !x.structural_eq(&y) {
-            return Ok(Value::Unit);
-        }
-        let (l, rr) = (it.debug_string(&x)?, it.debug_string(&y)?);
-        Err(panic_ctl(format!("assertion `left != right` failed\n  left: {}\n right: {}", l, rr)))
-    });
 
     // ----- std::test assertions -----
     fn cmp_assert(it: &mut Interpreter, a: &[Value], name: &str, ok: fn(std::cmp::Ordering) -> bool) -> R {
