@@ -1,5 +1,10 @@
 # Windjammer Async Execution Model Design
 
+> **Superseded by [WJ-CONC-01](../proposals/rfcs/WJ-CONC-01-async-concurrency.md) and [ADR-0004](../adr/0004-concurrency-surface.md) (Proposed).**
+> This document's "APPROVED" status below is historical. As of 2026-10-10 the parser does not produce `async expr` / `spawn expr`
+> (the `AsyncCall`/`SpawnCall` AST nodes are never constructed), and `async fn` is still the only function-level form that parses.
+> Treat the content as design background, not as implemented behaviour.
+
 **Status:** APPROVED - Implementation Pending  
 **Version:** 2.0 (Breaking Change)  
 **Date:** November 3, 2025  

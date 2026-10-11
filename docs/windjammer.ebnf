@@ -1,6 +1,7 @@
 (* Windjammer Formal Grammar — v0.50.0 *)
-(* This EBNF grammar is a normative reference for constrained-decoding harnesses *)
-(* and code-generation agents. It covers the full surface syntax. *)
+(* This EBNF grammar is a reference for constrained-decoding harnesses and *)
+(* code-generation agents. It was reconciled with src/parser and src/lexer on 2026-10-10. *)
+(* Constructs marked (* NOT PARSED *) are proposed in RFCs but rejected or unreachable today. *)
 
 program         = { item } ;
 
@@ -12,6 +13,10 @@ item            = use_decl
                 | function_decl
                 | const_decl
                 | type_alias
+                | static_decl
+                | mod_decl
+                | extern_decl
+                | bound_alias
                 | decorator item ;
 
 (* ── Declarations ── *)
@@ -36,12 +41,26 @@ impl_block      = "impl" [ generic_params ] type_expr
 
 function_decl   = [ visibility ] [ "async" ] "fn" IDENT
                   [ generic_params ] "(" param_list ")"
-                  [ "->" type_expr ] block ;
+                  [ "->" type_expr ] [ where_clause ] block ;
 function_sig    = [ visibility ] [ "async" ] "fn" IDENT
                   [ generic_params ] "(" param_list ")"
-                  [ "->" type_expr ] ;
+                  [ "->" type_expr ] [ where_clause ] ;
 
 const_decl      = "const" IDENT [ ":" type_expr ] "=" expression ;
+static_decl     = "static" [ "mut" ] IDENT [ ":" type_expr ] "=" expression ;
+
+mod_decl        = [ visibility ] "mod" IDENT [ "{" { item } "}" ] ;   (* no body: external file module *)
+
+extern_decl     = [ visibility ] "extern" ( "fn" IDENT [ generic_params ] "(" param_list ")" [ "->" type_expr ]
+                                          | "struct" IDENT [ generic_params ] [ "{" { field_decl [ "," ] } "}" ]
+                                          | "impl" type_expr "{" { function_sig } "}"
+                                          | "let" IDENT ":" type_expr ) ;
+
+(* soft keyword: "bound" is special only at item position, followed by IDENT and "=" *)
+bound_alias     = [ visibility ] "bound" IDENT "=" type_expr { "+" type_expr } ;
+
+where_clause    = "where" where_pred { "," where_pred } ;
+where_pred      = type_expr ":" type_expr { "+" type_expr } ;
 type_alias      = "type" IDENT [ generic_params ] "=" type_expr ;
 
 decorator       = "@" IDENT [ "(" arg_list ")" ] ;
@@ -83,7 +102,16 @@ statement       = let_stmt
                 | while_stmt
                 | loop_stmt
                 | break_stmt
-                | continue_stmt ;
+                | continue_stmt
+                | defer_stmt
+                | thread_stmt
+                | async_stmt
+                | static_decl
+                | const_decl ;
+
+defer_stmt      = "defer" statement ;
+thread_stmt     = "thread" block ;              (* statement only when followed by "{" *)
+async_stmt      = "async" block ;               (* statement only when followed by "{" *)
 
 let_stmt        = "let" [ "mut" ] IDENT [ ":" type_expr ] "=" expression ;
 assignment_stmt = lvalue assign_op expression ;
@@ -129,8 +157,9 @@ pattern_list    = pattern { "," pattern } ;
 
 expression      = assignment_expr ;
 
-assignment_expr = or_expr [ assign_op or_expr ] ;
-or_expr         = and_expr { "||" and_expr } ;
+assignment_expr = or_expr [ assign_op or_expr ] [ "<-" expression ] ;   (* "ch <- v" sends on a channel *)
+or_expr         = pipe_expr { "||" pipe_expr } ;    (* "|>" is handled as a left-associative loop in parse_binary_expression *)
+pipe_expr       = and_expr { "|>" and_expr } ;       (* pipe operator: x |> f(a)  ==  f(x, a) *)
 and_expr        = comparison { "&&" comparison } ;
 comparison      = bitor { cmp_op bitor } ;
 cmp_op          = "==" | "!=" | "<" | ">" | "<=" | ">=" ;
@@ -140,7 +169,7 @@ bitand          = shift { "&" shift } ;
 shift           = additive { ( "<<" | ">>" ) additive } ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative  = unary { ( "*" | "/" | "%" ) unary } ;
-unary           = ( "-" | "!" | "~" ) unary | postfix ;
+unary           = ( "-" | "!" | "~" | "<-" ) unary | postfix ;     (* "<-ch" receives from a channel *)
 postfix         = primary { postfix_op } ;
 
 postfix_op      = "." IDENT                     (* field access *)
@@ -160,11 +189,16 @@ primary         = literal
                 | if_expr
                 | match_expr
                 | block
-                | async_expr
-                | spawn_expr ;
+                | unsafe_block ;
 
-async_expr      = "async" expression ;
-spawn_expr      = "spawn" expression ;
+unsafe_block    = "unsafe" block ;
+
+(* NOT PARSED: caller-controlled "async expr" / "spawn expr" (RFC WJ-CONC-01).            *)
+(* The AST has AsyncCall/SpawnCall variants but no parser path constructs them (ADR-0004). *)
+(* async_expr  = "async" expression ;                                                      *)
+(* spawn_expr  = "spawn" expression ;                                                      *)
+
+(* NOT PARSED: ternary "c ? a : b" was removed; use if_expr. "?" is only the postfix try operator. *)
 
 if_expr         = "if" expression block [ "else" block ] ;
 match_expr      = "match" expression "{" { match_arm } "}" ;
@@ -196,7 +230,8 @@ INT_LIT         = DIGIT { DIGIT | "_" } [ int_suffix ] ;
 int_suffix      = "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" ;
 FLOAT_LIT       = DIGIT { DIGIT } "." DIGIT { DIGIT } [ float_suffix ] ;
 float_suffix    = "f32" | "f64" ;
-STRING_LIT      = '"' { CHAR - '"' | escape } '"' ;
+STRING_LIT      = '"' { CHAR - '"' - "$" | escape | interpolation } '"' ;
+interpolation   = "${" expression "}" ;               (* string interpolation, e.g. "Hello, ${name}!" *)
 CHAR_LIT        = "'" ( CHAR - "'" | escape ) "'" ;
 escape          = "\\" ( "n" | "r" | "t" | "\\" | "'" | '"' | "0" | "x" HEX HEX ) ;
 LETTER          = "a"…"z" | "A"…"Z" | "_" ;
