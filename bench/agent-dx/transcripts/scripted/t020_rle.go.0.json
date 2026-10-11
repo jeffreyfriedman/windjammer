@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\nfunc encode(s string) string {\n\tvar sb strings.Builder\n\tfor i := 0; i < len(s); {\n\t\tj := i\n\t\tfor j < len(s) && s[j] == s[i] {\n\t\t\tj++\n\t\t}\n\t\tsb.WriteString(strconv.Itoa(j - i))\n\t\tsb.WriteByte(s[i])\n\t\ti = j\n\t}\n\treturn sb.String()\n}\n\nfunc decode(s string) string {\n\tvar sb strings.Builder\n\tn := 0\n\tfor i := 0; i < len(s); i++ {\n\t\tif s[i] >= '0' && s[i] <= '9' {\n\t\t\tn = n*10 + int(s[i]-'0')\n\t\t} else {\n\t\t\tsb.WriteString(strings.Repeat(string(s[i]), n))\n\t\t\tn = 0\n\t\t}\n\t}\n\treturn sb.String()\n}\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tfor sc.Scan() {\n\t\tline := sc.Text()\n\t\tif line == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tmode, text, _ := strings.Cut(line, \" \")\n\t\tif mode == \"E\" {\n\t\t\tfmt.Println(encode(text))\n\t\t} else {\n\t\t\tfmt.Println(decode(text))\n\t\t}\n\t}\n}\n",
+   "usage": null,
+   "wall_seconds": 0.06
+  }
+ ],
+ "lang": "go",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.06
+ },
+ "recorded_at": "2026-10-11T15:16:02",
+ "schema": 1,
+ "task": "t020_rle",
+ "trial": 0
+}

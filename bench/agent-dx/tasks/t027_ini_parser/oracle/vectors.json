@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[a]\nx = 1\ny=2\n---\na.x\na.y\na.z\nb.x\n",
+  "stdout": "1\n2\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "g = top\n[s]\nk = v = w\n; c\n# d\n---\ng\ns.k\n.g\ns.c\n",
+  "stdout": "top\nv = w\ntop\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "---\nx\n",
+  "stdout": "<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[a]\nx=1\n[b]\nx=2\n[a]\nx=3\ny=4\n---\na.x\nb.x\na.y\n",
+  "stdout": "3\n2\n4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[s]\n k = spaced value \nnonsense line\n---\ns.k\ns.nonsense line\n",
+  "stdout": "spaced value\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host =  3 \ngarbage\nport = 1\ny = \n[a]\n; comment\nport = two\n; comment\nx = two\ny =  3 \n---\nnet.port\na.host\nnet.host\na.port\na.x\n",
+  "stdout": "<none>\n<none>\n<none>\ntwo\ntwo\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "# comment\ngarbage\ngarbage\n[net]\nport = \nx = 1\nx =  3 \n[net]\n; comment\n# comment\n# comment\nx = \n---\nnet.x\nb.x\nnet.x\na.x\n",
+  "stdout": "\n<none>\n\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "garbage\n[a]\n---\nx\nport\nnet.y\n",
+  "stdout": "<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "# comment\nhost = 1\n---\nx\na.port\nhost\nhost\n",
+  "stdout": "<none>\n<none>\n1\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x = \n---\nhost\nnet.port\nb.y\na.y\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "y = a=b\nhost = two\n---\na.y\nb.x\na.x\nb.port\na.x\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "# comment\ngarbage\nx = \nhost = two\n---\na.port\na.x\nb.port\na.y\nb.x\nnet.port\na.x\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x = 1\ny = \ny = 1\nport = two\nx = two\nhost = \nhost = a=b\n[net]\n[b]\n---\nnet.x\na.port\ny\na.port\nport\nhost\na.host\nport\n",
+  "stdout": "<none>\n<none>\n1\n<none>\ntwo\na=b\n<none>\ntwo\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[b]\nport = two\nhost = two\nport =  3 \nhost = two\n[b]\n---\nb.y\nb.x\nport\nb.port\nnet.x\n",
+  "stdout": "<none>\n<none>\n<none>\n3\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port = two\nx = 1\n---\nb.port\nx\nb.port\nx\nnet.port\nx\n",
+  "stdout": "<none>\n1\n<none>\n1\n<none>\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "---\nhost\ny\na.y\nb.x\nport\ny\ny\nnet.host\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "---\na.x\nport\na.port\nnet.port\nb.port\nb.port\nnet.x\nb.x\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port = a=b\nx = a=b\nx = two\n# comment\n---\nnet.x\nb.x\na.host\na.x\nnet.y\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x = a=b\nhost = 1\ngarbage\ngarbage\nhost = 1\nhost = \nx = \n[b]\n[a]\n---\nb.port\nport\n",
+  "stdout": "<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host =  3 \ngarbage\n[b]\nhost = two\n[b]\ngarbage\n[b]\nx = 1\nhost = 1\n---\nnet.port\ny\nb.y\n",
+  "stdout": "<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host = two\n---\nx\n",
+  "stdout": "<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "---\nb.x\nb.host\n",
+  "stdout": "<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port = two\nhost = \n# comment\nx = 1\n[b]\ny = two\ngarbage\nport = two\ngarbage\ngarbage\ny = 1\nport = two\n---\nnet.y\nhost\nb.y\nb.x\nb.x\na.y\nnet.x\n",
+  "stdout": "<none>\n\n1\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x = two\nx = \nport =  3 \nhost = 1\n[a]\n---\nb.host\ny\nb.x\nnet.port\nnet.port\na.x\nport\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[b]\nhost =  3 \n[a]\n; comment\n[b]\n; comment\n[a]\nhost = two\n---\nb.port\nb.port\n",
+  "stdout": "<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "; comment\nx =  3 \n---\nnet.port\nnet.port\n",
+  "stdout": "<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x = 1\ny =  3 \nhost = 1\nport =  3 \ny = two\nhost = a=b\nhost =  3 \n# comment\ny = a=b\n---\na.x\nx\nb.y\nhost\n",
+  "stdout": "<none>\n1\n<none>\n3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x = a=b\ngarbage\nhost = a=b\nx =  3 \ny =  3 \n---\na.port\nx\na.y\nhost\n",
+  "stdout": "<none>\n3\n<none>\na=b\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "y = two\n---\nport\nnet.host\nb.y\na.y\nhost\nnet.x\nnet.y\nb.y\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[a]\ngarbage\nx = two\nhost =  3 \n---\nb.x\nb.port\nb.x\na.port\nnet.x\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "garbage\ny = \ny = a=b\ny = a=b\n[b]\nx = two\nhost = a=b\nx = a=b\n[net]\n---\na.x\na.host\na.x\nnet.y\nhost\nb.port\nx\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "garbage\n---\na.host\nhost\nnet.host\nhost\nnet.port\nnet.port\nnet.x\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "---\nnet.host\na.y\na.port\na.host\nhost\nb.host\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n<none>\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host =  3 \ny = 1\nhost = \n; comment\n---\nnet.port\na.host\nnet.port\nx\ny\nnet.y\n",
+  "stdout": "<none>\n<none>\n<none>\n<none>\n1\n<none>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "y = two\n[net]\n[a]\n# comment\nport =  3 \n; comment\nport = a=b\ny = a=b\nhost = a=b\nport = a=b\n---\nhost\n",
+  "stdout": "<none>\n"
+ }
+]

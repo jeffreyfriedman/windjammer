@@ -1,0 +1,110 @@
+use std::fs
+
+struct Parser {
+    chars: Vec<char>,
+    pos: usize,
+    failed: bool,
+}
+
+impl Parser {
+    fn skip_spaces(self) {
+        while self.pos < self.chars.len() && self.chars[self.pos] == ' ' {
+            self.pos += 1
+        }
+    }
+
+    fn peek(self) -> char {
+        self.skip_spaces()
+        if self.pos < self.chars.len() {
+            self.chars[self.pos]
+        } else {
+            '\0'
+        }
+    }
+
+    fn expr(self) -> i64 {
+        let mut v = self.term()
+        loop {
+            let c = self.peek()
+            if c == '+' || c == '-' {
+                self.pos += 1
+                let r = self.term()
+                if c == '+' { v = v + r } else { v = v - r }
+            } else {
+                break
+            }
+        }
+        v
+    }
+
+    fn term(self) -> i64 {
+        let mut v = self.unary()
+        loop {
+            let c = self.peek()
+            if c == '*' || c == '/' || c == '%' {
+                self.pos += 1
+                let r = self.unary()
+                if c == '*' {
+                    v = v * r
+                } else if r == 0 {
+                    self.failed = true
+                } else if c == '/' {
+                    v = v / r
+                } else {
+                    v = v % r
+                }
+            } else {
+                break
+            }
+        }
+        v
+    }
+
+    fn unary(self) -> i64 {
+        if self.peek() == '-' {
+            self.pos += 1
+            return 0 - self.unary()
+        }
+        self.atom()
+    }
+
+    fn atom(self) -> i64 {
+        let c = self.peek()
+        if c == '(' {
+            self.pos += 1
+            let v = self.expr()
+            if self.peek() != ')' {
+                self.failed = true
+                return 0
+            }
+            self.pos += 1
+            return v
+        }
+        if c >= '0' && c <= '9' {
+            let mut v: i64 = 0
+            while self.pos < self.chars.len() && self.chars[self.pos] >= '0' && self.chars[self.pos] <= '9' {
+                v = v * 10 + ((self.chars[self.pos] as i64) - 48)
+                self.pos += 1
+            }
+            return v
+        }
+        self.failed = true
+        0
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let mut p = Parser { chars: line.chars().collect(), pos: 0, failed: false }
+        let v = p.expr()
+        if p.peek() != '\0' {
+            p.failed = true
+        }
+        if p.failed {
+            println("error")
+        } else {
+            println("${v}")
+        }
+    }
+}

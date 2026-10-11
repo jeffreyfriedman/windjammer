@@ -25,7 +25,7 @@ fn handle_echo(req: Request) -> ServerResponse {
 }
 
 fn handle_json(req: Request) -> ServerResponse {
-    // In a real app, you'd use @derive(Serialize) on a struct
+    // In a real app, you'd use  on a struct
     let json_response = "{\"status\": \"ok\", \"message\": \"JSON response from Windjammer!\"}"
     
     ServerResponse::json(json_response)
@@ -35,7 +35,7 @@ fn handle_json(req: Request) -> ServerResponse {
 fn handle_status(req: Request) -> ServerResponse {
     match req.path_param("code") {
         Some(code) => {
-            match code.as_str() {
+            match code {
                 "200" => ServerResponse::ok("OK\n"),
                 "201" => ServerResponse::created("Created\n"),
                 "400" => ServerResponse::bad_request("Bad Request\n"),

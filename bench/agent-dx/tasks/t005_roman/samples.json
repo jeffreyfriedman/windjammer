@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nXIV\n",
+  "stdout": "IV\n14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1994\nMMXXIV\n3999\n",
+  "stdout": "MCMXCIV\n2024\nMMMCMXCIX\n"
+ }
+]

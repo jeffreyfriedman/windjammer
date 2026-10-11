@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "use std::io::Read;\n\nfn encode(t: &str) -> String {\n    let mut out = String::new();\n    let mut chars = t.chars().peekable();\n    while let Some(c) = chars.next() {\n        let mut n = 1;\n        while chars.peek() == Some(&c) {\n            chars.next();\n            n += 1;\n        }\n        out.push_str(&format!(\"{}{}\", n, c));\n    }\n    out\n}\n\nfn decode(t: &str) -> String {\n    let mut out = String::new();\n    let mut n: usize = 0;\n    for c in t.chars() {\n        if let Some(d) = c.to_digit(10) {\n            n = n * 10 + d as usize;\n        } else {\n            out.push_str(&c.to_string().repeat(n));\n            n = 0;\n        }\n    }\n    out\n}\n\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n    for line in s.lines() {\n        let line = line.trim_end_matches('\\r');\n        let (cmd, text) = match line.split_once(' ') {\n            Some((c, t)) => (c, t),\n            None => (line, \"\"),\n        };\n        match cmd {\n            \"E\" => println!(\"{}\", encode(text)),\n            \"D\" => println!(\"{}\", decode(text)),\n            _ => {}\n        }\n    }\n}\n",
+   "usage": null,
+   "wall_seconds": 0.12
+  }
+ ],
+ "lang": "rust",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.12
+ },
+ "recorded_at": "2026-10-11T15:16:11",
+ "schema": 1,
+ "task": "t020_rle",
+ "trial": 0
+}

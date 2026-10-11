@@ -1463,7 +1463,9 @@ impl AutoCloneAnalysis {
                 crate::parser::EnumPatternBinding::None
                 | crate::parser::EnumPatternBinding::Wildcard => {}
             },
-            crate::parser::Pattern::Wildcard | crate::parser::Pattern::Literal(_) => {}
+            crate::parser::Pattern::Wildcard
+            | crate::parser::Pattern::Literal(_)
+            | crate::parser::Pattern::Range { .. } => {}
         }
     }
 
@@ -1849,7 +1851,7 @@ impl AutoCloneAnalysis {
                     .iter()
                     .any(|(_, p)| Self::pattern_binds_identifier(p, name)),
             },
-            Pattern::Wildcard | Pattern::Literal(_) => false,
+            Pattern::Wildcard | Pattern::Literal(_) | Pattern::Range { .. } => false,
         }
     }
 

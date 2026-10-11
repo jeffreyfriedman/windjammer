@@ -184,8 +184,8 @@ impl Parser {
                         name
                     } else {
                         return Err(format!(
-                            "Expected parameter name (at token position {})",
-                            self.position
+                            "Expected parameter name (at {})",
+                            self.pos_desc()
                         ));
                     };
 

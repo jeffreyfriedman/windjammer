@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "100 / 5 / 2\n7 / 0\n-9\n",
+  "stdout": "10\nerror: division by zero at step 1\n-9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10 / 3\n-10 / 3\n1 / 2 / 0\n",
+  "stdout": "3\n-3\nerror: division by zero at step 2\n"
+ }
+]

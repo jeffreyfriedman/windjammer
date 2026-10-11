@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "open a 100\nopen b 0\ntransfer a b 30\nbalance a\nwithdraw b 50\ndeposit b 5\n",
+  "stdout": "ok\nok\nok\n70\nerror: insufficient funds\nok\na 70\nb 35\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "deposit z 5\nopen a 1\nopen a 2\n",
+  "stdout": "error: unknown account z\nok\nerror: duplicate account\na 1\n"
+ }
+]

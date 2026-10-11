@@ -1,0 +1,27 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut nums: Vec<i64> = Vec::new()
+    for w in text.split_whitespace() {
+        nums.push(w.parse::<i64>().unwrap_or(0))
+    }
+    let t = nums[0]
+    let mut q: i64 = 1
+    while q <= t {
+        let mut n = nums[q as usize]
+        let mut peak = n
+        let mut steps: i64 = 0
+        while n != 1 {
+            if n % 2 == 0 {
+                n = n / 2
+            } else {
+                n = 3 * n + 1
+            }
+            if n > peak { peak = n }
+            steps += 1
+        }
+        println("${steps} ${peak}")
+        q += 1
+    }
+}

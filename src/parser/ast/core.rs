@@ -168,15 +168,19 @@ pub enum Statement<'ast> {
         pattern: Pattern<'ast>,
         iterable: &'ast Expression<'ast>,
         body: Vec<&'ast Statement<'ast>>,
+        /// Loop label without the quote: `'outer: for ...` is `Some("outer")`.
+        label: Option<String>,
         location: SourceLocation,
     },
     Loop {
         body: Vec<&'ast Statement<'ast>>,
+        label: Option<String>,
         location: SourceLocation,
     },
     While {
         condition: &'ast Expression<'ast>,
         body: Vec<&'ast Statement<'ast>>,
+        label: Option<String>,
         location: SourceLocation,
     },
     Thread {
@@ -191,10 +195,14 @@ pub enum Statement<'ast> {
         statement: &'ast Statement<'ast>,
         location: SourceLocation,
     },
+    /// `break`, `break 'label`, `break value`, `break 'label value` (value only for `loop`).
     Break {
+        label: Option<String>,
+        value: Option<&'ast Expression<'ast>>,
         location: SourceLocation,
     },
     Continue {
+        label: Option<String>,
         location: SourceLocation,
     },
     Use {
@@ -256,6 +264,12 @@ pub enum Pattern<'ast> {
     Identifier(String),
     EnumVariant(String, EnumPatternBinding<'ast>), // Enum name, binding type
     Literal(Literal),
+    /// Range pattern over integer / float / char literals: `1..=9`, `..=9`, `1..`, `'a'..'z'`.
+    Range {
+        start: Option<Literal>,
+        end: Option<Literal>,
+        inclusive: bool,
+    },
     Tuple(Vec<Pattern<'ast>>),      // Tuple pattern: (a, b, c)
     Or(Vec<Pattern<'ast>>),         // Or pattern: pattern1 | pattern2 | pattern3
     Reference(&'ast Pattern<'ast>), // Reference pattern: &x

@@ -5,11 +5,21 @@
 
 use crate::parser::Literal;
 
+/// Rust text of a suffixed integer literal. The AST stores the two's-complement bit pattern, so
+/// a `u64`/`usize` above `i64::MAX` arrives as a negative `i64` and must print as unsigned.
+pub fn int_suffixed_literal(i: i64, suffix: &str) -> String {
+    if i < 0 && matches!(suffix, "u64" | "usize") {
+        format!("{}_{}", i as u64, suffix)
+    } else {
+        format!("{}_{}", i, suffix)
+    }
+}
+
 /// Convert a Windjammer literal to Rust source code
 pub fn generate_literal(lit: &Literal) -> String {
     match lit {
         Literal::Int(i) => i.to_string(),
-        Literal::IntSuffixed(i, suffix) => format!("{}_{}", i, suffix),
+        Literal::IntSuffixed(i, suffix) => int_suffixed_literal(*i, suffix),
         Literal::Float(f) => {
             let s = f.to_string();
             // Windjammer convention: unconstrained float literals default to f32

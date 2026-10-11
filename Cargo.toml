@@ -20,12 +20,12 @@ edition.workspace = true
 default-run = "wj"
 authors.workspace = true
 license.workspace = true
-description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
+description = "Windjammer: a high-level language that compiles to Rust with inferred ownership. Runs instantly in an interpreter; also targets Go, JavaScript and WebAssembly."
 repository = "https://github.com/jeffreyfriedman/windjammer"
 homepage = "https://github.com/jeffreyfriedman/windjammer"
-documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GUIDE.md"
-keywords = ["compiler", "transpiler", "rust", "go", "language"]
-categories = ["development-tools", "compilers"]
+documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/index.md"
+keywords = ["compiler", "transpiler", "language", "ownership", "interpreter"]
+categories = ["compilers", "development-tools"]
 readme = "README.md"
 rust-version.workspace = true
 autobins = false
@@ -35,6 +35,9 @@ include = [
     "std/**/*",
     "stdlib_meta/**/*",
     "agent_index/**/*",
+    "templates/**/*",
+    "crates/windjammer-runtime/Cargo.toml",
+    "crates/windjammer-runtime/src/**/*",
     "build_support/**/*",
     "Cargo.toml",
     "Cargo.lock",
@@ -56,6 +59,12 @@ required-features = ["cli"]
 [[bin]]
 name = "wj-lint"
 path = "src/bin/wj-lint.rs"
+
+# Documentation generator/verifier (docs/CONTRIBUTING-docs.md); sources in tools/docs_truth/.
+[[bin]]
+name = "wj-docs"
+path = "src/bin/wj-docs.rs"
+required-features = ["cli"]
 
 [[bin]]
 name = "windjammer"
@@ -131,6 +140,27 @@ path = "tests/all.rs"
 [[test]]
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
+
+# Docs truth also runs standalone: cargo test --release --test docs_truth
+[[test]]
+name = "docs_truth"
+path = "tests/docs_truth_test.rs"
+required-features = ["cli"]
+
+# Every example under examples/ is run or checked (examples/EXAMPLES.toml): cargo test --release --test examples_gate
+[[test]]
+name = "examples_gate"
+path = "tests/examples_gate_test.rs"
+required-features = ["cli"]
+
+# Standalone runs of the hygiene gates (also part of `all`): cargo test --release --test interpreter_features --test parser_arena_soundness
+[[test]]
+name = "interpreter_features"
+path = "tests/interpreter_features_test.rs"
+
+[[test]]
+name = "parser_arena_soundness"
+path = "tests/parser_arena_soundness_test.rs"
 
 [[bench]]
 name = "string_optimization_bench"

@@ -495,6 +495,7 @@ pub fn stmt_while<'ast>(
     Statement::While {
         condition,
         body,
+        label: None,
         location: None,
     }
 }
@@ -503,18 +504,26 @@ pub fn stmt_while<'ast>(
 pub fn stmt_loop<'ast>(body: Vec<&'ast Statement<'ast>>) -> Statement<'ast> {
     Statement::Loop {
         body,
+        label: None,
         location: None,
     }
 }
 
 /// Build break statement
 pub fn stmt_break<'ast>() -> Statement<'ast> {
-    Statement::Break { location: None }
+    Statement::Break {
+        label: None,
+        value: None,
+        location: None,
+    }
 }
 
 /// Build continue statement
 pub fn stmt_continue<'ast>() -> Statement<'ast> {
-    Statement::Continue { location: None }
+    Statement::Continue {
+        label: None,
+        location: None,
+    }
 }
 
 /// Build for loop statement
@@ -527,6 +536,7 @@ pub fn stmt_for<'ast>(
         pattern,
         iterable,
         body,
+        label: None,
         location: None,
     }
 }

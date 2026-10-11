@@ -1,0 +1,50 @@
+use std::fs
+
+fn encode(s: string) -> string {
+    let chars: Vec<char> = s.chars().collect()
+    let mut out = ""
+    let mut i: usize = 0
+    while i < chars.len() {
+        let mut j = i
+        while j < chars.len() && chars[j] == chars[i] {
+            j += 1
+        }
+        out = out + "${j - i}" + chars[i].to_string()
+        i = j
+    }
+    out
+}
+
+fn decode(s: string) -> string {
+    let mut out = ""
+    let mut count: i64 = 0
+    for c in s.chars() {
+        if c >= '0' && c <= '9' {
+            count = count * 10 + ((c as i64) - 48)
+        } else {
+            let mut k: i64 = 0
+            while k < count {
+                out = out + c.to_string()
+                k += 1
+            }
+            count = 0
+        }
+    }
+    out
+}
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let rest = if line.len() > 2 { sub(line.to_string(), 2, line.len()) } else { "" }
+        if line.starts_with("E") {
+            println(encode(rest))
+        } else {
+            println(decode(rest))
+        }
+    }
+}

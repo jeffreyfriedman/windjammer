@@ -131,14 +131,16 @@ pub enum Token {
     Bang,       // ! (for macro invocations)
 
     // Special
-    /// Text the lexer could not tokenize (unexpected character, malformed or out-of-range
-    /// number). Never panics: the parser reports it at its location.
-    Unknown(String),
     Eof,
     Newline,
 
     // Documentation
     DocComment(String), // /// doc comment content
+
+    /// Lexical error (unexpected character, malformed literal). The lexer never panics: it emits
+    /// this token (carrying the diagnostic text) and keeps going; the parser reports every one
+    /// with line and column before parsing (`Parser::lexical_errors`).
+    Invalid(String),
 }
 
 impl fmt::Display for Token {
@@ -148,6 +150,7 @@ impl fmt::Display for Token {
             Token::IntLiteral(n) => write!(f, "Int({})", n),
             Token::IntLiteralSuffixed(n, ref s) => write!(f, "Int({}{})", n, s),
             Token::StringLiteral(s) => write!(f, "String(\"{}\")", s),
+            Token::Invalid(m) => write!(f, "invalid token ({})", m),
             _ => write!(f, "{:?}", self),
         }
     }
@@ -174,8 +177,8 @@ impl std::hash::Hash for Token {
             Token::BoolLiteral(b) => b.hash(state),
             Token::Ident(s) => s.hash(state),
             Token::DocComment(s) => s.hash(state),
+            Token::Invalid(s) => s.hash(state),
             Token::Decorator(s) => s.hash(state),
-            Token::Unknown(s) => s.hash(state),
             _ => {} // Keywords and operators have no data
         }
     }

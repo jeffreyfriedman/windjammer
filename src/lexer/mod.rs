@@ -1,4 +1,5 @@
 mod identifier_lexing;
+pub mod keywords;
 mod number_lexing;
 mod string_lexing;
 mod token_types;
@@ -58,15 +59,6 @@ impl Lexer {
 
         self.byte_pos += self.current_char.map_or(0, char::len_utf8);
         self.position += 1;
-        self.current_char = self.input.get(self.position).copied();
-    }
-
-    /// Step back over `n` ASCII, non-newline characters (number-suffix backtracking). Keeps
-    /// line/column/byte bookkeeping in sync with `position`.
-    pub(in crate::lexer) fn rewind_ascii(&mut self, n: usize) {
-        self.position -= n;
-        self.column -= n;
-        self.byte_pos -= n;
         self.current_char = self.input.get(self.position).copied();
     }
 
@@ -430,11 +422,22 @@ impl Lexer {
             }
             Some(ch) => {
                 self.advance();
-                Token::Unknown(ch.to_string())
+                Token::Invalid(Self::unexpected_char_message(ch))
             }
         };
 
         token
+    }
+
+    /// Diagnostic text for a character that starts no token. `#` gets a fix suggestion: ADR-0014
+    /// surface syntax spells attributes as decorators (`@derive(Clone)`), not `#[derive(Clone)]`.
+    pub fn unexpected_char_message(ch: char) -> String {
+        match ch {
+            '#' => "unexpected character '#': Windjammer has no `#[...]` attributes; use a decorator, e.g. `@derive(Clone)` instead of `#[derive(Clone)]`, `@test` instead of `#[test]`".to_string(),
+            '$' => "unexpected character '$': `${...}` is only valid inside a string literal".to_string(),
+            '`' => "unexpected character '`': use \"...\" for strings".to_string(),
+            _ => format!("unexpected character {:?}", ch),
+        }
     }
 
     /// `|>` or `|>?` (the cursor is on the `|`).

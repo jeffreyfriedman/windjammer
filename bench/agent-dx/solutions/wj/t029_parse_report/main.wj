@@ -1,0 +1,54 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut ok = 0
+    let mut invalid = 0
+    let mut overflow = 0
+    let mut empty = 0
+    for line in text.lines() {
+        if line.len() == 0 {
+            println("error empty")
+            empty += 1
+            continue
+        }
+        let chars: Vec<char> = line.chars().collect()
+        let mut start: usize = 0
+        if chars[0] == '+' || chars[0] == '-' {
+            start = 1
+        }
+        let mut valid = chars.len() > start
+        let mut i = start
+        while i < chars.len() {
+            if chars[i] < '0' || chars[i] > '9' {
+                valid = false
+            }
+            i += 1
+        }
+        if !valid {
+            println("error invalid ${line}")
+            invalid += 1
+            continue
+        }
+        // accumulate in i128-free manner: stop once the magnitude is clearly too large
+        let mut mag: i64 = 0
+        let mut big = false
+        let mut j = start
+        while j < chars.len() {
+            mag = mag * 10 + ((chars[j] as i64) - 48)
+            if mag > 4000000000 { big = true }
+            if big { mag = 4000000000 }
+            j += 1
+        }
+        let neg = chars[0] == '-'
+        let value = if neg { 0 - mag } else { mag }
+        if big || value < -2147483648 || value > 2147483647 {
+            println("error overflow ${line}")
+            overflow += 1
+        } else {
+            println("ok ${value}")
+            ok += 1
+        }
+    }
+    println("summary ok=${ok} invalid=${invalid} overflow=${overflow} empty=${empty}")
+}

@@ -1,4 +1,11 @@
+---
+status: proposal
+---
 # Export Target System - Design Document
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
+> Background note (2026-10-11): Design proposal. Only the `@export` decorator's WASM-only filtering exists (`src/decorator_registry.rs`); the layered target detection below is not implemented as described. See [ADR-0007](adr/0007-target-tiers-conformance.md).
+
 
 ## Problem
 

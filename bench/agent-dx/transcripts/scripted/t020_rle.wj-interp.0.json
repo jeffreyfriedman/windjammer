@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "use std::fs\n\nfn encode(s: string) -> string {\n    let chars: Vec<char> = s.chars().collect()\n    let mut out = \"\"\n    let mut i: usize = 0\n    while i < chars.len() {\n        let mut j = i\n        while j < chars.len() && chars[j] == chars[i] {\n            j += 1\n        }\n        out = out + \"${j - i}\" + chars[i].to_string()\n        i = j\n    }\n    out\n}\n\nfn decode(s: string) -> string {\n    let mut out = \"\"\n    let mut count: i64 = 0\n    for c in s.chars() {\n        if c >= '0' && c <= '9' {\n            count = count * 10 + ((c as i64) - 48)\n        } else {\n            let mut k: i64 = 0\n            while k < count {\n                out = out + c.to_string()\n                k += 1\n            }\n            count = 0\n        }\n    }\n    out\n}\n\nfn sub(s: string, a: usize, b: usize) -> string {\n    s.chars().skip(a).take(b - a).collect::<string>()\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    for line in text.lines() {\n        let rest = if line.len() > 2 { sub(line.to_string(), 2, line.len()) } else { \"\" }\n        if line.starts_with(\"E\") {\n            println(encode(rest))\n        } else {\n            println(decode(rest))\n        }\n    }\n}\n",
+   "usage": null,
+   "wall_seconds": 0.32
+  }
+ ],
+ "lang": "wj-interp",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.32
+ },
+ "recorded_at": "2026-10-11T15:17:54",
+ "schema": 1,
+ "task": "t020_rle",
+ "trial": 0
+}

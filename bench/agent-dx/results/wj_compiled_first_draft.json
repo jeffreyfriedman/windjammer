@@ -1,0 +1,1657 @@
+{
+ "note": "first draft: natural Windjammer solutions, wj built from scrub-compiler tree; before compiler-driven rewrites",
+ "toolchains": {
+  "wj-interp": {
+   "available": true,
+   "version": "wj 0.50.0",
+   "reason": ""
+  },
+  "wj": {
+   "available": true,
+   "version": "wj 0.50.0 + cargo",
+   "reason": ""
+  },
+  "rust": {
+   "available": true,
+   "version": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+   "reason": ""
+  },
+  "go": {
+   "available": true,
+   "version": "go version go1.26.1 darwin/arm64",
+   "reason": ""
+  },
+  "python": {
+   "available": true,
+   "version": "Python 3.13.5",
+   "reason": ""
+  },
+  "ts": {
+   "available": true,
+   "version": "node v24.17.0; typecheck via deno",
+   "reason": ""
+  }
+ },
+ "results": [
+  {
+   "lang": "wj",
+   "task": "t001_gcd_lcm",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 112.605,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 120.93
+  },
+  {
+   "lang": "wj",
+   "task": "t002_fizzbuzz_custom",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 74.273,
+    "raw": ""
+   },
+   "total": 37,
+   "passed": 37,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 81.29
+  },
+  {
+   "lang": "wj",
+   "task": "t003_prime_counts",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 52.35,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 58.39
+  },
+  {
+   "lang": "wj",
+   "task": "t004_collatz",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 62.513,
+    "raw": ""
+   },
+   "total": 36,
+   "passed": 36,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 68.71
+  },
+  {
+   "lang": "wj",
+   "task": "t005_roman",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 50.395,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 55.11
+  },
+  {
+   "lang": "wj",
+   "task": "t006_base_convert",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 55.483,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 60.63
+  },
+  {
+   "lang": "wj",
+   "task": "t007_digit_stats",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 35.75,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 39.08
+  },
+  {
+   "lang": "wj",
+   "task": "t008_fib_mod",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 48.939,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 53.63
+  },
+  {
+   "lang": "wj",
+   "task": "t009_rpn_eval",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0277",
+      "message": "can't compare `str` with `&str`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "can't compare `str` with `&str`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "can't compare `str` with `&str`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "can't compare `str` with `&str`",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 68.575,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 4 previous errors; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 68.58
+  },
+  {
+   "lang": "wj",
+   "task": "t010_ring_buffer",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 60.258,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 60.26
+  },
+  {
+   "lang": "wj",
+   "task": "t011_lru_cache",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 65.327,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 65.34
+  },
+  {
+   "lang": "wj",
+   "task": "t012_min_heap",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 70.167,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 75.55
+  },
+  {
+   "lang": "wj",
+   "task": "t013_bst",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0107",
+      "message": "method takes 0 generic arguments but 1 generic argument was supplied",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0107",
+      "message": "method takes 0 generic arguments but 1 generic argument was supplied",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0107",
+      "message": "method takes 0 generic arguments but 1 generic argument was supplied",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0596",
+      "message": "cannot borrow `self.keys` as mutable, as `self` is not declared as mutable",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0382",
+      "message": "borrow of moved value: `self`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0382",
+      "message": "borrow of moved value: `self`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0382",
+      "message": "borrow of moved value: `self`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0507",
+      "message": "cannot move out of `*self` which is behind a mutable reference",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 49.703,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 8 previous errors; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 49.79
+  },
+  {
+   "lang": "wj",
+   "task": "t014_union_find",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 41.058,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 41.09
+  },
+  {
+   "lang": "wj",
+   "task": "t015_linked_list",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "can't compare `usize` with `i64`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 47.696,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 47.7
+  },
+  {
+   "lang": "wj",
+   "task": "t016_matrix_mult",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 50.526,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 54.8
+  },
+  {
+   "lang": "wj",
+   "task": "t017_interval_merge",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 35.305,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 35.31
+  },
+  {
+   "lang": "wj",
+   "task": "t018_word_freq",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 26.275,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 1 warning emitted\n"
+   },
+   "total": 36,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 26.29
+  },
+  {
+   "lang": "wj",
+   "task": "t019_caesar",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "the type `[std::string::String]` cannot be indexed by `std::ops::Range<i32>`",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 47.078,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 2 previous errors; 1 warning emitted\n"
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 47.09
+  },
+  {
+   "lang": "wj",
+   "task": "t020_rle",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "the type `str` cannot be indexed by `std::ops::Range<i32>`",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 52.026,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 2 previous errors; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 52.03
+  },
+  {
+   "lang": "wj",
+   "task": "t021_anagram_groups",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 56.807,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 62.07
+  },
+  {
+   "lang": "wj",
+   "task": "t022_csv_parse",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 93.176,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 99.44
+  },
+  {
+   "lang": "wj",
+   "task": "t023_expr_eval",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 102.133,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 107.52
+  },
+  {
+   "lang": "wj",
+   "task": "t024_bracket_match",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 101.633,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 107.28
+  },
+  {
+   "lang": "wj",
+   "task": "t025_template_render",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 62.809,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 2 previous errors; 1 warning emitted\n"
+   },
+   "total": 36,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 62.84
+  },
+  {
+   "lang": "wj",
+   "task": "t026_palindromes",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 44.821,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 47.63
+  },
+  {
+   "lang": "wj",
+   "task": "t027_ini_parser",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0277",
+      "message": "can't compare `str` with `&str`",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 72.573,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 72.6
+  },
+  {
+   "lang": "wj",
+   "task": "t028_safe_div_chain",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 153.731,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 160.38
+  },
+  {
+   "lang": "wj",
+   "task": "t029_parse_report",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 83.313,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 87.39
+  },
+  {
+   "lang": "wj",
+   "task": "t030_bank_ledger",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0596",
+      "message": "cannot borrow `*self` as mutable, as it is behind a `&` reference",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0596",
+      "message": "cannot borrow `*self` as mutable, as it is behind a `&` reference",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 72.307,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 3 previous errors; 1 warning emitted\n"
+   },
+   "total": 33,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 72.33
+  },
+  {
+   "lang": "wj",
+   "task": "t031_config_validate",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 448.774,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 4 previous errors; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 448.78
+  },
+  {
+   "lang": "wj",
+   "task": "t032_checked_arith",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 23.162,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 8 previous errors; 1 warning emitted\n"
+   },
+   "total": 33,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 23.17
+  },
+  {
+   "lang": "wj",
+   "task": "t033_org_chart",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 23.538,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 2 previous errors; 1 warning emitted\n"
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 23.55
+  },
+  {
+   "lang": "wj",
+   "task": "t034_shapes_trait",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 51.351,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 56.5
+  },
+  {
+   "lang": "wj",
+   "task": "t035_generic_minmax_stack",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 64.285,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 72.45
+  },
+  {
+   "lang": "wj",
+   "task": "t036_multikey_sort",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 43.868,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 43.88
+  },
+  {
+   "lang": "wj",
+   "task": "t037_animal_traits",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 67.113,
+    "raw": ""
+   },
+   "total": 35,
+   "passed": 35,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 72.13
+  },
+  {
+   "lang": "wj",
+   "task": "t038_vec2_ops",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 61.665,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 66.99
+  },
+  {
+   "lang": "wj",
+   "task": "t039_custom_iterators",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0053",
+      "message": "method `next` has an incompatible type for trait",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0594",
+      "message": "cannot assign to `self.index`, which is behind a `&` reference",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0594",
+      "message": "cannot assign to `self.a`, which is behind a `&` reference",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0594",
+      "message": "cannot assign to `self.b`, which is behind a `&` reference",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0594",
+      "message": "cannot assign to `self.a`, which is behind a `&` reference",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 48.601,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 5 previous errors; 1 warning emitted\n"
+   },
+   "total": 33,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 48.79
+  },
+  {
+   "lang": "wj",
+   "task": "t040_memoizer",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 46.694,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 51.6
+  },
+  {
+   "lang": "wj",
+   "task": "t041_expr_tree",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 41.025,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 46.26
+  },
+  {
+   "lang": "wj",
+   "task": "t042_parallel_sum",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `clone` found for struct `JoinHandle<T>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 36.71,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\n"
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 36.76
+  },
+  {
+   "lang": "wj",
+   "task": "t043_channel_pipeline",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0614",
+      "message": "type `i64` cannot be dereferenced",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0614",
+      "message": "type `i64` cannot be dereferenced",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0614",
+      "message": "type `i64` cannot be dereferenced",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 43.98,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 4 previous errors; 2 warnings emitted\n"
+   },
+   "total": 38,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 43.99
+  },
+  {
+   "lang": "wj",
+   "task": "t044_shared_histogram",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `clone` found for struct `JoinHandle<T>` in the current scope",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 40.091,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 3 previous errors; 2 warnings emitted\n"
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 40.12
+  },
+  {
+   "lang": "wj",
+   "task": "t045_parallel_divisors",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `clone` found for struct `JoinHandle<T>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 39.768,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 39.77
+  },
+  {
+   "lang": "wj",
+   "task": "t046_producer_consumer",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0425",
+      "message": "cannot find type `JoinHandle` in this scope",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0599",
+      "message": "no method named `clone` found for struct `JoinHandle<T>` in the current scope",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0599",
+      "message": "no method named `clone` found for struct `JoinHandle<T>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 68.05,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 4 previous errors; 2 warnings emitted\n"
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 68.06
+  },
+  {
+   "lang": "wj",
+   "task": "t047_task_scheduler",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0277",
+      "message": "the type `[i64]` cannot be indexed by `std::ops::Range<i64>`",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 89.968,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 9 previous errors; 1 warning emitted\n"
+   },
+   "total": 36,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 90.0
+  },
+  {
+   "lang": "wj",
+   "task": "t048_wc_clone",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `collect` found for struct `Vec<std::string::String>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 117.405,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\n"
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 117.48
+  },
+  {
+   "lang": "wj",
+   "task": "t049_grep_clone",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `collect` found for struct `Vec<std::string::String>` in the current scope",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 110.034,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 2 previous errors; 2 warnings emitted\n"
+   },
+   "total": 41,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 110.1
+  },
+  {
+   "lang": "wj",
+   "task": "t050_cat_number",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `collect` found for struct `Vec<std::string::String>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 66.936,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\n"
+   },
+   "total": 39,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 67.03
+  },
+  {
+   "lang": "wj",
+   "task": "t051_file_transform",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `collect` found for struct `Vec<std::string::String>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 50.43,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 3 warnings emitted\n"
+   },
+   "total": 42,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 50.48
+  },
+  {
+   "lang": "wj",
+   "task": "t052_csv_columns",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `collect` found for struct `Vec<std::string::String>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 34.093,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 2 warnings emitted\n"
+   },
+   "total": 46,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 34.11
+  },
+  {
+   "lang": "wj",
+   "task": "t053_cli_flags",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0599",
+      "message": "no method named `collect` found for struct `Vec<std::string::String>` in the current scope",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 90.492,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 46,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 90.54
+  },
+  {
+   "lang": "wj",
+   "task": "t054_dir_tree",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0277",
+      "message": "can't compare `str` with `&str`",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 117.178,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 34,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 117.28
+  },
+  {
+   "lang": "wj",
+   "task": "t055_log_summary",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     },
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 108.14,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 10 previous errors; 1 warning emitted\n"
+   },
+   "total": 32,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 108.23
+  },
+  {
+   "lang": "wj",
+   "task": "t056_todo_manager",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "`match` arms have incompatible types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 73.475,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 33,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 73.49
+  },
+  {
+   "lang": "wj",
+   "task": "t057_inventory",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 64.725,
+    "raw": ""
+   },
+   "total": 33,
+   "passed": 33,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 67.58
+  },
+  {
+   "lang": "wj",
+   "task": "t058_vending_machine",
+   "hidden": true,
+   "build": {
+    "ok": true,
+    "diagnostics": [],
+    "seconds": 45.099,
+    "raw": ""
+   },
+   "total": 34,
+   "passed": 34,
+   "failures": [],
+   "categories": [],
+   "status": "pass",
+   "seconds": 52.73
+  },
+  {
+   "lang": "wj",
+   "task": "t059_game_of_life",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 35.188,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 37,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 35.19
+  },
+  {
+   "lang": "wj",
+   "task": "t060_kv_transactions",
+   "hidden": true,
+   "build": {
+    "ok": false,
+    "diagnostics": [
+     {
+      "code": "E0308",
+      "message": "mismatched types",
+      "category": "toolchain-bug"
+     }
+    ],
+    "seconds": 47.81,
+    "raw": "error: could not compile `windjammer` (bin \"windjammer\") due to 1 previous error; 1 warning emitted\n"
+   },
+   "total": 35,
+   "passed": 0,
+   "failures": [],
+   "categories": [
+    "toolchain-bug"
+   ],
+   "status": "build_error",
+   "seconds": 47.84
+  }
+ ]
+}

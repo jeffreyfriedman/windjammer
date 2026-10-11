@@ -1,0 +1,58 @@
+use std::fs
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut toks: Vec<i64> = Vec::new()
+    for w in text.split_whitespace() {
+        toks.push(w.parse::<i64>().unwrap_or(0))
+    }
+    let mut pos: usize = 0
+    let cases = toks[pos]
+    pos += 1
+    let mut c: i64 = 0
+    while c < cases {
+        let r1 = toks[pos] as usize
+        let c1 = toks[pos + 1] as usize
+        pos += 2
+        let mut a: Vec<i64> = Vec::new()
+        let mut i: usize = 0
+        while i < r1 * c1 {
+            a.push(toks[pos + i])
+            i += 1
+        }
+        pos += r1 * c1
+        let r2 = toks[pos] as usize
+        let c2 = toks[pos + 1] as usize
+        pos += 2
+        let mut b: Vec<i64> = Vec::new()
+        let mut j: usize = 0
+        while j < r2 * c2 {
+            b.push(toks[pos + j])
+            j += 1
+        }
+        pos += r2 * c2
+        if c1 != r2 {
+            println("dimension mismatch")
+        } else {
+            let mut r: usize = 0
+            while r < r1 {
+                let mut row: Vec<string> = Vec::new()
+                let mut col: usize = 0
+                while col < c2 {
+                    let mut s: i64 = 0
+                    let mut k: usize = 0
+                    while k < c1 {
+                        s += a[r * c1 + k] * b[k * c2 + col]
+                        k += 1
+                    }
+                    row.push(s.to_string())
+                    col += 1
+                }
+                println(row.join(" "))
+                r += 1
+            }
+        }
+        println("---")
+        c += 1
+    }
+}

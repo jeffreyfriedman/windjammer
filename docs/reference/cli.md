@@ -1,0 +1,391 @@
+<!-- GENERATED FILE - DO NOT EDIT. Generator: `cli` (scripts/docs_gen.sh, tools/docs_truth/). Checked by `cargo test --test all docs_truth`. -->
+
+# `wj` command-line reference
+
+Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `wj new` | Create a new Windjammer project |
+| `wj build` | Build a Windjammer project |
+| `wj run` | Compile and run a Windjammer file |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj test` | Run tests |
+| `wj fmt` | Format Windjammer code |
+| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
+| `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
+| `wj check` | Type check without building |
+| `wj add` | Add a dependency to wj.toml |
+| `wj remove` | Remove a dependency from wj.toml |
+| `wj update` | Update Windjammer to the latest version |
+| `wj stats` | Show error statistics |
+| `wj errors` | Interactive error navigator (TUI) |
+| `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
+| `wj explain` | Explain an error code |
+| `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
+| `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
+| `wj validate-wjsl` | Validate WJSL shader files (transpile to WGSL and check for errors) |
+| `wj clean` | Clean build artifacts and stale temp files |
+| `wj cache` | Manage the shared Cargo target cache (outside application repos) |
+| `wj cache path` | Print the shared (or --verify) Cargo target directory |
+| `wj cache status` | Show cache sizes and free disk |
+| `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) |
+| `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations |
+| `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH |
+
+## `wj new`
+
+Create a new Windjammer project
+
+```text
+Usage: wj new [OPTIONS] <NAME>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<NAME>` | NAME |  | Project name |
+| `-t`, `--template` | TEMPLATE | cli | Project template (cli, web, lib, wasm) |
+
+## `wj build`
+
+Build a Windjammer project
+
+```text
+Usage: wj build [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | FILE |  | Path to .wj file or directory |
+| `-o`, `--output` | DIR |  | Output directory (default: ./build) |
+| `-r`, `--release` | RELEASE |  | Build in release mode |
+| `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
+| `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
+| `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
+| `--minify` | MINIFY |  | Minify JavaScript output (JS target only) |
+| `--tree-shake` | TREE_SHAKE |  | Enable tree shaking (dead code elimination) |
+| `--source-maps` | SOURCE_MAPS |  | Generate source maps |
+| `--polyfills` | POLYFILLS |  | Include polyfills for older browsers (JS target only) |
+| `--v8-optimize` | V8_OPTIMIZE |  | Apply V8 optimizations (JS target only) |
+| `--check` | CHECK |  | Run cargo build after transpilation and show errors |
+| `--raw-errors` | RAW_ERRORS |  | Show raw Rust errors instead of translated Windjammer errors |
+| `--fix` | FIX |  | Automatically apply fixes for fixable errors |
+| `-v`, `--verbose` | VERBOSE |  | Show verbose error output (includes all notes and suggestions) |
+| `-q`, `--quiet` | QUIET |  | Show only error count (suppress detailed output) |
+| `--filter-file` | PATH |  | Filter errors by file path |
+| `--filter-type` | TYPE |  | Filter errors by type (error, warning) |
+| `--library` | LIBRARY |  | Library mode: exclude test main() functions from output |
+| `--module-file` | MODULE_FILE |  | Auto-generate mod.rs with pub mod declarations and re-exports |
+| `--no-cargo` | NO_CARGO |  | Skip cargo build after transpilation (transpile only) |
+| `--no-lint` | NO_LINT |  | Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.) |
+| `--no-generate-cargo-toml` | NO_GENERATE_CARGO_TOML |  | Skip Cargo.toml generation (use project-maintained manifest) |
+| `--metadata` | NAME=PATH |  | External crate metadata for cross-crate type inference (NAME=PATH, repeatable) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+| `--ir-shadow-validate` | IR_SHADOW_VALIDATE |  | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) |
+
+## `wj run`
+
+Compile and run a Windjammer file
+
+```text
+Usage: wj run [OPTIONS] <FILE> [ARGS]...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | FILE |  | Path to .wj file |
+| `<ARGS>` | ARGS |  | Arguments to pass to the program |
+| `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
+| `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
+| `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
+| `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
+
+## `wj repl`
+
+Start the Windjammerscript REPL (interactive interpreter)
+
+```text
+Usage: wj repl
+```
+
+## `wj test`
+
+Run tests
+
+```text
+Usage: wj test [OPTIONS] [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Directory or file containing tests (defaults to current directory) |
+| `-f`, `--filter` | FILTER |  | Run only tests matching this pattern |
+| `--nocapture` | NOCAPTURE |  | Show output from passing tests |
+| `--parallel` | PARALLEL | true | Run tests in parallel (default: true) |
+| `--json` | JSON |  | Output results as JSON for tooling |
+| `--library` | LIBRARY | true | Compile the library under test (default when `src/` has `.wj` files) |
+| `--module-file` | MODULE_FILE |  | Generate scoped `mod.rs` layout after transpile (same as `wj build --module-file`) |
+| `-o`, `--output` | DIR |  | Output directory for library compile (default: temp `{lib}/`) |
+| `--use-build-dir` | DIR |  | Use a pre-built outbound tree instead of recompiling the library |
+| `--use-project-cargo` | USE_PROJECT_CARGO |  | Merge `[dependencies]` from project root `Cargo.toml` into the test library crate |
+| `--no-runtime-copy` | NO_RUNTIME_COPY |  | Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp). Also the default when `wj.toml` declares a path dep on `windjammer-runtime` |
+| `--copy-runtime` | COPY_RUNTIME |  | Force copying windjammer-runtime into the temp tree (overrides path-dep inference) |
+| `--runtime-path` | PATH |  | Explicit path to windjammer-runtime (with `--no-runtime-copy`) |
+| `--no-generate-cargo-toml` | NO_GENERATE_CARGO_TOML |  | Skip auto-generated Cargo.toml for library compile |
+| `--list` | LIST |  | List discovered test files and functions, then exit without compiling |
+| `--allow-empty` | ALLOW_EMPTY |  | Exit 0 when no tests are found (default: finding none is an error) |
+| `--interpret` | INTERPRET |  | Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc |
+
+## `wj fmt`
+
+Format Windjammer code
+
+```text
+Usage: wj fmt [OPTIONS] [PATH]...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--check` | CHECK |  | Check formatting without applying changes (non-zero exit if changes are needed) |
+| `--rust` | RUST |  | Format generated Rust crates with `cargo fmt --all` instead of .wj files |
+| `<PATHS>` | PATH |  | Files or directories to format (default: current directory); `-` reads stdin |
+
+## `wj fix`
+
+Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms
+
+```text
+Usage: wj fix [OPTIONS] <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | File or directory to rewrite in place |
+| `--check` | CHECK |  | Do not write; exit non-zero if any file would change |
+| `--docs` | DOCS |  | Also migrate ```windjammer / ```wj code fences in .md files |
+
+## `wj lint`
+
+Run Rust leakage linter on .wj files (W0001-W0004)
+
+```text
+Usage: wj lint [OPTIONS] <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | File or directory to lint |
+| `--strict` | STRICT |  | Fail on warnings (for CI) |
+
+## `wj check`
+
+Type check without building
+
+```text
+Usage: wj check [OPTIONS] [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Path to .wj file or directory (default: current directory) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+
+## `wj add`
+
+Add a dependency to wj.toml
+
+```text
+Usage: wj add [OPTIONS] <PACKAGE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PACKAGE>` | PACKAGE |  | Package name |
+| `-f`, `--features` | FEATURES |  | Comma-separated list of features |
+| `-p`, `--path` | PATH |  | Local path dependency |
+
+## `wj remove`
+
+Remove a dependency from wj.toml
+
+```text
+Usage: wj remove <PACKAGE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PACKAGE>` | PACKAGE |  | Package name |
+
+## `wj update`
+
+Update Windjammer to the latest version
+
+```text
+Usage: wj update [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--check` | CHECK |  | Check for updates without installing |
+| `--force` | FORCE |  | Force reinstall even if already up to date |
+
+## `wj stats`
+
+Show error statistics
+
+```text
+Usage: wj stats [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--clear` | CLEAR |  | Clear statistics |
+| `-v`, `--verbose` | VERBOSE |  | Show detailed statistics |
+
+## `wj errors`
+
+Interactive error navigator (TUI)
+
+```text
+Usage: wj errors [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | File to check |
+| `-o`, `--output` | OUTPUT | ./build | Output directory |
+
+## `wj docs`
+
+Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation
+
+```text
+Usage: wj docs [OPTIONS] [QUERY]...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<QUERY>` | QUERY |  | Search terms, e.g. `wj docs hashmap entry` (all terms must match) |
+| `--limit` | LIMIT | 8 | Maximum number of search results |
+| `--json` | JSON |  | Print search results as JSON |
+| `-o`, `--output` | OUTPUT | ./docs/errors | Output directory for generated docs |
+| `-f`, `--format` | FORMAT | html | Format (html, markdown, json) |
+
+## `wj explain`
+
+Explain an error code
+
+```text
+Usage: wj explain <CODE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CODE>` | CODE |  | Error code to explain (e.g., WJ0001, E0425) |
+
+## `wj agent-index`
+
+Generate agent index artifacts for MCP (errors, stdlib, spec JSON)
+
+```text
+Usage: wj agent-index [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | OUTPUT | agent_index | Output directory |
+
+## `wj shader-compile`
+
+Compile .wjsl shader to WGSL (with type checking)
+
+```text
+Usage: wj shader-compile [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<INPUT>` | FILE |  | Path to .wjsl file |
+| `-o`, `--output` | FILE |  | Output path for .wgsl file (default: stdout) |
+
+## `wj validate-wjsl`
+
+Validate WJSL shader files (transpile to WGSL and check for errors)
+
+```text
+Usage: wj validate-wjsl <DIR>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | DIR |  | Path to directory containing .wjsl files |
+
+## `wj clean`
+
+Clean build artifacts and stale temp files
+
+```text
+Usage: wj clean [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--all` | ALL |  | Also clean local target/ directories (deep clean) |
+
+## `wj cache`
+
+Manage the shared Cargo target cache (outside application repos)
+
+```text
+Usage: wj cache <COMMAND>
+```
+
+## `wj cache path`
+
+Print the shared (or --verify) Cargo target directory
+
+```text
+Usage: wj cache path [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--verify` | VERIFY |  | Use the ephemeral verify cache (integration / codegen cargo checks) |
+
+## `wj cache status`
+
+Show cache sizes and free disk
+
+```text
+Usage: wj cache status
+```
+
+## `wj cache prune`
+
+Reclaim space (old incremental; aggressive when disk is low)
+
+```text
+Usage: wj cache prune [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--aggressive` | AGGRESSIVE |  | Also clear debug incremental trees when reclaiming |
+
+## `wj cache setup`
+
+Write env.sh / env.ps1 for bare `cargo` invocations
+
+```text
+Usage: wj cache setup
+```
+
+## `wj self-install`
+
+Install wj and plugins to ~/.wj/bin/ and ensure PATH
+
+```text
+Usage: wj self-install
+```

@@ -127,6 +127,8 @@ pub enum PPat {
     Wild,
     Bind { name: String, mutable: bool },
     Lit(PExpr),
+    /// Range pattern over ints/chars/floats: `lo..=hi`, `lo..hi`, `lo..`, `..=hi`, `..hi`.
+    Range { lo: Option<PExpr>, hi: Option<PExpr>, inclusive: bool },
     Tuple(Vec<PPat>),
     Or(Vec<PPat>),
     /// `Enum::Variant(p0, p1)` / struct-like; fields are (field name, pattern).
@@ -174,6 +176,11 @@ pub enum PStmt {
     Match { scrutinee: PExpr, arms: Vec<PArm> },
     Break,
     Continue,
+    /// `break 'label` / `continue 'label`: target the loop wrapped by `Labeled { label, .. }`.
+    BreakTo(String),
+    ContinueTo(String),
+    /// `'label: loop/while/for` (only emitted when some `BreakTo`/`ContinueTo` targets it).
+    Labeled { label: String, stmt: Box<PStmt> },
     Return(Option<PExpr>),
     Block(Vec<PStmt>),
     Defer(Box<PStmt>),

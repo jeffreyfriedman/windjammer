@@ -101,8 +101,22 @@ pub fn parse_markers(src: &str) -> Result<Vec<Marker>, String> {
     Ok(out)
 }
 
-/// First `:LINE:COL` pair in a message (`t.wj:2:13: error: ...`, or inside a wrapped message).
+/// Position of a located message: a `file:LINE:COL` prefix (`t.wj:2:13: error: ...`, pipe and
+/// interpolation errors) or an `(at line L, column C)` suffix (parser and lexer errors).
 pub fn location_in_message(msg: &str) -> Option<(usize, usize)> {
+    colon_pair(msg).or_else(|| line_column_words(msg))
+}
+
+fn line_column_words(msg: &str) -> Option<(usize, usize)> {
+    let i = msg.find("line ")?;
+    let rest = &msg[i + 5..];
+    let line: usize = rest.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+    let j = rest.find("column ")?;
+    let col: usize = rest[j + 7..].split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+    Some((line, col))
+}
+
+fn colon_pair(msg: &str) -> Option<(usize, usize)> {
     let b = msg.as_bytes();
     let num = |from: usize| -> Option<(usize, usize)> {
         let mut j = from;
@@ -156,8 +170,11 @@ fn collect_inner(file: &str, src: &str) -> Vec<Found> {
     parser.enable_span_log();
     match parser.parse() {
         Err(msg) => {
-            let (line, col) = location_in_message(&msg).unwrap_or((0, 0));
-            out.push(Found { producer: "parser", line, col, len: None, severity: "ERROR".into(), code: "parse".into(), message: msg });
+            // The parser recovers and reports up to 25 errors, one per line.
+            for m in msg.lines().filter(|l| !l.trim().is_empty()) {
+                let (line, col) = location_in_message(m).unwrap_or((0, 0));
+                out.push(Found { producer: "parser", line, col, len: None, severity: "ERROR".into(), code: "parse".into(), message: m.to_string() });
+            }
             return out;
         }
         Ok(program) => {

@@ -59,7 +59,8 @@ x = 1          // ❌ Compile error (correct!)
 
 ### ✅ Windjammer DOES infer ownership/borrowing:
 
-```windjammer
+<!-- ignore: the second half is the generated Rust, not Windjammer -->
+```windjammer,ignore
 // User writes:
 fn process(loader: Loader) { loader.add("x") }
 let mut ldr = Loader::new()
@@ -174,7 +175,8 @@ All tests now validate that the compiler **correctly infers** `&mut` for mutated
 
 If users **truly** need to force owned parameters (rare!), we could add an explicit keyword:
 
-```windjammer
+<!-- ignore: proposal: the `owned` keyword is ADR-0003 (proposed), not accepted -->
+```windjammer,ignore
 fn process(owned loader: Loader) {  // Explicit owned!
     loader.add("x")
 }
