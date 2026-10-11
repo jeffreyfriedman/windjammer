@@ -2,17 +2,12 @@
 #
 # Real, open compiler bugs (each one is a minimal repro of an ownership / integer-width
 # inference gap). Remove a line as soon as its test passes; never add a line for a test that
-# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail.
+# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail (12 after the correctness stream's fixes).
 #
 # Classes: multi-file ownership demotion (call-site vs defining module), String move-vs-clone
 # at last use, enum payload literal width without return-type context, while-counter width.
-bug_dispatch_from_mut_handle_must_not_be_owned_test::dispatch_from_mut_handle_must_not_be_owned
-bug_handle_forward_empty_lits_must_own_test::handle_forward_empty_lits_must_own
-bug_owned_string_param_must_move_into_owned_method_arg_test::owned_string_param_must_move_into_owned_method_arg
-bug_p3791_cross_module_json_move_then_clone_test::p3791_cross_module_json_interp_must_clone_before_later_use
 bug_while_literal_bound_index_must_not_be_i32_test::while_literal_bound_index_must_not_be_i32
 cross_crate_dogfooding_ownership_test::dogfood_lsm_store_apply_patch_asymmetric_coercion
-cross_crate_dogfooding_ownership_test::dogfood_store_has_key_forward_ref_borrows_owned_key
 cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
 integration_backend_conformance_test::test_integration_patterns
 library_multipass_map_key_codegen_test::test_library_multipass_graph_bfs_hashmap_compiles

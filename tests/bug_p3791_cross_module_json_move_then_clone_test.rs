@@ -115,7 +115,9 @@ fn p3791_cross_module_json_interp_must_clone_before_later_use() {
         .find(|l| l.contains("parse_aging_party_line_fields("))
         .unwrap_or("");
     assert!(
-        buckets.contains("json.clone()") || buckets.contains("&json"),
+        buckets.contains("json.clone()")
+            || buckets.contains("json.to_string()")
+            || buckets.contains("&json"),
         "P3.791 RED: moved json into parse_aging_bucket_fields before a later use, buckets `{buckets}` parties `{parties}`:\n{read}"
     );
 }

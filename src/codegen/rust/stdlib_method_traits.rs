@@ -667,8 +667,11 @@ pub fn method_is_map_key_qualified_with_project(
                 for reg in [project_registry, Some(registry)].into_iter().flatten() {
                     if let Some(sig) = lookup_sig(method, Some(base), reg) {
                         if sig.has_self_receiver {
-                            // User/project self-method wins (Owned Key → not map-key; Borrowed → is).
-                            return first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
+                            // User/project self-method wins (Owned Key → not map-key; Borrowed → is),
+                            // but only for the map-key vocabulary (`get`/`remove`/…): an arbitrary
+                            // user method with a borrowed first formal is an ordinary borrow.
+                            return is_map_key_method(method)
+                                && first_arg_ownership(sig) == Some(OwnershipMode::Borrowed);
                         }
                     }
                 }

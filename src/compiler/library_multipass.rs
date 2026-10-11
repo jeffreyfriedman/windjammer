@@ -746,14 +746,13 @@ pub(crate) fn build_library_multipass(
     // INCREMENTAL (Phase 2): Compute dirty files to skip codegen for unchanged sources.
     // Analysis still runs for ALL files (needed for metadata.json convergence),
     // but the expensive codegen + write is skipped for files whose source hasn't changed.
-    let (dirty_indices, skipped_count) =
-        super::cache_management::compute_dirty_files_with_dep_epoch(
-            &sources,
-            &src_base,
-            output,
-            &dep_roots,
-            dep_epoch_snapshot,
-        );
+    let (dirty_indices, skipped_count) = super::cache_management::compute_codegen_files(
+        &sources,
+        &src_base,
+        output,
+        dep_epoch_snapshot,
+        &reanalysis_set,
+    );
     let dirty_set: HashSet<usize> = dirty_indices.into_iter().collect();
     if skipped_count > 0 {
         eprintln!(
