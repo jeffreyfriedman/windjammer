@@ -162,11 +162,19 @@ impl<'e> Lowerer<'e> {
 
     fn let_stmt(&mut self, pattern: &Pattern, mutable: bool, ty: Option<&crate::parser::Type>, value: &Expression, els: Option<&[&Statement]>) -> PResult<Vec<PStmt>> {
         let declared = ty.map(|t| from_ast(t, &self.generics)).map(|t| self.freshen(&t));
-        let init = self.expr(value, declared.as_ref())?;
+        let mut init = self.expr(value, declared.as_ref())?;
         if let Some(d) = &declared {
             self.constrain(d, &init.ty);
         }
-        let ty = declared.unwrap_or_else(|| init.ty.clone());
+        let ty = match declared {
+            Some(d) => d,
+            None => {
+                // `let v = []` / `Vec::new()` / `None`: unknown element types become inference
+                // variables that later uses (`v.push(1)`) bind.
+                init.ty = self.freshen(&init.ty);
+                init.ty.clone()
+            }
+        };
         let init = self.own(init);
         match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => {

@@ -1,0 +1,74 @@
+// Interpolation specs `${x:spec}`: width, alignment, fill, zero pad, precision, `?`, radix.
+// Expected lines are hand-derived from the Rust std::fmt rules (known answers).
+// expect: [    42]
+// expect: [42    ]
+// expect: [  42  ]
+// expect: [000042]
+// expect: [-00007]
+// expect: [***42***]
+// expect: [------42]
+// expect: [3.14]
+// expect: [   3.142]
+// expect: [3.1     ]
+// expect: [00003.14]
+// expect: [   bob]
+// expect: [bob   ]
+// expect: [  bob  ]
+// expect: [bo]
+// expect: ["bob"]
+// expect: [42]
+// expect: [3.14159]
+// expect: [ff]
+// expect: [FF]
+// expect: [11111111]
+// expect: [377]
+// expect: [00101010]
+// expect: [    ff]
+// expect: [(1, "a")]
+// expect: [[1, 2, 3]]
+// expect: [Some(5)]
+// expect: [1.0]
+// expect: ["a\"b"]
+// expect: [true] [x]
+fn main() {
+    let x = 42
+    let neg = -7
+    let f = 3.14159
+    let big = 255
+    let name = "bob"
+    println("[${x:>6}]")
+    println("[${x:<6}]")
+    println("[${x:^6}]")
+    println("[${x:06}]")
+    println("[${neg:06}]")
+    println("[${x:*^8}]")
+    println("[${x:->8}]")
+    println("[${f:.2}]")
+    println("[${f:8.3}]")
+    println("[${f:<8.1}]")
+    println("[${f:08.2}]")
+    println("[${name:>6}]")
+    println("[${name:<6}]")
+    println("[${name:^7}]")
+    println("[${name:.2}]")
+    println("[${name:?}]")
+    println("[${x:?}]")
+    println("[${f:?}]")
+    println("[${big:x}]")
+    println("[${big:X}]")
+    println("[${big:b}]")
+    println("[${big:o}]")
+    println("[${x:08b}]")
+    println("[${big:>6x}]")
+    let t = (1, "a")
+    println("[${t:?}]")
+    let v = [1, 2, 3]
+    println("[${v:?}]")
+    let o = Some(5)
+    println("[${o:?}]")
+    let one: f64 = 1.0
+    println("[${one:?}]")
+    let q = "a\"b"
+    println("[${q:?}]")
+    println("[${true}] [${'x'}]")
+}

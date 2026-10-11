@@ -1,0 +1,32 @@
+// Every intrinsic in one seeded program; stdout checksum only, stderr traffic must not leak to stdout.
+// Reference model: 136_intr_mixed_seeded.ref.py
+fn step(s: i64) -> i64 {
+    (s * 1103515245 + 12345) % 2147483648
+}
+
+fn main() {
+    let mut s: i64 = __SEED__
+    let mut acc: i64 = 0
+    let mut log = []
+    let mut i = 0
+    while i < 200 {
+        s = step(s)
+        let v = s % 1000
+        let kept = debug(v)
+        acc = (acc * 31 + kept) % 1000000007
+        assert(kept >= 0 && kept < 1000, "range ${kept}")
+        assert_eq(kept + 1 - 1, v)
+        assert_ne(kept, -1, "neg")
+        if i % 40 == 0 {
+            stderr.println("tick ${i} acc=${acc}")
+            log.push(acc)
+            let half: f64 = acc as f64
+            let eighth = half / 8.0
+            println("${i:>4} ${acc:08} ${eighth:.3}")
+        }
+        i += 1
+    }
+    println("log ${log.len()} ${log:?}")
+    print("done ")
+    println("${acc:x}")
+}

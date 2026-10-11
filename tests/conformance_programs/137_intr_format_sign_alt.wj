@@ -1,0 +1,12 @@
+// Sign and alternate flags are Rust-only today; Go/JS/TS must reject them at build time
+// (SUPPORT.toml), never print something different.
+// expect: +5 -5
+// expect: 0xff 0b101
+fn main() {
+    let a: i64 = 5
+    let b: i64 = -5
+    println("${a:+} ${b:+}")
+    let h: i64 = 255
+    let c: i64 = 5
+    println("${h:#x} ${c:#b}")
+}

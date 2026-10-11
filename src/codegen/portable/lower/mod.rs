@@ -3,6 +3,7 @@
 mod call;
 mod expr;
 mod fmt;
+mod intrinsics;
 mod items;
 mod pat;
 mod stmt;

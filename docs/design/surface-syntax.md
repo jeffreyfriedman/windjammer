@@ -58,16 +58,39 @@ passed where a fixed-size array parameter is expected stays an array). Annotatin
 Both spellings are lowered by the parser to the same AST node (`Call` of an intrinsic registered
 in `src/intrinsics/mod.rs`), so every later phase sees one thing and backends lower it:
 
-| Intrinsic            | Rust                          | Go                              | JavaScript                |
-|----------------------|-------------------------------|---------------------------------|---------------------------|
-| `println`/`print`    | `println!` / `print!`         | `fmt.Println` / `fmt.Print`     | `console.log` / `process.stdout.write` |
-| `stderr.println`     | `eprintln!`                   | builtin `println` (stderr)      | `console.error`           |
-| `panic`/`todo`/`unreachable` | `panic!`/`todo!`/`unreachable!` | `panic(..)`             | `throw new Error(..)`     |
-| `assert*`            | `assert!`/`assert_eq!`/`assert_ne!` | inline `if .. { panic }`  | inline `throw`            |
-| `debug(x)`           | `dbg!`-style (stderr + value) | `wjDebug(x)` helper             | inline IIFE               |
+| Intrinsic            | Rust                          | Go / JavaScript / TypeScript (portable layer) |
+|----------------------|-------------------------------|-----------------------------------------------|
+| `println`/`print`    | `println!` / `print!`         | `Print` IR node: `wjPrint` / `$print` (buffered stdout) |
+| `stderr.println`/`print` | `eprintln!` / `eprint!`   | `Print { to_stderr }`: `wjEprint` / `$eprint` (flushes stdout first) |
+| `panic`/`todo`/`unreachable` | `panic!`/`todo!`/`unreachable!` | `Panic` node; messages `explicit panic`, `not yet implemented[: msg]`, `internal error: entered unreachable code[: msg]`; exit status 101 |
+| `assert(c, msg)`     | `assert!`                     | `if !c { panic(msg or "assertion failed") }` (message evaluated only on failure) |
+| `assert_eq`/`assert_ne` | `assert_eq!`/`assert_ne!`  | operands bound once; failure prints ``assertion `left == right` failed[: msg]`` plus `left:` / `right:` in `{:?}` form; exit 101 |
+| `debug(x)`           | `dbg!`-style (stderr + value) | `let t = x; stderr.println("[file:line:col] <source of x> = ${t:?}"); t` |
+| `[a, b]`, `[]`, `[x; n]` | `vec![..]`                | `VecLit` / `VecRepeat`; `let v = []` takes its element type from later uses (`v.push(1)`) |
+| `${x:spec}`          | `{:spec}`                     | `FmtSpec`: fill/align/width/`0`/precision, `?`, `x X b o e` |
 
 The interpreter implements the same intrinsics natively. Name matching for intrinsics lives only
-in `src/intrinsics/` (`Intrinsic::from_call_name`, `from_macro_name`); backends ask the registry.
+in `src/intrinsics/` (`Intrinsic::from_call_name`, `from_macro_name`); the Rust backend, the
+interpreter and `portable::lower::intrinsics` all ask the registry. A user function or local with
+an intrinsic's name shadows it on every backend.
+
+### Backend notes (Go / JavaScript / TypeScript)
+
+* One lowering serves all three: `src/codegen/portable/lower/intrinsics.rs` desugars every
+  intrinsic to existing IR (`Print`, `Format`, `Panic`, `If`, `Block`), so the emitters contain no
+  per-intrinsic code and cannot disagree on streams, messages or evaluation order.
+* A lone string literal prints verbatim (`println("{}")` prints `{}`); an interpolated string
+  carries its specs; a literal followed by arguments is the deprecated `{}` template.
+* `debug(x)` prints compact `{:?}` (Rust's `dbg!` uses pretty `{:#?}`), and the label is
+  reconstructed from the AST (identifiers, fields, calls, binary operators; other shapes print
+  `<expression>`). The column is the argument's column.
+* **Explicit errors, never wrong output** (`wj build` fails with `unsupported on this backend`):
+  sign `+` and alternate `#` flags (`${x:+}`, `${x:#x}`), `E`, `x?`, and pretty Debug `${v:#?}` of
+  an aggregate (scalars are fine). Rust supports all of these; the gaps are recorded per backend in
+  `tests/conformance_programs/SUPPORT.toml` (programs 137, 138).
+* Conformance: programs `120`-`138` (`*_intr_*`) check stdout, the exact/partial stderr stream
+  (`// stderr:`, `// stderr-has:`, `// stderr-empty` headers) and exit status on Rust, Go, JS and
+  TypeScript.
 
 ## Migrating: `wj lint` and `wj fix`
 

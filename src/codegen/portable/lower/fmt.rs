@@ -10,7 +10,9 @@ pub(super) enum Raw {
     Hole { selector: Option<String>, spec: FmtSpec },
 }
 
-pub(super) fn parse_spec(s: &str) -> FmtSpec {
+/// Parse the part of a `{:spec}` after the colon. Anything the portable backends cannot render
+/// faithfully (sign `+`, alternate `#` forms, `E`, `x?`) is an error, never silently ignored.
+pub(super) fn parse_spec(s: &str) -> Result<FmtSpec, String> {
     let mut spec = FmtSpec::default();
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
@@ -21,6 +23,12 @@ pub(super) fn parse_spec(s: &str) -> FmtSpec {
     } else if !chars.is_empty() && matches!(chars[0], '<' | '>' | '^') {
         spec.align = Some(chars[0]);
         i = 1;
+    }
+    if matches!(chars.get(i), Some('+' | '-')) {
+        return Err(format!("format flag `{}` in `{{:{s}}}`", chars[i]));
+    }
+    if chars.get(i) == Some(&'#') && chars[i..].iter().collect::<String>() != "#?" {
+        return Err(format!("alternate `#` format in `{{:{s}}}`"));
     }
     if i < chars.len() && chars[i] == '0' {
         spec.zero_pad = true;
@@ -43,14 +51,19 @@ pub(super) fn parse_spec(s: &str) -> FmtSpec {
     }
     let rest: String = chars[i..].iter().collect();
     match rest.as_str() {
-        "?" | "#?" => spec.debug = true,
+        "" => {}
+        "?" => spec.debug = true,
+        "#?" => {
+            spec.debug = true;
+            spec.pretty = true;
+        }
         "x" | "X" | "b" | "o" | "e" => spec.radix = rest.chars().next(),
-        _ => {}
+        other => return Err(format!("format type `{other}` in `{{:{s}}}`")),
     }
-    spec
+    Ok(spec)
 }
 
-pub(super) fn parse_format(fmt: &str) -> Vec<Raw> {
+pub(super) fn parse_format(fmt: &str) -> Result<Vec<Raw>, String> {
     let mut out = Vec::new();
     let mut lit = String::new();
     let chars: Vec<char> = fmt.chars().collect();
@@ -72,7 +85,7 @@ pub(super) fn parse_format(fmt: &str) -> Vec<Raw> {
                     out.push(Raw::Lit(std::mem::take(&mut lit)));
                 }
                 let (sel, spec) = match inner.split_once(':') {
-                    Some((a, b)) => (a.to_string(), parse_spec(b)),
+                    Some((a, b)) => (a.to_string(), parse_spec(b)?),
                     None => (inner.clone(), FmtSpec::default()),
                 };
                 out.push(Raw::Hole { selector: if sel.is_empty() { None } else { Some(sel) }, spec });
@@ -87,7 +100,7 @@ pub(super) fn parse_format(fmt: &str) -> Vec<Raw> {
     if !lit.is_empty() {
         out.push(Raw::Lit(lit));
     }
-    out
+    Ok(out)
 }
 
 impl<'e> Lowerer<'e> {
@@ -95,7 +108,11 @@ impl<'e> Lowerer<'e> {
     pub(super) fn format_pieces(&mut self, fmt: &str, args: &[&Expression]) -> PResult<Vec<FmtPiece>> {
         let mut pieces = Vec::new();
         let mut next = 0;
-        for raw in parse_format(fmt) {
+        let raws = match parse_format(fmt) {
+            Ok(r) => r,
+            Err(e) => return self.err(format!("unsupported {e}")),
+        };
+        for raw in raws {
             match raw {
                 Raw::Lit(s) => pieces.push(FmtPiece::Lit(s)),
                 Raw::Hole { selector, spec } => {
@@ -124,7 +141,7 @@ mod tests {
 
     #[test]
     fn parses_holes_and_escapes() {
-        let raw = parse_format("a{{b}} {} {:?} {:>6.2}");
+        let raw = parse_format("a{{b}} {} {:?} {:>6.2}").unwrap();
         assert_eq!(raw.len(), 6);
         match &raw[3] {
             Raw::Hole { spec, .. } => assert!(spec.debug),
@@ -138,5 +155,16 @@ mod tests {
             }
             _ => panic!(),
         }
+    }
+
+    #[test]
+    fn unsupported_specs_are_errors_not_ignored() {
+        for bad in ["+", "+5", "#x", "#08b", "E", "x?"] {
+            assert!(parse_spec(bad).is_err(), "{bad} must be rejected");
+        }
+        assert!(parse_spec("#?").unwrap().pretty);
+        let s = parse_spec("*^9.2").unwrap();
+        assert_eq!((s.fill, s.align, s.width, s.precision), (Some('*'), Some('^'), Some(9), Some(2)));
+        assert!(parse_spec("08b").unwrap().zero_pad);
     }
 }
