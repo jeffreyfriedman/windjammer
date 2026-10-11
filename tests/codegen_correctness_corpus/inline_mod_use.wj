@@ -1,0 +1,12 @@
+// expect: 8
+// expect: 9
+mod util {
+    pub fn twice(x: int) -> int { x * 2 }
+    pub fn inc(x: int) -> int { x + 1 }
+}
+use util::twice
+use util::inc
+fn main() {
+    println("${twice(4)}")
+    println("${inc(8)}")
+}

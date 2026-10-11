@@ -1060,5 +1060,6 @@ include!("literal_inference.rs");
 include!("get_expr_id.rs");
 include!("binary_op_inference.rs");
 include!("expression_constraints.rs");
+include!("closure_unary_constraints.rs");
 include!("constraint_solving.rs");
 include!("get_int_type.rs");

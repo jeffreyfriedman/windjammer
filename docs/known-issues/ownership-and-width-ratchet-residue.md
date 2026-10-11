@@ -74,3 +74,34 @@ measured with. WP 3 (state into `CompilationSession`) removes the cause.
   rustc clean. Needs the actual 10-formal `audit_canonical_payload` sources to bisect.
 * `loop-var-field-move-reused-collection`: `for item in items { next = item.field; break }` followed by a second
   `for item in items` emits `for item in &items` twice and clones the moved field; no repro.
+
+## 7. Codegen-correctness stream (2026-10-11): fixed, gated, and still open
+
+Gate: `tests/codegen_correctness_test.rs` (also `cargo test --test codegen_correctness`). Hand-written repros with an
+independent `// expect:` oracle live in `tests/codegen_correctness_corpus/`; seeded generated programs per class
+(`gate_*`, `WJ_CODEGEN_GATE_SEEDS=n`) run both `wj run --interpret` and `wj build --no-cargo` + `rustc` and shrink a failing
+program unit by unit. `// interp-gap:` marks a program the interpreter evaluates wrongly; the compiled output must still equal
+the expectation. The verified corpus (`examples/verified`, `// rust: gap`) is the second gate: 13 gap programs now compile
+and match (the header was flipped to `// rust: ok`).
+
+Fixed (each with a corpus program): by-reference closure capture for let-bound closures that never escape
+(`closure_escape.rs`); `fn(..)` formals and returns emitted as `impl Fn`; `let .. else`; `"x" + n.to_string()`; inline `mod` +
+`use` (functions were emitted twice); hand-written `impl PartialEq` vs the inferred derive and `&Self` formals; `impl Trait for
+int`; `map[key]` with a `&str`/`String` key; `map.get(&k)` with an owned `String` local; `get(..).unwrap_or(0)` /
+`unwrap_or(&0)` / `lines().next().unwrap_or("0")`; `cmp(&x)`; open slices `s[a..]`; `*tok == "lit"`; `return if ..` in a unit
+block; integer widths through `${..}` interpolation, closure bodies, `&x`, and `max/min/abs` on integers; `&mut self` for
+`Iterator::next`, `self.helper()?`, and loop variables whose field is mutated (`for i in self.list { i.c.inc() }`);
+`o.ok_or(e)?` / `r?` on a parameter (owned); parameters moved into a spawned closure (owned); `JoinHandle` pushed by move;
+spawn closure tail values; `let mut i: int = 0` with a literal `while` bound; `--library --module-file` writes `mod.rs` for
+directories whose `mod.wj` is their only file; direct adapters on collections (`v.map(..)`, `v.sum()`).
+
+Still open (needs the numeric/ownership convergence, not another local heuristic):
+* unconstrained integer literals default to `i32` (`let v = [1, 2, 3]; v.map(..).collect()` into `Vec<int>` needs the result
+  type to flow back through iterator adapters); `for x in rx { prev = x }` with `let mut prev = 0`.
+* `let c = self.items[i]; c.inc()` clones the element: Windjammer's value semantics versus the interpreter's aliasing is
+  undecided (needs an ADR).
+* codegen still re-decides loop/for borrow mutability (`iteration_borrow_dispatch.rs`) separately from the analyzer's `&mut self`
+  rule: both were extended with the same field-chain walk (`for_loop_over_self_field_triggers_mut_self`); WP 9 should leave one.
+* the interpreter copies loop elements (`for i in self.list { i.c.inc() }` mutates nothing); and has no threads/channels.
+* `ExprId` is `(line, column)` of the token *after* an expression, so `x`, `x * 2` and an enclosing closure can share an id;
+  interpolation sub-expressions are now rebased onto unique columns. Keying by node identity is part of WP 8.

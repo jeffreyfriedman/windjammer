@@ -22,7 +22,10 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("return");
         if let Some(e) = expr {
             output.push(' ');
+            // A returned `if`/`match` is a value even when the `return` sits in a unit-typed block.
+            let was_void = std::mem::replace(&mut self.in_void_block, false);
             let mut return_str = self.generate_expression(e);
+            self.in_void_block = was_void;
 
             // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
             // For `for (_, val) in &vec` where val: &i32, `return val` needs `return *val`
