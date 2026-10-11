@@ -61,3 +61,17 @@ pub fn targets(ctx: &Ctx) -> String {
         table(&["Backend", "Cause", "Programs"], &reason_rows)
     )
 }
+
+/// Compact table for the README: conformance results per backend, computed from the same data as `targets()`.
+pub fn summary(ctx: &Ctx) -> String {
+    let progs = programs(ctx);
+    let uns = unsupported(ctx);
+    let rows: Vec<Vec<String>> = backends(ctx)
+        .into_iter()
+        .map(|b| {
+            let n = uns.iter().filter(|u| u.1 == b).count();
+            vec![format!("`{b}`"), (progs.len().saturating_sub(n)).to_string(), n.to_string()]
+        })
+        .collect();
+    table(&["Backend", "Conformance programs passing", "Known unsupported"], &rows)
+}
