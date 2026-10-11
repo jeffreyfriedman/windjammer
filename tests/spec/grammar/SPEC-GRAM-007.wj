@@ -1,0 +1,6 @@
+// spec: SPEC-GRAM-007
+// mode: parse-error
+fn main() {
+    println("x");
+    ;
+}

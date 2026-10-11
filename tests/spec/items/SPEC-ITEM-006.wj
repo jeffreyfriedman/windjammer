@@ -1,0 +1,10 @@
+// spec: SPEC-ITEM-006
+// expect: 5 21
+type Id = int
+type Pair = (int, int)
+fn swap(p: Pair) -> Pair { (p.1, p.0) }
+fn main() {
+    let a: Id = 5
+    let s = swap((1, 2))
+    println("${a} ${s.0}${s.1}")
+}

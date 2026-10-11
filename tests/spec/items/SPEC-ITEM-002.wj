@@ -1,0 +1,9 @@
+// spec: SPEC-ITEM-002
+// expect: true
+@derive(PartialEq, Clone)
+pub struct P { pub x: int, y: int }
+fn main() {
+    let a = P { x: 1, y: 2 }
+    let b = a.clone()
+    println("${a == b}")
+}

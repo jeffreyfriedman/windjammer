@@ -1,0 +1,16 @@
+// spec: SPEC-STR-007
+// expect: [Hello, World] 12 false
+// expect: true true false
+// expect: HELLO, WORLD hello, world
+// expect: HeLLo, WorLd
+// expect: 3 b
+fn main() {
+    let s = "  Hello, World  "
+    let t = s.trim()
+    println("[${t}] ${t.len()} ${t.is_empty()}")
+    println("${t.contains("World")} ${t.starts_with("Hell")} ${t.ends_with("x")}")
+    println("${t.to_uppercase()} ${t.to_lowercase()}")
+    println("${t.replace("l", "L")}")
+    let parts = "a,b,c".split(",").collect::<Vec<string>>()
+    println("${parts.len()} ${parts[1]}")
+}

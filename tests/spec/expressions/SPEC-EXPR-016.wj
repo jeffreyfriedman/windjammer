@@ -1,0 +1,11 @@
+// spec: SPEC-EXPR-016
+// expect: 40
+// xfail: Q-005
+fn main() {
+    let mut k = 0
+    let r = loop {
+        k += 1
+        if k == 4 { break k * 10 }
+    }
+    println("${r}")
+}

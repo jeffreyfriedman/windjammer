@@ -1,0 +1,9 @@
+// spec: SPEC-EXEC-002
+// mode: panic
+// expect: bye
+// expect-exit: 3
+use std::process
+fn main() {
+    println("bye")
+    process::exit(3)
+}

@@ -1,0 +1,9 @@
+// spec: SPEC-GRAM-008
+// mode: parse-error
+fn main() {
+    'outer: for i in 0..3 {
+        for j in 0..3 {
+            if j == 1 { continue 'outer }
+        }
+    }
+}

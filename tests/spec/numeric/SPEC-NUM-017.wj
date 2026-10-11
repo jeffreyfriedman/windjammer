@@ -1,0 +1,9 @@
+// spec: SPEC-NUM-017
+// mode: panic
+// expect: -5 5
+// expect-error: overflow
+fn main() {
+    let m = -9223372036854775807 - 1
+    println("${-5} ${- -5}")
+    println("${-m}")
+}

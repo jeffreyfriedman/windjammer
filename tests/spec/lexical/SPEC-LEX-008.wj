@@ -1,0 +1,12 @@
+// spec: SPEC-LEX-008
+// expect: a	b
+// expect: c\d
+// expect: say "hi"
+// expect: x
+// expect: y
+fn main() {
+    println("a\tb")
+    println("c\\d")
+    println("say \"hi\"")
+    println("x\ny")
+}
