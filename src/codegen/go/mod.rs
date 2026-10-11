@@ -1,37 +1,75 @@
-//! Go code generation backend
+//! Go backend over the portable typed IR.
 //!
-//! This module generates Go source code from the Windjammer AST.
-//! Safety is enforced by the Windjammer analyzer at compile time —
-//! the Go backend only needs to produce semantically-equivalent Go code.
-//!
-//! ## Design Principles
-//!
-//! 1. **Idiomatic Go**: Generate code that looks like hand-written Go
-//! 2. **Semantic equivalence**: Same observable behavior as Rust backend
-//! 3. **Compilation speed**: Leverage Go's fast compilation
-//!
-//! ## Type Mapping
-//!
-//! | Windjammer | Go |
-//! |------------|------|
-//! | `int` | `int64` |
-//! | `float` | `float64` |
-//! | `bool` | `bool` |
-//! | `string` | `string` |
-//! | `Vec<T>` | `[]T` (slice) |
-//! | `HashMap<K,V>` | `map[K]V` |
-//! | `Option<T>` | `*T` (pointer, nil for None) |
-//! | Struct | struct |
-//! | Enum | interface + variant structs |
-//!
-//! ## Layout (`generator/`)
-//!
-//! The Go emitter lives in `generator/mod.rs`, which `include!`s focused fragments:
-//! `type_generation.rs`, `function_generation.rs`, `statement_generation.rs`, and
-//! `expression_generation.rs` (single module, shared imports in `mod.rs`).
+//! Output is a ready-to-run module directory: `main.go`, `wj_core.go` (runtime), `go.mod`.
+//! See `MODULE.md`.
 
-mod generator;
-mod ir_lowering;
-mod stdlib_method_lowering;
+mod emit;
 
-pub use generator::GoBackend;
+use crate::codegen::backend::{CodegenBackend, CodegenConfig, CodegenOutput, Target};
+use crate::codegen::portable::{self, flatten};
+use crate::parser::Program;
+use anyhow::{anyhow, Result};
+
+/// Runtime support file shipped next to every generated program.
+pub const RUNTIME_SOURCE: &str = include_str!("../../../std/runtime/go/wj_core.go");
+/// Portable `std::{math,strings,fs,time}` shims.
+pub const STD_SOURCE: &str = include_str!("../../../std/runtime/go/wj_std.go");
+
+pub struct GoBackend;
+
+impl GoBackend {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for GoBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CodegenBackend for GoBackend {
+    fn name(&self) -> &str {
+        "Go"
+    }
+
+    fn target(&self) -> Target {
+        Target::Go
+    }
+
+    fn generate(&self, program: &Program, _config: &CodegenConfig) -> Result<CodegenOutput> {
+        let ctx = crate::ir::analyze_and_lower(program)?;
+        let mut m = portable::lower::lower_program(program, Some(&ctx.registry)).map_err(|e| anyhow!("{e}"))?;
+        flatten::flatten_module(&mut m);
+        let src = emit::emit_module(&m).map_err(|e| anyhow!("{e}"))?;
+        Ok(CodegenOutput::new(src, "go".to_string()))
+    }
+
+    fn generate_additional_files(&self, _program: &Program, _config: &CodegenConfig) -> Vec<(String, String)> {
+        vec![
+            ("wj_core.go".to_string(), RUNTIME_SOURCE.to_string()),
+            ("wj_std.go".to_string(), STD_SOURCE.to_string()),
+            ("go.mod".to_string(), "module windjammer-program\n\ngo 1.22\n".to_string()),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_identity() {
+        let b = GoBackend::new();
+        assert_eq!(b.name(), "Go");
+        assert_eq!(b.target(), Target::Go);
+    }
+
+    #[test]
+    fn emits_runtime_and_go_mod() {
+        let files = GoBackend::new().generate_additional_files(&Program { items: vec![] }, &CodegenConfig::default());
+        assert!(files.iter().any(|(n, _)| n == "go.mod"));
+        assert!(files.iter().any(|(n, c)| n == "wj_core.go" && c.contains("package main")));
+    }
+}

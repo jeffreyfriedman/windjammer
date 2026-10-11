@@ -23,6 +23,7 @@
 pub mod backend;
 pub mod go;
 pub mod javascript;
+pub mod portable;
 pub mod rust;
 pub mod wasm;
 pub mod wasm_component_generator;
