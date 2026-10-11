@@ -436,7 +436,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let prev_suppress_scrutinee = self.suppress_borrowed_clone;
                 self.suppress_borrowed_clone = true;
                 let mut value_str = {
-                    if std::env::var("WJ_DEBUG_FIND_PATTERN").is_ok() {
+                    if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") {
                         if let Expression::MethodCall { method, .. } = value {
                             if method == "find" {}
                         }

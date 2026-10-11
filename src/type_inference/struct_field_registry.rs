@@ -6,10 +6,7 @@ use std::collections::HashMap;
 
 /// Set `WJ_DEBUG_GLOB_IMPORT=1` to trace `pub use`, glob imports, and use-path resolution.
 pub(crate) fn debug_struct_import_trace() -> bool {
-    matches!(
-        std::env::var("WJ_DEBUG_GLOB_IMPORT").ok().as_deref(),
-        Some("1") | Some("true") | Some("yes")
-    )
+    crate::debug_env::truthy("WJ_DEBUG_GLOB_IMPORT")
 }
 
 fn trace_import(msg: impl AsRef<str>) {
