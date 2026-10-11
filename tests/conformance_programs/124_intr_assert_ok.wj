@@ -1,0 +1,34 @@
+// Passing assertions are silent and do not evaluate their message.
+// expect: a
+// expect: side 7
+// expect: b
+// expect: c
+// stderr-empty
+struct P {
+    x: i64,
+    y: i64,
+}
+
+fn side(n: i64) -> i64 {
+    println("side ${n}")
+    n
+}
+
+fn main() {
+    let n = 5
+    assert(n == 5)
+    assert(n > 0, "n was ${n}")
+    assert_eq(n, 5)
+    assert_eq(n + 1, 6, "sum ${n}")
+    assert_ne(n, 6)
+    assert_eq("ab", "ab")
+    assert_eq([1, 2], [1, 2])
+    assert_eq((1, "z"), (1, "z"))
+    assert_ne([1, 2], [2, 1])
+    let p = P { x: 1, y: 2 }
+    assert_eq(p.x + p.y, 3)
+    println("a")
+    assert_eq(side(7), 7, "never shown")
+    println("b")
+    println("c")
+}

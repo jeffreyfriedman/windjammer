@@ -1,0 +1,20 @@
+// ADR-0014 intrinsics: stdout vs stderr routing and verbatim literals.
+// expect: one
+// expect: two three
+// expect: {literal} braces
+// expect:
+// expect: end
+// stderr: err-line
+// stderr: err-part
+fn main() {
+    println("one")
+    print("two ")
+    print("three")
+    println("")
+    stderr.println("err-line")
+    stderr.print("err-")
+    stderr.print("part\n")
+    println("{literal} braces")
+    println()
+    println("end")
+}

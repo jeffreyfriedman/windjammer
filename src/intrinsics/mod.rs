@@ -17,12 +17,11 @@
 //! backends, `wj lint` and `wj fix`:
 //! * interpolation specifier splitting (`"${x:.2}"`)
 //! * Rust `{}` template -> Windjammer interpolation conversion
-//! * Rust `{}` template -> Go `printf` template conversion
 
 pub mod surface_fix;
 pub mod template;
 
-pub use template::{go_printf_template, split_interp_spec};
+pub use template::split_interp_spec;
 
 /// Every built-in intrinsic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

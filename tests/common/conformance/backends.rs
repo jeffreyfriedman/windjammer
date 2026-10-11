@@ -12,6 +12,9 @@ pub enum Backend {
     Rust,
     Go,
     Js,
+    /// TypeScript flavour of the JS emitter (run through Node type stripping). Not part of
+    /// `ALL_BACKENDS`: only programs that opt in (the intrinsic corpus) are run on it.
+    Ts,
 }
 
 pub const ALL_BACKENDS: [Backend; 3] = [Backend::Rust, Backend::Go, Backend::Js];
@@ -22,6 +25,7 @@ impl Backend {
             Backend::Rust => "rust",
             Backend::Go => "go",
             Backend::Js => "js",
+            Backend::Ts => "ts",
         }
     }
 
@@ -30,6 +34,7 @@ impl Backend {
             Backend::Rust => "rust",
             Backend::Go => "go",
             Backend::Js => "javascript",
+            Backend::Ts => "typescript",
         }
     }
 
@@ -37,7 +42,7 @@ impl Backend {
         match self {
             Backend::Rust => Tool::Rustc,
             Backend::Go => Tool::Go,
-            Backend::Js => Tool::Node,
+            Backend::Js | Backend::Ts => Tool::Node,
         }
     }
 }
@@ -117,6 +122,9 @@ fn run_js(out: &Path) -> Outcome {
         return Outcome::BuildFailed("no JS entry point emitted".into());
     };
     let mut run = Command::new("node");
+    if entry.extension().map(|e| e == "ts").unwrap_or(false) {
+        run.args(["--experimental-strip-types", "--no-warnings"]);
+    }
     run.arg(entry).current_dir(out);
     to_outcome(run_with_timeout(&mut run, RUN_BUDGET))
 }
@@ -142,7 +150,7 @@ pub fn compile_and_run_with(wj: &Path, backend: Backend, work: &Path, source: &s
     match backend {
         Backend::Rust => run_rust(&out, work),
         Backend::Go => run_go(&out),
-        Backend::Js => run_js(&out),
+        Backend::Js | Backend::Ts => run_js(&out),
     }
 }
 

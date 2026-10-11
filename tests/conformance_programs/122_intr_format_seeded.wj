@@ -1,0 +1,17 @@
+// Interpolation specs over seed-derived values; reference model: 122_intr_format_seeded.ref.py
+fn main() {
+    let mut s: i64 = __SEED__
+    let mut i = 0
+    while i < 30 {
+        s = (s * 1103515245 + 12345) % 2147483648
+        let a = (s / 65536) % 100000
+        let neg = a - 50000
+        let b = (a as f64) / 8.0
+        let w = "w${a}"
+        println("[${a:>8}] [${a:<8}] [${a:^8}] [${a:08}] [${neg:08}] [${a:*>9}]")
+        println("[${b:.2}] [${b:10.3}] [${b:<10.1}] [${b:010.2}] [${b:^11.2}] [${b:?}]")
+        println("[${a:x}] [${a:>8X}] [${a:b}] [${a:o}]")
+        println("[${w:>8}] [${w:<8}] [${w:^8}] [${w:.3}] [${w:?}] [${w:_^9}]")
+        i += 1
+    }
+}
