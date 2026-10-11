@@ -37,7 +37,7 @@ Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [do
 | `wj new`, `wj build`, `wj run`, `wj test` | Create, transpile + build, build and run, run tests |
 | `wj lint` | Rust-leakage lint rules (W0001-W0004) on `.wj` files |
 | `wj add` / `wj remove` / `wj update` | Edit `wj.toml` dependencies / update the toolchain |
-| `wj repl` | Interpreter (Windjammerscript) |
+| `wj run --interpret`, `wj test --interpret`, `wj repl` | Interpreted dev loop, no cargo (experimental subset; see [docs/INTERPRETER.md](docs/INTERPRETER.md)) |
 | `wj explain`, `wj errors`, `wj stats`, `wj docs` | Error catalogue and diagnostics browsing |
 | `wj shader-compile`, `wj validate-wjsl` | WJSL shader front end to WGSL |
 | `wj cache`, `wj clean`, `wj self-install`, `wj agent-index` | Shared cargo cache, cleanup, install, agent artifacts |
