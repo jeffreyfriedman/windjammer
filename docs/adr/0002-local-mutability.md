@@ -1,6 +1,6 @@
 # ADR-0002: Local mutability: inferred vs explicit
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-10) — explicit `let mut` (Rust-like). Rationale (owner): inferred mutability can cause surprising, unintended behavior. Ownership of references (&, &mut, owned) stays inferred; only local binding mutability is explicit. Migration: compiler diagnostic with an automatic fix (`wj fix`) that adds `mut`, then remove `auto_needs_mut`.
 - **Date:** 2026-10-10
 - **Related:** [language-design/ownership-inference.md](../language-design/ownership-inference.md), `src/codegen/rust/let_statement_generation.rs`, `src/codegen/rust/function_formal_parameter_generation.rs`, `src/codegen/rust/variable_analysis/mut_inference.rs`
 

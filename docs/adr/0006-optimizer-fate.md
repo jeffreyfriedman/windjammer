@@ -1,6 +1,6 @@
 # ADR-0006: Optimizer fate
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-10)
 - **Date:** 2026-10-10
 - **Related:** [OPTIMIZATION_ARCHITECTURE.md](../OPTIMIZATION_ARCHITECTURE.md), [COMPILER_OPTIMIZATIONS.md](../COMPILER_OPTIMIZATIONS.md), [WJ-PERF-01](../proposals/rfcs/WJ-PERF-01-economic-efficiency.md), `src/compiler_database.rs`, `src/optimizer/`, `src/ir/optimizations.rs`, `src/ir/cost_model.rs`
 
