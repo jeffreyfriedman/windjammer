@@ -49,6 +49,11 @@ fn i32_for_range_len_end_must_cast_to_i32() {
     let map = test.compile().expect("P3.336 compile");
     let rs = map.get("scene.rs").expect("scene.rs");
     assert!(!rs.contains("0_i32..node.params.values.len()"), "P3.337:\n{rs}");
-    assert!(rs.contains("as i32"), "P3.336 cast:\n{rs}");
+    // Either the end is cast to i32, or (preferred) the counter is inferred as usize from its
+    // `as usize` indexing use. What must never happen is an i32 counter against a usize end.
+    assert!(
+        rs.contains("as i32") || rs.contains("0_usize..node.params.values.len()"),
+        "P3.336 range end/counter types must agree:\n{rs}"
+    );
     test.cargo_check().expect("P3.336 cargo-check");
 }

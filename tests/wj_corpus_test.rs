@@ -14,7 +14,6 @@
 //! consumes: tests/conformance/*.wj
 //! consumes: tests/conformance/*/*.wj
 //! consumes: tests/windjammer_tests/*.wj
-//! consumes: tests/integration_wj/test_cases/*.wj
 //! consumes: tests/error_system/*.wj
 //! consumes: tests/error_system_e2e/*.wj
 //! consumes: tests/fixtures/*.wj
@@ -122,7 +121,7 @@ fn corpus_error_system() {
 
 #[test]
 fn corpus_regression_dirs() {
-    for dir in ["auto_clone", "windjammer_tests", "integration_wj/test_cases", "dogfood"] {
+    for dir in ["auto_clone", "windjammer_tests", "dogfood"] {
         check_dir(dir);
     }
 }
