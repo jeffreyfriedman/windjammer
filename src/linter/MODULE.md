@@ -20,7 +20,7 @@ Layer `tooling`. May import: every module in a lower layer (support < syntax < r
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`Linter::new`, `lint_program`, `lint_function`, `run_lint_if_enabled` (src/linter/mod.rs).
+`Linter::new`, `lint_program`, `lint_function`, `run_lint_if_enabled` (src/linter/mod.rs). `lint_text(file, source)` is the single lint entry shared by `wj lint`, `wj build` and `wj run --interpret`. `trailing_return` (W0009, `wj fix`) and `missing_value` (W0011) implement ADR-0015 #4.
 
 ## Tests
 tests/linter_test.rs, tests/linter_tests.rs.

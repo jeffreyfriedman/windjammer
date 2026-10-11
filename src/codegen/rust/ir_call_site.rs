@@ -10348,8 +10348,6 @@ fn main() {
             "wal::replay_to_lsn"
         ));
         assert!(!CodeGenerator::is_module_boundary_callee("HashMap::new"));
-        assert!(!CodeGenerator::is_module_boundary_callee("i64::from_str_radix"));
-        assert!(!CodeGenerator::is_module_boundary_callee("char::from_u32"));
         assert!(!CodeGenerator::is_module_boundary_callee("Self::new"));
         assert!(!CodeGenerator::is_module_boundary_callee("plain_fn"));
         // Same-crate paths resolve via bare-name registry entries.

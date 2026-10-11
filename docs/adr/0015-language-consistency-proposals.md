@@ -33,3 +33,7 @@ statement. `return` remains for early exit.
 
 ## Implementation
 Sequenced behind the DefId resolver and single numeric solver (WP6-8): #4 and #3 and #2 first (independent), #1 with the solver, each with `wj fix` migrations.
+
+## Implementation status (idiom-gaps)
+- #1: unannotated `float` literals now emit `f64` in the Rust backend (was `f32`); a cast operand keeps its own width. The `int` default is still `i32` inside the numeric solver (`type_inference/int_inference`, `Unknown -> I32` plus the "prefer non-default" rule); flipping it needs a weak-default marker and is the largest remaining source of `// rust: gap` programs (E0308 width mismatches).
+- #4: W0009 (trailing `return`, fixed by `wj fix`) and W0011 (declared return type, body ends without a value) are lints; `wj check` surfaces them through `RustLeakageLinter`.

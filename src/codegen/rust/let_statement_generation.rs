@@ -515,9 +515,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                // `let s: String = chars.collect()` — String is a collect target only for the RHS call itself.
-                let rhs_is_collect = matches!(value, Expression::MethodCall { method, .. } if method == "collect");
-                if suppress_turbofish_here || (is_string_type && rhs_is_collect) {
+                if suppress_turbofish_here || Self::string_collect_rhs(t, value) {
                     self.collect_target_type = Some(t.clone());
                 }
 
@@ -1081,12 +1079,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                // `let s: String = chars.collect()` — String is a collect target only for the RHS call itself.
-                let rhs_is_collect = matches!(value, Expression::MethodCall { method, .. } if method == "collect");
-                if suppress_turbofish_here
-                    || (rhs_is_collect
-                        && (matches!(t, Type::String)
-                            || matches!(t, Type::Custom(name) if name == "String" || name == "string"))) {
+                if suppress_turbofish_here || Self::string_collect_rhs(t, value) {
                     self.collect_target_type = Some(t.clone());
                 }
 
