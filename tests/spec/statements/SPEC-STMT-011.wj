@@ -1,0 +1,11 @@
+// spec: SPEC-STMT-011
+// expect: done
+// xfail: Q-026
+fn g() {
+    return
+    println("g after")
+}
+fn main() {
+    g()
+    println("done")
+}

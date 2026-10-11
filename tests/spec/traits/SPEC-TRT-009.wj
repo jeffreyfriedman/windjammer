@@ -1,0 +1,10 @@
+// spec: SPEC-TRT-009
+// expect: hello p
+trait Named { fn name(self) -> string }
+trait Greeter: Named { fn greet(self) -> string { "hello ${self.name()}" } }
+struct P {}
+impl Named for P { fn name(self) -> string { "p" } }
+impl Greeter for P {}
+fn main() {
+    println(P {}.greet())
+}

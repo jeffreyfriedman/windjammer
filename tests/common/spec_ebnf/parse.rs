@@ -190,6 +190,7 @@ fn apply(p: &mut Production, d: &str) -> Result<(), String> {
         "status" => p.status = v.to_string(),
         "lex" => p.lex = Some(v.to_string()),
         "reject-keywords" => p.reject_keywords = true,
+        "depth" => p.depth = true,
         _ => return Err(format!("unknown directive @{k} on {}", p.name)),
     }
     Ok(())
