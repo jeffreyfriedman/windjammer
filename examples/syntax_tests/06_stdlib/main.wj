@@ -10,13 +10,13 @@ fn json_example() {
     
     match value {
         Ok(v) => {
-            println!("Parsed: {:?}", v)
+            println("Parsed: ${v:?}")
             
             // Convert back to string
             let stringified = json.stringify(&v)
-            println!("Stringified: {:?}", stringified)
+            println("Stringified: ${stringified:?}")
         }
-        Err(e) => println!("Error: {}", e),
+        Err(e) => println("Error: ${e}"),
     }
 }
 
@@ -31,13 +31,13 @@ fn fs_example() {
     // Read it back
     let read_content = fs.read_to_string("test.txt")
     match read_content {
-        Ok(s) => println!("Read: {}", s),
-        Err(e) => println!("Error: {}", e),
+        Ok(s) => println("Read: ${s}"),
+        Err(e) => println("Error: ${e}"),
     }
     
     // Check if file exists
     if fs.exists("test.txt") {
-        println!("File exists!")
+        println("File exists!")
         
         // Clean up
         fs.remove_file("test.txt")
@@ -78,19 +78,19 @@ fn fs_example() {
 // }
 
 fn main() {
-    println!("=== Windjammer Standard Library Examples ===\n")
+    println("=== Windjammer Standard Library Examples ===\n")
     
-    println!("1. JSON Example:")
+    println("1. JSON Example:")
     json_example()
-    println!("")
+    println("")
     
-    println!("2. File System Example:")
+    println("2. File System Example:")
     fs_example()
-    println!("")
+    println("")
     
     // println!("3. HTTP Example:")
     // http_example()
     
-    println!("\n✅ All examples completed!")
+    println("\n✅ All examples completed!")
 }
 

@@ -6,166 +6,166 @@ use std::storage::*
 
 @export
 fn main() {
-    println!("💾 Windjammer Storage API Demo")
-    println!("================================")
-    println!("")
+    println("💾 Windjammer Storage API Demo")
+    println("================================")
+    println("")
 
     // Example 1: Basic key-value storage
-    println!("Example 1: Basic Storage")
-    println!("------------------------")
+    println("Example 1: Basic Storage")
+    println("------------------------")
     
     match set("username", "alice") {
-        Ok(_) => println!("✓ Stored username"),
-        Err(e) => println!("✗ Error: {}", e),
+        Ok(_) => println("✓ Stored username"),
+        Err(e) => println("✗ Error: ${e}"),
     }
     
     match get("username") {
-        Ok(Some(value)) => println!("✓ Retrieved username: {}", value),
-        Ok(None) => println!("✗ Username not found"),
-        Err(e) => println!("✗ Error: {}", e),
+        Ok(Some(value)) => println("✓ Retrieved username: ${value}"),
+        Ok(None) => println("✗ Username not found"),
+        Err(e) => println("✗ Error: ${e}"),
     }
-    println!("")
+    println("")
 
     // Example 2: Multiple values
-    println!("Example 2: Multiple Values")
-    println!("--------------------------")
+    println("Example 2: Multiple Values")
+    println("--------------------------")
     
     let _ = set("app_name", "Windjammer Demo")
     let _ = set("version", "1.0.0")
     let _ = set("theme", "dark")
     
-    println!("Stored 3 values")
+    println("Stored 3 values")
     
     match keys() {
         Ok(all_keys) => {
-            println!("All keys: {:?}", all_keys)
-            println!("Total keys: {}", all_keys.len())
+            println("All keys: ${all_keys:?}")
+            println("Total keys: ${all_keys.len()}")
         },
-        Err(e) => println!("Error: {}", e),
+        Err(e) => println("Error: ${e}"),
     }
-    println!("")
+    println("")
 
     // Example 3: Check existence
-    println!("Example 3: Check Existence")
-    println!("--------------------------")
+    println("Example 3: Check Existence")
+    println("--------------------------")
     
     if contains_key("theme") {
-        println!("✓ 'theme' exists")
+        println("✓ 'theme' exists")
     } else {
-        println!("✗ 'theme' does not exist")
+        println("✗ 'theme' does not exist")
     }
     
     if contains_key("nonexistent") {
-        println!("✓ 'nonexistent' exists")
+        println("✓ 'nonexistent' exists")
     } else {
-        println!("✗ 'nonexistent' does not exist (expected)")
+        println("✗ 'nonexistent' does not exist (expected)")
     }
-    println!("")
+    println("")
 
     // Example 4: Update values
-    println!("Example 4: Update Values")
-    println!("------------------------")
+    println("Example 4: Update Values")
+    println("------------------------")
     
     match get("version") {
         Ok(Some(old_version)) => {
-            println!("Old version: {}", old_version)
+            println("Old version: ${old_version}")
             let _ = set("version", "1.1.0")
             match get("version") {
-                Ok(Some(new_version)) => println!("New version: {}", new_version),
-                _ => println!("Error retrieving new version"),
+                Ok(Some(new_version)) => println("New version: ${new_version}"),
+                _ => println("Error retrieving new version"),
             }
         },
-        _ => println!("Error retrieving old version"),
+        _ => println("Error retrieving old version"),
     }
-    println!("")
+    println("")
 
     // Example 5: Remove values
-    println!("Example 5: Remove Values")
-    println!("------------------------")
+    println("Example 5: Remove Values")
+    println("------------------------")
     
-    println!("Before removal:")
+    println("Before removal:")
     match keys() {
-        Ok(all_keys) => println!("  Keys: {:?}", all_keys),
-        Err(e) => println!("  Error: {}", e),
+        Ok(all_keys) => println("  Keys: ${all_keys:?}"),
+        Err(e) => println("  Error: ${e}"),
     }
     
     match remove("theme") {
-        Ok(_) => println!("✓ Removed 'theme'"),
-        Err(e) => println!("✗ Error: {}", e),
+        Ok(_) => println("✓ Removed 'theme'"),
+        Err(e) => println("✗ Error: ${e}"),
     }
     
-    println!("After removal:")
+    println("After removal:")
     match keys() {
-        Ok(all_keys) => println!("  Keys: {:?}", all_keys),
-        Err(e) => println!("  Error: {}", e),
+        Ok(all_keys) => println("  Keys: ${all_keys:?}"),
+        Err(e) => println("  Error: ${e}"),
     }
-    println!("")
+    println("")
 
     // Example 6: User preferences (structured data)
-    println!("Example 6: User Preferences")
-    println!("---------------------------")
+    println("Example 6: User Preferences")
+    println("---------------------------")
     
     // Simulate structured data with a simple format
     let prefs = "font_size:14,auto_save:true,line_numbers:true"    let _ = set("user_prefs", prefs)
     
     match get("user_prefs") {
         Ok(Some(value)) => {
-            println!("User preferences: {}", value)
+            println("User preferences: ${value}")
             // In a real app, you'd parse this or use JSON
         },
-        _ => println!("Error retrieving preferences"),
+        _ => println("Error retrieving preferences"),
     }
-    println!("")
+    println("")
 
     // Example 7: Session data
-    println!("Example 7: Session Data")
-    println!("-----------------------")
+    println("Example 7: Session Data")
+    println("-----------------------")
     
     let _ = set("session_id", "abc123xyz")
     let _ = set("last_login", "2025-11-11T10:30:00Z")
     
     match get("session_id") {
-        Ok(Some(sid)) => println!("Session ID: {}", sid),
-        _ => println!("No session"),
+        Ok(Some(sid)) => println("Session ID: ${sid}"),
+        _ => println("No session"),
     }
     
     match get("last_login") {
-        Ok(Some(timestamp)) => println!("Last login: {}", timestamp),
-        _ => println!("No login timestamp"),
+        Ok(Some(timestamp)) => println("Last login: ${timestamp}"),
+        _ => println("No login timestamp"),
     }
-    println!("")
+    println("")
 
     // Example 8: Clear all storage
-    println!("Example 8: Clear Storage")
-    println!("------------------------")
+    println("Example 8: Clear Storage")
+    println("------------------------")
     
-    println!("Before clear:")
+    println("Before clear:")
     match keys() {
-        Ok(all_keys) => println!("  Keys: {:?}", all_keys),
-        Err(e) => println!("  Error: {}", e),
+        Ok(all_keys) => println("  Keys: ${all_keys:?}"),
+        Err(e) => println("  Error: ${e}"),
     }
     
     match clear() {
-        Ok(_) => println!("✓ Cleared all storage"),
-        Err(e) => println!("✗ Error: {}", e),
+        Ok(_) => println("✓ Cleared all storage"),
+        Err(e) => println("✗ Error: ${e}"),
     }
     
-    println!("After clear:")
+    println("After clear:")
     match keys() {
         Ok(all_keys) => {
             if all_keys.is_empty() {
-                println!("  Keys: [] (empty)")
+                println("  Keys: [] (empty)")
             } else {
-                println!("  Keys: {:?}", all_keys)
+                println("  Keys: ${all_keys:?}")
             }
         },
-        Err(e) => println!("  Error: {}", e),
+        Err(e) => println("  Error: ${e}"),
     }
-    println!("")
+    println("")
 
     // Example 9: Application state persistence
-    println!("Example 9: Application State")
-    println!("----------------------------")
+    println("Example 9: Application State")
+    println("----------------------------")
     
     // Simulate saving application state
     let _ = set("window_width", "1024")
@@ -173,45 +173,45 @@ fn main() {
     let _ = set("sidebar_visible", "true")
     let _ = set("current_file", "/path/to/file.wj")
     
-    println!("Application state saved!")
-    println!("")
-    println!("Simulating app restart...")
-    println!("")
+    println("Application state saved!")
+    println("")
+    println("Simulating app restart...")
+    println("")
     
     // Simulate loading application state
     match get("window_width") {
-        Ok(Some(w)) => println!("Window width: {}", w),
-        _ => println!("Using default width"),
+        Ok(Some(w)) => println("Window width: ${w}"),
+        _ => println("Using default width"),
     }
     
     match get("window_height") {
-        Ok(Some(h)) => println!("Window height: {}", h),
-        _ => println!("Using default height"),
+        Ok(Some(h)) => println("Window height: ${h}"),
+        _ => println("Using default height"),
     }
     
     match get("sidebar_visible") {
-        Ok(Some(visible)) => println!("Sidebar visible: {}", visible),
-        _ => println!("Using default sidebar state"),
+        Ok(Some(visible)) => println("Sidebar visible: ${visible}"),
+        _ => println("Using default sidebar state"),
     }
     
     match get("current_file") {
-        Ok(Some(file)) => println!("Current file: {}", file),
-        _ => println!("No file open"),
+        Ok(Some(file)) => println("Current file: ${file}"),
+        _ => println("No file open"),
     }
-    println!("")
+    println("")
 
-    println!("✅ All examples completed!")
-    println!("")
-    println!("Platform Notes:")
-    println!("  • Native:  Uses file-based storage (~/.windjammer/storage/)")
-    println!("  • WASM:    Uses browser localStorage")
-    println!("  • Same code works everywhere! 🎉")
-    println!("")
-    println!("Use Cases:")
-    println!("  • User preferences and settings")
-    println!("  • Application state persistence")
-    println!("  • Session management")
-    println!("  • Cache management")
-    println!("  • Offline data storage")
+    println("✅ All examples completed!")
+    println("")
+    println("Platform Notes:")
+    println("  • Native:  Uses file-based storage (~/.windjammer/storage/)")
+    println("  • WASM:    Uses browser localStorage")
+    println("  • Same code works everywhere! 🎉")
+    println("")
+    println("Use Cases:")
+    println("  • User preferences and settings")
+    println("  • Application state persistence")
+    println("  • Session management")
+    println("  • Cache management")
+    println("  • Offline data storage")
 }
 

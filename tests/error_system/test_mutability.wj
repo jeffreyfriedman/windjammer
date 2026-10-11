@@ -4,6 +4,6 @@
 fn main() {
     let mut x = 10
     x = 20  // Error: x is not mutable
-    println!("x = {}", x)
+    println("x = ${x}")
 }
 

@@ -55,7 +55,7 @@ Create `hello.wj`:
 
 ```windjammer
 fn main() {
-    println!("Hello, Windjammer!")
+    println("Hello, Windjammer!")
 }
 ```
 
@@ -106,7 +106,7 @@ defer_drop_threshold = 1024
 **`src/main.wj`** - Your code:
 ```windjammer
 fn main() {
-    println!("Welcome to my app!")
+    println("Welcome to my app!")
 }
 ```
 
@@ -145,7 +145,7 @@ let pi: float = 3.14
 ```windjammer
 // Simple function
 fn greet(name: string) {
-    println!("Hello, ${name}!")
+    println("Hello, ${name}!")
 }
 
 // With return type
@@ -166,8 +166,8 @@ let name = "Bob"
 let age = 25
 
 // Built-in interpolation (no format! macro needed)
-println!("${name} is ${age} years old")
-println!("Next year: ${age + 1}")
+println("${name} is ${age} years old")
+println("Next year: ${age + 1}")
 ```
 
 ### Control Flow
@@ -175,16 +175,16 @@ println!("Next year: ${age + 1}")
 ```windjammer
 // If/else
 if age >= 18 {
-    println!("Adult")
+    println("Adult")
 } else {
-    println!("Minor")
+    println("Minor")
 }
 
 // Match (pattern matching)
 match status {
-    "active" => println!("Running"),
-    "idle" => println!("Waiting"),
-    _ => println!("Unknown"),
+    "active" => println("Running"),
+    "idle" => println("Waiting"),
+    _ => println("Unknown"),
 }
 
 // Match with values
@@ -196,7 +196,7 @@ let message = match count {
 
 // Loops
 for i in 0..10 {
-    println!("${i}")
+    println("${i}")
 }
 
 let mut x = 0
@@ -209,7 +209,7 @@ while x < 5 {
 
 ```windjammer
 // Vectors
-let numbers = vec![1, 2, 3, 4, 5]
+let numbers = [1, 2, 3, 4, 5]
 numbers.push(6)
 
 // HashMap
@@ -221,11 +221,11 @@ scores.insert("Bob", 85)
 
 // Iteration
 for num in numbers {
-    println!("${num}")
+    println("${num}")
 }
 
 for (name, score) in scores {
-    println!("${name}: ${score}")
+    println("${name}: ${score}")
 }
 ```
 
@@ -248,7 +248,7 @@ let user = User {
 }
 
 // Access fields
-println!("${user.name} is ${user.age}")
+println("${user.name} is ${user.age}")
 
 // Methods
 impl User {
@@ -257,7 +257,7 @@ impl User {
     }
     
     pub fn greet(self) {
-        println!("Hi, I'm ${self.name}!")
+        println("Hi, I'm ${self.name}!")
     }
 }
 
@@ -285,8 +285,8 @@ fn calculate() -> Result<int, string> {
 
 // Pattern matching on Result
 match divide(10, 0) {
-    Ok(val) => println!("Result: ${val}"),
-    Err(e) => println!("Error: ${e}"),
+    Ok(val) => println("Result: ${val}"),
+    Err(e) => println("Error: ${e}"),
 }
 ```
 
@@ -309,7 +309,7 @@ fs::write("output.txt", "Hello, world!")?
 
 // Check if file exists
 if fs.exists("config.json") {
-    println!("Config found!")
+    println("Config found!")
 }
 ```
 
@@ -444,7 +444,7 @@ Windjammer's ownership inference is smart. Trust it:
 // ✅ Good - let compiler decide
 fn process(data: Vec<int>) {
     for item in data {
-        println!("${item}")
+        println("${item}")
     }
 }
 

@@ -35,7 +35,7 @@ struct TodoState {
 
 impl TodoState {
     fn new() -> TodoState {
-        let initial_todos = vec![
+        let initial_todos = [
             Todo::new(1, "Learn Windjammer"),
             Todo::new(2, "Build amazing UIs"),
             Todo::new(3, "Deploy to production"),
@@ -246,14 +246,14 @@ fn render_footer(state: TodoState) -> Text {
     let text = if active_count == 1 {
         "1 item left"
     } else {
-        format!("{} items left", active_count)
+        "${active_count} items left"
     }
     Text::new(text).size(TextSize::Small)
 }
 
 @export
 fn start() {
-    println!("📝 Starting Todo App")
+    println("📝 Starting Todo App")
     
     let state = TodoState::new()
     

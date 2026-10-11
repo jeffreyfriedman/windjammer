@@ -5,26 +5,26 @@
 @async
 fn fetch_data(id: int) -> string {
     // In a real app, this would fetch from a network or database
-    format!("Data for ID: {}", id)
+    "Data for ID: ${id}"
 }
 
 @async
 fn process_item(item: string) -> string {
     // Simulate processing
-    format!("Processed: {}", item)
+    "Processed: ${item}"
 }
 
 @async
 fn main() {
-    println!("Async example starting...")
+    println("Async example starting...")
     
     // Call async functions with .await
     let data = fetch_data(42).await
-    println!("Fetched: {}", data)
+    println("Fetched: ${data}")
     
     let result = process_item(data).await
-    println!("Result: {}", result)
+    println("Result: ${result}")
     
-    println!("Async example complete!")
+    println("Async example complete!")
 }
 

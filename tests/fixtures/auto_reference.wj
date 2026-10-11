@@ -4,7 +4,7 @@ fn double(x: int) -> int {
 }
 
 fn greet(name: string) {
-    println!("Hello, {}", name)
+    println("Hello, ${name}")
 }
 
 fn main() {

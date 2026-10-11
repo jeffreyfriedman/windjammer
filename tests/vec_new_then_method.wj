@@ -13,7 +13,7 @@ fn test_vec_chain() {
     let items: Vec<Item> = Vec::new()
     let count2 = items.len()
     
-    println("counts: {}, {}", count, count2)
+    println("counts: ${count}, ${count2}")
 }
 
 fn main() {

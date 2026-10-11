@@ -3,6 +3,6 @@
 
 fn main() {
     let result = calculate_total(100, 200)
-    println!("Result: {}", result)
+    println("Result: ${result}")
 }
 

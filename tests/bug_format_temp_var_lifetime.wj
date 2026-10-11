@@ -12,7 +12,7 @@ fn validate_extension(ext: string) -> Result<(), AssetError> {
         Ok(())
     } else {
         // CRITICAL PATTERN: format! in expression context, passed to enum variant expecting String
-        Err(AssetError::InvalidFormat(format!("Unsupported file extension: {}", ext)))
+        Err(AssetError::InvalidFormat("Unsupported file extension: ${ext}"))
     }
 }
 
@@ -21,7 +21,7 @@ fn validate_size(size: i32, max: i32) -> Result<(), AssetError> {
         Ok(())
     } else {
         // CRITICAL PATTERN: format! with multiple args, passed to enum variant expecting String
-        Err(AssetError::TooLarge(format!("Asset size {} exceeds max {}", size, max)))
+        Err(AssetError::TooLarge("Asset size ${size} exceeds max ${max}"))
     }
 }
 
@@ -53,7 +53,7 @@ pub fn test_format_in_error_enum() {
 
 // Test case 2: format! in function argument
 fn log_error(message: string) {
-    println("ERROR: {}", message)
+    println("ERROR: ${message}")
 }
 
 pub fn test_format_in_function_arg() {
@@ -61,7 +61,7 @@ pub fn test_format_in_function_arg() {
     let path = "/api/users"
     
     // CRITICAL PATTERN: format! directly in function argument
-    log_error(format!("HTTP {} for path {}", code, path))
+    log_error("HTTP ${code} for path ${path}")
     
     println("✅ format! in function args works correctly")
 }
@@ -78,7 +78,7 @@ pub fn test_format_in_struct_field() {
     
     // CRITICAL PATTERN: format! in struct initialization
     let report = ErrorReport {
-        message: format!("Error {}: {}", error_code, details),
+        message: "Error ${error_code}: ${details}",
         code: error_code,
     }
     

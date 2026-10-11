@@ -44,17 +44,17 @@ pub fn test_method_chain_by_value() {
         .rotate(45.0)
         .translate(5.0, 5.0)
     
-    assert_eq!(transform.x, 15.0)
-    assert_eq!(transform.y, 25.0)
-    assert_eq!(transform.rotation, 45.0)
+    assert_eq(transform.x, 15.0)
+    assert_eq(transform.y, 25.0)
+    assert_eq(transform.rotation, 45.0)
 }
 
 pub fn test_single_method_by_value() {
     let t1 = Transform::new()
     let t2 = t1.translate(100.0, 200.0)  // t1 is moved, not borrowed
     
-    assert_eq!(t2.x, 100.0)
-    assert_eq!(t2.y, 200.0)
+    assert_eq(t2.x, 100.0)
+    assert_eq(t2.y, 200.0)
     
     // This should NOT compile (t1 was moved):
     // let t3 = t1.rotate(90.0)  

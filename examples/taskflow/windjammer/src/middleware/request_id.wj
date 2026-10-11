@@ -7,7 +7,7 @@ pub fn generate_request_id() -> string {
     // Generate a unique request ID
     let random_bytes = crypto.random_bytes(16)
     let id = crypto.base64_encode(&random_bytes)
-    format!("req_{}", id)
+    "req_${id}"
 }
 
 pub fn add_request_id_header(req: Request) -> Request {

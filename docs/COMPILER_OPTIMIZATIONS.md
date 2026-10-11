@@ -168,18 +168,18 @@ pub fn http_get(url: &str) -> Result<Response, Error> {
 ```windjammer
 // Windjammer code
 fn process_user(user: User) {
-    println!("User: {}", user.name)
+    println("User: ${user.name}")
 }
 
 // Current codegen (conservative)
 fn process_user(user: User) {
     let user_clone = user.clone();  // Unnecessary!
-    println!("User: {}", user_clone.name);
+    println("User: ${user_clone.name}");
 }
 
 // Optimized codegen
 fn process_user(user: &User) {  // Borrow instead of clone
-    println!("User: {}", user.name);
+    println("User: ${user.name}");
 }
 ```
 
@@ -367,15 +367,15 @@ async fn fetch_users(db: &Database) -> Result<Vec<User>, Error> {
 // Windjammer code
 let name = "Alice"
 let age = 30
-println!("Hello, ${name}! You are ${age} years old.")
+println("Hello, ${name}! You are ${age} years old.")
 
 // Current: Multiple allocations
-let s1 = format!("Hello, {}!", name);
-let s2 = format!("{} You are {} years old.", s1, age);
-println!("{}", s2);
+let s1 = "Hello, ${name}!";
+let s2 = "${s1} You are ${age} years old.";
+println("${s2}");
 
 // Optimized: Single format! call
-println!("Hello, {}! You are {} years old.", name, age);
+println("Hello, ${name}! You are ${age} years old.");
 ```
 
 **Implementation:**

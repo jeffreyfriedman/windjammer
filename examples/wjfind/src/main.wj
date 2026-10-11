@@ -45,7 +45,7 @@ fn main() {
     
     // Create search configuration
     let config = config::from_args(args).unwrap_or_else(|e| {
-        eprintln!("Error: {}", e)
+        stderr.println("Error: ${e}")
         std::process::exit(1)
     })
     
@@ -54,7 +54,7 @@ fn main() {
     let results = match search::run(config.clone()) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("Error: {}", e)
+            stderr.println("Error: ${e}")
             std::process::exit(1)
         }
     }
@@ -156,8 +156,8 @@ fn parse_args() -> Args {
     }
     
     // File types and exclusions
-    let file_types = matches.values_of("type").unwrap_or(vec![])
-    let exclude = matches.values_of("exclude").unwrap_or(vec![])
+    let file_types = matches.values_of("type").unwrap_or([])
+    let exclude = matches.values_of("exclude").unwrap_or([])
     
     // Max count
     let max_count = matches.value_of("max-count").map(|s| s.parse::<int>().unwrap())

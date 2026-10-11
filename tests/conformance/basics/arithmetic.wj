@@ -17,28 +17,28 @@
 
 fn main() {
     let a = 1 + 2
-    println("[add] {}", a)
+    println("[add] ${a}")
 
     let b = 10 - 3
-    println("[sub] {}", b)
+    println("[sub] ${b}")
 
     let c = 6 * 7
-    println("[mul] {}", c)
+    println("[mul] ${c}")
 
     let d = 10 / 2
-    println("[div] {}", d)
+    println("[div] ${d}")
 
     let e = 7 % 2
-    println("[mod] {}", e)
+    println("[mod] ${e}")
 
     let f = -10
-    println("[neg] {}", f)
+    println("[neg] ${f}")
 
     let t = true
-    println("[bool] {}", t)
+    println("[bool] ${t}")
 
     let u = !true
-    println("[bool] {}", u)
+    println("[bool] ${u}")
 
     println("PASSED")
 }

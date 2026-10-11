@@ -25,5 +25,5 @@ impl Condition {
 fn main() {
     let cond = Condition::ThresholdCheck(30);
     let result = cond.check();
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }

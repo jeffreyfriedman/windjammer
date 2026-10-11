@@ -28,10 +28,10 @@
 
 // --- Creation ---
 fn test_vec_create() {
-    let empty: Vec<int> = vec![]
+    let empty: Vec<int> = []
     println("[vec_create] empty len=${empty.len()}")
 
-    let v = vec![10, 20, 30]
+    let v = [10, 20, 30]
     println("[vec_create] with elements len=${v.len()}")
 
     let mut elems = ""
@@ -46,7 +46,7 @@ fn test_vec_create() {
 
 // --- Push ---
 fn test_vec_push() {
-    let mut v = vec![10, 20, 30]
+    let mut v = [10, 20, 30]
     v.push(40)
     println("[vec_push] after push: len=${v.len()}")
     println("[vec_push] last: ${v[3]}")
@@ -54,7 +54,7 @@ fn test_vec_push() {
 
 // --- Pop ---
 fn test_vec_pop() {
-    let mut v = vec![10, 20, 30]
+    let mut v = [10, 20, 30]
     let popped = v.pop()
     match popped {
         Some(val) => println("[vec_pop] popped: ${val}"),
@@ -65,13 +65,13 @@ fn test_vec_pop() {
 
 // --- Indexing ---
 fn test_vec_index() {
-    let mut v = vec![10, 20, 30]
+    let mut v = [10, 20, 30]
     println("[vec_index] v[0]=${v[0]}, v[1]=${v[1]}, v[2]=${v[2]}")
 }
 
 // --- Iteration ---
 fn test_vec_iterate() {
-    let v = vec![10, 20, 30]
+    let v = [10, 20, 30]
     let mut sum = 0
     for item in v {
         sum += item
@@ -81,7 +81,7 @@ fn test_vec_iterate() {
 
 // --- Empty check ---
 fn test_vec_empty() {
-    let mut v: Vec<int> = vec![]
+    let mut v: Vec<int> = []
     println("[vec_empty] is_empty before: ${v.is_empty()}")
     v.push(1)
     println("[vec_empty] is_empty after push: ${v.is_empty()}")
@@ -89,17 +89,17 @@ fn test_vec_empty() {
 
 // --- Nested vecs ---
 fn test_vec_nested() {
-    let mut matrix = vec![
-        vec![1, 2, 3],
-        vec![4, 5, 6],
-        vec![7, 8, 9],
+    let mut matrix = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
     ]
     println("[vec_nested] matrix[0][0]=${matrix[0][0]}, matrix[1][1]=${matrix[1][1]}, matrix[2][2]=${matrix[2][2]}")
 }
 
 // --- Building a vec in a loop ---
 fn test_vec_build() {
-    let mut squares: Vec<int> = vec![]
+    let mut squares: Vec<int> = []
     for i in 0..5 {
         squares.push(i * i)
     }

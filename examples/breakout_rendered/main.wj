@@ -185,7 +185,7 @@ pub fn main() {
         last_time = last_time + dt
     }
     
-    println("Score: {}", game.score)
+    println("Score: ${game.score}")
     println("✅ Breakout with GPU rendering complete!")
     
     wgpu_shutdown()

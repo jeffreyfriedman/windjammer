@@ -15,9 +15,9 @@ struct Platformer {
 
 @init
 fn init(game: Platformer) {
-    println!("🎮 2D Platformer with Physics!")
-    println!("Controls: Arrow keys to move, Space to jump")
-    println!("Physics: Gravity, velocity, collision")
+    println("🎮 2D Platformer with Physics!")
+    println("Controls: Arrow keys to move, Space to jump")
+    println("Physics: Gravity, velocity, collision")
     
     game.score = 0
     game.player_x = 100.0
@@ -99,7 +99,7 @@ fn update(game: Platformer, delta: float, input: Input) {
         game.player_vel_y = -jump_force
         game.on_ground = false
         game.score += 1
-        println!("Jump! Score: {}", game.score)
+        println("Jump! Score: ${game.score}")
     }
     
     // Keep player in bounds

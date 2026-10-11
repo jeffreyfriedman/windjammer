@@ -17,7 +17,7 @@ pub fn list(req: Request, pool: DbPool) -> Response {
     
     // Query all users
     let query = "SELECT id, username, email, created_at FROM users ORDER BY created_at DESC"
-    let rows = match db.query_all(pool, query, vec![]) {
+    let rows = match db.query_all(pool, query, []) {
         Ok(r) => r,
         Err(e) => {
             log.error("Failed to list users: ${e}")
@@ -25,7 +25,7 @@ pub fn list(req: Request, pool: DbPool) -> Response {
         }
     }
     
-    let mut users = vec![]
+    let mut users = []
     for row in rows {
         let user = UserResponse {
             id: db.get_int(row, "id"),

@@ -4,36 +4,36 @@
 
 fn main() {
     // Test 1: Simple move and reuse
-    let data = vec![1, 2, 3, 4, 5]
+    let data = [1, 2, 3, 4, 5]
     takes_ownership(data)  // Should auto-insert .clone() here
-    println!("Data length: {}", data.len())  // data still usable!
+    println("Data length: ${data.len()}")  // data still usable!
     
     // Test 2: Multiple uses after move
     let message = "Hello, Windjammer!"
     send_message(message)  // Should auto-insert .clone() here
     log_message(message)   // Should auto-insert .clone() here
-    println!("Message: {}", message)  // message still usable!
+    println("Message: ${message}")  // message still usable!
     
     // Test 3: No clone needed (single use)
-    let temp = vec![10, 20, 30]
+    let temp = [10, 20, 30]
     process_and_drop(temp)  // No .clone() needed, temp not used again
     
-    println!("Auto-clone test complete!")
+    println("Auto-clone test complete!")
 }
 
 fn takes_ownership(v: Vec<int>) {
-    println!("Received vector with {} elements", v.len())
+    println("Received vector with ${v.len()} elements")
 }
 
 fn send_message(msg: string) {
-    println!("Sending: {}", msg)
+    println("Sending: ${msg}")
 }
 
 fn log_message(msg: string) {
-    println!("Logging: {}", msg)
+    println("Logging: ${msg}")
 }
 
 fn process_and_drop(v: Vec<int>) {
-    println!("Processing {} elements", v.len())
+    println("Processing ${v.len()} elements")
 }
 

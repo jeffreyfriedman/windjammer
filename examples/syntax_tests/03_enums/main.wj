@@ -60,19 +60,19 @@ fn is_primary_color(c: Color) -> bool {
 fn main() {
     // Simple enum matching
     let color = Color.Red
-    println!("Color: ${color_to_string(color)}")
+    println("Color: ${color_to_string(color)}")
     
-    println!("Is primary color: ${is_primary_color(color)}")
+    println("Is primary color: ${is_primary_color(color)}")
     
     // Enum with data
     let circle = Shape.Circle(5)
     let square = Shape.Square(4)
     
-    println!("${circle.describe()}")
-    println!("Area: ${circle.area()}")
+    println("${circle.describe()}")
+    println("Area: ${circle.area()}")
     
-    println!("${square.describe()}")
-    println!("Area: ${square.area()}")
+    println("${square.describe()}")
+    println("Area: ${square.area()}")
     
     // Option-like enum
     let some_val = Maybe.Some(42)
@@ -82,8 +82,8 @@ fn main() {
     let result2 = maybe_add_ten(none_val)
     
     match result1 {
-        Maybe.Some(n) => println!("Result 1: ${n}"),
-        Maybe.None => println!("Result 1: None"),
+        Maybe.Some(n) => println("Result 1: ${n}"),
+        Maybe.None => println("Result 1: None"),
     }
 }
 

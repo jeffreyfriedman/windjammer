@@ -360,7 +360,7 @@ impl ServerResponse {
     fn new(status: int, body: string) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: vec![],
+            headers: [],
             body: body,
             binary_body: None,
         }
@@ -370,7 +370,7 @@ impl ServerResponse {
         ServerResponse {
             status: 200,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -378,7 +378,7 @@ impl ServerResponse {
     fn json(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: vec![("Content-Type", "application/json")],
+            headers: [("Content-Type", "application/json")],
             body: body,
             binary_body: None,
         }
@@ -388,7 +388,7 @@ impl ServerResponse {
         ServerResponse {
             status: 200,
             body: "",
-            headers: vec![("Content-Type", "application/json")],
+            headers: [("Content-Type", "application/json")],
             binary_body: None,
         }
     }
@@ -397,7 +397,7 @@ impl ServerResponse {
         ServerResponse {
             status: 201,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -406,7 +406,7 @@ impl ServerResponse {
         ServerResponse {
             status: 204,
             body: "",
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -415,7 +415,7 @@ impl ServerResponse {
         ServerResponse {
             status: 400,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -424,7 +424,7 @@ impl ServerResponse {
         ServerResponse {
             status: 401,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -433,7 +433,7 @@ impl ServerResponse {
         ServerResponse {
             status: 403,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -442,7 +442,7 @@ impl ServerResponse {
         ServerResponse {
             status: 413,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -451,7 +451,7 @@ impl ServerResponse {
         ServerResponse {
             status: 429,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -460,7 +460,7 @@ impl ServerResponse {
         ServerResponse {
             status: 503,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -469,7 +469,7 @@ impl ServerResponse {
         ServerResponse {
             status: 404,
             body: "Not Found",
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -477,7 +477,7 @@ impl ServerResponse {
     fn error(status: int, message: string) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: vec![("Content-Type", "text/plain")],
+            headers: [("Content-Type", "text/plain")],
             body: message,
             binary_body: None,
         }
@@ -486,7 +486,7 @@ impl ServerResponse {
     fn binary(status: int, data: Vec<u8>) -> ServerResponse {
         ServerResponse {
             status: status as u16,
-            headers: vec![],
+            headers: [],
             body: "",
             binary_body: Some(data),
         }
@@ -495,7 +495,7 @@ impl ServerResponse {
     fn html(body: string) -> ServerResponse {
         ServerResponse {
             status: 200,
-            headers: vec![("Content-Type", "text/html")],
+            headers: [("Content-Type", "text/html")],
             body: body,
             binary_body: None,
         }
@@ -505,7 +505,7 @@ impl ServerResponse {
         ServerResponse {
             status: 500,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }
@@ -514,7 +514,7 @@ impl ServerResponse {
         ServerResponse {
             status: status,
             body: body,
-            headers: vec![],
+            headers: [],
             binary_body: None,
         }
     }

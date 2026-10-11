@@ -60,7 +60,7 @@ fn format_user(user: User) -> string {
     let basic = "User: ${user.name} (${user.email})"
     
     // Concatenation chain (should detect multiple concatenations)
-    let detailed = "ID: " + format!("{}", user.id) + ", Name: " + user.name + ", Email: " + user.email
+    let detailed = "ID: " + "${user.id}" + ", Name: " + user.name + ", Email: " + user.email
     
     basic
 }
@@ -125,7 +125,7 @@ fn main() {
     println("Phase 4: Testing string operations...")
     let mut combined = ""
     for i in 0..100 {
-        combined = combined + "Item " + format!("{}", i) + ", "
+        combined = combined + "Item " + "${i}" + ", "
     }
     println("  ✓ Built string with ${combined.len()} characters")
     

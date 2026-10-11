@@ -11,11 +11,11 @@ fn process_file(ext: string, size: u64) -> Result<(), MyError> {
     // BUG: format!() returns String, error variant takes String
     // Generated code incorrectly adds & to the temp variable!
     if ext != "txt" {
-        return Err(MyError::InvalidFormat(format!("Unsupported: {}", ext)))
+        return Err(MyError::InvalidFormat("Unsupported: ${ext}"))
     }
     
     if size > 1000 {
-        return Err(MyError::TooLarge(format!("File too large: {}", size)))
+        return Err(MyError::TooLarge("File too large: ${size}"))
     }
     
     Ok(())
@@ -24,8 +24,8 @@ fn process_file(ext: string, size: u64) -> Result<(), MyError> {
 fn main() {
     match process_file("bin", 500) {
         Ok(_) => println("Success"),
-        Err(MyError::InvalidFormat(msg)) => println("Format error: {}", msg),
-        Err(MyError::TooLarge(msg)) => println("Size error: {}", msg),
+        Err(MyError::InvalidFormat(msg)) => println("Format error: ${msg}"),
+        Err(MyError::TooLarge(msg)) => println("Size error: ${msg}"),
     }
     
     println("✅ Temporary variable ownership works!")

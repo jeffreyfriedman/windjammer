@@ -9,6 +9,6 @@ fn add_ten(x: int) -> int {
 
 fn main() {
     let result = 5 |> double |> add_ten
-    println!("Result: {}", result)
+    println("Result: ${result}")
 }
 

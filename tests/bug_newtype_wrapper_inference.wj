@@ -78,5 +78,5 @@ fn main() {
     let quest = "test_quest";
     let is_complete = state.check_with_ref(quest);
     
-    println!("Quest complete: {}", is_complete);
+    println("Quest complete: ${is_complete}");
 }

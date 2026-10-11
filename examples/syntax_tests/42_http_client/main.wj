@@ -5,7 +5,7 @@ use std::http
 
 @async
 fn fetch_data() {
-    println!("Fetching data from httpbin.org...")
+    println("Fetching data from httpbin.org...")
     
     let url = "https://httpbin.org/get"
     // Use Windjammer's http abstraction - no direct reqwest access!
@@ -14,23 +14,23 @@ fn fetch_data() {
     match result {
         Ok(response) => {
             let status = response.status_code()
-            println!("Status: {}", status)
-            println!("Request successful!")
+            println("Status: ${status}")
+            println("Request successful!")
         }
-        Err(e) => println!("Error: {}", e)
+        Err(e) => println("Error: ${e}")
     }
 }
 
 @async
 fn main() {
-    println!("=== HTTP Client Demo ===")
-    println!()
+    println("=== HTTP Client Demo ===")
+    println()
     
     fetch_data().await
     
-    println!()
-    println!("✨ HTTP client with Windjammer!")
-    println!("   ✅ Using std.http abstraction (not reqwest directly)")
-    println!("   ✅ Dependencies added automatically")
-    println!("   ✅ Clean, Windjammer-native API")
+    println()
+    println("✨ HTTP client with Windjammer!")
+    println("   ✅ Using std.http abstraction (not reqwest directly)")
+    println("   ✅ Dependencies added automatically")
+    println("   ✅ Clean, Windjammer-native API")
 }

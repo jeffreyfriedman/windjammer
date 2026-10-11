@@ -61,5 +61,5 @@ fn main() {
     let mut clip = AnimationClip { keyframes: [] };
     let idx = clip.find_keyframe_index(5.0);
     let time = clip.another_test(idx);
-    println!("Found keyframe at index: {}, time: {}", idx, time);
+    println("Found keyframe at index: ${idx}, time: ${time}");
 }

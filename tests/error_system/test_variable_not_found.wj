@@ -3,6 +3,6 @@
 
 fn main() {
     let total = 100
-    println!("Count: {}", count)  // Error: count not declared
+    println("Count: ${count}")  // Error: count not declared
 }
 

@@ -30,7 +30,7 @@ impl MessageStore {
             CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
         "
         
-        db.execute(pool, create_table, vec![])?
+        db.execute(pool, create_table, [])?
         
         log.info("Message store initialized with SQLite")
         
@@ -69,21 +69,17 @@ impl MessageStore {
         before_timestamp: Option<int>
     ) -> Result<Vec<HistoryMessage>, Error> {
         let query = if let Some(before) = before_timestamp {
-            format!(
-                "SELECT user_id, message_text, timestamp 
+            "SELECT user_id, message_text, timestamp 
                  FROM messages 
                  WHERE room_id = $1 AND timestamp < $2
                  ORDER BY timestamp DESC 
                  LIMIT $3"
-            )
         } else {
-            format!(
-                "SELECT user_id, message_text, timestamp 
+            "SELECT user_id, message_text, timestamp 
                  FROM messages 
                  WHERE room_id = $1
                  ORDER BY timestamp DESC 
                  LIMIT $2"
-            )
         }
         
         let rows = if let Some(before) = before_timestamp {
@@ -100,7 +96,7 @@ impl MessageStore {
             )?
         }
         
-        let mut messages = vec![]
+        let mut messages = []
         
         for row in rows {
             let msg = HistoryMessage {
@@ -169,7 +165,7 @@ impl MessageStore {
             LIMIT $3
         "
         
-        let search_pattern = format!("%{}%", search_term)
+        let search_pattern = "%${search_term}%"
         
         let rows = db.query_all(
             self.pool,
@@ -177,7 +173,7 @@ impl MessageStore {
             vec![room_id, search_pattern, limit.to_string()]
         )?
         
-        let mut messages = vec![]
+        let mut messages = []
         
         for row in rows {
             let msg = HistoryMessage {

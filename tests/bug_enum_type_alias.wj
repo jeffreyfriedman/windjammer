@@ -16,5 +16,5 @@ fn create_consequence() -> DialogueConsequence {
 
 fn main() {
     let c = create_consequence();
-    println!("Created consequence");
+    println("Created consequence");
 }

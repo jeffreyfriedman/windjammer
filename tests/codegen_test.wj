@@ -31,13 +31,13 @@ fn test_string_literal_in_function_call() {
 
 fn test_empty_vec_with_type() {
     // Test empty vec with type annotation
-    let v: Vec<int> = vec![]
+    let v: Vec<int> = []
     assert(v.len() == 0)
 }
 
 fn test_vec_with_elements() {
     // Test vec with elements
-    let v = vec![1, 2, 3]
+    let v = [1, 2, 3]
     assert(v.len() == 3)
 }
 

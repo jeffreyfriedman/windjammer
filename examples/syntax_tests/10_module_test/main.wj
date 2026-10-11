@@ -3,13 +3,13 @@
 use std::test_simple
 
 fn main() {
-    println!("Testing module system...")
+    println("Testing module system...")
     
     let msg = test_simple.hello()
-    println!("Module says: {}", msg)
+    println("Module says: ${msg}")
     
     let result = test_simple.add(10, 20)
-    println!("10 + 20 = {}", result)
+    println("10 + 20 = ${result}")
     
-    println!("✅ Module test complete!")
+    println("✅ Module test complete!")
 }

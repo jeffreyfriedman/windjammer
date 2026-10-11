@@ -13,7 +13,7 @@ struct Window {
 
 impl Window {
     fn new(width: i32, height: i32, title: string) -> Window {
-        println("Creating window: {} ({}x{})", title, width, height)
+        println("Creating window: ${title} (${width}x${height})")
         Window {
             width: width,
             height: height,
@@ -28,15 +28,15 @@ impl Window {
     }
     
     fn clear(&self, r: f32, g: f32, b: f32) {
-        println("Clear color: ({}, {}, {})", r, g, b)
+        println("Clear color: (${r}, ${g}, ${b})")
     }
     
     fn draw_rect(&self, x: f32, y: f32, w: f32, h: f32) {
-        println("Draw rect at ({}, {}) size {}x{}", x, y, w, h)
+        println("Draw rect at (${x}, ${y}) size ${w}x${h}")
     }
     
     fn close(&mut self) {
-        println("Closing window: {}", self.title)
+        println("Closing window: ${self.title}")
         self.is_open = false
     }
 }
@@ -73,7 +73,7 @@ pub fn main() {
         frame += 1
         
         if frame % 5 == 0 {
-            println("--- Frame {} ---", frame)
+            println("--- Frame ${frame} ---")
         }
     }
     

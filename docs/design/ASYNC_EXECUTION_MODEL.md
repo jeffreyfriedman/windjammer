@@ -492,12 +492,12 @@ fn fetch_data(url: string) -> Result<Data> {
 fn main() {
     // Sync
     let data = fetch_data("https://api.com").unwrap()
-    println!("Got: {}", data)
+    println("Got: ${data}")
     
     // Async
     async {
         let data = fetch_data("https://api.com").unwrap()
-        println!("Got: {}", data)
+        println("Got: ${data}")
     }
 }
 ```
@@ -512,7 +512,7 @@ fn process_item(item: Item) -> Result {
 
 fn main() {
     let items = load_items()
-    let handles = vec![]
+    let handles = []
     
     for item in items {
         let handle = spawn process_item(item)
@@ -521,7 +521,7 @@ fn main() {
     
     for handle in handles {
         let result = handle.join().unwrap()
-        println!("Result: {}", result)
+        println("Result: ${result}")
     }
 }
 ```
@@ -547,7 +547,7 @@ fn get_user(id: int) -> Json<User> {
 fn main() {
     // Fetch 10 users concurrently (I/O bound)
     let users = async {
-        let mut results = vec![]
+        let mut results = []
         for id in 1..10 {
             let user = fetch_user(id).unwrap()
             results.push(user)
@@ -556,7 +556,7 @@ fn main() {
     }
     
     // Process them in parallel (CPU bound)
-    let handles = vec![]
+    let handles = []
     for user in users {
         let handle = spawn process_user(user)
         handles.push(handle)
@@ -629,7 +629,7 @@ fn fetch_user(id: int) -> User { }
 fn test_fetch_user() {
     // Just call it sync - easy!
     let user = fetch_user(1)
-    assert_eq!(user.name, "Alice")
+    assert_eq(user.name, "Alice")
 }
 ```
 
@@ -641,8 +641,8 @@ async fn test_fetch_user_concurrent() {
     async {
         let u1 = fetch_user(1)
         let u2 = fetch_user(2)
-        assert_eq!(u1.id, 1)
-        assert_eq!(u2.id, 2)
+        assert_eq(u1.id, 1)
+        assert_eq(u2.id, 2)
     }
 }
 ```
@@ -652,13 +652,13 @@ async fn test_fetch_user_concurrent() {
 ```windjammer
 #[test]
 fn test_parallel_processing() {
-    let handles = vec![]
+    let handles = []
     for i in 1..10 {
         let handle = spawn process_item(i)
         handles.push(handle)
     }
     
-    assert_eq!(handles.len(), 9)
+    assert_eq(handles.len(), 9)
 }
 ```
 
@@ -672,8 +672,8 @@ fn test_parallel_processing() {
 fn fetch() -> Result<Data> { }
 
 match fetch() {
-    Ok(data) => println!("Got: {}", data),
-    Err(e) => println!("Error: {}", e),
+    Ok(data) => println("Got: ${data}"),
+    Err(e) => println("Error: ${e}"),
 }
 ```
 
@@ -683,18 +683,18 @@ match fetch() {
 match async fetch() {
     Ok(future) => {
         match future.await {
-            Ok(data) => println!("Got: {}", data),
-            Err(e) => println!("Error: {}", e),
+            Ok(data) => println("Got: ${data}"),
+            Err(e) => println("Error: ${e}"),
         }
     },
-    Err(e) => println!("Spawn error: {}", e),
+    Err(e) => println("Spawn error: ${e}"),
 }
 
 // Or simpler with async block:
 async {
     match fetch() {
-        Ok(data) => println!("Got: {}", data),
-        Err(e) => println!("Error: {}", e),
+        Ok(data) => println("Got: ${data}"),
+        Err(e) => println("Error: ${e}"),
     }
 }
 ```

@@ -15,7 +15,7 @@ use std::json
 fn main() {
     // Use imported modules
     let data = fs::read_to_string("file.txt")
-    println!("{:?}", data)
+    println("${data:?}")
 }
 ```
 
@@ -93,14 +93,14 @@ use std::fs
 fn main() {
     // Read entire file as string
     match fs::read_to_string("config.txt") {
-        Ok(content) => println!("File content: {}", content),
-        Err(e) => println!("Error: {}", e),
+        Ok(content) => println("File content: ${content}"),
+        Err(e) => println("Error: ${e}"),
     }
     
     // Read as bytes
     match fs::read("data.bin") {
-        Ok(bytes) => println!("Read {} bytes", bytes.len()),
-        Err(e) => println!("Error: {}", e),
+        Ok(bytes) => println("Read ${bytes.len()} bytes"),
+        Err(e) => println("Error: ${e}"),
     }
 }
 ```
@@ -113,12 +113,12 @@ use std::fs
 fn main() {
     // Write string to file
     match fs::write("output.txt", "Hello, World!") {
-        Ok(_) => println!("File written successfully"),
-        Err(e) => println!("Error: {}", e),
+        Ok(_) => println("File written successfully"),
+        Err(e) => println("Error: ${e}"),
     }
     
     // Write bytes
-    let data: Vec<u8> = vec![0, 1, 2, 3]
+    let data: Vec<u8> = [0, 1, 2, 3]
     fs::write_bytes("output.bin", &data)
 }
 ```
@@ -131,16 +131,16 @@ use std::fs
 fn main() {
     // Check if path exists
     if fs.exists("/tmp") {
-        println!("Path exists!")
+        println("Path exists!")
     }
     
     // Check if it's a file or directory
     if fs.is_file("data.txt") {
-        println!("It's a file")
+        println("It's a file")
     }
     
     if fs.is_dir("/tmp") {
-        println!("It's a directory")
+        println("It's a directory")
     }
 }
 ```
@@ -184,24 +184,24 @@ fn main() {
         Ok(value) => {
             // Check type
             if json.is_object(&value) {
-                println!("It's an object!")
+                println("It's an object!")
             }
             
             // Get field
             if let Some(name) = json.get(&value, "name") {
                 if let Some(name_str) = json.as_str(name) {
-                    println!("Name: {}", name_str)
+                    println("Name: ${name_str}")
                 }
             }
             
             // Get numeric field
             if let Some(age) = json.get(&value, "age") {
                 if let Some(age_num) = json.as_i64(age) {
-                    println!("Age: {}", age_num)
+                    println("Age: ${age_num}")
                 }
             }
         },
-        Err(e) => println!("Parse error: {}", e),
+        Err(e) => println("Parse error: ${e}"),
     }
 }
 ```
@@ -220,13 +220,13 @@ fn load_config(path: &str) -> Option<serde_json.Value> {
             match json::parse(&content) {
                 Ok(value) => Some(value),
                 Err(e) => {
-                    println!("JSON parse error: {}", e)
+                    println("JSON parse error: ${e}")
                     None
                 }
             }
         },
         Err(e) => {
-            println!("File read error: {}", e)
+            println("File read error: ${e}")
             None
         }
     }
@@ -234,7 +234,7 @@ fn load_config(path: &str) -> Option<serde_json.Value> {
 
 fn main() {
     if let Some(config) = load_config("config.json") {
-        println!("Loaded config: {:?}", config)
+        println("Loaded config: ${config:?}")
     }
 }
 ```
@@ -298,7 +298,7 @@ fn read_config_safe() -> String {
     match fs::read_to_string("config.txt") {
         Ok(content) => content,
         Err(_) => {
-            println!("Using default config")
+            println("Using default config")
             "default_config".to_string()
         }
     }

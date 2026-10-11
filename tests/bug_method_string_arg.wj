@@ -7,7 +7,7 @@ struct State {
 
 impl State {
     pub fn new() -> State {
-        State { names: vec![] }
+        State { names: [] }
     }
     
     // Takes owned String (not &String)
@@ -38,5 +38,5 @@ fn main() {
     let cond = Condition::Check("test", 10);
     let state = State::new();
     let result = cond.is_met(state);
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }

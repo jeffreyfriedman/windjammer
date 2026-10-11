@@ -46,11 +46,11 @@ fn print_json(results: &SearchResults, duration: time::Duration) {
         }
     })
     
-    println!("{}", json::stringify_pretty(output).unwrap_or_else(|e| e))
+    println("${json::stringify_pretty(output).unwrap_or_else(|e| e)}")
 }
 
 fn print_count(results: &SearchResults) {
-    println!("{}", results.total_matches)
+    println("${results.total_matches}")
 }
 
 fn print_files_only(results: &SearchResults, config: &Config) {
@@ -64,9 +64,9 @@ fn print_files_only(results: &SearchResults, config: &Config) {
     // Print unique files
     for file in files {
         if config.use_color {
-            println!("{}{}{}", COLOR_GREEN, file, COLOR_RESET)
+            println("${COLOR_GREEN}${file}${COLOR_RESET}")
         } else {
-            println!("{}", file)
+            println("${file}")
         }
     }
 }
@@ -77,7 +77,7 @@ fn print_default(results: &SearchResults, config: &Config) {
     
     for m in &results.matches {
         by_file.entry(m.file.clone())
-            .or_insert(vec![])
+            .or_insert([])
             .push(m.clone())
     }
     
@@ -88,9 +88,9 @@ fn print_default(results: &SearchResults, config: &Config) {
     for (file, matches) in by_file {
         // Print file header
         if config.use_color {
-            println!("{}{}{}{}", COLOR_BOLD, COLOR_GREEN, file, COLOR_RESET)
+            println("${COLOR_BOLD}${COLOR_GREEN}${file}${COLOR_RESET}")
         } else {
-            println!("{}", file)
+            println("${file}")
         }
         
         // Print matches
@@ -98,22 +98,14 @@ fn print_default(results: &SearchResults, config: &Config) {
             print_match(&m, config)
         }
         
-        println!("")  // Blank line between files
+        println("")  // Blank line between files
     }
     
     // Print summary
     if config.use_color {
-        println!("{}Found {} matches in {} files (searched {} files){}", 
-            COLOR_CYAN,
-            results.total_matches,
-            file_count,
-            results.files_searched,
-            COLOR_RESET)
+        println("${COLOR_CYAN}Found ${results.total_matches} matches in ${file_count} files (searched ${results.files_searched} files)${COLOR_RESET}")
     } else {
-        println!("Found {} matches in {} files (searched {} files)", 
-            results.total_matches,
-            file_count,
-            results.files_searched)
+        println("Found ${results.total_matches} matches in ${file_count} files (searched ${results.files_searched} files)")
     }
 }
 
@@ -129,7 +121,7 @@ fn print_match(m: &Match, config: &Config) {
     
     // Print the match line
     let line_num_str = if config.line_numbers {
-        format!("{}:", m.line_number)
+        "${m.line_number}:"
     } else {
         "".to_string()
     }
@@ -142,13 +134,9 @@ fn print_match(m: &Match, config: &Config) {
     }
     
     if config.use_color {
-        println!("  {}{}{} {}", 
-            COLOR_BLUE, 
-            line_num_str, 
-            COLOR_RESET,
-            highlighted_line)
+        println("  ${COLOR_BLUE}${line_num_str}${COLOR_RESET} ${highlighted_line}")
     } else {
-        println!("  {}{}", line_num_str, highlighted_line)
+        println("  ${line_num_str}${highlighted_line}")
     }
     
     // Print context after if any
@@ -163,7 +151,7 @@ fn print_match(m: &Match, config: &Config) {
 
 fn print_context_line(line_num: int, line: &string, config: &Config) {
     let line_num_str = if config.line_numbers {
-        format!("{}-", line_num)  // Use '-' for context lines
+        "${line_num}-"  // Use '-' for context lines
     } else {
         "".to_string()
     }
@@ -175,7 +163,7 @@ fn print_context_line(line_num: int, line: &string, config: &Config) {
             COLOR_RESET,
             line)
     } else {
-        println!("  {}{}", line_num_str, line)
+        println("  ${line_num_str}${line}")
     }
 }
 
@@ -183,12 +171,6 @@ fn highlight_match(line: &string, match_text: &string, column: int) -> string {
     let before = &line[0..(column - 1) as usize]
     let after = &line[(column - 1 + match_text.len() as int) as usize..]
     
-    format!("{}{}{}{}{}{}", 
-        before,
-        COLOR_BOLD,
-        COLOR_RED,
-        match_text,
-        COLOR_RESET,
-        after)
+    "${before}${COLOR_BOLD}${COLOR_RED}${match_text}${COLOR_RESET}${after}"
 }
 

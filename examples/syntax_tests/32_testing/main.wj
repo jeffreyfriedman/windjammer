@@ -25,16 +25,16 @@ fn find_user(id: int) -> Option<string> {
 }
 
 fn test_basic_assertions() {
-    println!("=== Basic Assertions ===")
+    println("=== Basic Assertions ===")
     
     // Simple boolean assertions
     assert(true)
     assert(2 + 2 == 4)
-    println!("✓ Basic assertions passed")
+    println("✓ Basic assertions passed")
 }
 
 fn test_equality() {
-    println!("\n=== Equality Assertions ===")
+    println("\n=== Equality Assertions ===")
     
     let result = add(5, 3)
     assert_eq(result, 8)
@@ -45,11 +45,11 @@ fn test_equality() {
     // Inequality
     assert_ne(5, 10)
     
-    println!("✓ Equality assertions passed")
+    println("✓ Equality assertions passed")
 }
 
 fn test_option_results() {
-    println!("\n=== Option and Result Assertions ===")
+    println("\n=== Option and Result Assertions ===")
     
     // Test Some
     let user = find_user(1)
@@ -70,11 +70,11 @@ fn test_option_results() {
     let error_msg = assert_err(error_result)
     assert_eq(error_msg, "division by zero")
     
-    println!("✓ Option/Result assertions passed")
+    println("✓ Option/Result assertions passed")
 }
 
 fn test_comparisons() {
-    println!("\n=== Comparison Assertions ===")
+    println("\n=== Comparison Assertions ===")
     
     let x = 10
     let y = 5
@@ -84,11 +84,11 @@ fn test_comparisons() {
     assert_ge(x, 10) // x >= 10
     assert_le(y, 5)  // y <= 5
     
-    println!("✓ Comparison assertions passed")
+    println("✓ Comparison assertions passed")
 }
 
 fn test_float_comparison() {
-    println!("\n=== Float Comparison ===")
+    println("\n=== Float Comparison ===")
     
     let pi = 3.14159
     let approx_pi = 3.14
@@ -96,11 +96,11 @@ fn test_float_comparison() {
     // Approximately equal within epsilon
     assert_approx_eq(pi, approx_pi, 0.01)
     
-    println!("✓ Float comparison passed")
+    println("✓ Float comparison passed")
 }
 
 fn main() {
-    println!("Running Windjammer Test Suite\n")
+    println("Running Windjammer Test Suite\n")
     
     test_basic_assertions()
     test_equality()
@@ -108,7 +108,7 @@ fn main() {
     test_comparisons()
     test_float_comparison()
     
-    println!("\n✅ All tests passed!")
-    println!("Total: 5 test functions")
+    println("\n✅ All tests passed!")
+    println("Total: 5 test functions")
 }
 

@@ -43,10 +43,10 @@ use {{PROJECT_NAME}}
 
 fn main() {
     let greeting = {{PROJECT_NAME}}.hello("World")
-    println!("{}", greeting)
+    println("${greeting}")
     
     let sum = {{PROJECT_NAME}}.add(2, 3)
-    println!("Sum: {}", sum)
+    println("Sum: ${sum}")
 }
 ```
 

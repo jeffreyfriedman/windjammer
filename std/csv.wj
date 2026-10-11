@@ -39,7 +39,7 @@ fn parse_with_headers(data: string) -> Result<(Vec<string>, Vec<Vec<string>>), c
 
 // Write CSV from vector of records
 fn write(records: &[Vec<string>]) -> Result<string, csv.Error> {
-    let mut writer = csv.Writer.from_writer(vec![])
+    let mut writer = csv.Writer.from_writer([])
     
     for record in records {
         writer.write_record(record)?
@@ -54,7 +54,7 @@ fn write(records: &[Vec<string>]) -> Result<string, csv.Error> {
 
 // Write CSV with headers
 fn write_with_headers(headers: &[string], records: &[Vec<string>]) -> Result<string, csv.Error> {
-    let mut writer = csv.Writer.from_writer(vec![])
+    let mut writer = csv.Writer.from_writer([])
     
     // Write headers
     writer.write_record(headers)?
@@ -96,5 +96,5 @@ fn reader_with_delimiter(data: string, delimiter: u8) -> csv.ReaderBuilder {
 fn writer_with_delimiter(delimiter: u8) -> csv.WriterBuilder {
     csv.WriterBuilder.new()
         .delimiter(delimiter)
-        .from_writer(vec![])
+        .from_writer([])
 }

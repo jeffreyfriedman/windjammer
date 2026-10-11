@@ -88,7 +88,7 @@ Package-manager installs (`brew`, `cargo install windjammer`) are not verified b
 ```windjammer
 fn main() {
     let name = "World"
-    println!("Hello, ${name}!")
+    println("Hello, ${name}!")
 }
 ```
 

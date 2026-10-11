@@ -7,19 +7,19 @@ use std::fs::*
 fn main() {
     let base_dir = "../windjammer-ui/examples"
 
-    println!("🎨 Windjammer Showcase Server (Pure Windjammer!)")
-    println!("Serving from: {}", base_dir)
-    println!("")
-    println!("Starting server on http://localhost:8080")
-    println!("Open http://localhost:8080 to see the showcase")
-    println!("Press Ctrl+C to stop")
-    println!("")
+    println("🎨 Windjammer Showcase Server (Pure Windjammer!)")
+    println("Serving from: ${base_dir}")
+    println("")
+    println("Starting server on http://localhost:8080")
+    println("Open http://localhost:8080 to see the showcase")
+    println("Press Ctrl+C to stop")
+    println("")
     
     let server = Server::new("127.0.0.1", 8080)
     
     match server.serve(|request| handle_request(request)) {
-        Ok(_) => println!("Server stopped"),
-        Err(e) => println!("Server error: {}", e)
+        Ok(_) => println("Server stopped"),
+        Err(e) => println("Server error: ${e}")
     }
 }
 
@@ -27,9 +27,9 @@ fn handle_request(request: ServerRequest) -> ServerResponse {
     let base_dir = "../windjammer-ui/examples"
     
     let file_path = if request.path == "/" {
-        format!("{}/index.html", base_dir)
+        "${base_dir}/index.html"
     } else {
-        format!("{}{}", base_dir, request.path)
+        "${base_dir}${request.path}"
     }
     
     // Check if it's a binary file
@@ -49,7 +49,7 @@ fn handle_request(request: ServerRequest) -> ServerResponse {
                     .header("Content-Type", content_type)
             },
             Err(e) => {
-                ServerResponse::error(404, format!("File not found: {}", request.path))
+                ServerResponse::error(404, "File not found: ${request.path}")
             }
         }
     } else {
@@ -61,7 +61,7 @@ fn handle_request(request: ServerRequest) -> ServerResponse {
                     .header("Content-Type", content_type)
             },
             Err(e) => {
-                ServerResponse::error(404, format!("File not found: {}", request.path))
+                ServerResponse::error(404, "File not found: ${request.path}")
             }
         }
     }

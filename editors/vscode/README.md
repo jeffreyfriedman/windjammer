@@ -104,7 +104,7 @@ Configure the extension in VSCode settings:
 
 ```windjammer
 fn greet(name: string) {
-    println!("Hello, {}!", name)
+    println("Hello, ${name}!")
 }
 
 fn main() {

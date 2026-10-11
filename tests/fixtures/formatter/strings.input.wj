@@ -1,5 +1,5 @@
 fn f(name:string) {
 let s="hi ${name}, ${a+b} {x}"
 let r=r#"raw  "text"  here"#
-println!("a={}",s)
+println("a=${s}")
 }

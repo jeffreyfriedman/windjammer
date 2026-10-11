@@ -119,7 +119,7 @@ use std::json
 
 let data = json::parse("{\"name\": \"Alice\"}")?
 let name = data.get("name")?.as_string()?
-println!("Name: {}", name)
+println("Name: ${name}")
 ```
 
 **NOT:**
@@ -174,7 +174,7 @@ use std::http
 @async
 fn main() {
     let response = http::get("https://api.example.com").await?
-    println!("Status: {}", response.status)
+    println("Status: ${response.status}")
     let body = response.text().await?
 }
 ```
@@ -251,7 +251,7 @@ fn main() {
     for row in rows {
         let id = row.get::<int>(0)?
         let name = row.get::<string>(1)?
-        println!("User: {} - {}", id, name)
+        println("User: ${id} - ${name}")
     }
 }
 ```
@@ -291,8 +291,8 @@ use std::time
 
 fn main() {
     let now = time.now()
-    println!("Current time: {}", now.format("%Y-%m-%d %H:%M:%S"))
-    println!("Timestamp: {}", now.timestamp())
+    println("Current time: ${now.format("%Y-%m-%d %H:%M:%S")}")
+    println("Timestamp: ${now.timestamp()}")
 }
 ```
 
@@ -322,11 +322,11 @@ use std::crypto
 
 fn main() {
     let encoded = crypto.base64_encode("Hello, World!")
-    println!("Encoded: {}", encoded)
+    println("Encoded: ${encoded}")
     
     let hash = crypto.hash_password("my_password")?
     let valid = crypto.verify_password("my_password", &hash)?
-    println!("Password valid: {}", valid)
+    println("Password valid: ${valid}")
 }
 ```
 
@@ -353,7 +353,7 @@ use std::random
 fn main() {
     let num = random.range(1, 100)
     let coin = random.bool()
-    let items = vec![1, 2, 3, 4, 5]
+    let items = [1, 2, 3, 4, 5]
     let shuffled = random.shuffle(items)
 }
 ```

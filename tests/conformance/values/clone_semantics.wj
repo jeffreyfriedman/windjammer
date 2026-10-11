@@ -30,7 +30,7 @@ fn test_clone_string() {
 
 // --- Test: Vec clone ---
 fn test_clone_vec() {
-    let original = vec![1, 2, 3]
+    let original = [1, 2, 3]
     let mut cloned = original.clone()
     println("[clone_vec] original len=${original.len()}")
     println("[clone_vec] cloned len=${cloned.len()}")

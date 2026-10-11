@@ -7,8 +7,8 @@ bound Copyable = Clone + Copy
 
 // Use bound aliases in function signatures
 fn log<T: Printable>(value: T) {
-    println!("Display: {}", value)
-    println!("Debug: {:?}", value)
+    println("Display: ${value}")
+    println("Debug: ${value:?}")
 }
 
 fn duplicate<T: Copyable>(value: T) -> T {
@@ -17,17 +17,17 @@ fn duplicate<T: Copyable>(value: T) -> T {
 }
 
 fn main() {
-    println!("=== Named Bound Sets Demo ===")
-    println!()
+    println("=== Named Bound Sets Demo ===")
+    println()
     
-    println!("1. Printable bound (Display + Debug):")
+    println("1. Printable bound (Display + Debug):")
     log(42)
-    println!()
+    println()
     
-    println!("2. Copyable bound (Clone + Copy):")
+    println("2. Copyable bound (Clone + Copy):")
     let x = duplicate(100)
-    println!("   Duplicated: {}", x)
-    println!()
+    println("   Duplicated: ${x}")
+    println()
     
-    println!("✨ Named bound sets reduce boilerplate!")
+    println("✨ Named bound sets reduce boilerplate!")
 }

@@ -16,19 +16,19 @@
 fn main() {
     // Immutable binding
     let x = 42
-    println("[let] {}", x)
+    println("[let] ${x}")
 
     // Mutable binding with reassignment
     let mut y = 10
-    println("[mut] {}", y)
+    println("[mut] ${y}")
     y = 20
-    println("[mut] {}", y)
+    println("[mut] ${y}")
 
     // Shadowing
     let z = 5
-    println("[shadow] {}", z)
+    println("[shadow] ${z}")
     let z = z + 10
-    println("[shadow] {}", z)
+    println("[shadow] ${z}")
 
     println("PASSED")
 }

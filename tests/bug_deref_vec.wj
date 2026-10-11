@@ -13,7 +13,7 @@ fn find_in_vec(items: Vec<string>, target: string) -> bool {
 }
 
 fn main() {
-    let items = vec!["hello".to_string(), "world".to_string()];
+    let items = ["hello".to_string(), "world".to_string()];
     let result = find_in_vec(items, "hello".to_string());
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }
