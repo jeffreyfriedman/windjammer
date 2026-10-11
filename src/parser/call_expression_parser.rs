@@ -372,6 +372,22 @@ impl Parser {
                     }
 
                     let inclusive = self.current_token() == &Token::DotDotEq;
+                    // `start..` with no end (`(1..)`, `for i in 0.. {`) is `RangeFrom { start }`
+                    if !inclusive
+                        && matches!(
+                            self.peek(1),
+                            Some(Token::RParen | Token::Comma | Token::Semicolon | Token::RBrace | Token::LBrace)
+                        )
+                    {
+                        self.advance();
+                        let location = self.current_location();
+                        expr = self.alloc_expr(Expression::StructLiteral {
+                            name: "std::ops::RangeFrom".to_string(),
+                            fields: vec![("start".to_string(), expr)],
+                            location,
+                        });
+                        continue;
+                    }
                     self.advance();
                     // P3.280: range end must be a full expression so
                     // `(cx - 16)..(cx + 16)` and `a..b + c` parse correctly.
@@ -416,6 +432,11 @@ impl Parser {
                         };
 
                         self.advance(); // consume opening delimiter
+
+                        if name == "matches" && delimiter == MacroDelimiter::Parens {
+                            expr = self.parse_matches_macro()?;
+                            continue;
+                        }
 
                         let mut args = Vec::new();
 

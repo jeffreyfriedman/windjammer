@@ -874,6 +874,12 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::FieldAccess { object, field, .. } => {
                 self.generate_field_access(object, field, expr_to_generate)
             }
+            // `start..` (the parser lowers an open-ended range to `std::ops::RangeFrom { start }`)
+            Expression::StructLiteral { name, fields, .. }
+                if name == "std::ops::RangeFrom" && fields.len() == 1 =>
+            {
+                format!("({}..)", self.generate_expression(fields[0].1))
+            }
             Expression::StructLiteral { name, fields, .. } => {
                 self.generate_struct_literal(name, fields)
             }
