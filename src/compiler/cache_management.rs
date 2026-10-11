@@ -266,6 +266,26 @@ pub fn compute_dirty_files_with_dep_epoch(
     (dirty_indices, skipped)
 }
 
+/// Files whose Rust must be re-emitted: the stale ones plus every transitive dependent of a
+/// stale file (`reanalysis_set`). A file's output embeds call sites generated against its
+/// dependencies' inferred signatures (borrow vs own, widths), so unchanged source bytes do
+/// not make it up to date once a dependency's signatures may have moved.
+pub fn compute_codegen_files(
+    wj_files: &[(PathBuf, String)],
+    src_base: &Path,
+    output: &Path,
+    dep_epoch: u64,
+    reanalysis_set: &std::collections::HashSet<usize>,
+) -> (Vec<usize>, usize) {
+    let (mut dirty, _) =
+        compute_dirty_files_with_dep_epoch(wj_files, src_base, output, &[], dep_epoch);
+    dirty.extend(reanalysis_set.iter().copied());
+    dirty.sort_unstable();
+    dirty.dedup();
+    let skipped = wj_files.len().saturating_sub(dirty.len());
+    (dirty, skipped)
+}
+
 /// Like [`compute_dirty_files`] but also includes transitive importers (analysis rebuild set).
 pub fn compute_rebuild_set(
     wj_files: &[(PathBuf, String)],
