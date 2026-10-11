@@ -55,7 +55,9 @@ fn root() -> PathBuf {
 }
 
 fn walk(dir: &Path, out: &mut Vec<String>, base: &Path) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut entries: Vec<_> = rd.flatten().collect();
     entries.sort_by_key(|e| e.file_name());
     for e in entries {
@@ -63,7 +65,12 @@ fn walk(dir: &Path, out: &mut Vec<String>, base: &Path) {
         if p.is_dir() {
             walk(&p, out, base);
         } else if p.extension().is_some_and(|x| x == "wj") {
-            out.push(p.strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/"));
+            out.push(
+                p.strip_prefix(base)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
         }
     }
 }
@@ -73,7 +80,9 @@ fn examples() -> Vec<String> {
     let mut all = Vec::new();
     walk(&root().join("examples"), &mut all, &root());
     walk(&root().join("templates"), &mut all, &root());
-    all.into_iter().filter(|f| !f.starts_with("examples/verified/")).collect()
+    all.into_iter()
+        .filter(|f| !f.starts_with("examples/verified/"))
+        .collect()
 }
 
 fn glob_match(pat: &str, text: &str) -> bool {
@@ -85,7 +94,9 @@ fn glob_match(pat: &str, text: &str) -> bool {
                 let rest = rest.strip_prefix(b"/").unwrap_or(rest);
                 (0..=t.len()).any(|i| go(rest, &t[i..]))
             }
-            Some(b'*') => (0..=t.len()).take_while(|&i| i == 0 || t[i - 1] != b'/').any(|i| go(&p[1..], &t[i..])),
+            Some(b'*') => (0..=t.len())
+                .take_while(|&i| i == 0 || t[i - 1] != b'/')
+                .any(|i| go(&p[1..], &t[i..])),
             Some(c) => t.first() == Some(c) && go(&p[1..], &t[1..]),
         }
     }
@@ -100,16 +111,24 @@ fn manifest_problems(m: &Manifest, files: &[String]) -> Vec<String> {
             out.push(format!("`{}`: unknown mode `{}`", e.glob, e.mode));
         }
         if e.mode == "check" && e.reason.trim().is_empty() {
-            out.push(format!("`{}`: mode check needs a reason (why can it not run in CI?)", e.glob));
+            out.push(format!(
+                "`{}`: mode check needs a reason (why can it not run in CI?)",
+                e.glob
+            ));
         }
         if !files.iter().any(|f| e.matches(f)) {
-            out.push(format!("`{}` matches no example (remove the entry)", e.glob));
+            out.push(format!(
+                "`{}` matches no example (remove the entry)",
+                e.glob
+            ));
         }
     }
     for f in files {
         let n = m.example.iter().filter(|e| e.matches(f)).count();
         if n == 0 {
-            out.push(format!("{f}: not covered by examples/EXAMPLES.toml (add it, or delete the example)"));
+            out.push(format!(
+                "{f}: not covered by examples/EXAMPLES.toml (add it, or delete the example)"
+            ));
         } else if n > 1 {
             out.push(format!("{f}: covered by {n} entries"));
         }
@@ -118,13 +137,22 @@ fn manifest_problems(m: &Manifest, files: &[String]) -> Vec<String> {
 }
 
 fn manifest() -> Manifest {
-    let text = std::fs::read_to_string(root().join("examples/EXAMPLES.toml")).expect("examples/EXAMPLES.toml");
+    let text = std::fs::read_to_string(root().join("examples/EXAMPLES.toml"))
+        .expect("examples/EXAMPLES.toml");
     toml::from_str(&text).expect("EXAMPLES.toml parses")
 }
 
 fn headers(src: &str) -> (Vec<String>, i32) {
-    let expect = src.lines().filter_map(|l| l.trim().strip_prefix("// expect:")).map(|e| e.strip_prefix(' ').unwrap_or(e).trim_end().to_string()).collect();
-    let exit = src.lines().find_map(|l| l.trim().strip_prefix("// exit:")).and_then(|e| e.trim().parse().ok()).unwrap_or(0);
+    let expect = src
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("// expect:"))
+        .map(|e| e.strip_prefix(' ').unwrap_or(e).trim_end().to_string())
+        .collect();
+    let exit = src
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("// exit:"))
+        .and_then(|e| e.trim().parse().ok())
+        .unwrap_or(0);
     (expect, exit)
 }
 
@@ -134,8 +162,17 @@ fn check_in_process(src: String) -> Result<(), String> {
         .spawn(move || {
             std::panic::catch_unwind(|| {
                 let tokens = windjammer::lexer::Lexer::new(&src).tokenize_with_locations();
-                let program = windjammer::parser::Parser::new_with_source(tokens, "example.wj".into(), src.clone()).parse().map_err(|e| format!("parse error: {e}"))?;
-                windjammer::analyzer::Analyzer::new().analyze_program(&program).map(|_| ()).map_err(|e| format!("analyzer: {e}"))
+                let program = windjammer::parser::Parser::new_with_source(
+                    tokens,
+                    "example.wj".into(),
+                    src.clone(),
+                )
+                .parse()
+                .map_err(|e| format!("parse error: {e}"))?;
+                windjammer::analyzer::Analyzer::new()
+                    .analyze_program(&program)
+                    .map(|_| ())
+                    .map_err(|e| format!("analyzer: {e}"))
             })
             .unwrap_or_else(|_| Err("panicked".into()))
         })
@@ -148,24 +185,52 @@ fn run_one(file: &str, e: &Entry) -> Option<String> {
     let path = root().join(file);
     let src = std::fs::read_to_string(&path).unwrap_or_default();
     match e.mode.as_str() {
-        "check" => check_in_process(src).err().map(|m| format!("{file}: check failed: {m}")),
+        "check" => check_in_process(src)
+            .err()
+            .map(|m| format!("{file}: check failed: {m}")),
         "run" => {
             let (expect, exit) = headers(&src);
             if expect.is_empty() && exit == 0 {
                 return Some(format!("{file}: mode run needs `// expect:` lines (an independent oracle); use mode check if it has no deterministic output"));
             }
-            let o = Command::new(WJ).args(["run", "--interpret"]).arg(&path).output().unwrap();
+            let o = Command::new(WJ)
+                .args(["run", "--interpret"])
+                .arg(&path)
+                .output()
+                .unwrap();
             let text = String::from_utf8_lossy(&o.stdout).to_string();
-            let got: Vec<String> = text.lines().filter(|l| !l.starts_with("Interpreting ")).map(|l| l.trim_end().to_string()).collect();
+            let got: Vec<String> = text
+                .lines()
+                .filter(|l| !l.starts_with("Interpreting "))
+                .map(|l| l.trim_end().to_string())
+                .collect();
             let code = o.status.code().unwrap_or(-1);
             if code != exit {
-                return Some(format!("{file}: exit {code}, expected {exit}: {}", String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("")));
+                return Some(format!(
+                    "{file}: exit {code}, expected {exit}: {}",
+                    String::from_utf8_lossy(&o.stderr)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                ));
             }
             (got != expect).then(|| format!("{file}: expected {expect:?}, got {got:?}"))
         }
         "test" => {
-            let o = Command::new(WJ).args(["test", "--interpret"]).arg(&path).output().unwrap();
-            (!o.status.success()).then(|| format!("{file}: wj test --interpret failed: {}", String::from_utf8_lossy(&o.stdout).lines().last().unwrap_or("")))
+            let o = Command::new(WJ)
+                .args(["test", "--interpret"])
+                .arg(&path)
+                .output()
+                .unwrap();
+            (!o.status.success()).then(|| {
+                format!(
+                    "{file}: wj test --interpret failed: {}",
+                    String::from_utf8_lossy(&o.stdout)
+                        .lines()
+                        .last()
+                        .unwrap_or("")
+                )
+            })
         }
         _ => None,
     }
@@ -206,10 +271,23 @@ fn every_example_is_covered_by_the_manifest() {
 #[test]
 fn every_example_passes_its_mode() {
     let m = manifest();
-    let files: Vec<(String, Entry)> = examples().into_iter().filter_map(|f| m.example.iter().find(|e| e.matches(&f)).cloned().map(|e| (f, e))).collect();
+    let files: Vec<(String, Entry)> = examples()
+        .into_iter()
+        .filter_map(|f| {
+            m.example
+                .iter()
+                .find(|e| e.matches(&f))
+                .cloned()
+                .map(|e| (f, e))
+        })
+        .collect();
     assert!(!files.is_empty());
     let bad = run_all(files);
-    assert!(bad.is_empty(), "examples that CI cannot run or check:\n{}", bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "examples that CI cannot run or check:\n{}",
+        bad.join("\n")
+    );
 }
 
 /// Mutation self-tests of the gate itself.
@@ -220,17 +298,28 @@ fn gate_detects_uncovered_stale_and_broken_examples() {
     let ok = m("[[example]]\nglob = \"examples/a.wj\"\nmode = \"run\"\n[[example]]\nglob = \"examples/b/*.wj\"\nmode = \"check\"\nreason = \"needs network\"\n");
     assert!(manifest_problems(&ok, &files).is_empty());
     let uncovered = m("[[example]]\nglob = \"examples/a.wj\"\nmode = \"run\"\n");
-    assert!(manifest_problems(&uncovered, &files).iter().any(|p| p.contains("not covered")));
+    assert!(manifest_problems(&uncovered, &files)
+        .iter()
+        .any(|p| p.contains("not covered")));
     let stale = m("[[example]]\nglob = \"examples/gone.wj\"\nmode = \"run\"\n[[example]]\nglob = \"examples/**/*.wj\"\nmode = \"run\"\n");
-    assert!(manifest_problems(&stale, &files).iter().any(|p| p.contains("matches no example")));
+    assert!(manifest_problems(&stale, &files)
+        .iter()
+        .any(|p| p.contains("matches no example")));
     let no_reason = m("[[example]]\nglob = \"examples/**/*.wj\"\nmode = \"check\"\n");
-    assert!(manifest_problems(&no_reason, &files).iter().any(|p| p.contains("needs a reason")));
+    assert!(manifest_problems(&no_reason, &files)
+        .iter()
+        .any(|p| p.contains("needs a reason")));
     let twice = m("[[example]]\nglob = \"examples/a.wj\"\nmode = \"run\"\n[[example]]\nglob = \"examples/**/*.wj\"\nmode = \"run\"\n");
-    assert!(manifest_problems(&twice, &files).iter().any(|p| p.contains("covered by 2")));
+    assert!(manifest_problems(&twice, &files)
+        .iter()
+        .any(|p| p.contains("covered by 2")));
     // a broken program fails the check mode; a sound one passes
     assert!(check_in_process("fn ( {{ broken".into()).is_err());
     assert!(check_in_process("fn main() {\n    println(\"hi\")\n}\n".into()).is_ok());
-    assert_eq!(headers("// expect: a\n// expect: b\n// exit: 3\nfn main() {}\n"), (vec!["a".to_string(), "b".to_string()], 3));
+    assert_eq!(
+        headers("// expect: a\n// expect: b\n// exit: 3\nfn main() {}\n"),
+        (vec!["a".to_string(), "b".to_string()], 3)
+    );
 }
 
 #[allow(dead_code)]

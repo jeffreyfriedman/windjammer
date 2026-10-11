@@ -111,17 +111,28 @@ impl P {
             self.i += 1;
             alts.push(self.seq()?);
         }
-        Ok(if alts.len() == 1 { alts.pop().unwrap() } else { Node::Alt(alts) })
+        Ok(if alts.len() == 1 {
+            alts.pop().unwrap()
+        } else {
+            Node::Alt(alts)
+        })
     }
     fn seq(&mut self) -> Result<Node, String> {
         let mut items = Vec::new();
         while let Some(t) = self.peek() {
-            if matches!(t, Tok::P('|') | Tok::P(']') | Tok::P('}') | Tok::P(')') | Tok::P(';')) {
+            if matches!(
+                t,
+                Tok::P('|') | Tok::P(']') | Tok::P('}') | Tok::P(')') | Tok::P(';')
+            ) {
                 break;
             }
             items.push(self.atom()?);
         }
-        Ok(if items.len() == 1 { items.pop().unwrap() } else { Node::Seq(items) })
+        Ok(if items.len() == 1 {
+            items.pop().unwrap()
+        } else {
+            Node::Seq(items)
+        })
     }
     fn atom(&mut self) -> Result<Node, String> {
         let t = self.t.get(self.i).cloned().ok_or("unexpected end")?;
@@ -162,10 +173,15 @@ impl P {
 
 /// Production name -> body, in file order.
 pub fn parse(text: &str) -> Result<Vec<(String, Node)>, String> {
-    let mut p = P { t: lex(text)?, i: 0 };
+    let mut p = P {
+        t: lex(text)?,
+        i: 0,
+    };
     let mut out = Vec::new();
     while p.peek().is_some() {
-        let Some(Tok::Id(name)) = p.peek().cloned() else { return Err(format!("expected a production name, found {:?}", p.peek())) };
+        let Some(Tok::Id(name)) = p.peek().cloned() else {
+            return Err(format!("expected a production name, found {:?}", p.peek()));
+        };
         p.i += 1;
         p.expect('=').map_err(|e| format!("{name}: {e}"))?;
         let body = p.alt().map_err(|e| format!("{name}: {e}"))?;
@@ -189,9 +205,28 @@ fn walk<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
 // ---------------------------------------------------------------------------------------------
 
 /// Productions whose body is lexical (informative in the grammar): replaced by one sample token.
-const LEXICAL: &[(&str, &str)] = &[("IDENT", "@id"), ("INT_LIT", "1"), ("FLOAT_LIT", "1.5"), ("STRING_LIT", "\"s\""), ("CHAR_LIT", "'c'"), ("LIFETIME", "'a")];
+const LEXICAL: &[(&str, &str)] = &[
+    ("IDENT", "@id"),
+    ("INT_LIT", "1"),
+    ("FLOAT_LIT", "1.5"),
+    ("STRING_LIT", "\"s\""),
+    ("CHAR_LIT", "'c'"),
+    ("LIFETIME", "'a"),
+];
 /// Emitted after these productions so that statements/items sit on their own line (the parser uses ASI).
-const LINE_END: &[&str] = &["statement", "item", "field_decl", "match_arm", "let_stmt", "return_stmt", "break_stmt", "continue_stmt", "variant_decl", "function_sig", "type_alias"];
+const LINE_END: &[&str] = &[
+    "statement",
+    "item",
+    "field_decl",
+    "match_arm",
+    "let_stmt",
+    "return_stmt",
+    "break_stmt",
+    "continue_stmt",
+    "variant_decl",
+    "function_sig",
+    "type_alias",
+];
 
 pub struct Gen<'a> {
     prods: &'a BTreeMap<String, Node>,
@@ -207,7 +242,11 @@ enum Mode {
 
 impl<'a> Gen<'a> {
     pub fn new(prods: &'a BTreeMap<String, Node>) -> Gen<'a> {
-        let mut g = Gen { prods, cost: BTreeMap::new(), ids: 0 };
+        let mut g = Gen {
+            prods,
+            cost: BTreeMap::new(),
+            ids: 0,
+        };
         for _ in 0..prods.len() + 2 {
             for (name, body) in prods {
                 let c = g.node_cost(body);
@@ -221,13 +260,28 @@ impl<'a> Gen<'a> {
     fn node_cost(&self, n: &Node) -> usize {
         match n {
             Node::Term(_) => 1,
-            Node::Nt(s) => self.cost.get(s).copied().unwrap_or(usize::MAX / 4).saturating_add(0),
+            Node::Nt(s) => self
+                .cost
+                .get(s)
+                .copied()
+                .unwrap_or(usize::MAX / 4)
+                .saturating_add(0),
             Node::Opt(_) | Node::Rep(_) => 0,
-            Node::Seq(v) => v.iter().map(|c| self.node_cost(c)).fold(0usize, |a, b| a.saturating_add(b)),
+            Node::Seq(v) => v
+                .iter()
+                .map(|c| self.node_cost(c))
+                .fold(0usize, |a, b| a.saturating_add(b)),
             Node::Alt(v) => v.iter().map(|c| self.node_cost(c)).min().unwrap_or(0),
         }
     }
-    fn emit(&mut self, n: &Node, force: Option<usize>, mode: Mode, depth: usize, out: &mut Vec<String>) {
+    fn emit(
+        &mut self,
+        n: &Node,
+        force: Option<usize>,
+        mode: Mode,
+        depth: usize,
+        out: &mut Vec<String>,
+    ) {
         match n {
             Node::Term(s) => out.push(s.clone()),
             Node::Seq(v) => v.iter().for_each(|c| self.emit(c, None, mode, depth, out)),
@@ -242,7 +296,11 @@ impl<'a> Gen<'a> {
                 }
             }
             Node::Alt(v) => {
-                let i = force.filter(|&i| i < v.len()).unwrap_or_else(|| (0..v.len()).min_by_key(|&i| self.node_cost(&v[i])).unwrap_or(0));
+                let i = force.filter(|&i| i < v.len()).unwrap_or_else(|| {
+                    (0..v.len())
+                        .min_by_key(|&i| self.node_cost(&v[i]))
+                        .unwrap_or(0)
+                });
                 self.emit(&v[i], None, mode, depth, out)
             }
             Node::Nt(name) => {
@@ -255,7 +313,13 @@ impl<'a> Gen<'a> {
                     }
                 } else if let Some(body) = self.prods.get(name) {
                     // Full mode expands one level only: deeper uses are minimal (finite, readable sentences).
-                    self.emit(&body.clone(), None, if depth >= 1 { Mode::Min } else { mode }, depth + 1, out);
+                    self.emit(
+                        &body.clone(),
+                        None,
+                        if depth >= 1 { Mode::Min } else { mode },
+                        depth + 1,
+                        out,
+                    );
                     if LINE_END.contains(&name.as_str()) {
                         out.push("\n".into());
                     }
@@ -265,7 +329,9 @@ impl<'a> Gen<'a> {
     }
     /// Sentences for production `name`: one per top-level alternative (`name#i`), plus `name#full`.
     pub fn sentences(&mut self, name: &str) -> Vec<(String, String)> {
-        let Some(body) = self.prods.get(name).cloned() else { return vec![] };
+        let Some(body) = self.prods.get(name).cloned() else {
+            return vec![];
+        };
         let n_alts = if let Node::Alt(v) = &body { v.len() } else { 1 };
         let mut out = Vec::new();
         for i in 0..n_alts {
@@ -284,24 +350,56 @@ impl<'a> Gen<'a> {
 
 fn join(toks: &[String]) -> String {
     // `@` attaches to the decorator name that follows it.
-    toks.iter().map(|t| if t == "\n" { "\n".to_string() } else if t == "@" { "@".to_string() } else { format!("{t} ") }).collect::<String>()
+    toks.iter()
+        .map(|t| {
+            if t == "\n" {
+                "\n".to_string()
+            } else if t == "@" {
+                "@".to_string()
+            } else {
+                format!("{t} ")
+            }
+        })
+        .collect::<String>()
 }
 
 /// How a sentence of this production is embedded so the parser sees a complete program.
 pub fn wrap(production: &str, s: &str) -> Option<String> {
     Some(match production {
-        "item" | "use_decl" | "struct_decl" | "enum_decl" | "trait_decl" | "impl_block" | "function_decl" | "const_decl" | "type_alias" | "static_decl" | "mod_decl" | "extern_decl" | "bound_alias" | "program" => format!("{s}\n"),
-        "statement" | "let_stmt" | "assignment_stmt" | "return_stmt" | "expression_stmt" | "if_stmt" | "if_let_stmt" | "match_stmt" | "for_stmt" | "while_stmt" | "loop_stmt" | "break_stmt" | "continue_stmt" | "defer_stmt" | "thread_stmt" | "async_stmt" | "block" => format!("fn main() {{\nloop {{\n{s}\n}}\n}}\n"),
-        "expression" | "assignment_expr" | "or_expr" | "pipe_expr" | "and_expr" | "comparison" | "bitor" | "bitxor" | "bitand" | "shift" | "additive" | "multiplicative" | "unary" | "postfix" | "primary" | "if_expr" | "match_expr" | "closure" | "array_literal" | "struct_literal" | "literal" | "unsafe_block" => format!("fn main() {{\nlet _r = {s}\n}}\n"),
-        "type_expr" | "base_type" | "generic_type" | "array_type" | "tuple_type" | "fn_type" | "optional_type" => format!("fn f(a: {s}) {{\n}}\n"),
-        "pattern" | "tuple_pattern" | "struct_pattern" | "enum_pattern" | "range_pattern" => format!("fn main() {{\nmatch x {{\n{s} => 1\n}}\n}}\n"),
+        "item" | "use_decl" | "struct_decl" | "enum_decl" | "trait_decl" | "impl_block"
+        | "function_decl" | "const_decl" | "type_alias" | "static_decl" | "mod_decl"
+        | "extern_decl" | "bound_alias" | "program" => format!("{s}\n"),
+        "statement" | "let_stmt" | "assignment_stmt" | "return_stmt" | "expression_stmt"
+        | "if_stmt" | "if_let_stmt" | "match_stmt" | "for_stmt" | "while_stmt" | "loop_stmt"
+        | "break_stmt" | "continue_stmt" | "defer_stmt" | "thread_stmt" | "async_stmt"
+        | "block" => format!("fn main() {{\nloop {{\n{s}\n}}\n}}\n"),
+        "expression" | "assignment_expr" | "or_expr" | "pipe_expr" | "and_expr" | "comparison"
+        | "bitor" | "bitxor" | "bitand" | "shift" | "additive" | "multiplicative" | "unary"
+        | "postfix" | "primary" | "if_expr" | "match_expr" | "closure" | "array_literal"
+        | "struct_literal" | "literal" | "unsafe_block" => {
+            format!("fn main() {{\nlet _r = {s}\n}}\n")
+        }
+        "type_expr" | "base_type" | "generic_type" | "array_type" | "tuple_type" | "fn_type"
+        | "optional_type" => format!("fn f(a: {s}) {{\n}}\n"),
+        "pattern" | "tuple_pattern" | "struct_pattern" | "enum_pattern" | "range_pattern" => {
+            format!("fn main() {{\nmatch x {{\n{s} => 1\n}}\n}}\n")
+        }
         _ => return None,
     })
 }
 
 /// Character-level (informative) productions: upper-case names and the helpers they use.
 fn is_lexical(name: &str) -> bool {
-    name.chars().next().is_some_and(char::is_uppercase) || ["int_suffix", "float_suffix", "interpolation", "escape", "line_comment", "block_comment"].contains(&name)
+    name.chars().next().is_some_and(char::is_uppercase)
+        || [
+            "int_suffix",
+            "float_suffix",
+            "interpolation",
+            "escape",
+            "line_comment",
+            "block_comment",
+        ]
+        .contains(&name)
 }
 
 pub fn parse_program(src: &str) -> Result<(), String> {
@@ -311,7 +409,11 @@ pub fn parse_program(src: &str) -> Result<(), String> {
         .spawn(move || {
             std::panic::catch_unwind(|| {
                 let toks = Lexer::new(&src).tokenize_with_locations();
-                let mut p = windjammer::parser::Parser::new_with_source(toks, "ebnf.wj".into(), src.clone());
+                let mut p = windjammer::parser::Parser::new_with_source(
+                    toks,
+                    "ebnf.wj".into(),
+                    src.clone(),
+                );
                 p.parse().map(|_| ())
             })
             .unwrap_or_else(|_| Err("parser panicked".into()))
@@ -327,7 +429,9 @@ pub fn parse_program(src: &str) -> Result<(), String> {
 
 /// Words that appear quoted in the grammar but are not reserved lexer words (identifier-like names of
 /// library types or soft keywords); everything else alphabetic must be a lexer keyword.
-const NON_RESERVED_TERMINALS: &[&str] = &["Option", "None", "crate", "bound", "thread", "defer", "Some"];
+const NON_RESERVED_TERMINALS: &[&str] = &[
+    "Option", "None", "crate", "bound", "thread", "defer", "Some",
+];
 
 pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let text = ctx.read(PATH);
@@ -348,7 +452,10 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let mut terms: Vec<String> = Vec::new();
     for (name, body) in &list {
         walk(body, &mut |n| match n {
-            Node::Nt(r) if !prods.contains_key(r) => out.push(f(1, format!("`{name}` references undefined production `{r}`"))),
+            Node::Nt(r) if !prods.contains_key(r) => out.push(f(
+                1,
+                format!("`{name}` references undefined production `{r}`"),
+            )),
             // Terminals of lexical productions (informative character-level rules) are not checked as tokens.
             Node::Term(t) if !is_lexical(name) => terms.push(t.clone()),
             _ => {}
@@ -359,17 +466,33 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     terms.dedup();
     for t in &terms {
         if t.chars().all(|c| c.is_alphabetic() || c == '_') {
-            if !KEYWORDS.iter().any(|k| k.word == t) && !NON_RESERVED_TERMINALS.contains(&t.as_str()) {
-                out.push(f(1, format!("terminal \"{t}\" is not a keyword of the lexer (src/lexer/keywords.rs)")));
+            if !KEYWORDS.iter().any(|k| k.word == t)
+                && !NON_RESERVED_TERMINALS.contains(&t.as_str())
+            {
+                out.push(f(
+                    1,
+                    format!(
+                        "terminal \"{t}\" is not a keyword of the lexer (src/lexer/keywords.rs)"
+                    ),
+                ));
             }
         } else if let Ok(toks) = std::panic::catch_unwind(|| Lexer::new(t).tokenize()) {
             if toks.len() != 2 && !t.contains(char::is_whitespace) {
-                out.push(f(1, format!("terminal \"{t}\" does not lex as a single token ({} tokens)", toks.len().saturating_sub(1))));
+                out.push(f(
+                    1,
+                    format!(
+                        "terminal \"{t}\" does not lex as a single token ({} tokens)",
+                        toks.len().saturating_sub(1)
+                    ),
+                ));
             }
         }
     }
     let unlisted = &cfg.ebnf.unlisted_keywords;
-    for k in KEYWORDS.iter().filter(|k| k.class == KeywordClass::Keyword || k.class == KeywordClass::Literal) {
+    for k in KEYWORDS
+        .iter()
+        .filter(|k| k.class == KeywordClass::Keyword || k.class == KeywordClass::Literal)
+    {
         if !terms.iter().any(|t| t == k.word) && !unlisted.contains_key(k.word) {
             out.push(f(1, format!("lexer keyword `{}` never appears in the grammar (add it, or list it under [ebnf] unlisted_keywords with a reason)", k.word)));
         }
@@ -384,7 +507,9 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let mut seen = Vec::new();
     for (name, _) in &list {
         for (id, sentence) in g.sentences(name) {
-            let Some(src) = wrap(name, &sentence) else { continue };
+            let Some(src) = wrap(name, &sentence) else {
+                continue;
+            };
             seen.push(id.clone());
             let res = parse_program(&src);
             match (res, cfg.ebnf.divergences.get(&id)) {

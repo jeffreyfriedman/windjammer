@@ -48,15 +48,30 @@ fn parse_and_drop_parser(src: &str) -> (Program<'static>, ParserArenaLedger) {
 #[test]
 fn program_outlives_its_parser() {
     let (program, ledger) = parse_and_drop_parser(SRC);
-    assert_eq!(ledger.retired(), 3, "dropping a Parser must retire (not free) its three arenas");
-    assert_eq!(ledger.freed(), 0, "an arena was freed while Program<'static> still borrows it");
+    assert_eq!(
+        ledger.retired(),
+        3,
+        "dropping a Parser must retire (not free) its three arenas"
+    );
+    assert_eq!(
+        ledger.freed(),
+        0,
+        "an arena was freed while Program<'static> still borrows it"
+    );
     // Churn the allocator so that freed arena memory would be reused and clobbered.
     let churn: Vec<Vec<u8>> = (0..2000).map(|i| vec![(i % 251) as u8; 4096]).collect();
     let rendered = format!("{program:?}");
-    assert!(rendered.contains("sum") && rendered.contains("println"), "AST is still intact: {}", &rendered[..200.min(rendered.len())]);
+    assert!(
+        rendered.contains("sum") && rendered.contains("println"),
+        "AST is still intact: {}",
+        &rendered[..200.min(rendered.len())]
+    );
     // Deterministic across a second parse of the same text: a clobbered tree would differ.
     let (again, _) = parse_and_drop_parser(SRC);
-    assert_eq!(strip_positions(&rendered), strip_positions(&format!("{again:?}")));
+    assert_eq!(
+        strip_positions(&rendered),
+        strip_positions(&format!("{again:?}"))
+    );
     assert_eq!(churn.len(), 2000);
 }
 
@@ -79,5 +94,8 @@ fn ledger_detects_the_unsound_behavior() {
 }
 
 fn strip_positions(s: &str) -> String {
-    s.split_whitespace().filter(|w| !w.chars().any(|c| c.is_ascii_digit())).collect::<Vec<_>>().join(" ")
+    s.split_whitespace()
+        .filter(|w| !w.chars().any(|c| c.is_ascii_digit()))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
