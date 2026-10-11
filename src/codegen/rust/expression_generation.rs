@@ -349,7 +349,10 @@ impl<'ast> CodeGenerator<'ast> {
                 arguments,
                 ..
             } => {
-                let func_str = self.generate_expression_immut(function);
+                let mut func_str = self.generate_expression_immut(function);
+                if matches!(function, Expression::Closure { .. }) {
+                    func_str = format!("({})", func_str);
+                }
 
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.as_str()),

@@ -369,6 +369,6 @@ impl Parser {
             });
         }
 
-        Ok(left)
+        self.parse_pipe_stages(left)
     }
 }
