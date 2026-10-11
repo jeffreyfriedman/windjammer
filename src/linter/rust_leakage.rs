@@ -28,6 +28,10 @@ pub struct RustLeakageLinter<'ast> {
     default_file: String,
     /// When true, we're inside a trait impl - don't warn on &self/&mut self (trait requires it)
     in_trait_impl: bool,
+    /// True spans from the parser (`Parser::span_snapshot`). Without them, lints fall back to the
+    /// legacy AST `location`, which is the position of the token *after* a node (an inference
+    /// identity key, not a diagnostic span) or, for parameters, the file start.
+    spans: Option<crate::parser::SpanSnapshot>,
     _phantom: std::marker::PhantomData<&'ast ()>,
 }
 
@@ -37,7 +41,28 @@ impl<'ast> RustLeakageLinter<'ast> {
             collector: LintCollector::new(),
             default_file: default_file.into(),
             in_trait_impl: false,
+            spans: None,
             _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Locate diagnostics with the parser's true spans (see `Parser::enable_span_log`).
+    pub fn with_spans(mut self, spans: crate::parser::SpanSnapshot) -> Self {
+        self.spans = Some(spans);
+        self
+    }
+
+    fn loc_for_expr(&self, expr: &Expression<'ast>, legacy: &Option<Location>) -> SourceLocation {
+        match self.spans.as_ref().and_then(|s| s.expr(expr)) {
+            Some(sp) => SourceLocation::new(self.default_file.clone(), sp.line, sp.column),
+            None => to_source_location(legacy.clone(), &self.default_file),
+        }
+    }
+
+    fn param_location(&self, func: &FunctionDecl<'ast>, index: usize, file: &str) -> SourceLocation {
+        match self.spans.as_ref().and_then(|s| s.param(&func.parameters, index)) {
+            Some(sp) => SourceLocation::new(file, sp.line, sp.column),
+            None => SourceLocation::new(file, 1, 1),
         }
     }
 
@@ -79,9 +104,10 @@ impl<'ast> RustLeakageLinter<'ast> {
 
         // W0001: Explicit ownership annotations - skip for extern fn and trait impls
         if !func.is_extern && !self.in_trait_impl {
-            for param in &func.parameters {
-                self.check_explicit_ownership(param, &file);
-                self.check_param_type(param, &file);
+            for (i, param) in func.parameters.iter().enumerate() {
+                let loc = self.param_location(func, i, &file);
+                self.check_explicit_ownership(param, loc.clone());
+                self.check_param_type(param, loc);
             }
         }
 
@@ -92,7 +118,7 @@ impl<'ast> RustLeakageLinter<'ast> {
     }
 
     /// W0001: Explicit ownership annotations (&self, &mut self, &T in params)
-    fn check_explicit_ownership(&mut self, param: &Parameter<'ast>, file: &str) {
+    fn check_explicit_ownership(&mut self, param: &Parameter<'ast>, location: SourceLocation) {
         let (hint, param_name) = match &param.ownership {
             OwnershipHint::Ref => ("&", param.name.as_str()),
             OwnershipHint::Mut => ("&mut", param.name.as_str()),
@@ -115,9 +141,6 @@ impl<'ast> RustLeakageLinter<'ast> {
         } else {
             "Windjammer infers borrowing automatically".to_string()
         };
-
-        // Parameter doesn't have its own location - use a default
-        let location = SourceLocation::new(file, 1, 1);
 
         self.collector.add(LintDiagnostic {
             lint_name: "W0001".to_string(),
@@ -210,7 +233,7 @@ impl<'ast> RustLeakageLinter<'ast> {
             } => {
                 // W0002: .unwrap() and .expect()
                 if method == "unwrap" || method == "expect" {
-                    let loc = to_source_location(location.clone(), &self.default_file);
+                    let loc = self.loc_for_expr(expr, location);
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0002".to_string(),
                         category: LintCategory::Correctness,
@@ -230,7 +253,7 @@ impl<'ast> RustLeakageLinter<'ast> {
 
                 // W0003: .iter() and .iter_mut()
                 if method == "iter" || method == "iter_mut" {
-                    let loc = to_source_location(location.clone(), &self.default_file);
+                    let loc = self.loc_for_expr(expr, location);
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0003".to_string(),
                         category: LintCategory::Style,
@@ -249,7 +272,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                 if crate::type_classification::is_language_level_explicit_clone(method)
                     && arguments.is_empty()
                 {
-                    let loc = to_source_location(location.clone(), &self.default_file);
+                    let loc = self.loc_for_expr(expr, location);
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0005".to_string(),
                         category: LintCategory::Style,
@@ -280,7 +303,7 @@ impl<'ast> RustLeakageLinter<'ast> {
                         }
                     )
                 {
-                    let loc = to_source_location(location.clone(), &self.default_file);
+                    let loc = self.loc_for_expr(expr, location);
                     self.collector.add(LintDiagnostic {
                         lint_name: "W0006".to_string(),
                         category: LintCategory::Style,
@@ -398,7 +421,7 @@ impl<'ast> RustLeakageLinter<'ast> {
             ..
         } = arg
         {
-            let loc = to_source_location(location.clone(), &self.default_file);
+            let loc = self.loc_for_expr(arg, location);
             self.collector.add(LintDiagnostic {
                 lint_name: "W0004".to_string(),
                 category: LintCategory::Style,
@@ -415,10 +438,9 @@ impl<'ast> RustLeakageLinter<'ast> {
     }
 
     /// Check for explicit reference types in parameters (e.g. &str, &Camera)
-    fn check_param_type(&mut self, param: &Parameter<'ast>, file: &str) {
+    fn check_param_type(&mut self, param: &Parameter<'ast>, location: SourceLocation) {
         match &param.type_ {
             Type::Reference(_) | Type::MutableReference(_) => {
-                let location = SourceLocation::new(file, 1, 1);
                 self.collector.add(LintDiagnostic {
                     lint_name: "W0001".to_string(),
                     category: LintCategory::Style,

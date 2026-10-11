@@ -111,6 +111,7 @@ pub(crate) fn parse_wj_source(
         file.to_string_lossy().to_string(),
         source.to_string(),
     );
+    parser.enable_span_log(); // true spans for source maps and lints
     let program = parser
         .parse()
         .map_err(|e| anyhow::anyhow!("Parse error in {}: {}", file.display(), e))?;
@@ -161,13 +162,21 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     target: crate::CompilationTarget,
     dep_roots: &[std::path::PathBuf],
     dep_epoch: Option<u64>,
+    spans: crate::parser::SpanSnapshot,
 ) -> anyhow::Result<()> {
+    codegen.set_span_snapshot(spans);
+    codegen.set_map_files(output_file, source_file);
     let rust_code = crate::optimizer::run_default(&codegen.generate_program(program, analyzed_functions));
+    codegen.resolve_source_map(&rust_code);
     let mut registry = std::mem::take(&mut codegen.signature_registry);
     codegen.apply_self_receiver_upgrades(&mut registry);
     codegen.signature_registry = registry;
     cache_management::write_if_changed(output_file, &rust_code)?;
     if target == crate::CompilationTarget::Rust {
+        let map_path = output_file.with_extension("rs.map");
+        if let Err(e) = codegen.get_source_map().save_to_file(&map_path) {
+            eprintln!("Warning: failed to save source map {}: {e}", map_path.display());
+        }
         let source = std::fs::read_to_string(source_file)?;
         let fingerprint = Some(if let Some(epoch) = dep_epoch {
             incremental::compute_fingerprint_with_dep_epoch_and_output(&source, epoch, &rust_code)

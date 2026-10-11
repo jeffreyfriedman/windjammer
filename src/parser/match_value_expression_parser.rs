@@ -13,6 +13,15 @@ impl Parser {
     pub(in crate::parser) fn parse_match_value_atom(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let r = self.parse_match_value_atom_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_match_value_atom_inner(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
         let mut left = if self.current_token() == &Token::Bang {
             self.advance();
             let inner = self.parse_match_value_atom()?;
@@ -354,6 +363,15 @@ impl Parser {
     }
 
     pub(in crate::parser) fn parse_match_value(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let r = self.parse_match_value_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_match_value_inner(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
         let mut left = self.parse_match_value_atom()?;

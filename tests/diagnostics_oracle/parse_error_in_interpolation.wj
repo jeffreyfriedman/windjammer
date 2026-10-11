@@ -1,0 +1,4 @@
+fn main() {
+    let s = "value: ${1 +} done"
+//~@26 ERROR parse invalid expression in string interpolation
+}

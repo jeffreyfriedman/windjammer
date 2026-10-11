@@ -1,0 +1,4 @@
+fn main() {
+    let copy = original.clone()
+//~@16 WARN W0005 explicit .clone() call
+}

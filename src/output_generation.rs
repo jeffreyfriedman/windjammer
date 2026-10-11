@@ -128,12 +128,14 @@ pub(crate) fn generate_main_rust_code<'ast>(
         ));
 
         generator.set_source_file(input_path);
+        generator.set_span_snapshot(module_compiler.current_spans.clone());
         let output_file_path =
             project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
         if let Some(parent) = output_file_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         generator.set_output_file(&output_file_path);
+    generator.set_map_files(&output_file_path, input_path);
 
         if let Ok(cwd) = std::env::current_dir() {
             generator.set_workspace_root(cwd);
@@ -141,6 +143,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
         let result = crate::optimizer::run_default(&generator.generate_program(program, analyzed));
         let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
+        generator.resolve_source_map(&result);
 
         generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
         module_compiler
@@ -246,12 +249,14 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
 
     generator.set_source_file(input_path);
+    generator.set_span_snapshot(module_compiler.current_spans.clone());
     let output_file_path =
         project_paths::get_relative_output_path(source_root, input_path, output_dir)?;
     if let Some(parent) = output_file_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     generator.set_output_file(&output_file_path);
+    generator.set_map_files(&output_file_path, input_path);
 
     if let Ok(cwd) = std::env::current_dir() {
         generator.set_workspace_root(cwd);
@@ -259,6 +264,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
     let result = crate::optimizer::run_default(&generator.generate_program(program, analyzed));
     let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
+    generator.resolve_source_map(&result);
 
     generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
     module_compiler

@@ -84,6 +84,31 @@ pub struct ParseWarning {
     pub is_error: bool,
 }
 
+/// True when `msg` already contains a `:line:col` pair (e.g. `file.wj:3:5: error: ...`).
+pub(crate) fn message_has_line_col(msg: &str) -> bool {
+    let b = msg.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b':' {
+            let mut j = i + 1;
+            while j < b.len() && b[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j > i + 1 && j < b.len() && b[j] == b':' {
+                let mut k = j + 1;
+                while k < b.len() && b[k].is_ascii_digit() {
+                    k += 1;
+                }
+                if k > j + 1 {
+                    return true;
+                }
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 pub struct Parser {
     pub(crate) tokens: Vec<crate::lexer::TokenWithLocation>,
     pub(crate) position: usize,
@@ -108,6 +133,8 @@ pub struct Parser {
     pub(crate) expr_arena: Arena<Expression<'static>>,
     pub(crate) stmt_arena: Arena<Statement<'static>>,
     pub(crate) pattern_arena: Arena<Pattern<'static>>,
+    /// Node spans (off unless `enable_span_log()` was called).
+    pub(crate) span_log: std::cell::RefCell<Option<crate::parser::span_log::SpanLog>>,
 }
 
 impl Parser {
@@ -141,6 +168,7 @@ impl Parser {
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
+            span_log: std::cell::RefCell::new(None),
         }
     }
 
@@ -161,6 +189,7 @@ impl Parser {
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
+            span_log: std::cell::RefCell::new(None),
         }
     }
 
@@ -175,6 +204,9 @@ impl Parser {
         line: Option<usize>,
         column: Option<usize>,
     ) {
+        if let (Some(l), Some(c)) = (line, column) {
+            crate::error::span_check::assert_location("parser diagnostic", l, c);
+        }
         self.warnings.push(ParseWarning {
             message,
             file,
@@ -191,6 +223,9 @@ impl Parser {
         line: Option<usize>,
         column: Option<usize>,
     ) {
+        if let (Some(l), Some(c)) = (line, column) {
+            crate::error::span_check::assert_location("parser diagnostic", l, c);
+        }
         self.warnings.push(ParseWarning {
             message,
             file,
@@ -209,6 +244,7 @@ impl Parser {
     pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
         unsafe {
             let ptr = self.expr_arena.alloc(expr);
+            self.record_span(ptr as *const Expression<'static> as usize);
             std::mem::transmute(ptr)
         }
     }
@@ -218,6 +254,7 @@ impl Parser {
     pub(crate) fn alloc_stmt<'ast>(&self, stmt: Statement<'static>) -> &'ast Statement<'ast> {
         unsafe {
             let ptr = self.stmt_arena.alloc(stmt);
+            self.record_span(ptr as *const Statement<'static> as usize);
             std::mem::transmute(ptr)
         }
     }
@@ -279,15 +316,20 @@ impl Parser {
             Token::Shr => {
                 // Split >> into two > tokens
                 // We consume one > and insert another > after it
-                let current_location = self.tokens[self.position].clone();
-                let mut gt_token = current_location.clone();
-                gt_token.token = Token::Gt;
+                // The two halves partition the `>>` span: `>` at [s, s+1) and `>` at [s+1, s+2).
+                let shr = self.tokens[self.position].clone();
+                let mut first = shr.clone();
+                first.token = Token::Gt;
+                first.byte_end = shr.byte_start + 1;
+                first.end_line = shr.line;
+                first.end_column = shr.column + 1;
+                let mut second = shr;
+                second.token = Token::Gt;
+                second.byte_start += 1;
+                second.column += 1;
 
-                // Replace current Shr with Gt
-                self.tokens[self.position] = gt_token.clone();
-
-                // Insert another Gt right after this position
-                self.tokens.insert(self.position + 1, gt_token);
+                self.tokens[self.position] = first;
+                self.tokens.insert(self.position + 1, second);
 
                 // Advance to consume the first >
                 self.advance();
@@ -306,7 +348,23 @@ impl Parser {
     // SECTION 3: TOP-LEVEL PARSING
     // ========================================================================
 
+    /// Parse a whole program. Every error carries `file:line:col: error:` of the token the parser
+    /// was looking at when it failed (unless the producer already located it).
     pub fn parse(&mut self) -> Result<Program<'static>, String> {
+        self.parse_program().map_err(|msg| self.locate_error(msg))
+    }
+
+    pub(crate) fn locate_error(&self, msg: String) -> String {
+        if message_has_line_col(&msg) {
+            return msg;
+        }
+        match self.tokens.get(self.position).or_else(|| self.tokens.last()) {
+            Some(t) => format!("{}:{}:{}: error: {}", self.filename, t.line, t.column, msg),
+            None => msg,
+        }
+    }
+
+    fn parse_program(&mut self) -> Result<Program<'static>, String> {
         let mut items = Vec::new();
 
         while self.current_token() != &Token::Eof {
@@ -669,6 +727,11 @@ impl Parser {
     // Helper: Extract a name from a pattern for backward compatibility
 
     // Public wrapper methods for component compiler
+    /// Index of the next unconsumed token (tests use it to check a parse consumed its input).
+    pub fn token_position(&self) -> usize {
+        self.position
+    }
+
     pub fn parse_expression_public(&mut self) -> Result<&'static Expression<'static>, String> {
         self.parse_expression()
     }

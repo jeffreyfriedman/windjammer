@@ -378,9 +378,12 @@ impl WindjammerLanguageServer {
         }
 
         let line = lines[position.line as usize];
-        let char_pos = position.character as usize;
+        // `character` is UTF-16 code units, not chars or bytes (LSP spec).
+        let byte_in_line =
+            windjammer::error::span_check::lsp_position_to_byte(line, 0, position.character)?;
+        let char_pos = line[..byte_in_line].chars().count();
 
-        if char_pos >= line.len() {
+        if char_pos >= line.chars().count() {
             return None;
         }
 
@@ -946,12 +949,13 @@ impl LanguageServer for WindjammerLanguageServer {
         };
 
         // Find function at cursor position (simplified - look for function name before cursor)
-        let line_start = content
-            .lines()
-            .take(position.line as usize)
-            .map(|l| l.len() + 1)
-            .sum::<usize>();
-        let cursor_offset = line_start + position.character as usize;
+        let Some(cursor_offset) = windjammer::error::span_check::lsp_position_to_byte(
+            &content,
+            position.line,
+            position.character,
+        ) else {
+            return Ok(None);
+        };
 
         // Look backward for function call pattern
         let before_cursor = &content[..cursor_offset];

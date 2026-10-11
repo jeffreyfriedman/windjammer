@@ -22,6 +22,13 @@ impl Parser {
     }
 
     pub(crate) fn parse_statement(&mut self) -> Result<&'static Statement<'static>, String> {
+        self.span_enter();
+        let r = self.parse_statement_inner();
+        self.span_exit();
+        r
+    }
+
+    fn parse_statement_inner(&mut self) -> Result<&'static Statement<'static>, String> {
         match self.current_token() {
             Token::Let => self.parse_let(),
             Token::Const => self.parse_const_statement(),

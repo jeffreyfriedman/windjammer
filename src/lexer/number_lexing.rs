@@ -2,6 +2,7 @@ use super::{Lexer, Token};
 
 impl Lexer {
     pub(in crate::lexer) fn read_number(&mut self) -> Token {
+        let start_pos = self.position;
         let int_only_after_field_dot = self.numeric_field_index_after_dot;
         self.numeric_field_index_after_dot = false;
 
@@ -44,22 +45,16 @@ impl Lexer {
                                 if crate::type_classification::is_numeric_suffix(&suffix) {
                                     Some(suffix)
                                 } else {
-                                    for _ in 0..suffix.len() {
-                                        self.position = self.position.saturating_sub(1);
-                                    }
-                                    self.current_char = if self.position < self.input.len() {
-                                        Some(self.input[self.position])
-                                    } else {
-                                        None
-                                    };
+                                    self.rewind_ascii(suffix.len());
                                     None
                                 }
                             } else {
                                 None
                             };
 
-                        let parsed =
-                            u128::from_str_radix(&hex_str, 16).expect("Invalid hex literal");
+                        let Ok(parsed) = u128::from_str_radix(&hex_str, 16) else {
+                            return Token::Unknown(self.text_since(start_pos));
+                        };
 
                         if let Some(suffix) = type_suffix {
                             let bits = parsed as u64;
@@ -92,8 +87,9 @@ impl Lexer {
                             }
                         }
 
-                        let value =
-                            i64::from_str_radix(&bin_str, 2).expect("Invalid binary literal");
+                        let Ok(value) = i64::from_str_radix(&bin_str, 2) else {
+                            return Token::Unknown(self.text_since(start_pos));
+                        };
                         return Token::IntLiteral(value);
                     }
                     'o' | 'O' => {
@@ -113,8 +109,9 @@ impl Lexer {
                             }
                         }
 
-                        let value =
-                            i64::from_str_radix(&oct_str, 8).expect("Invalid octal literal");
+                        let Ok(value) = i64::from_str_radix(&oct_str, 8) else {
+                            return Token::Unknown(self.text_since(start_pos));
+                        };
                         return Token::IntLiteral(value);
                     }
                     _ => {
@@ -189,14 +186,7 @@ impl Lexer {
                     _ => {
                         // Not a valid type suffix, backtrack
                         // This handles cases like "0ux" which should be "0" + "ux" (identifier)
-                        for _ in 0..suffix.len() {
-                            self.position -= 1;
-                        }
-                        self.current_char = if self.position < self.input.len() {
-                            Some(self.input[self.position])
-                        } else {
-                            None
-                        };
+                        self.rewind_ascii(suffix.len());
                         None
                     }
                 }
@@ -204,13 +194,16 @@ impl Lexer {
                 None
             };
 
-            if let Some(suffix) = _type_suffix {
-                Token::IntLiteralSuffixed(num_str.parse().unwrap(), suffix)
-            } else {
-                Token::IntLiteral(num_str.parse().unwrap())
+            match (num_str.parse::<i64>(), _type_suffix) {
+                (Ok(n), Some(suffix)) => Token::IntLiteralSuffixed(n, suffix),
+                (Ok(n), None) => Token::IntLiteral(n),
+                (Err(_), _) => Token::Unknown(self.text_since(start_pos)),
             }
         } else {
-            Token::FloatLiteral(num_str.parse().unwrap())
+            match num_str.parse::<f64>() {
+                Ok(f) => Token::FloatLiteral(f),
+                Err(_) => Token::Unknown(self.text_since(start_pos)),
+            }
         }
     }
 }

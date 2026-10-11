@@ -1,0 +1,7 @@
+# class count. Counts may only shrink: fix the code, then lower or delete the line.
+src/linter/rust_leakage.rs 2
+src/resolve/collect.rs 1
+src/resolve/mod.rs 1
+src/resolve/res.rs 1
+src/resolve/uses.rs 1
+src/resolve/walk.rs 1

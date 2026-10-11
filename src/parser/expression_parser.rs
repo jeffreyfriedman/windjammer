@@ -14,7 +14,10 @@ use crate::parser_impl::Parser;
 
 impl Parser {
     pub(crate) fn parse_expression(&mut self) -> Result<&'static Expression<'static>, String> {
-        self.parse_ternary_expression()
+        self.span_enter();
+        let r = self.parse_ternary_expression();
+        self.span_exit();
+        r
     }
 
     pub(in crate::parser) fn parse_ternary_expression(

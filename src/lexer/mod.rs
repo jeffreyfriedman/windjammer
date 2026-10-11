@@ -11,6 +11,10 @@ pub struct Lexer {
     pub(in crate::lexer) current_char: Option<char>,
     pub(in crate::lexer) line: usize,
     pub(in crate::lexer) column: usize,
+    /// Byte offset of `position` in the original text (0-based).
+    pub(in crate::lexer) byte_pos: usize,
+    /// `(line, column, byte)` of the start of each `${...}` body seen in the current token.
+    pub(in crate::lexer) interp_starts: Vec<(usize, usize, usize)>,
     /// After a `.` token, the next numeric literal is a tuple/field index: do not merge `0.0` into
     /// one float (so `outer.0.0` tokenizes as `0` `.` `0`, not `0.0`).
     pub(in crate::lexer) numeric_field_index_after_dot: bool,
@@ -27,8 +31,20 @@ impl Lexer {
             current_char,
             line: 1,
             column: 1,
+            byte_pos: 0,
+            interp_starts: Vec::new(),
             numeric_field_index_after_dot: false,
         }
+    }
+
+    /// A lexer for text that starts at `(line, column, byte)` of a larger source (the body of a
+    /// string interpolation), so its tokens carry positions in the original file.
+    pub fn with_origin(input: &str, line: usize, column: usize, byte: usize) -> Self {
+        let mut lx = Self::new(input);
+        lx.line = line;
+        lx.column = column;
+        lx.byte_pos = byte;
+        lx
     }
 
     pub(in crate::lexer) fn advance(&mut self) {
@@ -40,8 +56,30 @@ impl Lexer {
             self.column += 1;
         }
 
+        self.byte_pos += self.current_char.map_or(0, char::len_utf8);
         self.position += 1;
         self.current_char = self.input.get(self.position).copied();
+    }
+
+    /// Step back over `n` ASCII, non-newline characters (number-suffix backtracking). Keeps
+    /// line/column/byte bookkeeping in sync with `position`.
+    pub(in crate::lexer) fn rewind_ascii(&mut self, n: usize) {
+        self.position -= n;
+        self.column -= n;
+        self.byte_pos -= n;
+        self.current_char = self.input.get(self.position).copied();
+    }
+
+    /// Source text from char index `start` up to the current position.
+    pub(in crate::lexer) fn text_since(&self, start: usize) -> String {
+        self.input[start..self.position].iter().collect()
+    }
+
+    /// True at a `//` comment that is not a doc comment (`///` not followed by a third `/`).
+    fn at_plain_comment(&self) -> bool {
+        self.current_char == Some('/')
+            && self.peek(1) == Some('/')
+            && !(self.peek(2) == Some('/') && self.peek(3) != Some('/'))
     }
 
     pub(in crate::lexer) fn peek(&self, offset: usize) -> Option<char> {
@@ -392,7 +430,7 @@ impl Lexer {
             }
             Some(ch) => {
                 self.advance();
-                panic!("Unexpected character: {}", ch);
+                Token::Unknown(ch.to_string())
             }
         };
 
@@ -412,17 +450,33 @@ impl Lexer {
         }
     }
 
-    /// Get next token with its source location
+    /// Get next token with its source location.
+    ///
+    /// Span convention (see docs/testing/INVARIANTS.md): lines and columns are 1-based, columns
+    /// count Unicode scalar values (not bytes, not UTF-16 units), lines end at `\n` only, and byte
+    /// offsets are 0-based and half-open. Whitespace and plain `//` comments are trivia and belong
+    /// to no token: the span starts at the token itself.
     pub fn next_token_with_location(&mut self) -> TokenWithLocation {
-        // Leading blanks belong to no token: the span must start at the token itself.
-        self.skip_whitespace();
-        let line = self.line;
-        let column = self.column;
+        loop {
+            self.skip_whitespace();
+            if self.at_plain_comment() {
+                self.skip_comment();
+            } else {
+                break;
+            }
+        }
+        let (line, column, byte_start) = (self.line, self.column, self.byte_pos);
+        self.interp_starts.clear();
         let token = self.next_token();
         TokenWithLocation {
             token,
             line,
             column,
+            byte_start,
+            byte_end: self.byte_pos,
+            end_line: self.line,
+            end_column: self.column,
+            interpolation_starts: std::mem::take(&mut self.interp_starts),
         }
     }
 
