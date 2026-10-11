@@ -71,7 +71,7 @@ impl Interpreter {
     pub(crate) fn eval(&mut self, e: &'static Expression<'static>) -> R {
         let v = self.eval_raw(e)?;
         if let Value::Ref(_) = v {
-            deref_value(v)
+            super::place::strip_refs(v)
         } else {
             Ok(v)
         }
@@ -146,7 +146,11 @@ impl Interpreter {
                     let v = self.eval(operand)?;
                     self.logical_not(v)
                 }
-                UnaryOp::Deref | UnaryOp::Ref => self.eval(operand),
+                UnaryOp::Deref => {
+                    let v = self.eval(operand)?;
+                    deref_value(v)
+                }
+                UnaryOp::Ref => self.eval(operand),
                 UnaryOp::MutRef => {
                     if let Some(p) = self.resolve_place(operand)? {
                         Ok(Value::Ref(p))
@@ -158,7 +162,8 @@ impl Interpreter {
 
             Expression::Call { function, arguments, location } => {
                 self.mark(location.as_ref());
-                self.eval_call(function, arguments)
+                let expected = self.take_expected(e);
+                self.eval_call(function, arguments, expected)
             }
 
             Expression::MethodCall { object, method, type_args, arguments, location } => {
@@ -217,6 +222,7 @@ impl Interpreter {
                     env: self.scope.vars.clone(),
                     module: self.scope.module,
                     self_ty: self.scope.self_ty.clone(),
+                    tparams: self.scope.tparams.clone(),
                 })))
             }
 
@@ -263,17 +269,23 @@ impl Interpreter {
             Expression::Block { statements, .. } => {
                 self.push_scope();
                 let r = self.exec_stmts(statements);
-                self.pop_scope();
-                r
+                self.pop_scope(r)
             }
 
-            Expression::Await { location, .. }
-            | Expression::AsyncCall { location, .. }
+            Expression::Await { expr, location } => {
+                let v = self.eval(expr)?;
+                self.mark(location.as_ref());
+                self.await_value(v)
+            }
+
+            Expression::AsyncCall { location, .. }
             | Expression::SpawnCall { location, .. }
             | Expression::ChannelSend { location, .. }
             | Expression::ChannelRecv { location, .. } => {
                 self.mark(location.as_ref());
-                Err(unsupported("async/await, spawn and channels"))
+                Err(unsupported(
+                    "`async expr`, `spawn`, channels and `<-` (ADR-0004: the concurrency surface is not settled; only `async fn` + `.await` run, sequentially)",
+                ))
             }
         }
     }
@@ -311,6 +323,13 @@ impl Interpreter {
     }
 
     pub(crate) fn field_of(&mut self, obj: &Value, field: &str) -> R {
+        let peeled;
+        let obj = if let Value::Rc(_) = obj {
+            peeled = deref_value(obj.clone())?;
+            &peeled
+        } else {
+            obj
+        };
         match obj {
             Value::Struct(s) => s
                 .fields
@@ -335,6 +354,9 @@ impl Interpreter {
     }
 
     pub(crate) fn index_value(&mut self, obj: &Value, idx: &Value) -> R {
+        if matches!(obj, Value::Rc(_)) || matches!(idx, Value::Rc(_)) {
+            return self.index_value(&deref_value(obj.clone())?, &deref_value(idx.clone())?);
+        }
         match (obj, idx) {
             (Value::Vec(v), Value::Int(i, _)) => {
                 if *i < 0 || *i as usize >= v.len() {
@@ -373,6 +395,16 @@ impl Interpreter {
         name: &'static str,
         fields: &'static [(String, &'static Expression<'static>)],
     ) -> R {
+        if matches!(name, "RangeFrom" | "std::ops::RangeFrom") && !self.structs.contains_key("RangeFrom") {
+            // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
+            return match fields {
+                [(f, ex)] if f == "start" => match self.eval(ex)? {
+                    Value::Int(a, t) => Ok(Value::Range(a, i128::MAX, t)),
+                    other => Err(unsupported(format!("`..` range from {}", other.type_name()))),
+                },
+                _ => Err(semantic("malformed RangeFrom")),
+            };
+        }
         let mut name = name.to_string();
         if let Some(rest) = name.strip_prefix("Self::") {
             name = format!("{}::{}", self.scope.self_ty.as_deref().unwrap_or("Self"), rest);
@@ -434,7 +466,7 @@ impl Interpreter {
                 return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
             }
         }
-        Ok(Value::Struct(Rc::new(StructVal { name: Rc::from(name.as_str()), fields: out, copy })))
+        Ok(self.make_struct(name.as_str(), out, copy))
     }
 
     pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {

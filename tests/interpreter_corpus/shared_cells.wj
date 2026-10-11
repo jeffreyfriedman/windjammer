@@ -1,0 +1,51 @@
+// seeds: 2 3 7 12
+// interp-only: the compiler rejects `Rc::strong_count(&x)` (explicit borrow, W0004) and has no spelling for it
+// Rc/Arc sharing and counts, RefCell/Cell/Mutex interior mutability, Weak upgrade after the owner is gone.
+use std::rc::{Rc, Weak}
+use std::cell::{RefCell, Cell}
+use std::sync::{Arc, Mutex}
+
+struct Node {
+    val: int,
+    parent: RefCell<Weak<Node>>,
+}
+
+fn main() {
+    let s: int = __SEED__
+    let shared = Rc::new(RefCell::new(s))
+    let a = Rc::clone(&shared)
+    println("count {}", Rc::strong_count(&shared))
+    let mut ga = a.borrow_mut();
+    *ga += 10
+    println("{}", shared.borrow())
+    {
+        let b = Rc::clone(&shared)
+        println("count {}", Rc::strong_count(&shared))
+        let mut gb = b.borrow_mut();
+        *gb *= 2
+    }
+    println("count {} val {}", Rc::strong_count(&shared), shared.borrow())
+
+    let c = Cell::new(s)
+    c.set(c.get() * 3 + 1)
+    println("{}", c.get())
+
+    let m = Arc::new(Mutex::new(s))
+    let m2 = Arc::clone(&m)
+    {
+        let mut g = m2.lock().unwrap();
+        *g += 7
+    }
+    println("{}", *m.lock().unwrap())
+
+    let leaf = Rc::new(Node { val: s, parent: RefCell::new(Weak::new()) })
+    println("orphan {}", leaf.parent.borrow().upgrade().is_none())
+    {
+        let branch = Rc::new(Node { val: s + 1, parent: RefCell::new(Weak::new()) })
+        let mut lp = leaf.parent.borrow_mut();
+        *lp = Rc::downgrade(&branch)
+        println("parent {}", leaf.parent.borrow().upgrade().unwrap().val)
+        println("{} {}", Rc::strong_count(&branch), Rc::weak_count(&branch))
+    }
+    println("orphan {}", leaf.parent.borrow().upgrade().is_none())
+}
