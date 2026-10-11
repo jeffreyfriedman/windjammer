@@ -392,11 +392,22 @@ impl Lexer {
             }
             Some(ch) => {
                 self.advance();
-                panic!("Unexpected character: {}", ch);
+                Token::Invalid(Self::unexpected_char_message(ch))
             }
         };
 
         token
+    }
+
+    /// Diagnostic text for a character that starts no token. `#` gets a fix suggestion: ADR-0014
+    /// surface syntax spells attributes as decorators (`@derive(Clone)`), not `#[derive(Clone)]`.
+    pub fn unexpected_char_message(ch: char) -> String {
+        match ch {
+            '#' => "unexpected character '#': Windjammer has no `#[...]` attributes; use a decorator, e.g. `@derive(Clone)` instead of `#[derive(Clone)]`, `@test` instead of `#[test]`".to_string(),
+            '$' => "unexpected character '$': `${...}` is only valid inside a string literal".to_string(),
+            '`' => "unexpected character '`': use \"...\" for strings".to_string(),
+            _ => format!("unexpected character {:?}", ch),
+        }
     }
 
     /// `|>` or `|>?` (the cursor is on the `|`).
