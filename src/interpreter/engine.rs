@@ -122,6 +122,10 @@ pub struct Interpreter {
     /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
     pub(crate) sched: super::sched::Sched,
     pub(crate) epoch: std::time::Instant,
+    /// Global random generator (`std::random`), seeded from entropy unless time is deterministic.
+    pub(crate) rng: Option<rand::rngs::StdRng>,
+    /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
+    pub(crate) log_level: Option<i32>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -173,6 +177,8 @@ impl Interpreter {
             scope: Scope::new(0),
             sched: super::sched::Sched::new(),
             epoch: std::time::Instant::now(),
+            rng: None,
+            log_level: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,

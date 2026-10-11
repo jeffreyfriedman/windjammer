@@ -177,6 +177,7 @@ pub fn register(r: &mut Registry) {
     r.native("Duration", "as_millis", |_, v, _| Ok(Value::Int(dur(v) / 1_000_000, IntTy::U128)));
     r.native("Duration", "as_micros", |_, v, _| Ok(Value::Int(dur(v) / 1_000, IntTy::U128)));
     r.native("Duration", "as_nanos", |_, v, _| Ok(Value::Int(dur(v), IntTy::U128)));
+    r.native("Duration", "as_seconds", |_, v, _| Ok(Value::Int(dur(v) / 1_000_000_000, IntTy::I64)));
     r.native("Duration", "as_secs_f64", |_, v, _| Ok(Value::float(dur(v) as f64 / 1e9)));
     r.native("Duration", "as_secs_f32", |_, v, _| Ok(Value::Float((dur(v) as f64 / 1e9) as f32 as f64, FloatTy::F32)));
     r.native("Duration", "subsec_nanos", |_, v, _| Ok(Value::Int(dur(v) % 1_000_000_000, IntTy::U32)));
