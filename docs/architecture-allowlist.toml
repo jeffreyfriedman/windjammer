@@ -179,7 +179,7 @@
 "src/file_compilation_pipeline.rs::compile_file_impl" = 403
 "src/interpreter/builtins/option.rs::register" = 316
 "src/interpreter/builtins/seq.rs::register_vec" = 360
-"src/ir/constraint_gen.rs::walk_expression" = 377
+"src/ir/constraint_gen.rs::walk_expression" = 362
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 304
 "src/parser/call_expression_parser.rs::parse_postfix_expression" = 489
