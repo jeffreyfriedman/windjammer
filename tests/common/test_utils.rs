@@ -242,13 +242,11 @@ fn assert_stdlib_runtime_links_impl(
         panic!("stdlib transpile failed:\n{e}");
     });
 
-    let generated = fs::read_to_string(out_dir.join("test.rs")).unwrap_or_else(|_| {
-        fs::read_to_string(out_dir.join("main.rs")).unwrap_or_default()
-    });
+    let generated = fs::read_to_string(out_dir.join("test.rs"))
+        .unwrap_or_else(|_| fs::read_to_string(out_dir.join("main.rs")).unwrap_or_default());
 
     assert!(
-        !generated.contains("compile_error!")
-            && !generated.contains("missing boundary signature"),
+        !generated.contains("compile_error!") && !generated.contains("missing boundary signature"),
         "stdlib must not emit fail-closed compile_error!, got:\n{generated}"
     );
 

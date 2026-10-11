@@ -1,4 +1,4 @@
-// Binary expressions, pipe (`|>`), channel send, and precedence helpers.
+// Binary expressions, channel send, and precedence helpers.
 
 use crate::lexer::Token;
 use crate::parser::ast::*;
@@ -12,36 +12,6 @@ impl Parser {
         let mut left = self.parse_primary_expression()?;
 
         loop {
-            // Check for pipe operator: value |> func  or  value |> f(a, b) -> f(value, a, b)
-            if self.current_token() == &Token::PipeOp {
-                self.advance();
-
-                // Parse the right side (function or call expression)
-                let func = self.parse_primary_expression()?;
-
-                left = match func {
-                    Expression::Call {
-                        function,
-                        arguments,
-                        location,
-                    } => {
-                        let mut new_args = arguments.clone();
-                        new_args.insert(0, (None, left));
-                        self.alloc_expr(Expression::Call {
-                            function,
-                            arguments: new_args,
-                            location: location.clone(),
-                        })
-                    }
-                    _ => self.alloc_expr(Expression::Call {
-                        function: func,
-                        arguments: vec![(None, left)],
-                        location: self.current_location(),
-                    }),
-                };
-                continue;
-            }
-
             // Check for channel send: ch <- value
             if self.current_token() == &Token::LeftArrow {
                 self.advance();

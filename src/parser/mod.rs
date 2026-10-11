@@ -26,6 +26,7 @@ mod compound_primary_expression_parser;
 pub mod expression_parser;
 mod interpolated_string_expression_parser;
 mod match_value_expression_parser;
+mod pipe_parser;
 mod primary_expression_parser;
 
 // Statement parsing module - extracted from parser_impl.rs

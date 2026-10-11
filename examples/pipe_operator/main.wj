@@ -1,0 +1,61 @@
+// Pipe operator example. See docs/design/pipe-operator.md.
+//
+// Expected output:
+//   16
+//   hello ada!
+//   6
+//   ok 2
+//   err odd 5
+
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn add(x: int, y: int) -> int {
+    x + y
+}
+
+fn greet(name: string) -> string {
+    "hello ${name}"
+}
+
+fn shout(s: string) -> string {
+    "${s}!"
+}
+
+fn half(n: int) -> Result<int, string> {
+    if n % 2 != 0 {
+        Err("odd ${n}")
+    } else {
+        Ok(n / 2)
+    }
+}
+
+fn quarter(n: int) -> Result<int, string> {
+    n |> half()? |> half()
+}
+
+fn main() {
+    // x |> f(a) is f(x, a); |> binds looser than every other operator
+    let n = 3 + 1 |> double |> add(8)
+    println("${n}")
+
+    // multi-line chain
+    let msg = "ada"
+        |> greet
+        |> shout
+    println("${msg}")
+
+    // placeholder picks the argument position
+    let v = 2 |> add(1, _) |> double
+    println("${v}")
+
+    match 8 |> quarter {
+        Ok(r) => println("ok ${r}"),
+        Err(e) => println("err ${e}"),
+    }
+    match 10 |> quarter {
+        Ok(r) => println("ok ${r}"),
+        Err(e) => println("err ${e}"),
+    }
+}

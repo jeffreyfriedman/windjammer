@@ -22,7 +22,7 @@ impl Parser {
     ) -> Result<&'static Expression<'static>, String> {
         // Ternary operator removed - use if/else expressions instead
         // This simplifies the parser and eliminates ambiguity with TryOp (?)
-        self.parse_binary_expression(0)
+        self.parse_pipe_expression()
     }
 
     pub(crate) fn peek(&self, offset: usize) -> Option<&Token> {
