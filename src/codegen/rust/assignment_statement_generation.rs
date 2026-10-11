@@ -72,7 +72,7 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 self.assignment_int_target_type = tgt_ty.clone();
             }
-            // Annotated / local usize bindings beat weak inference (DB-121).
+            // Annotated / local usize bindings beat weak inference.
             if let Expression::Identifier { name, .. } = target {
                 if let Some(t) = self.local_var_types.get(name) {
                     if Self::assignment_target_needs_int_codegen_context(t) {
@@ -399,7 +399,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .unwrap_or("i64");
                         let already_target_cast = right_str.ends_with(&format!(" as {cast}"))
                             || right_str.ends_with(&format!(") as {cast}"));
-                        // DB-302: never narrow an explicit `as i64` RHS to i32
+                        // never narrow an explicit `as i64` RHS to i32
                         // (`triangles as i64 as i32`) — emitted i64 width wins.
                         let rhs_explicit_i64 =
                             right_str.ends_with(" as i64") || right_str.ends_with(") as i64");
@@ -465,7 +465,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             self.assignment_float_target_type = tgt_ty.clone();
         } else if let Some(ft) = self.resolve_compound_assign_float_target(target) {
-            // DB-092: Index assign (`distances[u] = 0.0`) — fall back to float inference /
+            // Index assign (`distances[u] = 0.0`) — fall back to float inference /
             // compound-assign resolution when direct LHS type inference is weak.
             self.assignment_float_target_type = Some(Type::Custom(ft.to_string()));
         }
@@ -563,7 +563,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
 
-            // DB-367: `None` / bool keywords are not bindings — auto_clone can
+            // `None` / bool keywords are not bindings — auto_clone can
             // false-hit `"None"` at the wrong statement_idx → `None.clone()`.
             // Unit `None` never needs clone (Option::None is freely constructible).
             let is_unit_keyword = name == "None" || name == "true" || name == "false";
@@ -583,10 +583,10 @@ impl<'ast> CodeGenerator<'ast> {
                         let target_is_copy =
                             target_type.as_ref().is_some_and(|t| self.is_type_copy(t));
                         // Dual-oracle: identifier emit already skips Copy; do not re-clone
-                        // on field assign (DB-391 helper u32, DB-393 i32 formals, DB-394 usize).
+                        // on field assign (helper u32, i32 formals, usize).
                         let skip_copy =
                             target_is_copy || self.ident_skips_auto_clone_as_copy(name, value);
-                        // DB-340: demoted `&str` → owned String already got
+                        // demoted `&str` → owned String already got
                         // `.to_string()` above (P3.418). Do not stack a second
                         // `.to_string()` / `.clone()` from auto_clone reuse.
                         if owned_string_field && self.inferred_borrowed_params.contains(name) {
@@ -770,7 +770,7 @@ impl Bus {
         );
     }
 
-    /// DB-391: helper `u32` assigned to a field and reused must not `.clone()`.
+    // helper `u32` assigned to a field and reused must not `.clone()`.
     #[test]
     fn copy_u32_helper_return_assign_must_not_clone() {
         let source = r#"

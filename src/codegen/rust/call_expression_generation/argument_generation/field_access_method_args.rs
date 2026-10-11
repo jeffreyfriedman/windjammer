@@ -190,7 +190,7 @@ pub(in crate::codegen::rust) fn field_access_method_args_with_signature<'ast>(
                     false,
                     "IR call-site coercion must be total when call_sites is on ({qualified_name})"
                 );
-                // P3.635 / DB-134: IR miss must not skip HashMap key borrow on match
+                // P3.635 / IR miss must not skip HashMap key borrow on match
                 // scrutinees (`self.inner.get(label)`).
                 let effective_sig = type_name
                     .as_ref()

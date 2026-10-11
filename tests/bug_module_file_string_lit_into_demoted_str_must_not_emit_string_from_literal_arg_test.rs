@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-168: string literal into demoted `&str` formal must stay `&str`, not `String::from`.
+//! string literal into demoted `&str` formal must stay `&str`, not `String::from`.
 //!
 //! Product (`wave1_opt_hardware_port.wj`):
 //!   session = pg_wire_parse(session, "s1", wave1_opt_point_select_sql())
@@ -19,7 +19,7 @@
 //! → E0308 expected `&str`, found `String` (large share of ~162 &str←String residuals).
 //!
 //! Expected: emit `"s1"` (or `&…`) into demoted `&str`. Keep owned `String` formal is also GREEN.
-//! Distinct from DB-152 (lit → owned `string` needs `.to_string()`).
+//! Distinct from (lit → owned `string` needs `.to_string()`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

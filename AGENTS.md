@@ -2,7 +2,7 @@
 
 **Read the [windjammer-engineering skill](../.cursor/skills/windjammer-engineering/SKILL.md) before starting work.**
 
-Open compiler bugs are tracked in `tests/COMPILER_REPRO_QUEUE.md` (being consolidated); `bd` is optional.
+Open compiler bugs are tracked outside this repository; `bd` is optional.
 
 ## Architecture
 
@@ -46,7 +46,7 @@ When a seed app hits a compiler bug:
 3. Add a minimal failing repro under `tests/` here (see `package_flat_lib_wj_test_exports_test.rs`).
 4. Fix via signatures / IR / solver — no method-name heuristics — then resume the seed.
 
-Game, DbProject, and finance remain separate dogfoods; seed bugs still get TDD fixes in this tree.
+Game, a database project, and finance remain separate dogfoods; seed bugs still get TDD fixes in this tree.
 
 ## Landing the Plane (Session Completion)
 
@@ -90,10 +90,10 @@ See `tests/README.md` for suite features and filtering. **Never run tests with `
 
 Compiler-only changes: tests + `cargo test --release --test all` in `windjammer/` are sufficient.
 
-When fixes enable or change player-visible behavior in **Sample Game** or the engine render path, agents must validate through the game — not only unit tests:
+When fixes enable or change player-visible behavior in **a game project** or the engine render path, agents must validate through the game — not only unit tests:
 
-1. Build the game: `wj game build --release` in `../sample-game/`
-2. Headless playthrough with screenshots (see `../sample-game/AGENTS.md`)
+1. Build the game: `wj game build --release` in `../a game project/`
+2. Headless playthrough with screenshots (see `../a game project/AGENTS.md`)
 3. Dual-persona jury per `../.cursor/rules/dual-persona-jury-evaluation.mdc`
 
 Do not claim rendering or gameplay fixes are done without screenshot evidence and three-tier verdict.
@@ -104,7 +104,7 @@ Do not claim rendering or gameplay fixes are done without screenshot evidence an
 2. **Tests = production.** No test-only defaults. `IrCutoverConfig::default()` must match `from_env()`; unit tests exercise the same paths as `wj build`.
 3. **Done means tip-green.** A fix must pass both the isolate test and the whole-program multipass ("tip") test. An isolate-GREEN/tip-RED fix is not done.
 4. **Never silently change semantics.** Clone insertion must not drop mutations (`x.clone().mutate()`); mutating `self` methods infer `&mut self`. Prefer a hard Windjammer diagnostic over emitting code that compiles but behaves differently.
-5. **Repros are generic.** Name tests by behavior (`bug_<behavior>_test.rs`), not by dogfood ticket (`db`, `downstreamapp`, game file names). Project-specific fixtures belong in the project repo. The compiler never references a dogfood project's code.
+5. **Repros are generic.** Name tests by behavior (`bug_<behavior>_test.rs`), not by dogfood ticket (project-specific ticket ids, downstream project names, game file names). Project-specific fixtures belong in the project repo. The compiler never references a dogfood project's code.
 6. **Minimal repros, one bug each.** Reduce before filing; delete redundant/duplicate tests when a broader test subsumes them.
 7. **Tests write to temp dirs only.** Always `--out-dir`/`tempfile` for `rustc`; never write `*.rlib`, `tmp_*`, `*.zip` in the repo root.
 8. **No status docs** at the repo root or in `docs/` for sessions; update `CHANGELOG.md` instead.

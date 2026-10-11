@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-312: owned `String` formals must not receive `&dated_label.clone()` (wave1 publish).
+//! owned `String` formals must not receive `&dated_label.clone()` (wave1 publish).
 //!
 //! Product tip-out/gen:
 //!   `wave1_publish_append_gate_rows(&out, …, &dated_label.clone(), …)`
 //!   with `dated_label: String` → E0308.
-//! Twin of DB-306/310; prefer `dated_label.clone()` without `&` (and owned `out` move/clone).
+//! Twin of ; prefer `dated_label.clone()` without `&` (and owned `out` move/clone).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

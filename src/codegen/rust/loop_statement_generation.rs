@@ -96,7 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(t, Type::Int)
                                 || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
                         });
-                        // DB-361: explicit / inferred usize counters must not get
+                        // explicit / inferred usize counters must not get
                         // `(i as usize)` vs `.len()` — both sides are already usize.
                         let local_is_usize = self.expression_produces_usize(left)
                             || self.usize_variables.contains(name)

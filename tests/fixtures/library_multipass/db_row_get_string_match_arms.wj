@@ -1,6 +1,6 @@
 use std::db::Row
 
-/// DownstreamApp `postgres_row_mapping.wj` still uses `v + ""` / `"col" + ""` class
+/// a downstream application `postgres_row_mapping.wj` still uses `v + ""` / `"col" + ""` class
 /// workarounds. Tip greened get_string borrow + Ok/Err own (P3.237). P3.238:
 /// `two_columns` must move `row` into `col_string(row, …)` (not `row.clone()`).
 pub fn col_string(row: Row, col: string) -> (Row, string) {

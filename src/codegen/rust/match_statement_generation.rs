@@ -318,7 +318,7 @@ impl<'ast> CodeGenerator<'ast> {
                 && (wildcard_body_is_empty || wildcard_body_stmts.is_some())
             {
                 let prev_suppress = self.suppress_borrowed_clone;
-                // DB-372: match/if-let scrutinees must not auto-clone indexed fields
+                // match/if-let scrutinees must not auto-clone indexed fields
                 // (`self.entries[i].value.clone()`). Prefer `&place` (prefix below).
                 self.suppress_borrowed_clone = true;
                 let value_str = if let Expression::MethodCall {
@@ -378,7 +378,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // TDD FIX: When scrutinee is a non-Copy Option field on borrowed/mut-borrowed
                     // self, and we stripped the &/&mut prefix (because binding is used as owned),
                     // we need .clone() to avoid moving out of the borrow.
-                    // DB-349: presence-only `Some(_)` / `None` must borrow (`&place`),
+                    // presence-only `Some(_)` / `None` must borrow (`&place`),
                     // never clone the Option payload.
                     if self.match_scrutinee_is_self_field(value) {
                         if let Some(Type::Option(inner)) = self.infer_expression_type(value) {
@@ -677,7 +677,7 @@ impl<'ast> CodeGenerator<'ast> {
             .any(|arm| matches!(arm.pattern, Pattern::Tuple(_)));
 
         let prev_suppress_scrutinee = self.suppress_borrowed_clone;
-        // DB-372: do not auto-clone match scrutinees (`].value.clone()`).
+        // do not auto-clone match scrutinees (`].value.clone()`).
         self.suppress_borrowed_clone = true;
         let value_str = if let Expression::MethodCall {
             object,
@@ -792,7 +792,7 @@ impl<'ast> CodeGenerator<'ast> {
                     });
                     let behind_borrow = self.inferred_borrowed_params.contains(root_name)
                         || self.inferred_mut_borrowed_params.contains(root_name);
-                    // DB-424: prefer `match &place` over `.clone()` for reused /
+                    // prefer `match &place` over `.clone()` for reused /
                     // behind-borrow non-Copy field places.
                     if (behind_borrow || field_path_reused)
                         && value_str.ends_with(".clone()")
@@ -836,7 +836,7 @@ impl<'ast> CodeGenerator<'ast> {
                         } else if root_name == "self" {
                             // Indexed / field places behind `&self` still move non-Copy
                             // payloads (E0507). Prefer `match &self.entries[i].value`
-                            // over `.clone()` (DB-372).
+                            // over `.clone()`.
                             if matches!(
                                 value,
                                 Expression::FieldAccess { .. } | Expression::Index { .. }
@@ -851,7 +851,7 @@ impl<'ast> CodeGenerator<'ast> {
                             format!("&{}", value_str)
                         }
                     } else if field_path_reused {
-                        // DB-424: repeated match on a non-Copy owned field — prefer
+                        // repeated match on a non-Copy owned field — prefer
                         // `match &place` over move/clone.
                         let base = value_str
                             .strip_suffix(".clone()")
@@ -903,7 +903,7 @@ impl<'ast> CodeGenerator<'ast> {
         let use_cloned_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && self.match_borrow_break_yields_cloned_option(value);
-        // DB-374: Copy enum/scalar self-field (`chunks[i].state`) may reassign the
+        // Copy enum/scalar self-field (`chunks[i].state`) may reassign the
         // place in an arm — still bind by value (Copy); do not force owned-clone.
         let use_owned_copy_field = self.match_borrow_break_yields_owned_copy(value);
         let use_owned_copy_borrow_break = needs_borrow_break
@@ -921,7 +921,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !option_reassigns
             && !self.match_scrutinee_is_self_field(value)
             && self.match_borrow_break_yields_owned_option(value);
-        // DB-354: owned `Result<T, E>` method returns — same as owned Option.
+        // owned `Result<T, E>` method returns — same as owned Option.
         let use_owned_result_borrow_break = needs_borrow_break
             && !use_copied_borrow_break
             && !use_cloned_borrow_break
@@ -986,7 +986,7 @@ impl<'ast> CodeGenerator<'ast> {
                 || use_owned_option_borrow_break
                 || use_owned_result_borrow_break
             {
-                // DB-374: field emit may have appended `.clone()` before we chose the
+                // field emit may have appended `.clone()` before we chose the
                 // Copy borrow-break path — strip so we never get `.clone().clone()`.
                 let mut owned = value_str.clone();
                 while owned.ends_with(".clone()") {
@@ -999,7 +999,7 @@ impl<'ast> CodeGenerator<'ast> {
                 let expr = self.generate_expression(value);
                 let mut raw = self.strip_leading_borrow_prefix(&expr);
                 // Field emit may already have `.clone()` — do not stack another
-                // (DB-374 cross-module Copy lag / double-clone).
+                // (cross-module Copy lag / double-clone).
                 while raw.ends_with(".clone()") {
                     raw.truncate(raw.len() - ".clone()".len());
                 }
@@ -1097,7 +1097,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             owned_bindings_from_copy_deref = true;
         }
-        // DB-347: `apply_match_scrutinee_move_clone_if_needed` appends `.clone()` when a
+        // `apply_match_scrutinee_move_clone_if_needed` appends `.clone()` when a
         // non-Copy field/path is matched twice (`body.shape` → `body.shape.clone()`). The
         // match then binds owned payloads — never treat them as `&f32` / force `r.clone()`.
         if value_str.ends_with(".clone()") {
@@ -1262,7 +1262,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if use_owned_clone_borrow_break || use_owned_copy_borrow_break {
                     self.infer_match_bound_types_owned(value, &arm.pattern)
                 } else if use_copied_borrow_break || use_cloned_borrow_break || use_copied_option {
-                    // HashMap::get + `.copied()` → owned Copy bindings (DB-134).
+                    // HashMap::get + `.copied()` → owned Copy bindings.
                     self.infer_match_bound_types_from_copied_option(value, &arm.pattern)
                 } else {
                     self.infer_match_bound_types(value, &arm.pattern)
@@ -1599,7 +1599,7 @@ impl<'ast> CodeGenerator<'ast> {
             return None;
         }
         let inner = rest[..rest.len().saturating_sub(1)].trim();
-        // Allow rewriting `Some(value.clone())` once binding types are known (DB-429).
+        // Allow rewriting `Some(value.clone())` once binding types are known.
         let bare = inner.strip_suffix(".clone()").unwrap_or(inner).trim();
         if !Self::looks_like_simple_binding_ident(bare) || !added_borrowed.iter().any(|n| n == bare)
         {
@@ -1653,7 +1653,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Boolean `matches!(scrutinee, Some(_))` path: presence-only Option on a
-    /// borrowed place must not clone (DB-349 / usd `has_mesh`).
+    // borrowed place must not clone (usd `has_mesh`).
     fn generate_boolean_matches_scrutinee(
         &mut self,
         value: &'ast Expression<'ast>,
@@ -1704,7 +1704,7 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
-    /// `Some(_)` / `None` / `_` only — no payload bindings (DB-349 presence checks).
+    // `Some(_)` / `None` / `_` only — no payload bindings (presence checks).
     fn option_match_arms_are_presence_only(arms: &[MatchArm<'ast>]) -> bool {
         if arms.is_empty() {
             return false;

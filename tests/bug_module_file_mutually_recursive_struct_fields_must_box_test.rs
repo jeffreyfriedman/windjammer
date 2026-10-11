@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-116: mutually recursive owned struct fields emit infinite-size Rust types (E0072).
+//! mutually recursive owned struct fields emit infinite-size Rust types (E0072).
 //!
 //! a downstream database project CQ-C1 (after Phase 605 complete-chain close + fresh `wj build src --module-file`):
 //! product `a downstream crate` / `a downstream crate` `--lib` fail with E0072 on complete-chain result structs

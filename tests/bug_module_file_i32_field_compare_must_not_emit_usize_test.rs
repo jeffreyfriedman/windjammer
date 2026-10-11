@@ -11,9 +11,9 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-406: i32 field/local compares must not emit `as usize` on one peer.
+//! i32 field/local compares must not emit `as usize` on one peer.
 //!
-//! Product leftover after DB-395 (signed *zero* sentinels stay signed):
+//! Product leftover after (signed *zero* sentinels stay signed):
 //!   `rendering/spatial_index.rs`:
 //!     `if clen > (self.max_leaf_objects as usize) && d < (self.max_depth as usize)`
 //!   while `clen`/`d`/`max_leaf_objects`/`max_depth` are all i32.

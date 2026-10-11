@@ -138,7 +138,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         // string/String params → FfiString via string_to_ffi.
                         // Literals / &str / Display need `.to_string()`. Already-owned
                         // String places (FieldAccess / Identifier) use `.clone()` —
-                        // never `.to_string()` (E0507-safe duplicate; DB-110/111).
+                        // never `.to_string()` (E0507-safe duplicate; ).
                         //
                         // Strip redundant `.to_string()` before wrapping (user wrote
                         // `label.to_string()` → avoid `.to_string().to_string()`).
@@ -166,7 +166,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 ffi_arg.clone()
                             } else if matches!(arg, Expression::FieldAccess { .. }) {
                                 // `self.field` / `param.field` String places: clone into FFI
-                                // (never Display `.to_string()` — DB-110/111 / extern replay).
+                                // (never Display `.to_string()` — / extern replay).
                                 format!("{}.clone()", ffi_arg)
                             } else if let Expression::Identifier { name, .. } = arg {
                                 // Demoted `&str` formals need `.to_string()`; owned `String`
@@ -615,7 +615,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         let callee_wants_str = best_sig.as_ref().is_some_and(slot_wants_shared)
                             || gen.preregistered_free_call_arg_expects_borrow(func_name, i);
                         // Defining-module owned `String` emission beats stale stubs that
-                        // lack `emitted_rust_ref_params` (DB-301: do not `&` into owned).
+                        // lack `emitted_rust_ref_params` (do not `&` into owned).
                         let callee_confirmed_owned_string = dep_owned
                             || (!callee_wants_str
                                 && !dep_shared
@@ -674,7 +674,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             );
                         }
                         // Terminal: owned caller `Vec` reused after call into owned
-                        // callee formal — `.clone()`, never `&binding` (DB-281 class).
+                        // callee formal — `.clone()`, never `&binding` (class).
                         if coerced.starts_with('&') && !coerced.starts_with("&mut ") {
                             let base = crate::codegen::rust::expression_utilities::borrow_base_expr(
                                 &coerced,
@@ -761,7 +761,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                                 == Some(true)
                         });
                         // Only strip owned producers for confirmed shared-ref formals
-                        // (DB-301: do not undo `.to_string()` into owned `String`).
+                        // (do not undo `.to_string()` into owned `String`).
                         if wants_str && !confirmed_owned {
                             crate::codegen::rust::string_utilities::normalize_owned_string_producer_for_str_ref_param(
                                 arg,
@@ -789,7 +789,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                             }
                         }
                         // Always honor caller emit-truth: `run(csr: &DenseCsr)` → `touch(csr)`.
-                        // Must not sit behind callee registry lookup (DB-217).
+                        // Must not sit behind callee registry lookup.
                         if gen.caller_formal_emitted_shared_ref(name)
                             && coerced == format!("&{name}")
                         {
@@ -884,7 +884,7 @@ pub(in crate::codegen::rust) fn collect_regular_function_arguments<'ast>(
                         }
                     }
 
-                    // Absolute terminal: never emit `n as usize.clone()` (DB-300).
+                    // Absolute terminal: never emit `n as usize.clone()`.
                     coerced =
                         crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(
                             &coerced,

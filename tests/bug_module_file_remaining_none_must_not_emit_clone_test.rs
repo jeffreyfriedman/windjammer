@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-380: remaining product `None.clone()` sites DB-367's tip path-list missed.
+//! remaining product `None.clone()` sites 's tip path-list missed.
 //!
-//! DB-367 isolate + listed tip files went GREEN (P3.427), but tip-out still emits
+//! isolate + listed tip files went GREEN (P3.427), but tip-out still emits
 //! `None.clone()` in:
 //!   `tilemap.rs`, `voxel/voxel_scene.rs`, `animation/blend_tree.rs`,
 //!   `dialogue_system.rs`, `editor/animation_timeline.rs`, `audio/music_system.rs`
-//! Prefer bare `None` (Copy). Twin of DB-367.
+//! Prefer bare `None` (Copy). Twin of .
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

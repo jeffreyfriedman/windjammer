@@ -33,7 +33,7 @@ fn compile_single_file(source: &str) -> String {
 #[test]
 fn test_cross_file_fn_call_field_access_clone_for_partial_move() {
     // Moving `pass.label` then reading a *different* field (`pass.shader_id`) is a
-    // valid Rust partial move — no clone required when `pass` is owned (DB-096).
+    // valid Rust partial move — no clone required when `pass` is owned.
     // Clone is still required when the same field is reused or the whole binding is.
     let code = r#"
 use crate::debug::debug_labels::format_label

@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-392: Copy `Direction::PosX` must not emit `.clone()` (DB-384 path miss).
+//! Copy `Direction::PosX` must not emit `.clone()` (path miss).
 //!
-//! DB-384 tip list covers FaceDirection / AlertLevel / NPCBehavior /
+//! tip list covers FaceDirection / AlertLevel / NPCBehavior /
 //! ChunkLifecycleState / MaterialNodeKind, but product
 //! gen/voxel/meshing.rs still has `Direction::PosX.clone()`.
-//! WJ source is `direction: Direction::PosX`. Twin of DB-384.
+//! WJ source is `direction: Direction::PosX`. Twin of .
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

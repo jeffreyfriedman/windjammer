@@ -11,14 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-418: early-return of an owned `Vec` formal must move, not `positions.clone()`.
+//! early-return of an owned `Vec` formal must move, not `positions.clone()`.
 //!
 //! Product `uv_unwrap_algorithm.rs` / `uv_island_packing.rs`:
 //!   `return empty_result(positions.clone())` after `positions.len()` (and later
 //!   sibling-path uses of `positions`).
 //! WJ is `return empty_result(positions)` — that path is exclusive last-use.
-//! Distinct from DB-415 (if-then move, no early return + later sibling uses),
-//! DB-417 (match-arm `chunk.clone()`), and DB-407 (`Vec` `new` demote).
+//! Distinct from (if-then move, no early return + later sibling uses),
+//! (match-arm `chunk.clone()`), and (`Vec` `new` demote).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

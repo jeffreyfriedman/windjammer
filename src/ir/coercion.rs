@@ -231,7 +231,7 @@ fn strip_rust_ref_expr(expr: &str) -> &str {
 
 /// `text[s..e]` / `&text[s..e]` are `str` subslices — owned `String` formals need `.to_string()`.
 fn owned_coercion_for_str_subslice(inner: &str) -> String {
-    // DB-367: unit keywords are constructors — never `.clone()`.
+    // unit keywords are constructors — never `.clone()`.
     if inner == "None" || inner == "true" || inner == "false" {
         return inner.to_string();
     }
@@ -325,7 +325,7 @@ pub fn enforce_ownership_contract_on_coerced_arg_with_force_owned(
         && !crate::codegen::rust::expression_utilities::is_rust_string_literal_text(coerced)
         // P3.402: char is Copy + Pattern by value; `&'.'` is not a valid Pattern.
         && !crate::codegen::rust::expression_utilities::is_rust_char_literal_text(coerced)
-        // DB-329: never borrow a cast-to-usize / cast-to-Copy index expr.
+        // never borrow a cast-to-usize / cast-to-Copy index expr.
         && !coerced.contains(" as usize")
         && !coerced.contains(" as u32")
         && !coerced.contains(" as i32")
@@ -465,7 +465,7 @@ fn needs_string_owned_coercion(actual: &BaseType, expected: &BaseType) -> bool {
         return false;
     }
     // Already an owned `String` place — Identity / `.clone()`, never `.to_string()`
-    // (DB-110/111: `li_path.clone()` must stay clone into owned formals).
+    // (`li_path.clone()` must stay clone into owned formals).
     if is_string_base(actual) {
         return false;
     }
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn owned_string_to_owned_string_is_identity_not_to_owned() {
-        // DB-110/111: owned String → owned String must not pick ToOwnedString
+        // owned String → owned String must not pick ToOwnedString
         // (that rewrote `path.clone()` into `path.to_string()`).
         let actual = owned(BaseType::String);
         let expected = owned(BaseType::String);

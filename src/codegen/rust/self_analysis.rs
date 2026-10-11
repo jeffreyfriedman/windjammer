@@ -385,7 +385,7 @@ fn method_takes_owned_self(
 
 /// True when every `self.field` moved into a call is later assigned back
 /// (`self.buckets = put(take(self.buckets))`). Same-field replace is `&mut self`
-/// (P3.520). Distinct-field ctor moves stay owned (DB-414).
+// (P3.520). Distinct-field ctor moves stay owned.
 pub fn function_writeback_replaces_moved_self_fields(func: &FunctionDecl) -> bool {
     let mut moved = std::collections::HashSet::new();
     let mut assigned = std::collections::HashSet::new();
@@ -396,7 +396,7 @@ pub fn function_writeback_replaces_moved_self_fields(func: &FunctionDecl) -> boo
     !moved.is_empty() && moved.iter().all(|field| assigned.contains(field))
 }
 
-/// DB-414: `Vox::new(self.scene)` then `self.grid = 1` — move one field, assign a
+// `Vox::new(self.scene)` then `self.grid = 1` — move one field, assign a
 /// *different* field without writeback of the moved set. Needs owned `self`.
 /// Contrasts with notes-api `dispatch` (field moves into Owned formals + mutate via
 /// field methods) which is `&mut self` + Clone (P3.584 / P3.570).
@@ -406,7 +406,7 @@ pub fn function_partial_moves_self_field_then_assigns_other(func: &FunctionDecl)
 
 /// Same as [`function_partial_moves_self_field_then_assigns_other`], but Copy
 /// fields (`self.pos_x: f32` passed into `Vec3::new`) are not moves. Unknown
-/// fields stay moves so DB-414 non-Copy ctor moves still take owned `mut self`.
+// fields stay moves so non-Copy ctor moves still take owned `mut self`.
 pub fn function_partial_moves_self_field_then_assigns_other_if(
     func: &FunctionDecl,
     field_is_moved: impl Fn(&str) -> bool,
@@ -645,7 +645,7 @@ fn expression_consumes_self(expr: &Expression) -> bool {
         Expression::Block { statements, .. } => {
             statements.iter().any(|s| statement_consumes_self(s))
         }
-        // DB-414: `Vox::new(self.scene)` moves a field through a call arg.
+        // `Vox::new(self.scene)` moves a field through a call arg.
         Expression::Call { arguments, .. } | Expression::MethodCall { arguments, .. } => {
             arguments.iter().any(|(_, a)| {
                 expression_is_bare_self(a)

@@ -435,7 +435,7 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
         }
-        // DB-327: do NOT use `contains("_usize")` — identifiers like `best_idx_usize`
+        // do NOT use `contains("_usize")` — identifiers like `best_idx_usize`
         // inside `open_set[best_idx_usize].x` falsely widened i32 field loads to usize
         // (`current_x == goal_x as usize`). Only real usize *literal* suffixes / casts.
         // P3.679: an emitted `_i32` suffix is the width rustc sees (`let mut i: i32 = 0_i32`).
@@ -473,10 +473,10 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Emitted RHS is usize-width from a literal suffix / cast — not from an identifier
-    /// that merely contains the substring `_usize` (DB-327 / `best_idx_usize`).
+    // that merely contains the substring `_usize` (`best_idx_usize`).
     ///
     /// Index payloads are stripped first: `self.depths[node_idx as usize]` loads an
-    /// element (DB-406/395); the index cast must not mark the binding as usize.
+    // element; the index cast must not mark the binding as usize.
     fn emitted_rhs_indicates_usize_literal_width(emitted: &str) -> bool {
         let without_indexes = Self::strip_bracket_regions(emitted);
         if without_indexes.contains(" as usize") {
@@ -516,7 +516,7 @@ impl<'ast> CodeGenerator<'ast> {
         out
     }
 
-    /// DB-305: untyped `let mut best_count = 0` defaults to return-width i64 while later
+    // untyped `let mut best_count = 0` defaults to return-width i64 while later
     /// `best_count = count` assigns a `u32` (CDLP majority). Prefer the later assign width.
     /// Int width from a later call that passes `name` into a typed formal
     /// (`let status = if … { 404 } else { 400 }` then `error_from_message(status, …)`
@@ -744,13 +744,13 @@ impl<'ast> CodeGenerator<'ast> {
         peer
     }
 
-    /// DB-411: `let mut i = 0` later compared to a u32 (`while i < count`) must
+    // `let mut i = 0` later compared to a u32 (`while i < count`) must
     /// peer u32 even when `function_prefers_i32_coord_locals` (f32 return).
     ///
     /// P3.549/P3.329: a small literal while bound (`while month <= 12`) alone would
     /// peer i32, but when `name` is also passed to a WJ `int`/`i64` formal
     /// (`days_in_month(year, month)`), keep int width — never `1_i32` + `12_i32 as i32`.
-    /// DB-328 / P3.403: `let mut i = -1` must stay WJ `int` (i64), not i32 while peers.
+    /// P3.403: `let mut i = -1` must stay WJ `int` (i64), not i32 while peers.
     pub(in crate::codegen::rust) fn let_binding_has_negative_int_literal_init(
         &self,
         name: &str,
@@ -876,7 +876,7 @@ impl<'ast> CodeGenerator<'ast> {
             return;
         };
         // P3.323/P3.350: `while i < 512` — small literal bound → i32 counter (not WJ int/i64).
-        // DB-328: `let mut i = -1` / `while i <= 1` keeps i64 peers (`1_i64`, not `1_i32`).
+        // `let mut i = -1` / `while i <= 1` keeps i64 peers (`1_i64`, not `1_i32`).
         if matches!(
             bound,
             Expression::Literal {
@@ -1378,7 +1378,7 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         // Resolve RHS width against the *full* function body so
                         // `best_count = count` inside `if` still finds
-                        // `let count = counts[i]` in the enclosing while (DB-305).
+                        // `let count = counts[i]` in the enclosing while.
                         let full: Vec<&crate::parser::Statement> =
                             if !self.full_function_body_snapshot.is_empty() {
                                 self.full_function_body_snapshot.iter().copied().collect()
@@ -1565,7 +1565,7 @@ impl<'ast> CodeGenerator<'ast> {
         self.if_branch_is_i32_width(then_branch) && self.if_branch_is_i32_width(else_branch)
     }
 
-    /// DB-440: `let mse = if count > 0 { sum / count } else { 0.0 }` must type as
+    // `let mse = if count > 0 { sum / count } else { 0.0 }` must type as
     /// `f32` so struct-lit reuse does not emit `mse.clone()` (Copy auto-copy).
     pub(in crate::codegen::rust) fn if_else_binding_should_be_float(
         &self,
@@ -1929,7 +1929,7 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         expr: &Expression<'ast>,
     ) -> Option<Type> {
-        // DB-315: usize + lit chains (incl. nested) peer usize before coord i32.
+        // usize + lit chains (incl. nested) peer usize before coord i32.
         if self.expression_produces_usize(expr) {
             return Some(Type::Custom("usize".into()));
         }
@@ -2002,7 +2002,7 @@ impl<'ast> CodeGenerator<'ast> {
                     | BinaryOp::Shl
                     | BinaryOp::Shr
             ) {
-                // DB-315: usize + lit chains peer usize before coord i32.
+                // usize + lit chains peer usize before coord i32.
                 if self.expression_produces_usize(expr) {
                     return Some(Type::Custom("usize".into()));
                 }

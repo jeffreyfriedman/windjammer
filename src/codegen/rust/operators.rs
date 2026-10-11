@@ -69,7 +69,7 @@ pub fn unary_op_to_rust(op: &UnaryOp) -> &'static str {
 /// Returns the precedence level for a binary operator **as Rust parses it**.
 ///
 /// Used by Rust codegen to decide when to emit parentheses. Windjammer's
-/// *parser* may differ (DB-153: shifts bind tighter than additive); emission
+// *parser* may differ (shifts bind tighter than additive); emission
 /// must still follow Rust so `Add(a, Shl(b,c))` becomes `a + (b << c)`.
 ///
 /// Higher numbers indicate higher precedence (tighter binding):

@@ -250,7 +250,7 @@ pub(crate) fn rust_shared_borrow(expr: &str) -> String {
         return expr.to_string();
     }
     // Stale auto-/user-clone before Borrow: `&x.clone()` is never needed for a shared
-    // formal — peel to the binding then borrow (DB-270 / Connection reuse / demoted `&str`).
+    // formal — peel to the binding then borrow (Connection reuse / demoted `&str`).
     // Must run even when `expr` already starts with `&` (early-return used to keep `&x.clone()`).
     // Do **not** peel `.to_string()` / `.to_owned()`: those convert Display/non-text
     // (`i32.to_string()` into `push_str`) as well as text no-ops. `&self.rows.to_string()`
@@ -352,7 +352,7 @@ pub fn apply_coercion(kind: &CoercionKind, expr: &str, target: Target) -> String
             crate::codegen::rust::expression_utilities::append_rust_clone(core)
         }
         (Target::Rust, CoercionKind::Deref) => {
-            // Never `*x.clone()`: Deref is only for Copy pointees (DB-344).
+            // Never `*x.clone()`: Deref is only for Copy pointees.
             let peel = |s: &str| {
                 let mut core = s
                     .trim()

@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-396: mutually recursive BT tick helpers must agree on Vec mutability.
+//! mutually recursive BT tick helpers must agree on Vec mutability.
 //!
 //! Product tip `behavior_tree/executor.rs` (hottest leftover, 24 rustc errors):
 //!   `tick_node(..., active: &mut Vec<i32>, …)` then
@@ -20,7 +20,7 @@
 //!   → E0596. Match arms also pass `active.clone()` into the owned sibling,
 //!   discarding mutations.
 //!
-//! DB-342 isolate is GREEN for a one-way `tick() → tick_node` with `.push`.
+//! isolate is GREEN for a one-way `tick() → tick_node` with `.push`.
 //! Product is a match-dispatched SCC: node mutates + forwards, composite
 //! forwards back. All Vec formals in the SCC must be `&mut Vec` (or owned
 //! `mut`) and call sites must pass the binding, not `&mut` on a non-mut

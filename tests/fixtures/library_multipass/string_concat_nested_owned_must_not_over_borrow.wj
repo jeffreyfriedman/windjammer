@@ -1,5 +1,5 @@
 // FAILING REPRO — nested concat2 / overlay_row helpers must not over-borrow
-// owned string formals (DownstreamApp domain/string_concat.wj tip api-check).
+// owned string formals (a downstream application domain/string_concat.wj tip api-check).
 //
 // Tip RED: concat2(left: string, right: string) call sites emit &String into
 // owned String formals → WJ0003 "arguments to this function are incorrect".

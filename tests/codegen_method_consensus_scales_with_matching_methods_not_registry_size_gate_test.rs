@@ -7,7 +7,7 @@
     feature = "integration_tests",
 )))]
 
-//! Regression for downstream-screens / large multipass builds.
+//! Regression for a large downstream application / large multipass builds.
 //!
 //! Consensus trait queries (`consensus_mutates_receiver`, type-preserving checks)
 //! must use the method index — not scan every unrelated signature per call site.

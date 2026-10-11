@@ -1497,9 +1497,8 @@ impl SignatureRegistry {
     /// Register `crate_key::fn` aliases for every bare free-function signature.
     ///
     /// External crate metadata stores bare keys (`circuit_delta_from_edge_inserts`);
-    /// call sites may use `db_circuit::circuit_delta_from_edge_inserts`. Aliasing
+    /// call sites may use `graph_circuit::circuit_delta_from_edge_inserts`. Aliasing
     /// keeps IR fail-closed exact-key lookup working without hardcoding API names
-    /// (DB-094).
     pub fn register_crate_prefix_aliases(&mut self, crate_key: &str) {
         if crate_key.is_empty() || crate_key.contains("::") {
             return;
@@ -1894,7 +1893,7 @@ impl SignatureRegistry {
                 ) {
                     continue;
                 }
-                // DB-398: only same-shape mixed incumbents may block an owned refresh.
+                // only same-shape mixed incumbents may block an owned refresh.
                 // Arity-bloated mixed bags (`new` with 6× MaterialPalette) must not win.
                 if crate::codegen::rust::signature_promotion::defining_text_demotion_beats_owned_string_snapshot(
                     existing, sig,

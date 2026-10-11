@@ -25,7 +25,7 @@ If the destination is still executing, the helpers **refuse** unless `--allow-bu
 While other agents use `windjammer/target/release/wj`:
 
 ```bash
-export WJ_COMPILER=/home/user/src/wj/game-host/.cargo-target-wj/release/wj
+export WJ_COMPILER=/path/to/isolated-target/release/wj
 # then: wj game build / tip wj build …
 ```
 

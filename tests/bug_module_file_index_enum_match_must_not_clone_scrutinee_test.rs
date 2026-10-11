@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-372: indexed enum field match must not clone scrutinee (`].value.clone()`).
+//! indexed enum field match must not clone scrutinee (`].value.clone()`).
 //!
 //! Tip output for a game project `behavior_tree/blackboard.rs`:
 //!   `match self.entries[idx as usize].value.clone() { BlackboardValue::Float(v) => … }`
 //! Prefer `match &self.entries[idx].value` / `match self.entries[idx].value`.
-//! Twin of DB-351 (match clone scrutinee) + DB-359 (index field).
+//! Twin of (match clone scrutinee) + (index field).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

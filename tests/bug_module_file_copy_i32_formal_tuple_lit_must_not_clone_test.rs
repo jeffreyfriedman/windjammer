@@ -11,14 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-438: Copy `i32` formal into tuple literal must not `.clone()` when
+//! Copy `i32` formal into tuple literal must not `.clone()` when
 //! the same formal is also passed to a sibling call in that tuple.
 //!
 //! Product `ai/astar_grid.rs` `get_neighbors`:
 //!   `result.push((x.clone(), y + 1_i32, self.get_cost(x, y + 1_i32)))`
 //! WJ is `result.push((x, y + 1, self.get_cost(x, y + 1)))`.
-//! Distinct from DB-437 (formal into **let**), DB-434 (const into **call**),
-//! and DB-423 (indexed tuple element).
+//! Distinct from (formal into **let**), (const into **call**),
+//! and (indexed tuple element).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

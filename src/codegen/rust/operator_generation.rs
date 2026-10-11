@@ -16,7 +16,7 @@ impl<'ast> CodeGenerator<'ast> {
         expr: &Expression<'ast>,
         type_: &Type,
     ) -> String {
-        // DB-353 / DB-383: collapse `(e as i32|i64) as usize` → `e as usize`.
+        // collapse `(e as i32|i64) as usize` → `e as usize`.
         // Terrain / frame_analysis wrote mid-width truncations; a single `as usize`
         // is enough for non-negative index coords (and drops redundant mid casts).
         if Self::cast_target_is_usize(type_) {
@@ -35,7 +35,7 @@ impl<'ast> CodeGenerator<'ast> {
         // P3.250: outer call-arg / assignment int targets (e.g. `Vec<u8>::push`) must not
         // suffix nested bitop/shift literals as `_u8`. The cast result carries the target
         // width; the operand is typed from its own peers (i64 & 0xff → 255_i64).
-        // DB-302: also clear struct-field width so `field: (total / 3) as u64` does not
+        // also clear struct-field width so `field: (total / 3) as u64` does not
         // force `3_u64` inside the division.
         let prev_call_arg = self.call_arg_expected_type.take();
         let prev_assign_int = self.assignment_int_target_type.take();
@@ -55,9 +55,9 @@ impl<'ast> CodeGenerator<'ast> {
         self.call_arg_expected_type = prev_call_arg;
         self.assignment_int_target_type = prev_assign_int;
         self.in_struct_literal_field = prev_in_struct_field;
-        // DB-329: Copy cast targets must not keep a stale shared borrow on the operand
+        // Copy cast targets must not keep a stale shared borrow on the operand
         // (`&idx as usize` → E0606). Strip leading `&` before composing the cast.
-        // DB-432: also strip operand `.clone()` — Copy cast results never need it
+        // also strip operand `.clone()` — Copy cast results never need it
         // (`children_copy[c].clone() as u64` → `children_copy[c] as u64`).
         if self.is_type_copy(type_) {
             if let Some(rest) = expr_str.strip_prefix('&') {

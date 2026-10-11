@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-336: `&mut Vec` formal must not receive `&mut data.clone()` (temp).
+//! `&mut Vec` formal must not receive `&mut data.clone()` (temp).
 //!
 //! Tip output for a game project `rendering/mesh_renderer.rs`:
 //!   `push_mat4(&mut data.clone(), …)` / `push_mat4(&mut mat4_floats.clone(), …)`

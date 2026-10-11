@@ -10,13 +10,13 @@
     feature = "integration_tests",
 ))]
 
-//! DB-176: loop-bound struct field `.clone()` into demoted `&str` must borrow.
+//! loop-bound struct field `.clone()` into demoted `&str` must borrow.
 //!
 //! Product residual after tip-out sync (~12× `&str`←`String`), tip-out still RED:
 //!   `cross_signal_find_bm25(hits, v.node_id.clone())` while `doc_id: &str`
 //!   `cross_signal_find_graph(hits, h.id.clone())` while id formal is `&str`
 //!
-//! Distinct from DB-166 (Emit struct field into Cap sql). Signature-driven.
+//! Distinct from (Emit struct field into Cap sql). Signature-driven.
 //! Prefer tip greens over downstream.
 
 #[path = "common/integration_test_helpers.rs"]

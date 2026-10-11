@@ -60,7 +60,7 @@ fn main() {
     let mut registry = SignatureRegistry::new();
     let bare = owned_string_sig("circuit_delta_from_edge_inserts");
     registry.add_function("circuit_delta_from_edge_inserts".into(), bare.clone());
-    // Simulates metadata load registering crate-qualified aliases (DB-094).
+    // Simulates metadata load registering crate-qualified aliases.
     registry.register_crate_prefix_aliases("dep_crate");
 
     let mut analyzer = windjammer::analyzer::Analyzer::new();
@@ -91,7 +91,7 @@ fn main() {
     );
 
     let mut registry = SignatureRegistry::new();
-    // Bare metadata key only — no `dep_crate::` alias (pre-DB-094 behavior).
+    // Bare metadata key only — no `dep_crate::` alias (pre- behavior).
     registry.add_function(
         "circuit_delta_from_edge_inserts".into(),
         owned_string_sig("circuit_delta_from_edge_inserts"),

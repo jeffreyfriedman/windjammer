@@ -837,7 +837,7 @@ impl<'ast> CodeGenerator<'ast> {
                             coerced = format!("&{coerced}");
                         }
                         // Terminal: unit constructors / Copy args never keep `.clone()`
-                        // (DB-367 `None.clone()`, DB-371 Copy field `.clone()`).
+                        // (`None.clone()`, Copy field `.clone()`).
                         coerced = crate::codegen::rust::expression_utilities::strip_unit_constructor_clone(
                             &coerced,
                         );
@@ -895,7 +895,7 @@ impl<'ast> CodeGenerator<'ast> {
             })
             .collect();
 
-        // P3.635 / DB-134: HashMap/BTreeMap key args must emit `&key` (match scrutinees).
+        // P3.635 / HashMap/BTreeMap key args must emit `&key` (match scrutinees).
         // Only when the receiver is a map/set/wrapper — never blanketed `get`/`remove`
         // (P3.649–651: Vec::get / Vec::remove / Store::get take owned Copy indices).
         if crate::codegen::rust::stdlib_method_traits::is_map_key_method(method) {

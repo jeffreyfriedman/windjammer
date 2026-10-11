@@ -12,7 +12,7 @@
 
 //! FAILING REPRO — struct field into owned `string` formal must clone/own, not `&field`.
 //!
-//! Dogfood (downstream-screens tip regen / `escape_html`):
+//! Dogfood (a large downstream application tip regen / `escape_html`):
 //! `escape_html(link.href)` must move/clone, not emit `&link.href` into owned `String`.
 //! Tip GREEN (P3.180) — product drops `field + ""` at escape/status call sites.
 //!

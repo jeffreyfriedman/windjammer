@@ -11,11 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-216: demoted `&Vec<u32>` into owned FFI `Vec<u32>` must clone.
+//! demoted `&Vec<u32>` into owned FFI `Vec<u32>` must clone.
 //!
 //! Product residual (~32× Vec<u32>←&Vec), tip-out/gen graph_simd:
 //!   wrapper `a: &Vec<u32>` forwards bare `a` into `*_ffi(a: Vec<u32>, …)`.
-//! Twin of DB-195. Signature-driven.
+//! Twin of . Signature-driven.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

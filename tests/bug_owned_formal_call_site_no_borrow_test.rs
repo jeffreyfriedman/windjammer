@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-099 / a downstream database project: owned formals must not get `&arg` at call sites (IR-driven).
+//! a downstream database project: owned formals must not get `&arg` at call sites (IR-driven).
 //!
 //! Multipass regen must not emit:
 //!   `opt_run_cost_report(&ledger)` where formal is owned non-Copy `OptEconLedger`

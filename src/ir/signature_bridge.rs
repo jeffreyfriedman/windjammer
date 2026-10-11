@@ -198,7 +198,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
         if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
             return safety_type_from_parser_type(bare, Some(OwnershipMode::Owned));
         }
-        // DB-165: metadata may omit formal/param types while ownership + emission flags
+        // metadata may omit formal/param types while ownership + emission flags
         // already say owned — still report Owned so call sites do not over-borrow.
         if matches!(
             sig.param_ownership.get(param_idx),
@@ -303,7 +303,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 match analyzer_mode {
                     Some(OwnershipMode::Borrowed) => {
                         // Explicit owned emission (`emitted=false`) keeps owned `Vec`
-                        // (DB-281 / contains(items) → clone, not `&items`). Analysis-only
+                        // (contains(items) → clone, not `&items`). Analysis-only
                         // Borrowed with no emission slot (cross-file `check_collisions`)
                         // must stay Ref → `&walls`.
                         if ref_emission == Some(false) {
@@ -475,7 +475,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
                 if matches!(bare, Type::Custom(_)) {
                     // Bare Custom: shared-ref when codegen confirmed `&T`, or analyzer
                     // Borrowed on a bare (non-Reference) formal for non-Copy (`DenseCsr`,
-                    // `QuestId`) — same cold-meta rule as Borrowed bare Vec (DB-097).
+                    // `QuestId`) — same cold-meta rule as Borrowed bare Vec.
                     // Stale body-converged `Reference(T)` on *methods* without emission
                     // (MemoryEngine::put) stays owned until codegen confirms `&T`.
                     // Free-fn / bare-param Borrowed (`keys_equal`, DenseCsr) stay Ref.
@@ -756,7 +756,7 @@ pub fn safety_type_from_signature_param(sig: &FunctionSignature, param_idx: usiz
             }
             // Bare non-text Custom without shared-ref emission:
             // - confirmed owned emission (`false`) / Owned ownership → owned
-            // - analyzer Borrowed + bare param type → shared `&T` (DB-097 DenseCsr)
+            // - analyzer Borrowed + bare param type → shared `&T` (DenseCsr)
             // - stale Reference wrap (put Key / Policy) without emission → owned
             if let Some(bare) = bare_wj_formal_type(sig, param_idx) {
                 if matches!(bare, Type::Custom(_))
@@ -880,7 +880,7 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     {
         return false;
     }
-    // DB-329 / e0308: bare Copy / usize formals (Vec::remove; `quantity: i32`) never
+    // e0308: bare Copy / usize formals (Vec::remove; `quantity: i32`) never
     // need a shared-ref borrow at emit — even when analyzer left Borrowed while codegen
     // emitted owned `i32` (`&item.quantity` → E0308).
     let formal = sig
@@ -917,7 +917,7 @@ pub fn call_site_needs_shared_ref_at_emit(sig: &FunctionSignature, param_idx: us
     // owned `Vec` / Owned ownership. Must beat `emitted_owned_arg_contract` and
     // bare-Vec owned denial below.
     //
-    // P3.588 / DB-110: do **not** apply that to owned WJ `string` formals that
+    // P3.588 / do **not** apply that to owned WJ `string` formals that
     // emit `String` (`emitted_rust_ref_params[i] == false`). AsRef-runtime bodies
     // (`strings::is_empty`) set forwarding_borrow while codegen keeps owned
     // `String` — callers must pass owned / `.clone()`, not `&String`.
@@ -1208,7 +1208,7 @@ fn is_plain_windjammer_string_type(ty: &Type) -> bool {
 mod tests {
     #[test]
     fn borrowed_bare_dense_csr_expects_shared_ref_at_call_site() {
-        // DB-097 cold meta: analyzer Borrowed + bare Custom, no emission flags.
+        // cold meta: analyzer Borrowed + bare Custom, no emission flags.
         let sig = FunctionSignature {
             name: "graph_bfs_run_dense".into(),
             param_types: vec![Type::Custom("DenseCsr".into()), Type::Custom("i64".into())],
@@ -1382,7 +1382,7 @@ mod tests {
         ));
     }
 
-    /// P3.588 / DB-110: AsRef-owned `string` keeps `String` emit + forwarding_borrow;
+    // P3.588 / AsRef-owned `string` keeps `String` emit + forwarding_borrow;
     /// call sites must still pass owned (not `&String`).
     #[test]
     fn forwarding_borrow_must_not_borrow_owned_string_emit() {

@@ -4,8 +4,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
 use std::fs;
 use std::path::PathBuf;
-use game_host_framework::sdk_codegen::{CodeGenerator, Language};
-use game_host_framework::sdk_idl::ApiDefinition;
+use game_framework::sdk_codegen::{CodeGenerator, Language};
+use game_framework::sdk_idl::ApiDefinition;
 
 #[derive(Parser)]
 #[command(name = "wj-sdk-gen")]

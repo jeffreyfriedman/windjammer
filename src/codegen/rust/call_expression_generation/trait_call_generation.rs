@@ -317,7 +317,7 @@ pub(in crate::codegen::rust) fn generate_call_on_field_access<'ast>(
         built
     };
 
-    // P3.635 / DB-134: match scrutinees use Call(FieldAccess); belt map-key borrow
+    // P3.635 / match scrutinees use Call(FieldAccess); belt map-key borrow
     // only for map/set/wrapper receivers — never Vec::get / Store::get (P3.649–651).
     if crate::codegen::rust::stdlib_method_traits::is_map_key_method(call_method) {
         let receiver_base = type_name

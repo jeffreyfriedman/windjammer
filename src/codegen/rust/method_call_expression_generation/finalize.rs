@@ -88,7 +88,7 @@ impl<'ast> CodeGenerator<'ast> {
                     let Expression::Identifier { name, .. } = arg_expr else {
                         return arg_str;
                     };
-                    // DB-367: unit constructors are never bindings — do not re-clone
+                    // unit constructors are never bindings — do not re-clone
                     // after IR peel (`None` / `Value::None`).
                     if name == "None"
                         || name == "true"
@@ -118,7 +118,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if let Some(sig) = sig {
                         let pidx = sig.arg_param_index(i);
                         // Map/set key lookups are `&Q`. A poisoned owned skeleton must
-                        // not turn IR `&key` into `key.clone()` (DB-236).
+                        // not turn IR `&key` into `key.clone()`.
                         if self.is_collection_key_lookup_at_site(
                             sig,
                             i,
@@ -264,7 +264,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     && owned_non_copy_param)
                             {
                                 // IR already appended one `.clone()` for reuse. This
-                                // post-IR pass must stay idempotent (DB-479
+                                // post-IR pass must stay idempotent (
                                 // `tag.clone().clone()` on HashMap::insert).
                                 return crate::codegen::rust::expression_utilities::append_rust_clone(
                                     base,
@@ -289,7 +289,7 @@ impl<'ast> CodeGenerator<'ast> {
                     };
                     let pidx = sig.arg_param_index(i);
                     // Never peel HashMap/BTreeMap key borrows — `Reference(i64)` /
-                    // `&Q` formals must keep `&label` (P3.635 DB-134). Do not treat
+                    // `&Q` formals must keep `&label` (P3.635 ). Do not treat
                     // bare `get`/`remove` as map keys (P3.649–651 Vec/Store).
                     let is_ck = self.is_collection_key_lookup_at_site(
                         sig,
@@ -1109,7 +1109,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // regression: peel stale `&` on Copy owned passes (`&through` → `through`,
-                    // DB-134 `get_label(&label)` → `get_label(label)` for `i64` formals).
+                    // `get_label(&label)` → `get_label(label)` for `i64` formals).
                     if arg_str.starts_with('&') && !arg_str.starts_with("&mut ") {
                         if let (Some(rt), Some((_, arg_expr))) =
                             (receiver_type_name.as_deref(), arguments.get(i))
@@ -1324,7 +1324,7 @@ impl<'ast> CodeGenerator<'ast> {
                                         .any(|p| p.name == *name);
                                 // Skip Copy bindings even when the callee formal is
                                 // generic `T` (Vec::push) — Rust copies implicitly
-                                // (DB-457 LightId / DB-458 ComponentId).
+                                // (LightId / ComponentId).
                                 if !is_collection_key
                                     && (auto_clone || demoted_owned_outer)
                                     && !arg_str.ends_with(".clone()")
@@ -1667,7 +1667,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Explicit `.clone()` in WJ source is Rust leakage (W0005). Prefer stripping, but
         // preserve when reuse analysis, loop body, call-argument context, or a borrowed
-        // field/index place needs it (E0507 move from `&self.field` / DB-style snapshots).
+        // field/index place needs it (E0507 move from `&self.field` / downstream-style snapshots).
         if crate::type_classification::is_language_level_explicit_clone(method)
             && arguments.is_empty()
         {
@@ -1681,7 +1681,7 @@ impl<'ast> CodeGenerator<'ast> {
                         })
                     });
             // Call-arg sites: user wrote `.clone()` in an argument — always preserve
-            // (DB-106/108). Reuse analysis often misses the first move because the
+            // Reuse analysis often misses the first move because the
             // explicit clone masks it; IR/reconcile must not strip afterward.
             let preserve_at_call_site = self.in_call_argument_generation;
             // Field/index places: user wrote `.clone()` to avoid E0507 moves (`self.logs`).

@@ -10,14 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! DB-180: demoted `&str` formals into owned `String` callee must `.to_string()`.
+//! demoted `&str` formals into owned `String` callee must `.to_string()`.
 //!
 //! Product residual (~8× String←&str), tip-out bakeoff:
 //!   `bakeoff_run_to_fill(hardware: &str, …)` calls
 //!   `opt_operator_fill_record(matrix_row: String, hardware: String, …)`
 //!   with bare `matrix_row, hardware, scale, dated_label` → E0308.
 //!
-//! Distinct from DB-170 (`.clone()` on demoted &str). Here args are already `&str`
+//! Distinct from (`.clone()` on demoted &str). Here args are already `&str`
 //! and need ownership into String formals. Signature-driven.
 
 #[path = "common/integration_test_helpers.rs"]

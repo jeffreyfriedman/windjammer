@@ -1,4 +1,4 @@
-// FAILING REPRO — while idx < vec.len() must unify int index with len (DownstreamApp).
+// FAILING REPRO — while idx < vec.len() must unify int index with len (a downstream application).
 // Tip RED: `(idx as i64) < validated.lines.len()` → WJ0003 expected int found uint.
 
 pub struct Line {
