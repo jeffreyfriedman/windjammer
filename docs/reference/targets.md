@@ -6,10 +6,10 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 117 | 94 | 23 |
-| `go` | 117 | 115 | 2 |
-| `js` | 117 | 115 | 2 |
-| `ts` | 117 | 115 | 2 |
+| `rust` | 119 | 96 | 23 |
+| `go` | 119 | 117 | 2 |
+| `js` | 119 | 117 | 2 |
+| `ts` | 119 | 117 | 2 |
 
 ## Known-unsupported pairs by cause
 

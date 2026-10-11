@@ -39,3 +39,4 @@ Generated from `src/error_codes.rs`, `src/error_catalog.rs` and `src/linter/code
 | `W0004` | explicit-borrow | error | explicit borrow in a function call |
 | `W0005` | explicit-clone | warning | explicit `.clone()` call |
 | `W0006` | string-literal-to-string | error | string literal `.to_string()` is Rust leakage |
+| `W0010` | non-canonical-string-type | error | `String`/`&str` spelled in source; Windjammer has one string type, `string` (emitted by the parser) |
