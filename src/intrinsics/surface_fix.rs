@@ -67,6 +67,32 @@ pub fn fix_source(src: &str) -> FixOutput {
     FixOutput { text, findings }
 }
 
+/// Rewrite the Windjammer code fences (```windjammer / ```wj) of a Markdown document.
+pub fn fix_markdown(md: &str) -> String {
+    let mut out = String::with_capacity(md.len());
+    let mut lines = md.split_inclusive('\n').peekable();
+    while let Some(line) = lines.next() {
+        out.push_str(line);
+        let t = line.trim();
+        if t == "```windjammer" || t == "```wj" {
+            let mut body = String::new();
+            let mut closing = None;
+            for l in lines.by_ref() {
+                if l.trim() == "```" {
+                    closing = Some(l);
+                    break;
+                }
+                body.push_str(l);
+            }
+            out.push_str(&fix_source(&body).text);
+            if let Some(c) = closing {
+                out.push_str(c);
+            }
+        }
+    }
+    out
+}
+
 /// Findings only (for `wj lint` and compile-time warnings).
 pub fn lint_source(src: &str) -> Vec<Finding> {
     fix_source(src).findings
@@ -859,6 +885,15 @@ mod tests {
             let once = fx(s);
             assert_eq!(fx(&once), once, "not idempotent for {s}");
         }
+    }
+
+    #[test]
+    fn markdown_fences() {
+        let md = "text println!(\"{}\", x)\n```windjammer\nprintln!(\"{}\", x)\n```\n```rust\nprintln!(\"{}\", x);\n```\n";
+        assert_eq!(
+            fix_markdown(md),
+            "text println!(\"{}\", x)\n```windjammer\nprintln(\"${x}\")\n```\n```rust\nprintln!(\"{}\", x);\n```\n"
+        );
     }
 
     #[test]

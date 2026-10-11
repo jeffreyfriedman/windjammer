@@ -26,9 +26,13 @@ fn parses(path: &str, source: &str) -> bool {
     parser.parse().is_ok()
 }
 
-fn collect(path: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+fn is_target(p: &Path, docs: bool) -> bool {
+    p.extension().is_some_and(|e| e == "wj" || (docs && e == "md"))
+}
+
+fn collect(path: &Path, out: &mut Vec<PathBuf>, docs: bool) -> Result<()> {
     if path.is_file() {
-        if path.extension().is_some_and(|e| e == "wj") {
+        if is_target(path, docs) {
             out.push(path.to_path_buf());
         }
         return Ok(());
@@ -40,8 +44,8 @@ fn collect(path: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
             if matches!(name, "target" | "build" | ".git" | "node_modules" | "out") {
                 continue;
             }
-            collect(&p, out)?;
-        } else if p.extension().is_some_and(|e| e == "wj") {
+            collect(&p, out, docs)?;
+        } else if is_target(&p, docs) {
             out.push(p);
         }
     }
@@ -50,29 +54,38 @@ fn collect(path: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
 
 /// Fix a path (file or directory). With `check`, nothing is written and the call fails if
 /// any file would change.
-pub fn execute(path: &Path, check: bool) -> Result<FixSummary> {
+pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
     if !path.exists() {
         bail!("Path does not exist: {}", path.display());
     }
     let mut files = Vec::new();
-    collect(path, &mut files)?;
+    collect(path, &mut files, docs)?;
     files.sort();
     let mut summary = FixSummary::default();
     for file in &files {
         let source = fs::read_to_string(file)?;
         summary.files_scanned += 1;
-        let out = surface_fix::fix_source(&source);
+        let is_md = file.extension().is_some_and(|e| e == "md");
+        let out = if is_md {
+            let text = surface_fix::fix_markdown(&source);
+            surface_fix::FixOutput {
+                findings: Vec::new(),
+                text,
+            }
+        } else {
+            surface_fix::fix_source(&source)
+        };
         summary.skipped += out.skipped_count();
         if out.text == source {
             continue;
         }
         let name = file.display().to_string();
-        if parses(&name, &source) && !parses(&name, &out.text) {
+        if !is_md && parses(&name, &source) && !parses(&name, &out.text) {
             eprintln!("warning: {name}: rewritten file does not parse; left unchanged");
             continue;
         }
         summary.files_changed += 1;
-        summary.rewrites += out.changed_count();
+        summary.rewrites += out.changed_count().max(is_md as usize);
         if !check {
             fs::write(file, &out.text)?;
         }
