@@ -69,6 +69,7 @@ def agent_section(transcripts):
     for t in transcripts:
         by[t["lang"]].append(t)
     lines = ["## Agent runs (from recorded transcripts)", "",
+             "Transcripts under `transcripts/scripted/` come from scripted agents (reference solutions or canned edits) and only exercise the harness; they are not LLM results.", "",
              "| lang | trials | pass@1 | within 2 iters | within 3 iters | mean iters to green | mean fix attempts | tokens in/out | wall s |",
              "|---|---|---|---|---|---|---|---|---|"]
     detail = {}

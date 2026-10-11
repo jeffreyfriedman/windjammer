@@ -17,7 +17,7 @@ fn main() {
     for w in text.split_whitespace() {
         let lw = w.to_lowercase()
         let key = sorted_key(lw.clone())
-        let known = match groups.get(key.as_str()) {
+        let known = match groups.get(key) {
             Some(l) => l.contains(lw.clone()),
             None => false,
         }

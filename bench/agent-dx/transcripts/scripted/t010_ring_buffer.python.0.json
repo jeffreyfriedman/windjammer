@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import sys\nfrom collections import deque\n\nlines = sys.stdin.read().split(\"\\n\")\ncap = int(lines[0])\nq = deque()\nfor line in lines[1:]:\n    p = line.split()\n    if not p:\n        continue\n    c = p[0]\n    if c == \"push\":\n        if len(q) >= cap:\n            print(\"full\")\n        else:\n            q.append(int(p[1]))\n            print(\"ok\")\n    elif c == \"pop\":\n        print(q.popleft() if q else \"empty\")\n    elif c == \"peek\":\n        print(q[0] if q else \"empty\")\n    elif c == \"size\":\n        print(len(q))\n    elif c == \"dump\":\n        print(\" \".join(map(str, q)) if q else \"<empty>\")\n",
+   "usage": null,
+   "wall_seconds": 0.03
+  }
+ ],
+ "lang": "python",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.03
+ },
+ "recorded_at": "2026-10-11T15:15:53",
+ "schema": 1,
+ "task": "t010_ring_buffer",
+ "trial": 0
+}

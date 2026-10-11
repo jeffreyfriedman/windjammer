@@ -1,5 +1,5 @@
 use std::fs
-use std::collections::HashMap
+
 
 struct Task {
     id: i64,
@@ -7,62 +7,118 @@ struct Task {
     deps: Vec<i64>,
 }
 
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
+fn slice_i64(v: Vec<i64>, from: usize, to: usize) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new()
+    let mut i = from
+    while i < to && i < v.len() {
+        out.push(v[i])
+        i += 1
+    }
+    out
+}
+
+fn index_of(tasks: Vec<Task>, id: i64) -> i64 {
+    let mut i: usize = 0
+    while i < tasks.len() {
+        if tasks[i].id == id { return i as i64 }
+        i += 1
+    }
+    -1
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
-    let mut lines = text.lines()
-    let head: Vec<i64> = lines.next().unwrap_or("0 0").split_whitespace().map(|s| s.parse::<i64>().unwrap_or(0)).collect()
+    let all: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let head: Vec<i64> = line_at(all.clone(), cursor).split_whitespace().map(|s| s.parse::<i64>().unwrap_or(0)).collect()
+    cursor += 1
     let workers = head[0] as usize
     let n = head[1] as usize
     let mut tasks: Vec<Task> = Vec::new()
-    for l in lines {
+    for l in rest_lines(all.clone(), cursor) {
         let p: Vec<i64> = l.split_whitespace().map(|s| s.parse::<i64>().unwrap_or(0)).collect()
         if p.len() < 2 { continue }
-        tasks.push(Task { id: p[0], duration: p[1], deps: p[2..].to_vec() })
+        tasks.push(Task { id: p[0], duration: p[1], deps: slice_i64(p.clone(), 2, p.len()) })
     }
-    tasks.sort_by(|a, b| a.id.cmp(b.id))
-    let mut start: HashMap<i64, i64> = HashMap::new()
-    let mut end: HashMap<i64, i64> = HashMap::new()
-    let mut running: Vec<(i64, i64)> = Vec::new()
+    let mut si: usize = 1
+    while si < tasks.len() {
+        let mut sj = si
+        while sj > 0 && tasks[sj].id < tasks[sj - 1].id {
+            tasks.swap(sj, sj - 1)
+            sj -= 1
+        }
+        si += 1
+    }
+    // start/end times by position in the id-sorted task list (-1 = not yet)
+    let count = tasks.len()
+    let mut start: Vec<i64> = Vec::new()
+    let mut end: Vec<i64> = Vec::new()
+    let mut k: usize = 0
+    while k < count {
+        start.push(-1)
+        end.push(-1)
+        k += 1
+    }
+    let mut running: Vec<(i64, usize)> = Vec::new()
+    let mut finished: usize = 0
     let mut time: i64 = 0
-    while end.len() < n {
-        let mut still: Vec<(i64, i64)> = Vec::new()
-        for r in running.iter() {
+    while finished < n {
+        let mut still: Vec<(i64, usize)> = Vec::new()
+        for r in running {
             if r.0 <= time {
-                end.insert(r.1, r.0)
+                end[r.1] = r.0
+                finished += 1
             } else {
-                still.push(*r)
+                still.push(r)
             }
         }
         running = still
-        for t in tasks.iter() {
-            if start.contains_key(&t.id) { continue }
+        let mut ti: usize = 0
+        while ti < count {
+            if start[ti] >= 0 {
+                ti += 1
+                continue
+            }
             if running.len() >= workers { break }
             let mut ready = true
-            for d in t.deps.iter() {
-                match end.get(d) {
-                    Some(e) => { if *e > time { ready = false } }
-                    None => { ready = false }
-                }
+            for d in tasks[ti].deps.clone() {
+                let di = index_of(tasks.clone(), d)
+                if di < 0 || end[di as usize] < 0 || end[di as usize] > time { ready = false }
             }
             if ready {
-                start.insert(t.id, time)
-                running.push((time + t.duration, t.id))
+                start[ti] = time
+                running.push((time + tasks[ti].duration, ti))
             }
+            ti += 1
         }
-        if end.len() >= n { break }
+        if finished >= n { break }
         if running.len() == 0 { break }
         let mut next = running[0].0
-        for r in running.iter() {
+        for r in running.clone() {
             if r.0 < next { next = r.0 }
         }
         time = next
     }
     let mut makespan: i64 = 0
-    for t in tasks.iter() {
-        let s = start.get(&t.id).unwrap_or(&0)
-        let e = end.get(&t.id).unwrap_or(&0)
-        println("${t.id} ${s} ${e}")
-        if *e > makespan { makespan = *e }
+    let mut oi: usize = 0
+    while oi < count {
+        println("${tasks[oi].id} ${start[oi]} ${end[oi]}")
+        if end[oi] > makespan { makespan = end[oi] }
+        oi += 1
     }
     println("makespan ${makespan}")
 }

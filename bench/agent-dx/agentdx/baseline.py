@@ -28,6 +28,8 @@ def _explain(r, log):
     if r["status"] == "build_error":
         for d in r["build"]["diagnostics"][:3]:
             print("    build:", d["category"], d["message"][:200].replace("\n", " | "), file=log)
+            if os.environ.get("AGENTDX_DETAIL") and d.get("detail"):
+                print("      " + d["detail"].replace("\n", "\n      "), file=log)
     for f in r["failures"][:1]:
         print("    fail:", f["category"], f["message"][:160].replace("\n", " | "), file=log)
         print("      stdin:", repr(f["stdin"][:120]), "args:", f["args"], file=log)

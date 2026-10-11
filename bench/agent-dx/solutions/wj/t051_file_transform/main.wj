@@ -3,7 +3,10 @@ use std::fs
 use std::process
 
 fn main() {
-    let args: Vec<string> = env::args().collect()
+    let mut args: Vec<string> = Vec::new()
+    for a0 in env::args() {
+        args.push(a0)
+    }
     if args.len() != 4 {
         println("usage: transform INPUT OUTPUT MODE")
         process::exit(2)
@@ -11,12 +14,12 @@ fn main() {
     let input = args[1].clone()
     let output = args[2].clone()
     let mode = args[3].clone()
-    let text = match fs::read_to_string(input.as_str()) {
+    let text = match fs::read_to_string(input) {
         Ok(t) => t,
         Err(_) => {
             println("error: cannot read ${input}")
             process::exit(1)
-            "".to_string()
+            ""
         }
     }
     let known = mode == "upper" || mode == "reverse" || mode == "sort" || mode == "dedupe" || mode == "trim" || mode == "number"
@@ -26,19 +29,23 @@ fn main() {
     }
     let mut lines: Vec<string> = text.lines().map(|s| s.to_string()).collect()
     if mode == "upper" {
-        lines = lines.iter().map(|l| l.to_uppercase()).collect()
+        let mut up: Vec<string> = Vec::new()
+        for l in lines.clone() { up.push(l.to_uppercase()) }
+        lines = up
     } else if mode == "reverse" {
         lines.reverse()
     } else if mode == "sort" {
         lines.sort()
     } else if mode == "dedupe" {
         let mut out: Vec<string> = Vec::new()
-        for l in lines.iter() {
+        for l in lines {
             if !out.contains(l) { out.push(l.clone()) }
         }
         lines = out
     } else if mode == "trim" {
-        lines = lines.iter().map(|l| l.trim_matches(' ').to_string()).collect()
+        let mut tr: Vec<string> = Vec::new()
+        for l in lines.clone() { tr.push(l.trim_matches(' ').to_string()) }
+        lines = tr
     } else {
         let mut out: Vec<string> = Vec::new()
         let mut i: usize = 0
@@ -49,10 +56,10 @@ fn main() {
         lines = out
     }
     let mut body = ""
-    for l in lines.iter() {
+    for l in lines {
         body = body + l + "\n"
     }
-    match fs::write(output.as_str(), body.as_str()) {
+    match fs::write(output, body) {
         Ok(_) => {}
         Err(_) => {
             println("error: cannot write ${output}")
@@ -60,6 +67,6 @@ fn main() {
         }
     }
     println("wrote ${lines.len()} lines to ${output}")
-    let back = fs::read_to_string(output.as_str()).unwrap_or("")
+    let back = fs::read_to_string(output).unwrap_or("")
     print(back)
 }

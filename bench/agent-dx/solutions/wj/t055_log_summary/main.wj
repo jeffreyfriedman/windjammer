@@ -1,5 +1,4 @@
 use std::fs
-use std::collections::HashMap
 
 fn digits(s: string, from: usize, to: usize) -> bool {
     let cs: Vec<char> = s.chars().collect()
@@ -18,10 +17,32 @@ fn valid_ts(t: string) -> bool {
         && cs[10] == 'T' && digits(t.clone(), 11, 13) && cs[13] == ':' && digits(t.clone(), 14, 16) && cs[16] == ':' && digits(t.clone(), 17, 19)
 }
 
+fn pair_before(a: (string, i64), b: (string, i64)) -> bool {
+    if a.1 != b.1 { a.1 > b.1 } else { a.0 < b.0 }
+}
+
+fn sort_pairs(items: Vec<(string, i64)>) -> Vec<(string, i64)> {
+    let mut v = items
+    let mut i: usize = 1
+    while i < v.len() {
+        let mut j = i
+        while j > 0 && pair_before(v[j].clone(), v[j - 1].clone()) {
+            v.swap(j, j - 1)
+            j -= 1
+        }
+        i += 1
+    }
+    v
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
-    let mut levels: HashMap<string, i64> = HashMap::new()
-    let mut comps: HashMap<string, i64> = HashMap::new()
+    let mut n_debug: i64 = 0
+    let mut n_info: i64 = 0
+    let mut n_warn: i64 = 0
+    let mut n_error: i64 = 0
+    let mut comp_names: Vec<string> = Vec::new()
+    let mut comp_counts: Vec<i64> = Vec::new()
     let mut errors: Vec<string> = Vec::new()
     let mut first = ""
     let mut last = ""
@@ -29,7 +50,7 @@ fn main() {
     let mut any = false
     for line in text.lines() {
         let parts: Vec<string> = line.splitn(4, " ").map(|s| s.to_string()).collect()
-        let lv = if parts.len() > 1 { parts[1].clone() } else { "".to_string() }
+        let lv = if parts.len() > 1 { parts[1].clone() } else { "" }
         let level_ok = lv == "DEBUG" || lv == "INFO" || lv == "WARN" || lv == "ERROR"
         if parts.len() < 3 || !valid_ts(parts[0].clone()) || !level_ok || parts[2].len() == 0 {
             malformed += 1
@@ -37,9 +58,24 @@ fn main() {
         }
         let ts = parts[0].clone()
         let comp = parts[2].clone()
-        let msg = if parts.len() > 3 { parts[3].clone() } else { "".to_string() }
-        levels.insert(lv.clone(), levels.get(lv.as_str()).unwrap_or(&0) + 1)
-        comps.insert(comp.clone(), comps.get(comp.as_str()).unwrap_or(&0) + 1)
+        let msg = if parts.len() > 3 { parts[3].clone() } else { "" }
+        if lv == "DEBUG" { n_debug += 1 }
+        if lv == "INFO" { n_info += 1 }
+        if lv == "WARN" { n_warn += 1 }
+        if lv == "ERROR" { n_error += 1 }
+        let mut found = false
+        let mut ci: usize = 0
+        while ci < comp_names.len() {
+            if comp_names[ci] == comp {
+                comp_counts[ci] = comp_counts[ci] + 1
+                found = true
+            }
+            ci += 1
+        }
+        if !found {
+            comp_names.push(comp.clone())
+            comp_counts.push(1)
+        }
         if !any || ts < first { first = ts.clone() }
         if !any || ts > last { last = ts.clone() }
         any = true
@@ -47,15 +83,15 @@ fn main() {
             errors.push("  [${comp}] ${msg}")
         }
     }
-    println("levels: DEBUG=${levels.get("DEBUG").unwrap_or(&0)} INFO=${levels.get("INFO").unwrap_or(&0)} WARN=${levels.get("WARN").unwrap_or(&0)} ERROR=${levels.get("ERROR").unwrap_or(&0)}")
+    println("levels: DEBUG=${n_debug} INFO=${n_info} WARN=${n_warn} ERROR=${n_error}")
     println("top components:")
     let mut items: Vec<(string, i64)> = Vec::new()
-    for (k, v) in comps {
-        items.push((k, v))
+    let mut xi: usize = 0
+    while xi < comp_names.len() {
+        items.push((comp_names[xi].clone(), comp_counts[xi]))
+        xi += 1
     }
-    items.sort_by(|a, b| {
-        if a.1 != b.1 { b.1.cmp(a.1) } else { a.0.cmp(b.0) }
-    })
+    items = sort_pairs(items)
     let mut i: usize = 0
     while i < items.len() && i < 3 {
         println("  ${items[i].0} ${items[i].1}")

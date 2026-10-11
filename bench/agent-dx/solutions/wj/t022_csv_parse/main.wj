@@ -46,7 +46,13 @@ fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     for line in text.lines() {
         let f = parse_line(line.to_string())
-        let wrapped: Vec<string> = f.iter().map(|x| "[" + x + "]").collect()
-        println("${f.len()}: ${wrapped.join("|")}")
+        let mut wrapped = ""
+        let mut first = true
+        for x in f.clone() {
+            if !first { wrapped = wrapped + "|" }
+            wrapped = wrapped + "[" + x + "]"
+            first = false
+        }
+        println("${f.len()}: ${wrapped}")
     }
 }

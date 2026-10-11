@@ -13,11 +13,21 @@ fn shift_char(c: char, n: i64) -> char {
     }
 }
 
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     let pieces: Vec<string> = text.split("\n").map(|s| s.to_string()).collect()
     let head = pieces[0].clone()
-    let body = pieces[1..].join("\n")
+    let body = rest_lines(pieces.clone(), 1).join("\n")
     let parts: Vec<string> = head.split_whitespace().map(|s| s.to_string()).collect()
     let mut n = parts[1].parse::<i64>().unwrap_or(0)
     if parts[0] == "dec" {

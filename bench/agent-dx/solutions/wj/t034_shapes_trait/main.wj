@@ -41,7 +41,12 @@ fn main() {
     for line in text.lines() {
         let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
         if p.len() == 0 { continue }
-        let v: Vec<i64> = p[1..].iter().map(|x| x.parse::<i64>().unwrap_or(0)).collect()
+        let mut v: Vec<i64> = Vec::new()
+        let mut pi: usize = 1
+        while pi < p.len() {
+            v.push(p[pi].parse::<i64>().unwrap_or(0))
+            pi += 1
+        }
         if p[0] == "square" {
             shapes.push(Box::new(Square { s: v[0] }))
         } else if p[0] == "rect" {
@@ -55,7 +60,7 @@ fn main() {
     let mut total: i64 = 0
     let mut best_name = "none"
     let mut best: i64 = -1
-    for s in shapes.iter() {
+    for s in shapes {
         let d = s.double_area()
         println("${s.name()} corners=${s.corners()} area2=${d}")
         total += d

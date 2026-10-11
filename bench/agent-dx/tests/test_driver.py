@@ -95,6 +95,21 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(a["pass_within_iterations"]["2"], 1.0)
 
 
+class CliSmoke(unittest.TestCase):
+    def test_run_replay_report_roundtrip(self):
+        from agentdx import cli
+        with tempfile.TemporaryDirectory() as d:
+            rc = cli.main(["run", "--langs", "python", "--tasks", "t001", "--max-iters", "2", "--trials", "2", "--out", d,
+                           "--agent-cmd", "sh {harness}/agents/replay_example.sh {workspace} {task} {lang}"])
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(os.listdir(d)), 2)
+            self.assertEqual(cli.main(["replay", "--transcripts", d]), 0)
+            self.assertEqual(cli.main(["replay", "--transcripts", d, "--no-regrade"]), 0)
+            md = os.path.join(d, "r.md")
+            cli.main(["report", "--transcripts", d, "--md", md])
+            self.assertIn("python", open(md).read())
+
+
 class MetricTests(unittest.TestCase):
     def test_pass_at_k_known_values(self):
         self.assertAlmostEqual(metrics.pass_at_k(10, 0, 1), 0.0)

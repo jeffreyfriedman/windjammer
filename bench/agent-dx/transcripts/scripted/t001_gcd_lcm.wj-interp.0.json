@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 36,
+    "status": "pass",
+    "total": 36
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "use std::fs\n\nfn gcd(a: i64, b: i64) -> i64 {\n    let mut x = a\n    let mut y = b\n    while y != 0 {\n        let t = x % y\n        x = y\n        y = t\n    }\n    x\n}\n\nfn main() {\n    match fs::read_to_string(\"/dev/stdin\") {\n        Ok(text) => {\n            let mut nums: Vec<i64> = Vec::new()\n            for w in text.split_whitespace() {\n                match w.parse::<i64>() {\n                    Ok(v) => { nums.push(v) }\n                    Err(_) => {}\n                }\n            }\n            let t = nums[0]\n            let mut i: i64 = 0\n            while i < t {\n                let a = nums[(1 + 2 * i) as usize]\n                let b = nums[(2 + 2 * i) as usize]\n                let g = gcd(a, b)\n                println(\"${g} ${a / g * b}\")\n                i += 1\n            }\n        }\n        Err(_) => {}\n    }\n}\n",
+   "usage": null,
+   "wall_seconds": 0.06
+  }
+ ],
+ "lang": "wj-interp",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.06
+ },
+ "recorded_at": "2026-10-11T15:17:49",
+ "schema": 1,
+ "task": "t001_gcd_lcm",
+ "trial": 0
+}

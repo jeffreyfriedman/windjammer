@@ -7,37 +7,54 @@ struct Person {
 }
 
 fn skip_level(people: HashMap<string, Person>, q: string) -> string {
-    let p = match people.get(q.as_str()) {
+    let p = match people.get(q) {
         Some(p) => p,
         None => { return "none: unknown ${q}" }
     }
     if p.manager == "-" { return "none: no manager ${q}" }
     let m1 = p.manager.clone()
-    let mp = match people.get(m1.as_str()) {
+    let mp = match people.get(m1) {
         Some(x) => x,
         None => { return "none: unknown ${m1}" }
     }
     if mp.manager == "-" { return "none: no skip-level ${m1}" }
     let m2 = mp.manager.clone()
-    match people.get(m2.as_str()) {
+    match people.get(m2) {
         Some(x) => "${x.salary}",
         None => "none: unknown ${m2}",
     }
 }
 
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
-    let mut lines = text.lines()
-    let n = lines.next().unwrap_or("0").trim().parse::<usize>().unwrap_or(0)
+    let all: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let n = line_at(all.clone(), cursor).trim().parse::<usize>().unwrap_or(0)
+    cursor += 1
     let mut people: HashMap<string, Person> = HashMap::new()
     let mut i: usize = 0
     while i < n {
-        let l = lines.next().unwrap_or("")
+        let l = line_at(all.clone(), cursor)
+        cursor += 1
         let p: Vec<string> = l.split_whitespace().map(|s| s.to_string()).collect()
         people.insert(p[0].clone(), Person { manager: p[1].clone(), salary: p[2].parse::<i64>().unwrap_or(0) })
         i += 1
     }
-    for l in lines {
+    for l in rest_lines(all.clone(), cursor) {
         let q = l.trim()
         if q.len() == 0 { continue }
         println(skip_level(people.clone(), q.to_string()))

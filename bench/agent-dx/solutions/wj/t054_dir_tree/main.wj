@@ -7,7 +7,7 @@ struct Counts {
 
 fn walk(path: string, depth: usize, counts: Counts) -> Counts {
     let mut c = counts
-    let entries = fs::read_dir(path.as_str()).unwrap_or(Vec::new())
+    let entries = fs::read_dir(path).unwrap_or(Vec::new())
     let mut names: Vec<string> = Vec::new()
     for e in entries {
         names.push(e.file_name())
@@ -20,14 +20,14 @@ fn walk(path: string, depth: usize, counts: Counts) -> Counts {
         k += 1
     }
     for n in names {
-        let full = if path == "." { "./${n}" } else { "${path}/${n}" }
-        if fs::is_dir(full.as_str()) {
+        let full = "${path}/${n}"
+        if fs::is_dir(full) {
             c.dirs += 1
             println("${indent}${n}/")
             c = walk(full, depth + 1, c)
         } else {
             c.files += 1
-            let size = fs::read_to_string(full.as_str()).unwrap_or("").len()
+            let size = fs::read_to_string(full).unwrap_or("").len()
             println("${indent}${n} (${size} bytes)")
         }
     }
@@ -35,6 +35,6 @@ fn walk(path: string, depth: usize, counts: Counts) -> Counts {
 }
 
 fn main() {
-    let c = walk(".".to_string(), 0, Counts { dirs: 0, files: 0 })
+    let c = walk(".", 0, Counts { dirs: 0, files: 0 })
     println("${c.dirs} directories, ${c.files} files")
 }

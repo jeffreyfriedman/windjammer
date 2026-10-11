@@ -1,11 +1,24 @@
 use std::fs
 use std::collections::HashMap
 
+struct Saved {
+    key: string,
+    existed: bool,
+    old: i64,
+}
+
+fn already_saved(frame: Vec<Saved>, key: string) -> bool {
+    for s in frame {
+        if s.key == key { return true }
+    }
+    false
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     let mut data: HashMap<string, i64> = HashMap::new()
-    // each open transaction records the previous value (None = absent) of every key it touched
-    let mut undo: Vec<HashMap<string, Option<i64>>> = Vec::new()
+    // each open transaction records the previous state of every key it touched
+    let mut undo: Vec<Vec<Saved>> = Vec::new()
     for line in text.lines() {
         let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
         if p.len() == 0 { continue }
@@ -14,40 +27,43 @@ fn main() {
             let key = p[1].clone()
             if undo.len() > 0 {
                 let top = undo.len() - 1
-                if !undo[top].contains_key(key.as_str()) {
-                    let prev = match data.get(key.as_str()) {
-                        Some(v) => Some(*v),
-                        None => None,
+                if !already_saved(undo[top].clone(), key.clone()) {
+                    let existed = data.contains_key(key)
+                    let mut old: i64 = 0
+                    match data.get(key) {
+                        Some(v) => { old = v + 0 }
+                        None => {}
                     }
-                    undo[top].insert(key.clone(), prev)
+                    undo[top].push(Saved { key: key.clone(), existed: existed, old: old })
                 }
             }
             if cmd == "set" {
                 data.insert(key, p[2].parse::<i64>().unwrap_or(0))
             } else {
-                data.remove(key.as_str())
+                data.remove(key)
             }
         } else if cmd == "get" {
-            match data.get(p[1].as_str()) {
+            match data.get(p[1]) {
                 Some(v) => { println("${v}") }
                 None => { println("NULL") }
             }
         } else if cmd == "count" {
             let target = p[1].parse::<i64>().unwrap_or(0)
             let mut n = 0
-            for (k, v) in data.iter() {
-                if *v == target { n += 1 }
+            for (k, v) in data.clone() {
+                if v == target { n += 1 }
             }
             println("${n}")
         } else if cmd == "begin" {
-            undo.push(HashMap::new())
+            undo.push(Vec::new())
         } else if cmd == "rollback" {
             match undo.pop() {
                 Some(frame) => {
-                    for (k, old) in frame {
-                        match old {
-                            Some(v) => { data.insert(k, v) }
-                            None => { data.remove(k.as_str()) }
+                    for s in frame {
+                        if s.existed {
+                            data.insert(s.key, s.old)
+                        } else {
+                            data.remove(s.key)
                         }
                     }
                 }

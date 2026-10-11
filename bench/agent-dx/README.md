@@ -147,12 +147,26 @@ outside the agent's reachable paths). This repository's self-tests never invoke 
   deterministic and detects a tampered transcript, the report aggregates correctly.
 - `test_diagnostics.py`: category mapping and the output comparison rule.
 
-## Baseline
+## Baseline (reference solutions, hidden vectors, Oct 2026 toolchains)
 
-`results/report.md` (generated) holds the language x task matrix for the reference solutions and the list of Windjammer tasks
-that do not build or run, each with the first diagnostic. Every gap has a minimal repro under `docs/known-issues/` (prefix
-`agent-dx-`). These numbers describe the *language and toolchain* (can a correct solution be expressed and run), not agent
-skill; agent numbers come only from `run` transcripts.
+Full matrix: `results/report.md` (generated from `results/baseline.json`). Windjammer built from the `scrub-compiler` tree (`wj 0.50.0`).
+
+| Language | Tasks passing all hidden vectors | Notes |
+|----------|----------------------------------|-------|
+| python, go, rust, ts | 60/60 each | independent authors; these cross-check the oracle |
+| `wj` (compiled: `wj build` + cargo) | 59/60 | only t043 (thread + channel pipeline) cannot be written; **25/60 compiled on the first draft** (`results/wj_compiled_first_draft.json`), the rest needed the workarounds below |
+| `wj-interp` (`wj run --interpret`) | 54/60 | t042-t046 (threads, channels, Mutex) and t054 (`fs::read_dir`) are unsupported by design (loud, exit 2) |
+
+Reading this honestly: the Windjammer solutions were written by the benchmark author who knows the language and ran a compile-fix loop of
+about six rounds; the 25/60 first-draft number is the more agent-like figure. Every workaround is a line of evidence for a compiler or
+tooling fix, documented with a minimal repro in `docs/known-issues/agent-dx-*.md` (interpreter: none-first-arm, entry binding, range
+indexing, `env::args`, stdin APIs, char `to_lowercase`, unsupported-by-design; parser: leading `*` statement, `if (x as T)` expression;
+compiled: literal/Option codegen, `cmp` and range literals, miscellaneous codegen, `self` mutability inference, threads and channels,
+lint-vs-interpreter mode split). The interpreter bugs "None as first match arm" and "entry().or_insert binding" are already fixed on the
+interp-gaps branch; the baseline numbers are from the older tree on purpose.
+
+The `transcripts/scripted/` files are harness smoke runs (a scripted agent that copies reference solutions, plus one canned
+syntax-error-then-fix run). They contain no LLM output. No live LLM run has been made; agent numbers must come from `run`.
 
 ## Methodology limits (read before quoting any number)
 

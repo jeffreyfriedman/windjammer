@@ -22,14 +22,23 @@ impl Todo {
     }
 }
 
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     let mut todo = Todo { items: Vec::new(), next_id: 1 }
     for line in text.lines() {
         if line.trim().len() == 0 { continue }
-        let (cmd, rest) = match line.find(" ") {
-            Some(p) => (line.as_str()[0..p].to_string(), line.as_str()[p + 1..].to_string()),
-            None => (line.to_string(), "".to_string()),
+        let mut cmd = line.to_string()
+        let mut rest = ""
+        match line.find(" ") {
+            Some(p) => {
+                cmd = sub(line.clone(), 0, p)
+                rest = sub(line.clone(), p + 1, line.len())
+            }
+            None => {}
         }
         if cmd == "add" {
             if rest.len() == 0 {
@@ -58,13 +67,13 @@ fn main() {
                 println("done ${id}")
             }
         } else if cmd == "list" {
-            let f = if rest.len() == 0 { "all".to_string() } else { rest }
+            let f = if rest.len() == 0 { "all" } else { rest }
             if f != "all" && f != "open" && f != "done" {
                 println("error: bad filter ${f}")
                 continue
             }
             let mut shown = 0
-            for it in todo.items.iter() {
+            for it in todo.items {
                 if f == "all" || (f == "done" && it.done) || (f == "open" && !it.done) {
                     let mark = if it.done { "x" } else { " " }
                     println("${it.id} [${mark}] ${it.text}")
@@ -83,7 +92,7 @@ fn main() {
         } else if cmd == "count" {
             let mut open = 0
             let mut done = 0
-            for it in todo.items.iter() {
+            for it in todo.items {
                 if it.done { done += 1 } else { open += 1 }
             }
             println("open=${open} done=${done}")

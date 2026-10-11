@@ -2,7 +2,8 @@ use std::fs
 
 fn eval_line(line: string) -> string {
     let mut stack: Vec<i64> = Vec::new()
-    for tok in line.split(" ") {
+    let toks: Vec<string> = line.split(" ").map(|s| s.to_string()).collect()
+    for tok in toks {
         if tok == "+" || tok == "-" || tok == "*" || tok == "/" {
             if stack.len() < 2 {
                 return "error: underflow"

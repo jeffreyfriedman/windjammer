@@ -33,10 +33,14 @@ fn decode(s: string) -> string {
     out
 }
 
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     for line in text.lines() {
-        let rest = if line.len() > 2 { line[2..].to_string() } else { "".to_string() }
+        let rest = if line.len() > 2 { sub(line.to_string(), 2, line.len()) } else { "" }
         if line.starts_with("E") {
             println(encode(rest))
         } else {

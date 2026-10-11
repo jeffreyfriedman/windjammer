@@ -30,6 +30,17 @@ fn from_vec(v: Vec<i64>) -> List {
     l
 }
 
+fn join_ints(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     let mut list = List::Nil
@@ -37,7 +48,7 @@ fn main() {
         let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
         if p.len() == 0 { continue }
         let cmd = p[0].clone()
-        let mut v = to_vec(list)
+        let mut v: Vec<i64> = to_vec(list)
         if cmd == "push_front" {
             v.insert(0, p[1].parse::<i64>().unwrap_or(0))
         } else if cmd == "push_back" {
@@ -66,8 +77,8 @@ fn main() {
             if v.len() == 0 {
                 println("<empty>")
             } else {
-                let strs: Vec<string> = v.iter().map(|x| x.to_string()).collect()
-                println(strs.join(" "))
+                let strs = join_ints(v.clone())
+                println(strs)
             }
         } else {
             let k = p[1].parse::<i64>().unwrap_or(0)

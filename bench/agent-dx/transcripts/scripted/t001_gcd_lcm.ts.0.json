@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 36,
+    "status": "pass",
+    "total": 36
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import * as fs from \"node:fs\";\n\nfunction gcd(a: bigint, b: bigint): bigint {\n  while (b !== 0n) {\n    [a, b] = [b, a % b];\n  }\n  return a;\n}\n\nconst data = fs.readFileSync(0, \"utf8\").split(/\\s+/).filter((x) => x.length > 0);\nconst t = parseInt(data[0], 10);\nfor (let i = 0; i < t; i++) {\n  const a = BigInt(data[1 + 2 * i]);\n  const b = BigInt(data[2 + 2 * i]);\n  const g = gcd(a, b);\n  console.log(`${g} ${(a / g) * b}`);\n}\n",
+   "usage": null,
+   "wall_seconds": 0.1
+  }
+ ],
+ "lang": "ts",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.1
+ },
+ "recorded_at": "2026-10-11T15:16:28",
+ "schema": 1,
+ "task": "t001_gcd_lcm",
+ "trial": 0
+}

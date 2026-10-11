@@ -199,6 +199,7 @@ class WjCompiledRunner(Runner):
                 if m and m.get("level") == "error":
                     c = (m.get("code") or {}).get("code") or ""
                     diags.append({"code": c, "message": m.get("message", "")[:300],
+                                  "detail": (m.get("rendered") or "")[:900],
                                   "category": "toolchain-bug" if c else dg.categorize("wj", m.get("message", ""))})
             if not diags:
                 diags = dg.parse_text("wj", err or out)

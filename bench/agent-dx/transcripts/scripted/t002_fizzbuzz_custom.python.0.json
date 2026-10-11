@@ -1,0 +1,92 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [
+     "syntax"
+    ],
+    "diagnostics": [
+     {
+      "category": "syntax",
+      "code": "",
+      "message": "SyntaxError: invalid syntax"
+     }
+    ],
+    "ok": false
+   },
+   "hidden": {
+    "categories": [
+     "syntax"
+    ],
+    "passed": 0,
+    "status": "build_error",
+    "total": 37
+   },
+   "index": 1,
+   "samples": {
+    "passed": 0,
+    "status": "build_error",
+    "total": 2
+   },
+   "source": "def main(:\n    pass\n",
+   "usage": {
+    "input_tokens": 1000,
+    "output_tokens": 100
+   },
+   "wall_seconds": 0.2
+  },
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 37,
+    "status": "pass",
+    "total": 37
+   },
+   "index": 2,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import sys\n\nn, a, b = map(int, sys.stdin.read().split()[:3])\nout = []\nfor i in range(1, n + 1):\n    if i % a == 0 and i % b == 0:\n        out.append(\"FizzBuzz\")\n    elif i % a == 0:\n        out.append(\"Fizz\")\n    elif i % b == 0:\n        out.append(\"Buzz\")\n    else:\n        out.append(str(i))\nif out:\n    print(\"\\n\".join(out))\n",
+   "usage": {
+    "input_tokens": 2000,
+    "output_tokens": 200
+   },
+   "wall_seconds": 0.29
+  }
+ ],
+ "lang": "python",
+ "max_iters": 3,
+ "metrics": {
+  "diagnostic_categories": {
+   "syntax": 1
+  },
+  "first_error_to_fix": {
+   "attempts": 1,
+   "changed_lines": 15
+  },
+  "green": true,
+  "iterations_to_green": 2,
+  "iterations_used": 2,
+  "pass_at_1": false,
+  "tokens_in": 3000,
+  "tokens_out": 300,
+  "wall_seconds": 0.49
+ },
+ "recorded_at": "2026-10-11T15:18:04",
+ "schema": 1,
+ "task": "t002_fizzbuzz_custom",
+ "trial": 0
+}

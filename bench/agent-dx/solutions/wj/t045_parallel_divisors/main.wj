@@ -1,5 +1,6 @@
 use std::fs
 use std::thread
+use std::thread::JoinHandle
 
 fn divisor_count(n: i64) -> i64 {
     let mut c: i64 = 0
@@ -13,6 +14,16 @@ fn divisor_count(n: i64) -> i64 {
     c
 }
 
+fn slice_i64(v: Vec<i64>, from: usize, to: usize) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new()
+    let mut i = from
+    while i < to && i < v.len() {
+        out.push(v[i])
+        i += 1
+    }
+    out
+}
+
 fn main() {
     let text = fs::read_to_string("/dev/stdin").unwrap_or("")
     let mut nums: Vec<i64> = Vec::new()
@@ -21,21 +32,20 @@ fn main() {
     }
     let workers = nums[0] as usize
     let n = nums[1] as usize
-    let values: Vec<i64> = nums[2..2 + n].to_vec()
-    let mut handles = Vec::new()
+    let values: Vec<i64> = slice_i64(nums.clone(), 2, 2 + n)
+    let mut handles: Vec<JoinHandle<Vec<(usize, i64)>>> = Vec::new()
     let mut w: usize = 0
     while w < workers {
         let vals = values.clone()
-        let handle = thread::spawn(move || {
+        handles.push(thread::spawn(move || {
             let mut out: Vec<(usize, i64)> = Vec::new()
             let mut i = w
             while i < vals.len() {
                 out.push((i, divisor_count(vals[i])))
                 i += workers
             }
-            out
-        })
-        handles.push(handle)
+            return out
+        }))
         w += 1
     }
     let mut results: Vec<i64> = Vec::new()

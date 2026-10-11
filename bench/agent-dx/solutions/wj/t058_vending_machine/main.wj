@@ -14,9 +14,15 @@ fn change_for(amount: i64) -> Vec<i64> {
 }
 
 fn show_coins(c: Vec<i64>) -> string {
-    if c.len() == 0 { return "none".to_string() }
-    let strs: Vec<string> = c.iter().map(|x| x.to_string()).collect()
-    strs.join(" ")
+    if c.len() == 0 { return "none" }
+    let mut out = ""
+    let mut first = true
+    for x in c {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
 }
 
 fn main() {
