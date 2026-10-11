@@ -1,5 +1,7 @@
 # Windjammer Standard Library Architecture
 
+> **Status (2026-10-11): background, not verified.** Written for 0.14 (2025-10). The authoritative list of stdlib modules is `std/`; API sketches and "Active" labels below were not re-checked against it.
+
 **Version:** 0.14.0  
 **Status:** Active  
 **Last Updated:** October 8, 2025

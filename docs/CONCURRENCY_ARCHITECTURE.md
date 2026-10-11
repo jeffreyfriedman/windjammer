@@ -1,5 +1,7 @@
 # Windjammer Concurrency Architecture
 
+> **Status (2026-10-11): background, not verified.** The three-layer design is background; the concurrency surface that is actually decided is [ADR-0004](adr/0004-concurrency-surface.md). The implementation-status list and the performance tables below were not re-verified.
+
 ## Overview: Three Layers of Concurrency
 
 Windjammer provides **three complementary concurrency APIs**, each serving different use cases:

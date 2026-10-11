@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** [WJ-PKG-01](../proposals/rfcs/WJ-PKG-01-package-management.md), `src/config.rs` (`DependencySpec`), `src/package/{manifest,resolver,registry}.rs`, `src/cli/{add,remove,update}.rs`, [PUBLISHING.md](../PUBLISHING.md)
+- **Related:** [WJ-PKG-01](../proposals/rfcs/WJ-PKG-01-package-management.md), `src/config.rs` (`DependencySpec`), `src/package/{manifest,resolver,registry}.rs`, `src/cli/{add,remove,update}.rs`
 
 ## Context
 `wj.toml` already parses `dependencies` with `version`, `path`, `git`, `branch`, `features`, `package` (a Cargo rename) and `registry`.

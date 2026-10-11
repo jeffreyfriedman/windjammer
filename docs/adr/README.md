@@ -4,9 +4,9 @@ ADRs record decisions that shape the compiler, the language surface or the ecosy
 options considered. They exist so that agents and contributors stop re-deriving (or silently contradicting)
 choices that the code and the docs currently leave implicit.
 
-**Every ADR below is `Proposed`.** None has been accepted. Each carries a recommendation and a
-"Decision needed from: project owner" line; an ADR becomes `Accepted` only when the owner edits its status
-and adds the date and any amendments. Until then the recommendation is guidance, not policy.
+**Status is whatever the ADR file says; this table mirrors it.** `Proposed` ADRs carry a recommendation and a
+"Decision needed from: project owner" line; an ADR becomes `Accepted` only when the owner edits its status and adds the
+date and any amendments. Until then a `Proposed` recommendation is guidance, not policy.
 
 | ADR | Title | Recommended option | Status |
 |-----|-------|--------------------|--------|
@@ -15,7 +15,7 @@ and adds the date and any amendments. Until then the recommendation is guidance,
 | [0003](0003-owned-keyword.md) | The `owned` keyword | Do not add; ownership stays inferred | Proposed |
 | [0004](0004-concurrency-surface.md) | Concurrency surface | One documented surface: `async`/`spawn` expressions per WJ-CONC-01; `thread {}` kept; `go`/channels not added | Accepted (2026-10-10) |
 | [0005](0005-error-strategy.md) | Error strategy | Front-end checks first; rustc errors stay a mapped fallback | Proposed |
-| [0006](0006-optimizer-fate.md) | Optimizer fate | Delete the dormant 15-phase optimizer; keep IR-level passes; rebuild on measurement | Accepted (2026-10-10) |
+| [0006](0006-optimizer-fate.md) | Optimizer fate | Delete the dormant 15-phase AST optimizer; keep IR-level passes; rebuild on measurement (amended: replaced by a post-codegen `syn` pass) | Accepted (2026-10-10), amended 2026-10-11 |
 | [0007](0007-target-tiers-conformance.md) | Target tiers and conformance contract | Tier 1 Rust, Tier 2 WASM/JS, Tier 3 Go; conformance suite gates promotion | Proposed |
 | [0008](0008-stdlib-portability.md) | Stdlib portability | Portable core (pure `.wj` + capability-tagged host modules) | Proposed |
 | [0009](0009-security-enforcement.md) | Security enforcement level | Effects fail the build; taint fails by default; lock file per dependency | Proposed |
@@ -23,6 +23,8 @@ and adds the date and any amendments. Until then the recommendation is guidance,
 | [0011](0011-release-version-policy.md) | Release and version policy across repos | Compiler/runtime/stdlib lockstep; ecosystem repos declare a compatible range | Proposed |
 | [0012](0012-rust-interop-boundary.md) | Rust interop boundary | `extern` declarations plus `[rust-dependencies]`-style Cargo passthrough, no inline Rust | Proposed |
 | [0013](0013-bug-triage-tracker.md) | Bug-triage tracker | One tracker (bd) as source of truth; repro queue generated or archived | Proposed |
+| [0014](0014-surface-syntax-rust-isms.md) | Windjammer-native surface syntax | Retire leaked Rust-isms (`println!`, `vec!`, `format!`, ...), in phases | Accepted (2026-10-11) for Phase 1; Phases 2-3 Proposed |
+| [0015](0015-language-consistency-proposals.md) | Language consistency proposals | Numerics, casts, paths, returns; each item independent | Accepted (2026-10-11) |
 
 ## Template
 

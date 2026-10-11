@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** `tests/COMPILER_REPRO_QUEUE.md`, `tests/STDLIB_ADOPTION_QUEUE.md`, `tests/LANGUAGE_SPEC_TESTS.md`, `AGENTS.md` (bd workflow), `docs/known-gaps.md`
+- **Related:** the former `tests/COMPILER_REPRO_QUEUE.md` (deleted 2026-10-11; see git history), `AGENTS.md` (bd workflow), `docs/known-gaps.md`
 
 ## Context
 Compiler bugs found by dogfooding are recorded in `tests/COMPILER_REPRO_QUEUE.md`, a single markdown file that keeps growing (entries numbered
@@ -14,7 +14,7 @@ must have a regression test.
 ## Options
 ### A. `bd` is the source of truth; the queue is generated or archived
 Every bug is a bd issue with labels (`area:codegen`, `class:ownership`, ...). Each fixed issue links its regression test name. The queue file is
-frozen, moved to `docs/archive/`, and only an auto-generated summary remains (or none).
+frozen, deleted (history is in git), and only an auto-generated summary remains (or none).
 ### B. Markdown queue is the source of truth; bd tracks only work items
 Pros: reviewable in PRs. Cons: merge conflicts, no status, unbounded growth.
 ### C. GitHub issues
@@ -25,7 +25,7 @@ Option A with a retention rule: a closed bug keeps its regression test as the re
 release without a test are re-triaged or closed. `docs/known-gaps.md` holds architectural gaps only, not individual bugs.
 
 ## Consequences
-- `tests/COMPILER_REPRO_QUEUE.md` (not owned by this change) is archived by the owner of `tests/`.
+- `tests/COMPILER_REPRO_QUEUE.md` was deleted on 2026-10-11 (11,000 lines of stale per-ticket history; `git log` is the archive).
 - AGENTS.md states "file bugs in bd, add a failing generic test first".
 - Dogfood projects report through bd, not by editing compiler docs.
 

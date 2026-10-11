@@ -31,9 +31,3 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | Is `let mut` required? | Docs say yes; codegen infers `mut` for mutated locals and parameters | [ADR-0002](adr/0002-local-mutability.md) |
 | Does ternary `c ? a : b` exist? | RFC says implemented; parser removed it | WJ-SYN-02 row in the [RFC table](proposals/rfcs/README.md) |
 | Are `use ... as` aliases and `std::http.client` submodule syntax supported? | Old docs said "future"; not verified in tests | [MODULE_SYSTEM.md](MODULE_SYSTEM.md) |
-
-## Documentation drift fixed on 2026-10-10
-README version/test counts, `go`/`chan` claims, `wj eject` / `wj fmt` / performance claims, `windjammer.ebnf` coverage,
-MODULE_SYSTEM import support, ownership-inference `let mut` rule, RFC status table, ARCHITECTURE.md (UI-component gate), the
-IR doc's backend table, `design/traits.md` `&self` usage, split versioning documents. Archived stale documents are listed in
-[archive/README.md](archive/README.md).
