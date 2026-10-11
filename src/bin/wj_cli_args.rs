@@ -222,6 +222,14 @@ pub enum Commands {
         /// Skip auto-generated Cargo.toml for library compile
         #[arg(long)]
         no_generate_cargo_toml: bool,
+
+        /// List discovered test files and functions, then exit without compiling
+        #[arg(long)]
+        list: bool,
+
+        /// Exit 0 when no tests are found (default: finding none is an error)
+        #[arg(long)]
+        allow_empty: bool,
     },
 
     /// Format Windjammer code

@@ -29,6 +29,10 @@ pub struct TestRunOptions {
     pub runtime_path: Option<PathBuf>,
     /// Skip auto-generated Cargo.toml for the library compile (same as `wj build --no-generate-cargo-toml`).
     pub no_generate_cargo_toml: bool,
+    /// Print discovered test files and functions, then exit without compiling.
+    pub list: bool,
+    /// Exit successfully when no tests are found (default: finding none is an error).
+    pub allow_empty: bool,
 }
 
 impl Default for TestRunOptions {
@@ -48,6 +52,8 @@ impl Default for TestRunOptions {
             copy_runtime: false,
             runtime_path: None,
             no_generate_cargo_toml: false,
+            list: false,
+            allow_empty: false,
         }
     }
 }
