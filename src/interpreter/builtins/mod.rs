@@ -16,6 +16,7 @@ mod map;
 mod num;
 mod option;
 mod seq;
+mod shared;
 mod std_fns;
 mod text;
 
@@ -131,6 +132,7 @@ impl Registry {
         map::register(&mut r);
         option::register(&mut r);
         std_fns::register(&mut r);
+        shared::register(&mut r);
         r
     }
 

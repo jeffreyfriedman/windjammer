@@ -146,6 +146,7 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
             _ => Err(panic_ctl("variant has no fields")),
         },
         (Value::Ref(p0), _) => project(&p0.read()?, p),
+        (Value::Rc(slot), _) => project(&slot.borrow().clone(), p),
         (v, p) => Err(panic_ctl(format!("cannot project {:?} out of {}", p, v.type_name()))),
     }
 }
@@ -154,14 +155,29 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
 pub fn deref_value(v: Value) -> R<Value> {
     let mut cur = v;
     let mut n = 0;
-    while let Value::Ref(p) = cur {
-        cur = p.read()?;
+    loop {
+        cur = match cur {
+            Value::Ref(p) => p.read()?,
+            Value::Rc(s) => s.borrow().clone(),
+            other => return Ok(other),
+        };
         n += 1;
         if n > 64 {
             return Err(panic_ctl("reference cycle"));
         }
     }
-    Ok(cur)
+}
+
+/// Follow `&`/`&mut` references but keep an `Rc` handle (so sharing is not lost).
+pub fn strip_refs(v: Value) -> R<Value> {
+    let mut cur = v;
+    for _ in 0..64 {
+        match cur {
+            Value::Ref(p) => cur = p.read()?,
+            other => return Ok(other),
+        }
+    }
+    Err(panic_ctl("reference cycle"))
 }
 
 impl Interpreter {
@@ -207,6 +223,7 @@ impl Interpreter {
                 let bv = base.read()?;
                 let bv = match bv {
                     Value::Ref(p) => return Ok(Some(self.chase(p)?.proj(Proj::Field(field.as_str().into())))),
+                    Value::Rc(slot) => return Ok(Some(Place::of_slot(slot).proj(Proj::Field(field.as_str().into())))),
                     other => other,
                 };
                 let proj = match &bv {
