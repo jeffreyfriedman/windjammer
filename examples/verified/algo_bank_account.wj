@@ -1,0 +1,35 @@
+// tags: struct, result, error-handling, domain
+// rust: ok
+// expect: balance 100
+// expect: left 70
+// expect: balance 70
+// expect: error: insufficient funds (have 70, need 100)
+struct Account { balance: int }
+
+impl Account {
+    fn deposit(self, amt: int) {
+        self.balance += amt
+    }
+    fn withdraw(self, amt: int) -> Result<int, string> {
+        if amt > self.balance {
+            return Err("insufficient funds (have ${self.balance}, need ${amt})")
+        }
+        self.balance -= amt
+        Ok(self.balance)
+    }
+}
+
+fn main() {
+    let mut acct = Account { balance: 0 }
+    acct.deposit(100)
+    println("balance ${acct.balance}")
+    match acct.withdraw(30) {
+        Ok(left) => println("left ${left}"),
+        Err(e) => println("error: ${e}"),
+    }
+    println("balance ${acct.balance}")
+    match acct.withdraw(100) {
+        Ok(_) => println("ok"),
+        Err(e) => println("error: ${e}"),
+    }
+}

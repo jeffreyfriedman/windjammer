@@ -20,7 +20,7 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | 6b | `.wj-capabilities.lock` not wired | Open | `src/ir/capability_lock.rs` unused by the CLI | ADR-0009, ADR-0010 |
 | 6c | Unknown external calls have no effect classification; effects checked only with `[app_capabilities]` | Partial | `src/output_generation.rs` | ADR-0009, ADR-0012 |
 | 7a | Go and JavaScript backends do not consume the IR | Open | `let _ir = ...prepare_ir_context(...)` in both generators | Plan WP 11; [ADR-0007](adr/0007-target-tiers-conformance.md) |
-| 7b | Conformance suite runs only the Rust path | Partial | `tests/conformance/run_conformance_tests.sh` (22 programs) | ADR-0007 |
+| 7b | Conformance suite runs only the Rust path | Partial | `tests/conformance/run_conformance_tests.sh` | ADR-0007 |
 | 7c | Stdlib is Rust-host-only; no portability tags | Open | `std/*.wj` over `windjammer-runtime` | [ADR-0008](adr/0008-stdlib-portability.md) |
 | 8 | Optimizer disabled; performance and economics claims unmeasured | Decision needed | `src/compiler_database.rs` `optimize_program`; no `wj optimize`/`wj economics` | [ADR-0006](adr/0006-optimizer-fate.md), [WJ-PERF-01](proposals/rfcs/WJ-PERF-01-economic-efficiency.md) |
 | 9 | RFC features (comptime, const generics, `owned`) | Not started | No tokens/syntax; only `ConstEval::Comptime` IR scaffolding | [ADR-0003](adr/0003-owned-keyword.md), [WJ-LANG-02](proposals/rfcs/WJ-LANG-02-mojo-feature-analysis.md) |
@@ -31,9 +31,3 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | Is `let mut` required? | Docs say yes; codegen infers `mut` for mutated locals and parameters | [ADR-0002](adr/0002-local-mutability.md) |
 | Does ternary `c ? a : b` exist? | RFC says implemented; parser removed it | WJ-SYN-02 row in the [RFC table](proposals/rfcs/README.md) |
 | Are `use ... as` aliases and `std::http.client` submodule syntax supported? | Old docs said "future"; not verified in tests | [MODULE_SYSTEM.md](MODULE_SYSTEM.md) |
-
-## Documentation drift fixed on 2026-10-10
-README version/test counts, `go`/`chan` claims, `wj eject` / `wj fmt` / performance claims, `windjammer.ebnf` coverage,
-MODULE_SYSTEM import support, ownership-inference `let mut` rule, RFC status table, ARCHITECTURE.md (UI-component gate), the
-IR doc's backend table, `design/traits.md` `&self` usage, split versioning documents. Archived stale documents are listed in
-[archive/README.md](archive/README.md).

@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import * as fs from \"node:fs\";\n\nconst lines = fs.readFileSync(0, \"utf8\").split(\"\\n\").map((l) => l.trim()).filter((l) => l !== \"\");\nconst cap = parseInt(lines[0], 10);\nconst q: string[] = [];\nconst out: string[] = [];\nfor (const line of lines.slice(1)) {\n  const p = line.split(/\\s+/);\n  switch (p[0]) {\n    case \"push\":\n      if (q.length >= cap) out.push(\"full\");\n      else {\n        q.push(String(BigInt(p[1])));\n        out.push(\"ok\");\n      }\n      break;\n    case \"pop\":\n      out.push(q.length ? q.shift()! : \"empty\");\n      break;\n    case \"peek\":\n      out.push(q.length ? q[0] : \"empty\");\n      break;\n    case \"size\":\n      out.push(String(q.length));\n      break;\n    case \"dump\":\n      out.push(q.length ? q.join(\" \") : \"<empty>\");\n      break;\n  }\n}\nif (out.length > 0) console.log(out.join(\"\\n\"));\n",
+   "usage": null,
+   "wall_seconds": 0.11
+  }
+ ],
+ "lang": "ts",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.11
+ },
+ "recorded_at": "2026-10-11T15:17:12",
+ "schema": 1,
+ "task": "t010_ring_buffer",
+ "trial": 0
+}

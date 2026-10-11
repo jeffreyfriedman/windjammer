@@ -1,0 +1,15 @@
+// tags: basics, control-flow, if, expression
+// rust: ok
+// expect: 7
+// expect: even
+// expect: odd
+fn main() {
+    let a = 3
+    let b = 7
+    let bigger = if a > b { a } else { b }
+    println("${bigger}")
+    for n in [4, 5] {
+        let kind = if n % 2 == 0 { "even" } else { "odd" }
+        println(kind)
+    }
+}

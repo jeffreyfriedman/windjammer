@@ -1,0 +1,18 @@
+// tags: iterators, enumerate, zip
+// rust: gap error[E0599]: no method named 'zip' found for struct 'Vec<String>' in the curren
+// expect: 0:a 1:b 2:c
+// expect: a=1 b=2 c=3
+fn main() {
+    let letters = ["a", "b", "c"]
+    let mut s = ""
+    for (i, l) in letters.enumerate() {
+        s = s + "${i}:${l} "
+    }
+    println(s.trim())
+    let nums = [1, 2, 3]
+    let mut t = ""
+    for (l, n) in letters.zip(nums) {
+        t = t + "${l}=${n} "
+    }
+    println(t.trim())
+}

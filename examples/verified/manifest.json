@@ -1,0 +1,1965 @@
+{
+  "count": 164,
+  "examples": [
+    {
+      "expect_lines": 2,
+      "file": "algo_anagram.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "strings",
+        "sort",
+        "chars"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "algo_bank_account.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "result",
+        "error-handling",
+        "domain"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_bfs_grid.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "algorithm",
+        "bfs",
+        "queue",
+        "grid",
+        "vecdeque"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_binary_search.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "algorithm",
+        "search",
+        "option"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "algo_binary_tree.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "enum",
+        "recursion",
+        "box",
+        "tree",
+        "data-structure"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_bubble_sort.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "algorithm",
+        "sorting",
+        "loops",
+        "swap"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "algo_caesar_cipher.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "strings",
+        "chars",
+        "cipher"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "algo_collatz.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "loops",
+        "collatz"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_digits.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "math",
+        "digits"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "algo_fibonacci.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "recursion",
+        "loops",
+        "u64"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_fizzbuzz.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "loops",
+        "fizzbuzz"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_gcd_lcm.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "recursion",
+        "math"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_inventory.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "struct",
+        "hashmap",
+        "domain",
+        "option"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_knapsack_dp.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: arguments to this function are incorrect",
+      "tags": [
+        "algorithm",
+        "dynamic-programming"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_lcs.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ",
+      "tags": [
+        "algorithm",
+        "dynamic-programming",
+        "strings"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_linked_list_enum.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "enum",
+        "recursion",
+        "box",
+        "data-structure"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "algo_matrix_multiply.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: arguments to this function are incorrect",
+      "tags": [
+        "algorithm",
+        "matrix",
+        "nested-vec"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_palindrome.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "strings",
+        "chars",
+        "palindrome"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "algo_pascal_triangle.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<i64>' in the current s",
+      "tags": [
+        "algorithm",
+        "vec",
+        "nested"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_perfect_numbers.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "math",
+        "loops"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "algo_primes_sieve.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<i64>' in the current s",
+      "tags": [
+        "algorithm",
+        "sieve",
+        "primes",
+        "vec"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "algo_roman_numerals.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "strings",
+        "tuples"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_stack_calculator.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0277]: can't compare 'str' with '&str'",
+      "tags": [
+        "algorithm",
+        "stack",
+        "parsing",
+        "rpn"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_state_machine.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "algorithm",
+        "enum",
+        "state-machine",
+        "match"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "algo_statistics.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'sum' found for struct 'Vec<f32>' in the current s",
+      "tags": [
+        "algorithm",
+        "math",
+        "float",
+        "statistics"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "algo_temperature_table.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "algorithm",
+        "float",
+        "formatting",
+        "loops"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "algo_tokenizer.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "algorithm",
+        "strings",
+        "chars",
+        "enum",
+        "parsing"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "algo_word_frequency.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'map' found for struct 'HashMap<String, i64>' in t",
+      "tags": [
+        "algorithm",
+        "hashmap",
+        "strings",
+        "sort"
+      ]
+    },
+    {
+      "expect_lines": 6,
+      "file": "basics_arithmetic.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0689]: can't call method 'pow' on ambiguous numeric type '{integer}'",
+      "tags": [
+        "basics",
+        "arithmetic",
+        "int"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_bool_logic.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "bool",
+        "operators"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_const.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "basics",
+        "const"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "basics_float_math.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "float",
+        "math"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "basics_for_range.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "loops",
+        "for",
+        "range"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_functions.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "functions"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "basics_hello.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "print"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "basics_if_else.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "control-flow",
+        "if"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_if_expression.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "control-flow",
+        "if",
+        "expression"
+      ]
+    },
+    {
+      "expect_lines": 6,
+      "file": "basics_interpolation.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "strings",
+        "interpolation"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "basics_loop_break.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "loops",
+        "break",
+        "continue"
+      ]
+    },
+    {
+      "exit": 3,
+      "expect_lines": 1,
+      "file": "basics_main_exit_code.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0433]: cannot find module or crate 'windjammer_runtime' in this scope",
+      "tags": [
+        "basics",
+        "exit",
+        "process"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_shadowing_blocks.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "scope",
+        "blocks"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_tuples.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "basics",
+        "tuples"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "basics_variables.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "variables",
+        "mutability"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "basics_while.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "basics",
+        "loops",
+        "while"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "btreemap_ordered.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "btreemap",
+        "collections",
+        "ordered"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "chars_ascii_arith.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "chars",
+        "ascii",
+        "arithmetic"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "chars_classify.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "chars",
+        "classify"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "closures_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "closures",
+        "functions"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "closures_counter.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "closures",
+        "mutation",
+        "capture"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "closures_return_fn.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "closures",
+        "higher-order",
+        "functions"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "defer_cleanup.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "output differs from interpreter/oracle",
+      "tags": [
+        "control-flow",
+        "defer"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "enum_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "enum",
+        "match"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "enum_data.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "enum",
+        "match",
+        "data"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "enum_methods.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: arguments to this enum variant are incorrect",
+      "tags": [
+        "enum",
+        "impl",
+        "methods"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "enum_option_like_generic.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "enum",
+        "generics",
+        "match"
+      ]
+    },
+    {
+      "exit": 101,
+      "expect_lines": 1,
+      "file": "error_assert_eq_fails.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "error-handling",
+        "assert",
+        "panic"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "error_assert_ok.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "error-handling",
+        "assert"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "error_custom_enum.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "error-handling",
+        "enum",
+        "result",
+        "question-mark"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "error_map_err_ok.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "error-handling",
+        "map_err",
+        "ok_or",
+        "result",
+        "option"
+      ]
+    },
+    {
+      "exit": 101,
+      "expect_lines": 1,
+      "file": "error_panic_exit_code.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "error-handling",
+        "panic",
+        "exit"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "error_unwrap_or_expect.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "error-handling",
+        "unwrap_or",
+        "unwrap_or_default",
+        "option",
+        "result"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "from_conversion.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "traits",
+        "from",
+        "into",
+        "conversion"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "generics_function.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'clone' found for type parameter 'T' in the curren",
+      "tags": [
+        "generics",
+        "functions"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "generics_struct.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "generics",
+        "struct",
+        "container"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "hashmap_basics.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "hashmap",
+        "collections",
+        "insert",
+        "get"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "hashmap_iterate_sorted.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "hashmap",
+        "iteration",
+        "sort"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "hashmap_remove_update.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "hashmap",
+        "remove",
+        "update"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "hashmap_word_count.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "hashmap",
+        "entry",
+        "word-count"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "hashset_basics.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "hashset",
+        "collections",
+        "set"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "if_let_chain.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "if-let",
+        "option",
+        "result"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "iter_any_all_count.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the current s",
+      "tags": [
+        "iterators",
+        "any",
+        "all",
+        "count",
+        "find"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "iter_collect_hashmap.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<String>' in the curren",
+      "tags": [
+        "iterators",
+        "collect",
+        "hashmap"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "iter_enumerate_zip.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'zip' found for struct 'Vec<String>' in the curren",
+      "tags": [
+        "iterators",
+        "enumerate",
+        "zip"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "iter_filter_map_flat.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'filter_map' found for struct 'Vec<String>' in the",
+      "tags": [
+        "iterators",
+        "filter_map",
+        "parsing",
+        "option"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "iter_flat_map_chain.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' in the curr",
+      "tags": [
+        "iterators",
+        "flat_map",
+        "chain",
+        "flatten"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "iter_fold_sum.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'sum' found for struct 'Vec<i32>' in the current s",
+      "tags": [
+        "iterators",
+        "fold",
+        "sum",
+        "product"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "iter_group_by_manual.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "iterators",
+        "hashmap",
+        "grouping",
+        "sort"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "iter_map_filter.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<i32>' in the current s",
+      "tags": [
+        "iterators",
+        "map",
+        "filter",
+        "collect"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "iter_min_max_by.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0061]: this method takes 1 argument but 0 arguments were supplied",
+      "tags": [
+        "iterators",
+        "min",
+        "max",
+        "min_by_key"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "iter_partition_unzip.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'partition' found for struct 'Vec<i32>' in the cur",
+      "tags": [
+        "iterators",
+        "partition",
+        "unzip"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "iter_scan_running_total.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "iterators",
+        "scan",
+        "fold",
+        "accumulate"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "iter_sort_by_float.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "iterators",
+        "sort",
+        "float",
+        "partial_cmp"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "iter_take_skip_rev.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'take' found for struct 'Vec<i32>' in the current",
+      "tags": [
+        "iterators",
+        "take",
+        "skip",
+        "rev",
+        "step_by"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "let_else_pattern.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0005]: refutable pattern in local binding",
+      "tags": [
+        "let-else",
+        "option",
+        "control-flow"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "loops_labeled_nested.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: arguments to this function are incorrect",
+      "tags": [
+        "loops",
+        "break",
+        "nested",
+        "search"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "match_patterns.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "match",
+        "patterns",
+        "guards",
+        "ranges"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "match_tuple_destructure.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "match",
+        "tuples",
+        "destructure"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "match_while_let.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "match",
+        "while-let",
+        "stack"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "mem_swap_replace_take.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "vec",
+        "option",
+        "swap",
+        "take",
+        "mutation"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "module_inline.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0255]: the name 'rect_area' is defined multiple times",
+      "tags": [
+        "modules",
+        "mod",
+        "use",
+        "pub"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "modules_trait_static.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "traits",
+        "associated-fn",
+        "impl",
+        "static"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "numbers_bitwise.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "numbers",
+        "bitwise"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "numbers_conversions.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "numbers",
+        "conversion",
+        "casts"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "numbers_float_rounding.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "numbers",
+        "float",
+        "round",
+        "formatting"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "numbers_float_special.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "output differs from interpreter/oracle",
+      "tags": [
+        "numbers",
+        "float",
+        "nan"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "numbers_integer_widths.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "numbers",
+        "u8",
+        "i64",
+        "widths",
+        "overflow"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "numbers_min_max_abs.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0689]: can't call method 'abs' on ambiguous numeric type '{integer}'",
+      "tags": [
+        "numbers",
+        "math",
+        "builtin"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "numbers_overflow_checked.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "numbers",
+        "overflow",
+        "checked"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "operators_overload.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0119]: conflicting implementations of trait 'PartialEq' for type 'V2'",
+      "tags": [
+        "operators",
+        "impl",
+        "traits",
+        "add",
+        "mul",
+        "eq"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "option_basics.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "option",
+        "match",
+        "error-handling"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "option_combinators.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "option",
+        "map",
+        "and_then",
+        "combinators"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "option_filter_zip_flatten.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "option",
+        "filter",
+        "zip",
+        "flatten",
+        "or"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "option_take_replace.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "option",
+        "mutation",
+        "take",
+        "replace"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "pipe_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "pipe",
+        "functions",
+        "composition"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "pipe_method_stage.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: '[i64; 4]' is not an iterator",
+      "tags": [
+        "pipe",
+        "methods",
+        "iterators"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "pipe_result_question.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "pipe",
+        "result",
+        "question-mark"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "prog_bit_counting.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "program",
+        "bitwise",
+        "math",
+        "u32"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "prog_csv_parse.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<Row>' in the current s",
+      "tags": [
+        "program",
+        "strings",
+        "parsing",
+        "struct",
+        "result"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_event_handlers.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "closures",
+        "vec",
+        "callbacks"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_game_of_life.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "simulation",
+        "grid",
+        "loops"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_lru_cache.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "data-structure",
+        "hashmap",
+        "vec"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_matrix_transpose.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "matrix",
+        "nested-vec"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "prog_priority_scheduler.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "sort",
+        "struct",
+        "tuples"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_queue_simulation.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "program",
+        "simulation",
+        "vecdeque",
+        "struct"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "prog_run_length_encoding.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "program",
+        "strings",
+        "chars",
+        "encoding"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_shapes_report.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "traits",
+        "enum",
+        "formatting",
+        "vec"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_text_wrap.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "program",
+        "strings",
+        "formatting",
+        "loops"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "prog_tictactoe_winner.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "program",
+        "game",
+        "grid",
+        "enum"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "recursion_hanoi_ackermann.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "recursion",
+        "algorithm"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "result_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "result",
+        "error-handling",
+        "match"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "result_collect_all_or_nothing.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0282]: type annotations needed",
+      "tags": [
+        "result",
+        "iterators",
+        "collect",
+        "parsing"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "result_question_mark.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "result",
+        "error-handling",
+        "question-mark"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "sort_stability_keys.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "sort",
+        "sort_by_key",
+        "stability",
+        "strings"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "std_cmp_ordering.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "std",
+        "cmp",
+        "ordering",
+        "sort"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "std_env_args.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0432]: unresolved import 'windjammer_runtime'",
+      "tags": [
+        "std",
+        "env",
+        "args"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "std_fs_roundtrip.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0433]: cannot find module or crate 'windjammer_runtime' in this scope",
+      "tags": [
+        "std",
+        "fs",
+        "io",
+        "file",
+        "result"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "std_math_functions.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "std",
+        "math",
+        "float"
+      ]
+    },
+    {
+      "expect_lines": 7,
+      "file": "strings_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "strings",
+        "methods"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "strings_build.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "strings",
+        "push",
+        "mutation"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "strings_chars.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "strings",
+        "chars"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "strings_compare_sort.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0658]: use of unstable library feature 'str_as_str'",
+      "tags": [
+        "strings",
+        "sort",
+        "compare"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "strings_format_specs.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "strings",
+        "formatting",
+        "interpolation",
+        "table"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "strings_parse.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "strings",
+        "parse",
+        "result",
+        "option"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "strings_slicing.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0277]: the size for values of type 'str' cannot be known at compilation t",
+      "tags": [
+        "strings",
+        "slicing"
+      ]
+    },
+    {
+      "expect_lines": 5,
+      "file": "strings_split_join.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "strings",
+        "split",
+        "join"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "strings_unicode.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "strings",
+        "unicode",
+        "chars",
+        "bytes"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "struct_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "methods",
+        "impl"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "struct_default_builder.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "builder",
+        "default"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "struct_derive_debug_eq.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "derive",
+        "debug",
+        "equality"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "struct_method_chain_mut.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "mutation",
+        "methods",
+        "inferred-mut"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "struct_nested.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "nested",
+        "composition"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "struct_update_copy.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "struct",
+        "clone",
+        "copy"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "struct_with_vec_field.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0282]: type annotations needed",
+      "tags": [
+        "struct",
+        "vec",
+        "methods",
+        "mutation"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_basic_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "assert_eq"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_cases_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "test_cases",
+        "parameterized"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_collections_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "vec",
+        "hashmap"
+      ]
+    },
+    {
+      "exit": 1,
+      "expect_lines": 0,
+      "file": "testing_failure_reported_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "failure",
+        "exit-code"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_naming_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "naming",
+        "discovery"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_option_result_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "option",
+        "result"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_panics_helper_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "assert_ne",
+        "strings"
+      ]
+    },
+    {
+      "expect_lines": 0,
+      "file": "testing_struct_methods_test.wj",
+      "kind": "test",
+      "rust": "n/a",
+      "tags": [
+        "testing",
+        "test",
+        "struct",
+        "impl"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "trait_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "trait",
+        "impl",
+        "polymorphism"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "trait_default_and_override.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "trait",
+        "default-method",
+        "override"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "trait_display_to_string.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "trait",
+        "to_string",
+        "display",
+        "interpolation"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "trait_dyn_dispatch.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "trait",
+        "dynamic-dispatch",
+        "vec"
+      ]
+    },
+    {
+      "expect_lines": 2,
+      "file": "trait_generic_bound.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0425]: cannot find type 'int' in this scope",
+      "tags": [
+        "trait",
+        "generics",
+        "bounds"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "vec_2d_grid.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied",
+      "tags": [
+        "vec",
+        "grid",
+        "nested"
+      ]
+    },
+    {
+      "expect_lines": 6,
+      "file": "vec_basics.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "vec",
+        "collections",
+        "push",
+        "pop"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "vec_contains_position.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'position' found for struct 'Vec<i32>' in the curr",
+      "tags": [
+        "vec",
+        "search",
+        "contains"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "vec_insert_remove.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0308]: mismatched types",
+      "tags": [
+        "vec",
+        "collections",
+        "insert",
+        "remove"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "vec_of_structs.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'max_by_key' found for struct 'Vec<Person>' in the",
+      "tags": [
+        "vec",
+        "structs",
+        "sort_by_key"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "vec_slices_windows.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0277]: a value of type 'Vec<i64>' cannot be built from an iterator over e",
+      "tags": [
+        "vec",
+        "slices",
+        "windows",
+        "chunks"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "vec_sort_dedup.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "vec",
+        "sort",
+        "dedup"
+      ]
+    },
+    {
+      "expect_lines": 4,
+      "file": "vecdeque_queue.wj",
+      "kind": "program",
+      "rust": "gap",
+      "rust_gap": "error[E0599]: no method named 'cloned' found for struct 'VecDeque<i64>' in the c",
+      "tags": [
+        "vecdeque",
+        "queue",
+        "collections"
+      ]
+    }
+  ],
+  "format": "each program starts with `// tags:`, `// rust:` and `// expect:` lines; see README.md"
+}

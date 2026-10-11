@@ -1,0 +1,6 @@
+// tags: basics, print
+// rust: ok
+// expect: Hello, Windjammer!
+fn main() {
+    println("Hello, Windjammer!")
+}

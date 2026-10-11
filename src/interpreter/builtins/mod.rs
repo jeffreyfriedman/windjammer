@@ -11,10 +11,12 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+mod iter;
 mod map;
 mod num;
 mod option;
 mod seq;
+mod shared;
 mod std_fns;
 mod text;
 
@@ -44,6 +46,8 @@ pub enum Kind {
     Enum,
     Func,
     Formatter,
+    Rc,
+    Cell,
 }
 
 impl Kind {
@@ -72,6 +76,8 @@ impl Kind {
             Value::Func(_) => Kind::Func,
             Value::Formatter(_) => Kind::Formatter,
             Value::Ref(_) => Kind::Any,
+            Value::Rc(_) | Value::Weak(_) => Kind::Rc,
+            Value::Cell(..) => Kind::Cell,
         }
     }
 
@@ -126,6 +132,7 @@ impl Registry {
         map::register(&mut r);
         option::register(&mut r);
         std_fns::register(&mut r);
+        shared::register(&mut r);
         r
     }
 
@@ -243,7 +250,7 @@ pub(crate) fn arg_f64(args: &[Value], i: usize, what: &str) -> R<f64> {
 }
 
 pub(crate) fn new_iter(items: Vec<Value>) -> Value {
-    Value::Iter(Rc::new(RefCell::new(IterState { items, pos: 0 })))
+    Value::Iter(IterState::from_items(items))
 }
 
 pub(crate) fn ordering(o: std::cmp::Ordering) -> Value {

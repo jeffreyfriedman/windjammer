@@ -102,14 +102,14 @@ CI sets `WJ_REQUIRE_TOOLCHAINS=1` (read in `tests/common/conformance/toolchain.r
 
 `gen_build.rs` is a seeded grammar-based generator over a UB-free `i64` subset (wrapping ops, literal divisors, shifts,
 `Vec`/`HashMap`/Copy-struct mutation, loops, branches). Each program prints a checkpoint trace and is compared with the
-generator's own evaluator on every backend: 200 programs by default, 5,000 with `--features conformance_soak`. A mismatch
+generator's own evaluator on every backend: a default program count, a much larger one with `--features conformance_soak`. A mismatch
 is shrunk by delta debugging (`shrink.rs`) and printed as a minimal program plus its first diverging checkpoint.
 Metamorphic tests re-print the same AST after semantic-preserving transformations (rename locals, reorder independent
 statements, wrap in blocks, split into temporaries, extract through a helper) and require identical traces.
 
 ## Adding a case
 
-1. Create `tests/conformance_programs/NN_name.wj`. Known-answer: add `// expect:` lines (and `// exit: N` for panics).
+1. Create `tests/conformance_programs/<NN>_<name>.wj`. Known-answer: add `// expect:` lines (and `// exit: N` for panics).
    Seeded: use `__SEED__`, write `NN_name.ref.py` (reads the seed from `argv[1]`, prints the expected stdout) and run
    `python3 tests/conformance_programs/regen_vectors.py`.
 2. If a backend cannot run it, add a `[[unsupported]]` entry to `SUPPORT.toml` with the missing capability as the reason.

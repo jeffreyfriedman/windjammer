@@ -27,6 +27,7 @@ pub mod expression_parser;
 mod interpolated_string_expression_parser;
 mod intrinsic_lowering;
 mod match_value_expression_parser;
+mod matches_macro;
 mod pipe_parser;
 mod primary_expression_parser;
 

@@ -1,0 +1,22 @@
+// tags: result, error-handling, match
+// rust: ok
+// expect: ok 5
+// expect: err: division by zero
+fn divide(a: int, b: int) -> Result<int, string> {
+    if b == 0 {
+        Err("division by zero")
+    } else {
+        Ok(a / b)
+    }
+}
+
+fn main() {
+    match divide(10, 2) {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err: ${e}"),
+    }
+    match divide(1, 0) {
+        Ok(v) => println("ok ${v}"),
+        Err(e) => println("err: ${e}"),
+    }
+}

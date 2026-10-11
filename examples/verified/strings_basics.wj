@@ -1,0 +1,22 @@
+// tags: strings, methods
+// rust: ok
+// expect: 11
+// expect: HELLO WORLD
+// expect: hello world
+// expect: true
+// expect: true
+// expect: hello_world
+// expect: [padded]
+fn main() {
+    let s = "Hello World"
+    println("${s.len()}")
+    println(s.to_uppercase())
+    println(s.to_lowercase())
+    let has_world = s.contains("World")
+    let has_prefix = s.starts_with("Hello")
+    println("${has_world}")
+    println("${has_prefix}")
+    println(s.to_lowercase().replace(" ", "_"))
+    let padded = "  padded  "
+    println("[${padded.trim()}]")
+}

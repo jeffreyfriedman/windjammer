@@ -38,6 +38,8 @@ struct Program {
     template: String,
     seeds: Vec<u64>,
     exit: i32,
+    /// `// interp-only: reason`: the compiled pipeline cannot build this program (reason documented in the file); only the oracle applies.
+    interp_only: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,9 +57,13 @@ fn load(path: &Path) -> Program {
     let template = fs::read_to_string(path).unwrap();
     let mut seeds = Vec::new();
     let mut exit = 0;
+    let mut interp_only = false;
     for line in template.lines() {
         if let Some(r) = line.strip_prefix("// seeds:") {
             seeds = r.split_whitespace().filter_map(|s| s.parse().ok()).collect();
+        }
+        if line.starts_with("// interp-only:") {
+            interp_only = true;
         }
         if let Some(r) = line.strip_prefix("// exit:") {
             exit = r.trim().parse().unwrap_or(0);
@@ -70,6 +76,7 @@ fn load(path: &Path) -> Program {
         template,
         seeds,
         exit,
+        interp_only,
     }
 }
 
@@ -221,7 +228,7 @@ fn interpreter_matches_compiled_rust() {
     // Compiling is slow: default to the first and last seed; WJ_DIFF_ALL_SEEDS=1 runs them all.
     let all = std::env::var("WJ_DIFF_ALL_SEEDS").is_ok();
     let mut failures = Vec::new();
-    for p in programs(&corpus_dir()) {
+    for p in programs(&corpus_dir()).into_iter().filter(|p| !p.interp_only) {
         let seeds: Vec<u64> = if all {
             p.seeds.clone()
         } else {

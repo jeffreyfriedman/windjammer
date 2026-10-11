@@ -1,0 +1,20 @@
+// tags: testing, test, assert_eq
+// tests-passed: 3
+fn add(a: int, b: int) -> int { a + b }
+fn is_even(n: int) -> bool { n % 2 == 0 }
+
+@test
+fn test_add() {
+    assert_eq(add(2, 3), 5)
+}
+
+@test
+fn test_add_negative() {
+    assert_eq(add(-2, -3), -5)
+}
+
+@test
+fn test_is_even() {
+    assert(is_even(4))
+    assert(!is_even(7), "7 is odd")
+}

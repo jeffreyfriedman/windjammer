@@ -1,0 +1,33 @@
+// expect: 5
+// expect: 12
+// expect: 10
+fn id(a: int) -> int {
+    a
+}
+
+fn bump(c: &mut int) {
+    let x = id(1)
+    *c = *c + 1
+    let y = id(2)
+    *c += 3
+}
+
+fn mul(w: int, h: int) -> int {
+    let area = id(w)
+        * h
+    area
+}
+
+fn main() {
+    let mut n = 1
+    bump(&mut n)
+    println("${n}")
+    println("${mul(3, 4)}")
+    let mut z = 7
+    let r = &mut z
+    id(0)
+    *r *= 2
+    id(0)
+    *r -= 4
+    println("${z}")
+}

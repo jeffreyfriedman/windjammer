@@ -1,0 +1,22 @@
+// tags: traits, associated-fn, impl, static
+// rust: ok
+// expect: Circle r=2
+// expect: Square s=3
+trait Named {
+    fn label(self) -> string
+}
+
+struct Circle { r: int }
+struct Square { s: int }
+
+impl Named for Circle { fn label(self) -> string { "Circle r=${self.r}" } }
+impl Named for Square { fn label(self) -> string { "Square s=${self.s}" } }
+
+fn print_label<T: Named>(x: T) {
+    println(x.label())
+}
+
+fn main() {
+    print_label(Circle { r: 2 })
+    print_label(Square { s: 3 })
+}

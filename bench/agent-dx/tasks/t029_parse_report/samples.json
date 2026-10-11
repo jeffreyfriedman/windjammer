@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "42\n-7\nabc\n99999999999\n",
+  "stdout": "ok 42\nok -7\nerror invalid abc\nerror overflow 99999999999\nsummary ok=2 invalid=1 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n+5\n-\n1 2\n",
+  "stdout": "error empty\nok 5\nerror invalid -\nerror invalid 1 2\nsummary ok=1 invalid=2 overflow=0 empty=1\n"
+ }
+]

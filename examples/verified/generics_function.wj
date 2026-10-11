@@ -1,0 +1,24 @@
+// tags: generics, functions
+// rust: gap error[E0599]: no method named 'clone' found for type parameter 'T' in the curren
+// expect: 9
+// expect: z
+// expect: [3, 2, 1]
+fn largest<T: PartialOrd>(items: Vec<T>) -> T {
+    let mut best = items[0]
+    for i in items {
+        if i > best { best = i }
+    }
+    best
+}
+
+fn reversed<T>(items: Vec<T>) -> Vec<T> {
+    let mut out = []
+    for i in items.into_iter().rev() { out.push(i) }
+    out
+}
+
+fn main() {
+    println("${largest([3, 9, 4])}")
+    println("${largest(["a", "z", "m"])}")
+    println("${reversed([1, 2, 3]):?}")
+}

@@ -1,0 +1,50 @@
+use std::fs
+
+fn eval_line(line: string) -> string {
+    let mut stack: Vec<i64> = Vec::new()
+    let toks: Vec<string> = line.split(" ").map(|s| s.to_string()).collect()
+    for tok in toks {
+        if tok == "+" || tok == "-" || tok == "*" || tok == "/" {
+            if stack.len() < 2 {
+                return "error: underflow"
+            }
+            let b = stack.pop().unwrap_or(0)
+            let a = stack.pop().unwrap_or(0)
+            if tok == "+" {
+                stack.push(a + b)
+            } else if tok == "-" {
+                stack.push(a - b)
+            } else if tok == "*" {
+                stack.push(a * b)
+            } else {
+                if b == 0 {
+                    return "error: divzero"
+                }
+                stack.push(a / b)
+            }
+        } else {
+            match tok.parse::<i64>() {
+                Ok(v) => {
+                    let ok = !tok.starts_with("+") && tok.chars().all(|c| c == '-' || (c >= '0' && c <= '9'))
+                    if !ok {
+                        return "error: token"
+                    }
+                    stack.push(v)
+                }
+                Err(_) => { return "error: token" }
+            }
+        }
+    }
+    if stack.len() != 1 {
+        return "error: leftover"
+    }
+    "${stack[0]}"
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim().len() == 0 { continue }
+        println(eval_line(line.to_string()))
+    }
+}

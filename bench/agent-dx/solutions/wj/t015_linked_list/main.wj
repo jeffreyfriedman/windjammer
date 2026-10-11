@@ -1,0 +1,89 @@
+use std::fs
+
+enum List {
+    Nil,
+    Cons(i64, Box<List>),
+}
+
+fn to_vec(l: List) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new()
+    let mut cur = l
+    loop {
+        match cur {
+            List::Nil => { break }
+            List::Cons(v, rest) => {
+                out.push(v)
+                cur = *rest
+            }
+        }
+    }
+    out
+}
+
+fn from_vec(v: Vec<i64>) -> List {
+    let mut l = List::Nil
+    let mut i = v.len()
+    while i > 0 {
+        i -= 1
+        l = List::Cons(v[i], Box::new(l))
+    }
+    l
+}
+
+fn join_ints(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut list = List::Nil
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let cmd = p[0].clone()
+        let mut v: Vec<i64> = to_vec(list)
+        if cmd == "push_front" {
+            v.insert(0, p[1].parse::<i64>().unwrap_or(0))
+        } else if cmd == "push_back" {
+            v.push(p[1].parse::<i64>().unwrap_or(0))
+        } else if cmd == "pop_front" {
+            if v.len() == 0 { println("empty") } else { println("${v.remove(0)}") }
+        } else if cmd == "pop_back" {
+            if v.len() == 0 { println("empty") } else { println("${v.pop().unwrap_or(0)}") }
+        } else if cmd == "remove" {
+            let x = p[1].parse::<i64>().unwrap_or(0)
+            let mut idx: i64 = -1
+            let mut i: usize = 0
+            while i < v.len() {
+                if v[i] == x && idx < 0 { idx = i as i64 }
+                i += 1
+            }
+            if idx < 0 {
+                println("missing")
+            } else {
+                v.remove(idx as usize)
+                println("removed")
+            }
+        } else if cmd == "reverse" {
+            v.reverse()
+        } else if cmd == "print" {
+            if v.len() == 0 {
+                println("<empty>")
+            } else {
+                let strs = join_ints(v.clone())
+                println(strs)
+            }
+        } else {
+            let k = p[1].parse::<i64>().unwrap_or(0)
+            if k >= 0 && (k as usize) < v.len() { println("${v[k as usize]}") } else { println("none") }
+        }
+        list = from_vec(v)
+    }
+}

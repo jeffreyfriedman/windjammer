@@ -1,5 +1,7 @@
 # Windjammer Standard Library Architecture
 
+> **Status (2026-10-11): background, not verified.** Written for 0.14 (2025-10). The authoritative list of stdlib modules is `std/`; API sketches and "Active" labels below were not re-checked against it.
+
 **Version:** 0.14.0  
 **Status:** Active  
 **Last Updated:** October 8, 2025
@@ -337,7 +339,8 @@ fn main() {
 **Implementation:** rand  
 **Public API:**
 
-```windjammer
+<!-- ignore: signature sketch without bodies -->
+```windjammer,ignore
 fn random<T>() -> T
 fn range(min: int, max: int) -> int
 fn float() -> float
@@ -351,10 +354,9 @@ fn choice<T>(list: Vec<T>) -> Option<T>
 use std::random
 
 fn main() {
-    let num = random.range(1, 100)
-    let coin = random.bool()
+    let num = random::range(1, 100)
     let items = [1, 2, 3, 4, 5]
-    let shuffled = random.shuffle(items)
+    let shuffled = random::shuffle(items)
 }
 ```
 

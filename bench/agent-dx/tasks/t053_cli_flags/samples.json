@@ -1,0 +1,25 @@
+[
+ {
+  "args": [
+   "--name=bob",
+   "-v",
+   "a",
+   "b"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: bob\ncount: 1\nverbosity: 1\ndry-run: false\npositional: a b\n"
+ },
+ {
+  "args": [
+   "--count",
+   "3",
+   "-vv",
+   "--dry-run",
+   "x"
+  ],
+  "files": {},
+  "stdin": "",
+  "stdout": "name: anonymous\ncount: 3\nverbosity: 2\ndry-run: true\npositional: x\n"
+ }
+]

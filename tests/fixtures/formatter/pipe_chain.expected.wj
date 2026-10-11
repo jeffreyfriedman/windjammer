@@ -1,0 +1,14 @@
+fn f() {
+    let a = x |> clean() |> sum()
+    let b = raw |>? parse() |>? validate(1, _)
+    let c = values
+        |> clean_everything_thoroughly()
+        |> normalize_all_the_entries(1, 2)
+        |> summarize_into_report()
+        |> finish()
+    let d = values
+        |> clean() // drop invalid
+        // then sum
+        |> sum()
+    let e = x |> |v| v + 1
+}

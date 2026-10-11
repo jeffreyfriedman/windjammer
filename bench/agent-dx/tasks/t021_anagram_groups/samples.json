@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "listen silent enlist google gogole\n",
+  "stdout": "enlist listen silent\ngogole google\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abc def\n",
+  "stdout": "none\n"
+ }
+]

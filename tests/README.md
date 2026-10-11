@@ -8,7 +8,7 @@ runner reaches fails CI (`scripts/check-orphan-tests.sh`).
 | File | Reached by |
 |------|-----------|
 | `tests/*.rs` | `build.rs` generates one `mod` per file into the single `all` binary (`tests/all.rs` `include!`s the list). |
-| `tests/<dir>/**/*.rs` containing `#[test]` | Same, module named by path: `tests/a/b_test.rs` is `a__b_test`. |
+| `tests/<dir>/**/*.rs` containing `#[test]` | Same, module named by path: `a/b_test.rs` under `tests/` is `a__b_test`. |
 | `tests/common/`, `tests/fixtures/`, `*.expected.rs` | Never modules: shared helpers (`#[path = ...] mod ...;`) and data. |
 | `crates/*/tests/*.rs` | Cargo's normal integration-test discovery (`cargo test --workspace`). |
 | `tests/*.wj`, `tests/conformance/**`, `tests/auto_clone`, `tests/windjammer_tests`, `tests/integration_wj`, `tests/fixtures/*.wj` | `tests/wj_corpus_test.rs` compiles each file; files that must fail to compile are in `tests/error_system*/`. Known-bad files are listed with a cause in `tests/wj_corpus_known_failures.txt`; a listed file that starts passing fails the run until its entry is removed. |

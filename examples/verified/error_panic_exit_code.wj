@@ -1,0 +1,13 @@
+// tags: error-handling, panic, exit
+// rust: ok
+// exit: 101
+// expect: before
+fn main() {
+    println("before")
+    let v: Vec<int> = [1, 2, 3]
+    let i = 10
+    if i >= v.len() {
+        panic("index ${i} out of range")
+    }
+    println("unreachable")
+}

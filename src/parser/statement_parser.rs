@@ -15,7 +15,21 @@ impl Parser {
         let mut statements = Vec::new();
 
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
-            statements.push(self.parse_statement()?);
+            let start = self.position;
+            match self.parse_statement() {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) if !self.recovering => return Err(e),
+                Err(e) => {
+                    // Record and resynchronise so one file reports several errors. The program
+                    // is discarded by `parse()` (it fails with every recorded error).
+                    let e = self.with_position(e);
+                    self.recovered_errors.push(e);
+                    self.recover_to_statement_boundary(start);
+                    if self.recovered_errors.len() > 25 {
+                        break;
+                    }
+                }
+            }
         }
 
         Ok(statements)
@@ -29,9 +43,24 @@ impl Parser {
             Token::Return => self.parse_return(),
             Token::If => self.parse_if(),
             Token::Match => self.parse_match(),
-            Token::For => self.parse_for(),
-            Token::Loop => self.parse_loop(),
-            Token::While => self.parse_while(),
+            Token::For => self.parse_for(None),
+            Token::Loop => self.parse_loop(None),
+            Token::While => self.parse_while(None),
+            // Labeled loop: `'outer: for ...`, `'a: while ...`, `'a: loop ...`
+            Token::Lifetime(_) if self.peek(1) == Some(&Token::Colon) => {
+                let label = self.parse_loop_label()?;
+                match self.current_token() {
+                    Token::For => self.parse_for(Some(label)),
+                    Token::Loop => self.parse_loop(Some(label)),
+                    Token::While => self.parse_while(Some(label)),
+                    other => Err(format!(
+                        "Expected `for`, `while` or `loop` after label '{}:, got {:?} (at {})",
+                        label,
+                        other,
+                        self.pos_desc()
+                    )),
+                }
+            }
             Token::Thread => {
                 // Check if this is a thread block or a module path (thread::...)
                 if self.peek(1) == Some(&Token::LBrace) {
@@ -67,7 +96,15 @@ impl Parser {
             Token::Defer => self.parse_defer(),
             Token::Break => {
                 self.advance();
+                let label = self.parse_optional_jump_label();
+                let value = if self.break_value_follows() {
+                    Some(self.parse_expression()?)
+                } else {
+                    None
+                };
                 let stmt = self.alloc_stmt(Statement::Break {
+                    label,
+                    value,
                     location: self.current_location(),
                 });
                 // Consume trailing semicolon if present
@@ -78,7 +115,9 @@ impl Parser {
             }
             Token::Continue => {
                 self.advance();
+                let label = self.parse_optional_jump_label();
                 let stmt = self.alloc_stmt(Statement::Continue {
+                    label,
                     location: self.current_location(),
                 });
                 // Consume trailing semicolon if present
@@ -206,7 +245,46 @@ impl Parser {
         }))
     }
 
-    fn parse_for(&mut self) -> Result<&'static Statement<'static>, String> {
+    /// `'name:` -> `name` (cursor on the lifetime token; consumes the colon).
+    pub(crate) fn parse_loop_label(&mut self) -> Result<String, String> {
+        let Token::Lifetime(name) = self.current_token().clone() else {
+            return Err(format!("Expected a loop label (at {})", self.pos_desc()));
+        };
+        self.advance();
+        self.expect(Token::Colon)?;
+        Ok(name)
+    }
+
+    /// Optional `'label` after `break` / `continue`.
+    fn parse_optional_jump_label(&mut self) -> Option<String> {
+        if let Token::Lifetime(name) = self.current_token().clone() {
+            self.advance();
+            Some(name)
+        } else {
+            None
+        }
+    }
+
+    /// Does an expression follow `break [label]` on the same line? (`break` ends the statement at
+    /// a newline, `;`, `,`, `}` or `)`; see docs/design/statement-boundaries.md.)
+    fn break_value_follows(&self) -> bool {
+        if self.had_newline_before_current() {
+            return false;
+        }
+        !matches!(
+            self.current_token(),
+            Token::Semicolon
+                | Token::Comma
+                | Token::RBrace
+                | Token::RParen
+                | Token::RBracket
+                | Token::Eof
+                | Token::FatArrow
+                | Token::Else
+        )
+    }
+
+    pub(crate) fn parse_for(&mut self, label: Option<String>) -> Result<&'static Statement<'static>, String> {
         self.expect(Token::For)?;
 
         // Parse for-loop pattern: use the general pattern parser which handles all cases:
@@ -243,6 +321,7 @@ impl Parser {
             pattern,
             iterable,
             body,
+            label,
             location: self.current_location(),
         }))
     }
@@ -613,7 +692,7 @@ impl Parser {
     // SECTION 6: PATTERN PARSING
     // ========================================================================
 
-    fn parse_loop(&mut self) -> Result<&'static Statement<'static>, String> {
+    pub(crate) fn parse_loop(&mut self, label: Option<String>) -> Result<&'static Statement<'static>, String> {
         self.expect(Token::Loop)?;
         self.expect(Token::LBrace)?;
         let body = self.parse_block_statements()?;
@@ -621,11 +700,12 @@ impl Parser {
 
         Ok(self.alloc_stmt(Statement::Loop {
             body,
+            label,
             location: self.current_location(),
         }))
     }
 
-    fn parse_while(&mut self) -> Result<&'static Statement<'static>, String> {
+    pub(crate) fn parse_while(&mut self, label: Option<String>) -> Result<&'static Statement<'static>, String> {
         self.expect(Token::While)?;
 
         // Check for `while let` pattern
@@ -660,6 +740,8 @@ impl Parser {
             });
 
             let break_stmt = self.alloc_stmt(Statement::Break {
+                label: None,
+                value: None,
                 location: self.current_location(),
             });
 
@@ -688,6 +770,7 @@ impl Parser {
 
             Ok(self.alloc_stmt(Statement::Loop {
                 body: vec![match_stmt],
+                label,
                 location: self.current_location(),
             }))
         } else {
@@ -701,6 +784,7 @@ impl Parser {
             Ok(self.alloc_stmt(Statement::While {
                 condition,
                 body,
+                label,
                 location: self.current_location(),
             }))
         }

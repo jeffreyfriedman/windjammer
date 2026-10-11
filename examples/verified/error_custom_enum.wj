@@ -1,0 +1,43 @@
+// tags: error-handling, enum, result, question-mark
+// rust: gap error[E0308]: mismatched types
+// expect: ok: 20
+// expect: error: empty input
+// expect: error: bad number 'x1'
+// expect: error: too large: 5000
+enum ParseError {
+    Empty,
+    BadNumber(string),
+    TooLarge(int),
+}
+
+fn describe(e: ParseError) -> string {
+    match e {
+        ParseError::Empty => "empty input",
+        ParseError::BadNumber(s) => "bad number '${s}'",
+        ParseError::TooLarge(n) => "too large: ${n}",
+    }
+}
+
+fn parse_amount(s: string) -> Result<int, ParseError> {
+    if s.is_empty() { return Err(ParseError::Empty) }
+    let n = match s.parse::<int>() {
+        Ok(n) => n,
+        Err(_) => return Err(ParseError::BadNumber(s)),
+    }
+    if n > 1000 { return Err(ParseError::TooLarge(n)) }
+    Ok(n)
+}
+
+fn double_amount(s: string) -> Result<int, ParseError> {
+    let n = parse_amount(s)?
+    Ok(n * 2)
+}
+
+fn main() {
+    for input in ["10", "", "x1", "5000"] {
+        match double_amount(input) {
+            Ok(v) => println("ok: ${v}"),
+            Err(e) => println("error: ${describe(e)}"),
+        }
+    }
+}

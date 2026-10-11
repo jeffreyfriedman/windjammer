@@ -1,0 +1,21 @@
+// tags: match, tuples, destructure
+// rust: ok
+// expect: origin
+// expect: on x axis at 5
+// expect: on y axis at -2
+// expect: at (3, 4)
+fn locate(p: (int, int)) -> string {
+    match p {
+        (0, 0) => "origin",
+        (x, 0) => "on x axis at ${x}",
+        (0, y) => "on y axis at ${y}",
+        (x, y) => "at (${x}, ${y})",
+    }
+}
+
+fn main() {
+    println(locate((0, 0)))
+    println(locate((5, 0)))
+    println(locate((0, -2)))
+    println(locate((3, 4)))
+}

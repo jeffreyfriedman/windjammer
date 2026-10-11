@@ -11,6 +11,9 @@ use crate::diagnostics::render;
 
 pub fn execute(path: Option<&Path>, json: bool, watch: bool, fix: bool) -> Result<()> {
     let root = path.unwrap_or_else(|| Path::new("."));
+    if path.is_none() && Path::new("Cargo.toml").exists() && !has_wj_files(root) {
+        return cargo_check();
+    }
     if watch {
         return watch_loop(root, json, fix);
     }
@@ -33,6 +36,9 @@ fn check_quietly(root: &Path) -> Result<Checked> {
 
 fn run_once(root: &Path, json: bool, fix: bool) -> Result<bool> {
     let mut checked = check_quietly(root)?;
+    if checked.report.summary.files_checked == 0 {
+        checked.report = check_path(root);
+    }
     let mut fixed = None;
     if fix {
         let outcome = check::apply_fixes(&checked.report.diagnostics, &checked.sources, true)?;
@@ -86,4 +92,36 @@ fn watch_loop(root: &Path, json: bool, fix: bool) -> Result<()> {
         }
         check::watch::wait_for_change(root, &before, Duration::from_millis(250));
     }
+}
+
+/// Programmatic entry used by tools (MCP `check_code`): the shared-schema report for `path`.
+/// A path with no `.wj` files yields a failed report with one error.
+pub fn check_path(path: &Path) -> crate::diagnostics::Report {
+    match check::check_path(path, &CheckOptions { use_cache: false }) {
+        Ok(c) if c.report.summary.files_checked > 0 => c.report,
+        Ok(_) => crate::diagnostics::Report::new(
+            "check",
+            vec![crate::diagnostics::Diagnostic::error(
+                "WJ0011",
+                format!("no .wj files found at {}", path.display()),
+            )],
+        ),
+        Err(e) => crate::diagnostics::Report::new(
+            "check",
+            vec![crate::diagnostics::Diagnostic::error("WJ0011", format!("{e}"))],
+        ),
+    }
+}
+
+fn has_wj_files(root: &Path) -> bool {
+    check::watch::snapshot(root).keys().next().is_some()
+}
+
+/// A plain Rust crate (a `Cargo.toml` and no `.wj` sources) keeps the old behaviour.
+fn cargo_check() -> Result<()> {
+    let status = std::process::Command::new("cargo").arg("check").status()?;
+    if !status.success() {
+        anyhow::bail!("Type check failed");
+    }
+    Ok(())
 }

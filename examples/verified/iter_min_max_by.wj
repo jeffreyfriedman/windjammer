@@ -1,0 +1,14 @@
+// tags: iterators, min, max, min_by_key
+// rust: gap error[E0061]: this method takes 1 argument but 0 arguments were supplied
+// expect: Some(1)
+// expect: Some(9)
+// expect: cherry
+// expect: fig
+fn main() {
+    let v = [4, 1, 9, 3]
+    println("${v.min().copied():?}")
+    println("${v.max().copied():?}")
+    let words = ["fig", "cherry", "kiwi"]
+    println("${words.max_by_key(|w| w.len()).unwrap_or("")}")
+    println("${words.min_by_key(|w| w.len()).unwrap_or("")}")
+}

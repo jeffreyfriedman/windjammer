@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib take 10\nsquares below 50\n",
+  "stdout": "0 1 1 2 3 5 8 13 21 34\n1 4 9 16 25 36 49\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "primes take 8\nevens sum 5\ntriangular take 0\n",
+  "stdout": "2 3 5 7 11 13 17 19\n20\n\n"
+ }
+]

@@ -354,7 +354,6 @@ fn do_something_else(data: &[u8]) -> Vec<u8> {
 
 - [Standard Library Reference](../std/README.md) - Complete API documentation
 - [Examples](../examples/) - Working code examples
-- [Rust Interoperability](COMPARISON.md#rust-interoperability) - Calling Rust from Windjammer
 
 ---
 

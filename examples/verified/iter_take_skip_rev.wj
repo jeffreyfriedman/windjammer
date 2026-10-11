@@ -1,0 +1,17 @@
+// tags: iterators, take, skip, rev, step_by
+// rust: gap error[E0599]: no method named 'take' found for struct 'Vec<i32>' in the current 
+// expect: [1, 2, 3]
+// expect: [4, 5]
+// expect: [5, 4, 3, 2, 1]
+// expect: [0, 3, 6, 9]
+fn main() {
+    let v = [1, 2, 3, 4, 5]
+    let a: Vec<int> = v.take(3).cloned().collect()
+    let b: Vec<int> = v.skip(3).cloned().collect()
+    let c: Vec<int> = v.rev().cloned().collect()
+    let d: Vec<int> = (0..10).step_by(3).collect()
+    println("${a:?}")
+    println("${b:?}")
+    println("${c:?}")
+    println("${d:?}")
+}

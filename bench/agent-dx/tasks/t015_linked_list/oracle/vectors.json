@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 1\npush_back 2\npush_front 0\nprint\nreverse\nprint\nnth 1\nnth 7\n",
+  "stdout": "0 1 2\n2 1 0\n1\nnone\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop_front\npop_back\nremove 3\nprint\n",
+  "stdout": "empty\nempty\nmissing\n<empty>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 1\npop_back\npop_front\nprint\npush_front 4\nremove 4\nprint\n",
+  "stdout": "1\nempty\n<empty>\nremoved\n<empty>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 2\npush_back 2\npush_back 3\nremove 2\nprint\nreverse\nprint\nnth 0\nnth -1\n",
+  "stdout": "removed\n2 3\n3 2\n3\nnone\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back -3\nremove 5\nnth 4\nnth 4\npop_front\nremove 3\npush_back -3\npush_back -2\npush_back -2\npush_back -5\npush_back 0\npush_front -3\npush_back 0\npush_back -2\npush_back 2\nnth 6\npush_front 5\nreverse\n",
+  "stdout": "missing\nnone\nnone\n-3\nmissing\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back -3\nremove -3\nprint\npush_back -5\npop_front\npush_front 2\npush_back 4\nnth 5\nprint\nprint\nnth 0\nprint\npush_back -5\npush_back -3\nremove 5\npush_front 3\nnth 2\nnth 6\nnth 2\nprint\npop_back\npush_front -3\npush_front -5\nnth 4\nreverse\nnth 6\nremove 2\nremove 0\npush_front -1\nremove 4\n",
+  "stdout": "removed\n<empty>\n-5\nnone\n2 4\n2 4\n2\n2 4\nmissing\n4\nnone\n4\n3 2 4 -5 -3\n-3\n4\nnone\nremoved\nmissing\nremoved\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "print\nreverse\nprint\nreverse\nnth 0\npush_front 2\npush_back 1\npush_front 4\npop_back\npush_back 3\npush_front -1\nnth -1\nremove -2\nnth 4\npop_back\npush_back 5\npush_back 4\npush_back -2\nprint\nprint\nnth 5\npop_back\npop_front\npush_front 4\npush_front 1\nnth 3\nprint\nprint\npush_front 3\npush_front 3\npush_back -1\nnth 0\npush_back 3\nremove -5\nremove -3\npush_front -2\nremove 2\nprint\nprint\nnth 5\nreverse\n",
+  "stdout": "<empty>\n<empty>\nnone\n1\nnone\nmissing\nnone\n3\n-1 4 2 5 4 -2\n-1 4 2 5 4 -2\n-2\n-2\n-1\n2\n1 4 4 2 5 4\n1 4 4 2 5 4\n3\nmissing\nmissing\nremoved\n-2 3 3 1 4 4 5 4 -1 3\n-2 3 3 1 4 4 5 4 -1 3\n4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "print\nremove 2\npush_front 1\nremove -2\nprint\nreverse\npush_back 3\nreverse\npop_back\nnth 6\nprint\npush_front -1\npop_back\npush_front -2\npush_front -4\nnth 0\nremove 2\nremove 3\nprint\npop_back\nnth 1\npop_front\nnth 4\nremove -2\npush_back 3\nremove 0\npush_back 0\npush_front 2\nnth 3\nremove 5\npush_front -1\npop_front\nreverse\npush_front -4\npush_front 4\nremove 1\nprint\nprint\nnth 4\nremove 1\n",
+  "stdout": "<empty>\nmissing\nmissing\n1\n1\nnone\n3\n3\n-4\nmissing\nmissing\n-4 -2 -1\n-1\n-2\n-4\nnone\nremoved\nmissing\nnone\nmissing\n-1\nmissing\n4 -4 0 3 2\n4 -4 0 3 2\n2\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 1\nremove 0\nreverse\nprint\nremove -3\npush_front -2\npush_back -1\nreverse\npush_front -4\npush_front -2\nprint\npush_front -4\nnth 5\npush_front 2\nnth 2\nreverse\npop_front\nprint\nremove -3\npop_back\npush_back -2\npop_front\npush_front 3\npush_back -1\n",
+  "stdout": "missing\n1\nmissing\n-2 -4 -1 1 -2\n-2\n-2\n-2\n1 -1 -4 -2 -4 2\nmissing\n2\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 3\npush_back 1\npush_front -1\nprint\nreverse\nreverse\npush_front 4\nremove 4\npush_back 5\nprint\nreverse\npush_back -3\npush_front -3\npush_front -3\nreverse\nnth 6\npush_front 1\nprint\nremove -5\npush_back 5\nreverse\nreverse\npop_back\nprint\n",
+  "stdout": "-1 3 1\nremoved\n-1 3 1 5\n-3\n1 -3 -1 3 1 5 -3 -3\nmissing\n5\n1 -3 -1 3 1 5 -3 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "nth 6\npush_back 4\npush_back 2\npush_front -4\nprint\npush_front 4\nremove 2\nnth 1\npush_front 5\npush_front 0\npop_back\npush_front -5\n",
+  "stdout": "none\n-4 4 2\nremoved\n-4\n4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front 0\npush_back 2\nnth 4\nnth 1\nprint\nnth 0\npush_front -5\npop_front\nprint\npush_front 5\npush_front -3\npush_back 5\npush_front 2\n",
+  "stdout": "none\n2\n0 2\n0\n-5\n0 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop_back\npush_back -2\nreverse\npush_front 1\nprint\nremove 2\nnth -1\npop_back\nprint\nnth 4\npush_back -1\nnth 6\nnth 1\npop_front\npush_front -5\npush_front 5\nnth 5\npush_front 1\nnth 2\n",
+  "stdout": "empty\n1 -2\nmissing\nnone\n-2\n1\nnone\nnone\n-1\n1\nnone\n-5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front -4\nremove -3\npush_back 2\nprint\npush_front 1\npush_front 3\npop_back\nprint\nreverse\npush_back -1\npush_front -5\npush_front 4\nprint\npop_back\nprint\nnth 3\nprint\npop_back\npop_back\npush_front 4\nreverse\nnth 0\npush_back 0\npush_front -3\nremove 2\npop_back\nprint\nremove -2\nnth 2\nremove 5\npush_front -4\npush_front 5\npop_front\nprint\npush_back 0\nremove 4\npop_front\npush_back -1\npush_front -5\npush_front 4\npush_front 0\nreverse\npush_back 0\npop_back\n",
+  "stdout": "missing\n-4 2\n2\n3 1 -4\n4 -5 -4 1 3 -1\n-1\n4 -5 -4 1 3\n1\n4 -5 -4 1 3\n3\n1\n-4\nmissing\n0\n-3 -4 -5 4 4\nmissing\n-5\nmissing\n5\n-4 -3 -4 -5 4 4\nremoved\n-4\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 2\npop_back\nremove -1\nnth 1\nremove -2\nprint\npush_front 0\npush_front 2\npush_back 5\npush_back -2\nreverse\npush_back -3\npop_front\nremove 4\nremove -3\npush_front 5\nprint\npush_front 2\npush_back 3\npush_back 1\npush_back 3\npush_front -3\nremove -3\nnth 2\n",
+  "stdout": "2\nmissing\nnone\nmissing\n<empty>\n-2\nmissing\nremoved\n5 5 0 2\nremoved\n5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove 0\nprint\nremove 3\nnth 1\npush_back 1\npush_front -3\npush_front 4\nnth 1\nprint\nremove 5\npush_front -3\npop_back\npush_front 2\nprint\nprint\nprint\npush_front -3\npush_front 3\nnth 6\npush_back -4\npush_back 0\nremove -2\npush_back -3\nprint\npop_back\npush_front -5\nnth 3\nnth 5\nprint\npush_front 0\nremove 4\npush_back 5\nprint\npush_front -3\nprint\npush_front -2\npop_front\nnth 6\npop_front\n",
+  "stdout": "missing\n<empty>\nmissing\nnone\n-3\n4 -3 1\nmissing\n1\n2 -3 4 -3\n2 -3 4 -3\n2 -3 4 -3\nnone\nmissing\n3 -3 2 -3 4 -3 -4 0 -3\n-3\n2\n4\n-5 3 -3 2 -3 4 -3 -4 0\nremoved\n0 -5 3 -3 2 -3 -3 -4 0 5\n-3 0 -5 3 -3 2 -3 -3 -4 0 5\n-2\n-3\n-3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front -4\nremove 2\nprint\npush_front 4\npop_back\npush_front -1\nprint\npush_back 4\npush_back 2\npush_front -5\npush_front 0\npush_back 1\nnth 1\nprint\nremove 0\n",
+  "stdout": "missing\n-4\n-4\n-1 4\n-5\n0 -5 -1 4 4 2 1\nremoved\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 5\nreverse\nnth 6\nprint\npush_front 1\nnth 2\npop_front\npush_front -4\npush_back -3\npop_back\npush_front -1\nnth 2\npush_back 1\npush_front -2\npush_back -5\nremove -1\npush_back -1\nnth 1\nremove -3\nreverse\nremove -3\npush_front 0\nreverse\nprint\n",
+  "stdout": "none\n5\nnone\n1\n-3\n5\nremoved\n-4\nmissing\nmissing\n-2 -4 5 1 -5 -1 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front 3\npush_back -1\nnth 3\nnth 0\nprint\npush_front 4\npush_back 5\npush_back -1\nnth 4\npop_front\nprint\nprint\nprint\npush_back 2\nprint\npop_back\nprint\npop_back\nprint\nnth 0\npush_back 1\nprint\nnth 0\npush_front -5\nprint\nnth 6\nnth 3\npush_back -2\npush_front -4\nremove 3\npush_front 3\nremove -5\npop_front\npush_front -3\nprint\npush_back -2\npush_back -1\npush_back -5\nprint\npush_back -4\npush_back -4\nprint\npop_front\nnth 1\npush_back -4\npush_back -5\nnth 1\nremove -2\n",
+  "stdout": "none\n3\n3 -1\n-1\n4\n3 -1 5 -1\n3 -1 5 -1\n3 -1 5 -1\n3 -1 5 -1 2\n2\n3 -1 5 -1\n-1\n3 -1 5\n3\n3 -1 5 1\n3\n-5 3 -1 5 1\nnone\n5\nremoved\nremoved\n3\n-3 -4 -1 5 1 -2\n-3 -4 -1 5 1 -2 -2 -1 -5\n-3 -4 -1 5 1 -2 -2 -1 -5 -4 -4\n-3\n-1\n-1\nremoved\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back -3\npop_back\nnth 0\nreverse\nnth 6\npush_front 3\npush_back -4\npop_back\nremove 1\nreverse\npush_front -3\npush_front -3\nremove 2\nprint\nprint\npush_back 3\nnth 0\nnth 2\npush_back 1\nnth 4\nnth 5\npush_back 2\npush_back -3\nnth 2\npush_front -4\nremove -2\npop_back\nremove 0\npush_back 5\npop_front\nremove 5\nremove 1\npush_front 5\npush_front 4\npush_front 2\nremove -3\nnth 3\nremove 5\npush_front 0\npush_front 5\npop_back\n",
+  "stdout": "-3\nnone\nnone\n-4\nmissing\nmissing\n-3 -3 3\n-3 -3 3\n-3\n3\n1\nnone\n3\nmissing\n-3\nmissing\n-4\nremoved\nremoved\nremoved\n-3\nremoved\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop_front\npush_front -3\npush_back 5\nremove -5\npush_back -1\npush_back 2\nnth 3\nremove 0\nremove 3\n",
+  "stdout": "empty\nmissing\n2\nmissing\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_back 1\npush_back -5\nprint\npop_front\npop_back\npush_front -5\nprint\npop_front\nremove 3\nprint\npush_front 4\nprint\npush_front 0\npush_front -5\npush_front -3\npush_front 2\npush_back -3\npush_front 4\n",
+  "stdout": "1 -5\n1\n-5\n-5\n-5\nmissing\n<empty>\n4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "reverse\npush_back -2\nreverse\nremove -1\npop_front\nremove 0\npop_back\npush_back 2\nprint\npush_front 0\npush_front -4\nprint\nprint\nnth 5\npush_back 4\npop_back\npush_back 4\npush_front -1\npop_back\npush_front -2\npush_front 2\npush_back -4\npush_back -2\nprint\nnth 1\nreverse\npush_front 2\npush_back 2\npop_back\npush_front -3\nnth 0\nnth 6\nremove 4\npush_front 0\nremove -1\npush_front 0\nremove -4\nremove -4\npush_front 0\npush_back 0\nreverse\npush_front 3\npop_back\npush_back -3\nreverse\npush_front -5\nprint\npush_front -1\npop_front\nprint\n",
+  "stdout": "missing\n-2\nmissing\nempty\n2\n-4 0 2\n-4 0 2\nnone\n4\n4\n2 -2 -1 -4 0 2 -4 -2\n-2\n2\n-3\n-4\nmissing\nremoved\nremoved\nremoved\n0\n-5 -3 0 0 -3 2 -2 2 0 -2 2 0 3\n-1\n-5 -3 0 0 -3 2 -2 2 0 -2 2 0 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "print\nremove 3\nnth 1\nreverse\nnth 3\npush_back 0\npop_front\npush_back 3\npush_front 0\npush_back -2\nremove -1\npush_front -1\npush_back -4\nnth 6\npush_front 4\npop_back\npush_back 2\nnth 4\npop_back\nreverse\nremove 2\npop_front\npush_front -3\nnth 2\npush_back 4\nremove 4\npush_back -4\npush_front 0\nremove 4\n",
+  "stdout": "<empty>\nmissing\nnone\nnone\n0\nmissing\nnone\n-4\n-2\n2\nmissing\n-2\n0\nremoved\nremoved\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front 3\npush_front 3\npush_back 2\npush_front 3\npush_back 2\npush_front -2\npush_back -2\nremove 0\npush_front 0\nremove -5\npush_back 5\nprint\nreverse\nnth 0\npush_front -5\nremove -4\nremove -4\npush_front -1\nreverse\nnth 6\nremove 4\npush_back 3\nnth -1\nprint\npush_front 0\npush_back -5\npop_front\npush_front 3\nprint\npush_front 0\npush_back 0\npush_back -5\nnth 1\npop_back\npush_back 0\nremove -5\nprint\nnth 1\npush_front -4\npush_back 0\npush_back -3\nprint\n",
+  "stdout": "missing\nmissing\n0 -2 3 3 3 2 2 -2 5\n5\nmissing\nmissing\n2\nmissing\nnone\n0 -2 3 3 3 2 2 -2 5 -5 -1 3\n0\n3 0 -2 3 3 3 2 2 -2 5 -5 -1 3 -5\n3\n-5\nremoved\n0 3 0 -2 3 3 3 2 2 -2 5 -1 3 -5 0 0\n3\n-4 0 3 0 -2 3 3 3 2 2 -2 5 -1 3 -5 0 0 0 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front 5\nremove 2\nnth 3\npop_front\npush_back -4\npush_front 0\npop_back\nremove -2\npush_front 3\npush_front -3\npop_front\nnth -1\nremove 1\npush_back 0\nprint\nremove -4\npush_back 4\nprint\npush_back 4\nprint\npush_back -5\npush_front 0\npush_back -1\nremove -4\npop_back\npop_back\npop_front\npop_back\nprint\npop_back\nprint\nnth 3\n",
+  "stdout": "missing\nnone\n5\n-4\nmissing\n-3\nnone\nmissing\n3 0 0\nmissing\n3 0 0 4\n3 0 0 4 4\nmissing\n-1\n-5\n0\n4\n3 0 0 4\n4\n3 0 0\nnone\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pop_back\nprint\npush_back 2\npush_back 3\npush_front 3\nremove 4\npush_front -1\npush_back -3\npush_back -5\nprint\nremove -5\npush_front 4\nremove 1\nprint\npush_front -2\nnth 6\nnth 2\nprint\nremove -4\n",
+  "stdout": "empty\n<empty>\nmissing\n-1 3 2 3 -3 -5\nremoved\nmissing\n4 -1 3 2 3 -3\n-3\n-1\n-2 4 -1 3 2 3 -3\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove -2\npush_front 1\nreverse\npop_front\npush_back 4\npush_back 0\nnth 2\npop_back\npush_back -3\nnth 3\npush_front 0\nnth 2\npush_front 0\nnth 0\nnth 3\npush_front -5\nremove -1\nnth -1\npush_front -2\npush_front -5\npush_front -4\nremove 1\nnth 1\npush_back 0\npush_front 1\nnth 2\npush_back -5\npush_front 1\npush_back -3\npush_back 1\nprint\npush_front 1\nprint\nremove -3\npush_front 2\nremove 5\npush_back -2\nnth 2\npush_front 0\npush_front 1\npush_front 3\npop_back\npush_front -3\npush_front 4\npush_back 4\nreverse\npush_front 3\npush_front 2\nremove -1\n",
+  "stdout": "missing\n1\nnone\n0\nnone\n-3\n0\n-3\nmissing\nnone\nmissing\n-5\n-5\n1 1 -4 -5 -2 -5 0 0 4 -3 0 -5 -3 1\n1 1 1 -4 -5 -2 -5 0 0 4 -3 0 -5 -3 1\nremoved\nmissing\n1\n-2\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "print\nprint\npop_front\nreverse\npush_back 4\npush_back -2\npop_back\nreverse\nremove 4\nreverse\npush_front -4\nprint\npush_front -4\nreverse\nnth 1\npush_back 5\nnth 6\nnth -1\npush_front -4\nprint\nnth 1\nprint\npush_front -2\npush_back 5\npush_front -5\npush_back 3\npush_front -4\n",
+  "stdout": "<empty>\n<empty>\nempty\n-2\nremoved\n-4\n-4\nnone\nnone\n-4 -4 -4 5\n-4\n-4 -4 -4 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "print\npush_back -1\nnth 4\npush_back 0\npush_front -2\npush_front -3\nremove -5\nremove -1\nprint\nprint\npush_back -5\nnth 4\npop_front\npush_back 2\nremove -2\npush_front -3\n",
+  "stdout": "<empty>\nnone\nmissing\nremoved\n-3 -2 0\n-3 -2 0\nnone\n-3\nremoved\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove 2\nprint\nremove 5\nnth 6\nremove -2\nremove -3\npush_front -3\npop_back\npush_back 3\nnth 5\npush_back 4\npop_front\npush_front -2\npush_back -4\nprint\npush_front -2\nremove -3\nnth 2\npush_front 3\npush_front -4\nnth 1\npush_front -2\nremove 4\nremove -2\nremove 0\npop_front\nremove -5\nremove -3\nremove 0\nprint\npush_front -2\nprint\npush_front -4\npush_front 5\npush_back -3\npush_front -2\npush_back 3\npop_back\npush_back 2\npush_back 2\npush_front 5\n",
+  "stdout": "missing\n<empty>\nmissing\nnone\nmissing\nmissing\n-3\nnone\n3\n-2 4 -4\nmissing\n4\n3\nremoved\nremoved\nmissing\n-4\nmissing\nmissing\nmissing\n3 -2 -2 -4\n-2 3 -2 -2 -4\n3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "nth 4\npop_front\nprint\nprint\nremove -1\nnth 4\npush_front 3\nremove -3\npush_front 2\npush_back 3\npop_front\nnth 3\nnth 5\nnth -1\npop_front\npop_back\nreverse\npush_back 0\npop_back\npush_back -5\npush_back 3\nremove 0\npush_front -3\npush_back -1\npop_back\npush_front 3\npush_back 2\nprint\nnth 0\nreverse\npop_front\nremove -1\npush_front -3\nremove -3\nremove 5\nreverse\npush_front 0\nremove 2\npush_front 3\nremove 2\nremove 2\npush_back 2\npush_front -3\nreverse\nprint\nprint\npush_front 2\nprint\n",
+  "stdout": "none\nempty\n<empty>\n<empty>\nmissing\nnone\nmissing\n2\nnone\nnone\nnone\n3\n3\n0\nmissing\n-1\n3 -3 -5 3 2\n3\n2\nmissing\nremoved\nmissing\nmissing\nmissing\nmissing\n2 3 -5 -3 3 0 3 -3\n2 3 -5 -3 3 0 3 -3\n2 2 3 -5 -3 3 0 3 -3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove -1\nnth 6\nremove 2\npop_back\nnth -1\npush_back 1\npop_front\npush_back 2\npush_back 0\npush_back -4\nnth 0\nremove 4\npush_front 0\npush_front -4\nnth 1\npush_front 2\npop_front\npush_back 0\npush_front 2\nremove -1\npush_front -5\nprint\nremove -3\npush_front 0\npush_front 1\nprint\nreverse\nnth 6\nremove -1\npush_back 1\npush_back 2\npush_back 4\nreverse\n",
+  "stdout": "missing\nnone\nmissing\nempty\nnone\n1\n2\nmissing\n0\n2\nmissing\n-5 2 -4 0 2 0 -4 0\nmissing\n1 0 -5 2 -4 0 2 0 -4 0\n2\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push_front 5\nnth -1\npush_back -4\nnth 2\nnth 0\npush_front 2\nprint\nnth 3\nreverse\nprint\n",
+  "stdout": "none\nnone\n5\n2 5 -4\nnone\n-4 5 2\n"
+ }
+]

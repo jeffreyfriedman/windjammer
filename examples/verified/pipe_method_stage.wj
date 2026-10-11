@@ -1,0 +1,15 @@
+// tags: pipe, methods, iterators
+// rust: gap error[E0599]: '[i64; 4]' is not an iterator
+// expect: 30
+// expect: [2, 4, 6]
+// expect: abc
+fn main() {
+    let total = [1, 2, 3, 4]
+        |> .map(|x| x * 3)
+        |> .sum::<int>()
+    println("${total}")
+    let doubled: Vec<int> = [1, 2, 3] |> .map(|x| x * 2) |> .collect()
+    println("${doubled:?}")
+    let s = "  abc  " |> .trim() |> .to_string()
+    println(s)
+}

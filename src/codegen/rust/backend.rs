@@ -329,7 +329,7 @@ fn test() {}
 
         let cargo_toml = backend.generate_cargo_toml_with_code(generated_code);
 
-        // Cargo.toml uses hyphens (windjammer-game-core) not underscores
+        // Cargo.toml uses hyphens (a game engine project) not underscores
         assert!(
             cargo_toml.contains("windjammer-game-core"),
             "Cargo.toml should include windjammer-game-core (with hyphens)"
