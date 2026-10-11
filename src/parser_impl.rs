@@ -111,6 +111,14 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// 1-based (line, column) of the token the parser stopped at (for error reporting).
+    pub fn error_position(&self) -> Option<(usize, usize)> {
+        self.tokens
+            .get(self.position)
+            .or_else(|| self.tokens.last())
+            .map(|t| (t.line, t.column))
+    }
+
     /// Check if there was a newline before the current token (for ASI - Automatic Semicolon Insertion)
     pub(crate) fn had_newline_before_current(&self) -> bool {
         if self.position == 0 {
