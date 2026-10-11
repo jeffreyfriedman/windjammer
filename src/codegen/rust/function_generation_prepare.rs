@@ -91,10 +91,10 @@ impl<'ast> CodeGenerator<'ast> {
         // When IR cutover is active for clones, read from IrFunction's optimization hints.
         if self.ir_cutover.clones && self.current_ir_function.is_some() {
             if let Some(ir_fn) = &self.current_ir_function {
-                self.auto_clone_analysis = Some(ir_fn.optimizations.auto_clone.clone());
+                self.auto_clone_analysis = Some(self.without_module_item_clones(ir_fn.optimizations.auto_clone.clone()));
             }
         } else {
-            self.auto_clone_analysis = Some(analyzed.auto_clone_analysis.clone());
+            self.auto_clone_analysis = Some(self.without_module_item_clones(analyzed.auto_clone_analysis.clone()));
         }
         self.auto_clone_counter = 0;
 

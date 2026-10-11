@@ -74,7 +74,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Apply IR coercion when a `vec!` element must match an expected collection slot type.
-    fn coerce_vec_macro_element(
+    pub(in crate::codegen::rust) fn coerce_vec_macro_element(
         &self,
         arg_expr: &Expression<'ast>,
         generated: &str,
