@@ -103,6 +103,9 @@ impl GoGenerator {
                 ..
             } => {
                 if let Expression::Identifier { name, .. } = &**function {
+                    if let Some(intrinsic) = self.try_generate_intrinsic_call(name, arguments) {
+                        return intrinsic;
+                    }
                     match name.as_str() {
                         "println" => {
                             return self.generate_println_call(arguments);
@@ -319,7 +322,7 @@ impl GoGenerator {
                         if args.is_empty() {
                             "\"\"".to_string()
                         } else {
-                            let fmt_str = args[0].replace("{}", "%v");
+                            let fmt_str = crate::intrinsics::go_printf_template(&args[0]);
                             if args.len() == 1 {
                                 format!("fmt.Sprintf({})", fmt_str)
                             } else {
@@ -374,7 +377,7 @@ impl GoGenerator {
             .and_then(|(_, e)| self.extract_string_literal(e))
         {
             let fmt_str = fmt_str.to_string();
-            if arguments.len() == 1 && !fmt_str.contains("{}") {
+            if arguments.len() == 1 {
                 return format!("fmt.Println(\"{}\")", fmt_str);
             }
 
@@ -409,7 +412,7 @@ impl GoGenerator {
             .and_then(|(_, e)| self.extract_string_literal(e))
         {
             let fmt_str = fmt_str.to_string();
-            if arguments.len() == 1 && !fmt_str.contains("{}") {
+            if arguments.len() == 1 {
                 return format!("fmt.Print(\"{}\")", fmt_str);
             }
 

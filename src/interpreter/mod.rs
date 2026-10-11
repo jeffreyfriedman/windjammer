@@ -15,6 +15,7 @@ pub mod environment;
 pub mod value;
 
 mod expression_evaluation;
+mod intrinsics;
 mod statement_execution;
 mod value_operations;
 

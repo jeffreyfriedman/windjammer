@@ -93,6 +93,10 @@ impl GoGenerator {
         }
 
         output.push_str(&items_code.join("\n"));
+        if self.needs_debug_helper {
+            output.push('\n');
+            output.push_str(GO_DEBUG_HELPER);
+        }
         output
     }
 

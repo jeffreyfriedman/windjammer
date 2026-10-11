@@ -76,13 +76,19 @@ impl Parser {
                                     self.advance();
                                     let arguments = self.parse_arguments()?;
                                     self.expect(Token::RParen)?;
-                                    self.alloc_expr(Expression::MethodCall {
-                                        object: expr,
-                                        method: field,
-                                        type_args,
-                                        arguments,
-                                        location: self.current_location(),
-                                    })
+                                    if let Some(lowered) =
+                                        self.lower_stream_method_call(expr, &field, &arguments)
+                                    {
+                                        lowered
+                                    } else {
+                                        self.alloc_expr(Expression::MethodCall {
+                                            object: expr,
+                                            method: field,
+                                            type_args,
+                                            arguments,
+                                            location: self.current_location(),
+                                        })
+                                    }
                                 }
                             } else if type_args.is_some() {
                                 return Err(
@@ -469,13 +475,17 @@ impl Parser {
                             );
                         }
 
-                        self.alloc_expr(Expression::MacroInvocation {
-                            name: name.clone(),
-                            args,
-                            delimiter,
-                            is_repeat: is_repeat_flag,
-                            location: self.current_location(),
-                        })
+                        if let Some(lowered) = self.lower_intrinsic_macro(name, &args) {
+                            lowered
+                        } else {
+                            self.alloc_expr(Expression::MacroInvocation {
+                                name: name.clone(),
+                                args,
+                                delimiter,
+                                is_repeat: is_repeat_flag,
+                                location: self.current_location(),
+                            })
+                        }
                     } else {
                         // Not a macro invocation, break out of postfix loop
                         break;

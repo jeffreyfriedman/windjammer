@@ -447,6 +447,21 @@ impl<'ast> CodeGenerator<'ast> {
         elements: &[&Expression<'ast>],
     ) -> String {
         use crate::parser::Literal;
+        // ADR-0014: `[a, b]` is the list literal. It lowers to a growable `Vec` when the context
+        // determines a list (`let x = [..]`, a `Vec` struct field), exactly like `vec![a, b]`.
+        if !elements.is_empty() && (self.array_literal_as_list || self.struct_field_expects_vec()) {
+            let prev = self.array_literal_as_list;
+            self.array_literal_as_list = true; // nested literals are lists too
+            let generated = self.generate_macro_invocation(
+                false,
+                "vec",
+                elements,
+                &crate::parser::MacroDelimiter::Brackets,
+            );
+            self.array_literal_as_list = prev;
+            return generated;
+        }
+        let prev_list = std::mem::replace(&mut self.array_literal_as_list, false);
         let expected_elem_ty = self.struct_array_field_element_type();
         let expr_strs: Vec<String> = elements
             .iter()
@@ -473,6 +488,7 @@ impl<'ast> CodeGenerator<'ast> {
                 s
             })
             .collect();
+        self.array_literal_as_list = prev_list;
 
         // WINDJAMMER PHILOSOPHY: Array literal syntax determines Rust output.
         //

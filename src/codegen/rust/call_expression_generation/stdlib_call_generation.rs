@@ -12,6 +12,10 @@ pub(in crate::codegen::rust) fn try_early_stdio_and_test_dispatch<'ast>(
 ) -> Option<String> {
     let func_name = ast_utilities::extract_function_name(function);
 
+    if let Some(intrinsic) = gen.try_generate_intrinsic_call(&func_name, arguments) {
+        return Some(intrinsic);
+    }
+
     if let Some(print_macro) = gen.try_generate_print_macro(&func_name, arguments) {
         return Some(print_macro);
     }
