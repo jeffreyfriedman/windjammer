@@ -22,7 +22,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
 | `wj errors` | Interactive error navigator (TUI) |
-| `wj docs` | Generate error documentation |
+| `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -259,14 +259,17 @@ Usage: wj errors [OPTIONS] <FILE>
 
 ## `wj docs`
 
-Generate error documentation
+Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation
 
 ```text
-Usage: wj docs [OPTIONS]
+Usage: wj docs [OPTIONS] [QUERY]...
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
+| `<QUERY>` | QUERY |  | Search terms, e.g. `wj docs hashmap entry` (all terms must match) |
+| `--limit` | LIMIT | 8 | Maximum number of search results |
+| `--json` | JSON |  | Print search results as JSON |
 | `-o`, `--output` | OUTPUT | ./docs/errors | Output directory for generated docs |
 | `-f`, `--format` | FORMAT | html | Format (html, markdown, json) |
 
