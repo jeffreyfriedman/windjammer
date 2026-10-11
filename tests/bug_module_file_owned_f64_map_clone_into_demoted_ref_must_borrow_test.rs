@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-223: owned `GraphVertexF64Map` / `.clone()` into demoted `&GraphVertexF64Map` must borrow.
+//! owned `GraphVertexF64Map` / `.clone()` into demoted `&GraphVertexF64Map` must borrow.
 //!
 //! Product residual (~10×), tip-out/gen graph_pagerank_engine:
 //!   `graph_vertex_f64_get(map: &GraphVertexF64Map, …)` called with
 //!   `self.scores.clone()` / `scores.clone()` → expected `&`, found owned.
-//! Twin of DB-222 (I64Map). Signature-driven.
+//! Twin of (I64Map). Signature-driven.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

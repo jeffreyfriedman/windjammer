@@ -164,7 +164,7 @@ pub(crate) fn has_stale_owned_non_copy_params(sig: &FunctionSignature) -> bool {
             // codegen `emitted_rust_ref_params[idx] == false` (early return above).
             OwnershipMode::Owned => {
                 // Sibling demoted shared-ref slots (dependency metadata) mean this Owned
-                // Custom is a real payload formal, not a stale engine stub (DB-244).
+                // Custom is a real payload formal, not a stale engine stub.
                 if sig
                     .emitted_rust_ref_params
                     .as_ref()
@@ -802,7 +802,7 @@ pub(crate) fn merge_codegen_refresh_metadata(
         return;
     }
     let replacing_with_mixed = from_mixed && defining_mixed_owned_emission_beats(from, into);
-    // DB-398: same-shape all-owned refresh must replace stale `emitted[i]=true`
+    // same-shape all-owned refresh must replace stale `emitted[i]=true`
     // instead of OR-union (which permanently poisons owned formals).
     let replacing_with_owned_refresh = signature_param_shapes_compatible(into, from)
         && from_flags.iter().all(|&f| !f)
@@ -817,7 +817,7 @@ pub(crate) fn merge_codegen_refresh_metadata(
     } else {
         match &prior_flags {
             Some(existing) => {
-                // Cap OR-union to param arity so flags cannot grow past types (DB-398).
+                // Cap OR-union to param arity so flags cannot grow past types.
                 let n = into
                     .param_types
                     .len()
@@ -844,7 +844,7 @@ pub(crate) fn merge_codegen_refresh_metadata(
             Some(false) => {
                 // Keep a prior shared-ref unless we are replacing an importer stub
                 // with defining-module mixed formals (`[true, true]` → `[true, false]`)
-                // or an all-owned refresh (DB-398).
+                // or an all-owned refresh.
                 if !replacing_with_mixed
                     && !replacing_with_owned_refresh
                     && prior_flags.as_ref().and_then(|f| f.get(idx)).copied() == Some(true)
@@ -1347,7 +1347,7 @@ pub(crate) fn owned_user_refresh_beats_stdlib_shared_ref(
     shared: &FunctionSignature,
 ) -> bool {
     // Runtime-qualified stdlib (`strings::contains`) must not lose to a bare
-    // `contains` owned stub — that forced `String::from` on `&str` needles (DB-144).
+    // `contains` owned stub — that forced `String::from` on `&str` needles.
     // Distinct-shape user APIs (`join(string, string)` vs `strings::join(Vec, str)`)
     // still beat the homonym.
     if signature_is_wj_std_stub_or_runtime_qualified(shared)
@@ -1580,7 +1580,7 @@ pub(crate) fn owned_emission_slot_count(sig: &FunctionSignature) -> usize {
 /// owned-emission slot). An all-owned importer stub must not "win" just because
 /// it has more `false` flags than a correctly demoted mixed API.
 ///
-/// DB-398: arity / shape must match. A corrupted longer mixed signature
+// arity / shape must match. A corrupted longer mixed signature
 /// (`VoxelMaterialEditor::new` with 6× `MaterialPalette` slots) must not block a
 /// correct one-param owned refresh via `owned_emission_slot_count` alone.
 pub(crate) fn defining_mixed_owned_emission_beats(
@@ -1784,7 +1784,7 @@ pub(crate) fn shared_ref_emission_beats(
 }
 
 /// WJ AST declares bare owned non-text formals: non-Copy `Custom(T)`, or container
-/// `Vec`/`Map` (DB-216/275/276: `extern fn …_ffi(buf: Vec<f64>)` must count as owned
+// `Vec`/`Map` (`extern fn …_ffi(buf: Vec<f64>)` must count as owned
 /// so wrappers that forward bare into FFI keep owned formals).
 pub(crate) fn wj_ast_bare_owned_non_text_type(t: &Type) -> bool {
     if matches!(t, Type::Reference(_) | Type::MutableReference(_)) {
@@ -1852,7 +1852,7 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
     if !formal_is_container {
         return false;
     }
-    // Analyzer MutBorrowed is `&mut Vec` / `&mut Map` at call sites (DB-396 BT SCC),
+    // Analyzer MutBorrowed is `&mut Vec` / `&mut Map` at call sites (BT SCC),
     // not an owned container slot. Same rule as `bare_formal_is_owned_user_type`.
     if matches!(
         sig.param_ownership.get(param_idx),
@@ -1862,7 +1862,7 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
     }
     // Analyzer Borrowed without an explicit owned-emission slot is `&Vec` / `&Map`
     // (cross-file `check_collisions(walls)` → `&walls`). Explicit `emitted=false`
-    // keeps the owned-container slot (DB-281 / P3.589 `data: Vec<u8>`).
+    // keeps the owned-container slot (P3.589 `data: Vec<u8>`).
     if matches!(
         sig.param_ownership.get(param_idx),
         Some(OwnershipMode::Borrowed)
@@ -1876,7 +1876,7 @@ pub(crate) fn bare_formal_is_vec_or_map(sig: &FunctionSignature, param_idx: usiz
         return false;
     }
     // Bare WJ `Vec`/`Map` AST formals emit owned containers unless codegen confirmed `&Vec`
-    // (DB-281). Stale analyzer `Reference(Vec)` in `param_types` must not deny the slot —
+    // Stale analyzer `Reference(Vec)` in `param_types` must not deny the slot —
     // that previously forced call-site `&items` into owned `contains(items: Vec)`.
     sig.emitted_rust_ref_params
         .as_ref()
@@ -1914,7 +1914,7 @@ pub(crate) fn bare_formal_is_owned_user_type(sig: &FunctionSignature, param_idx:
         matches!(t, Type::Custom(_)) && !crate::codegen::rust::types::is_windjammer_text_type(t)
     };
     // Live / tip-cluster call sites often fill `param_types` before `formal_param_types`
-    // (DB-169 `BakeoffRun` slots) — treat bare Custom in either slot as owned user type.
+    // (`BakeoffRun` slots) — treat bare Custom in either slot as owned user type.
     sig.formal_param_type(param_idx).is_some_and(is_bare_custom)
         || sig.param_types.get(param_idx).is_some_and(is_bare_custom)
 }
@@ -2047,13 +2047,13 @@ pub(crate) fn local_user_fn_beats_runtime_std_homonym(
     }
     // Same bare name (`join`): a stdlib/runtime homonym stored as `join` must not
     // beat the same-file user API. Defining-module demotion vs importer stub is
-    // the non-stdlib path below (DB-112 / parquet).
+    // the non-stdlib path below (parquet).
     if signature_is_wj_std_stub_or_runtime_qualified(&resolved)
         && !signature_is_wj_std_stub_or_runtime_qualified(local_sig)
     {
         return local_sig.clone();
     }
-    // Same bare name: defining-module codegen refresh beats importer stubs (DB-112/113).
+    // Same bare name: defining-module codegen refresh beats importer stubs.
     if shared_ref_emission_beats(&resolved, local_sig)
         || mut_borrow_emission_beats(&resolved, local_sig)
     {
@@ -2551,7 +2551,7 @@ pub(crate) fn best_method_signature_for_receiver(
 }
 
 /// Prefer registry keys whose module path matches `caller_module` when multiple
-/// types share a leaf name (DB-332 dual `AudioChannel::new`).
+// types share a leaf name (dual `AudioChannel::new`).
 pub(crate) fn best_method_signature_for_receiver_in_module(
     registry: &SignatureRegistry,
     receiver_type: &str,
@@ -2580,7 +2580,7 @@ pub(crate) fn best_method_signature_for_receiver_in_module(
             .unwrap_or(0);
         if let Some((_, ref best_sig, _, best_affinity)) = best {
             // Caller-module affinity beats cross-file leaf-name homonyms before
-            // str-ref / stale-owned heuristics (DB-332).
+            // str-ref / stale-owned heuristics.
             if affinity > best_affinity {
                 best = Some((key.to_string(), sig.clone(), false, affinity));
                 return;
@@ -2727,7 +2727,7 @@ pub fn param_type_is_owned_non_text(sig: &FunctionSignature, param_idx: usize) -
 /// **Must not** insert signatures that exist only in `global`. Call sites already
 /// resolve via `CodeGenerator::global_signature_registry` (`Arc`). Copying the full
 /// global map (~10k–20k+ keys) into every file's local registry is O(files×sigs)
-/// and made full `game-host-core` rebuilds look hung (multi-second per file).
+/// and made full a game engine project rebuilds look hung (multi-second per file).
 pub(crate) fn promote_overlapping_global_signatures_into_local(
     local: &mut SignatureRegistry,
     global: &SignatureRegistry,
@@ -3268,7 +3268,7 @@ mod prefer_shared_runtime_tests {
             1,
             "emitted=false String slot counts as owned even if analyzer is Borrowed"
         );
-        // DB-398: shape-mismatched mixed must not beat a different API via slot counts.
+        // shape-mismatched mixed must not beat a different API via slot counts.
         assert!(!defining_mixed_owned_emission_beats(&borrowed_emit, &std));
         let mut same_shape_owned = borrowed_emit.clone();
         same_shape_owned.emitted_rust_ref_params = Some(vec![false, false]);

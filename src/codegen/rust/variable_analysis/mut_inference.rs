@@ -277,7 +277,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             // Owned emitted formal (`mut deps: AppDeps`) — do not force `let mut` / &mut
             // at call sites from stale MutBorrowed analyzer metadata. Emitted `&mut`
-            // slots (DB-161) already set `emitted_mut_slot` and must keep mut bindings.
+            // slots already set `emitted_mut_slot` and must keep mut bindings.
             if !emitted_mut_slot
                 && sig.is_some_and(|s| {
                     crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(s, pidx)
@@ -293,7 +293,7 @@ impl<'ast> CodeGenerator<'ast> {
                     ..
                 } => matches!(&**operand, Expression::Identifier { name, .. } if name == var_name),
                 // WJ `f(v.clone())` into a MutBorrowed formal peels to `&mut v` at emit
-                // (DB-161). Count the clone receiver so the owned binding gets `mut`.
+                // Count the clone receiver so the owned binding gets `mut`.
                 Expression::MethodCall {
                     object,
                     method,

@@ -67,7 +67,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         // Cold pass / missing meta: prefer typing the local as the nominal type so later
-        // method coercion can resolve Borrowed string formals (DB-091).
+        // method coercion can resolve Borrowed string formals.
         Some(if type_name == "String" {
             Type::String
         } else {
@@ -142,7 +142,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     return Some(Type::Custom(prim.to_string()));
                 }
-                // DB-444: `WeatherType::Clear` is a unit-enum constructor — type is the enum.
+                // `WeatherType::Clear` is a unit-enum constructor — type is the enum.
                 if crate::type_classification::is_enum_variant_constructor_path(name) {
                     if let Some((ty, _)) = name.rsplit_once("::") {
                         let ty = ty.rsplit("::").next().unwrap_or(ty);
@@ -290,7 +290,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                         } else if let Some(t) = self.module_const_types.get(field.as_str()) {
-                            // DB-343: `module::CONST` / `station_builder::MAT_TRIM` —
+                            // `module::CONST` / `station_builder::MAT_TRIM` —
                             // object is a module path prefix (not a typed local). Library-wide
                             // const types are folded into `module_const_types` (P3.280).
                             return Some(t.clone());
@@ -366,7 +366,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Type::Reference(inner) | Type::MutableReference(inner) => *inner,
                 _ => t,
             }),
-            // DB-423: `-1` / `!flag` keep the operand's type so
+            // `-1` / `!flag` keep the operand's type so
             // `[(-1, 0), …]` infers as `[(i64,i64); N]` (Copy) and index
             // destructure does not fall through to `.clone()`.
             Expression::Unary {
@@ -737,7 +737,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .as_ref()
                 .and_then(|ot| Self::peeled_collection_element_type(ot))
                 .cloned(),
-            // DB-423: `[ (1.0, 0.0, 0.0), … ]` must type as `[ (f32,f32,f32); N ]`
+            // `[ (1.0, 0.0, 0.0), … ]` must type as `[ (f32,f32,f32); N ]`
             // so index destructure is Copy and does not `.clone()`.
             Expression::Tuple { elements, .. } => {
                 let mut tys = Vec::with_capacity(elements.len());

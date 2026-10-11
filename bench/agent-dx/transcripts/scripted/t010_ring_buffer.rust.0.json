@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "use std::collections::VecDeque;\nuse std::io::Read;\n\nstruct Ring {\n    cap: usize,\n    items: VecDeque<i64>,\n}\n\nimpl Ring {\n    fn push(&mut self, x: i64) -> &'static str {\n        if self.items.len() >= self.cap {\n            \"full\"\n        } else {\n            self.items.push_back(x);\n            \"ok\"\n        }\n    }\n}\n\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n    let mut lines = s.lines();\n    let cap: usize = lines.next().unwrap().trim().parse().unwrap();\n    let mut r = Ring { cap, items: VecDeque::new() };\n    for line in lines {\n        let p: Vec<&str> = line.split_whitespace().collect();\n        if p.is_empty() {\n            continue;\n        }\n        match p[0] {\n            \"push\" => println!(\"{}\", r.push(p[1].parse().unwrap())),\n            \"pop\" => match r.items.pop_front() {\n                Some(v) => println!(\"{}\", v),\n                None => println!(\"empty\"),\n            },\n            \"peek\" => match r.items.front() {\n                Some(v) => println!(\"{}\", v),\n                None => println!(\"empty\"),\n            },\n            \"size\" => println!(\"{}\", r.items.len()),\n            \"dump\" => {\n                if r.items.is_empty() {\n                    println!(\"<empty>\");\n                } else {\n                    let v: Vec<String> = r.items.iter().map(|x| x.to_string()).collect();\n                    println!(\"{}\", v.join(\" \"));\n                }\n            }\n            _ => {}\n        }\n    }\n}\n",
+   "usage": null,
+   "wall_seconds": 0.06
+  }
+ ],
+ "lang": "rust",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.06
+ },
+ "recorded_at": "2026-10-11T15:16:08",
+ "schema": 1,
+ "task": "t010_ring_buffer",
+ "trial": 0
+}

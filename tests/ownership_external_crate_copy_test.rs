@@ -21,7 +21,7 @@ use tempfile::TempDir;
 /// infers & (reference) instead of owned.
 ///
 /// Example from game dogfooding:
-/// - External crate: game_host_core::physics::collision::AABB
+/// - External crate: a game engine project::physics::collision::AABB
 /// - Method: pub fn intersects_aabb(&self, other: AABB) -> bool
 /// - Call: future_box.intersects_aabb(wall)
 /// - Generated (WRONG): future_box.intersects_aabb(&wall)

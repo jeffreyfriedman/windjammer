@@ -10,14 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! DB-132: multipass demotes `DenseCsr` formal to `&mut DenseCsr` but call sites still
+//! multipass demotes `DenseCsr` formal to `&mut DenseCsr` but call sites still
 //! pass `csr.clone()` (owned) → E0308 (`expected &mut DenseCsr, found DenseCsr`).
 //!
 //! a downstream database project CQ-C5:
 //!   `graph_dense_csr_take_in_edges(csr.clone())` while formal is `&mut DenseCsr`
 //!   `graph_pagerank_run_dense(csr.clone(), …)` while formal is `&mut DenseCsr`
 //!
-//! Distinct from DB-125 (`&T` + clone → `&clone`). Expected: `&mut csr` (not owned clone).
+//! Distinct from (`&T` + clone → `&clone`). Expected: `&mut csr` (not owned clone).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

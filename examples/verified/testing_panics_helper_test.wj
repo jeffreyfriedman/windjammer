@@ -1,0 +1,15 @@
+// tags: testing, test, assert_ne, strings
+// tests-passed: 2
+fn slugify(s: string) -> string {
+    s.trim().to_lowercase().replace(" ", "-")
+}
+
+@test
+fn slug_basic() {
+    assert_eq(slugify("  Hello World "), "hello-world")
+}
+
+@test
+fn slug_differs_for_different_input() {
+    assert_ne(slugify("A"), slugify("B"))
+}

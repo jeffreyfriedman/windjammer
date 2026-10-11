@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Pipe operator `|>`
 
 Status: implemented in `src/parser/pipe_parser.rs`.
@@ -71,9 +75,31 @@ with the piped value, then `?`. `|> async f()` / `spawn` stages are not
 special: they are rejected as non-callable right-hand sides (write
 `x |> f` and put `async`/`spawn` around the whole chain).
 
-Future work (not implemented): a short-circuiting stage such as `|>?` that maps
-over `Result`/`Option` automatically. The explicit `parse()?` form is already
-short and unambiguous, so it was not justified for now.
+## `|>?` (short-circuiting pipe)
+
+`x |>? stage` is `x? |> stage`: the *left-hand side* is unwrapped with `?` and
+the stage is then applied to the `Ok`/`Some` payload. On `Err`/`None` the
+enclosing function returns early, exactly like `?` (so the same rules apply:
+the function must return a compatible `Result`/`Option`, errors convert via
+`From`).
+
+    raw |>? parse |>? validate(limit, _)
+    // validate(limit, parse(raw?)?)  -- each stage result is unwrapped before the next
+
+Decisions:
+
+* It is a lexer token (`|>?`, no space allowed; `|> ?` stays an error). It
+  desugars in `pipe_parser.rs` by wrapping the left-hand side in a `TryOp`
+  before the ordinary stage rewrite, so every backend and the interpreter see
+  plain `?` and calls. There is no `map`-style lifting: the stage receives the
+  unwrapped value and its own result is *not* re-wrapped, so a fallible stage
+  is chained with another `|>?`.
+* Precedence/associativity are those of `|>`: `a + 1 |>? f` is `f((a + 1)?)`.
+* `|>?` and a postfix `?` on a stage are independent: `x |>? f()?` is
+  `f(x?)?`.
+* All stage forms (`f`, `f(a)`, `f(_, a)`, `Type::assoc`, `.method()`,
+  closure) and all diagnostics of `|>` apply; messages name the operator that
+  was written (`|>?`).
 
 ## Evaluation order and ownership
 
@@ -89,23 +115,29 @@ short and unambiguous, so it was not justified for now.
 
 ## Diagnostics
 
-All errors carry `file:line:col` of the offending token:
+All errors carry `file:line:col` (1-based, of the first character of the
+offending token):
 
-* `|>` with no left-hand value (statement starts with `|>`)
-* trailing `|>` with no stage
-* right-hand side is not callable
-* placeholder misuse: more than one `_`, or `_` nested / outside a stage
+* `|>` / `|>?` with no left-hand value (statement starts with the operator): at the operator
+* trailing `|>` with no stage: at the operator
+* right-hand side is not callable (literal, `if`, ...): at the first token of the stage
+* a stage followed by a binary operator on the same line (`x |> f + 1`): at the operator;
+  parenthesise (`(x |> f) + 1`)
+* more than one `_` in a stage: at the second `_`
+* `_` nested inside another expression of the stage (`f(g(_))`): at that `_`
+* `_` outside a pipe stage: at the `_`
 
 ## Other tools
 
-* Formatter (`src/formatter`): token-based, already treats `|>` as a binary
-  operator and a continuation start (`layout.rs`), so multi-line chains with a
-  leading `|>` keep their layout. Because it never builds an AST, pipes are not
-  desugared by `wj fmt`. Pipe-specific fixtures were not added there.
-* Backends: the Rust backend wraps a closure literal in callee position in
-  parentheses (`(|v| v + 1)(x)`). Go/JS/interpreter backends need to do the
-  same for `Call { function: Closure, .. }` if they do not already.
-* Interpreter (`wt/interpreter`): needs nothing if it consumes the parser's AST,
-  since pipes are already plain calls. Closure-literal calls `(|v| ..)(x)` must
-  be supported by its call evaluator; `tests/pipe_operator_test.rs` covers the
-  parser output the interpreter will see.
+* Formatter (`src/formatter`): token-based; `|>` and `|>?` are binary operators
+  and continuation starts (`layout.rs`). A line over the width limit holding two
+  or more top-level pipes is broken before every `|>` (`wrap.rs`), stages are
+  indented one level, and comments between stages align with the stages. Pipes
+  are never desugared by `wj fmt`. Fixture: `tests/fixtures/formatter/pipe_chain.*`.
+* Backends: all verified on the cross-backend corpus
+  (`tests/conformance_programs/150_pipe_forms_mixed.wj`, `151_pipe_try.wj`; Rust, Go, JS; the
+  interpreter and the WASM target in `tests/pipe_backends_test.rs`). The Rust (and WASM)
+  backend parenthesises a closure in callee position (`(|v| v + 1)(x)`); the portable
+  Go/JS lowering types the closure parameters from the argument (`lower/call.rs`),
+  otherwise `5 |> |v| v + 1` picked a different integer width than its argument.
+* Interpreter: consumes the parser's AST; closure-literal calls are supported.

@@ -1,0 +1,13 @@
+// tags: iterators, any, all, count, find
+// rust: gap error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the current s
+// expect: true
+// expect: false
+// expect: 3
+// expect: Some(16)
+fn main() {
+    let v = [3, 5, 8, 12, 16, 21]
+    println("${v.any(|x| *x > 20)}")
+    println("${v.all(|x| *x > 3)}")
+    println("${v.filter(|x| *x % 2 == 0).count()}")
+    println("${v.find(|x| *x > 12).copied():?}")
+}

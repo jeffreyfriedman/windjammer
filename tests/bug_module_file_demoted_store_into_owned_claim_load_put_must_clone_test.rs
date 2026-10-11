@@ -10,12 +10,12 @@
     feature = "integration_tests",
 ))]
 
-//! DB-192: demoted `&RelationalMvccStore` into owned job_store load/put must clone.
+//! demoted `&RelationalMvccStore` into owned job_store load/put must clone.
 //!
 //! Product residual (~10× RelationalMvccStore←&), tip-out claim/heartbeat/release:
 //!   `job_store_load_jobs(&store, …)` / `job_store_put_job(&next_store, …)`
 //! while formals are owned `RelationalMvccStore` → E0308.
-//! DB-174 greened tip-out **job_store_port**; satellite claim ports still RED.
+//! greened tip-out **job_store_port**; satellite claim ports still RED.
 //! Signature-driven.
 
 #[path = "common/integration_test_helpers.rs"]

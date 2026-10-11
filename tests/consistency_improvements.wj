@@ -91,7 +91,7 @@ fn test_qualified_match(color: Color) -> i32 {
 // The compiler generates: use super::module::Type
 // Instead of: pub mod module { ... } (nested inline)
 
-// This is tested by the fact that game-host compiles successfully!
+// This is tested by the fact that a game engine project compiles successfully!
 
 // ============================================================================
 // TEST 6: Optional Semicolons (Consistency)

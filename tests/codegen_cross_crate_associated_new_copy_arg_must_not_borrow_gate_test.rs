@@ -13,7 +13,7 @@
 //! FAILING REPRO — cross-crate associated `Type::new(copy_int)` / `::new(copy_float)`
 //! must pass Copy args **by value**, not `&arg`.
 //!
-//! Dogfood (`downstream-screens` + path-dep `windjammer-ui`):
+//! Dogfood (a large downstream application + path-dep `windjammer-ui`):
 //!   `DaysToCloseMetric::new(days)` → tip emits `DaysToCloseMetric::new(&days)` (E0308)
 //!   `Progress::new(progress_percent as float)` → `Progress::new(&(… as f64))` (E0308)
 //!   `MoneyDisplay::new(cents)` → `MoneyDisplay::new(&cents)` (E0308)

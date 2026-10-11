@@ -484,7 +484,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // `for i in 0..vec.len()` → Rust `usize`; `for x in (cx - 16)..(cx + 16)` → bound width (e.g. i32).
-        // DB-425: `-2..3` parses as `Unary(Neg, Range(2, 3))` (neg binds the range),
+        // `-2..3` parses as `Unary(Neg, Range(2, 3))` (neg binds the range),
         // not `Range(Neg(2), 3)`. Peel so loop counters still register as Copy i32.
         if let Some(var) = &loop_var {
             let range_bounds: Option<(&Expression<'ast>, &Expression<'ast>)> = match iterable {
@@ -519,7 +519,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.codegen_i32_binding_names.insert(var.clone());
                     }
                 } else {
-                    // DB-425: any remaining non-usize integer range (`-2..3`,
+                    // any remaining non-usize integer range (`-2..3`,
                     // `-n..(n+1)`) still yields a Copy scalar counter — default i32
                     // so multi-use sites never emit `.clone()`.
                     self.local_var_types.insert(var.clone(), Type::Int32);
@@ -666,7 +666,7 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> Option<Type> {
         use crate::parser::Literal;
         use crate::type_inference::IntType;
-        // DB-425: include negated small literals (`-2..3`) — previously only
+        // include negated small literals (`-2..3`) — previously only
         // non-negative `0..=4096` matched, so `for dx in -2..3` never registered
         // `dx: i32` and auto-clone emitted `dx.clone()` on multi-use.
         let small_int_literal = |expr: &Expression<'ast>| -> bool {

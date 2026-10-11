@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nput 1 1\nput 2 2\nget 1\nput 3 3\nget 2\nkeys\n",
+  "stdout": "1\nevict 2\n-1\n3 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nput 1 10\nput 2 20\nget 1\nkeys\n",
+  "stdout": "evict 1\n-1\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nkeys\nput 1 1\nput 1 5\nget 1\nkeys\nput 2 2\nput 3 3\nkeys\n",
+  "stdout": "<empty>\n5\n1\nevict 1\n3 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nput 1 1\nput 2 2\nput 3 3\nget 1\nput 4 4\nkeys\nget 2\nget 3\n",
+  "stdout": "1\nevict 2\n4 1 3\n-1\n3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nput 1 97\nget 3\nput 3 -9\nkeys\nput 1 58\nget 8\nput 1 43\nget 8\nput 2 13\nget 8\nget 3\nget 1\nget 5\nget 2\nget 2\nkeys\nkeys\nput 1 34\nput 8 45\nput 7 9\nput 3 15\nput 4 7\nkeys\nget 2\nput 5 33\nput 2 8\nget 3\n",
+  "stdout": "-1\n3 1\n-1\n-1\nevict 3\n-1\n-1\n43\n-1\n13\n13\n2 1\n2 1\nevict 2\nevict 1\nevict 8\nevict 7\n4 3\n-1\nevict 3\nevict 4\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nput 2 1\nkeys\nkeys\nput 7 94\nkeys\nkeys\nkeys\nput 1 28\nput 6 46\nput 3 -5\nget 1\nget 8\nput 6 79\nget 2\nget 4\nkeys\nget 5\nput 7 74\nget 7\nput 8 70\nput 3 63\nget 2\nput 2 25\nput 2 19\nget 5\nput 1 62\nput 2 49\nput 5 86\nget 8\nput 2 -2\nput 3 27\nget 1\nget 7\nkeys\nput 3 78\nput 1 23\nkeys\nput 5 37\nput 2 -7\nget 1\nget 4\nput 5 18\nget 1\nget 6\nput 4 10\nput 6 25\nput 2 53\nput 8 95\nkeys\n",
+  "stdout": "2\n2\n7 2\n7 2\n7 2\n28\n-1\n1\n-1\n2 6 1 3 7\n-1\n74\nevict 3\nevict 1\n1\n-1\nevict 6\nevict 7\n70\n62\n-1\n1 3 2 8 5\n1 3 2 8 5\n23\n-1\n23\n-1\nevict 8\nevict 3\nevict 5\n8 2 6 4 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nput 3 -1\nput 6 67\nput 6 48\nput 8 27\nkeys\nput 8 25\nput 3 14\nkeys\nput 5 -8\nput 7 33\nput 2 38\nput 3 6\nput 8 63\nput 5 38\nput 2 -5\nget 8\nput 4 75\nput 3 18\nput 6 12\nget 1\nget 5\nget 7\nget 6\nput 3 46\nget 1\n",
+  "stdout": "8 6 3\n3 8 6\nevict 6\nevict 8\nevict 3\nevict 5\nevict 7\nevict 2\nevict 3\n63\nevict 5\nevict 2\nevict 8\n-1\n-1\n-1\n12\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nget 7\nget 8\nget 1\nput 1 55\nget 3\nget 8\nget 3\nget 2\nget 6\nkeys\nget 2\nget 2\nget 3\nget 3\nput 1 -2\nput 1 83\nput 1 17\nput 5 -2\nput 8 21\nget 4\nget 4\nget 4\nget 2\nput 5 78\nput 6 35\nput 8 86\nput 5 92\nkeys\nget 1\nget 2\nget 4\nget 7\nput 1 -7\nput 1 30\nput 5 45\nput 7 44\nget 7\nput 5 17\nget 6\nkeys\nput 6 21\nget 1\nget 6\nget 1\nput 7 -6\nput 1 76\nput 8 87\nput 1 3\nget 5\nput 1 -4\n",
+  "stdout": "-1\n-1\n-1\n-1\n-1\n-1\n-1\n-1\n1\n-1\n-1\n-1\n-1\n-1\n-1\n-1\n-1\n5 8 6 1\n17\n-1\n-1\n-1\nevict 6\n44\n-1\n5 7 1 8\nevict 8\n30\n21\n30\nevict 5\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nkeys\nput 5 -2\nput 5 99\nput 2 8\nget 2\nkeys\nput 8 39\nput 6 54\nget 3\nget 4\nget 1\nget 7\nget 3\nget 1\nput 2 81\nget 7\nget 7\nkeys\n",
+  "stdout": "<empty>\n8\n2 5\n-1\n-1\n-1\n-1\n-1\n-1\n-1\n-1\n2 6 8 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nget 4\nput 5 87\nput 6 68\nput 6 75\nget 1\nput 7 7\nget 3\nget 7\nget 5\nput 6 1\nput 2 -3\nput 3 25\nget 7\nput 3 54\nget 3\nget 5\nput 8 97\nput 4 84\nget 4\nput 1 55\nput 4 37\nget 2\nget 7\nput 5 76\nget 2\nput 7 92\nkeys\nput 6 55\nput 2 -3\nget 5\nput 1 -5\nget 1\nget 5\nput 7 30\nput 6 12\nput 5 83\nget 3\nput 8 94\nput 2 1\n",
+  "stdout": "-1\n-1\n-1\n7\n87\nevict 7\n-1\n54\n87\nevict 6\nevict 2\n84\nevict 3\n-1\n-1\n-1\nevict 8\n7 5 4 1\nevict 1\nevict 4\n76\nevict 7\n-5\n76\nevict 6\nevict 2\n-1\nevict 1\nevict 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nput 3 5\nget 6\nput 2 3\nget 7\nkeys\nput 8 96\nget 8\nput 6 10\nput 8 50\nget 5\nput 8 0\nput 5 66\nget 8\nget 7\nput 3 33\nget 8\nput 8 11\nget 7\nput 1 31\nget 3\nget 5\nget 4\nput 1 50\nput 5 61\nkeys\nget 8\nput 6 27\nget 2\nget 2\nput 7 66\nkeys\nget 7\n",
+  "stdout": "-1\n-1\n2 3\n96\nevict 3\n-1\nevict 2\n0\n-1\nevict 6\n0\n-1\nevict 5\n33\n-1\n-1\nevict 8\n5 1 3\n-1\nevict 3\n-1\n-1\nevict 1\n7 6 5\n66\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nput 2 -6\nget 3\nget 7\nget 6\nget 8\nget 6\nput 5 -1\nput 1 10\nget 3\nput 3 83\nkeys\nkeys\n",
+  "stdout": "-1\n-1\n-1\n-1\n-1\n-1\nevict 2\n3 1 5\n3 1 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nput 7 35\nput 2 31\nput 7 -5\nget 6\nget 7\nput 7 -7\nget 6\nget 4\nput 1 12\nget 1\nget 5\nput 2 53\nget 2\nkeys\nget 5\nget 7\nput 4 86\nkeys\nput 6 49\n",
+  "stdout": "evict 7\nevict 2\n-1\n-5\n-1\n-1\nevict 7\n12\n-1\nevict 1\n53\n2\n-1\n-1\nevict 2\n4\nevict 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nput 3 62\nput 3 1\nput 1 57\nput 6 35\nput 5 -3\nget 3\nput 1 64\nput 3 98\nput 4 52\nput 6 -2\nget 5\nput 8 62\nget 8\nput 7 16\nget 3\nput 6 71\nkeys\nkeys\nget 6\nget 7\nput 8 68\nput 5 39\nput 6 52\nput 2 25\nget 7\nkeys\nput 2 58\nget 7\nget 3\nput 6 70\nput 1 99\nget 7\nkeys\nput 4 94\nput 6 -5\nput 3 33\nget 5\nput 2 44\nkeys\nget 1\nget 2\n",
+  "stdout": "evict 3\n-1\nevict 6\nevict 5\nevict 1\n-1\nevict 3\n62\nevict 4\n-1\n6 7 8\n6 7 8\n71\n16\nevict 6\nevict 7\nevict 8\n-1\n2 6 5\n-1\n-1\nevict 5\n-1\n1 6 2\nevict 2\nevict 1\n-1\nevict 4\n2 3 6\n-1\n44\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nput 5 58\nkeys\nget 8\nget 3\nput 6 35\nput 3 45\nput 8 89\nget 3\nget 5\nput 1 32\nget 3\nput 4 -8\nget 3\nput 6 56\nput 2 35\nput 5 13\nget 3\nget 6\nput 7 44\nget 6\nput 4 29\nput 1 77\nput 4 41\nget 3\nget 4\nput 5 42\nkeys\nput 1 21\n",
+  "stdout": "5\n-1\n-1\nevict 5\nevict 6\n45\n-1\nevict 8\n45\nevict 1\n45\nevict 4\nevict 3\nevict 6\n-1\n-1\nevict 2\n-1\nevict 5\nevict 7\n-1\n41\nevict 1\n5 4\nevict 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nput 7 0\nput 6 89\nput 4 20\nput 1 86\nput 5 53\nget 8\nget 4\nput 4 98\nkeys\nget 5\nput 2 63\nkeys\nget 3\nget 2\nget 6\nput 2 49\nput 4 83\nget 5\nget 1\nput 1 51\nget 8\nput 8 59\nput 3 81\nput 5 8\nput 8 71\nget 2\nput 7 65\nkeys\nput 6 62\n",
+  "stdout": "evict 7\nevict 6\nevict 4\nevict 1\n-1\n-1\nevict 5\n4\n-1\nevict 4\n2\n-1\n63\n-1\nevict 2\n-1\n-1\nevict 4\n-1\nevict 1\nevict 8\nevict 3\nevict 5\n-1\nevict 8\n7\nevict 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nget 1\nget 2\nput 6 46\nkeys\nput 8 63\nget 4\nput 7 18\nput 2 14\nget 6\nput 5 87\nput 1 38\nget 1\nget 8\nput 3 79\nput 6 4\nput 8 25\nget 1\nkeys\nput 5 77\nkeys\nget 3\nget 2\nget 5\nput 2 9\nput 8 47\nput 1 46\nput 1 50\nput 6 67\nget 6\nput 4 79\nput 3 66\nput 2 -8\nput 7 76\nkeys\nget 8\nkeys\nput 8 -3\nkeys\nput 6 84\n",
+  "stdout": "-1\n-1\n6\n-1\nevict 6\n-1\nevict 8\nevict 7\n38\n-1\nevict 2\nevict 5\nevict 1\n-1\n8 6 3\nevict 3\n5 8 6\n-1\n-1\n77\nevict 6\nevict 5\nevict 2\n67\nevict 8\nevict 1\nevict 6\nevict 4\n7 2 3\n-1\n7 2 3\nevict 3\n8 7 2\nevict 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nput 3 62\nkeys\nput 3 65\nget 1\nget 3\nkeys\nget 6\nput 7 12\nput 6 31\nkeys\nput 8 51\nget 8\nput 6 57\nput 6 89\nget 7\nput 5 60\nput 4 23\nput 2 -3\nput 3 90\nput 4 15\nget 4\nput 1 32\nput 6 40\nput 4 10\nput 5 64\nget 3\nget 4\nget 4\nput 7 29\nget 7\nget 7\nget 4\n",
+  "stdout": "3\n-1\n65\n3\n-1\n6 7 3\n51\n12\nevict 3\nevict 8\nevict 6\nevict 7\n15\nevict 5\nevict 2\nevict 3\n-1\n10\n10\nevict 1\n29\n29\n10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nput 5 77\nput 7 -9\nkeys\nget 4\nput 4 69\nput 3 56\nput 8 60\nput 8 49\nput 5 85\nput 2 44\nput 6 47\nget 7\nget 4\nput 8 3\nput 3 5\nput 8 8\nput 8 70\nkeys\nput 2 42\nput 5 25\nkeys\nget 3\nput 3 20\nput 4 27\nget 2\nput 4 9\nget 4\nkeys\nput 3 35\nkeys\nput 1 45\nget 7\nput 4 73\nput 1 12\nput 4 33\nget 6\nget 5\nput 1 23\nput 1 31\nget 3\nkeys\nput 7 18\nget 1\nkeys\n",
+  "stdout": "7 5\n-1\nevict 5\nevict 7\nevict 4\nevict 3\nevict 8\nevict 5\n-1\n-1\nevict 2\nevict 6\n8 3\nevict 3\nevict 8\n5 2\n-1\nevict 2\nevict 5\n-1\n9\n4 3\n3 4\nevict 4\n-1\nevict 3\n-1\n-1\n-1\n1 4\nevict 4\n31\n1 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nput 5 13\nput 4 42\nput 5 22\nput 8 52\nget 7\nput 7 42\nput 8 29\nput 2 71\nput 2 32\nput 5 -7\nput 3 0\nget 6\nget 4\nput 5 88\nput 1 64\nget 7\nput 3 83\nput 6 11\nput 4 62\nkeys\nget 4\nput 6 52\nput 2 -3\nput 1 33\nput 4 55\nput 1 49\nput 7 82\nput 5 9\nput 1 25\nget 7\nget 4\nget 6\nput 6 -2\nput 2 39\nput 2 4\nget 6\nput 5 14\nput 1 22\nput 5 76\nput 4 71\nkeys\nget 8\nget 6\nget 1\nkeys\nget 6\nput 1 -9\nget 5\nput 8 21\nput 6 75\n",
+  "stdout": "-1\nevict 4\n-1\n-1\nevict 7\n-1\nevict 8\nevict 2\n4 6 3 1 5\n62\nevict 5\nevict 3\nevict 6\n82\n55\n-1\nevict 2\nevict 5\n-2\nevict 1\nevict 7\n4 5 1 6 2\n-1\n-2\n22\n1 6 4 5 2\n-2\n76\nevict 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nget 7\nget 3\nget 6\nput 2 69\nget 5\nkeys\nkeys\nget 4\nget 5\nput 2 63\nput 6 55\nkeys\nkeys\nget 4\nget 1\nput 7 84\nget 4\nget 2\nput 7 -1\nget 8\nget 4\nget 1\nget 5\nget 2\nput 6 90\nput 5 1\nget 3\nget 5\nget 2\nput 6 40\nput 1 -6\nput 5 50\nput 8 90\nput 8 -3\nkeys\nput 6 89\nput 4 59\nput 5 78\nput 2 -9\nget 6\nkeys\nget 7\nget 2\n",
+  "stdout": "-1\n-1\n-1\n-1\n2\n2\n-1\n-1\n6 2\n6 2\n-1\n-1\nevict 2\n-1\n-1\n-1\n-1\n-1\n-1\n-1\nevict 7\n-1\n1\n-1\nevict 5\nevict 6\nevict 1\n8 5\nevict 5\nevict 8\nevict 6\nevict 4\n-1\n2 5\n-1\n-9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nkeys\nget 6\nget 4\nput 4 87\nget 3\nget 4\nput 6 86\nkeys\nput 4 14\nput 5 45\nget 8\nput 2 45\nput 5 42\nput 7 5\nput 5 86\nput 1 11\nput 2 64\nkeys\nput 8 10\nkeys\nput 4 35\nput 1 21\nput 4 42\nget 2\nget 7\nget 7\nput 1 56\n",
+  "stdout": "<empty>\n-1\n-1\n-1\n87\n6 4\nevict 6\n-1\nevict 4\nevict 2\nevict 7\nevict 5\n2 1\nevict 1\n8 2\nevict 2\nevict 8\n-1\n-1\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nput 7 83\nput 7 48\nget 2\nput 3 52\nget 2\nget 2\nput 7 6\nput 7 -4\nput 1 20\nkeys\nput 8 4\nget 5\nkeys\nget 5\nkeys\nput 2 48\nput 2 -6\nget 5\nkeys\nput 8 7\nput 2 16\nput 8 -3\nput 7 10\nput 6 97\nget 2\nput 1 31\nkeys\nput 6 12\nput 3 44\n",
+  "stdout": "-1\n-1\n-1\n1 7 3\nevict 3\n-1\n8 1 7\n-1\n8 1 7\nevict 7\n-1\n2 8 1\nevict 1\nevict 2\n-1\nevict 8\n1 6 7\nevict 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nput 4 32\nput 7 7\nget 3\nput 3 75\nput 1 66\nput 5 68\nput 4 49\nput 5 13\nget 8\nget 7\nkeys\nget 2\nput 7 92\nput 3 -3\nput 4 96\nget 5\nget 6\nget 4\nput 3 77\n",
+  "stdout": "evict 4\n-1\nevict 7\nevict 3\nevict 1\nevict 5\nevict 4\n-1\n-1\n5\n-1\nevict 5\nevict 7\nevict 3\n-1\n-1\n96\nevict 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nget 7\nget 7\nput 3 71\nget 6\nget 2\nget 7\nget 2\nget 1\nget 3\nput 1 30\nget 2\nput 2 60\nput 5 46\nput 2 79\nget 8\nget 7\nput 1 41\nget 5\nget 7\nkeys\nput 4 94\nput 4 8\nkeys\nget 4\nget 3\nput 3 27\nput 5 15\nput 2 87\nget 1\nget 6\nget 8\nput 2 68\nput 8 91\nput 3 72\nput 6 89\nget 5\nput 5 89\nget 4\nget 1\nget 3\nget 6\n",
+  "stdout": "-1\n-1\n-1\n-1\n-1\n-1\n-1\n71\n-1\n-1\n-1\n46\n-1\n5 1 2 3\n4 5 1 2 3\n8\n71\n41\n-1\n-1\nevict 4\nevict 5\n-1\nevict 1\n-1\n-1\n72\n89\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nget 3\nput 4 20\nget 1\nget 3\nget 5\nput 2 94\nkeys\nget 7\nput 2 -3\nput 8 98\nput 6 49\nget 3\nput 4 71\nput 7 33\nget 5\nput 3 -6\nget 7\nget 3\nput 1 76\nput 7 11\nget 6\nkeys\nput 1 85\nkeys\nput 4 79\nget 1\nput 2 88\nget 1\nget 3\n",
+  "stdout": "-1\n-1\n-1\n-1\n2 4\n-1\n-1\n-1\nevict 2\n33\n-6\nevict 8\n49\n6 7 1 3 4\n1 6 7 3 4\n85\nevict 3\n85\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nget 6\nput 4 72\nput 7 87\nget 6\nput 7 95\nget 1\nkeys\nget 7\nput 7 -6\nget 8\nput 8 48\nget 2\nput 1 24\nkeys\nput 6 63\nput 5 99\nget 3\nget 2\nget 7\nput 3 75\nget 7\nget 8\nput 4 35\nput 2 23\nput 8 13\nkeys\nget 8\nkeys\nput 7 70\nput 1 71\nput 2 9\nget 1\nput 2 -1\nget 6\nkeys\nget 2\nput 1 9\nget 2\nget 5\nput 3 70\nput 1 69\nget 2\nput 3 46\nget 5\n",
+  "stdout": "-1\nevict 4\n-1\n-1\n7\n95\n-1\nevict 7\n-1\nevict 8\n1\nevict 1\nevict 6\n-1\n-1\n-1\nevict 5\n-1\n-1\nevict 3\nevict 4\nevict 2\n8\n13\n8\nevict 8\nevict 7\nevict 1\n-1\n-1\n2\n-1\nevict 2\n-1\n-1\nevict 1\nevict 3\n-1\nevict 1\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nget 3\nkeys\nget 3\nput 3 20\nput 1 41\nget 4\nput 7 51\nget 3\nput 1 82\nput 1 87\nget 8\nget 7\nput 8 11\nput 4 71\nkeys\nput 4 14\nput 5 71\nget 5\nput 4 7\nget 4\nput 4 41\nput 7 80\nkeys\nget 7\nput 1 -6\nget 6\nget 2\nget 6\nput 8 53\n",
+  "stdout": "-1\n<empty>\n-1\n-1\nevict 3\n-1\n-1\n51\nevict 1\nevict 7\n4 8\nevict 8\n71\n7\nevict 5\n7 4\n80\nevict 4\n-1\n-1\n-1\nevict 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nput 7 94\nget 5\nget 1\nput 5 56\nput 8 69\nget 2\nput 4 8\nget 2\nget 3\nput 1 83\nget 8\nget 4\nput 7 42\nget 6\nget 6\nput 2 39\nkeys\nget 1\nget 2\nput 3 9\nget 7\nput 4 11\nput 6 32\nput 6 0\nput 7 70\nput 6 30\nkeys\nget 6\nkeys\nput 5 7\nget 2\nput 3 7\nget 3\nput 5 84\nput 5 68\nget 3\nget 6\nput 1 23\nget 7\nput 3 18\nkeys\nget 4\nput 4 -4\nput 3 79\n",
+  "stdout": "-1\n-1\n-1\n-1\n-1\nevict 7\n69\n8\nevict 5\n-1\n-1\nevict 1\n2 7 4 8\n-1\n39\nevict 8\n42\nevict 2\n6 7 4 3\n30\n6 7 4 3\nevict 3\n-1\nevict 4\n7\n7\n30\nevict 7\n-1\n3 1 6 5\n-1\nevict 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nget 7\nput 7 65\nput 5 17\nkeys\nput 6 13\nkeys\nput 3 93\nget 3\nput 1 55\nget 4\nkeys\nput 1 13\nkeys\nget 7\nput 7 53\nput 2 78\nput 8 31\nput 4 6\nput 2 39\nget 5\nput 3 0\nput 1 87\nget 2\nput 2 93\nput 7 -7\nget 1\nget 8\nget 2\n",
+  "stdout": "-1\nevict 7\n5\nevict 5\n6\nevict 6\n93\nevict 3\n-1\n1\n1\n-1\nevict 1\nevict 7\nevict 2\nevict 8\nevict 4\n-1\nevict 2\nevict 3\n-1\nevict 1\nevict 2\n-1\n-1\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nkeys\nput 7 12\nkeys\nget 2\nput 1 -5\nget 6\nput 1 51\nput 5 84\nget 7\nput 2 -1\nput 7 -7\nput 1 74\n",
+  "stdout": "<empty>\n7\n-1\n-1\n12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nput 5 36\nput 8 98\nput 4 89\nput 2 95\nput 3 17\nput 1 1\nget 1\nput 7 6\nget 2\nput 3 17\nput 5 13\nput 3 17\nget 7\n",
+  "stdout": "evict 5\nevict 8\n1\nevict 4\n95\nevict 1\n6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nget 8\nget 7\nput 6 -1\nget 3\nput 3 71\nput 4 79\nget 4\nkeys\nget 4\nget 8\nget 3\nget 2\nget 7\nput 1 63\nput 6 2\nkeys\nget 6\nget 5\nput 2 69\nput 2 61\nput 4 97\n",
+  "stdout": "-1\n-1\n-1\n79\n4 3 6\n79\n-1\n71\n-1\n-1\n6 1 3 4\n2\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nput 3 68\nput 6 -1\nput 3 70\nput 7 2\nkeys\nput 5 37\nput 2 70\nput 1 47\nget 4\nget 4\nput 4 9\nget 2\nget 2\nput 7 23\nget 1\nget 7\nput 8 -3\nput 3 86\nget 2\nput 6 38\nget 3\nget 1\nput 6 61\nkeys\nput 4 52\nput 5 -8\nget 5\nput 2 42\nget 4\nput 6 86\nput 4 45\nkeys\nput 6 72\nput 4 2\nput 2 24\nput 4 16\nget 8\nput 2 5\nput 1 98\nkeys\nkeys\nget 3\nkeys\nget 7\nget 8\n",
+  "stdout": "evict 6\n7 3\nevict 3\nevict 7\nevict 5\n-1\n-1\nevict 2\n-1\n-1\nevict 1\n-1\n23\nevict 4\nevict 7\n-1\nevict 8\n86\n-1\n6 3\nevict 3\nevict 6\n-8\nevict 4\n-1\nevict 5\nevict 2\n4 6\nevict 6\n-1\nevict 4\n1 2\n1 2\n-1\n1 2\n-1\n-1\n"
+ }
+]

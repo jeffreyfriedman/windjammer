@@ -20,6 +20,11 @@ impl<'e> Lowerer<'e> {
                 let e = self.literal(l, Some(&ty))?;
                 Ok(PPat::Lit(e))
             }
+            Pattern::Range { start, end, inclusive } => {
+                let lo = start.as_ref().map(|l| self.literal(l, Some(&ty))).transpose()?;
+                let hi = end.as_ref().map(|l| self.literal(l, Some(&ty))).transpose()?;
+                Ok(PPat::Range { lo, hi, inclusive: *inclusive })
+            }
             Pattern::Tuple(ps) => {
                 let tys = match &ty {
                     Ty::Tuple(ts) => ts.clone(),

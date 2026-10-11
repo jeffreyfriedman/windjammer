@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-458: Copy **newtype** local into owned method formal must not `.clone()`.
+//! Copy **newtype** local into owned method formal must not `.clone()`.
 //!
 //! Product `ecs/component_storage.rs` list_component_ids_for_entity:
 //!   `if self.has(entity, comp_id.clone()) { result.push(comp_id.clone()) }`
 //! WJ uses bare `comp_id` for both `has` and `push`.
-//! Distinct from DB-457 (Copy newtype into **Vec::push** with field reuse),
-//! DB-431 (Copy u64 **field** into insert/push), and DB-393 (i32 formal field).
+//! Distinct from (Copy newtype into **Vec::push** with field reuse),
+//! (Copy u64 **field** into insert/push), and (i32 formal field).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

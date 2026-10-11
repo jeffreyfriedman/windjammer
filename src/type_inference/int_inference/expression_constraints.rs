@@ -2,7 +2,7 @@ impl IntInference {
     /// Unannotated `let xs = vec![10, 20]` / `[10, 20]` later passed to `Vec<u64>`
     /// MustBe's the identifier (nested width) and MustMatch's it to the collection
     /// expr — but element literals are separate nodes. Unify each element with the
-    /// collection so callee `Vec<u64>` writes back `_u64` (DB-127). Language-level
+    // collection so callee `Vec<u64>` writes back `_u64`. Language-level
     /// collection homogeneity, not a callee-name heuristic.
     fn unify_collection_element_int_width<'ast>(
         &mut self,
@@ -470,7 +470,7 @@ impl IntInference {
 
                 // Rust indexing uses usize at codegen (`maybe_cast_index_to_usize`). Do not
                 // force the variable's unified width to usize — loop counters stay WJ `int`/i64
-                // when compared to `len() as int` (P3.267 / DownstreamApp nested loops).
+                // when compared to `len() as int` (P3.267 / a downstream application nested loops).
                 self.collect_expression_constraints(index, None);
             }
             Expression::Array { elements, .. } => {
@@ -538,7 +538,7 @@ impl IntInference {
                         }
                     }
                     // Unannotated `let xs = vec![10, 20]` + later `f(xs)` where `f: Vec<u64>`
-                    // MustBe's the identifier, not the element literals (DB-127).
+                    // MustBe's the identifier, not the element literals.
                     self.unify_collection_element_int_width(expr, args);
                 } else {
                     for arg in args {

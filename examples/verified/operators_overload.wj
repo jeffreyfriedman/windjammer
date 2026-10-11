@@ -1,0 +1,30 @@
+// tags: operators, impl, traits, add, mul, eq
+// rust: gap error[E0119]: conflicting implementations of trait 'PartialEq' for type 'V2'
+// expect: (4, 6)
+// expect: (3, 6)
+// expect: true
+// expect: false
+struct V2 { x: int, y: int }
+
+impl Add for V2 {
+    fn add(self, o: V2) -> V2 { V2 { x: self.x + o.x, y: self.y + o.y } }
+}
+
+impl Mul<int> for V2 {
+    fn mul(self, k: int) -> V2 { V2 { x: self.x * k, y: self.y * k } }
+}
+
+impl PartialEq for V2 {
+    fn eq(self, o: V2) -> bool { self.x == o.x && self.y == o.y }
+}
+
+fn show(v: V2) -> string { "(${v.x}, ${v.y})" }
+
+fn main() {
+    let a = V2 { x: 1, y: 2 }
+    let b = V2 { x: 3, y: 4 }
+    println(show(a + b))
+    println(show(V2 { x: 1, y: 2 } * 3))
+    println("${a == V2 { x: 1, y: 2 }}")
+    println("${a == b}")
+}

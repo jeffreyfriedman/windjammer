@@ -70,7 +70,7 @@ impl<'ast> CodeGenerator<'ast> {
             .insert(s.name.clone(), usize_fields);
 
         // STRUCT FIELD TYPE TRACKING: Record all field types for type inference.
-        // Preserve / re-apply Box on recursive SCCs (DB-116) so emit stays finite-size.
+        // Preserve / re-apply Box on recursive SCCs so emit stays finite-size.
         let mut field_types = std::collections::HashMap::new();
         for field in &s.fields {
             let ty = self
@@ -434,7 +434,7 @@ impl<'ast> CodeGenerator<'ast> {
     pub(super) fn generate_enum(&mut self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
-        // DB-444: register variant payload shapes before Copy/unit-enum decisions at
+        // register variant payload shapes before Copy/unit-enum decisions at
         // call sites that may emit later in the same program pass.
         self.collect_enum_variant_types(e);
 
@@ -1034,7 +1034,7 @@ impl<'ast> CodeGenerator<'ast> {
                 for func in &impl_block.functions {
                     // Consuming methods stay owned *unless* they call a sibling that
                     // this pre-pass already recorded as `&mut self` (P3.522:
-                    // `handle_http` → `handle_method` → `check_rate`). DB-414
+                    // `handle_http` → `handle_method` → `check_rate`). 
                     // field-ctor moves do not call a MutBorrowed sibling.
                     if self
                         .current_impl_consuming_self_methods
@@ -1046,7 +1046,7 @@ impl<'ast> CodeGenerator<'ast> {
                     {
                         continue;
                     }
-                    // DB-414 / P3.584: move field A into a ctor then assign field B
+                    // P3.584: move field A into a ctor then assign field B
                     // needs owned `mut self` — do not pre-upgrade to `&mut self`.
                     if self.self_field_partial_move_needs_owned_receiver(func) {
                         continue;

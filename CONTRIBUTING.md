@@ -49,7 +49,7 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 
 ### Prerequisites
 
-- Rust 1.70+ (install via [rustup](https://rustup.rs/))
+- Rust 1.90+ (`rust-version` in `Cargo.toml`) (install via [rustup](https://rustup.rs/))
 - Git
 - A code editor (VS Code with rust-analyzer recommended)
 
@@ -87,11 +87,12 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 
 ## 🧪 Testing
 
-- **Run all tests**: `cargo test --release --test all` (never `--all-features`; it disables ~120 test files)
+- **Run all tests**: `cargo test --release --test all` (never `--all-features`; it disables many test files)
 - **Check no test file is orphaned**: `scripts/check-orphan-tests.sh`
 - **Run specific test**: `cargo test --release --test all -- test_name`
 - **Run with output**: `cargo test --release --test all -- test_name -- --nocapture`
 - **Run benchmarks**: `cargo bench`
+- **Architecture fitness**: `cargo test --release --test all architecture` (see `docs/ARCHITECTURE_CI.md`)
 
 Always add tests for new features and bug fixes.
 
@@ -117,8 +118,9 @@ Always add tests for new features and bug fixes.
    - Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 3. **Test thoroughly**
-   - Run all tests: `cargo test`
-   - Run clippy: `cargo clippy`
+   - Run tests: `cargo test --release --test all` (never `--all-features`)
+   - Run `scripts/check-orphan-tests.sh` and, if you added modules, `scripts/update-architecture-baselines.sh`
+   - Run clippy: `cargo clippy -- -D warnings`
    - Format code: `cargo fmt --all`
 
 4. **Update documentation**
@@ -147,14 +149,15 @@ windjammer/
 │   ├── parser/        # Windjammer language parser
 │   ├── analyzer/      # Semantic analysis and type checking
 │   ├── codegen/       # Code generation (Rust, JS, WASM)
+│   ├── ir/            # IR and constraint solver
 │   └── cli/           # Command-line interface
 ├── std/               # Standard library (.wj files)
 ├── crates/            # Sub-crates
 │   ├── windjammer-lsp/      # Language Server Protocol
 │   ├── windjammer-mcp/      # Model Context Protocol
 │   └── windjammer-runtime/  # Runtime support
-├── examples/          # Example projects
-├── docs/              # Documentation
+├── examples/          # Example programs (best-effort)
+├── docs/              # Documentation (index: docs/README.md)
 └── tests/             # Integration tests
 ```
 
@@ -164,8 +167,8 @@ When contributing, keep in mind Windjammer's core philosophy:
 
 - **80% of Rust's power, 20% of the complexity**
 - **Zero backend leakage** - Developers write pure Windjammer
-- **Inferred ownership** - No explicit `mut`, `&`, or lifetimes
-- **Multi-target** - Compile to Rust, JavaScript, and WebAssembly
+- **Inferred ownership** - No explicit `&` or lifetimes on parameters; local `let mut` is explicit per [ADR-0002](docs/adr/0002-local-mutability.md)
+- **Multi-target** - Rust is the primary backend; JavaScript, WebAssembly and Go are less mature ([ADR-0007](docs/adr/0007-target-tiers-conformance.md))
 - **Pragmatic** - Favor practical solutions over theoretical purity
 
 ## 🏷️ Commit Message Guidelines

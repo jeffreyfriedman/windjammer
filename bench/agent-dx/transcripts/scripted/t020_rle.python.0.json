@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import sys\nimport re\n\ntext = sys.stdin.read()\nlines = text.split(\"\\n\")\nif lines and lines[-1] == \"\":\n    lines.pop()\nfor line in lines:\n    mode = line[:1]\n    body = line[2:]\n    if mode == \"E\":\n        out = []\n        i = 0\n        while i < len(body):\n            j = i\n            while j < len(body) and body[j] == body[i]:\n                j += 1\n            out.append(\"%d%s\" % (j - i, body[i]))\n            i = j\n        print(\"\".join(out))\n    else:\n        print(\"\".join(ch * int(n) for n, ch in re.findall(r\"([0-9]+)([a-z])\", body)))\n",
+   "usage": null,
+   "wall_seconds": 0.07
+  }
+ ],
+ "lang": "python",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.07
+ },
+ "recorded_at": "2026-10-11T15:15:55",
+ "schema": 1,
+ "task": "t020_rle",
+ "trial": 0
+}

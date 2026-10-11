@@ -146,7 +146,7 @@ jobs:
           echo "Publishing windjammer-mcp (depends on windjammer + windjammer-lsp)..."
           cargo publish -p windjammer-mcp
           echo "✅ All core crates published!"
-          echo "Note: windjammer-ui and game-host-framework will be published from separate repos"
+          echo "Note: windjammer-ui and game_framework will be published from separate repos"
 
       - name: Notify success
         if: success()

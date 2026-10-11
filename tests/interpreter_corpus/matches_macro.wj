@@ -1,0 +1,41 @@
+// seeds: 2 5 13 40
+// matches! with enum patterns, guards, or-patterns and in conditions.
+enum Tok {
+    Num(int),
+    Op(string),
+    End,
+    Pair { a: int, b: int },
+}
+
+fn classify(t: Tok) -> int {
+    let mut score = 0
+    if matches!(t, Tok::Num(_)) { score += 1 }
+    if matches!(t, Tok::Num(n) if n % 2 == 0) { score += 10 }
+    if matches!(t, Tok::End | Tok::Op(_)) { score += 100 }
+    if matches!(t, Tok::Pair { .. }) { score += 1000 }
+    score
+}
+
+fn main() {
+    let mut x: int = __SEED__
+    let mut total = 0
+    let mut i: int = 0
+    let six: int = 6
+    let four: int = 4
+    while i < six {
+        let t = match i % four {
+            0 => Tok::Num(x),
+            1 => Tok::Op("+"),
+            2 => Tok::Pair { a: x, b: i },
+            _ => Tok::End,
+        }
+        let c = classify(t)
+        total += c
+        println("{} {}", i, c)
+        x = x * 3 + 1
+        i += 1
+    }
+    let five: int = 5
+    let o = Some(x % five)
+    println("total {} {} {}", total, matches!(o, Some(0)), matches!(o, None))
+}

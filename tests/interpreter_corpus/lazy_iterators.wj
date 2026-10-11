@@ -1,0 +1,51 @@
+// seeds: 2 3 5 11
+// Lazy iterators: unbounded ranges, cycle, take/take_while over them, and the
+// interleaving of side effects (each item flows through the whole chain before the next).
+fn main() {
+    let s: int = __SEED__
+    let z: int = 0
+    let one: int = 1
+    let hundred: int = 100
+    let step: usize = 3
+    let two: usize = 2
+    let odds: Vec<int> = (s..).map(|x| x * x).filter(|x| x % 2 == 1).take(4).collect()
+    println("{:?}", odds)
+
+    let base: Vec<int> = [s, s + 1, s + 2]
+    let ring: Vec<int> = base.into_iter().cycle().take(8).collect()
+    println("{:?}", ring)
+
+    let under: Vec<int> = (one..).map(|x| x * s).take_while(|x| *x < 10 * s).collect()
+    println("{:?}", under)
+
+    for v in (z..).map(|x| {
+        println("make {}", x)
+        x * s
+    }).take_while(|x| *x < 3 * s) {
+        println("use {}", v)
+    }
+
+    let found = (s..).find(|x| x % 7 == 0)
+    println("{:?}", found)
+    let pos = (z..).position(|x| x * x > s * hundred)
+    println("{:?}", pos)
+
+    let mut it = (s..).step_by(step)
+    let a = it.next()
+    let b = it.next()
+    println("{:?} {:?}", a, b)
+    let both: Vec<int> = (one..4).chain(10..12).rev().collect()
+    println("{:?}", both)
+
+    let mut n = 0
+    for i in z.. {
+        n += i * s
+        if n > 40 {
+            println("stop at {}", i)
+            break
+        }
+    }
+    let sk: usize = (s % 3) as usize
+    let evens: Vec<int> = (0..20).filter(|x| x % 2 == 0).skip(sk).step_by(two).collect()
+    println("{:?}", evens)
+}

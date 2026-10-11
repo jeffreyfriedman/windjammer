@@ -159,7 +159,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `for x in owner.field` / `owner.a.b` must borrow to avoid partial moves
-    /// (DB-307: `index.graph.nodes` while body reuses `index`, including `&Index`).
+    // (`index.graph.nodes` while body reuses `index`, including `&Index`).
     pub(crate) fn field_iterable_needs_borrow_when_owner_used_in_body(
         &self,
         iterable: &Expression,

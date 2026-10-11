@@ -256,7 +256,7 @@ impl<'ast> CodeGenerator<'ast> {
                     && !crate::codegen::rust::literals::is_already_owned_string(&s)
                 {
                     let ty = self.infer_expression_type(e);
-                    // DB-347: `match_arm_bindings` are owned payloads (ref arms live in
+                    // `match_arm_bindings` are owned payloads (ref arms live in
                     // `borrowed_iterator_vars`). Do not force `.clone()` on Copy f32/i32
                     // match bindings into return tuples.
                     let is_borrowed_binding = matches!(
@@ -557,7 +557,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let base_expr = format!("{}{}{}", obj_str, separator, field);
 
-        // DB-367: unit enum constructors (`None`, `Value::None`) are not bindings.
+        // unit enum constructors (`None`, `Value::None`) are not bindings.
         if field == "None" || base_expr.ends_with("::None") {
             return base_expr;
         }
@@ -676,7 +676,7 @@ impl<'ast> CodeGenerator<'ast> {
         // is true (correct for Copy fields like .score), but for non-Copy fields
         // like String, the resulting expression `vec[i].text` is still a move.
         // Fix: clone the field access result when the field type is non-Copy.
-        // DB-369: comparisons set `suppress_borrowed_clone` — `String`/`&str`
+        // comparisons set `suppress_borrowed_clone` — `String`/`&str`
         // PartialEq works on refs, so `.key.clone() == key` is noise.
         if !self.generating_assignment_target
             && !self.in_explicit_clone_call
@@ -984,12 +984,12 @@ impl<'ast> CodeGenerator<'ast> {
                         self.clone_non_copy_ref_binding_for_struct_field(expr, &expr_str);
                 }
 
-                // DB-367: `None` / bool keywords are not bindings — auto_clone path
+                // `None` / bool keywords are not bindings — auto_clone path
                 // can false-hit `"None"` at the wrong statement_idx → `None.clone()`.
                 // Unit Option::None is Copy when the field payload is Copy.
                 if let Expression::Identifier { name: id, .. } = expr {
                     let is_unit_keyword = id == "None" || id == "true" || id == "false";
-                    // DB-440: Copy struct fields auto-copy — strip / skip `.clone()` even
+                    // Copy struct fields auto-copy — strip / skip `.clone()` even
                     // when if/else float locals were not yet in `local_var_types`.
                     let field_is_copy = self
                         .lookup_struct_field_types(name)
@@ -1044,7 +1044,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // DB-116: recursive layout fields emit as Box<T> — wrap literal values.
+                // recursive layout fields emit as Box<T> — wrap literal values.
                 if let Some(field_ty) = self
                     .lookup_struct_field_types(name)
                     .and_then(|ft| ft.get(field_name).cloned())
@@ -1074,7 +1074,7 @@ impl<'ast> CodeGenerator<'ast> {
                             .get(id)
                             .is_some_and(|count| *count > 1);
                         if used_multiple_times {
-                            // DB-440: Copy locals (if/else float) and Copy fields must
+                            // Copy locals (if/else float) and Copy fields must
                             // not re-clone — formals-only was too narrow.
                             let field_is_copy = self
                                 .lookup_struct_field_types(name)
@@ -1203,7 +1203,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         let final_idx = idx_str;
 
-        // WJ `string[i]` / `String[i]` / `&str[i]` → Rust byte indexing (DB-120).
+        // WJ `string[i]` / `String[i]` / `&str[i]` → Rust byte indexing.
         // `str` does not implement `Index<usize>`; Cap UTF-8 body→`Vec<u8>` needs
         // `as_bytes()[i]`. Driven by text-type predicate — not method-name heuristics.
         if self
@@ -1218,7 +1218,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Owned call-site formals: clone non-Copy / Custom index elements (E0507). Empty WJ
         // std stubs (`Row {}`) may be misclassified Copy while runtime types are Clone-only.
-        // DB-359: skip when this Index is only an intermediate object for FieldAccess
+        // skip when this Index is only an intermediate object for FieldAccess
         // (`chunks[i].coord`) — parent owns the ownership decision for the field.
         if self.in_call_argument_generation
             && !self.generating_assignment_target
@@ -1229,7 +1229,7 @@ impl<'ast> CodeGenerator<'ast> {
                 .as_ref()
                 .and_then(|t| Self::peeled_collection_element_type(t))
                 .cloned();
-            // DB-432: Copy elements (incl. `u64` / unit enums as Custom) pass by value.
+            // Copy elements (incl. `u64` / unit enums as Custom) pass by value.
             // Do not force-clone all Custom — that heuristic cloned `Vec<u64>` indexes.
             let needs_clone = match et.as_ref() {
                 None => true,
@@ -1259,7 +1259,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // TDD: Struct literal fields need owned values - force .clone() for Vec<String> etc.
         // Peel &Vec<T> (generated Rust for WJ `Vec<T>` params) so Copy element detection works.
-        // DB-359: never force-clone an intermediate Index when a parent FieldAccess is
+        // never force-clone an intermediate Index when a parent FieldAccess is
         // reading a field (`chunks[i].coord`). `in_field_access_object` already marks
         // chain intermediates — owned call-arg context must not undo that (else
         // `chunks[i].clone().coord` for Copy fields).

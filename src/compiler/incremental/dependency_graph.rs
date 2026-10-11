@@ -111,7 +111,7 @@ impl DependencyGraph {
     ///
     /// When a true SCC remains after ignoring `mod.wj` edges, break the cycle by emitting
     /// the most-depended-upon pending module first so defining-fn signature refresh reaches
-    /// importers (db-layers: `graph_bfs_engine` before `graph_analytics_session`).
+    /// importers (a large multi-crate project: `graph_bfs_engine` before `graph_analytics_session`).
     pub fn sort_indices_for_codegen(&self, indices: &[usize]) -> Vec<usize> {
         let set: HashSet<usize> = indices.iter().copied().collect();
         if set.is_empty() {

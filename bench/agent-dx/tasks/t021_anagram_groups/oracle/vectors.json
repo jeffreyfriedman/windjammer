@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "listen silent enlist google gogole\n",
+  "stdout": "enlist listen silent\ngogole google\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abc def\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "Listen SILENT listen\n",
+  "stdout": "listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a A\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "ab ba\ncd dc\nx\n",
+  "stdout": "ab ba\ncd dc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a listen enlist tac\ntac bca gogole\nsilent tac TAC\n",
+  "stdout": "enlist listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "gogole enlist Listen\n\nlisten listen bca gogole\ncab dog gogole TAC enlist listen\n",
+  "stdout": "bca cab\nenlist listen\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "abc god bca act dog\ncat a cab google b\ngod act a Listen cab\n",
+  "stdout": "abc bca cab\nact cat\ndog god\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "gogole TAC\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enlist cat b cat Listen\nsilent bca bca cat b a\n",
+  "stdout": "enlist listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "god cab enlist\ndog god\nb tac\nb\n",
+  "stdout": "dog god\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "listen listen listen\ngoogle\nListen b listen google dog tac\nTAC cab a cat tac\n",
+  "stdout": "cat tac\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "gogole listen\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "act TAC gogole\nTAC cab Listen act cab TAC\n",
+  "stdout": "act tac\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "Listen abc TAC b TAC\nsilent TAC listen b google\n",
+  "stdout": "listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "god cab google a google\ndog a dog act listen act\ngod bca TAC cat enlist cab\n\n",
+  "stdout": "act cat tac\nbca cab\ndog god\nenlist listen\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cat listen\n\ndog Listen act b silent\ngoogle\n",
+  "stdout": "act cat\nlisten silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cab cab abc abc bca enlist\nact act enlist b TAC\n",
+  "stdout": "abc bca cab\nact tac\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "god enlist act\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "god act\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "listen a silent Listen a god\ngoogle\nTAC enlist google\n\n",
+  "stdout": "enlist listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "listen Listen abc bca\nListen TAC act cab\nenlist a cat\n",
+  "stdout": "abc bca cab\nact cat tac\nenlist listen\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "google act enlist dog\na Listen\na god enlist TAC silent\ngoogle listen\n",
+  "stdout": "act tac\ndog god\nenlist listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "gogole dog act act abc b\ncab cab b google\n",
+  "stdout": "abc cab\ngogole google\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a bca abc\n",
+  "stdout": "abc bca\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cat god cat\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cat\nenlist act b\n\n",
+  "stdout": "act cat\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "google god listen silent b cab\n",
+  "stdout": "listen silent\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tac\ngod tac TAC tac tac\ncat tac god bca\n",
+  "stdout": "cat tac\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "b b god bca enlist\nbca google cat\n\ngogole\n",
+  "stdout": "gogole google\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "b\n\nact enlist bca enlist google\n\n",
+  "stdout": "none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog dog enlist tac cab TAC\n\ngogole bca google a\ncat\n",
+  "stdout": "bca cab\ncat tac\ngogole google\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "god\ncat act god cab\ndog\nact god gogole act TAC\n",
+  "stdout": "act cat tac\ndog god\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\nTAC god abc\nlisten enlist\nact\n",
+  "stdout": "act tac\nenlist listen\n"
+ }
+]

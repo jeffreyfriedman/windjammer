@@ -76,7 +76,7 @@ pub struct FloatInference {
     /// Const/static types: name → Type (for const F: f32 = 1.0)
     const_types: HashMap<String, Type>,
     /// External crate metadata: crate_name → path to metadata.json directory
-    /// Used for cross-crate type inference (e.g., game_host_core)
+    /// Used for cross-crate type inference (e.g., a game engine project)
     external_crate_metadata_paths: std::collections::HashMap<String, std::path::PathBuf>,
     /// Debug: Optional source text for error context (line extraction)
     debug_source: Option<String>,

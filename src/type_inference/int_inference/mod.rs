@@ -565,7 +565,7 @@ impl IntInference {
                 // TDD FIX: Pre-pass - populate var_types from return statements
                 // e.g. "return count" with return type u32 → var_types["count"] = u32
                 // Enables compound assignment "count += 1" to infer 1_u32 before we process it
-                // DB-361: do NOT stamp `-> i32` onto a `while i < …len()` counter — that
+                // do NOT stamp `-> i32` onto a `while i < …len()` counter — that
                 // forces `let mut i: i32` + `(i as usize)` vs `.len()`. Prefer usize; cast at return.
                 if let Some(return_type) = &decl.return_type {
                     for stmt in &decl.body {
@@ -589,7 +589,7 @@ impl IntInference {
                     self.collect_statement_constraints(stmt, decl.return_type.as_ref());
                 }
                 // After body constraints, drop return MustBe conflicts for len-while counters
-                // by not having stamped return type in the pre-pass (DB-361).
+                // by not having stamped return type in the pre-pass.
                 // TDD FIX: Restore saved var_types (clear function-local variables)
                 self.var_types = saved_var_types;
             }
@@ -605,7 +605,7 @@ impl IntInference {
                             .insert(param.name.clone(), param.type_.clone());
                     }
                     // TDD FIX: Pre-pass - populate var_types from return statements (same as Function)
-                    // DB-361: skip `-> i32` stamp on `while i < …len()` counters.
+                    // skip `-> i32` stamp on `while i < …len()` counters.
                     if let Some(return_type) = &func.return_type {
                         for stmt in &func.body {
                             if let Statement::Return {
@@ -669,7 +669,7 @@ impl IntInference {
         }
     }
 
-    /// True when `name` is the left side of `while name < … .len()` (DB-361).
+    // True when `name` is the left side of `while name < … .len()`.
     fn body_has_len_while_counter(body: &[&Statement<'_>], name: &str) -> bool {
         for stmt in body {
             match stmt {
@@ -848,7 +848,7 @@ impl IntInference {
                 value: Some(expr), ..
             } => {
                 self.collect_expression_constraints(expr, return_type);
-                // DB-361: Identifier returns must not MustBe-retype `.len()` while counters
+                // Identifier returns must not MustBe-retype `.len()` while counters
                 // (`return i` with `-> i32` keeps `i: usize` from the while peer; codegen casts).
                 // Non-counter cases still get return width via the pre-pass `var_types` stamp.
                 if !matches!(expr, Expression::Identifier { .. }) {

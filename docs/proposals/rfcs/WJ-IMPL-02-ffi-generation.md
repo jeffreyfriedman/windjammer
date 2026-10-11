@@ -1,4 +1,9 @@
+---
+status: proposal
+---
 # FFI Generation from IDL - Proposal
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
 
 ## Overview
 
@@ -262,7 +267,7 @@ pub extern "C" fn wj_sprite_new(
         let col: Color = color.into();
         
         // Call Rust implementation (generated)
-        game_host_framework::rendering::sprite_new(
+        game_framework::rendering::sprite_new(
             entity_handle,
             texture_handle,
             pos,

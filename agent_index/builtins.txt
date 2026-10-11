@@ -1,0 +1,114 @@
+# Built-in methods and functions available without imports. Format: kind | name | signature | summary
+# Curated; every entry is exercised by examples/verified (see tags). Edit, then run `wj agent-index`.
+intrinsic | println | println(msg: string) | print a line to stdout; interpolate with "${x}" and "${x:.2}", "${x:?}", "${x:>5}", "${x:05}"
+intrinsic | print | print(msg: string) | print without newline
+intrinsic | stderr.println | stderr.println(msg: string) | print a line to stderr
+intrinsic | panic | panic(msg: string) | abort with message, exit status 101
+intrinsic | assert | assert(cond: bool, msg: string) | panic if cond is false; message optional
+intrinsic | assert_eq | assert_eq(a, b, msg: string) | panic unless a == b; message optional
+intrinsic | assert_ne | assert_ne(a, b) | panic if a == b
+intrinsic | debug | debug(x) -> T | print "[file:line:col] expr = value" to stderr and return x
+intrinsic | todo | todo() | placeholder that panics with "not yet implemented"
+Vec | push | v.push(x) | append an element (v must be `let mut`)
+Vec | pop | v.pop() -> Option<T> | remove and return the last element
+Vec | len | v.len() -> int | number of elements
+Vec | is_empty | v.is_empty() -> bool | true if no elements
+Vec | insert | v.insert(i: int, x) | insert x at index i
+Vec | remove | v.remove(i: int) -> T | remove and return element at i
+Vec | swap | v.swap(i: int, j: int) | swap two elements
+Vec | reverse | v.reverse() | reverse in place
+Vec | sort | v.sort() | sort ascending in place
+Vec | sort_by | v.sort_by(|a, b| a.cmp(b)) | sort with comparator returning Ordering
+Vec | sort_by_key | v.sort_by_key(|x| key) | stable sort by key
+Vec | dedup | v.dedup() | remove consecutive duplicates
+Vec | contains | v.contains(&x) -> bool | membership test
+Vec | get | v.get(i: int) -> Option<T> | bounds-checked access
+Vec | first | v.first() -> Option<T> | first element
+Vec | last | v.last() -> Option<T> | last element
+Vec | join | v.join(sep: string) -> string | join strings
+Vec | windows | v.windows(n: int) | sliding windows of size n
+Vec | chunks | v.chunks(n: int) | non-overlapping chunks of size n
+Vec | retain | v.retain(|x| keep) | keep elements where the closure is true
+Vec | extend | v.extend(other) | append all elements of another collection
+Iterator | map | xs.map(|x| expr) | transform each element (write `v.map(..)`, not `v.iter().map(..)`)
+Iterator | filter | xs.filter(|x| cond) | keep elements where cond is true
+Iterator | fold | xs.fold(init, |acc, x| expr) | reduce to one value
+Iterator | sum | xs.sum::<int>() | sum of elements
+Iterator | product | xs.product::<int>() | product of elements
+Iterator | count | xs.count() -> int | number of elements
+Iterator | any | xs.any(|x| cond) -> bool | true if any element matches
+Iterator | all | xs.all(|x| cond) -> bool | true if all elements match
+Iterator | find | xs.find(|x| cond) -> Option<T> | first matching element
+Iterator | position | xs.position(|x| cond) -> Option<int> | index of first match
+Iterator | enumerate | xs.enumerate() | pairs (index, element)
+Iterator | zip | xs.zip(ys) | pairs of elements from two collections
+Iterator | take | xs.take(n: int) | first n elements
+Iterator | skip | xs.skip(n: int) | all but the first n elements
+Iterator | rev | xs.rev() | reverse order
+Iterator | chain | xs.chain(ys) | concatenate
+Iterator | flat_map | xs.flat_map(|x| list) | map then flatten
+Iterator | filter_map | xs.filter_map(|x| option) | map and keep Some values
+Iterator | min | xs.min() -> Option<T> | smallest element
+Iterator | max | xs.max() -> Option<T> | largest element
+Iterator | max_by_key | xs.max_by_key(|x| key) -> Option<T> | element with the largest key
+Iterator | min_by_key | xs.min_by_key(|x| key) -> Option<T> | element with the smallest key
+Iterator | partition | xs.partition(|x| cond) -> (Vec, Vec) | split by predicate
+Iterator | collect | xs.collect::<Vec<T>>() | gather into a collection (also String, HashMap, HashSet, Result<Vec<T>, E>)
+Iterator | step_by | xs.step_by(n: int) | every nth element
+string | len | s.len() -> int | byte length
+string | trim | s.trim() -> string | strip surrounding whitespace
+string | split | s.split(sep: string) | split on a separator
+string | split_whitespace | s.split_whitespace() | split on runs of whitespace
+string | lines | s.lines() | split into lines
+string | chars | s.chars() | iterate characters
+string | contains | s.contains(pat: string) -> bool | substring test
+string | starts_with | s.starts_with(pat: string) -> bool | prefix test
+string | ends_with | s.ends_with(pat: string) -> bool | suffix test
+string | replace | s.replace(from: string, to: string) -> string | replace all occurrences
+string | to_uppercase | s.to_uppercase() -> string | upper-case copy
+string | to_lowercase | s.to_lowercase() -> string | lower-case copy
+string | repeat | s.repeat(n: int) -> string | repeat n times
+string | find | s.find(pat: string) -> Option<int> | byte index of first match
+string | parse | s.parse::<int>() -> Result<int, E> | parse a number; also ::<float>
+string | push_str | s.push_str(t: string) | append (s must be `let mut`)
+string | is_empty | s.is_empty() -> bool | true if length is 0
+char | is_alphabetic | c.is_alphabetic() -> bool | letter test
+char | is_numeric | c.is_numeric() -> bool | digit test
+char | to_digit | c.to_digit(radix: int) -> Option<int> | digit value
+char | to_ascii_uppercase | c.to_ascii_uppercase() -> char | ASCII upper-case
+Option | unwrap_or | o.unwrap_or(default) -> T | value or default (prefer over unwrap)
+Option | map | o.map(|x| expr) -> Option<U> | transform the Some value
+Option | and_then | o.and_then(|x| option) -> Option<U> | chain fallible steps
+Option | is_some | o.is_some() -> bool | true for Some
+Option | is_none | o.is_none() -> bool | true for None
+Option | ok_or | o.ok_or(err) -> Result<T, E> | convert to Result
+Option | take | o.take() -> Option<T> | move the value out, leaving None
+Result | map_err | r.map_err(|e| expr) -> Result<T, F> | transform the error
+Result | unwrap_or | r.unwrap_or(default) -> T | Ok value or default
+Result | ok | r.ok() -> Option<T> | drop the error
+Result | ? | expr? | return early with the Err (or None) from the enclosing function
+HashMap | insert | m.insert(k, v) | add or replace an entry
+HashMap | get | m.get(k) -> Option<V> | lookup
+HashMap | contains_key | m.contains_key(k) -> bool | key test
+HashMap | remove | m.remove(k) | delete an entry
+HashMap | entry | m.entry(k).or_insert(v) | get-or-insert; also .and_modify(|c| *c += 1)
+HashMap | keys | m.keys() | iterate keys (order unspecified; sort before printing)
+HashMap | values | m.values() | iterate values
+HashSet | insert | s.insert(x) | add an element
+HashSet | contains | s.contains(&x) -> bool | membership
+HashSet | union | a.union(&b) | elements in either set
+HashSet | intersection | a.intersection(&b) | elements in both sets
+VecDeque | push_back | q.push_back(x) | enqueue at the back
+VecDeque | pop_front | q.pop_front() -> Option<T> | dequeue from the front
+int | pow | x.pow(n: int) -> int | integer power
+int | abs | x.abs() -> int | absolute value
+int | min | a.min(b) -> int | smaller of two
+int | max | a.max(b) -> int | larger of two
+int | clamp | x.clamp(lo, hi) -> int | limit to a range
+int | checked_add | x.checked_add(y) -> Option<int> | None on overflow
+int | wrapping_add | x.wrapping_add(y) -> int | wraps on overflow
+float | sqrt | x.sqrt() -> float | square root
+float | floor | x.floor() -> float | round down
+float | round | x.round() -> float | round to nearest
+float | powi | x.powi(n: int) -> float | integer power
+float | partial_cmp | a.partial_cmp(&b) -> Option<Ordering> | compare floats (use .unwrap_or(Ordering::Equal))

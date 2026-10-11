@@ -43,10 +43,16 @@ pub struct ErrorExample {
     pub explanation: String,
 }
 
+fn serialize_sorted<S: serde::Serializer>(m: &HashMap<String, ErrorEntry>, s: S) -> Result<S::Ok, S::Error> {
+    let sorted: std::collections::BTreeMap<&String, &ErrorEntry> = m.iter().collect();
+    serde::Serialize::serialize(&sorted, s)
+}
+
 /// Error catalog
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorCatalog {
-    /// All error entries indexed by code
+    /// All error entries indexed by code (serialized in code order: HashMap order is unspecified)
+    #[serde(serialize_with = "serialize_sorted")]
     pub errors: HashMap<String, ErrorEntry>,
     /// Categories
     pub categories: Vec<String>,
@@ -194,22 +200,30 @@ x = 20  // Works! x is mutable"#.to_string(),
     /// Search errors by keyword
     pub fn search(&self, keyword: &str) -> Vec<&ErrorEntry> {
         let keyword_lower = keyword.to_lowercase();
-        self.errors
+        let mut found: Vec<&ErrorEntry> = self
+            .errors
             .values()
             .filter(|error| {
                 error.title.to_lowercase().contains(&keyword_lower)
                     || error.explanation.to_lowercase().contains(&keyword_lower)
                     || error.code.to_lowercase().contains(&keyword_lower)
             })
-            .collect()
+            .collect();
+        // HashMap iteration order is unspecified; sort so output is deterministic.
+        found.sort_by(|a, b| a.code.cmp(&b.code));
+        found
     }
 
     /// Get errors by category
     pub fn get_by_category(&self, category: &str) -> Vec<&ErrorEntry> {
-        self.errors
+        let mut found: Vec<&ErrorEntry> = self
+            .errors
             .values()
             .filter(|error| error.category == category)
-            .collect()
+            .collect();
+        // HashMap iteration order is unspecified; sort so generated docs are deterministic.
+        found.sort_by(|a, b| a.code.cmp(&b.code));
+        found
     }
 
     /// Generate HTML documentation
@@ -452,6 +466,35 @@ mod tests {
         let catalog = ErrorCatalog::new();
         let errors = catalog.get_by_category("Type Errors");
         assert!(!errors.is_empty());
+    }
+
+    #[test]
+    fn generated_docs_are_deterministic_across_catalogs() {
+        // Each catalog has its own HashMap (random hasher state), so unsorted iteration differs.
+        let docs: Vec<(String, String)> = (0..8)
+            .map(|_| {
+                let c = ErrorCatalog::new();
+                (c.generate_markdown(), c.generate_html())
+            })
+            .collect();
+        assert!(docs.windows(2).all(|w| w[0] == w[1]), "ErrorCatalog output depends on HashMap order");
+    }
+
+    #[test]
+    fn json_catalog_is_deterministic() {
+        let docs: Vec<String> = (0..8).map(|_| serde_json::to_string_pretty(&ErrorCatalog::new()).unwrap()).collect();
+        assert!(docs.windows(2).all(|w| w[0] == w[1]), "JSON catalog depends on HashMap order");
+    }
+
+    #[test]
+    fn category_and_search_results_are_sorted_by_code() {
+        let c = ErrorCatalog::new();
+        for cat in &c.categories {
+            let codes: Vec<&str> = c.get_by_category(cat).iter().map(|e| e.code.as_str()).collect();
+            assert!(codes.windows(2).all(|w| w[0] <= w[1]), "{cat}: {codes:?}");
+        }
+        let codes: Vec<&str> = c.search("e0").iter().map(|e| e.code.as_str()).collect();
+        assert!(codes.windows(2).all(|w| w[0] <= w[1]));
     }
 
     #[test]

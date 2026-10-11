@@ -1,5 +1,5 @@
 // FAILING REPRO — owned Vec<Custom> into view helper must not receive `&Vec` (multipass).
-// Product tip api-check (DownstreamApp postgres_*_repository):
+// Product tip api-check (a downstream application postgres_*_repository):
 //   invoice_view_from_row(header, &lines)
 
 pub struct Line {

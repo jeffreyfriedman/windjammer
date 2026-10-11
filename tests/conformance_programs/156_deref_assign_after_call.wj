@@ -1,0 +1,23 @@
+// expect: 12
+// expect: 20
+fn id(a: int) -> int {
+    a
+}
+
+fn mul(w: int, h: int) -> int {
+    let area = id(w)
+        * h
+    area
+}
+
+struct Acc {
+    n: int,
+}
+
+fn main() {
+    println("${mul(3, 4)}")
+    let mut acc = Acc { n: 4 }
+    id(0)
+    acc.n = acc.n * 5
+    println("${acc.n}")
+}

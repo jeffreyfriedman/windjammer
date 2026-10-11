@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-285 class: reused Vec into owned Vec formal must `.clone()`, never `&samples`.
+//! class: reused Vec into owned Vec formal must `.clone()`, never `&samples`.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

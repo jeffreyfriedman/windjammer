@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-414: `Type::new(self.scene)` must move the field, not `self.scene.clone()`.
+//! `Type::new(self.scene)` must move the field, not `self.scene.clone()`.
 //!
 //! Product:
 //!   `CsgVoxelizer::new(self.scene.clone())` in rifter_quarter / cathedral / humanoid_demo
 //! WJ is `CsgVoxelizer::new(self.scene)` — scene is not used after.
-//! Distinct from DB-360 (`encode(self.grid.clone())`), DB-410 (wither reconstruct),
-//! and DB-407 (`Vec` `new` demote).
+//! Distinct from (`encode(self.grid.clone())`), (wither reconstruct),
+//! and (`Vec` `new` demote).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

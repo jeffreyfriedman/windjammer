@@ -175,7 +175,13 @@ pub fn run(cli: Cli) -> Result<()> {
                 println!("{}", stats.format());
             }
         }
-        Commands::Docs { output, format } => cmd_generate_docs(&output, &format)?,
+        Commands::Docs { query, limit, json, output, format } => {
+            if query.is_empty() {
+                cmd_generate_docs(&output, &format)?
+            } else {
+                windjammer::agent_index::docs_search::run_cli(&query.join(" "), limit, json)
+            }
+        }
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;

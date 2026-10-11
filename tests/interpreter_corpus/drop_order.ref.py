@@ -1,0 +1,15 @@
+import sys
+s = int(sys.argv[1])
+print("made %d" % (s + 1 + 100))
+print("drop %d" % (s + 1 + 100))
+print("inner %d" % (s + 2))
+print("drop %d" % (s + 2))
+print("drop %d" % (s + 3))
+print("drop %d" % (s + 5))
+print("drop %d" % (s + 8))
+print("made %d" % (s + 9 + 100))
+print("drop %d" % (s + 9 + 100))
+print("drop %d" % (s + 9))
+print("end %d %d %d" % (s, s + 1, s))
+for k in (6, 7, 4, 1, 0):
+    print("drop %d" % (s + k))

@@ -1,0 +1,33 @@
+// tags: algorithm, enum, state-machine, match
+// rust: gap error[E0308]: mismatched types
+// expect: Idle -> Running -> Paused -> Running -> Stopped
+enum State { Idle, Running, Paused, Stopped }
+
+fn name(s: State) -> string {
+    match s {
+        State::Idle => "Idle",
+        State::Running => "Running",
+        State::Paused => "Paused",
+        State::Stopped => "Stopped",
+    }
+}
+
+fn next(s: State, event: string) -> State {
+    match (s, event) {
+        (State::Idle, "start") => State::Running,
+        (State::Running, "pause") => State::Paused,
+        (State::Paused, "resume") => State::Running,
+        (State::Running, "stop") => State::Stopped,
+        (other, _) => other,
+    }
+}
+
+fn main() {
+    let mut s = State::Idle
+    let mut trail: Vec<string> = [name(State::Idle)]
+    for e in ["start", "pause", "bogus", "resume", "stop"] {
+        s = next(s, e)
+        if e != "bogus" { trail.push(name(s)) }
+    }
+    println(trail.join(" -> "))
+}

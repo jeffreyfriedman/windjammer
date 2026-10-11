@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-384: Copy enum unit variants must not emit `.clone()`.
+//! Copy enum unit variants must not emit `.clone()`.
 //!
 //! Tip output for a game project:
 //!   `FaceDirection::PosX.clone()` (mesh_generator)

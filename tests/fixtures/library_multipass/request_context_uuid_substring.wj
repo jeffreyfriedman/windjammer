@@ -1,4 +1,4 @@
-// DownstreamApp `adapters/inbound/request_context.wj` class — UUID hex slices +
+// a downstream application `adapters/inbound/request_context.wj` class — UUID hex slices +
 // Bearer strip without empty-concat. Tip must cargo-check substring int lits
 // and `strings.len` end indices (no `String as usize`).
 

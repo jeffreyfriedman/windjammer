@@ -10,14 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! DB-140: owned struct formal receives `&plan` (over-borrow) → E0308
+//! owned struct formal receives `&plan` (over-borrow) → E0308
 //! (`expected GraphSqlLogicalPlan, found &GraphSqlLogicalPlan`).
 //!
 //! a downstream database project CQ-C5 (`graph_sql_datafusion_port.rs`):
 //!   `graph_sql_logical_to_datafusion_sql_edges_src_in(&logical, &allow_srcs)`
 //!   while first formal is owned `GraphSqlLogicalPlan` (second is demoted `&Vec`).
 //!
-//! Inverse of demoted-`&T` + owned clone (DB-125/126). Expected: `logical.clone()`
+//! Inverse of demoted-`&T` + owned clone. Expected: `logical.clone()`
 //! (or move) into the owned formal — not `&logical`.
 
 #[path = "common/integration_test_helpers.rs"]

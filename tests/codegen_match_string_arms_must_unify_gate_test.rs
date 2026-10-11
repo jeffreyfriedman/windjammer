@@ -12,7 +12,7 @@
 
 //! FAILING REPRO / lockstep gate — match arms yielding `string` must unify as owned.
 //!
-//! Dogfood (`downstream-screens` `json.wj` analytics schema parse):
+//! Dogfood (a large downstream application `json.wj` analytics schema parse):
 //! ```ignore
 //! let dims = match dims_raw.find("]") {
 //!     Some(end) => dims_raw.substring(0, end + 1),

@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! P3.787: Oct 10 09:23 `wj` downstream-screens regen (42 errors).
+//! P3.787: Oct 10 09:23 `wj` a large downstream application regen (42 errors).
 //!
 //! `s.replace("&", "&amp;")` and `base.trim_end_matches("/")` emit
 //! `String::from(...)`, which is not a `Pattern` and is not `&str`.

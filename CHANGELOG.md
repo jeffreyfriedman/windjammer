@@ -1,15 +1,38 @@
 # Changelog
 
+Entries before 0.50.0 were written during rapid development; test counts and performance figures in old entries are
+historical and were not re-verified. The workspace version in `Cargo.toml` is 0.50.0; entries below "Unreleased" describe
+what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
+
 ## [Unreleased]
 
 ### Added
 - **`wj check` is a real front-end check** (no cargo/rustc): `wj check [PATH] [--json] [--watch] [--fix]`.
-- **Diagnostics schema v2** (`docs/diagnostics-schema.json`): stable codes, spans with byte ranges, fixes with applicability, `wj explain` links; shared by `wj check/build/test --json` and the LSP. See `docs/DIAGNOSTICS.md`.
-- Error codes WJ0011-WJ0028, WJ0098, WJ0099 with `wj explain` entries (explanation, cause, fix, examples).
-- rustc errors are translated to WJ codes with `.wj` locations; untranslatable ones become WJ0099.
+- **Diagnostics schema v2** (`docs/diagnostics-schema.json`): stable codes, spans with byte ranges, fixes with
+  applicability, `wj explain` links; shared by `wj check/build/test --json`, the LSP and the MCP `check_code` tool.
+  See `docs/DIAGNOSTICS.md`.
+- Error codes WJ0011-WJ0028, WJ0098, WJ0099 with `wj explain` entries; rustc errors are translated to WJ codes with
+  `.wj` locations, untranslatable ones become WJ0099.
+- Post-codegen, `syn`-based Rust optimizer (`src/optimizer/`) replacing the retired AST-level phases (ADR-0006).
+- `wj fmt` formats `.wj` files; `wj fix` migrates deprecated surface syntax (ADR-0014 phase 1); architecture fitness tests
+  (`tests/architecture.rs`), orphan-test checker, per-module `MODULE.md` files, ADR-0001 to ADR-0015.
+- Interpreter (`wj run --interpret`, `wj test --interpret`, `wj repl`): experimental subset.
+
+### Fixed
+- `wj test` inside the compiler checkout no longer treats the hand-written `src/lib.rs` as a pre-built library.
+- `wj new` templates, `std/`, `stdlib_meta/` and the `windjammer-runtime` crate are embedded in the binary; an installed
+  `wj` no longer reads them from the cwd or the checkout it was built from (`src/embedded_assets.rs`). Runtime
+  discovery order: explicit flag/`WINDJAMMER_RUNTIME_PATH`, `wj.toml` path dependency, embedded copy.
+- `.wj-cache/*.wj.meta` is now byte-deterministic (map fields were serialized in random order).
+- `wj new --template web` produced a project that failed `wj check` (forbidden `@derive(Serialize)`); `cli` template
+  now runs under `wj run --interpret`; all templates are `wj fmt`-clean.
+
+### Removed
+- Stale documentation, SDK/docker leftovers, committed binaries, game/UI-era examples and the per-ticket repro queue
+  (2026-10-11 cleanup; history is in git).
 
 ### Changed
-- `wj build --json` exits non-zero on errors and uses schema v2 (v1 was the legacy shape).
+- `wj build --json` / `wj check --json` exit non-zero on errors and use diagnostics schema v2 (v1 was the legacy shape).
 
 ## [0.50.0] - 2026-07-07
 
@@ -197,7 +220,7 @@ This release reinforces the **explicit mutability** philosophy and improves the 
 This release represents a major milestone: **90+ bug fixes** through rigorous TDD + dogfooding methodology, resulting in a **production-ready compiler** that generates idiomatic, Clippy-clean Rust code across all platforms.
 
 ### Major Achievements
-- ✅ **Zero compilation errors** in game-host (303 .wj files)
+- ✅ **Zero compilation errors** in a game engine project (303 .wj files)
 - ✅ **Zero Clippy warnings** in generated code and compiler code
 - ✅ **246 tests passing** (237 library + 9 new integration tests)
 - ✅ **Cross-platform compatibility** (Ubuntu, macOS, Windows)
@@ -250,7 +273,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 
 ## [0.42.0] - 2026-02-10 (Development Branch)
 ### Focus: Dogfooding & Game Engine Improvements
-- TDD dogfooding with game-host engine
+- TDD dogfooding with a game engine project engine
 - Compiler fixes discovered through real game development
 
 ---
@@ -390,7 +413,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 - Zero regressions introduced
 
 ### Dogfooding
-- **game-host voxel system**: 4/4 files now compile (405 lines)
+- **a game engine project voxel system**: 4/4 files now compile (405 lines)
 - Validated real-world patterns: guard clauses, coordinate conversion, bounds checking
 - Unblocked Phase 2: 3D mesh generation in Windjammer
 
@@ -520,7 +543,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 - **String Type Inference**: Auto-detect `&str` vs `String` and insert `.to_string()` when needed
 - **Nested Generics Parser**: Support for `HashMap<K, Vec<V>>` and `>>` token splitting
 - **Doc Comments**: `///` style comments for functions, structs, enums, fields, and variants
-- **Path Dependency Resolution**: Auto-detect local crates (e.g., game-host-core)
+- **Path Dependency Resolution**: Auto-detect local crates (e.g., a game engine project)
 - **LSP Integration (PoC)**: Quick-fixes for missing `mut`, auto-add `&` and `&mut`
 
 ### Fixed
@@ -886,9 +909,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Users who need UI should explicitly add `windjammer-ui` to their `Cargo.toml`
   
 - **Removed Game stdlib** - `std::game` module removed from compiler stdlib
-  - Game functionality should now be provided by the separate `game-host` crate
+  - Game functionality should now be provided by the separate a game engine project crate
   - Clean separation: compiler no longer depends on or references game framework
-  - Users who need game features should explicitly add `game-host` to their `Cargo.toml`
+  - Users who need game features should explicitly add a game engine project to their `Cargo.toml`
 
 ### Fixed
 - Fixed cargo publish issue: added version requirement to `windjammer` dependency in `windjammer-lsp`
@@ -938,7 +961,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ **Rust Target** - Added `CompilationTarget::Rust` enum variant
 - ✅ **Smart Execution** - WASM apps show build instructions, native apps run directly
 - ✅ **Import Handling** - Fixed braced import parsing for Cargo.toml generation
-- ✅ **Framework Support** - Compiler handles both windjammer-ui and game-host-framework imports
+- ✅ **Framework Support** - Compiler handles both windjammer-ui and game_framework imports
 
 ### Fixed
 - **Critical**: Double reference/borrow bug in code generation (`&&` and `&mut &mut`)
@@ -963,7 +986,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for building apps, and a complete 2D/3D game engine. Write once, deploy to Web, Desktop, and Mobile - for both UI apps AND games. Same language, idiomatic Windjammer syntax, Rust performance.
 
 **Major Achievements**: 
-- Separated game engine into dedicated `game-host-framework` crate with full ECS, physics, and wgpu rendering backend
+- Separated game engine into dedicated `game_framework` crate with full ECS, physics, and wgpu rendering backend
 - Implemented key language features: `if let` patterns, fixed-size arrays `[T; N]`, closure compound assignments
 - 97/164 examples passing (59%), comprehensive test coverage
 
@@ -1008,7 +1031,7 @@ v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for buil
 - `new()` and `with_state()` constructors
 - `#[derive(Props)]` for component props
 
-**game-host-framework (Dedicated Game Engine):**
+**game_framework (Dedicated Game Engine):**
 - Entity-Component System (ECS) with World, Entity, Component
 - 2D/3D math (Vec2, Vec3, Mat4) with SIMD (glam)
 - 2D/3D physics (Rapier2D/3D integration)

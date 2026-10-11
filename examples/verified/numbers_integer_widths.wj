@@ -1,0 +1,16 @@
+// tags: numbers, u8, i64, widths, overflow
+// rust: ok
+// expect: 255
+// expect: 9223372036854775807
+// expect: 4294967295
+// expect: 44
+fn main() {
+    let a: u8 = 255
+    println("${a}")
+    let b: i64 = 9223372036854775807
+    println("${b}")
+    let c: u32 = 4294967295
+    println("${c}")
+    let d: u8 = 200
+    println("${d.wrapping_add(100)}")
+}

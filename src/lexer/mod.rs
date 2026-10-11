@@ -1,4 +1,5 @@
 mod identifier_lexing;
+pub mod keywords;
 mod number_lexing;
 mod string_lexing;
 mod token_types;
@@ -329,11 +330,7 @@ impl Lexer {
                 self.advance();
                 Token::OrAssign
             }
-            Some('|') if self.peek(1) == Some('>') => {
-                self.advance();
-                self.advance();
-                Token::PipeOp
-            }
+            Some('|') if self.peek(1) == Some('>') => self.pipe_operator(),
             Some('|') => {
                 self.advance();
                 Token::Pipe
@@ -401,15 +398,41 @@ impl Lexer {
             }
             Some(ch) => {
                 self.advance();
-                panic!("Unexpected character: {}", ch);
+                Token::Invalid(Self::unexpected_char_message(ch))
             }
         };
 
         token
     }
 
+    /// Diagnostic text for a character that starts no token. `#` gets a fix suggestion: ADR-0014
+    /// surface syntax spells attributes as decorators (`@derive(Clone)`), not `#[derive(Clone)]`.
+    pub fn unexpected_char_message(ch: char) -> String {
+        match ch {
+            '#' => "unexpected character '#': Windjammer has no `#[...]` attributes; use a decorator, e.g. `@derive(Clone)` instead of `#[derive(Clone)]`, `@test` instead of `#[test]`".to_string(),
+            '$' => "unexpected character '$': `${...}` is only valid inside a string literal".to_string(),
+            '`' => "unexpected character '`': use \"...\" for strings".to_string(),
+            _ => format!("unexpected character {:?}", ch),
+        }
+    }
+
+    /// `|>` or `|>?` (the cursor is on the `|`).
+    fn pipe_operator(&mut self) -> Token {
+        let try_form = self.peek(2) == Some('?');
+        for _ in 0..if try_form { 3 } else { 2 } {
+            self.advance();
+        }
+        if try_form {
+            Token::PipeTry
+        } else {
+            Token::PipeOp
+        }
+    }
+
     /// Get next token with its source location
     pub fn next_token_with_location(&mut self) -> TokenWithLocation {
+        // Leading blanks belong to no token: the span must start at the token itself.
+        self.skip_whitespace();
         let line = self.line;
         let column = self.column;
         let token = self.next_token();

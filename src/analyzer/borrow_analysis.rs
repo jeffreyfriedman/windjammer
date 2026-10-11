@@ -188,7 +188,7 @@ impl<'ast> Analyzer<'ast> {
                 // Do NOT treat "passed to a free/associated function whose formal is
                 // currently Owned" as a consuming method. That duplicated passthrough,
                 // and mutual recursion (`tick_node` ↔ `tick_seq`) kept both Owned forever
-                // — forcing `tree.clone()` on read-only BT walks (DB-366). True consumes
+                // — forcing `tree.clone()` on read-only BT walks. True consumes
                 // are covered by is_stored / is_returned / passthrough strength.
                 for (_, arg) in arguments {
                     if self.expr_calls_consuming_method(param_name, arg, registry, receiver_type) {

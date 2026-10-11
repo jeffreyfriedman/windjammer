@@ -24,8 +24,8 @@ impl Parser {
                 n
             } else {
                 return Err(format!(
-                    "Expected field name after 'mut' in struct pattern (at token position {})",
-                    self.position
+                    "Expected field name after 'mut' in struct pattern (at {})",
+                    self.pos_desc()
                 ));
             };
             return Ok((field_name.clone(), Pattern::MutBinding(field_name)));
@@ -37,8 +37,8 @@ impl Parser {
             n
         } else {
             return Err(format!(
-                "Expected field name in struct pattern (at token position {})",
-                self.position
+                "Expected field name in struct pattern (at {})",
+                self.pos_desc()
             ));
         };
 
@@ -73,8 +73,112 @@ impl Parser {
         }
     }
 
-    /// Parse a single pattern
+    /// A numeric or char literal usable as a range-pattern bound (`-5`, `9`, `'a'`, `1.5`).
+    fn parse_range_bound(&mut self) -> Result<Literal, String> {
+        let negative = if self.current_token() == &Token::Minus {
+            self.advance();
+            true
+        } else {
+            false
+        };
+        let lit = match self.current_token().clone() {
+            Token::IntLiteral(n) => Literal::Int(if negative { n.wrapping_neg() } else { n }),
+            Token::IntLiteralSuffixed(n, suf) => {
+                Literal::IntSuffixed(if negative { n.wrapping_neg() } else { n }, suf)
+            }
+            Token::FloatLiteral(f) => Literal::Float(if negative { -f } else { f }),
+            Token::CharLiteral(c) if !negative => Literal::Char(c),
+            other => {
+                return Err(format!(
+                    "Expected an integer, float or char literal as range pattern bound, got {:?} (at {})",
+                    other,
+                    self.pos_desc()
+                ));
+            }
+        };
+        self.advance();
+        Ok(lit)
+    }
+
+    fn at_range_bound_start(&self) -> bool {
+        matches!(
+            self.current_token(),
+            Token::IntLiteral(_)
+                | Token::IntLiteralSuffixed(..)
+                | Token::FloatLiteral(_)
+                | Token::CharLiteral(_)
+                | Token::Minus
+        )
+    }
+
+    /// Parse a single pattern, including range patterns: `1..=9`, `'a'..='z'`, `1..`, `..=9`,
+    /// `..9`, `-5..0`. (`..` alone is the rest pattern and is handled by its callers.)
     pub fn parse_pattern(&mut self) -> Result<Pattern<'static>, String> {
+        // Prefix forms: `..=hi` / `..hi`
+        if self.current_token() == &Token::DotDotEq
+            || (self.current_token() == &Token::DotDot
+                && matches!(
+                    self.peek(1),
+                    Some(Token::IntLiteral(_))
+                        | Some(Token::IntLiteralSuffixed(..))
+                        | Some(Token::FloatLiteral(_))
+                        | Some(Token::CharLiteral(_))
+                        | Some(Token::Minus)
+                ))
+        {
+            let inclusive = self.current_token() == &Token::DotDotEq;
+            self.advance();
+            let end = self.parse_range_bound()?;
+            return Ok(Pattern::Range {
+                start: None,
+                end: Some(end),
+                inclusive,
+            });
+        }
+        // Negative literal, possibly the start of a range.
+        let lead = if self.current_token() == &Token::Minus
+            || matches!(
+                self.current_token(),
+                Token::IntLiteral(_)
+                    | Token::IntLiteralSuffixed(..)
+                    | Token::FloatLiteral(_)
+                    | Token::CharLiteral(_)
+            ) {
+            Some(self.parse_range_bound()?)
+        } else {
+            None
+        };
+        if let Some(start) = lead {
+            return match self.current_token() {
+                Token::DotDotEq => {
+                    self.advance();
+                    let end = self.parse_range_bound()?;
+                    Ok(Pattern::Range {
+                        start: Some(start),
+                        end: Some(end),
+                        inclusive: true,
+                    })
+                }
+                Token::DotDot => {
+                    self.advance();
+                    let end = if self.at_range_bound_start() {
+                        Some(self.parse_range_bound()?)
+                    } else {
+                        None
+                    };
+                    Ok(Pattern::Range {
+                        start: Some(start),
+                        end,
+                        inclusive: false,
+                    })
+                }
+                _ => Ok(Pattern::Literal(start)),
+            };
+        }
+        self.parse_pattern_non_range()
+    }
+
+    fn parse_pattern_non_range(&mut self) -> Result<Pattern<'static>, String> {
         // TDD FIX: Check for `ref` or `ref mut` patterns
         // Syntax: `ref x` or `ref mut x`
         // Used in match arms to borrow without moving: `Some(ref c) => c.len()`
@@ -298,8 +402,8 @@ impl Parser {
                                     break;
                                 }
                                 return Err(format!(
-                                    "Expected }} after .. in struct pattern (at token position {})",
-                                    self.position
+                                    "Expected }} after .. in struct pattern (at {})",
+                                    self.pos_desc()
                                 ));
                             }
 
@@ -398,8 +502,8 @@ impl Parser {
                                 break;
                             }
                             return Err(format!(
-                                "Expected }} after .. in struct pattern (at token position {})",
-                                self.position
+                                "Expected }} after .. in struct pattern (at {})",
+                                self.pos_desc()
                             ));
                         }
 
@@ -462,7 +566,7 @@ impl Parser {
             }
             Pattern::EnumVariant(name, _) => name.clone(),
             Pattern::Wildcard => "_".to_string(),
-            Pattern::Literal(_) => "_lit".to_string(),
+            Pattern::Literal(_) | Pattern::Range { .. } => "_lit".to_string(),
             Pattern::Or(patterns) => {
                 // Use the first pattern's name
                 if let Some(first) = patterns.first() {
@@ -516,6 +620,9 @@ impl Parser {
                 }
             },
             Pattern::Literal(lit) => format!("{:?}", lit),
+            Pattern::Range { start, end, inclusive } => {
+                format!("{:?}{}{:?}", start, if *inclusive { "..=" } else { ".." }, end)
+            }
             Pattern::Or(patterns) => {
                 let parts: Vec<String> = patterns.iter().map(Self::pattern_to_string).collect();
                 parts.join(" | ")
@@ -560,7 +667,7 @@ impl Parser {
 
             // Other enum bindings (Some(x), None, Ok(v)) are refutable
             Pattern::EnumVariant(_, _) => true,
-            Pattern::Literal(_) => true,
+            Pattern::Literal(_) | Pattern::Range { .. } => true,
             Pattern::Or(_) => true,
         }
     }

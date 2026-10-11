@@ -85,7 +85,7 @@ Packages frequently keep:
 
 CLI help text still says “functions starting with `test_`”, while discovery also accepts `@test`. Examples mix `std::testing`, `std::test`, and rich APIs (`mock`, `bench`, `property`) that may not all be wired for library tests.
 
-**Need:** one documented happy path (`tests/foo_test.wj` + `@test` + `std::testing`) that `wj test` guarantees for libraries.
+**Need:** one documented happy path (`tests/<name>_test.wj` + `@test` + `std::testing`) that `wj test` guarantees for libraries.
 
 ### 4. Harness fragility (runtime / sandbox copy)
 
@@ -119,7 +119,7 @@ Rust `#[cfg(test)]` / `tests/*.rs` can import the **exact** artifact CI ships. `
 
 ### 7. Discovered `*_test.wj` must be transpiled into the temp crate (RED)
 
-Discovery finds `tests/foo_test.wj` and generates `pub mod foo_test;` in the temp `lib.rs`, but does not write `foo_test.rs`. Cargo then fails with **E0583** (`file not found for module`) before any assertion runs.
+Discovery finds `tests/<name>_test.wj` and generates `pub mod foo_test;` in the temp `lib.rs`, but does not write `foo_test.rs`. Cargo then fails with **E0583** (`file not found for module`) before any assertion runs.
 
 **Gate:** `tests/wj_test_transpiles_discovered_wj_test_modules_gate_test.rs`
 
@@ -132,7 +132,7 @@ Discovery finds `tests/foo_test.wj` and generates `pub mod foo_test;` in the tem
 A dogfood library package can:
 
 1. Keep SOT in `src/**/*.wj` with **no** string-literal `.to_string()`. — **partially met** (related ownership / leakage gates green)  
-2. Add `tests/foo_test.wj` using `@test` + `std::testing` / `std::test` asserts. — **blocked** on §7 E0583 until tip greens the transpile gate  
+2. Add `tests/<name>_test.wj` using `@test` + `std::testing` / `std::test` asserts. — **blocked** on §7 E0583 until tip greens the transpile gate  
 3. Run `wj test` with the **same** compile flags as `wj build` for that package. — **met on tip** (`--module-file --library`, `--use-project-cargo`, `--use-build-dir` + i32 lit + SKIP_WJ_REGEN default)  
 4. Path-depend on UI crates without manual Cargo.toml surgery. — **met for harness** (SKIP_WJ_REGEN default green); still prefer deliberate UI regen  
 

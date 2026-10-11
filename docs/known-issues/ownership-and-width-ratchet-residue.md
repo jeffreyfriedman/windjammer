@@ -62,12 +62,12 @@ call sites must read only it.
 
 ## 5. Test isolation
 
-Under in-process `cargo test --test all` ~130 tests fail or flip between runs (process-global `OnceLock`
+Under in-process `cargo test --test all` many tests fail or flip between runs (process-global `OnceLock`
 registries / `thread_local!` state shared by parallel tests, e.g. identical function names such as `pass`, `tag`,
 `all` in different tests). `.config/nextest.toml` runs one process per test, which is what the ratchet should be
 measured with. WP 3 (state into `CompilationSession`) removes the cause.
 
-## 6. Findings that did not reproduce on this tree (DownstreamApp dogfood)
+## 6. Findings that did not reproduce on this tree (a downstream application dogfood)
 
 * `concat-temp-into-demoted-str-formal`: concat temps (`x + ""`) passed to read-only `string` formals, cross-module,
   mixed owned/borrowed formals: emitted `payload(_temp0, &job.id)` / `payload2(&_temp0, &_temp1, &job.format)`,

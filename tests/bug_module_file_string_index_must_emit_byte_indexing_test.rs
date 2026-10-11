@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-120: `string[i]` / `s[i] as u8` must emit byte indexing, not `str` Index.
+//! `string[i]` / `s[i] as u8` must emit byte indexing, not `str` Index.
 //!
 //! a downstream database project CQ-C5: `observability_http_tcp_server_exchange` had
 //!   `while i < resp.body.len() { wire.push(resp.body[i] as u8) }`

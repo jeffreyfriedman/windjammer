@@ -1,0 +1,14 @@
+// tags: numbers, float, round, formatting
+// rust: ok
+// expect: 3
+// expect: 4
+// expect: -3
+// expect: 2.35
+// expect: 0.1
+fn main() {
+    println("${2.6.floor() + 1.0}")
+    println("${3.5.round()}")
+    println("${(-2.5).trunc() - 1.0}")
+    println("${2.345:.2}")
+    println("${0.1:.1}")
+}

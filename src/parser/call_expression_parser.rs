@@ -104,8 +104,8 @@ impl Parser {
                             }
                         } else {
                             return Err(format!(
-                                "Expected field or method name (at token position {})",
-                                self.position
+                                "Expected field or method name (at {})",
+                                self.pos_desc()
                             ));
                         }
                     }
@@ -372,6 +372,10 @@ impl Parser {
                     }
 
                     let inclusive = self.current_token() == &Token::DotDotEq;
+                    if let Some(open) = self.try_parse_range_from(expr) {
+                        expr = open;
+                        continue;
+                    }
                     self.advance();
                     // P3.280: range end must be a full expression so
                     // `(cx - 16)..(cx + 16)` and `a..b + c` parse correctly.
@@ -417,6 +421,11 @@ impl Parser {
 
                         self.advance(); // consume opening delimiter
 
+                        if name == "matches" && delimiter == MacroDelimiter::Parens {
+                            expr = self.parse_matches_macro()?;
+                            continue;
+                        }
+
                         let mut args = Vec::new();
 
                         // Check for empty macro: vec![], println!()
@@ -461,19 +470,7 @@ impl Parser {
 
                         self.expect(end_token)?;
 
-                        if name == "format" {
-                            let (file, line) = if let Some(loc) = self.current_location() {
-                                (Some(loc.file.display().to_string()), Some(loc.line))
-                            } else {
-                                (None, None)
-                            };
-                            self.emit_warning(
-                                "format!() is Rust syntax. Use string interpolation instead: \"text ${expr}\"".to_string(),
-                                file,
-                                line,
-                                None,
-                            );
-                        }
+                        self.warn_if_format_macro(name);
 
                         if let Some(lowered) = self.lower_intrinsic_macro(name, &args) {
                             lowered

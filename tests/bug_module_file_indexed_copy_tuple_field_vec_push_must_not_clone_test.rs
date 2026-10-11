@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-466: indexed Copy tuple **field** into `Vec::push` must not `.clone()`.
+//! indexed Copy tuple **field** into `Vec::push` must not `.clone()`.
 //!
 //! Product `scene_graph/scene_graph_state.rs` `sort_by_distance`:
 //!   `sorted_nodes.push(sorted[k].0.clone())` and `sorted[i].1.clone()`
 //! WJ uses bare `sorted[k].0` / `sorted[i].1` (`u64` / `f32`, Copy).
-//! Distinct from DB-439 (tuple field **return**), DB-465 (clone the whole
-//! indexed tuple into push), DB-363 (clone the element then read a field).
+//! Distinct from (tuple field **return**), (clone the whole
+//! indexed tuple into push), (clone the element then read a field).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

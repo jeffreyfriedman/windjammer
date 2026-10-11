@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-454: Copy `f32` **local** into **local reassignment** must not `.clone()`.
+//! Copy `f32` **local** into **local reassignment** must not `.clone()`.
 //!
 //! Product `frame_analysis.rs` histogram loop:
 //!   `min_val = lum.clone()` / `max_val = lum.clone()`
 //! WJ uses bare `lum`.
-//! Distinct from DB-452 (f32 **formal** local reassign), DB-445 (f32 formal into **let**),
-//! DB-440 (f32 local into **struct literal**), and DB-448 (f32 formal into **field**).
+//! Distinct from (f32 **formal** local reassign), (f32 formal into **let**),
+//! (f32 local into **struct literal**), and (f32 formal into **field**).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

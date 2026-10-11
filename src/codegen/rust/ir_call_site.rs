@@ -48,7 +48,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// WJ `std/*.wj` stubs may still own-coerce literals after generate.
-    /// Stdlib/runtime `&str` is the source of truth (DB-144 needle).
+    // Stdlib/runtime `&str` is the source of truth (needle).
     pub(crate) fn peel_owned_literal_when_stdlib_expects_str_ref(
         &self,
         callee_name: &str,
@@ -110,7 +110,7 @@ impl<'ast> CodeGenerator<'ast> {
         arg_index: usize,
     ) -> bool {
         let pidx = sig.arg_param_index(arg_index);
-        // Demoted `&mut Vec` / `&mut T` is never owned emission — the DB-281 Vec/map
+        // Demoted `&mut Vec` / `&mut T` is never owned emission — the Vec/map
         // shortcut must not override MutBorrowed (recursive `buf.clone()` into `&mut Vec`).
         if matches!(
             sig.param_ownership.get(pidx),
@@ -134,7 +134,7 @@ impl<'ast> CodeGenerator<'ast> {
         }) {
             return true;
         }
-        // Bare WJ `Vec`/`Map` formals emit owned Rust containers (DB-281: `contains(items)`
+        // Bare WJ `Vec`/`Map` formals emit owned Rust containers (`contains(items)`
         // must not auto-borrow `&items` then leave E0308 into owned `Vec`).
         if crate::codegen::rust::signature_promotion::bare_formal_is_vec_or_map(sig, pidx)
             && !crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
@@ -161,7 +161,7 @@ impl<'ast> CodeGenerator<'ast> {
                         sig, pidx,
                     );
                 }
-                // DB-212: bare Custom in WJ AST is not owned emission when codegen demoted
+                // bare Custom in WJ AST is not owned emission when codegen demoted
                 // to `&T` (`timeseries_ingest_batch_point_count(batch: &Batch)`).
                 // Prefer `param_types` Reference wrap (sync from `conn: &Connection`) over
                 // the WJ AST formal — otherwise reuse clones a non-Clone runtime type.
@@ -221,7 +221,7 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> bool {
         // Same-crate bare names (`touch`, `join`) are decided by local registry + IR.
         // Treating them as "dep shared" re-prefixes `&` onto already-`&T` formals
-        // (`run(csr: &DenseCsr) { touch(&csr) }` — DB-217).
+        // (`run(csr: &DenseCsr) { touch(&csr) }`).
         if !self.callee_is_path_qualified_or_import_alias(callee_name) {
             return false;
         }
@@ -820,7 +820,7 @@ impl<'ast> CodeGenerator<'ast> {
             let from_reg = registry.get_signature(lookup).cloned();
             let from_local = local_sig.cloned();
             // Bare `contains` after `use std::strings` must still see the runtime
-            // `&str` needle (DB-144) — not only the qualified `strings::contains` path.
+            // `&str` needle — not only the qualified `strings::contains` path.
             let runtime_mod =
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     lookup,
@@ -856,7 +856,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
             callee_name,
         ) {
-            // DB-332: bare leaf keys (`AudioChannel::new`) are last-writer-wins across
+            // bare leaf keys (`AudioChannel::new`) are last-writer-wins across
             // sibling modules. Prefer caller-module affinity (and the already-resolved
             // `local_sig` from plain-call lookup) over `get_signature("Type::method")`.
             let arg_count = user_arg_count.unwrap_or(arg_index + 1);
@@ -1438,7 +1438,7 @@ impl<'ast> CodeGenerator<'ast> {
         // coercion decisions — analyzer stubs often still say bare `string`+Owned while
         // the defining-fn refresh recorded `&str` (`process("hello")` must stay bare).
         // Mirror method path: merge defining-module `emitted_rust_ref_params` so owned
-        // Custom formals (`csr: DenseCsr`) beat DB-097 cold-meta Borrowed stubs.
+        // Custom formals (`csr: DenseCsr`) beat cold-meta Borrowed stubs.
         // Skip type-qualified associated calls (`ServerResponse::error`) — bare `error`
         // would merge `log::error`'s `&str` formal onto owned i64 status.
         if receiver_type_name.is_none()
@@ -1628,7 +1628,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.sync_call_sig_from_preregistered_free_fn_emission(callee_name, &mut sig);
         }
 
-        // DB-332: leaf-name homonyms (`AudioChannel::new`) — caller-module affinity is
+        // leaf-name homonyms (`AudioChannel::new`) — caller-module affinity is
         // final after refresh/prefer_method/global bare-key challenges, which otherwise
         // re-poison formals (i32 → String → `.to_string()`).
         if crate::codegen::rust::call_signature_resolution::is_type_qualified_associated_call(
@@ -1689,7 +1689,7 @@ impl<'ast> CodeGenerator<'ast> {
                 );
             }
         }
-        // Demoted Custom/`&T` emit: prefer Ref expected so owned locals Borrow (DB-212).
+        // Demoted Custom/`&T` emit: prefer Ref expected so owned locals Borrow.
         // Runs after owned-user-type promotion so emission flags win over bare Custom Owned.
         if crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
             && !Self::sig_arg_confirms_owned_emission(&sig, arg_index)
@@ -1930,7 +1930,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Identity;
         }
-        // P3.635 / DB-134: Copy scalar bindings into owned Copy formals must move
+        // P3.635 / Copy scalar bindings into owned Copy formals must move
         // (`get_label(label)`), never Borrow → `&label` into `label: i64`. Finalize
         // peels are skipped when `ir_cutover.call_sites` is on — fix here.
         // Skip collection-key sites (`HashMap::get`) — those need `&Q` even for Copy keys.
@@ -1963,7 +1963,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
-        // DB-367: unit keywords / `Value::None` are constructors — never `.clone()`.
+        // unit keywords / `Value::None` are constructors — never `.clone()`.
         if matches!(kind, CoercionKind::Clone)
             && (matches!(
                 arg_expr,
@@ -1982,7 +1982,7 @@ impl<'ast> CodeGenerator<'ast> {
                 prepared_arg = base.to_string();
             }
         }
-        // DB-343: Copy cast targets must not receive trailing `.clone()` at call sites.
+        // Copy cast targets must not receive trailing `.clone()` at call sites.
         if matches!(kind, CoercionKind::Clone)
             && matches!(arg_expr, Expression::Cast { type_, .. } if self.is_type_copy(type_))
         {
@@ -2004,7 +2004,7 @@ impl<'ast> CodeGenerator<'ast> {
                 prepared_arg = base.to_string();
             }
         }
-        // DB-170 / eco wj-toml: demoted `&str` into owned `String` must `.to_string()`, not `.clone()`.
+        // eco wj-toml: demoted `&str` into owned `String` must `.to_string()`, not `.clone()`.
         if matches!(kind, CoercionKind::Clone)
             && crate::ir::coercion::is_string_base(&expected.base)
             && matches!(expected.ownership, OwnedType::Owned)
@@ -2023,7 +2023,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             kind = CoercionKind::Borrow;
         }
-        // DB-212 / Custom demotion: owned binding into demoted `&T` at emit must Borrow
+        // Custom demotion: owned binding into demoted `&T` at emit must Borrow
         // even without `.clone()` (Clone→Borrow above only covers cloned args).
         if matches!(kind, CoercionKind::Identity)
             && crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(&sig, param_idx)
@@ -2034,7 +2034,7 @@ impl<'ast> CodeGenerator<'ast> {
             )
             && !prepared_arg.starts_with('&')
             && !prepared_arg.starts_with("&mut ")
-            // DB-329: `idx as usize` into Vec::remove Owned usize — never promote to Borrow
+            // `idx as usize` into Vec::remove Owned usize — never promote to Borrow
             // (`&idx as usize` / `&(idx as usize)` are both wrong).
             && !matches!(
                 arg_expr,
@@ -2103,14 +2103,14 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // `rows[i]` / `self.field` into owned non-Copy formals: clone when the root cannot
         // move (shared/`&mut self`, or WJ bare `self` that emits `&self`). Owned/`mut self`
-        // can move the field (DB-414) — do not invent Clone from the name `self`.
+        // can move the field — do not invent Clone from the name `self`.
         // Nested paths (`self.config.public_base_url`) use root-behind-ref, not only
         // direct `self.field` (P3.584 / notes-api dispatch).
         let field_from_borrowed_self = matches!(arg_expr, Expression::FieldAccess { .. })
             && self.field_access_root_is_behind_reference(arg_expr)
             && self.extract_root_identifier(arg_expr).as_deref() == Some("self");
         // Shared-ref at emit only — analyzer `Borrowed` alone must not demote Clone→Borrow
-        // for bare owned Vec formals (DB-281: `contains(items.clone())`, not `&items`).
+        // for bare owned Vec formals (`contains(items.clone())`, not `&items`).
         // Stale `emitted_rust_ref_params` must not block Clone when emission confirms owned
         // (P3.583: `decode_records(self.bytes)` under `&self` → `.clone()` into `Vec<u8>`).
         let callee_wants_shared =
@@ -2329,7 +2329,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Demoted `&str` formals: strip stale `.clone()` and borrow the binding.
         // Keeping Identity here leaves `json.clone()` into `&str` (E0308 / wasteful).
-        // Never strip explicit user `.clone()` — DB-106/108.
+        // Never strip explicit user `.clone()` — .
         if prepared_arg.ends_with(".clone()")
             && matches!(kind, CoercionKind::Borrow)
             && (crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
@@ -2341,7 +2341,7 @@ impl<'ast> CodeGenerator<'ast> {
             prepared_arg = prepared_arg.trim_end_matches(".clone()").to_string();
         }
         // NOTE: do NOT demote Borrow→Identity on `.clone()` for other shared-ref
-        // formals (DB-222/247/249). Auto-clone leaves `map.clone()` while expected
+        // formals. Auto-clone leaves `map.clone()` while expected
         // is `&Map`; keep Borrow and let the strip below peel to `&map`.
         if matches!(kind, CoercionKind::Clone) {
             let formal_ty = sig
@@ -2439,7 +2439,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Borrow coercion on `binding.clone()` / `self.field.clone()` → `&binding` /
         // `&self.field` (clone-before-borrow is redundant for shared-ref formals).
-        // Never strip explicit user `.clone()` at call sites (DB-106/108).
+        // Never strip explicit user `.clone()` at call sites.
         if prepared_arg.ends_with(".clone()")
             && matches!(kind, CoercionKind::Borrow | CoercionKind::MutBorrow)
             && matches!(
@@ -2510,7 +2510,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         let mut resolved_kind = kind;
-        // DB-169/DB-190: callee temps autoborrow into `&T` / `&Vec<T>` — never `&callee()`.
+        // callee temps autoborrow into `&T` / `&Vec<T>` — never `&callee()`.
         let call_temp_autoborrow = matches!(
             arg_expr,
             Expression::Call { .. } | Expression::MethodCall { .. }
@@ -2898,8 +2898,8 @@ impl<'ast> CodeGenerator<'ast> {
             let this_arg_expects_mut = self.ir_sig_arg_expects_mut_borrow(&sig, arg_index);
             let preserve_explicit =
                 crate::codegen::rust::expression_helpers::is_explicit_user_clone_call(arg_expr);
-            // Mut formals: always strip — `&mut x.clone()` is never a valid lvalue (DB-336/337/342).
-            // Shared formals: preserve explicit user `.clone()` (DB-106/108).
+            // Mut formals: always strip — `&mut x.clone()` is never a valid lvalue.
+            // Shared formals: preserve explicit user `.clone()`.
             if this_arg_expects_mut || !preserve_explicit {
                 match arg_expr {
                     Expression::Identifier { name, .. } => {
@@ -2917,7 +2917,7 @@ impl<'ast> CodeGenerator<'ast> {
                         || (arg_is_fn_param && this_arg_expects_borrow)
                     {
                         // Locals reused into demoted `&mut Vec` must keep the binding
-                        // (`&mut data`), not a clone temp (DB-336/337/342).
+                        // (`&mut data`), not a clone temp.
                         crate::codegen::rust::expression_utilities::strip_trailing_clone(
                             &mut coerced,
                         );
@@ -3502,7 +3502,7 @@ impl<'ast> CodeGenerator<'ast> {
             callee_name,
             arg_index,
         );
-        // ensure_owned can re-append `.clone()` after Identity — peel unit/Copy (DB-367/371).
+        // ensure_owned can re-append `.clone()` after Identity — peel unit/Copy.
         coerced =
             crate::codegen::rust::expression_utilities::strip_unit_constructor_clone(&coerced);
         if coerced.ends_with(".clone()")
@@ -3963,7 +3963,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else if !crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
             && coerced.starts_with("&*")
         {
-            // DB-368: compiler must not emit `&*ident` for owned `string` into demoted
+            // compiler must not emit `&*ident` for owned `string` into demoted
             // `&str` formals (match payloads / locals). Bare ident coerces via Deref.
             coerced = coerced.trim_start_matches("&*").to_string();
         } else if crate::codegen::rust::call_site_borrow::user_wrote_explicit_deref(arg_expr)
@@ -4324,7 +4324,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // Text demotions: `&str` → owned String needs `.to_string()`.
                 // P3.390: demoted `&Vec` / non-text must NEVER get `.to_string()` (E0599).
                 // Shared-ref callees: strip stale auto-clone and pass the already-borrowed
-                // binding. Owned callees: keep `.clone()` (DB-281 / demoted→owned).
+                // binding. Owned callees: keep `.clone()` (demoted→owned).
                 let is_text = self.current_function_params.iter().any(|p| {
                     p.name == *name
                         && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
@@ -4332,7 +4332,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if is_text {
                     coerced = format!("{}.to_string()", name);
                 } else {
-                    // Keep `.clone()` only when codegen confirmed owned emission (DB-281).
+                    // Keep `.clone()` only when codegen confirmed owned emission.
                     // Bare Vec AST makes `callee_wants_shared` false — do not gate on it.
                     let mut live = sig.clone();
                     let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
@@ -4370,7 +4370,7 @@ impl<'ast> CodeGenerator<'ast> {
             &self.current_function_params,
         );
 
-        // Terminal: never leave `n as usize.clone()` (DB-300).
+        // Terminal: never leave `n as usize.clone()`.
         coerced =
             crate::codegen::rust::expression_utilities::sanitize_cast_trailing_clone(&coerced);
 
@@ -4566,7 +4566,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                             other => other,
                         };
-                        // Copy Custom aggregates (Vec3) must not clone (DB-371).
+                        // Copy Custom aggregates (Vec3) must not clone.
                         !self.is_type_copy(bare)
                     }
                 };
@@ -4778,7 +4778,7 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             {
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
-                // DB-444: Copy unit enums / aggregates auto-copy — do not `.clone()`
+                // Copy unit enums / aggregates auto-copy — do not `.clone()`
                 // after peeling a stale shared-borrow prefix (`&weather` → `weather`).
                 let formal_ty = sig
                     .formal_param_type(param_idx)
@@ -4823,7 +4823,7 @@ impl<'ast> CodeGenerator<'ast> {
                 )
             {
                 let base = crate::codegen::rust::expression_utilities::borrow_base_expr(arg_str);
-                // DB-444: same Copy skip as the reuse branch above.
+                // same Copy skip as the reuse branch above.
                 let formal_ty = sig
                     .formal_param_type(param_idx)
                     .or_else(|| sig.param_types.get(param_idx));
@@ -4867,7 +4867,7 @@ impl<'ast> CodeGenerator<'ast> {
         // (`let (row, id) = f(row); g(row)`).
         let needs = match arg_expr {
             Expression::Identifier { name, .. } => {
-                // DB-367: unit keywords are not bindings — multipass `needs_clone_anywhere`
+                // unit keywords are not bindings — multipass `needs_clone_anywhere`
                 // on `"None"` yields `None.clone()` at unrelated push sites (tilemap/graph).
                 if name == "None"
                     || name == "true"
@@ -4902,7 +4902,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Expression::FieldAccess { .. } | Expression::Index { .. } => {
-                // DB-414: owned/by-value `self` (`mut self`, not `&mut self`) can
+                // owned/by-value `self` (`mut self`, not `&mut self`) can
                 // partial-move fields into owned formals. Prefer emit truth over
                 // stale inferred_* mut-borrow flags from later field writes.
                 if matches!(arg_expr, Expression::FieldAccess { .. })
@@ -4980,7 +4980,7 @@ impl<'ast> CodeGenerator<'ast> {
             if skip_clone {
                 arg_str.to_string()
             } else {
-                // DB-444: Copy unit enums skip reuse clone even when copy_types_registry
+                // Copy unit enums skip reuse clone even when copy_types_registry
                 // lagged (analyzer `copy_structs` historically omitted enums).
                 let unit_enum_copy = match arg_expr {
                     Expression::Identifier { name, .. } => self
@@ -5131,7 +5131,7 @@ impl<'ast> CodeGenerator<'ast> {
         has_ownership_collision: bool,
     ) {
         // Prefer defining-module codegen refresh (`emitted_rust_ref_params`) over stale
-        // importer/collision stubs before any owned-formal peel (DB-101 map getters).
+        // importer/collision stubs before any owned-formal peel (map getters).
         let mut sig = self.refreshed_call_site_sig_for_arg(registry, callee_name, arg_index, sig);
         // Exact runtime-std owned contract (`json::to_string(value: T)`) beats a
         // MutBorrowed `to_string` homonym left on `contract_sig` after IR.
@@ -5417,7 +5417,7 @@ impl<'ast> CodeGenerator<'ast> {
                         arg_expr,
                         Expression::Call { .. } | Expression::MethodCall { .. }
                     ) {
-                        // DB-169/DB-190: call temps autoborrow — never `&callee()`.
+                        // call temps autoborrow — never `&callee()`.
                     } else if !local_move_owned_text {
                         let callee_owned_copy_scalar =
                             crate::codegen::rust::call_site_borrow::callee_user_arg_bare_formal_is_copy_pass_by_value(
@@ -5933,7 +5933,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     _ => false,
                 };
-                // DB-444: Copy identity (unit enums / aggregates) auto-copies — peel
+                // Copy identity (unit enums / aggregates) auto-copies — peel
                 // stale `&weather` to `weather`, never `weather.clone()`. Only non-Copy
                 // reuse needs `.clone()` here (scalar Copy already skipped below).
                 let formal_ty = text_sig
@@ -6279,7 +6279,7 @@ impl<'ast> CodeGenerator<'ast> {
             registry,
         );
 
-        // DB-174/178/180/181: cross-module registry ownership can lag defining-module
+        // cross-module registry ownership can lag defining-module
         // Rust emission (demoted caller formals, shared-ref callees). Reconcile from
         // caller binding shape + owned/shared emission contracts — signature-driven.
         self.reconcile_multipass_demoted_caller_and_shared_callee_terminal(
@@ -6319,7 +6319,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Reuse clones for owned non-Copy params live in
         // `ensure_owned_move_clone_for_reuse` (auto_clone + later-owned-pass).
         // A blanket `.clone()` on every local-receiver owned slot undoes last-use
-        // Identity (`out.columns.push(col)` / DB-209).
+        // Identity (`out.columns.push(col)`).
 
         let wants_shared_terminal = global_confirms_shared_ref(param_idx)
             || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(&sig, param_idx)
@@ -6391,7 +6391,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Terminal multipass ownership fixes when importer registry stubs disagree with
-    /// defining-module Rust emission (DB-174/178/180/181 product gates).
+    // defining-module Rust emission (product gates).
     fn reconcile_multipass_demoted_caller_and_shared_callee_terminal(
         &self,
         coerced: &mut String,
@@ -6487,7 +6487,7 @@ impl<'ast> CodeGenerator<'ast> {
                     )
                 });
         // Homonym shared-ref hits must not undo a confirmed owned formal on *this* sig
-        // (DB-329: Vec::remove Owned usize vs Blackboard::remove Borrowed).
+        // (Vec::remove Owned usize vs Blackboard::remove Borrowed).
         let callee_emits_owned = callee_emits_owned
             && (!global_confirms_shared_ref(param_idx)
                 || crate::codegen::rust::signature_promotion::emitted_owned_arg_contract(
@@ -6518,7 +6518,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !coerced.ends_with(".to_string()")
             && !coerced.ends_with(".to_owned()")
             && !crate::codegen::rust::call_site_borrow::expression_is_string_literal(arg_expr)
-            // DB-329: never re-borrow cast-to-usize after numeric formal peel.
+            // never re-borrow cast-to-usize after numeric formal peel.
             && !matches!(
                 arg_expr,
                 Expression::Call { .. }
@@ -6589,7 +6589,7 @@ impl<'ast> CodeGenerator<'ast> {
     ///
     /// Do **not** treat `usize_variables` alone as emitted usize: loop-counter
     /// analysis marks `i` for comparisons (`while i < n`) while the Rust binding
-    /// may still be `i64` (DB-119). Match [`identifier_emits_as_usize`].
+    // may still be `i64`. Match [`identifier_emits_as_usize`].
     /// True when the expression still lowers as WJ `int` / i32 (not Rust `usize`).
     /// Loop-vs-`.len()` may list the binding in `usize_variables` while emit stays i64.
     fn expression_emits_as_wj_int_width(&self, expr: &Expression<'_>) -> bool {
@@ -6751,7 +6751,7 @@ impl<'ast> CodeGenerator<'ast> {
                 fallback_usize_formal.as_ref()
             } else if formal.is_none_or(|t| {
                 // Runtime fallback may declare `usize` while WJ stubs still say `int`.
-                // Never override a concrete non-int formal (DB-133: `drain(DenseCsr {..})`
+                // Never override a concrete non-int formal (`drain(DenseCsr {..})`
                 // must not become `(DenseCsr {..}) as usize` via a colliding fallback key).
                 crate::codegen::rust::type_casting::type_is_wj_int_formal(t)
                     || matches!(
@@ -6781,7 +6781,7 @@ impl<'ast> CodeGenerator<'ast> {
             formal_for_usize,
             already_usize,
         );
-        // DB-160: runtime `process::exit(i32)` — cast WJ `int`/`i64` args.
+        // runtime `process::exit(i32)` — cast WJ `int`/`i64` args.
         let arg_ty = self.infer_expression_type(arg_expr);
         let mixed_int = Some(self.int_type_for_mixed_int_codegen(arg_expr));
         crate::codegen::rust::type_casting::coerce_arg_str_for_i32_formal(
@@ -7541,7 +7541,7 @@ impl<'ast> CodeGenerator<'ast> {
                             object,
                         )
                     });
-                    // DB-444: Copy unit enums are not `caller_owned_non_copy_formal`
+                    // Copy unit enums are not `caller_owned_non_copy_formal`
                     // when registry/unit detection is live; belt-and-suspenders skip.
                     let copy_identity = self.call_arg_is_copy_identity(arg_expr, None)
                         || self.binding_name_is_copy(name)
@@ -7582,7 +7582,7 @@ impl<'ast> CodeGenerator<'ast> {
                             sig, pidx,
                         ))
                     {
-                        // DB-174/175 / DB-191: demoted caller formal into owned callee.
+                        // demoted caller formal into owned callee.
                         let is_text = self.current_function_params.iter().any(|p| {
                             p.name == *name
                                 && crate::codegen::rust::types::is_windjammer_text_type(&p.type_)
@@ -7804,7 +7804,7 @@ impl<'ast> CodeGenerator<'ast> {
                     return;
                 }
             }
-            // DB-169/DB-190: Call/MethodCall temps must fall through to owned peel — never
+            // Call/MethodCall temps must fall through to owned peel — never
             // prefix `&callee()` here and never return early (blocks force_owned strip).
             if !matches!(
                 arg_expr,
@@ -7901,7 +7901,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Never treat true `&mut T` / MutBorrowed slots as owned Copy (apply_rotation /
         // fill_grid / update_health_regen).
         //
-        // DB-165: when *this* callee's emission record says owned (`emitted_owned_arg_contract`),
+        // when *this* callee's emission record says owned (`emitted_owned_arg_contract`),
         // do not let a stale *global* shared-ref hit (`global_emits_shared_ref`) block stripping
         // `&state.clone()` into an owned `PgWireServeState` formal.
         let local_owned_emission =
@@ -7969,7 +7969,7 @@ impl<'ast> CodeGenerator<'ast> {
             // Same-file demotion is recorded on preregistered formals before sibling
             // bodies run (`encode_line` → `todo: &Todo`). Do not force-owned peel.
             && !self.preregistered_free_call_arg_expects_borrow(callee_name, arg_index)
-            // DB-169: owned Call/MethodCall temps (`empty_bakeoff_run()`) must move into
+            // owned Call/MethodCall temps (`empty_bakeoff_run()`) must move into
             // owned Custom formals even when a stale global shared-ref homonym exists —
             // `&empty_bakeoff_run()` is never a valid shared-ref binding.
             && (local_owned_emission
@@ -8010,7 +8010,7 @@ impl<'ast> CodeGenerator<'ast> {
                 && !s.ends_with(".to_string()")
                 && !s.ends_with(".to_owned()")
             {
-                // DB-343: Copy formals / Copy cast values auto-copy — never
+                // Copy formals / Copy cast values auto-copy — never
                 // `(x as i32).clone()` into owned i32 slots.
                 let formal_is_copy = sig
                     .formal_param_type(param_idx)
@@ -8027,7 +8027,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.is_type_copy(pointee)
                     })
                     || Self::arg_str_is_copy_scalar_numeric_cast(&s);
-                // DB-444: unit-enum Copy formals/args must not clone into owned slots.
+                // unit-enum Copy formals/args must not clone into owned slots.
                 let unit_enum_copy = match arg_expr {
                     Expression::Identifier { name, .. } => self
                         .current_function_params
@@ -8060,7 +8060,7 @@ impl<'ast> CodeGenerator<'ast> {
                 return;
             }
             // Owned clones/`to_string` deref-coerce to `&str` only. Custom `&T`
-            // formals need `&item.clone()` (encode_line / DB-125).
+            // formals need `&item.clone()` (encode_line).
             let expected_for_clone = safety_type_from_signature_param(sig, param_idx);
             if crate::ir::coercion::rust_owned_temp_deref_coerces_into_shared_ref(
                 &expected_for_clone,
@@ -8111,9 +8111,9 @@ impl<'ast> CodeGenerator<'ast> {
                     .to_string();
                 return;
             }
-            // DB-169/DB-190: Call temps into owned formals must not grow `&`.
+            // Call temps into owned formals must not grow `&`.
             // MethodCall `.clone()` into Custom `&T` does not autoborrow.
-            // DB-329: Cast-to-Copy/`usize` is a value (`idx as usize`), not a place.
+            // Cast-to-Copy/`usize` is a value (`idx as usize`), not a place.
             let clone_temp_needs_explicit_ref = matches!(arg_expr, Expression::MethodCall { .. })
                 && (coerced.ends_with(".clone()")
                     || coerced.ends_with(".to_string()")
@@ -8471,7 +8471,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if coerced.starts_with("&mut ") {
                     return;
                 }
-                // Mut borrow needs an lvalue — never `&mut binding.clone()` (DB-336/337/342).
+                // Mut borrow needs an lvalue — never `&mut binding.clone()`.
                 // Auto-clone may have fired for reuse before demotion to `&mut Vec`.
                 crate::codegen::rust::expression_utilities::apply_mut_borrow_prefix(coerced);
                 return;
@@ -8829,7 +8829,7 @@ impl<'ast> CodeGenerator<'ast> {
             if self.copy_match_payload_binding(name) {
                 return coerced[1..].to_string();
             }
-            // DB-368: `&String` / text match payloads must not take the Copy
+            // `&String` / text match payloads must not take the Copy
             // `&binding` → `*binding` path (later shared-ref re-borrow yields `&*ident`).
             let text_ref_binding = self.local_var_types.get(name).is_some_and(|t| {
                 let inner = match t {
@@ -8841,7 +8841,7 @@ impl<'ast> CodeGenerator<'ast> {
             });
             // `&T` is Copy as a reference. Deref (`*binding`) is only for a Copy
             // pointee. `HashMap::get` → `&Vec` must stay a clone into an owned
-            // formal, not `*updated` (DB-236).
+            // formal, not `*updated`.
             let pointee_is_copy = |t: &Type| {
                 let inner = match t {
                     Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
@@ -9229,8 +9229,8 @@ impl<'ast> CodeGenerator<'ast> {
                     return arg_str.to_string();
                 }
                 // P3.574: owned non-Copy match payloads participate in auto-clone;
-                // Copy match payloads (DB-347) still skip.
-                // DB-444: unit-enum formals/locals are Copy even when copy_structs lagged.
+                // Copy match payloads still skip.
+                // unit-enum formals/locals are Copy even when copy_structs lagged.
                 if self.copy_match_payload_binding(name)
                     || self.expression_is_copy(arg_expr)
                     || self.binding_name_is_copy(name)
@@ -9611,7 +9611,7 @@ impl<'ast> CodeGenerator<'ast> {
         callee_name: Option<&str>,
         arg_index: Option<usize>,
     ) -> String {
-        // DB-367: unit `None` / enum `Value::None` must not pick up reuse `.clone()`.
+        // unit `None` / enum `Value::None` must not pick up reuse `.clone()`.
         if arg_str == "None" || arg_str.ends_with("::None") {
             return arg_str.to_string();
         }
@@ -9641,7 +9641,7 @@ impl<'ast> CodeGenerator<'ast> {
             self.auto_clone_field_path_wants_at_call(arg_expr, callee_name, arg_index, false);
         if needs {
             // Copy values (scalars *and* aggregates like Coord/Vec3) are passed by
-            // value — never `.coord.clone()` / `pc.clone()` (DB-370/371). Non-Copy
+            // value — never `.coord.clone()` / `pc.clone()`. Non-Copy
             // enums (regression-063 Value) still clone on multi-use owned moves.
             let skip = self.infer_expression_type(arg_expr).is_some_and(|t| {
                 let bare = match &t {
@@ -9735,7 +9735,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             // Copy aggregates without confirmed shared-ref emission usually stay owned
             // (Lsn). Defer to the signature bridge so analyzer-Borrowed bare Custom that
-            // the bridge still marks Ref (DB-097 DenseCsr; also when field layout is
+            // the bridge still marks Ref (DenseCsr; also when field layout is
             // unknown and `is_type_copy` is a false positive) is not demoted to Identity.
             if self.is_type_copy(bare)
                 && !crate::type_classification::is_copy_pass_by_value_formal(bare)
@@ -9744,7 +9744,7 @@ impl<'ast> CodeGenerator<'ast> {
                 return crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx);
             }
         }
-        // Prefer the emit-aware oracle (DB-329 Owned Copy / usize) over bridge-only
+        // Prefer the emit-aware oracle (Owned Copy / usize) over bridge-only
         // `safety_type` Ref — prevents `&item.quantity` into `quantity: i32`.
         crate::ir::signature_bridge::call_site_needs_shared_ref_at_emit(sig, pidx)
     }
@@ -10350,7 +10350,7 @@ fn main() {
         assert!(!CodeGenerator::is_module_boundary_callee("HashMap::new"));
         assert!(!CodeGenerator::is_module_boundary_callee("Self::new"));
         assert!(!CodeGenerator::is_module_boundary_callee("plain_fn"));
-        // Same-crate paths resolve via bare-name registry entries (DB-094).
+        // Same-crate paths resolve via bare-name registry entries.
         assert!(!CodeGenerator::is_module_boundary_callee(
             "crate::circuit_row::copy_rows"
         ));

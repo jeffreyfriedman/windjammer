@@ -100,8 +100,8 @@ fn is_project_source_dir(src_dir: &Path, depth: usize) -> bool {
 /// Calculate output path that preserves directory structure
 ///
 /// Example:
-/// - source_root: "game-host/src"
-/// - input_path: "game-host/src/math/vec2.wj"
+/// - source_root: "game_core/src"
+/// - input_path: "game_core/src/math/vec2.wj"
 /// - output_dir: "build"
 /// - Result: "build/math/vec2.rs"
 pub fn get_relative_output_path(

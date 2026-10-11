@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-332: i32 formal must not receive `priority.to_string()`.
+//! i32 formal must not receive `priority.to_string()`.
 //!
 //! Tip output for a game project `audio/audio_mixer.rs`:
 //!   `AudioChannel::new(id, priority.to_string())` with `priority: i32` → E0308.

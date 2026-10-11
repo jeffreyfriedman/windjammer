@@ -154,7 +154,7 @@ pub struct PackageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SourcesConfig {
     /// Source roots - directories where compiler looks for modules
-    /// e.g., ["game-host-core/src", "lib/src"]
+    /// e.g., ["game_core/src", "lib/src"]
     #[serde(default)]
     pub roots: Vec<String>,
 }

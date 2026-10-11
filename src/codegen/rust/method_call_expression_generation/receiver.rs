@@ -129,7 +129,7 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                     .flatten();
                 if let Some(recv_ty) = self.infer_expression_type(object) {
-                    // DB-356: Copy aggregates (Mat4, …) auto-copy from `&self` — never
+                    // Copy aggregates (Mat4, …) auto-copy from `&self` — never
                     // `self.clone().owned_method()`. Prefer registry + enclosing struct.
                     let recv_is_copy = self.is_type_copy(&recv_ty)
                         || (name == "self"
@@ -185,7 +185,7 @@ impl<'ast> CodeGenerator<'ast> {
                             {
                                 // From `&mut self` / `&self`, calling another borrowed
                                 // method must reborrow — never `self.clone().method()`
-                                // (DB-358: `is_mesh_uploaded(&self)` → `find_mesh_index`).
+                                // (`is_mesh_uploaded(&self)` → `find_mesh_index`).
                                 let ownership =
                                     self.effective_method_self_ownership(&qualified, sig);
                                 let skip_clone = (is_mut_borrowed_param
@@ -262,7 +262,7 @@ impl<'ast> CodeGenerator<'ast> {
             && !obj_str.ends_with(".clone()")
         {
             if let Some(recv_ty) = self.infer_expression_type(object) {
-                // DB-356: Copy aggregates auto-copy from `&self` field chains too.
+                // Copy aggregates auto-copy from `&self` field chains too.
                 let recv_is_copy = self.is_type_copy(&recv_ty)
                     || self.current_struct_name.as_ref().is_some_and(|sn| {
                         self.copy_types_registry.contains(sn.as_str())

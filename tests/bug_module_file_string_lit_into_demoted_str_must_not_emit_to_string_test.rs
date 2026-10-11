@@ -18,7 +18,7 @@
 //! app.handle("GET", path, …)  // method: string demoted to &str
 //! ```
 //! Tip emitted `handle("GET".to_string(), …)` → E0308 expected `&str`, found `String`.
-//! Related to DB-168 (`String::from`); this gate targets `.to_string()` on impl
+//! Related to (`String::from`); this gate targets `.to_string()` on impl
 //! method formals across domain/adapters modules (auth downstream shape).
 
 #[path = "common/integration_test_helpers.rs"]

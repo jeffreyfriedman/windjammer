@@ -1,0 +1,27 @@
+// tags: trait, default-method, override
+// rust: ok
+// expect: Hi, I am Robot
+// expect: Hello, I am Ann
+trait Greeter {
+    fn name(self) -> string
+    fn greet(self) -> string {
+        "Hi, I am ${self.name()}"
+    }
+}
+
+struct Robot {}
+struct Person { n: string }
+
+impl Greeter for Robot {
+    fn name(self) -> string { "Robot" }
+}
+
+impl Greeter for Person {
+    fn name(self) -> string { self.n }
+    fn greet(self) -> string { "Hello, I am ${self.n}" }
+}
+
+fn main() {
+    println(Robot {}.greet())
+    println(Person { n: "Ann" }.greet())
+}

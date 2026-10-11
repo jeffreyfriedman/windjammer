@@ -1,0 +1,16 @@
+// tags: basics, arithmetic, int
+// rust: gap error[E0689]: can't call method 'pow' on ambiguous numeric type '{integer}'
+// expect: 17
+// expect: 3
+// expect: 2
+// expect: -3
+// expect: 1024
+// expect: 2
+fn main() {
+    println("${7 + 2 * 5}")
+    println("${17 / 5}")
+    println("${17 % 5}")
+    println("${-17 / 5}")
+    println("${2.pow(10)}")
+    println("${-17 % 5 + 4}")
+}

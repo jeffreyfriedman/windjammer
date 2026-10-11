@@ -1,0 +1,10 @@
+// tags: sort, sort_by_key, stability, strings
+// rust: ok
+// expect: [dd, aa, bb, c]
+fn main() {
+    let mut v = ["bb", "aa", "c", "dd"]
+    v.sort_by_key(|s| s.len())
+    v.reverse()
+    v.sort_by_key(|s| 0 - s.len() as int)
+    println("[${v.join(", ")}]")
+}

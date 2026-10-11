@@ -1,0 +1,16 @@
+// tags: basics, loops, while
+// rust: ok
+// expect: 1 2 4 8 16 32 
+// expect: steps: 6
+fn main() {
+    let mut x = 1
+    let mut steps = 0
+    let mut line = ""
+    while x <= 32 {
+        line = line + "${x} "
+        x *= 2
+        steps += 1
+    }
+    println(line)
+    println("steps: ${steps}")
+}

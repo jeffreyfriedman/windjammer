@@ -2,7 +2,7 @@
 //!
 //! `i32::max` / `min` / `clamp` / `abs` return the receiver width. Without these
 //! keys, `let max_size = w.max(h).max(d)` stays untyped and reuse analysis emits
-//! `max_size.clone()` (DB-343). No method-name ownership lists — registry return
+//! `max_size.clone()`. No method-name ownership lists — registry return
 //! type is the source of truth.
 
 use crate::parser::Type;
@@ -136,7 +136,7 @@ pub fn register_primitive_int_signatures(registry: &mut SignatureRegistry) {
         }
     }
     // Integers and floats: `to_le_bytes` → `[u8; N]` (Copy) and `from_le_bytes`.
-    // Untyped results made reuse/index emit `.clone()` on Copy bytes (DB-464/467).
+    // Untyped results made reuse/index emit `.clone()` on Copy bytes.
     for prim in SIGNED
         .iter()
         .chain(UNSIGNED.iter())

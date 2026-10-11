@@ -958,7 +958,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when every field/index move from `param` is a Copy or Windjammer text field let
-    /// (`let kind = …`, `let name = tree.nodes[i].name`). Both are readable from `&T` (DB-366).
+    // (`let kind = …`, `let name = tree.nodes[i].name`). Both are readable from `&T`.
     pub(crate) fn param_field_move_bindings_are_only_copy_or_text(
         &self,
         param_name: &str,
@@ -1074,7 +1074,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// True when a non-Copy `param.field` is passed as a call/method argument
-    /// (`return_f64(buf.scores)`). That is a partial move — keep the param Owned (DB-096).
+    // (`return_f64(buf.scores)`). That is a partial move — keep the param Owned.
     pub(crate) fn param_projects_non_copy_field_into_call_arg(
         &self,
         param_name: &str,

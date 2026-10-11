@@ -47,13 +47,13 @@ impl<'ast> CodeGenerator<'ast> {
         name: &str,
         expr: &Expression<'ast>,
     ) -> bool {
-        // DB-438 / DB-437: Copy scalar formals (`i32`, `bool`, …) auto-copy at
+        // Copy scalar formals (`i32`, `bool`, …) auto-copy at
         // move+reuse sites — never `x.clone()` in tuple literals or let inits.
         // Signature/type-classification driven (not method-name heuristics).
         if self.binding_is_copy_pass_by_value_scalar(name) {
             return true;
         }
-        // DB-425: range `for dx in -2..3` counters registered in codegen_i32_binding_names.
+        // range `for dx in -2..3` counters registered in codegen_i32_binding_names.
         if self.codegen_i32_binding_names.contains(name) {
             return true;
         }
@@ -71,7 +71,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return true;
         }
-        // DB-343 / DB-426: module `const` of a Copy type (u32 LEAF_FLAG, MAT_TRIM)
+        // module `const` of a Copy type (u32 LEAF_FLAG, MAT_TRIM)
         // auto-copies — never `LEAF_FLAG.clone()` on assign or reuse.
         if self
             .module_const_type_for_binding(name)
@@ -125,7 +125,7 @@ impl<'ast> CodeGenerator<'ast> {
             base_name
         };
 
-        // DB-367: unit keywords / `Type::Variant` paths are constructors, not bindings.
+        // unit keywords / `Type::Variant` paths are constructors, not bindings.
         // `Value::None` parses as one identifier (not FieldAccess) — auto_clone must
         // not emit `Value::None.clone()` (visual_scripting/graph).
         if name == "None"
@@ -141,7 +141,7 @@ impl<'ast> CodeGenerator<'ast> {
             };
         }
 
-        // DB-347 / P3.574: only Copy match payloads skip the rest of this path's
+        // P3.574: only Copy match payloads skip the rest of this path's
         // auto-clone noise (`r.clone()` on f32). Non-Copy match bindings (e.g.
         // `HashMap`/`Map::get` → `&String`) must fall through so owned returns clone.
         if self.copy_match_payload_binding(name) {
@@ -190,7 +190,7 @@ impl<'ast> CodeGenerator<'ast> {
                     .is_some()
                 {
                     // Skip .clone() for Copy / reborrow bindings — they are implicitly
-                    // copied. Assignment emit must use the same predicate (DB-391/393/394).
+                    // copied. Assignment emit must use the same predicate.
                     if !self.ident_skips_auto_clone_as_copy(name, expr_to_generate) {
                         return format!("{}.clone()", base_name);
                     }

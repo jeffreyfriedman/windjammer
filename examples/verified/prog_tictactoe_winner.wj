@@ -1,0 +1,28 @@
+// tags: program, game, grid, enum
+// rust: gap error[E0308]: mismatched types
+// expect: X wins
+// expect: draw
+// expect: in progress
+fn winner(b: Vec<string>) -> string {
+    let lines = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6],
+    ]
+    for l in lines {
+        if b[l[0]] != "." && b[l[0]] == b[l[1]] && b[l[1]] == b[l[2]] {
+            return "${b[l[0]]} wins"
+        }
+    }
+    if b.contains(&".") { "in progress" } else { "draw" }
+}
+
+fn board(s: string) -> Vec<string> {
+    s.chars().map(|c| c.to_string()).collect()
+}
+
+fn main() {
+    println(winner(board("XXXOO....")))
+    println(winner(board("XOXXOOOXX")))
+    println(winner(board("XO..X....")))
+}

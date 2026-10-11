@@ -1,0 +1,25 @@
+// tags: algorithm, dynamic-programming, strings
+// rust: gap wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ
+// expect: lcs = 4
+fn lcs(a: string, b: string) -> int {
+    let x: Vec<char> = a.chars().collect()
+    let y: Vec<char> = b.chars().collect()
+    let mut dp: Vec<Vec<int>> = []
+    for _ in 0..=x.len() {
+        dp.push([0; 8])
+    }
+    for i in 0..x.len() {
+        for j in 0..y.len() {
+            if x[i] == y[j] {
+                dp[i + 1][j + 1] = dp[i][j] + 1
+            } else {
+                dp[i + 1][j + 1] = dp[i][j + 1].max(dp[i + 1][j])
+            }
+        }
+    }
+    dp[x.len()][y.len()]
+}
+
+fn main() {
+    println("lcs = ${lcs("AGGTAB", "GXTXAYB")}")
+}

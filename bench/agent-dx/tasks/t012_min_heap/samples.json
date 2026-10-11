@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 5 a\npush 1 b\npush 3 c\npop\npeek\nsize\npop\npop\npop\n",
+  "stdout": "1 b\n3 c\n2\n3 c\n5 a\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "push 2 x\npush 2 y\npop\npop\n",
+  "stdout": "2 x\n2 y\n"
+ }
+]

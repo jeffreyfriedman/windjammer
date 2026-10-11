@@ -385,7 +385,7 @@ pub(crate) fn build_library_multipass(
                 &mut dep_struct_fields,
             );
         }
-        // Qualified `dep_crate::fn` call sites need crate-prefix aliases (DB-094).
+        // Qualified `dep_crate::fn` call sites need crate-prefix aliases.
         crate::metadata::merge_external_crate_metadata_with_aliases(
             external_paths,
             &mut dep_registry,
@@ -421,7 +421,7 @@ pub(crate) fn build_library_multipass(
     );
     // Merge same-crate `.wj.meta` AFTER dependency filtering. Do not drop again —
     // a second `drop_dependency_signatures_for_local_types` would delete bare
-    // `Type::method` keys from defining-module metas (DB-091 / cross-file &str).
+    // `Type::method` keys from defining-module metas (cross-file &str).
     crate::metadata::merge_wj_meta_signatures_from_dir(&src_base, &mut global_registry);
     let mut global_float_signatures: HashMap<
         String,
@@ -484,7 +484,7 @@ pub(crate) fn build_library_multipass(
     );
     profile_phase("Declaration stub registry (parallel)", stub_registry_start);
 
-    // DB-116: insert Box on one owned field per recursive SCC so rustc E0072
+    // insert Box on one owned field per recursive SCC so rustc E0072
     // cannot fire on mutually recursive embeds (complete-chain / reducer graphs).
     crate::codegen::rust::recursive_struct_layout::apply_recursive_struct_boxing(
         &mut global_struct_fields,

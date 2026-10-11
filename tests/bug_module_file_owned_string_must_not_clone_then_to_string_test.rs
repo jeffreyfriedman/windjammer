@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-348: owned `String` field init must not emit `path.clone().to_string()`.
+//! owned `String` field init must not emit `path.clone().to_string()`.
 //!
 //! Tip output for a game project `assets/loader.rs`:
 //!   `LoadedAsset { …, path: path.clone().to_string(), … }` with `path: String`.
 //! Prefer move (`path`) or a single clone (`path.clone()`), never clone+to_string.
-//! Related to DB-340 (double to_string) but distinct pattern.
+//! Related to (double to_string) but distinct pattern.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-148: `for x in &collection` yields `&T`; tip must auto-deref (or `*x`) when
+//! `for x in &collection` yields `&T`; tip must auto-deref (or `*x`) when
 //! passing into an owned `T` / `i64` formal.
 //!
 //! a downstream database project CQ-C5 bench restore:

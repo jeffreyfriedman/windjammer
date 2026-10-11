@@ -191,7 +191,7 @@ impl<'ast> CodeGenerator<'ast> {
 
 /// Collect PascalCase type names appearing in generated Rust generic annotations.
 ///
-/// Handles tuple element types inside collections (DB-118): `Vec<(Key, Value)>`
+// Handles tuple element types inside collections: `Vec<(Key, Value)>`
 /// must yield `Key` and `Value`, not the paren-stained tokens `(Key` / `Value)`.
 fn extract_custom_types_from_rust_type_annotations(body: &str) -> Vec<String> {
     let mut out = std::collections::BTreeSet::new();

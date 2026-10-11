@@ -13,9 +13,9 @@
 /// TDD Test: Test library should use the correct lib name (not windjammer-app or *_testlib)
 ///
 /// THE WINDJAMMER WAY: Test library name must match project lib name
-/// so that test imports like `use game_host_core::*` work correctly.
+/// so that test imports like `use a game engine project::*` work correctly.
 ///
-/// Bug: Tests were failing with E0433: unresolved module game_host_core
+/// Bug: Tests were failing with E0433: unresolved module a game engine project
 /// Root Cause: Test library was using wrong names (windjammer-app or *_testlib)
 /// Fix: Use the actual project lib name from Cargo.toml
 use std::env;

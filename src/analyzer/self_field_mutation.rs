@@ -287,7 +287,7 @@ impl MaterialPalette {
 
     #[test]
     fn ctor_arg_self_field_then_write_other_field_owns_self() {
-        // DB-414: `Vox::new(self.scene); self.grid = 1` must be owned `self`.
+        // `Vox::new(self.scene); self.grid = 1` must be owned `self`.
         let src = r#"
 pub struct Scene {
     pub label: string,
@@ -330,7 +330,7 @@ impl Demo {
         assert_eq!(
             mode,
             OwnershipMode::Owned,
-            "DB-414: initialize must own self to move scene; got {mode:?}"
+            "initialize must own self to move scene; got {mode:?}"
         );
     }
 
@@ -391,7 +391,7 @@ impl NotesApp {
 
     #[test]
     fn stored_string_and_value_set_formals_stay_owned() {
-        // DB-409: `set(name, value)` stores both into Binding / field assign.
+        // `set(name, value)` stores both into Binding / field assign.
         let src = r#"
 pub enum Val {
     N(i32),
@@ -427,13 +427,13 @@ impl Scope {
         assert_eq!(
             func.inferred_ownership.get("name").copied(),
             Some(OwnershipMode::Owned),
-            "DB-409: stored name must stay Owned; got {:?}",
+            "stored name must stay Owned; got {:?}",
             func.inferred_ownership.get("name")
         );
         assert_eq!(
             func.inferred_ownership.get("value").copied(),
             Some(OwnershipMode::Owned),
-            "DB-409: stored value must stay Owned; got {:?}",
+            "stored value must stay Owned; got {:?}",
             func.inferred_ownership.get("value")
         );
     }

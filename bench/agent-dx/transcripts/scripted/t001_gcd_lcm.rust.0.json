@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 36,
+    "status": "pass",
+    "total": 36
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "use std::io::Read;\n\nfn gcd(mut a: i64, mut b: i64) -> i64 {\n    while b != 0 {\n        let t = a % b;\n        a = b;\n        b = t;\n    }\n    a\n}\n\nfn main() {\n    let mut s = String::new();\n    std::io::stdin().read_to_string(&mut s).unwrap();\n    let mut it = s.split_whitespace();\n    let t: usize = it.next().unwrap().parse().unwrap();\n    for _ in 0..t {\n        let a: i64 = it.next().unwrap().parse().unwrap();\n        let b: i64 = it.next().unwrap().parse().unwrap();\n        let g = gcd(a, b);\n        println!(\"{} {}\", g, a / g * b);\n    }\n}\n",
+   "usage": null,
+   "wall_seconds": 0.09
+  }
+ ],
+ "lang": "rust",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.09
+ },
+ "recorded_at": "2026-10-11T15:16:04",
+ "schema": 1,
+ "task": "t001_gcd_lcm",
+ "trial": 0
+}

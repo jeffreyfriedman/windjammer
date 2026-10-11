@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-356: Copy `self` must not emit `self.clone().method()` into owned-self callee.
+//! Copy `self` must not emit `self.clone().method()` into owned-self callee.
 //!
 //! Tip output for a game project `math/mat4.rs` (Mat4 is Copy):
 //!   `self.clone().multiply(other)` / `self.clone().transpose().to_array()`

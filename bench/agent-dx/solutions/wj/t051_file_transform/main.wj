@@ -1,0 +1,72 @@
+use std::env
+use std::fs
+use std::process
+
+fn main() {
+    let mut args: Vec<string> = Vec::new()
+    for a0 in env::args() {
+        args.push(a0)
+    }
+    if args.len() != 4 {
+        println("usage: transform INPUT OUTPUT MODE")
+        process::exit(2)
+    }
+    let input = args[1].clone()
+    let output = args[2].clone()
+    let mode = args[3].clone()
+    let text = match fs::read_to_string(input) {
+        Ok(t) => t,
+        Err(_) => {
+            println("error: cannot read ${input}")
+            process::exit(1)
+            ""
+        }
+    }
+    let known = mode == "upper" || mode == "reverse" || mode == "sort" || mode == "dedupe" || mode == "trim" || mode == "number"
+    if !known {
+        println("error: unknown mode ${mode}")
+        process::exit(2)
+    }
+    let mut lines: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    if mode == "upper" {
+        let mut up: Vec<string> = Vec::new()
+        for l in lines.clone() { up.push(l.to_uppercase()) }
+        lines = up
+    } else if mode == "reverse" {
+        lines.reverse()
+    } else if mode == "sort" {
+        lines.sort()
+    } else if mode == "dedupe" {
+        let mut out: Vec<string> = Vec::new()
+        for l in lines {
+            if !out.contains(l) { out.push(l.clone()) }
+        }
+        lines = out
+    } else if mode == "trim" {
+        let mut tr: Vec<string> = Vec::new()
+        for l in lines.clone() { tr.push(l.trim_matches(' ').to_string()) }
+        lines = tr
+    } else {
+        let mut out: Vec<string> = Vec::new()
+        let mut i: usize = 0
+        while i < lines.len() {
+            out.push("${i + 1}:${lines[i]}")
+            i += 1
+        }
+        lines = out
+    }
+    let mut body = ""
+    for l in lines {
+        body = body + l + "\n"
+    }
+    match fs::write(output, body) {
+        Ok(_) => {}
+        Err(_) => {
+            println("error: cannot write ${output}")
+            process::exit(1)
+        }
+    }
+    println("wrote ${lines.len()} lines to ${output}")
+    let back = fs::read_to_string(output).unwrap_or("")
+    print(back)
+}

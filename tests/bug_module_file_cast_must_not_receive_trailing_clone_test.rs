@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-300: cast expr must not grow a trailing `.clone()` (`n as usize.clone()`).
+//! cast expr must not grow a trailing `.clone()` (`n as usize.clone()`).
 //!
 //! Product tip-out/gen PageRank / pg_serve:
 //!   `graph_pagerank_buffers_new(n as usize.clone(), …)` → "cast cannot be followed by a method call".

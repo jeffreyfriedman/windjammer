@@ -11,14 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-482: a local `string` passed into a call on one `if let` arm and
+//! a local `string` passed into a call on one `if let` arm and
 //! returned on the other must not `.clone()`. The arms are exclusive.
 //!
 //! Product `dialogue_system.rs` `current_text`:
 //!   `self.substitute_variables(text.clone().clone(), world)`
 //!   then `return text`
 //! WJ is `return self.substitute_variables(text, world)` or `return text`.
-//! Distinct from DB-478 (a `for` binding into `push`) and DB-481 (a string
+//! Distinct from (a `for` binding into `push`) and (a string
 //! pushed and then used again, where one clone is required).
 
 #[path = "common/integration_test_helpers.rs"]

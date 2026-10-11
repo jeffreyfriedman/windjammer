@@ -1,0 +1,17 @@
+// tags: strings, formatting, interpolation, table
+// rust: ok
+// expect: |name      |  qty|   price|
+// expect: |apple     |    3|    1.25|
+// expect: |watermelon|   10|   12.50|
+// expect: hex ff, bin 1010, oct 17, sci 1.5e3
+fn main() {
+    let h1 = "name"
+    let h2 = "qty"
+    let h3 = "price"
+    println("|${h1:<10}|${h2:>5}|${h3:>8}|")
+    let r1 = "apple"
+    println("|${r1:<10}|${3:>5}|${1.25:>8.2}|")
+    let r2 = "watermelon"
+    println("|${r2:<10}|${10:>5}|${12.5:>8.2}|")
+    println("hex ${255:x}, bin ${10:b}, oct ${15:o}, sci ${1500.0:e}")
+}

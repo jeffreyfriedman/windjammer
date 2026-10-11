@@ -49,6 +49,23 @@ impl<'e> Lowerer<'e> {
                 }
                 self.method_call(object, field, None, args, want)
             }
+            // `(|v| body)(x)` (what `x |> |v| body` desugars to): type the closure
+            // parameters from the argument types, otherwise they default to the
+            // wrong integer width on typed backends.
+            Expression::Closure { .. } => {
+                let mut lowered = Vec::new();
+                for (_, a) in args.iter() {
+                    lowered.push(self.expr(a, None)?);
+                }
+                let want_fn = Ty::Fn(lowered.iter().map(|v| v.ty.clone()).collect(), Box::new(Ty::Unknown));
+                let f = self.expr(function, Some(&want_fn))?;
+                let ret = match &f.ty {
+                    Ty::Fn(_, r) => (**r).clone(),
+                    _ => Ty::Unknown,
+                };
+                let out = lowered.into_iter().map(|v| self.own(v)).collect();
+                Ok(PExpr::new(ret, PK::CallValue { f, args: out }))
+            }
             other => {
                 let f = self.expr(other, None)?;
                 self.call_value(f, args)
@@ -57,6 +74,11 @@ impl<'e> Lowerer<'e> {
     }
 
     fn named_call(&mut self, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        // `self::f()` is the module-relative path to the free function `f` (never a method call;
+        // the parser keeps it distinct from `self.f()`). Portable modules are flat.
+        if let Some(rest) = name.strip_prefix("self::") {
+            return self.named_call(rest, args, want);
+        }
         let plain: Vec<&Expression> = args.iter().map(|(_, e)| *e).collect();
         if let Some(intr) = Intrinsic::from_call_name(name).filter(|_| !self.shadows_intrinsic(name)) {
             return self.intrinsic(intr, &plain, false, want);

@@ -1,0 +1,9 @@
+// tags: error-handling, assert, panic
+// rust: ok
+// exit: 101
+// expect: start
+fn main() {
+    println("start")
+    assert_eq(2 + 2, 5, "arithmetic is broken")
+    println("never printed")
+}

@@ -11,14 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-410: owned-self wither must move fields, not clone them.
+//! owned-self wither must move fields, not clone them.
 //!
 //! Product `PassBuilder::push_binding(self, …) -> PassBuilder`:
 //!   `let mut new_bindings = self.bindings.clone();`
 //!   `PassBuilder { graph: self.graph.clone(), bindings: new_bindings,
 //!     binding_metas: self.binding_metas.clone(), dependencies: self.dependencies.clone(), … }`
 //! WJ is `let mut new_bindings = self.bindings` then `PassBuilder { graph: self.graph, … }`.
-//! Distinct from DB-378 (indexed `src[i].clone().field` per field) and DB-358 (`self.clone().method()`).
+//! Distinct from (indexed `src[i].clone().field` per field) and (`self.clone().method()`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

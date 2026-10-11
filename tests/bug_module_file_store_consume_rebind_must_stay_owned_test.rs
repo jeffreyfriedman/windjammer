@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-164: owned store formal consumed via `let mut out = store` must stay owned.
+//! owned store formal consumed via `let mut out = store` must stay owned.
 //!
 //! Product cold gen (`relational_mvcc_*.rs`):
 //!   `fn relational_mvcc_put_version(store: &mut RelationalMvccStore, …) -> RelationalMvccStore`
@@ -21,7 +21,7 @@
 //! assignment call sites (`store = put_version(store, …)`), which were invisible to
 //! the call-hint walk, and no skip/restore for `let mut out = store`.
 //!
-//! Note: DB-163 covers early-return `(state, …)` yielding `&mut State`; this gate is
+//! Note: covers early-return `(state, …)` yielding `&mut State`; this gate is
 //! the put_version / writeback store formal demotion sibling.
 
 #[path = "common/integration_test_helpers.rs"]
