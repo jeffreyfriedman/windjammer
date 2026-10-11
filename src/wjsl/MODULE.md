@@ -1,28 +1,35 @@
-# src/wjsl/
+# wjsl (Windjammer Shader Language front end + the single WGSL printer)
 
 ## Purpose
-WJSL (Windjammer Shader Language) front end: lexer, parser, type checker, includes, diagnostics and WGSL transpilation.
+The ONE shader front end and ONE WGSL printer. Everything that emits WGSL
+(RFC-syntax `.wjsl`, block-syntax `shader X { }`, and the Windjammer-source
+WGSL backend in `codegen/wgsl`) prints types/structs/bindings via `wgsl_printer`.
 
-## Inputs/Outputs
-In: `.wjsl` source text. Out: WGSL source or diagnostics.
+## Pipeline (public API)
+`parse(src) -> ShaderModule` -> `check(&module, src)` -> `emit_wgsl(module, src) -> String`.
+- `transpile_wjsl(src)` runs all three; `transpile_wjsl_with_includes(src, dir)` resolves
+  `use "p"` / `#include "p"` first (`resolve_includes`).
+- `ShaderDiagnostics::new(src).enrich(err)` adds WJSL context/hints to any stage's error.
+- Block syntax: `compile_legacy_shader(src)` (= `parse_block_shader` + `check_block_shader`
+  + `emit_block_shader`); `check_uniform_match` validates host/shader uniform types.
+
+## Modules
+lexer, parser, ast: tokens and AST. type_checker + expression_/statement_type_checking +
+shader_type_rules: semantic checks. codegen: module-level layout and function bodies.
+wgsl_printer: pure type/struct/binding printing (shared). block_syntax: compact block-syntax
+front end lowering into the same AST. includes: include resolution. diagnostics: errors/hints.
 
 ## Invariants
-- Self-contained: imports nothing else from the crate.
-- Overlaps with `shader/` and `codegen/wgsl` (three stacks; WP 12 merges).
+- Output is pinned by `tests/wgsl_golden_test.rs` (goldens in `tests/golden/wgsl/`).
+- No other module may print WGSL types itself; add printing to `wgsl_printer`.
+- Never decides: host-side layout (see `codegen/wgsl`).
 
-## Owns
-WJSL syntax, shader type rules, include resolution.
+## Imports
+`anyhow`, std only; `codegen/wgsl` depends on `wjsl`, never the reverse.
 
-## Never decides
-Host-side code generation.
+## Callers
+`wj shader-compile` (block syntax), `wj validate-wjsl`, `wj build` (.wjsl files),
+`windjammer-runtime-host` (`transpile_wjsl[_with_includes]`).
 
-## Allowed imports
-Nothing from the rest of the crate (self-contained). No known violations.
-Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
-
-## Entry points
-`transpile_wjsl`, `transpile_wjsl_with_includes`, `type_check_wjsl` (src/wjsl/mod.rs).
-
-## Tests
-tests/wjsl_*_test.rs (~30 files), fixtures in tests/common/wjsl_shader_fixtures.rs.
-Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
+## Testing
+`cargo test --release --test all wgsl_golden wjsl shader wgsl`

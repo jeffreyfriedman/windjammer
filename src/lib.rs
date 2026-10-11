@@ -59,7 +59,6 @@ pub mod decorator_registry;
 pub mod ejector;
 pub mod error_mapper;
 pub mod lib_rs_generator;
-pub mod shader;
 pub mod test_utils;
 pub mod type_classification;
 pub mod type_display;

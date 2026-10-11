@@ -285,7 +285,7 @@ fn cmd_explain(code: &str) -> Result<()> {
 fn cmd_shader_compile(input: &std::path::Path, output: Option<&std::path::Path>) -> Result<()> {
     let source = std::fs::read_to_string(input)
         .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", input.display(), e))?;
-    let wgsl = windjammer::shader::compile_shader(&source)?;
+    let wgsl = windjammer::wjsl::compile_legacy_shader(&source)?;
     match output {
         Some(path) => {
             std::fs::write(path, &wgsl)?;
