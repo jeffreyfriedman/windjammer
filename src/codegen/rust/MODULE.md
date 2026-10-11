@@ -1,0 +1,29 @@
+# src/codegen/rust/
+
+## Purpose
+The Rust backend: expression, statement, item, type and call-site generation split into ~90 files around `CodeGenerator` (generator.rs).
+
+## Inputs/Outputs
+In: `Program` + analyzer output + registry. Out: a Rust source string.
+
+## Invariants
+- Largest and most heuristic part of the compiler: `function_generation_prepare.rs`, `ir_call_site.rs`, `generator.rs` exceed the 2,000-line limit (ratcheted in docs/architecture-allowlist.toml).
+- Functions over 300 lines are allow-listed and may not grow.
+- New code must not add ownership/clone/width decisions here; put them in the IR solvers.
+
+## Owns
+Rust text emission: `expression_generation`, `statement` files, `function_generation_*`, `data_structure_generation`, `call_expression_generation/`, `ir_call_site`, `signature_promotion`.
+
+## Never decides
+Cross-function ownership policy, numeric inference, module resolution.
+
+## Allowed imports
+Layer `backend`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir). Known violations (tracked in docs/architecture-allowlist.toml, may only shrink): `compiler`, `linter`.
+Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
+
+## Entry points
+`CodeGenerator::new` / `generate_program` (generator.rs); `backend.rs` implements `CodegenBackend`.
+
+## Tests
+tests/codegen_*_test.rs and tests/*bug_*_test.rs regression files.
+Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.

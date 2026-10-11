@@ -1,0 +1,28 @@
+# src/cli/
+
+## Purpose
+Subcommand implementations of the `wj` binary: build, run, test, check, fmt, lint, new, add/remove, update, cache, clean, self-install, JSON diagnostics.
+
+## Inputs/Outputs
+In: parsed CLI args. Out: process side effects and exit status.
+
+## Invariants
+- Thin: delegate to `compiler`, `test_runner`, `cargo_cache`.
+- Driver layer: may read env vars and print (ratcheted).
+
+## Owns
+User-facing command behavior.
+
+## Never decides
+Compilation semantics.
+
+## Allowed imports
+Layer `driver`. May import: every module in a lower layer (support < syntax < resolve < types < ownership < ir < backend < tooling) and peers `build_utils`, `cargo_cache`, `cargo_toml`, `test_runner`. No known violations.
+Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
+
+## Entry points
+Each `cli/<cmd>.rs::execute` (src/cli/mod.rs routes).
+
+## Tests
+tests/cli_lint_test.rs and assert_cmd tests of the `wj` binary.
+Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
