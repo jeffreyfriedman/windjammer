@@ -29,6 +29,8 @@ pub use function_metadata::{
 };
 pub use type_metadata::infer_copy_from_metadata_structs_pub;
 
+mod sorted_serde;
+
 /// Metadata for a single Windjammer module
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleMetadata {
@@ -36,15 +38,17 @@ pub struct ModuleMetadata {
     pub module_path: String,
 
     /// Function signatures: name → (param_types, return_type)
+    #[serde(serialize_with = "sorted_serde::sorted_map")]
     pub functions: HashMap<String, FunctionSignature>,
 
     /// Struct field types: struct_name → field_name → Type
+    #[serde(serialize_with = "sorted_serde::sorted_nested_map")]
     pub structs: HashMap<String, HashMap<String, String>>, // String = serialized Type
 
     /// Trait implementations: trait_name → methods
     ///
     /// `stdlib_meta/*.wj.meta` omits this field; default keeps those files loadable.
-    #[serde(default)]
+    #[serde(default, serialize_with = "sorted_serde::sorted_map")]
     pub trait_impls: HashMap<String, Vec<String>>,
 
     /// Structs that implement Copy (enables cross-file Copy detection)

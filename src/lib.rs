@@ -46,6 +46,7 @@ pub mod parser_impl;
 pub mod project_paths;
 pub mod resolve;
 pub mod source_map;
+pub mod embedded_assets;
 pub mod stdlib_scanner;
 #[cfg(feature = "highlighting")]
 pub mod syntax_highlighter;
