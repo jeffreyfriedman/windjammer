@@ -248,6 +248,10 @@ pub enum Commands {
         /// Do not write; exit non-zero if any file would change
         #[arg(long)]
         check: bool,
+
+        /// Also migrate ```windjammer / ```wj code fences in .md files
+        #[arg(long)]
+        docs: bool,
     },
 
     /// Run Rust leakage linter on .wj files (W0001-W0004)

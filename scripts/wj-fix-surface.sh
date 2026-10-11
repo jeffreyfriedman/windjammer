@@ -36,6 +36,6 @@ fi
 
 status=0
 for path in "$@"; do
-  "$WJ_BIN" fix ${CHECK[@]+"${CHECK[@]}"} "$path" || status=$?
+  "$WJ_BIN" fix --docs ${CHECK[@]+"${CHECK[@]}"} "$path" || status=$?
 done
 exit $status
