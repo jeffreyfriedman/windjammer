@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Multi-Target Code Generation Architecture
 
 **Version:** 0.32.0  

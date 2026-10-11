@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Error Mapping System Design
 
 ## Problem Statement

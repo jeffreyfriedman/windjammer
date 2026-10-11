@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Windjammer Trait System Design
 
 > **Style note (2026-10-10).** Windjammer examples write `self`, never `&self` / `&mut self`: the compiler infers the receiver mode from the method body (see the "Self parameter inference" section and [language-guide/self-parameter.md](../language-guide/self-parameter.md)). Rust blocks below show the generated output. Code fences labelled `go` are Windjammer syntax highlighted as Go.
