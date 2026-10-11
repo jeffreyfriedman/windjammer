@@ -82,7 +82,7 @@ pub fn register(r: &mut Registry) {
     r.add_const("Ordering::Less", ordering(std::cmp::Ordering::Less));
     r.add_const("Ordering::Equal", ordering(std::cmp::Ordering::Equal));
     r.add_const("Ordering::Greater", ordering(std::cmp::Ordering::Greater));
-    for n in ["Box::new", "Rc::new", "Arc::new", "Cow::Borrowed", "Cow::Owned", "identity", "convert::identity"] {
+    for n in ["Box::new", "Cow::Borrowed", "Cow::Owned", "identity", "convert::identity"] {
         r.func(n, |_, a| arg(&a, 0, "new"));
     }
     r.func("drop", |_, _| Ok(Value::Unit));

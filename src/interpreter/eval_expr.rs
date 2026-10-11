@@ -71,7 +71,7 @@ impl Interpreter {
     pub(crate) fn eval(&mut self, e: &'static Expression<'static>) -> R {
         let v = self.eval_raw(e)?;
         if let Value::Ref(_) = v {
-            deref_value(v)
+            super::place::strip_refs(v)
         } else {
             Ok(v)
         }
@@ -146,7 +146,11 @@ impl Interpreter {
                     let v = self.eval(operand)?;
                     self.logical_not(v)
                 }
-                UnaryOp::Deref | UnaryOp::Ref => self.eval(operand),
+                UnaryOp::Deref => {
+                    let v = self.eval(operand)?;
+                    deref_value(v)
+                }
+                UnaryOp::Ref => self.eval(operand),
                 UnaryOp::MutRef => {
                     if let Some(p) = self.resolve_place(operand)? {
                         Ok(Value::Ref(p))
@@ -312,6 +316,13 @@ impl Interpreter {
     }
 
     pub(crate) fn field_of(&mut self, obj: &Value, field: &str) -> R {
+        let peeled;
+        let obj = if let Value::Rc(_) = obj {
+            peeled = deref_value(obj.clone())?;
+            &peeled
+        } else {
+            obj
+        };
         match obj {
             Value::Struct(s) => s
                 .fields
@@ -336,6 +347,9 @@ impl Interpreter {
     }
 
     pub(crate) fn index_value(&mut self, obj: &Value, idx: &Value) -> R {
+        if matches!(obj, Value::Rc(_)) || matches!(idx, Value::Rc(_)) {
+            return self.index_value(&deref_value(obj.clone())?, &deref_value(idx.clone())?);
+        }
         match (obj, idx) {
             (Value::Vec(v), Value::Int(i, _)) => {
                 if *i < 0 || *i as usize >= v.len() {

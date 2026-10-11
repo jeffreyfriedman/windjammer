@@ -113,7 +113,7 @@ impl Interpreter {
             }
 
             Statement::If { condition, then_block, else_block, .. } => {
-                let c = self.eval(condition)?;
+                let c = deref_value(self.eval(condition)?)?;
                 match c {
                     Value::Bool(true) => self.exec_block(then_block),
                     Value::Bool(false) => match else_block {
@@ -168,6 +168,10 @@ impl Interpreter {
 
     fn eval_raw_binding(&mut self, e: &'static Expression<'static>) -> R {
         if let Expression::Unary { op: crate::parser::UnaryOp::MutRef, .. } = e {
+            return self.eval_raw(e);
+        }
+        // a guard/reference returned by a call (`cell.borrow_mut()`, `lock().unwrap()`) stays a reference
+        if let Expression::MethodCall { .. } = e {
             return self.eval_raw(e);
         }
         self.eval(e)

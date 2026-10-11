@@ -651,6 +651,9 @@ impl Interpreter {
             (None, Value::Ref(p)) => Some(self.chase(p.clone())?),
             _ => place,
         };
+        if method == "clone" && matches!(recv, Value::Rc(_)) {
+            return Ok(recv); // Rc::clone: another handle to the same allocation
+        }
         let recv = deref_value(recv)?;
         // which user method (if any) will run? decides argument ref-ness
         let user = self.find_user_method(&recv, method);
