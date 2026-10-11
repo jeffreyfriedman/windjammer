@@ -128,6 +128,11 @@ path = "tests/all.rs"
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
 
+# Codegen correctness gates (compiled Rust vs interpreter): also standalone for fast iteration.
+[[test]]
+name = "codegen_correctness"
+path = "tests/codegen_correctness_test.rs"
+
 [[bench]]
 name = "string_optimization_bench"
 harness = false

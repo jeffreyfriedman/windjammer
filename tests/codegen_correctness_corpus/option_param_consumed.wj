@@ -1,0 +1,19 @@
+// `o.ok_or(e)?` and `r?` consume an Option/Result parameter: it is owned, not `&mut`/`&`.
+// expect: Ok(1)
+// expect: Err("none")
+// expect: Ok(1)
+// expect: Err("bad")
+fn c(o: Option<string>) -> Result<int, string> {
+    let s = o.ok_or("none")?
+    Ok(s.len())
+}
+fn d(o: Result<string, string>) -> Result<int, string> {
+    let s = o?
+    Ok(s.len())
+}
+fn main() {
+    println("${c(Some("x")):?}")
+    println("${c(None):?}")
+    println("${d(Ok("y")):?}")
+    println("${d(Err("bad")):?}")
+}

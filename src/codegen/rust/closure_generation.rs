@@ -45,6 +45,7 @@ impl<'ast> CodeGenerator<'ast> {
         parameters: &[String],
         body: &Expression<'ast>,
     ) -> String {
+        let borrows_captures = std::mem::take(&mut self.idiom.next_closure_borrows_captures);
         let params = parameters
             .iter()
             .map(|p| self.format_closure_param_to_rust(p))
@@ -80,7 +81,25 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // `|| base * 2` with `base: int`: the literal takes the width of its typed peer. Numeric
+        // inference does not key closure-body expressions reliably, so give the body the type of
+        // its own operands as the ambient integer slot.
+        let prev_int_target = self.assignment_int_target_type.clone();
+        if !is_compiler_generated
+            && matches!(body, Expression::Binary { .. })
+        {
+            if let Some(ty) = self.infer_expression_type(body) {
+                if Self::int_type_from_assignment_target(&ty).is_some() {
+                    self.assignment_int_target_type = Some(ty);
+                }
+            }
+        }
+        // A closure body is its own value context: its tail is the closure's result even when the
+        // closure sits inside a unit-typed block (`hs.push(thread::spawn(move || { ..; s }))`).
+        let was_void = std::mem::replace(&mut self.in_void_block, false);
         let body_str = self.generate_expression(body);
+        self.in_void_block = was_void;
+        self.assignment_int_target_type = prev_int_target;
 
         if !is_compiler_generated {
             self.in_user_written_closure = prev_in_user_closure;
@@ -94,6 +113,8 @@ impl<'ast> CodeGenerator<'ast> {
             false
         } else if is_compiler_generated {
             true
+        } else if borrows_captures {
+            false
         } else {
             captures_outer
         };

@@ -18,8 +18,8 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
-        if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
-        let mut obj_str = obj_str;
+        let (mut obj_str, mut args) = (obj_str, args);
+        self.mc_fix_std_idiom_call(object, method, arguments, &mut obj_str, &mut args);
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);
         let receiver_type_name = self
@@ -1662,7 +1662,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Convert it back to proper Rust slice syntax
         // For strings, we need to add & to get &str (a reference)
         if method == "slice" && args.len() == 2 {
-            return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
+            return self.mc_slice_expr(&obj_str, &args, arguments);
         }
 
         // Explicit `.clone()` in WJ source is Rust leakage (W0005). Prefer stripping, but

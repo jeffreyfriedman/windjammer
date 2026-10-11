@@ -1,0 +1,36 @@
+// Threads: handles collected in a Vec, spawn closures returning a tail value, a Receiver moved into a worker.
+// interp-gap: the interpreter has no threads or channels
+// expect: 0 10 20
+// expect: 6
+use std::thread
+use std::sync::mpsc
+fn worker(rx: Receiver<int>) -> int {
+    let mut s = 0
+    for v in rx { s += v }
+    s
+}
+fn main() {
+    let mut handles: Vec<JoinHandle<int>> = []
+    let mut i: int = 0
+    while i < 3 {
+        let k = i
+        let h = thread::spawn(move || {
+            let s = k * 10
+            s
+        })
+        handles.push(h)
+        i += 1
+    }
+    let mut out: Vec<int> = []
+    for h in handles {
+        out.push(h.join().unwrap_or(0))
+    }
+    println("${out[0]} ${out[1]} ${out[2]}")
+    let (tx, rx) = mpsc::channel()
+    let h2 = thread::spawn(move || worker(rx))
+    tx.send(1)
+    tx.send(2)
+    tx.send(3)
+    drop(tx)
+    println("${h2.join().unwrap_or(0)}")
+}
