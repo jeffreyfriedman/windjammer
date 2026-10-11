@@ -119,8 +119,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 no_generate_cargo_toml,
             })?;
         }
-        Commands::Fmt { check } => {
-            windjammer::cli::fmt::execute(check)?;
+        Commands::Fmt { check, rust, paths } => {
+            windjammer::cli::fmt::execute(check, &paths, rust)?;
         }
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
