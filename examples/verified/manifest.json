@@ -1,5 +1,5 @@
 {
-  "count": 164,
+  "count": 165,
   "examples": [
     {
       "expect_lines": 2,
@@ -809,6 +809,18 @@
       ]
     },
     {
+      "expect_lines": 6,
+      "file": "idiom_agentdx_regressions.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "idioms",
+        "regression",
+        "strings",
+        "sort"
+      ]
+    },
+    {
       "expect_lines": 3,
       "file": "if_let_chain.wj",
       "kind": "program",
@@ -1336,8 +1348,7 @@
       "expect_lines": 4,
       "file": "prog_priority_scheduler.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "program",
         "sort",
@@ -1468,8 +1479,7 @@
       "expect_lines": 4,
       "file": "std_cmp_ordering.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "std",
         "cmp",
@@ -1539,8 +1549,7 @@
       "expect_lines": 4,
       "file": "strings_chars.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "strings",
         "chars"
@@ -1550,8 +1559,7 @@
       "expect_lines": 4,
       "file": "strings_compare_sort.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0658]: use of unstable library feature 'str_as_str'",
+      "rust": "ok",
       "tags": [
         "strings",
         "sort",
