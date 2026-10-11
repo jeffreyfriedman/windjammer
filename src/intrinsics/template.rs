@@ -277,7 +277,14 @@ pub fn rust_template_to_interpolation(
                     return Err("empty format argument".into());
                 }
                 out.push_str("${");
-                out.push_str(expr);
+                if expr.starts_with('"') {
+                    // `${"` lexes as a literal dollar-brace; parenthesise string-literal expressions.
+                    out.push('(');
+                    out.push_str(expr);
+                    out.push(')');
+                } else {
+                    out.push_str(expr);
+                }
                 if let Some(s) = spec {
                     let s = s.trim();
                     if !s.is_empty() {
@@ -369,6 +376,10 @@ mod tests {
             rust_template_to_interpolation("{name}={v:.2}", &[], &[("v".into(), "a.b".into())])
                 .unwrap(),
             "${name}=${a.b:.2}"
+        );
+        assert_eq!(
+            rust_template_to_interpolation("{:?}", &v(&["\"ok\""]), &[]).unwrap(),
+            "${(\"ok\"):?}"
         );
         assert_eq!(
             rust_template_to_interpolation("cost $ {}", &v(&["c"]), &[]).unwrap(),
