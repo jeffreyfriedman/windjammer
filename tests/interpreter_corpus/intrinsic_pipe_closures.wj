@@ -1,0 +1,24 @@
+// seeds: 1 4 6 9
+// Pipe operator (desugared in the parser) and closure literals applied in call position.
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() {
+    let n: int = __SEED__
+    let one: int = 1
+    let three: int = 3
+    let four: int = 4
+    let a = n |> |v| v + one
+    let b = n |> double |> |v| v * three
+    let c = (|v| v - four)(n)
+    let d = (|x, y| x * y)(n, n + one)
+    let e = n |> double |> add(n)
+    println("a=${a} b=${b} c=${c} d=${d} e=${e}")
+    let f = n |> |v| v * v |> |w| w + n
+    println("f=${f}")
+}

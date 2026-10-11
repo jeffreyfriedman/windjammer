@@ -210,21 +210,8 @@ impl Interpreter {
     ) -> R {
         if let Expression::Identifier { name, .. } = function {
             if self.lookup_var(name).is_none() {
-                if matches!(name.as_str(), "println" | "print" | "eprintln" | "eprint")
-                    && arguments.len() == 1
-                    && super::eval_expr::is_prebuilt_string(arguments[0].1)
-                {
-                    let v = self.eval(arguments[0].1)?;
-                    let mut s = self.display_string(&v)?;
-                    if name.ends_with("ln") {
-                        s.push('\n');
-                    }
-                    if name.starts_with('e') {
-                        self.write_err(&s);
-                    } else {
-                        self.write_out(&s);
-                    }
-                    return Ok(Value::Unit);
+                if let Some(intr) = self.intrinsic_for_call(name) {
+                    return self.eval_intrinsic_call(intr, function, arguments);
                 }
                 return self.call_named(name, arguments);
             }
