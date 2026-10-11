@@ -13,7 +13,11 @@ fn list(status: Status) -> String {
     let mut s = String::new();
     for a in areas {
         s.push_str(&format!("- **{a}**: "));
-        let items: Vec<&str> = FEATURES.iter().filter(|f| f.status == status && f.area == a).map(|f| f.summary).collect();
+        let items: Vec<&str> = FEATURES
+            .iter()
+            .filter(|f| f.status == status && f.area == a)
+            .map(|f| f.summary)
+            .collect();
         s.push_str(&items.join("; "));
         s.push('\n');
     }

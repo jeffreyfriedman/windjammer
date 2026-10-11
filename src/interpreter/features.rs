@@ -27,12 +27,38 @@ pub struct Feature {
     pub expect: &'static str,
 }
 
-const fn ok(id: &'static str, area: &'static str, summary: &'static str, probe: &'static str, expect: &'static str) -> Feature {
-    Feature { id, area, summary, status: Status::Supported, probe, expect }
+const fn ok(
+    id: &'static str,
+    area: &'static str,
+    summary: &'static str,
+    probe: &'static str,
+    expect: &'static str,
+) -> Feature {
+    Feature {
+        id,
+        area,
+        summary,
+        status: Status::Supported,
+        probe,
+        expect,
+    }
 }
 
-const fn no(id: &'static str, area: &'static str, summary: &'static str, probe: &'static str, expect: &'static str) -> Feature {
-    Feature { id, area, summary, status: Status::Unsupported, probe, expect }
+const fn no(
+    id: &'static str,
+    area: &'static str,
+    summary: &'static str,
+    probe: &'static str,
+    expect: &'static str,
+) -> Feature {
+    Feature {
+        id,
+        area,
+        summary,
+        status: Status::Unsupported,
+        probe,
+        expect,
+    }
 }
 
 pub const FEATURES: &[Feature] = &[
@@ -110,7 +136,11 @@ mod tests {
     fn ids_are_unique_and_well_formed() {
         for (i, f) in FEATURES.iter().enumerate() {
             assert!(f.id.contains('.') && !f.id.contains(' '), "{}", f.id);
-            assert!(FEATURES[i + 1..].iter().all(|g| g.id != f.id), "duplicate id {}", f.id);
+            assert!(
+                FEATURES[i + 1..].iter().all(|g| g.id != f.id),
+                "duplicate id {}",
+                f.id
+            );
             assert!(f.probe.contains("fn main"), "{}: probe needs fn main", f.id);
         }
     }

@@ -33,10 +33,11 @@ fn run_probe(src: &str) -> Outcome {
         .stack_size(64 << 20)
         .spawn(move || {
             let tokens = Lexer::new(&src).tokenize_with_locations();
-            let program = match Parser::new_with_source(tokens, "probe.wj".into(), src.clone()).parse() {
-                Ok(p) => p,
-                Err(e) => return Outcome::Other(format!("parse error: {e}")),
-            };
+            let program =
+                match Parser::new_with_source(tokens, "probe.wj".into(), src.clone()).parse() {
+                    Ok(p) => p,
+                    Err(e) => return Outcome::Other(format!("parse error: {e}")),
+                };
             let mut it = Interpreter::new_capturing();
             match it.run_checked(&program) {
                 Ok(_) => Outcome::Printed(it.get_output().trim_end_matches('\n').to_string()),
@@ -55,8 +56,13 @@ fn run_probe(src: &str) -> Outcome {
 /// Does running `f.probe` match what the registry says about it?
 fn conforms(f: &Feature, got: &Outcome) -> bool {
     match (f.status, got) {
-        (Status::Supported, Outcome::Printed(out)) => !f.expect.starts_with("panic: ") && out == f.expect,
-        (Status::Supported, Outcome::Panicked(m)) => f.expect.strip_prefix("panic: ").is_some_and(|w| m.contains(w)),
+        (Status::Supported, Outcome::Printed(out)) => {
+            !f.expect.starts_with("panic: ") && out == f.expect
+        }
+        (Status::Supported, Outcome::Panicked(m)) => f
+            .expect
+            .strip_prefix("panic: ")
+            .is_some_and(|w| m.contains(w)),
         (Status::Unsupported, Outcome::Unsupported(m)) => m.contains(f.expect),
         _ => false,
     }
@@ -68,31 +74,70 @@ fn every_registered_feature_behaves_as_registered() {
         .iter()
         .filter_map(|f| {
             let got = run_probe(f.probe);
-            (!conforms(f, &got)).then(|| format!("{} ({:?}): expected {:?}, got {got:?}", f.id, f.status, f.expect))
+            (!conforms(f, &got)).then(|| {
+                format!(
+                    "{} ({:?}): expected {:?}, got {got:?}",
+                    f.id, f.status, f.expect
+                )
+            })
         })
         .collect();
-    assert!(bad.is_empty(), "registry drifted from the interpreter:\n{}", bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "registry drifted from the interpreter:\n{}",
+        bad.join("\n")
+    );
 }
 
 #[test]
 fn registry_is_not_trivially_small_and_has_both_statuses() {
-    assert!(FEATURES.iter().filter(|f| f.status == Status::Supported).count() >= 20);
+    assert!(
+        FEATURES
+            .iter()
+            .filter(|f| f.status == Status::Supported)
+            .count()
+            >= 20
+    );
     assert!(FEATURES.iter().any(|f| f.status == Status::Unsupported));
 }
 
 /// Mutation self-tests: the harness must reject wrong expectations and flipped statuses.
 #[test]
 fn harness_detects_drift() {
-    let sup = FEATURES.iter().find(|f| f.status == Status::Supported && !f.expect.starts_with("panic: ")).unwrap();
+    let sup = FEATURES
+        .iter()
+        .find(|f| f.status == Status::Supported && !f.expect.starts_with("panic: "))
+        .unwrap();
     let got = run_probe(sup.probe);
     assert!(conforms(sup, &got));
-    let wrong = Feature { expect: "definitely not the output", ..*sup };
-    assert!(!conforms(&wrong, &got), "a wrong expectation must be caught");
-    let flipped = Feature { status: Status::Unsupported, ..*sup };
-    assert!(!conforms(&flipped, &got), "a feature that works but is registered Unsupported must be caught");
-    let uns = FEATURES.iter().find(|f| f.status == Status::Unsupported).unwrap();
+    let wrong = Feature {
+        expect: "definitely not the output",
+        ..*sup
+    };
+    assert!(
+        !conforms(&wrong, &got),
+        "a wrong expectation must be caught"
+    );
+    let flipped = Feature {
+        status: Status::Unsupported,
+        ..*sup
+    };
+    assert!(
+        !conforms(&flipped, &got),
+        "a feature that works but is registered Unsupported must be caught"
+    );
+    let uns = FEATURES
+        .iter()
+        .find(|f| f.status == Status::Unsupported)
+        .unwrap();
     let got = run_probe(uns.probe);
     assert!(conforms(uns, &got));
-    let flipped = Feature { status: Status::Supported, ..*uns };
-    assert!(!conforms(&flipped, &got), "an unsupported feature registered as Supported must be caught");
+    let flipped = Feature {
+        status: Status::Supported,
+        ..*uns
+    };
+    assert!(
+        !conforms(&flipped, &got),
+        "an unsupported feature registered as Supported must be caught"
+    );
 }
