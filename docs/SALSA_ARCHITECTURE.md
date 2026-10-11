@@ -1,8 +1,10 @@
 # Salsa Architecture in Windjammer LSP
 
+> **Status (2026-10-11): background, not verified.** Written for 0.24 (2025-10). Salsa is a dependency of the `cli` feature and `windjammer-lsp`, but performance figures and the "Production Ready" label below were not re-measured; treat them as design intent.
+
 **Version**: 0.24.0  
 **Date**: October 12, 2025  
-**Status**: Production Ready
+**Status**: design description (unverified)
 
 ---
 
@@ -725,7 +727,7 @@ db.set_source_text(uri, text);  // Creates memo
 ---
 
 **Version**: 0.24.0  
-**Status**: ✅ **Production Ready**  
+**Status**: design description (unverified)  
 **Performance**: ✅ **~1000x speedup achieved**  
 **Next**: Cross-file features, semantic analysis
 

@@ -20,10 +20,9 @@ produced by these commands; nothing is quoted from existing docs.
 | `codegen/rust/constant_folding.rs` | Folds literal arithmetic | Live (`expression_generation.rs:825`) | unit | LIVE | Low |
 | `codegen/rust/optimizations.rs` | 19-line trait stub | nothing | none | DEAD | None |
 | docs `OPTIMIZATION_ARCHITECTURE.md` | Describes `compiler_analysis.rs`, `batching_codegen.rs` | those files do not exist in the repo | - | FALSE (rewritten) | - |
-| docs `COMPILER_OPTIMIZATIONS.md`, `MULTI_LANGUAGE_OPTIMIZATION.md`, WJ-PERF-01 RFC | Targets: ">= 95% of Rust", "99%+", "95% of Rust's runtime speed" | not implemented (`wj optimize`, `wj economics` do not exist) | - | ASPIRATIONAL | - |
+| former docs `COMPILER_OPTIMIZATIONS.md`, `MULTI_LANGUAGE_OPTIMIZATION.md` (both deleted), WJ-PERF-01 RFC | Targets: ">= 95% of Rust", "99%+", "95% of Rust's runtime speed" | not implemented (`wj optimize`, `wj economics` do not exist) | - | ASPIRATIONAL | - |
 
-Decision (see ADR-0006 option A): the dead AST phases and IR stubs are moved to
-`src/optimizer/quarantine/` (not compiled, kept for history) and replaced by
+Decision (see ADR-0006 option A): the dead AST phases were deleted (history in git) and replaced by
 `src/optimizer/` v2, documented in `src/optimizer/MODULE.md` and
 `docs/optimization/PASSES.md`.
 

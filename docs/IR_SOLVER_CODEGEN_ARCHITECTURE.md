@@ -191,7 +191,6 @@ For every coercion rule or constraint change:
 ## Related Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — compiler crate structure
-- [archive/design/auto-reference.md](archive/design/auto-reference.md) — historical auto-borrow design (archived, superseded by this document)
 - [design/multi-target-codegen.md](design/multi-target-codegen.md) — multi-target vision
 - [proposals/rfcs/WJ-SEC-01-effect-capabilities.md](proposals/rfcs/WJ-SEC-01-effect-capabilities.md) — effect system
 - [proposals/rfcs/WJ-SEC-02-taint-tracking.md](proposals/rfcs/WJ-SEC-02-taint-tracking.md) — taint tracking
