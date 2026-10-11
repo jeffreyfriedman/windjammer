@@ -1,6 +1,6 @@
 (* Windjammer grammar: normative syntax of the language as accepted by src/lexer and src/parser.   *)
 (*                                                                                                  *)
-(* This file is machine-checked by tests/spec_grammar_test.rs: sentences are generated from it and  *)
+(* This file is machine-checked by tools/docs_truth/spec_grammar.rs: sentences are generated from it and *)
 (* fed to the real parser. Notation: "x" terminal; { x } repetition; [ x ] option; ( x ) group;     *)
 (* /a-z_/ character class (lexical rules only). UPPERCASE names are lexical, lowercase syntactic.   *)
 (* Directives (a comment whose text starts with "@") apply to the NEXT production:                               *)
