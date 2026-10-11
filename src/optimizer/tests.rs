@@ -162,3 +162,15 @@ fn macro_arg_clone_strips_format_family_args_only() {
     let w = "fn f(o: &mut String, s: &String) { write!(o.clone(), \"{}\", s.clone()); }";
     assert_eq!(opt(&c, w), "fn f(o: &mut String, s: &String) { write!(o.clone(), \"{}\", s); }");
 }
+
+#[test]
+fn with_capacity_skips_sibling_vec_lets_and_handles_literal_i32_bounds() {
+    let c = only(|c| c.with_capacity = true);
+    let src = "fn f(n: usize) { let mut a = Vec::new(); let mut b = Vec::new(); for _i in 0_usize..n { a.push(1); b.push(2); } }";
+    let got = opt(&c, src);
+    assert!(got.contains("let mut b = Vec::with_capacity(n)"), "{got}");
+    let lit = "fn f() { let mut v: Vec<u8> = Vec::new(); for _i in 0_i32..5000_i32 { v.push(1); } }";
+    assert!(opt(&c, lit).contains("Vec::with_capacity(5000_i32 as usize)"));
+    let neg_var = "fn f(n: i32) { let mut v: Vec<u8> = Vec::new(); for _i in 0_i32..n { v.push(1); } }";
+    assert_eq!(opt(&c, neg_var), neg_var);
+}
