@@ -153,7 +153,7 @@ pub fn parse<'db>(db: &'db dyn salsa::Database, file: SourceFile) -> ParsedProgr
         Err(e) => {
             tracing::error!("Parse error in {}: {}", uri, e);
             // Return empty program on error
-            parser::Program { items: vec![] }
+            parser::Program::new(vec![])
         }
     };
 

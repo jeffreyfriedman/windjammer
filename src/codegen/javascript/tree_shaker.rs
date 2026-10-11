@@ -47,7 +47,7 @@ impl TreeShaker {
             .cloned()
             .collect();
 
-        Program { items }
+        Program::from_items_of(items, [program])
     }
 
     /// Mark all used items starting from entry points
@@ -263,6 +263,7 @@ mod tests {
     #[test]
     fn test_tree_shaker_basic() {
         let program = Program {
+            owner: Default::default(),
             items: vec![
                 Item::Function {
                     decl: FunctionDecl {
@@ -344,6 +345,7 @@ mod tests {
     #[test]
     fn test_analyze_usage() {
         let program = Program {
+            owner: Default::default(),
             items: vec![
                 Item::Function {
                     decl: FunctionDecl {

@@ -158,6 +158,14 @@ path = "tests/interpreter_features_test.rs"
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
 
+[[test]]
+name = "parser_arena_memory"
+path = "tests/parser_arena_memory_test.rs"
+
+[[bench]]
+name = "parser_throughput"
+harness = false
+
 [[bench]]
 name = "string_optimization_bench"
 harness = false
