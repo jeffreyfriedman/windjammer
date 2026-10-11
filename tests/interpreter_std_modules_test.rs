@@ -343,3 +343,62 @@ fn main() {
     // uuid v7 for 1700000000000 ms = 0x018BCFE56800, version nibble 7, variant 10xx
     assert_eq!(out, "true\n36\n4\n018bcfe5-6800-7123-8567-89abcdef0123\n4\n42\n0\néll\nbbaa\n");
 }
+
+const HTTP_PROG: &str = r##"
+use std::http
+fn main() {
+    match http::get("http://127.0.0.1:PORT/hello") {
+        Ok(r) => {
+            println("${r.status_code()} ${r.is_success()}")
+            println(r.text().unwrap_or("?"))
+            println(r.headers().get("x-test").unwrap_or("-"))
+        }
+        Err(e) => println("ERR ${e}")
+    }
+}
+"##;
+
+fn run_with(src: &str, flags: &[&str]) -> (String, String, i32) {
+    let dir = TempDir::new().unwrap();
+    let f = dir.path().join("prog.wj");
+    fs::write(&f, src).unwrap();
+    let o = Command::new(WJ).args(["run", "--interpret"]).args(flags).arg(&f).current_dir(dir.path()).output().unwrap();
+    (String::from_utf8_lossy(&o.stdout).to_string(), String::from_utf8_lossy(&o.stderr).to_string(), o.status.code().unwrap_or(-1))
+}
+
+#[test]
+fn http_client_is_off_by_default_mockable_and_real_only_when_allowed() {
+    use std::io::{Read, Write};
+    let src = HTTP_PROG.replace("PORT", "9");
+    // 1. default: refuses, naming the flags
+    let (out, _, code) = run_with(&src, &[]);
+    assert_eq!(code, 0);
+    assert!(out.starts_with("ERR network access is disabled"), "{out}");
+    assert!(out.contains("--mock-http") && out.contains("--allow-network"), "{out}");
+    // 2. mock port
+    let dir = TempDir::new().unwrap();
+    let mock = dir.path().join("mock.json");
+    fs::write(
+        &mock,
+        r#"[{"method":"GET","url":"http://127.0.0.1:9/hello","status":201,"headers":{"X-Test":"yes"},"body":"canned"}]"#,
+    )
+    .unwrap();
+    let (out, err, _) = run_with(&src, &["--mock-http", mock.to_str().unwrap()]);
+    assert_eq!(out, "201 true\ncanned\nyes\n", "{err}");
+    let (out, _, _) = run_with(&src.replace("/hello", "/other"), &["--mock-http", mock.to_str().unwrap()]);
+    assert!(out.starts_with("ERR mock http: no response recorded for GET"), "{out}");
+    // 3. real port against a local server
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        let (mut s, _) = listener.accept().unwrap();
+        let mut buf = [0u8; 1024];
+        let n = s.read(&mut buf).unwrap();
+        let req = String::from_utf8_lossy(&buf[..n]).to_string();
+        assert!(req.starts_with("GET /hello HTTP/1.1"), "{req}");
+        s.write_all(b"HTTP/1.1 200 OK\r\nX-Test: real\r\nContent-Length: 5\r\n\r\nworld").unwrap();
+    });
+    let (out, err, _) = run_with(&HTTP_PROG.replace("PORT", &port.to_string()), &["--allow-network"]);
+    server.join().unwrap();
+    assert_eq!(out, "200 true\nworld\nreal\n", "{err}");
+}

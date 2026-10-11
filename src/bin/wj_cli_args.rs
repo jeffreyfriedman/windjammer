@@ -161,6 +161,14 @@ pub enum Commands {
         #[arg(long)]
         deterministic_time: bool,
 
+        /// With --interpret: allow plain http:// client requests (default: the http client refuses)
+        #[arg(long)]
+        allow_network: bool,
+
+        /// With --interpret: answer http client calls from a JSON file of canned responses
+        #[arg(long, value_name = "FILE")]
+        mock_http: Option<PathBuf>,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,

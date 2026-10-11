@@ -52,10 +52,14 @@ pub fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static)
 }
 
 /// Knobs of a run (CLI flags): scheduler seed and deterministic time.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct RunOptions {
     pub sched_seed: u64,
     pub deterministic_time: bool,
+    /// `--allow-network`: plain http:// client requests are allowed.
+    pub allow_network: bool,
+    /// `--mock-http FILE`: canned responses for the http client (takes precedence).
+    pub mock_http: Option<PathBuf>,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -76,6 +80,17 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
         it.guard_stack();
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
+        if let Some(p) = &opts.mock_http {
+            match super::builtins::std_http::HttpMode::mock_from_file(p) {
+                Ok(m) => it.set_http_mode(m),
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return 1;
+                }
+            }
+        } else if opts.allow_network {
+            it.set_http_mode(super::builtins::std_http::HttpMode::Real);
+        }
         it.set_args(args);
         if let Err(e) = it.load_entry_file(&entry) {
             eprintln!("{}", e.render());

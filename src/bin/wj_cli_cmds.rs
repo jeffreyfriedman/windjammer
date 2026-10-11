@@ -75,12 +75,14 @@ pub fn run(cli: Cli) -> Result<()> {
             interpret,
             sched_seed,
             deterministic_time,
+            allow_network,
+            mock_http,
             defer_drop,
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             if interpret {
-                let opts = windjammer::interpreter::runner::RunOptions { sched_seed, deterministic_time };
+                let opts = windjammer::interpreter::runner::RunOptions { sched_seed, deterministic_time, allow_network, mock_http };
                 interpret_file(&path, args, opts)?;
             } else {
                 windjammer::cli::run::execute(&path, &args, &target)?;

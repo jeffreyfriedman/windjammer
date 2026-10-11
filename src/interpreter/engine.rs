@@ -126,6 +126,8 @@ pub struct Interpreter {
     pub(crate) rng: Option<rand::rngs::StdRng>,
     /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
     pub(crate) log_level: Option<i32>,
+    /// How `std::http` client calls are answered (default: refuse).
+    pub(crate) http: super::builtins::std_http::HttpMode,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -179,6 +181,7 @@ impl Interpreter {
             epoch: std::time::Instant::now(),
             rng: None,
             log_level: None,
+            http: Default::default(),
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
@@ -224,6 +227,10 @@ impl Interpreter {
     /// Deterministic time: no real clock is read; time advances only through `sleep`.
     pub fn set_deterministic_time(&mut self, on: bool) {
         self.sched.deterministic = on;
+    }
+
+    pub fn set_http_mode(&mut self, mode: super::builtins::std_http::HttpMode) {
+        self.http = mode;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {
