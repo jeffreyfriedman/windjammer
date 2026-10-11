@@ -1,7 +1,9 @@
 # Examples
 
-Status: these programs are not built by CI. They may lag the compiler; the language-feature examples in
-`syntax_tests/` and `tests/` are run with `wj test` (see below), everything else is best-effort.
+Status: every program here is exercised by CI. `examples/EXAMPLES.toml` assigns each `.wj` file a mode
+(`run`: interpreter output equals its hand-written `// expect:` lines; `test`: `wj test --interpret` passes; `check`: parses and passes the
+analyzer, with a stated reason it is not run), and `tests/examples_gate_test.rs` fails on an example that is not listed or does not pass its mode.
+An example that fits no mode is deleted. The verified idiom corpus is [verified/](verified/README.md) (checked by `tests/verified_examples_test.rs`).
 
 ## Contents
 - `syntax_tests/` - numbered single-feature programs (package with tests).
@@ -10,7 +12,7 @@ Status: these programs are not built by CI. They may lag the compiler; the langu
 - `wjfind/` (file search), `wschat/` (WebSocket chat), `taskflow/` (REST API): larger dogfooding programs.
 - `wasm_hello/` - WebAssembly "hello" (`wj build ... --target wasm`).
 - `optimization_validation/` - inputs for the optimizer assessment.
-- Single files in this directory (`async_patterns.wj`, `traits.wj`, `macros.wj`, ...): feature demos, not verified.
+- Single files in this directory (`traits.wj`, `testing_examples.wj`, ...): feature demos, checked by the gate.
 
 ## Running
 

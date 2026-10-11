@@ -1,3 +1,8 @@
+// expect: 16
+// expect: hello ada!
+// expect: 6
+// expect: ok 2
+// expect: err odd 5
 // Pipe operator example. See docs/design/pipe-operator.md.
 //
 // Expected output:
