@@ -1,3 +1,7 @@
+---
+status: accepted
+last_verified: 3406ef05bb35
+---
 # ADR-0001: Ownership truth: IR solver vs analyzer
 
 - **Status:** Accepted (2026-10-10)

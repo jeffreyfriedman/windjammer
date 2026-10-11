@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Surface syntax guide (ADR-0014 Phase 1)
 
 Windjammer has no macros. The print/assert/panic family are **built-in functions** (language

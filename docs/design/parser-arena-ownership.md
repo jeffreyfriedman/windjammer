@@ -1,5 +1,6 @@
 ---
 status: accepted
+last_verified: 3406ef05bb35
 ---
 # Parser arena ownership
 

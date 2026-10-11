@@ -1,3 +1,7 @@
+---
+status: accepted
+last_verified: 3406ef05bb35
+---
 # ADR-0014: Windjammer-native surface syntax (retire leaked Rust-isms)
 
 - **Status:** Accepted (2026-10-11) for Phase 1 (print/assert/panic/`vec!`/`format!`/`dbg!`). Phases 2-3 are Proposed.
