@@ -1,65 +1,10 @@
+<!-- GENERATED FILE - DO NOT EDIT. Generator: `error_catalog` (scripts/docs_gen.sh, tools/docs_truth/). Checked by `cargo test --test all docs_truth`. -->
+
 # Windjammer Error Catalog
 
 Version: 0.1.0
 
 ## Type Errors
-
-### E0425 - Variable not found
-
-The compiler cannot find a variable, function, or constant with this name in the current scope.
-
-**Common Causes:**
-
-- Typo in the variable name
-- Variable not declared before use
-- Variable is out of scope
-- Module not imported
-
-**Solutions:**
-
-- Check the spelling of the variable name
-- Declare the variable before using it: let x = 42
-- Import the module: use std::collections::HashMap
-- Check variable scope (declared inside a block?)
-
-**Examples:**
-
-#### Typo in variable name
-
-❌ Wrong:
-
-```windjammer
-let count = 10
-println("${cont}")  // Typo: 'cont' instead of 'count'
-```
-
-✅ Correct:
-
-```windjammer
-let count = 10
-println("${count}")  // Fixed!
-```
-
-Fixed the typo in the variable name
-
-#### Variable not declared
-
-❌ Wrong:
-
-```windjammer
-println("${total}")  // 'total' not declared
-```
-
-✅ Correct:
-
-```windjammer
-let total = 100
-println("${total}")  // Declared first!
-```
-
-Declared the variable before using it
-
----
 
 ### E0308 - Type mismatch
 
@@ -115,6 +60,63 @@ Used .to_string() to convert integer to string
 
 ---
 
+### E0425 - Variable not found
+
+The compiler cannot find a variable, function, or constant with this name in the current scope.
+
+**Common Causes:**
+
+- Typo in the variable name
+- Variable not declared before use
+- Variable is out of scope
+- Module not imported
+
+**Solutions:**
+
+- Check the spelling of the variable name
+- Declare the variable before using it: let x = 42
+- Import the module: use std::collections::HashMap
+- Check variable scope (declared inside a block?)
+
+**Examples:**
+
+#### Typo in variable name
+
+❌ Wrong:
+
+```windjammer
+let count = 10
+println!("{}", cont)  // Typo: 'cont' instead of 'count'
+```
+
+✅ Correct:
+
+```windjammer
+let count = 10
+println!("{}", count)  // Fixed!
+```
+
+Fixed the typo in the variable name
+
+#### Variable not declared
+
+❌ Wrong:
+
+```windjammer
+println!("{}", total)  // 'total' not declared
+```
+
+✅ Correct:
+
+```windjammer
+let total = 100
+println!("{}", total)  // Declared first!
+```
+
+Declared the variable before using it
+
+---
+
 ## Ownership Errors
 
 ### E0384 - Cannot modify immutable variable
@@ -158,4 +160,3 @@ Added 'mut' keyword to make variable mutable
 ## Module Errors
 
 ## Trait Errors
-
