@@ -290,7 +290,8 @@ fn main() {
 }
 ```
 
-```windjammer,bad
+<!-- should_fail: Rust attribute syntax `#[derive]` is rejected (use `@derive`) -->
+```windjammer,should_fail,bad
 #[derive(Debug, Clone)]
 struct P { x: int }
 

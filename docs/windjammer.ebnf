@@ -21,19 +21,19 @@ item            = use_decl
 
 (* ── Declarations ── *)
 
-use_decl        = "use" use_path [ "::" "{" ident_list "}" ] ;
-use_path        = ident { "::" ident } ;
+use_decl        = "use" use_path [ "::" "{" ident_list "}" | "as" IDENT ] ;
+use_path        = IDENT { "::" IDENT } ;
 
 struct_decl     = [ visibility ] "struct" IDENT [ generic_params ]
                   "{" { field_decl [ "," ] } "}" ;
-field_decl      = [ visibility ] IDENT ":" type_expr [ "=" expression ] ;
+field_decl      = [ visibility ] IDENT ":" type_expr ;
 
 enum_decl       = [ visibility ] "enum" IDENT [ generic_params ]
                   "{" { variant_decl [ "," ] } "}" ;
-variant_decl    = IDENT [ "(" type_list ")" | "{" field_list "}" ] ;
+variant_decl    = IDENT [ "(" type_list ")" | "{" { field_decl [ "," ] } "}" ] ;
 
 trait_decl      = [ visibility ] "trait" IDENT [ generic_params ]
-                  [ ":" type_list ] "{" { trait_item } "}" ;
+                  [ ":" type_expr { "+" type_expr } ] "{" { trait_item } "}" ;
 trait_item      = function_sig | type_alias ;
 
 impl_block      = "impl" [ generic_params ] type_expr
@@ -46,13 +46,13 @@ function_sig    = [ visibility ] [ "async" ] "fn" IDENT
                   [ generic_params ] "(" param_list ")"
                   [ "->" type_expr ] [ where_clause ] ;
 
-const_decl      = "const" IDENT [ ":" type_expr ] "=" expression ;
-static_decl     = "static" [ "mut" ] IDENT [ ":" type_expr ] "=" expression ;
+const_decl      = "const" IDENT ":" type_expr "=" expression ;     (* the type is required *)
+static_decl     = "static" [ "mut" ] IDENT ":" type_expr "=" expression ;
 
 mod_decl        = [ visibility ] "mod" IDENT [ "{" { item } "}" ] ;   (* no body: external file module *)
 
 extern_decl     = [ visibility ] "extern" ( "fn" IDENT [ generic_params ] "(" param_list ")" [ "->" type_expr ]
-                                          | "struct" IDENT [ generic_params ] [ "{" { field_decl [ "," ] } "}" ]
+                                          | "struct" IDENT [ generic_params ] "{" { field_decl [ "," ] } "}"
                                           | "impl" type_expr "{" { function_sig } "}"
                                           | "let" IDENT ":" type_expr ) ;
 
@@ -61,7 +61,7 @@ bound_alias     = [ visibility ] "bound" IDENT "=" type_expr { "+" type_expr } ;
 
 where_clause    = "where" where_pred { "," where_pred } ;
 where_pred      = type_expr ":" type_expr { "+" type_expr } ;
-type_alias      = "type" IDENT [ generic_params ] "=" type_expr ;
+type_alias      = "type" IDENT "=" type_expr ;           (* no generic parameters *)
 
 decorator       = "@" IDENT [ "(" arg_list ")" ] ;
 
@@ -77,7 +77,8 @@ type_expr       = base_type
                 | array_type
                 | tuple_type
                 | fn_type
-                | optional_type ;
+                | optional_type
+                | dyn_type ;
 
 base_type       = IDENT ;
 generic_type    = IDENT "<" type_list ">" ;
@@ -85,6 +86,7 @@ array_type      = "[" type_expr "]" ;
 tuple_type      = "(" type_list ")" ;
 fn_type         = "fn" "(" type_list ")" "->" type_expr ;
 optional_type   = "Option" "<" type_expr ">" ;
+dyn_type        = "dyn" type_expr ;
 
 type_list       = type_expr { "," type_expr } ;
 generic_params  = "<" generic_param { "," generic_param } ">" ;
@@ -115,6 +117,7 @@ async_stmt      = "async" block ;               (* statement only when followed 
 
 let_stmt        = "let" [ "mut" ] IDENT [ ":" type_expr ] "=" expression ;
 assignment_stmt = lvalue assign_op expression ;
+lvalue          = postfix ;
 assign_op       = "=" | "+=" | "-=" | "*=" | "/=" | "%="
                 | "<<=" | ">>=" | "&=" | "|=" | "^=" ;
 return_stmt     = "return" [ expression ] ;
@@ -157,9 +160,10 @@ pattern_list    = pattern { "," pattern } ;
 
 expression      = assignment_expr ;
 
-assignment_expr = or_expr [ assign_op or_expr ] [ "<-" expression ] ;   (* "ch <- v" sends on a channel *)
-or_expr         = pipe_expr { "||" pipe_expr } ;    (* "|>" is handled as a left-associative loop in parse_binary_expression *)
-pipe_expr       = and_expr { "|>" and_expr } ;       (* pipe operator: x |> f(a)  ==  f(x, a) *)
+assignment_expr = pipe_expr [ "<-" expression ] ;   (* "ch <- v" sends on a channel; assignment itself is a statement *)
+pipe_expr       = or_expr { "|>" pipe_stage } ;      (* pipe operator: x |> f(a)  ==  f(x, a); binds looser than every other operator *)
+or_expr         = and_expr { "||" and_expr } ;
+pipe_stage      = path | path "(" arg_list ")" | "." IDENT "(" arg_list ")" | closure ;   (* anything else is an error *)
 and_expr        = comparison { "&&" comparison } ;
 comparison      = bitor { cmp_op bitor } ;
 cmp_op          = "==" | "!=" | "<" | ">" | "<=" | ">=" ;
@@ -168,7 +172,8 @@ bitxor          = bitand { "^" bitand } ;
 bitand          = shift { "&" shift } ;
 shift           = additive { ( "<<" | ">>" ) additive } ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
-multiplicative  = unary { ( "*" | "/" | "%" ) unary } ;
+multiplicative  = cast { ( "*" | "/" | "%" ) cast } ;
+cast            = unary { "as" type_expr } ;            (* numeric cast: x as u8 *)
 unary           = ( "-" | "!" | "~" | "<-" ) unary | postfix ;     (* "<-ch" receives from a channel *)
 postfix         = primary { postfix_op } ;
 
@@ -176,6 +181,7 @@ postfix_op      = "." IDENT                     (* field access *)
                 | "." IDENT "(" arg_list ")"    (* method call *)
                 | "(" arg_list ")"              (* function call *)
                 | "[" expression "]"            (* index *)
+                | "." "await"                   (* await a future *)
                 | "?" ;                         (* try operator *)
 
 primary         = literal
@@ -221,7 +227,7 @@ arg             = [ IDENT ":" ] expression ;
 
 path            = IDENT { "::" IDENT } ;
 ident_list      = IDENT { "," IDENT } ;
-visibility      = "pub" [ "(" "crate" ")" ] ;
+visibility      = "pub" ;                      (* pub(crate) is not parsed *)
 
 (* ── Lexical tokens (informative) ── *)
 
@@ -246,3 +252,7 @@ block_comment   = "/*" { CHAR | block_comment } "*/" ;
 (* ── Whitespace ── *)
 
 WHITESPACE      = " " | "\t" | "\r" | "\n" ;
+
+(* Character classes used by the lexical rules above (informative). *)
+CHAR            = "any character" ;
+NEWLINE         = "\n" ;

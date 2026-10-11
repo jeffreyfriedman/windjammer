@@ -2,10 +2,10 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** the former `tests/COMPILER_REPRO_QUEUE.md` (deleted 2026-10-11; see git history), `AGENTS.md` (bd workflow), `docs/known-gaps.md`
+- **Related:** the former `COMPILER_REPRO_QUEUE.md` under `tests/` (deleted 2026-10-11; see git history), `AGENTS.md` (bd workflow), `docs/known-gaps.md`
 
 ## Context
-Compiler bugs found by dogfooding are recorded in `tests/COMPILER_REPRO_QUEUE.md`, a single markdown file that keeps growing (entries numbered
+Compiler bugs found by dogfooding are recorded in `COMPILER_REPRO_QUEUE.md` under `tests/`, a single markdown file that keeps growing (entries numbered
 `P3.798` and rising, each with gate commands and "do not steal" lists). `AGENTS.md` mandates `bd` (beads) for task tracking. Plan and protocol
 files add a third place (`docs/known-issues/<slug>.md`). The result: no single answer to "what is open?", queue entries embed commit hashes and gate
 results that go stale, and the file is large enough to be expensive for agents to load. Nothing says when an entry is removed after a fix, or which entries
@@ -25,7 +25,7 @@ Option A with a retention rule: a closed bug keeps its regression test as the re
 release without a test are re-triaged or closed. `docs/known-gaps.md` holds architectural gaps only, not individual bugs.
 
 ## Consequences
-- `tests/COMPILER_REPRO_QUEUE.md` was deleted on 2026-10-11 (11,000 lines of stale per-ticket history; `git log` is the archive).
+- `COMPILER_REPRO_QUEUE.md` under `tests/` was deleted on 2026-10-11 (11,000 lines of stale per-ticket history; `git log` is the archive).
 - AGENTS.md states "file bugs in bd, add a failing generic test first".
 - Dogfood projects report through bd, not by editing compiler docs.
 

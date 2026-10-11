@@ -17,8 +17,8 @@ Despite the cutover, the analyzer still runs first and codegen/`compiler` still 
 (for example `multipass_bare_pass_demotion.rs`, post-IR `reconcile_post_ir_*` helpers, string-level `.clone()` fixes).
 The architecture audit found ownership decided in at least five places and clones in at least three. The IR doc's
 claim "the IR constraint solver is the single source of truth" is therefore true for call-site coercion on the Rust
-backend only. Go and JavaScript call `prepare_ir_context` and discard the result (`let _ir = ...` in
-`src/codegen/go/generator/mod.rs` and `src/codegen/javascript/mod.rs`).
+backend only. At the time of the audit Go and JavaScript called `prepare_ir_context` and discarded the result (`let _ir = ...`); that call no longer
+exists in `src/codegen/go/` or `src/codegen/javascript/`, which are the emit-based backends today.
 
 ## Options
 ### A. Solver is the single writer (end state: `src/analyzer` is facts only)

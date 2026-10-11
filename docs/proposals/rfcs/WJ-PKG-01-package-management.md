@@ -1,4 +1,9 @@
+---
+status: proposal
+---
 # WJ-PKG-01: Package Management & Registry
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
 
 **Status:** Draft  
 **Author:** Windjammer Core Team  
@@ -23,8 +28,8 @@ This RFC specifies Windjammer's package management system, including package man
 3. [Lock File Format (.wj-lock)](#lock-file-format-wj-lock)
 4. [Registry Protocol](#registry-protocol)
 5. [Publishing Workflow](#publishing-workflow)
-6. [Security Integration](#security-integration)
-7. [Economic Integration](#economic-integration)
+6. Security Integration
+7. Economic Integration
 8. [CLI Commands](#cli-commands)
 9. [Implementation Roadmap](#implementation-roadmap)
 

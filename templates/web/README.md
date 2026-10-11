@@ -46,12 +46,12 @@ wj add tokio --features full    # Async runtime
 ## Example API Usage
 
 ```windjammer
-use std.http
-use std.json
+use std::http
+use std::json
 
 @async
 fn main() {
-    let response = http.get("https://api.example.com/data").await?
+    let response = http::get("https://api.example.com/data").await?
     let data = response.json::<MyType>().await?
     println("Received: ${data:?}")
 }
