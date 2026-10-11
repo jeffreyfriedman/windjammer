@@ -1,0 +1,13 @@
+// seeds: 88172645463325252 1 2 3 99
+// Marsaglia xorshift64: shifts discard high bits (no overflow panic), output is the full state.
+fn main() {
+    let mut x: u64 = __SEED__
+    let mut i = 0
+    while i < 6 {
+        x = x ^ (x << 13)
+        x = x ^ (x >> 7)
+        x = x ^ (x << 17)
+        println("{}", x)
+        i += 1
+    }
+}

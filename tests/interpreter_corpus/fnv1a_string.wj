@@ -1,0 +1,15 @@
+// seeds: 1 2 3 42 1000003
+// FNV-1a 64-bit over the bytes of a string built from the seed.
+fn main() {
+    let n: u64 = __SEED__
+    let text = "seed-${n}-payload"
+    let mut h: u64 = (3421674724 << 32) | 2216829733
+    for b in text.bytes() {
+        h = h ^ (b as u64)
+        h = h.wrapping_mul(1099511628211)
+    }
+    println("{}", text)
+    println("{}", h)
+    println("{:x}", h)
+    println("{:016X}", h >> 8)
+}

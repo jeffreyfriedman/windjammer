@@ -1,0 +1,629 @@
+//! Expression evaluation.
+
+use super::engine::{Interpreter, VariantKind};
+use super::error::{panic_ctl, semantic, unsupported, Ctl, RuntimeError, R};
+use super::int::IntTy;
+use super::place::deref_value;
+use super::value::*;
+use crate::parser::{BinaryOp, Expression, Literal, Statement, Type, UnaryOp};
+use crate::source_map::Location;
+use std::rc::Rc;
+
+pub(crate) fn expr_loc(e: &'static Expression<'static>) -> Option<&'static Location> {
+    use Expression::*;
+    match e {
+        Literal { location, .. }
+        | Identifier { location, .. }
+        | Binary { location, .. }
+        | Unary { location, .. }
+        | Call { location, .. }
+        | MethodCall { location, .. }
+        | FieldAccess { location, .. }
+        | StructLiteral { location, .. }
+        | MapLiteral { location, .. }
+        | Range { location, .. }
+        | Closure { location, .. }
+        | Cast { location, .. }
+        | Index { location, .. }
+        | Tuple { location, .. }
+        | Array { location, .. }
+        | MacroInvocation { location, .. }
+        | TryOp { location, .. }
+        | Await { location, .. }
+        | AsyncCall { location, .. }
+        | SpawnCall { location, .. }
+        | ChannelSend { location, .. }
+        | ChannelRecv { location, .. }
+        | Block { location, .. } => location.as_ref(),
+    }
+}
+
+/// `println("... ${x} ...")`: the argument is already a finished string (an interpolation
+/// lowered to `format!`), so braces inside it are data, not format directives.
+pub(crate) fn is_prebuilt_string(e: &Expression<'static>) -> bool {
+    matches!(e, Expression::MacroInvocation { name, .. } if name == "format")
+}
+
+pub(crate) fn stmt_loc(s: &'static Statement<'static>) -> Option<&'static Location> {
+    use Statement::*;
+    match s {
+        Let { location, .. }
+        | Const { location, .. }
+        | Static { location, .. }
+        | Assignment { location, .. }
+        | Return { location, .. }
+        | Expression { location, .. }
+        | If { location, .. }
+        | Match { location, .. }
+        | For { location, .. }
+        | Loop { location, .. }
+        | While { location, .. }
+        | Thread { location, .. }
+        | Async { location, .. }
+        | Defer { location, .. }
+        | Break { location, .. }
+        | Continue { location, .. }
+        | Use { location, .. } => location.as_ref(),
+    }
+}
+
+impl Interpreter {
+    pub(crate) fn panic_at(&mut self, e: &'static Expression<'static>, msg: String) -> Ctl {
+        self.mark(expr_loc(e));
+        panic_ctl(msg)
+    }
+
+    /// Evaluate to a plain value (references are followed).
+    pub(crate) fn eval(&mut self, e: &'static Expression<'static>) -> R {
+        let v = self.eval_raw(e)?;
+        if let Value::Ref(_) = v {
+            deref_value(v)
+        } else {
+            Ok(v)
+        }
+    }
+
+    /// Evaluate, preserving `&mut` references (used for call results that are borrows).
+    pub(crate) fn eval_keep_ref(&mut self, e: &'static Expression<'static>) -> R {
+        self.eval_raw(e)
+    }
+
+    pub(crate) fn literal(&self, l: &Literal) -> Value {
+        match l {
+            Literal::Int(i) => Value::Int(*i as i128, IntTy::Lit),
+            Literal::IntSuffixed(i, suf) => match suf.as_str() {
+                "f64" => Value::Float(*i as f64, FloatTy::F64),
+                "f32" => Value::Float(*i as f64, FloatTy::F32),
+                s => Value::Int(*i as i128, IntTy::from_name(s).unwrap_or(IntTy::Lit)),
+            },
+            Literal::Float(f) => Value::Float(*f, FloatTy::Lit),
+            Literal::String(s) => Value::str(s.clone()),
+            Literal::Char(c) => Value::Char(*c),
+            Literal::Bool(b) => Value::Bool(*b),
+        }
+    }
+
+    pub(crate) fn eval_raw(&mut self, e: &'static Expression<'static>) -> R {
+        match e {
+            Expression::Literal { value, .. } => Ok(self.literal(value)),
+
+            Expression::Identifier { name, location } => {
+                if let Some(slot) = self.lookup_var(name) {
+                    let v = slot.borrow().clone();
+                    return Ok(v);
+                }
+                self.mark(location.as_ref());
+                self.eval_path_value(name)
+            }
+
+            Expression::Binary { left, op, right, location } => {
+                match op {
+                    BinaryOp::And => {
+                        let l = self.eval(left)?;
+                        return match l {
+                            Value::Bool(false) => Ok(Value::Bool(false)),
+                            Value::Bool(true) => self.eval(right),
+                            _ => Err(semantic("`&&` needs bool operands")),
+                        };
+                    }
+                    BinaryOp::Or => {
+                        let l = self.eval(left)?;
+                        return match l {
+                            Value::Bool(true) => Ok(Value::Bool(true)),
+                            Value::Bool(false) => self.eval(right),
+                            _ => Err(semantic("`||` needs bool operands")),
+                        };
+                    }
+                    _ => {}
+                }
+                let l = self.eval(left)?;
+                let r = self.eval(right)?;
+                self.mark(location.as_ref());
+                self.binary(*op, l, r)
+            }
+
+            Expression::Unary { op, operand, location } => match op {
+                UnaryOp::Neg => {
+                    let v = self.eval(operand)?;
+                    self.mark(location.as_ref());
+                    self.negate(v)
+                }
+                UnaryOp::Not => {
+                    let v = self.eval(operand)?;
+                    self.logical_not(v)
+                }
+                UnaryOp::Deref | UnaryOp::Ref => self.eval(operand),
+                UnaryOp::MutRef => {
+                    if let Some(p) = self.resolve_place(operand)? {
+                        Ok(Value::Ref(p))
+                    } else {
+                        self.eval(operand)
+                    }
+                }
+            },
+
+            Expression::Call { function, arguments, location } => {
+                self.mark(location.as_ref());
+                self.eval_call(function, arguments)
+            }
+
+            Expression::MethodCall { object, method, type_args, arguments, location } => {
+                self.eval_method_call(e, object, method, type_args.as_ref(), arguments, location.as_ref())
+            }
+
+            Expression::FieldAccess { object, field, location } => {
+                if let Expression::Identifier { name, .. } = &**object {
+                    if self.lookup_var(name).is_none() && (self.enums.contains_key(name.as_str()) || self.structs.contains_key(name.as_str())) {
+                        self.mark(location.as_ref());
+                        return self.eval_path_value(&format!("{}::{}", name, field));
+                    }
+                }
+                let obj = self.eval(object)?;
+                self.mark(location.as_ref());
+                self.field_of(&obj, field)
+            }
+
+            Expression::StructLiteral { name, fields, location } => {
+                self.mark(location.as_ref());
+                self.eval_struct_literal(name, fields)
+            }
+
+            Expression::MapLiteral { pairs, .. } => {
+                let mut m = std::collections::BTreeMap::new();
+                for (k, v) in pairs {
+                    let k = self.eval(k)?;
+                    let v = self.eval(v)?;
+                    m.insert(Key(k), v);
+                }
+                Ok(Value::Map(Rc::new(m)))
+            }
+
+            Expression::Range { start, end, inclusive, .. } => {
+                let s = self.eval(start)?;
+                let en = self.eval(end)?;
+                match (&s, &en) {
+                    (Value::Int(a, at), Value::Int(b, bt)) => {
+                        let ty = IntTy::unify(*at, *bt);
+                        Ok(Value::Range(*a, if *inclusive { *b + 1 } else { *b }, ty))
+                    }
+                    (Value::Char(a), Value::Char(b)) => {
+                        let hi = if *inclusive { *b as u32 + 1 } else { *b as u32 };
+                        let items = (*a as u32..hi).filter_map(char::from_u32).map(Value::Char).collect();
+                        Ok(Value::vec(items))
+                    }
+                    _ => Err(unsupported("range over non-integer values")),
+                }
+            }
+
+            Expression::Closure { parameters, body, .. } => {
+                self.closure_counter += 1;
+                Ok(Value::Func(Rc::new(Callable::Closure {
+                    params: parameters.as_slice(),
+                    body,
+                    env: self.scope.vars.clone(),
+                    module: self.scope.module,
+                    self_ty: self.scope.self_ty.clone(),
+                })))
+            }
+
+            Expression::Cast { expr, type_, location } => {
+                let v = self.eval(expr)?;
+                self.mark(location.as_ref());
+                self.cast(v, type_)
+            }
+
+            Expression::Index { object, index, location } => {
+                let obj = self.eval(object)?;
+                let idx = self.eval(index)?;
+                self.mark(location.as_ref());
+                self.index_value(&obj, &idx)
+            }
+
+            Expression::Tuple { elements, .. } => {
+                let mut items = Vec::with_capacity(elements.len());
+                for x in elements {
+                    items.push(self.eval(x)?);
+                }
+                Ok(Value::tuple(items))
+            }
+
+            Expression::Array { elements, .. } => {
+                let mut items = Vec::with_capacity(elements.len());
+                for x in elements {
+                    items.push(self.eval(x)?);
+                }
+                Ok(Value::vec(items))
+            }
+
+            Expression::MacroInvocation { name, args, is_repeat, location, .. } => {
+                self.mark(location.as_ref());
+                self.eval_macro(e, name, args, *is_repeat)
+            }
+
+            Expression::TryOp { expr, location } => {
+                let v = self.eval(expr)?;
+                self.mark(location.as_ref());
+                self.eval_try(v)
+            }
+
+            Expression::Block { statements, .. } => {
+                self.push_scope();
+                let r = self.exec_stmts(statements);
+                self.pop_scope();
+                r
+            }
+
+            Expression::Await { location, .. }
+            | Expression::AsyncCall { location, .. }
+            | Expression::SpawnCall { location, .. }
+            | Expression::ChannelSend { location, .. }
+            | Expression::ChannelRecv { location, .. } => {
+                self.mark(location.as_ref());
+                Err(unsupported("async/await, spawn and channels"))
+            }
+        }
+    }
+
+    fn eval_try(&mut self, v: Value) -> R {
+        match &v {
+            Value::Enum(en) if &*en.ty == "Option" => match &en.payload {
+                Payload::Tuple(p) if en.idx == 1 => Ok(p[0].clone()),
+                _ => Err(Ctl::Return(Value::none())),
+            },
+            Value::Enum(en) if &*en.ty == "Result" => match &en.payload {
+                Payload::Tuple(p) if en.idx == 0 => Ok(p[0].clone()),
+                Payload::Tuple(p) => {
+                    let converted = self.convert_error(p[0].clone())?;
+                    Err(Ctl::Return(Value::err(converted)))
+                }
+                _ => Err(semantic("malformed Result")),
+            },
+            other => Err(semantic(format!("`?` on {}", other.type_name()))),
+        }
+    }
+
+    /// `From::from` conversion applied by `?` when the function's error type is a user type.
+    fn convert_error(&mut self, e: Value) -> R {
+        if let Some(Type::Result(_, er)) = self.scope.ret_ty {
+            if let Type::Custom(target) = &**er {
+                if e.type_name() != *target {
+                    if let Some(f) = self.methods.get(&(target.clone(), "from".to_string())).cloned() {
+                        return self.call_func(&f, vec![e], None);
+                    }
+                }
+            }
+        }
+        Ok(e)
+    }
+
+    pub(crate) fn field_of(&mut self, obj: &Value, field: &str) -> R {
+        match obj {
+            Value::Struct(s) => s
+                .fields
+                .iter()
+                .find(|(n, _)| &**n == field)
+                .map(|(_, v)| v.clone())
+                .ok_or_else(|| semantic(format!("no field `{}` on type `{}`", field, s.name))),
+            Value::Tuple(t) => {
+                let i: usize = field.parse().map_err(|_| semantic(format!("no field `{}` on tuple", field)))?;
+                t.get(i).cloned().ok_or_else(|| semantic("tuple index out of range"))
+            }
+            Value::Enum(e) => match &e.payload {
+                Payload::Struct(fs) => fs
+                    .iter()
+                    .find(|(n, _)| &**n == field)
+                    .map(|(_, v)| v.clone())
+                    .ok_or_else(|| semantic(format!("no field `{}`", field))),
+                _ => Err(semantic(format!("no field `{}` on enum `{}`", field, e.ty))),
+            },
+            other => Err(semantic(format!("no field `{}` on value of type `{}`", field, other.type_name()))),
+        }
+    }
+
+    pub(crate) fn index_value(&mut self, obj: &Value, idx: &Value) -> R {
+        match (obj, idx) {
+            (Value::Vec(v), Value::Int(i, _)) => {
+                if *i < 0 || *i as usize >= v.len() {
+                    return Err(panic_ctl(format!(
+                        "index out of bounds: the len is {} but the index is {}",
+                        v.len(),
+                        i
+                    )));
+                }
+                Ok(v[*i as usize].clone())
+            }
+            (Value::Vec(v), Value::Range(a, b, _)) => {
+                let (a, b) = (*a as usize, (*b).min(i128::MAX) as usize);
+                if a > b || b > v.len() {
+                    return Err(panic_ctl(format!("range end index {} out of range for slice of length {}", b, v.len())));
+                }
+                Ok(Value::vec(v[a..b].to_vec()))
+            }
+            (Value::Str(s), Value::Range(a, b, _)) => {
+                let (a, b) = (*a as usize, *b as usize);
+                if a > b || b > s.len() || !s.is_char_boundary(a) || !s.is_char_boundary(b) {
+                    return Err(panic_ctl(format!("byte index {}..{} out of range or not on a char boundary for string of length {}", a, b, s.len())));
+                }
+                Ok(Value::str(s[a..b].to_string()))
+            }
+            (Value::Map(m), k) => m
+                .get(&Key(k.clone()))
+                .cloned()
+                .ok_or_else(|| panic_ctl("key not found in map")),
+            (o, i) => Err(unsupported(format!("indexing {} with {}", o.type_name(), i.type_name()))),
+        }
+    }
+
+    fn eval_struct_literal(
+        &mut self,
+        name: &'static str,
+        fields: &'static [(String, &'static Expression<'static>)],
+    ) -> R {
+        let mut name = name.to_string();
+        if let Some(rest) = name.strip_prefix("Self::") {
+            name = format!("{}::{}", self.scope.self_ty.as_deref().unwrap_or("Self"), rest);
+        } else if name == "Self" {
+            name = self.scope.self_ty.as_deref().unwrap_or("Self").to_string();
+        }
+        // enum struct variant: Enum::Variant { .. }
+        if let Some((en, var)) = name.rsplit_once("::") {
+            let en = en.rsplit("::").next().unwrap_or(en).to_string();
+            let target = self.type_aliases.get(&en).and_then(|t| if let Type::Custom(n) = t { Some(n.clone()) } else { None }).unwrap_or(en);
+            let variant_fields = self.enums.get(&target).and_then(|def| {
+                def.variants.iter().enumerate().find(|(_, v)| v.name == var).and_then(|(idx, vd)| match &vd.kind {
+                    VariantKind::Struct(ftys) => Some((idx, ftys.clone())),
+                    _ => None,
+                })
+            });
+            if let Some((idx, ftys)) = variant_fields {
+                let mut out = Vec::new();
+                for (fname, ty) in &ftys {
+                    let (_, ex) = fields
+                        .iter()
+                        .find(|(n, _)| n == fname)
+                        .ok_or_else(|| semantic(format!("missing field `{}` in `{}`", fname, name)))?;
+                    let v = self.eval(ex)?;
+                    out.push((Rc::from(*fname), self.coerce(v, ty)?));
+                }
+                return Ok(Value::enum_val(&target, var, idx as u32, Payload::Struct(out)));
+            }
+            name = var.to_string();
+        }
+        if let Some(Type::Custom(n)) = self.type_aliases.get(&name) {
+            name = n.clone();
+        }
+        let (decl_fields, copy) = match self.structs.get(&name) {
+            Some(d) => (d.fields.iter().map(|(n, t)| (*n, t.clone())).collect::<Vec<_>>(), d.copy),
+            None => return Err(semantic(format!("cannot find struct `{}`", name))),
+        };
+        let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(decl_fields.len());
+        for (fname, ty) in &decl_fields {
+            match fields.iter().find(|(n, _)| n == fname) {
+                Some((_, ex)) => {
+                    let v = self.eval(ex)?;
+                    out.push((Rc::from(*fname), self.coerce(v, ty)?));
+                }
+                None => {
+                    // struct update syntax `..base` is parsed as a field named ".."
+                    if let Some((_, base_ex)) = fields.iter().find(|(n, _)| n == "..") {
+                        let base = self.eval(base_ex)?;
+                        let v = self.field_of(&base, fname)?;
+                        out.push((Rc::from(*fname), v));
+                    } else {
+                        return Err(semantic(format!("missing field `{}` in initializer of `{}`", fname, name)));
+                    }
+                }
+            }
+        }
+        for (n, _) in fields {
+            if n != ".." && !decl_fields.iter().any(|(f, _)| f == n) {
+                return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
+            }
+        }
+        Ok(Value::Struct(Rc::new(StructVal { name: Rc::from(name.as_str()), fields: out, copy })))
+    }
+
+    pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {
+        let def = self.enums.get(enum_name).ok_or_else(|| semantic(format!("unknown enum `{}`", enum_name)))?;
+        let vd = &def.variants[idx];
+        match &vd.kind {
+            VariantKind::Unit => Ok(Value::enum_val(enum_name, vd.name, idx as u32, Payload::Unit)),
+            VariantKind::Tuple(tys) => {
+                if tys.len() != args.len() {
+                    return Err(semantic(format!(
+                        "variant `{}::{}` takes {} argument(s) but {} supplied",
+                        enum_name,
+                        vd.name,
+                        tys.len(),
+                        args.len()
+                    )));
+                }
+                let tys = tys.clone();
+                let name = vd.name;
+                let mut out = Vec::new();
+                for (a, t) in args.into_iter().zip(tys.iter()) {
+                    out.push(self.coerce(a, t)?);
+                }
+                Ok(Value::enum_val(enum_name, name, idx as u32, Payload::Tuple(out)))
+            }
+            VariantKind::Struct(_) => Err(semantic("struct variant needs braces")),
+        }
+    }
+
+    fn eval_macro(
+        &mut self,
+        whole: &'static Expression<'static>,
+        name: &str,
+        args: &'static [&'static Expression<'static>],
+        is_repeat: bool,
+    ) -> R {
+        match name {
+            "println" | "print" | "eprintln" | "eprint" => {
+                let vals = self.eval_all(args)?;
+                let mut s = if args.len() == 1 && is_prebuilt_string(args[0]) {
+                    self.display_string(&vals[0])?
+                } else {
+                    self.format_args(&vals)?
+                };
+                if name.ends_with("ln") {
+                    s.push('\n');
+                }
+                if name.starts_with('e') {
+                    self.write_err(&s);
+                } else {
+                    self.write_out(&s);
+                }
+                Ok(Value::Unit)
+            }
+            "format" => {
+                let vals = self.eval_all(args)?;
+                Ok(Value::str(self.format_args(&vals)?))
+            }
+            "vec" => {
+                if is_repeat && args.len() == 2 {
+                    let x = self.eval(args[0])?;
+                    let n = self.eval(args[1])?;
+                    let n = match n {
+                        Value::Int(n, _) if n >= 0 => n as usize,
+                        _ => return Err(semantic("vec![x; n] needs a non-negative integer length")),
+                    };
+                    return Ok(Value::vec(vec![x; n]));
+                }
+                Ok(Value::vec(self.eval_all(args)?))
+            }
+            "panic" | "unreachable" | "todo" | "unimplemented" => {
+                let vals = self.eval_all(args)?;
+                let msg = if vals.is_empty() {
+                    match name {
+                        "todo" => "not yet implemented".to_string(),
+                        "unimplemented" => "not implemented".to_string(),
+                        "unreachable" => "internal error: entered unreachable code".to_string(),
+                        _ => "explicit panic".to_string(),
+                    }
+                } else {
+                    let m = self.format_args(&vals)?;
+                    if name == "unreachable" { format!("internal error: entered unreachable code: {}", m) } else { m }
+                };
+                Err(panic_ctl(msg))
+            }
+            "assert" | "debug_assert" => {
+                if args.is_empty() {
+                    return Err(semantic("assert! needs a condition"));
+                }
+                let c = self.eval(args[0])?;
+                if matches!(c, Value::Bool(true)) {
+                    return Ok(Value::Unit);
+                }
+                let msg = if args.len() > 1 {
+                    let vals = self.eval_all(&args[1..])?;
+                    self.format_args(&vals)?
+                } else {
+                    "assertion failed".to_string()
+                };
+                Err(self.panic_at(whole, msg))
+            }
+            "assert_eq" | "assert_ne" | "debug_assert_eq" | "debug_assert_ne" => {
+                if args.len() < 2 {
+                    return Err(semantic("assert_eq! needs two operands"));
+                }
+                let a = self.eval(args[0])?;
+                let b = self.eval(args[1])?;
+                let want_eq = name.ends_with("eq");
+                let eq = matches!(self.binary(BinaryOp::Eq, a.clone(), b.clone())?, Value::Bool(true));
+                if eq == want_eq {
+                    return Ok(Value::Unit);
+                }
+                let extra = if args.len() > 2 {
+                    let vals = self.eval_all(&args[2..])?;
+                    format!(": {}", self.format_args(&vals)?)
+                } else {
+                    String::new()
+                };
+                let l = self.debug_string(&a)?;
+                let r = self.debug_string(&b)?;
+                Err(self.panic_at(
+                    whole,
+                    format!(
+                        "assertion `left {} right` failed{}\n  left: {}\n right: {}",
+                        if want_eq { "==" } else { "!=" },
+                        extra,
+                        l,
+                        r
+                    ),
+                ))
+            }
+            "write" | "writeln" => {
+                if args.is_empty() {
+                    return Err(semantic("write! needs a destination"));
+                }
+                let dest = self.eval_raw(args[0])?;
+                let vals = self.eval_all(&args[1..])?;
+                let mut s = self.format_args(&vals)?;
+                if name == "writeln" {
+                    s.push('\n');
+                }
+                match deref_value(dest.clone())? {
+                    Value::Formatter(f) => {
+                        f.borrow_mut().push_str(&s);
+                        Ok(Value::ok(Value::Unit))
+                    }
+                    Value::Str(_) => {
+                        if let Some(p) = self.resolve_place(args[0])? {
+                            p.with_mut(|t| {
+                                if let Value::Str(rc) = t {
+                                    Rc::make_mut(rc).push_str(&s);
+                                }
+                                Ok(())
+                            })?;
+                            Ok(Value::ok(Value::Unit))
+                        } else {
+                            Err(semantic("write! destination is not a place"))
+                        }
+                    }
+                    other => Err(unsupported(format!("write! to {}", other.type_name()))),
+                }
+            }
+            "dbg" => {
+                let vals = self.eval_all(args)?;
+                let v = vals.into_iter().next().unwrap_or(Value::Unit);
+                let s = self.debug_string(&v)?;
+                self.write_err(&format!("[dbg] {}\n", s));
+                Ok(v)
+            }
+            "matches" => Err(unsupported("matches! macro")),
+            other => Err(unsupported(format!("macro `{}!`", other))),
+        }
+    }
+
+    pub(crate) fn eval_all(&mut self, args: &'static [&'static Expression<'static>]) -> R<Vec<Value>> {
+        let mut out = Vec::with_capacity(args.len());
+        for a in args {
+            out.push(self.eval(a)?);
+        }
+        Ok(out)
+    }
+
+    pub(crate) fn runtime_error(&self, e: RuntimeError) -> Ctl {
+        Ctl::Err(Box::new(e))
+    }
+}

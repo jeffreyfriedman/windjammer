@@ -1,0 +1,219 @@
+//! Definition registration: turns parsed items into the interpreter's tables.
+
+use super::engine::*;
+use super::error::RuntimeError;
+use crate::parser::{
+    EnumVariantData, FunctionDecl, Item, Program, TraitMethod, Type,
+};
+use std::cell::OnceCell;
+use std::rc::Rc;
+
+pub(crate) fn base_type_name(n: &str) -> String {
+    let b = n.split('<').next().unwrap_or(n).trim().trim_start_matches('&').trim_start_matches("mut ").trim();
+    match b {
+        "int" => "i64".to_string(),
+        "uint" => "u64".to_string(),
+        "float" => "f64".to_string(),
+        "string" | "str" => "String".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn has_copy_derive(decl: &crate::parser::StructDecl<'static>) -> bool {
+    decl.decorators.iter().any(|d| {
+        d.name == "derive"
+            && d.arguments.iter().any(|(k, v)| {
+                k == "Copy"
+                    || matches!(v, crate::parser::Expression::Identifier { name, .. } if name == "Copy")
+            })
+    })
+}
+
+impl Interpreter {
+    fn func_from_decl(
+        &self,
+        decl: &'static FunctionDecl<'static>,
+        module: usize,
+        self_ty: Option<&str>,
+    ) -> Rc<FuncDef> {
+        let qual: Rc<str> = match self_ty {
+            Some(t) => Rc::from(format!("{}::{}", t, decl.name)),
+            None => Rc::from(decl.name.as_str()),
+        };
+        Rc::new(FuncDef {
+            name: decl.name.clone(),
+            qual,
+            params: &decl.parameters,
+            ret: decl.return_type.as_ref(),
+            body: &decl.body,
+            module,
+            self_ty: self_ty.map(Rc::from),
+            decorators: &decl.decorators,
+            is_extern: decl.is_extern,
+            mutated: OnceCell::new(),
+            self_mutated: OnceCell::new(),
+        })
+    }
+
+    fn func_from_trait_default(
+        &self,
+        m: &'static TraitMethod<'static>,
+        module: usize,
+        self_ty: &str,
+    ) -> Option<Rc<FuncDef>> {
+        let body = m.body.as_ref()?;
+        Some(Rc::new(FuncDef {
+            name: m.name.clone(),
+            qual: Rc::from(format!("{}::{}", self_ty, m.name)),
+            params: &m.parameters,
+            ret: m.return_type.as_ref(),
+            body,
+            module,
+            self_ty: Some(Rc::from(self_ty)),
+            decorators: &[],
+            is_extern: false,
+            mutated: OnceCell::new(),
+            self_mutated: OnceCell::new(),
+        }))
+    }
+
+    /// Register every item of `program` into module `module`.
+    pub fn load_program(
+        &mut self,
+        module: usize,
+        program: &'static Program<'static>,
+    ) -> Result<(), RuntimeError> {
+        self.register_items(module, &program.items)?;
+        self.finish_registration();
+        Ok(())
+    }
+
+    pub(crate) fn register_items(
+        &mut self,
+        module: usize,
+        items: &'static [Item<'static>],
+    ) -> Result<(), RuntimeError> {
+        for item in items {
+            match item {
+                Item::Function { decl, .. } => {
+                    let f = self.func_from_decl(decl, module, None);
+                    self.modules[module].funcs.insert(decl.name.clone(), f);
+                }
+                Item::Struct { decl, .. } => {
+                    let tuple = decl.tuple_fields.is_some();
+                    let fields: Vec<(&'static str, Type)> = if let Some(tf) = &decl.tuple_fields {
+                        // tuple-struct field names are leaked once at registration
+                        tf.iter()
+                            .enumerate()
+                            .map(|(i, t)| (&*Box::leak(i.to_string().into_boxed_str()), t.clone()))
+                            .collect()
+                    } else {
+                        decl.fields.iter().map(|f| (f.name.as_str(), f.field_type.clone())).collect()
+                    };
+                    self.structs.insert(
+                        decl.name.clone(),
+                        StructDef { fields, tuple, copy: has_copy_derive(decl) },
+                    );
+                }
+                Item::Enum { decl, .. } => {
+                    let variants = decl
+                        .variants
+                        .iter()
+                        .map(|v| VariantDef {
+                            name: v.name.as_str(),
+                            kind: match &v.data {
+                                EnumVariantData::Unit => VariantKind::Unit,
+                                EnumVariantData::Tuple(ts) => VariantKind::Tuple(ts.clone()),
+                                EnumVariantData::Struct(fs) => VariantKind::Struct(
+                                    fs.iter().map(|(n, t)| (n.as_str(), t.clone())).collect(),
+                                ),
+                            },
+                        })
+                        .collect();
+                    self.enums.insert(decl.name.clone(), EnumDef { variants });
+                }
+                Item::Trait { decl, .. } => {
+                    self.traits.insert(
+                        decl.name.clone(),
+                        TraitDef { supertraits: decl.supertraits.clone() },
+                    );
+                    self.trait_methods
+                        .insert(decl.name.clone(), decl.methods.iter().collect());
+                }
+                Item::Impl { block, .. } => {
+                    if block.trait_name.as_deref() == Some("Drop") {
+                        return Err(RuntimeError::new(
+                            crate::interpreter::error::ErrorKind::Unsupported,
+                            "`impl Drop` (destructors that run at scope exit)",
+                        ));
+                    }
+                    let ty = base_type_name(&block.type_name);
+                    for func in &block.functions {
+                        let f = self.func_from_decl(func, module, Some(&ty));
+                        if let Some(tr) = &block.trait_name {
+                            // trait-qualified key disambiguates e.g. Display::fmt vs Debug::fmt
+                            self.methods.insert((ty.clone(), format!("{}::{}", base_type_name(tr), func.name)), f.clone());
+                            self.methods.entry((ty.clone(), func.name.clone())).or_insert(f);
+                        } else {
+                            self.methods.insert((ty.clone(), func.name.clone()), f);
+                        }
+                    }
+                    if let Some(tr) = &block.trait_name {
+                        self.trait_impls.push((ty.clone(), base_type_name(tr)));
+                    }
+                }
+                Item::Const { name, value, type_, .. } | Item::Static { name, value, type_, .. } => {
+                    self.modules[module].consts.insert(name.clone(), value);
+                    self.modules[module].const_types.insert(name.clone(), type_);
+                }
+                Item::TypeAlias { name, target, .. } => {
+                    self.type_aliases.insert(name.clone(), target.clone());
+                }
+                Item::Mod { name, items, .. } => {
+                    let file = self.modules[module].file.clone();
+                    let child = self.new_module(name, file, Some(module));
+                    self.modules[module].children.insert(name.clone(), child);
+                    self.register_items(child, items)?;
+                }
+                Item::Use { path, alias, .. } => {
+                    self.register_use(module, path, alias.as_deref())?;
+                }
+                Item::Macro { .. } | Item::ExternLet { .. } | Item::BoundAlias { .. } => {}
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn new_module(
+        &mut self,
+        name: &str,
+        file: std::path::PathBuf,
+        parent: Option<usize>,
+    ) -> usize {
+        self.modules.push(Module::new(name, file, parent));
+        self.modules.len() - 1
+    }
+
+    /// After all definitions are known: fill trait default methods, compute mutating-method names.
+    pub(crate) fn finish_registration(&mut self) {
+        let impls = self.trait_impls.clone();
+        for (ty, tr) in impls {
+            let mut chain = vec![tr.clone()];
+            // supertrait defaults are inherited by the implementor only if it implements them itself
+            chain.dedup();
+            for t in chain {
+                if let Some(ms) = self.trait_methods.get(&t).cloned() {
+                    for m in ms {
+                        let key = (ty.clone(), m.name.clone());
+                        if !self.methods.contains_key(&key) {
+                            if let Some(f) = self.func_from_trait_default(m, 0, &ty) {
+                                self.methods.insert(key, f);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        self.trait_impls.clear();
+    }
+}

@@ -1,0 +1,30 @@
+// seeds: 1 2 3 4
+// Closures capturing environment, higher-order functions, iterator pipelines.
+fn main() {
+    let k: int = __SEED__
+    let add_k = |x| x + k
+    let mul_k = |x| x * k
+    println("{}", mul_k(add_k(10)))
+    let v: Vec<int> = (1..=10).collect()
+    let mut s = 0
+    for x in v.clone() {
+        let y = x * k
+        if y % 2 == 0 {
+            s += y
+        }
+    }
+    println("{}", s)
+    let mut folded = k
+    for x in v.clone() {
+        folded = folded * 2 + x
+    }
+    println("{}", folded)
+    let mut pairs: Vec<int> = Vec::new()
+    let n = v.len()
+    let mut i = 0
+    while i < n {
+        pairs.push(v[i] * v[n - 1 - i])
+        i += 1
+    }
+    println("{:?}", pairs)
+}
