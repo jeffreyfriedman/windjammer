@@ -1,0 +1,63 @@
+use std::fs
+use std::collections::HashMap
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut data: HashMap<string, i64> = HashMap::new()
+    // each open transaction records the previous value (None = absent) of every key it touched
+    let mut undo: Vec<HashMap<string, Option<i64>>> = Vec::new()
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let cmd = p[0].clone()
+        if cmd == "set" || cmd == "delete" {
+            let key = p[1].clone()
+            if undo.len() > 0 {
+                let top = undo.len() - 1
+                if !undo[top].contains_key(key.as_str()) {
+                    let prev = match data.get(key.as_str()) {
+                        Some(v) => Some(*v),
+                        None => None,
+                    }
+                    undo[top].insert(key.clone(), prev)
+                }
+            }
+            if cmd == "set" {
+                data.insert(key, p[2].parse::<i64>().unwrap_or(0))
+            } else {
+                data.remove(key.as_str())
+            }
+        } else if cmd == "get" {
+            match data.get(p[1].as_str()) {
+                Some(v) => { println("${v}") }
+                None => { println("NULL") }
+            }
+        } else if cmd == "count" {
+            let target = p[1].parse::<i64>().unwrap_or(0)
+            let mut n = 0
+            for (k, v) in data.iter() {
+                if *v == target { n += 1 }
+            }
+            println("${n}")
+        } else if cmd == "begin" {
+            undo.push(HashMap::new())
+        } else if cmd == "rollback" {
+            match undo.pop() {
+                Some(frame) => {
+                    for (k, old) in frame {
+                        match old {
+                            Some(v) => { data.insert(k, v) }
+                            None => { data.remove(k.as_str()) }
+                        }
+                    }
+                }
+                None => { println("NO TRANSACTION") }
+            }
+        } else {
+            if undo.len() == 0 {
+                println("NO TRANSACTION")
+            }
+            undo.clear()
+        }
+    }
+}

@@ -1,0 +1,67 @@
+use std::fs
+use std::sync::mpsc
+use std::sync::{Arc, Mutex}
+use std::thread
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let p: Vec<usize> = text.split_whitespace().map(|s| s.parse::<usize>().unwrap_or(0)).collect()
+    let producers = p[0]
+    let per = p[1]
+    let consumers = p[2]
+    let (tx, rx) = mpsc::sync_channel(4)
+    let shared_rx = Arc::new(Mutex::new(rx))
+    let collected = Arc::new(Mutex::new(Vec::new()))
+    let mut prod_handles = Vec::new()
+    let mut a: usize = 0
+    while a < producers {
+        let t = tx.clone()
+        let handle = thread::spawn(move || {
+            let mut j: usize = 1
+            while j <= per {
+                t.send("p${a}-${j}")
+                j += 1
+            }
+        })
+        prod_handles.push(handle)
+        a += 1
+    }
+    drop(tx)
+    let mut cons_handles = Vec::new()
+    let mut c: usize = 0
+    while c < consumers {
+        let r = Arc::clone(&shared_rx)
+        let out = Arc::clone(&collected)
+        let handle = thread::spawn(move || {
+            let mut mine: i64 = 0
+            loop {
+                let item = r.lock().unwrap().recv()
+                match item {
+                    Ok(s) => {
+                        out.lock().unwrap().push(s)
+                        mine += 1
+                    }
+                    Err(_) => { break }
+                }
+            }
+            mine
+        })
+        cons_handles.push(handle)
+        c += 1
+    }
+    for h in prod_handles { h.join() }
+    let mut total: i64 = 0
+    for h in cons_handles { total += h.join().unwrap_or(0) }
+    let mut items = collected.lock().unwrap().clone()
+    items.sort()
+    let mut chars: usize = 0
+    for s in items.iter() { chars += s.len() }
+    println("items: ${items.len()}")
+    println("chars: ${chars}")
+    let mut i: usize = 0
+    while i < 3 && i < items.len() {
+        println("first: ${items[i]}")
+        i += 1
+    }
+    println("consumers_total: ${total}")
+}

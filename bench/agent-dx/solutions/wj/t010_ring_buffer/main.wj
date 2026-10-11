@@ -1,0 +1,58 @@
+use std::fs
+
+struct Ring {
+    items: Vec<i64>,
+    cap: usize,
+}
+
+impl Ring {
+    fn new(cap: usize) -> Ring {
+        Ring { items: Vec::new(), cap: cap }
+    }
+
+    fn push(self, x: i64) -> bool {
+        if self.items.len() >= self.cap {
+            return false
+        }
+        self.items.push(x)
+        true
+    }
+
+    fn pop(self) -> Option<i64> {
+        if self.items.len() == 0 {
+            return None
+        }
+        Some(self.items.remove(0))
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut lines = text.lines()
+    let cap = lines.next().unwrap_or("1").trim().parse::<usize>().unwrap_or(1)
+    let mut ring = Ring::new(cap)
+    for line in lines {
+        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if parts.len() == 0 { continue }
+        if parts[0] == "push" {
+            let x = parts[1].parse::<i64>().unwrap_or(0)
+            if ring.push(x) { println("ok") } else { println("full") }
+        } else if parts[0] == "pop" {
+            match ring.pop() {
+                Some(v) => { println("${v}") }
+                None => { println("empty") }
+            }
+        } else if parts[0] == "peek" {
+            if ring.items.len() == 0 { println("empty") } else { println("${ring.items[0]}") }
+        } else if parts[0] == "size" {
+            println("${ring.items.len()}")
+        } else {
+            if ring.items.len() == 0 {
+                println("<empty>")
+            } else {
+                let strs: Vec<string> = ring.items.iter().map(|x| x.to_string()).collect()
+                println(strs.join(" "))
+            }
+        }
+    }
+}

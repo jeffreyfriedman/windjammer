@@ -1,0 +1,67 @@
+use std::env
+use std::fs
+use std::process
+
+fn main() {
+    let args: Vec<string> = env::args().collect()
+    let mut ignore_case = false
+    let mut numbers = false
+    let mut count_only = false
+    let mut invert = false
+    let mut positional: Vec<string> = Vec::new()
+    for a in args[1..].iter() {
+        if a == "-i" {
+            ignore_case = true
+        } else if a == "-n" {
+            numbers = true
+        } else if a == "-c" {
+            count_only = true
+        } else if a == "-v" {
+            invert = true
+        } else {
+            positional.push(a.clone())
+        }
+    }
+    let pattern = if ignore_case { positional[0].to_lowercase() } else { positional[0].clone() }
+    let files: Vec<string> = positional[1..].to_vec()
+    let multi = files.len() > 1
+    let mut matched: i64 = 0
+    let mut status = 0
+    for f in files.iter() {
+        let text = match fs::read_to_string(f.as_str()) {
+            Ok(t) => t,
+            Err(_) => {
+                println("grep: ${f}: No such file")
+                status = 2
+                continue
+            }
+        }
+        let mut n: i64 = 0
+        let mut cnt: i64 = 0
+        for line in text.lines() {
+            n += 1
+            let hay = if ignore_case { line.to_lowercase() } else { line.to_string() }
+            let mut hit = hay.contains(pattern.as_str())
+            if invert { hit = !hit }
+            if hit {
+                cnt += 1
+                if !count_only {
+                    let mut prefix = ""
+                    if multi { prefix = prefix + f + ":" }
+                    if numbers { prefix = prefix + "${n}:" }
+                    println("${prefix}${line}")
+                }
+            }
+        }
+        matched += cnt
+        if count_only {
+            if multi { println("${f}:${cnt}") } else { println("${cnt}") }
+        }
+    }
+    if status == 0 && matched == 0 {
+        status = 1
+    }
+    if status != 0 {
+        process::exit(status)
+    }
+}

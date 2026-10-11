@@ -6,7 +6,7 @@ def _c(files):
 
 
 SAMPLES = [_c({"a.txt": "hello", "src/main.rs": "fn main() {}\n"}), _c({"x": ""})]
-EDGE = [_c({}), _c({"b/c/d/e.txt": "deep", "b/a": "1", "B": "upper", "a/z": "zz", "a b": "space"})]
+EDGE = [_c({}), _c({"b/c/d/e.txt": "deep", "b/a": "1", "Bee": "upper", "a/z": "zz", "a b": "space"})]
 
 
 def rand(rng):

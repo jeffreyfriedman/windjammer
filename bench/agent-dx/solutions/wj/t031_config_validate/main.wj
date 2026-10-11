@@ -1,0 +1,66 @@
+use std::fs
+use std::collections::HashMap
+
+fn is_int_in(v: string, lo: i64, hi: i64) -> bool {
+    if v.len() == 0 { return false }
+    for c in v.chars() {
+        if c < '0' || c > '9' { return false }
+    }
+    if v.len() > 12 { return false }
+    match v.parse::<i64>() {
+        Ok(n) => n >= lo && n <= hi,
+        Err(_) => false,
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut values: HashMap<string, string> = HashMap::new()
+    let mut order: Vec<string> = Vec::new()
+    let mut errors: Vec<string> = Vec::new()
+    let mut n: i64 = 0
+    for line in text.lines() {
+        n += 1
+        if line.len() == 0 { continue }
+        match line.find("=") {
+            Some(p) => {
+                let k = line.as_str()[0..p].to_string()
+                if !values.contains_key(k.as_str()) { order.push(k.clone()) }
+                values.insert(k, line.as_str()[p + 1..].to_string())
+            }
+            None => { errors.push("error: malformed line ${n}") }
+        }
+    }
+    let host = values.get("host").unwrap_or("<absent>")
+    if !values.contains_key("host") {
+        errors.push("error: host: missing")
+    } else if host.len() == 0 {
+        errors.push("error: host: empty")
+    }
+    let port = values.get("port").unwrap_or("")
+    if !values.contains_key("port") {
+        errors.push("error: port: missing")
+    } else if !is_int_in(port.to_string(), 1, 65535) {
+        errors.push("error: port: invalid value ${port}")
+    }
+    let debug = values.get("debug").unwrap_or("false")
+    if values.contains_key("debug") && debug != "true" && debug != "false" {
+        errors.push("error: debug: invalid value ${debug}")
+    }
+    let workers = values.get("workers").unwrap_or("4")
+    if values.contains_key("workers") && !is_int_in(workers.to_string(), 1, 64) {
+        errors.push("error: workers: invalid value ${workers}")
+    }
+    for k in order {
+        if k != "host" && k != "port" && k != "debug" && k != "workers" {
+            errors.push("error: unknown key ${k}")
+        }
+    }
+    if errors.len() > 0 {
+        for e in errors { println(e) }
+    } else {
+        let pn = port.parse::<i64>().unwrap_or(0)
+        let wn = workers.parse::<i64>().unwrap_or(0)
+        println("ok host=${host} port=${pn} debug=${debug} workers=${wn}")
+    }
+}

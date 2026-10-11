@@ -1,0 +1,45 @@
+use std::fs
+use std::collections::HashMap
+
+struct Person {
+    manager: string,
+    salary: i64,
+}
+
+fn skip_level(people: HashMap<string, Person>, q: string) -> string {
+    let p = match people.get(q.as_str()) {
+        Some(p) => p,
+        None => { return "none: unknown ${q}" }
+    }
+    if p.manager == "-" { return "none: no manager ${q}" }
+    let m1 = p.manager.clone()
+    let mp = match people.get(m1.as_str()) {
+        Some(x) => x,
+        None => { return "none: unknown ${m1}" }
+    }
+    if mp.manager == "-" { return "none: no skip-level ${m1}" }
+    let m2 = mp.manager.clone()
+    match people.get(m2.as_str()) {
+        Some(x) => "${x.salary}",
+        None => "none: unknown ${m2}",
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut lines = text.lines()
+    let n = lines.next().unwrap_or("0").trim().parse::<usize>().unwrap_or(0)
+    let mut people: HashMap<string, Person> = HashMap::new()
+    let mut i: usize = 0
+    while i < n {
+        let l = lines.next().unwrap_or("")
+        let p: Vec<string> = l.split_whitespace().map(|s| s.to_string()).collect()
+        people.insert(p[0].clone(), Person { manager: p[1].clone(), salary: p[2].parse::<i64>().unwrap_or(0) })
+        i += 1
+    }
+    for l in lines {
+        let q = l.trim()
+        if q.len() == 0 { continue }
+        println(skip_level(people.clone(), q.to_string()))
+    }
+}

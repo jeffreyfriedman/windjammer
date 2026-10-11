@@ -1,0 +1,40 @@
+use std::fs
+
+struct Counts {
+    dirs: i64,
+    files: i64,
+}
+
+fn walk(path: string, depth: usize, counts: Counts) -> Counts {
+    let mut c = counts
+    let entries = fs::read_dir(path.as_str()).unwrap_or(Vec::new())
+    let mut names: Vec<string> = Vec::new()
+    for e in entries {
+        names.push(e.file_name())
+    }
+    names.sort()
+    let mut indent = ""
+    let mut k: usize = 0
+    while k < depth {
+        indent = indent + "  "
+        k += 1
+    }
+    for n in names {
+        let full = if path == "." { "./${n}" } else { "${path}/${n}" }
+        if fs::is_dir(full.as_str()) {
+            c.dirs += 1
+            println("${indent}${n}/")
+            c = walk(full, depth + 1, c)
+        } else {
+            c.files += 1
+            let size = fs::read_to_string(full.as_str()).unwrap_or("").len()
+            println("${indent}${n} (${size} bytes)")
+        }
+    }
+    c
+}
+
+fn main() {
+    let c = walk(".".to_string(), 0, Counts { dirs: 0, files: 0 })
+    println("${c.dirs} directories, ${c.files} files")
+}

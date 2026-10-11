@@ -1,0 +1,47 @@
+use std::env
+use std::fs
+use std::process
+
+fn main() {
+    let args: Vec<string> = env::args().collect()
+    let mut numbered = false
+    let mut names: Vec<string> = Vec::new()
+    for a in args[1..].iter() {
+        if a == "-n" { numbered = true } else { names.push(a.clone()) }
+    }
+    let mut sources: Vec<(string, bool, string)> = Vec::new()
+    if names.len() == 0 {
+        sources.push(("-".to_string(), true, fs::read_to_string("/dev/stdin").unwrap_or("")))
+    }
+    for nm in names.iter() {
+        match fs::read_to_string(nm.as_str()) {
+            Ok(t) => { sources.push((nm.clone(), true, t)) }
+            Err(_) => { sources.push((nm.clone(), false, "".to_string())) }
+        }
+    }
+    let mut n: i64 = 0
+    let mut bad = false
+    for (nm, ok, text) in sources {
+        if !ok {
+            println("cat: ${nm}: No such file")
+            bad = true
+            continue
+        }
+        if !numbered {
+            print(text)
+            continue
+        }
+        for line in text.lines() {
+            n += 1
+            let num = "${n}"
+            let mut pad = ""
+            let mut k = num.len()
+            while k < 6 {
+                pad = pad + " "
+                k += 1
+            }
+            println("${pad}${num}\t${line}")
+        }
+    }
+    if bad { process::exit(1) }
+}

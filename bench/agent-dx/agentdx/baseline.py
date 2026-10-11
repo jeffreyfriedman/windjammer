@@ -24,6 +24,17 @@ def grade_solution(lang, task_id, src=None):
         return r
 
 
+def _explain(r, log):
+    if r["status"] == "build_error":
+        for d in r["build"]["diagnostics"][:3]:
+            print("    build:", d["category"], d["message"][:200].replace("\n", " | "), file=log)
+    for f in r["failures"][:1]:
+        print("    fail:", f["category"], f["message"][:160].replace("\n", " | "), file=log)
+        print("      stdin:", repr(f["stdin"][:120]), "args:", f["args"], file=log)
+        print("      want:", repr(f["expected"][:120]), file=log)
+        print("      got: ", repr(f["actual"][:120]), file=log)
+
+
 def run_matrix(langs, task_ids, log=sys.stderr):
     out = []
     for tid in task_ids:
@@ -31,4 +42,6 @@ def run_matrix(langs, task_ids, log=sys.stderr):
             r = grade_solution(lang, tid)
             print(f"{tid:34s} {lang:10s} {r['status']:12s} {r['passed']}/{r['total']}", file=log, flush=True)
             out.append(r)
+            if r["status"] not in ("pass", "missing") and os.environ.get("AGENTDX_VERBOSE", "1") == "1":
+                _explain(r, log)
     return out

@@ -1,0 +1,52 @@
+use std::fs
+
+fn parse_line(line: string) -> Vec<string> {
+    let chars: Vec<char> = line.chars().collect()
+    let n = chars.len()
+    let mut fields: Vec<string> = Vec::new()
+    let mut cur = ""
+    let mut i: usize = 0
+    loop {
+        if i < n && chars[i] == '"' {
+            i += 1
+            loop {
+                if chars[i] == '"' {
+                    if i + 1 < n && chars[i + 1] == '"' {
+                        cur = cur + "\""
+                        i += 2
+                        continue
+                    }
+                    i += 1
+                    break
+                }
+                cur = cur + chars[i].to_string()
+                i += 1
+            }
+        } else {
+            while i < n && chars[i] != ',' {
+                cur = cur + chars[i].to_string()
+                i += 1
+            }
+        }
+        fields.push(cur.clone())
+        cur = ""
+        if i >= n {
+            return fields
+        }
+        i += 1
+        if i >= n {
+            fields.push("")
+            return fields
+        }
+    }
+    fields
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let f = parse_line(line.to_string())
+        let wrapped: Vec<string> = f.iter().map(|x| "[" + x + "]").collect()
+        println("${f.len()}: ${wrapped.join("|")}")
+    }
+}

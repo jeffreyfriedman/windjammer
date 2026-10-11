@@ -1,0 +1,73 @@
+use std::fs
+use std::collections::HashMap
+
+struct Memo {
+    cache: HashMap<string, i64>,
+    hits: i64,
+    misses: i64,
+}
+
+impl Memo {
+    fn lookup(self, key: string) -> Option<i64> {
+        match self.cache.get(key.as_str()) {
+            Some(v) => {
+                self.hits += 1
+                Some(*v)
+            }
+            None => None,
+        }
+    }
+
+    fn store(self, key: string, v: i64) {
+        self.misses += 1
+        self.cache.insert(key, v)
+    }
+}
+
+fn fib_mod(n: i64) -> i64 {
+    let mut a: i64 = 0
+    let mut b: i64 = 1
+    let mut i: i64 = 0
+    while i < n {
+        let t = (a + b) % 1000000007
+        a = b
+        b = t
+        i += 1
+    }
+    a
+}
+
+fn collatz(n: i64) -> i64 {
+    let mut x = n
+    let mut steps: i64 = 0
+    while x != 1 {
+        if x % 2 == 0 { x = x / 2 } else { x = 3 * x + 1 }
+        steps += 1
+    }
+    steps
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut memo = Memo { cache: HashMap::new(), hits: 0, misses: 0 }
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() < 2 { continue }
+        let name = p[0].clone()
+        let arg = p[1].parse::<i64>().unwrap_or(0)
+        if name != "fib" && name != "collatz" && name != "tri" {
+            println("unknown function")
+            continue
+        }
+        let key = "${name}:${arg}"
+        match memo.lookup(key.clone()) {
+            Some(v) => { println("${v} hit") }
+            None => {
+                let v = if name == "fib" { fib_mod(arg) } else if name == "collatz" { collatz(arg) } else { arg * (arg + 1) / 2 }
+                memo.store(key, v)
+                println("${v} miss")
+            }
+        }
+    }
+    println("hits=${memo.hits} misses=${memo.misses}")
+}

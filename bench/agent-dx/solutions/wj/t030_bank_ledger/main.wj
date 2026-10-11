@@ -1,0 +1,97 @@
+use std::fs
+use std::collections::HashMap
+
+enum BankError {
+    InvalidAmount,
+    Duplicate,
+    Unknown(string),
+    Insufficient,
+    SameAccount,
+}
+
+fn describe(e: BankError) -> string {
+    match e {
+        BankError::InvalidAmount => "error: invalid amount",
+        BankError::Duplicate => "error: duplicate account",
+        BankError::Unknown(n) => "error: unknown account ${n}",
+        BankError::Insufficient => "error: insufficient funds",
+        BankError::SameAccount => "error: same account",
+    }
+}
+
+struct Bank {
+    accounts: HashMap<string, i64>,
+}
+
+impl Bank {
+    fn open(self, name: string, amount: i64) -> Result<i64, BankError> {
+        if amount < 0 { return Err(BankError::InvalidAmount) }
+        if self.accounts.contains_key(name.as_str()) { return Err(BankError::Duplicate) }
+        self.accounts.insert(name, amount)
+        Ok(0)
+    }
+
+    fn balance_of(self, name: string) -> Result<i64, BankError> {
+        match self.accounts.get(name.as_str()) {
+            Some(b) => Ok(*b),
+            None => Err(BankError::Unknown(name)),
+        }
+    }
+
+    fn change(self, name: string, delta: i64) -> Result<i64, BankError> {
+        let b = self.balance_of(name.clone())?
+        if b + delta < 0 { return Err(BankError::Insufficient) }
+        self.accounts.insert(name, b + delta)
+        Ok(0)
+    }
+
+    fn transfer(self, from: string, to: string, amount: i64) -> Result<i64, BankError> {
+        if amount <= 0 { return Err(BankError::InvalidAmount) }
+        self.balance_of(from.clone())?
+        self.balance_of(to.clone())?
+        if from == to { return Err(BankError::SameAccount) }
+        self.change(from, 0 - amount)?
+        self.change(to, amount)?
+        Ok(0)
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut bank = Bank { accounts: HashMap::new() }
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let cmd = p[0].clone()
+        let result: Result<i64, BankError> = if cmd == "open" {
+            bank.open(p[1].clone(), p[2].parse::<i64>().unwrap_or(0))
+        } else if cmd == "balance" {
+            bank.balance_of(p[1].clone())
+        } else if cmd == "deposit" || cmd == "withdraw" {
+            let a = p[2].parse::<i64>().unwrap_or(0)
+            if a <= 0 {
+                Err(BankError::InvalidAmount)
+            } else if cmd == "deposit" {
+                bank.change(p[1].clone(), a)
+            } else {
+                bank.change(p[1].clone(), 0 - a)
+            }
+        } else {
+            bank.transfer(p[1].clone(), p[2].clone(), p[3].parse::<i64>().unwrap_or(0))
+        }
+        match result {
+            Ok(v) => {
+                if cmd == "balance" { println("${v}") } else { println("ok") }
+            }
+            Err(e) => { println(describe(e)) }
+        }
+    }
+    let mut names: Vec<string> = Vec::new()
+    for (k, v) in bank.accounts.clone() {
+        names.push(k)
+    }
+    names.sort()
+    for n in names {
+        println("${n} ${bank.accounts.get(n.as_str()).unwrap_or(0)}")
+    }
+}

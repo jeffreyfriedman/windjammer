@@ -1,0 +1,46 @@
+use std::fs
+
+fn compute(op: string, a: i32, b: i32) -> string {
+    if op == "add" {
+        return match a.checked_add(b) { Some(r) => "${r}", None => "overflow" }
+    }
+    if op == "sub" {
+        return match a.checked_sub(b) { Some(r) => "${r}", None => "overflow" }
+    }
+    if op == "mul" {
+        return match a.checked_mul(b) { Some(r) => "${r}", None => "overflow" }
+    }
+    if op == "div" || op == "rem" {
+        if b == 0 { return "divzero" }
+        if a == -2147483648 && b == -1 {
+            return if op == "div" { "overflow" } else { "0" }
+        }
+        return if op == "div" { "${a / b}" } else { "${a % b}" }
+    }
+    // pow
+    if b < 0 { return "invalid" }
+    if a == 0 { return if b == 0 { "1" } else { "0" } }
+    if a == 1 { return "1" }
+    if a == -1 { return if b % 2 == 0 { "1" } else { "-1" } }
+    let mut result: i32 = 1
+    let mut i: i32 = 0
+    while i < b {
+        match result.checked_mul(a) {
+            Some(r) => { result = r }
+            None => { return "overflow" }
+        }
+        i += 1
+    }
+    "${result}"
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() < 3 { continue }
+        let a = p[1].parse::<i32>().unwrap_or(0)
+        let b = p[2].parse::<i32>().unwrap_or(0)
+        println(compute(p[0].clone(), a, b))
+    }
+}

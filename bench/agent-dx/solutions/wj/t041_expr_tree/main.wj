@@ -1,0 +1,91 @@
+use std::fs
+
+enum Expr {
+    Num(i64),
+    Neg(Box<Expr>),
+    Bin(string, Box<Expr>, Box<Expr>),
+}
+
+struct Parser {
+    toks: Vec<string>,
+    pos: usize,
+}
+
+impl Parser {
+    fn parse(self) -> Expr {
+        let t = self.toks[self.pos].clone()
+        self.pos += 1
+        if t == "(" {
+            let op = self.toks[self.pos].clone()
+            self.pos += 1
+            let a = self.parse()
+            if op == "neg" {
+                self.pos += 1
+                return Expr::Neg(Box::new(a))
+            }
+            let b = self.parse()
+            self.pos += 1
+            return Expr::Bin(op, Box::new(a), Box::new(b))
+        }
+        Expr::Num(t.parse::<i64>().unwrap_or(0))
+    }
+}
+
+fn eval(e: Expr) -> i64 {
+    match e {
+        Expr::Num(n) => n,
+        Expr::Neg(a) => 0 - eval(*a),
+        Expr::Bin(op, a, b) => {
+            let x = eval(*a)
+            let y = eval(*b)
+            if op == "+" { x + y } else if op == "-" { x - y } else { x * y }
+        }
+    }
+}
+
+fn depth(e: Expr) -> i64 {
+    match e {
+        Expr::Num(n) => 1,
+        Expr::Neg(a) => 1 + depth(*a),
+        Expr::Bin(op, a, b) => {
+            let x = depth(*a)
+            let y = depth(*b)
+            1 + if x > y { x } else { y }
+        }
+    }
+}
+
+fn count(e: Expr) -> i64 {
+    match e {
+        Expr::Num(n) => 1,
+        Expr::Neg(a) => 1 + count(*a),
+        Expr::Bin(op, a, b) => 1 + count(*a) + count(*b),
+    }
+}
+
+fn render(e: Expr) -> string {
+    match e {
+        Expr::Num(n) => "${n}",
+        Expr::Neg(a) => "-(${render(*a)})",
+        Expr::Bin(op, a, b) => "(${render(*a)} ${op} ${render(*b)})",
+    }
+}
+
+fn build(line: string) -> Expr {
+    let spaced = line.replace("(", "( ").replace(")", " )")
+    let toks: Vec<string> = spaced.split_whitespace().map(|s| s.to_string()).collect()
+    let mut p = Parser { toks: toks, pos: 0 }
+    p.parse()
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        if line.trim().len() == 0 { continue }
+        let v = eval(build(line.to_string()))
+        let d = depth(build(line.to_string()))
+        let c = count(build(line.to_string()))
+        let r = render(build(line.to_string()))
+        println("${v} ${d} ${c} ${r}")
+    }
+}

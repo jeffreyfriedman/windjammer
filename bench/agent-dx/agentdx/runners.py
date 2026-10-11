@@ -52,6 +52,7 @@ class Runner:
     src = "main.txt"
     build_timeout = 120
     run_timeout = 10
+    arg_separator = []  # tokens placed between the program and its arguments
 
     def build_dir(self, wd):
         d = os.path.join(wd, ".build")
@@ -71,7 +72,8 @@ class Runner:
                 os.makedirs(os.path.dirname(p), exist_ok=True)
                 with open(p, "w") as f:
                     f.write(content)
-            cmd = self.command(build, wd) + list(case.get("args") or [])
+            args = list(case.get("args") or [])
+            cmd = self.command(build, wd) + (self.arg_separator if args else []) + args
             code, out, err, to, sec = _exec(cmd, cwd, case.get("stdin", ""), self.run_timeout)
             return RunResult(out, err, code, to, sec)
 
@@ -148,6 +150,7 @@ class TsRunner(Runner):
 class WjInterpRunner(Runner):
     lang, src = "wj-interp", "main.wj"
     run_timeout = 20
+    arg_separator = ["--"]  # otherwise `wj run` parses program flags such as --name itself
 
     def build(self, wd):
         # Interpreter has no separate compile step; errors surface at run time (first vector).

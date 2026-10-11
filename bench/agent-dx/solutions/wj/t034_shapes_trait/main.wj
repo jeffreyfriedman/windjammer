@@ -1,0 +1,73 @@
+use std::fs
+
+trait Shape {
+    fn name(self) -> string
+    fn corners(self) -> i64
+    fn double_area(self) -> i64
+}
+
+struct Square { s: i64 }
+struct Rect { w: i64, h: i64 }
+struct RightTri { a: i64, b: i64 }
+struct Trapezoid { a: i64, b: i64, h: i64 }
+
+impl Shape for Square {
+    fn name(self) -> string { "square" }
+    fn corners(self) -> i64 { 4 }
+    fn double_area(self) -> i64 { 2 * self.s * self.s }
+}
+
+impl Shape for Rect {
+    fn name(self) -> string { "rect" }
+    fn corners(self) -> i64 { 4 }
+    fn double_area(self) -> i64 { 2 * self.w * self.h }
+}
+
+impl Shape for RightTri {
+    fn name(self) -> string { "rtri" }
+    fn corners(self) -> i64 { 3 }
+    fn double_area(self) -> i64 { self.a * self.b }
+}
+
+impl Shape for Trapezoid {
+    fn name(self) -> string { "trap" }
+    fn corners(self) -> i64 { 4 }
+    fn double_area(self) -> i64 { (self.a + self.b) * self.h }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut shapes: Vec<Box<dyn Shape>> = Vec::new()
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let v: Vec<i64> = p[1..].iter().map(|x| x.parse::<i64>().unwrap_or(0)).collect()
+        if p[0] == "square" {
+            shapes.push(Box::new(Square { s: v[0] }))
+        } else if p[0] == "rect" {
+            shapes.push(Box::new(Rect { w: v[0], h: v[1] }))
+        } else if p[0] == "rtri" {
+            shapes.push(Box::new(RightTri { a: v[0], b: v[1] }))
+        } else {
+            shapes.push(Box::new(Trapezoid { a: v[0], b: v[1], h: v[2] }))
+        }
+    }
+    let mut total: i64 = 0
+    let mut best_name = "none"
+    let mut best: i64 = -1
+    for s in shapes.iter() {
+        let d = s.double_area()
+        println("${s.name()} corners=${s.corners()} area2=${d}")
+        total += d
+        if d > best {
+            best = d
+            best_name = s.name()
+        }
+    }
+    println("total area2=${total}")
+    if best < 0 {
+        println("largest=none")
+    } else {
+        println("largest=${best_name} area2=${best}")
+    }
+}
