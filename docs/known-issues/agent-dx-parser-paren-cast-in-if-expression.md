@@ -1,7 +1,6 @@
 # Parser: `let v = if (x as usize) < n { .. } else { .. }` fails to parse
 
-<!-- should_fail: documents a parser bug: the program is valid but is rejected today; remove the annotation when the bug is fixed -->
-```windjammer,should_fail
+```windjammer
 fn main() {
     let ci: i64 = 1
     let p: Vec<string> = vec!["a".to_string(), "b".to_string()]

@@ -43,8 +43,4 @@ defs = "docs/spec/**/*.md"
 
 # Grammar sentences the parser rejects: "production#alternative" = "reason". An entry the parser accepts fails the check.
 [ebnf.divergences]
-"pattern#6" = "range patterns are documented but the parser does not accept them yet (wt/parser-gaps adds them; delete these four entries when that merges)"
-"range_pattern#0" = "see pattern#6"
-"range_pattern#1" = "see pattern#6"
-"range_pattern#full" = "see pattern#6"
 
