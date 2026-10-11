@@ -1,6 +1,7 @@
 # Parser: a statement starting with `*` after a line ending in `}` or `)` is parsed as multiplication
 
-```windjammer
+<!-- should_fail: documents a parser bug: the program is valid but is rejected today; remove the annotation when the bug is fixed -->
+```windjammer,should_fail
 use std::collections::HashMap
 
 fn main() {

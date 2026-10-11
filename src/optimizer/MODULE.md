@@ -41,7 +41,7 @@ unsound variants (tests only).
 
 ## Testing
 - `cargo test --lib optimizer::` (unit, per pass, with rejection cases)
-- `tests/optimizer_fixture_test.rs` (19 programs vs independent Python model, metamorphic)
+- `tests/optimizer_fixture_test.rs` (fixture programs vs independent Python model, metamorphic)
 - `tests/optimizer_generative_test.rs` (seeded generator + shrinking; `--features optimizer-soak` for 5000)
 - `tests/optimizer_mutation_test.rs` (every unsound mutant must be caught)
 - `tests/optimizer_ratchet_test.rs` (clone/to_string/cast counts must not grow)

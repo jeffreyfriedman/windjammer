@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Pipe operator `|>`
 
 Status: implemented in `src/parser/pipe_parser.rs`.

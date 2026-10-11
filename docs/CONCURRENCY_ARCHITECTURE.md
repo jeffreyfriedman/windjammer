@@ -1,6 +1,11 @@
+---
+status: proposal
+---
 # Windjammer Concurrency Architecture
 
-> **Status (2026-10-11): background, not verified.** The three-layer design is background; the concurrency surface that is actually decided is [ADR-0004](adr/0004-concurrency-surface.md). The implementation-status list and the performance tables below were not re-verified.
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
+> Background note (2026-10-11): The three-layer design is background; the concurrency surface that is actually decided is [ADR-0004](adr/0004-concurrency-surface.md). The implementation-status list and the performance tables below were not re-verified.
+
 
 ## Overview: Three Layers of Concurrency
 

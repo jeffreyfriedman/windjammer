@@ -1,3 +1,7 @@
+---
+status: accepted
+last_verified: 3406ef05bb35
+---
 # ADR-0015: Language consistency proposals (numerics, casts, paths, returns)
 
 - **Status:** Accepted (2026-10-11): 1, 2, 3, 5. Removed: 4 (`::` to `.`; revisit only if needed). 6 advisory.

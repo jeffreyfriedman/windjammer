@@ -8,11 +8,13 @@
 
 pub mod claims;
 pub mod config;
+pub mod ebnf;
 pub mod fence_run;
 pub mod fences;
 pub mod freshness;
 pub mod gen_cli;
 pub mod gen_errors;
+pub mod gen_interp;
 pub mod gen_lang;
 pub mod gen_meta;
 pub mod gen_stdlib;
@@ -20,6 +22,7 @@ pub mod gen_targets;
 pub mod genfiles;
 pub mod links;
 pub mod md;
+pub mod proposal;
 pub mod regions;
 pub mod util;
 
@@ -76,5 +79,7 @@ pub fn run_all(ctx: &Ctx) -> Vec<Finding> {
     out.extend(links::check_all(ctx, &cfg));
     out.extend(claims::check_all(ctx, &cfg));
     out.extend(freshness::check_all(ctx, &cfg));
+    out.extend(proposal::check_all(ctx));
+    out.extend(ebnf::check_all(ctx, &cfg));
     out
 }

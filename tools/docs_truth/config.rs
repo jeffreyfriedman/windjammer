@@ -16,6 +16,28 @@ pub struct Config {
     pub rule_ids: Vec<RuleIds>,
     #[serde(default)]
     pub freshness: Freshness,
+    #[serde(default)]
+    pub verify: Verify,
+    #[serde(default)]
+    pub ebnf: Ebnf,
+}
+
+/// Cross-check of `docs/windjammer.ebnf` against the parser (see `ebnf.rs`). Both tables may only shrink.
+#[derive(Debug, Default, Deserialize)]
+pub struct Ebnf {
+    /// Lexer keywords deliberately absent from the grammar -> reason.
+    #[serde(default)]
+    pub unlisted_keywords: BTreeMap<String, String>,
+    /// `production#alt` sentences the parser is known to reject -> reason.
+    #[serde(default)]
+    pub divergences: BTreeMap<String, String>,
+}
+
+/// Documents whose shell fences that run `wj` must all be `sh,verify` (or explicitly `ignore`d).
+#[derive(Debug, Default, Deserialize)]
+pub struct Verify {
+    #[serde(default)]
+    pub required: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +64,9 @@ pub struct Freshness {
     /// Warn when referenced code changed by more than this many lines since `last_verified`.
     #[serde(default = "default_threshold")]
     pub changed_lines: usize,
+    /// Missing front matter / `last_verified` on tracked docs fails instead of warning.
+    #[serde(default)]
+    pub require: bool,
 }
 
 fn default_threshold() -> usize {
@@ -50,7 +75,7 @@ fn default_threshold() -> usize {
 
 impl Default for Freshness {
     fn default() -> Self {
-        Freshness { tracked: vec![], changed_lines: default_threshold() }
+        Freshness { tracked: vec![], changed_lines: default_threshold(), require: false }
     }
 }
 
@@ -58,7 +83,12 @@ pub const PATH: &str = "docs/docs-truth.toml";
 
 pub fn load(ctx: &Ctx) -> Config {
     let text = ctx.read(PATH);
-    toml::from_str(&text).unwrap_or_else(|e| panic!("{PATH}: {e}"))
+    let mut cfg: Config = toml::from_str(&text).unwrap_or_else(|e| panic!("{PATH}: {e}"));
+    // Triage aid: `WJ_DOCS_NO_BASELINE=1 wj-docs check` lists every finding the ratchets currently hide.
+    if std::env::var_os("WJ_DOCS_NO_BASELINE").is_some() {
+        cfg.baseline.clear();
+    }
+    cfg
 }
 
 impl Config {
@@ -95,6 +125,21 @@ impl Config {
         }
         out
     }
+}
+
+/// Ratchet guard for `update-baseline`: no per-file count may exceed its recorded baseline, and no
+/// file or check without a baseline may appear. Returns every violation.
+pub fn check_no_increase(old: &BTreeMap<String, BTreeMap<String, usize>>, new: &BTreeMap<&'static str, BTreeMap<String, usize>>) -> Result<(), String> {
+    let mut bad = Vec::new();
+    for (check, files) in new {
+        for (file, &n) in files {
+            let was = old.get(*check).and_then(|m| m.get(file)).copied().unwrap_or(0);
+            if n > was {
+                bad.push(format!("  {check}: {file}: {n} findings, baseline {was}"));
+            }
+        }
+    }
+    if bad.is_empty() { Ok(()) } else { Err(bad.join("\n")) }
 }
 
 /// Rewrite the `[baseline.*]` tables of the config file from current raw counts, keeping the rest verbatim.
