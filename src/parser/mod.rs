@@ -30,6 +30,7 @@ mod match_value_expression_parser;
 mod matches_macro;
 mod pipe_parser;
 mod primary_expression_parser;
+pub mod span_log;
 
 // Statement parsing module - extracted from parser_impl.rs
 pub mod statement_parser;
@@ -49,6 +50,7 @@ pub use ast::*;
 // Re-export everything else from parser_impl for now to maintain backward compatibility
 pub use crate::parser_impl::ParseWarning;
 pub use crate::parser_impl::Parser;
+pub use span_log::{NodeSpan, SpanSnapshot};
 
 // TODO: Uncomment these as we create the modules
 // pub mod core;

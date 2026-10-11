@@ -44,6 +44,14 @@ pub struct CodeGenerator<'ast> {
     source_map: crate::source_map::SourceMap,
     pub(crate) current_output_file: std::path::PathBuf, // Path to the Rust file being generated
     current_rust_line: usize, // Current line number in generated Rust code (1-indexed)
+    /// True node spans from the parser (source-map locations); empty when not provided.
+    span_snapshot: crate::parser::SpanSnapshot,
+    /// Statements seen during generation, in source order: (wj location, first generated line).
+    /// Resolved to Rust line numbers against the final text by `resolve_source_map`.
+    pending_mappings: Vec<(crate::source_map::Location, String)>,
+    /// Files named in the emitted source map (independent of `current_*_file`, which steer codegen).
+    map_output_file: std::path::PathBuf,
+    map_wj_file: std::path::PathBuf,
     pub(crate) current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
@@ -668,6 +676,10 @@ impl<'ast> CodeGenerator<'ast> {
             source_map: crate::source_map::SourceMap::new(),
             current_output_file: std::path::PathBuf::new(),
             current_rust_line: 1,
+            span_snapshot: crate::parser::SpanSnapshot::default(),
+            pending_mappings: Vec::new(),
+            map_output_file: std::path::PathBuf::new(),
+            map_wj_file: std::path::PathBuf::new(),
             current_wj_file: std::path::PathBuf::new(),
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
@@ -2490,17 +2502,78 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_rust_line += count;
     }
 
-    /// Record a mapping from current Rust location to Windjammer location
-    pub(super) fn record_mapping(&mut self, wj_location: &crate::source_map::Location) {
-        if !self.current_output_file.as_os_str().is_empty() {
+    /// Name the generated Rust file and its `.wj` source in the emitted source map.
+    pub fn set_map_files(&mut self, rust_file: impl Into<std::path::PathBuf>, wj_file: impl Into<std::path::PathBuf>) {
+        self.map_output_file = rust_file.into();
+        self.map_wj_file = wj_file.into();
+    }
+
+    /// Provide the parser's true node spans (statement locations for the source map).
+    pub fn set_span_snapshot(&mut self, spans: crate::parser::SpanSnapshot) {
+        self.span_snapshot = spans;
+    }
+
+    /// Start a mapping for `stmt`: remembers its true source position; returns a slot to fill
+    /// with the first generated line once the statement has been generated.
+    pub(super) fn begin_mapping(&mut self, stmt: &crate::parser::Statement<'_>) -> Option<usize> {
+        if self.map_output_file.as_os_str().is_empty() {
+            return None;
+        }
+        let span = self.span_snapshot.stmt(stmt)?;
+        // The tail-statement path and `generate_statement` both begin a mapping for the same
+        // statement: share one slot.
+        if let Some((last, _)) = self.pending_mappings.last() {
+            if (last.line, last.column) == (span.line, span.column) {
+                return Some(self.pending_mappings.len() - 1);
+            }
+        }
+        self.pending_mappings.push((
+            crate::source_map::Location {
+                file: self.map_wj_file.clone(),
+                line: span.line,
+                column: span.column,
+            },
+            String::new(),
+        ));
+        Some(self.pending_mappings.len() - 1)
+    }
+
+    /// Record the first non-blank generated line of the statement started with `begin_mapping`.
+    pub(super) fn finish_mapping(&mut self, slot: Option<usize>, generated: &str) {
+        if let Some(i) = slot {
+            if let Some(first) = generated.lines().map(str::trim).find(|l| !l.is_empty()) {
+                self.pending_mappings[i].1 = first.to_string();
+            }
+        }
+    }
+
+    /// Resolve pending statement mappings against the final Rust text. Statements are matched in
+    /// generation (source) order to the next line that starts with their first generated line, so
+    /// a statement the optimizer rewrote simply stays unmapped instead of being mapped wrongly.
+    pub fn resolve_source_map(&mut self, final_code: &str) {
+        let lines: Vec<&str> = final_code.lines().collect();
+        let mut cursor = 0usize;
+        for (loc, anchor) in std::mem::take(&mut self.pending_mappings) {
+            if anchor.is_empty() {
+                continue;
+            }
+            let Some(off) = lines[cursor.min(lines.len())..]
+                .iter()
+                .position(|l| l.trim_start().starts_with(anchor.as_str()))
+            else {
+                continue;
+            };
+            let idx = cursor + off;
+            let indent = lines[idx].len() - lines[idx].trim_start().len();
             self.source_map.add_mapping(
-                self.current_output_file.clone(),
-                self.current_rust_line,
-                0, // column (simplified for now)
-                wj_location.file.clone(),
-                wj_location.line,
-                wj_location.column,
+                self.map_output_file.clone(),
+                idx + 1,
+                indent + 1,
+                loc.file.clone(),
+                loc.line,
+                loc.column,
             );
+            cursor = idx + 1;
         }
     }
 

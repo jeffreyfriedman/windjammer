@@ -1,0 +1,4 @@
+fn main() {
+    let = 10
+//~@9 ERROR parse
+}

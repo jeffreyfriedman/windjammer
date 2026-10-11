@@ -131,6 +131,9 @@ pub enum Token {
     Bang,       // ! (for macro invocations)
 
     // Special
+    /// Text the lexer could not tokenize (unexpected character, malformed or out-of-range
+    /// number). Never panics: the parser reports it at its location.
+    Unknown(String),
     Eof,
     Newline,
 
@@ -172,6 +175,7 @@ impl std::hash::Hash for Token {
             Token::Ident(s) => s.hash(state),
             Token::DocComment(s) => s.hash(state),
             Token::Decorator(s) => s.hash(state),
+            Token::Unknown(s) => s.hash(state),
             _ => {} // Keywords and operators have no data
         }
     }
@@ -181,6 +185,19 @@ impl std::hash::Hash for Token {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TokenWithLocation {
     pub token: Token,
+    /// 1-based line of the first character of the token.
     pub line: usize,
+    /// 1-based column (in chars) of the first character of the token.
     pub column: usize,
+    /// 0-based byte offset of the token start.
+    pub byte_start: usize,
+    /// 0-based byte offset one past the token end (half-open).
+    pub byte_end: usize,
+    /// 1-based line of the position one past the last character (exclusive end).
+    pub end_line: usize,
+    /// 1-based column of the position one past the last character (exclusive end).
+    pub end_column: usize,
+    /// For `InterpolatedString`: where each `${expr}` body starts, as `(line, column, byte)` in
+    /// the original text (one entry per `StringPart::Expression`, in order). Empty otherwise.
+    pub interpolation_starts: Vec<(usize, usize, usize)>,
 }

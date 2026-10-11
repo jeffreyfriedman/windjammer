@@ -1,0 +1,6 @@
+fn main() {
+    let v = lookup().unwrap()
+//~@13 ERROR W0002 explicit .unwrap() call
+    let w = other().expect("x")
+//~@13 ERROR W0002 explicit .expect() call
+}

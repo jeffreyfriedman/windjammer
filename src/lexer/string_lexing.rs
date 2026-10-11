@@ -52,6 +52,7 @@ impl Lexer {
                     // Skip ${
                     self.advance();
                     self.advance();
+                    self.interp_starts.push((self.line, self.column, self.byte_pos));
 
                     // Read expression until }
                     let mut expr = String::new();
@@ -147,7 +148,14 @@ impl Lexer {
     }
 
     pub(in crate::lexer) fn read_char(&mut self) -> Token {
+        let start = self.position;
         self.advance(); // Skip opening quote
+
+        // `''` is an empty char literal, not the char `'`.
+        if self.current_char == Some('\'') {
+            self.advance();
+            return Token::Unknown(self.text_since(start));
+        }
 
         let ch = if let Some(c) = self.current_char {
             if c == '\\' {
@@ -177,11 +185,12 @@ impl Lexer {
             '\0'
         };
 
-        // Skip closing quote
+        // The closing quote is required: `'a` followed by anything else is malformed.
         if self.current_char == Some('\'') {
             self.advance();
+            Token::CharLiteral(ch)
+        } else {
+            Token::Unknown(self.text_since(start))
         }
-
-        Token::CharLiteral(ch)
     }
 }

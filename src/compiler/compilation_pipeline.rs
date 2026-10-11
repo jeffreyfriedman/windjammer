@@ -376,6 +376,7 @@ pub fn build_project_with_config(
             target,
             &ancestor_roots,
             None,
+            _parser.span_snapshot(),
         )?;
 
         if library {

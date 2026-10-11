@@ -1437,6 +1437,7 @@ pub(crate) fn build_library_multipass(
                 target,
                 &dep_roots,
                 Some(dep_epoch_snapshot),
+                parsers[*i].span_snapshot(),
             )?;
 
             // Bin + lib package: `use crate::` in main must resolve via the lib crate name.

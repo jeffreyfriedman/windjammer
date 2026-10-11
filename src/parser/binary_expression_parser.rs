@@ -9,6 +9,16 @@ impl Parser {
         &mut self,
         min_precedence: u8,
     ) -> Result<&'static Expression<'static>, String> {
+        self.span_enter();
+        let r = self.parse_binary_expression_inner(min_precedence);
+        self.span_exit();
+        r
+    }
+
+    fn parse_binary_expression_inner(
+        &mut self,
+        min_precedence: u8,
+    ) -> Result<&'static Expression<'static>, String> {
         let mut left = self.parse_primary_expression()?;
 
         loop {

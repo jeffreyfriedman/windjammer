@@ -30,3 +30,6 @@ Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test
 ## Pipe tokens
 `|>` is `PipeOp`, `|>?` (no space) is `PipeTry`. `next_token_with_location` skips blanks before
 recording the position, so token columns are 1-based and start at the token itself.
+
+## Spans (gate 1)
+`TokenWithLocation` carries `line`/`column` (1-based; columns count Unicode scalar values; lines end at `\n` only), `byte_start`/`byte_end` (0-based, half-open), `end_line`/`end_column` (exclusive end) and, for interpolated strings, `interpolation_starts`. Whitespace and plain `//` comments are trivia and belong to no token. Unlexable text (unexpected character, malformed or out-of-range number, empty/unterminated char literal) becomes `Token::Unknown(text)`, never a panic. Verified against an independent oracle by tests/span_oracle_suite.rs (every `.wj` in the repo + generated unicode/CRLF/tab/comment sources + mutation self-tests).

@@ -44,6 +44,8 @@ pub struct ModuleCompiler {
     // Enables type inference for field accesses on imported structs (e.g., stack.quantity → i32)
     // Without this, Copy-type fields on cross-module structs get unnecessary .clone()
     pub global_struct_field_types: HashMap<String, HashMap<String, parser::Type>>,
+    /// True node spans of the file currently being compiled (source-map locations).
+    pub current_spans: parser::SpanSnapshot,
 }
 
 #[allow(dead_code)]
@@ -86,6 +88,7 @@ impl ModuleCompiler {
             global_signatures: analyzer::SignatureRegistry::new(), // BUG #8 FIX: Global signatures
             path_dep_signatures_loaded: false,
             global_struct_field_types: HashMap::new(), // Cross-module struct field types
+            current_spans: parser::SpanSnapshot::default(),
         }
     }
 
