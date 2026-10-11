@@ -178,7 +178,7 @@ impl Sched {
     fn pick(&mut self, me: usize, me_ready: bool) -> Option<usize> {
         loop {
             let mut cands = self.runnable(me);
-            if me_ready {
+            if me_ready || (!self.tasks[me].done && self.ready(&self.tasks[me].wait)) {
                 cands.push(me);
             }
             if !cands.is_empty() {

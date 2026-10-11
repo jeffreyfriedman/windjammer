@@ -82,6 +82,17 @@ impl Interpreter {
         self.eval_raw(e)
     }
 
+    /// Like `eval`, but a lock/borrow guard stays a guard (so it can be handed to `Condvar::wait`
+    /// or reassigned without releasing the lock).
+    pub(crate) fn eval_keep_guard(&mut self, e: &'static Expression<'static>) -> R {
+        let v = self.eval_raw(e)?;
+        match &v {
+            Value::Ref(p) if p.guard.is_some() => Ok(v),
+            Value::Ref(_) => super::place::strip_refs(v),
+            _ => Ok(v),
+        }
+    }
+
     pub(crate) fn literal(&self, l: &Literal) -> Value {
         match l {
             Literal::Int(i) => Value::Int(*i as i128, IntTy::Lit),
