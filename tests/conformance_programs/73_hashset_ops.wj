@@ -1,0 +1,31 @@
+// expect: 3
+// expect: true
+// expect: false
+// expect: false
+// expect: 1 2 3
+use std::collections::HashSet
+
+fn main() {
+    let mut s: HashSet<i64> = HashSet::new()
+    s.insert(3)
+    s.insert(1)
+    s.insert(3)
+    s.insert(2)
+    println("{}", s.len())
+    println("{}", s.contains(2))
+    println("{}", s.contains(9))
+    println("{}", s.insert(1))
+    let mut items: Vec<i64> = Vec::new()
+    for x in s {
+        items.push(x)
+    }
+    items.sort()
+    let mut out = ""
+    for x in items {
+        if out.len() > 0 {
+            out = out + " "
+        }
+        out = out + x.to_string()
+    }
+    println("{}", out)
+}

@@ -1,0 +1,13 @@
+// expect: true
+// expect: false
+// expect: true
+// expect: a-b-c
+// expect: abc
+fn main() {
+    let s = "hello world"
+    println("{}", s.contains("lo w"))
+    println("{}", s.starts_with("world"))
+    println("{}", s.ends_with("world"))
+    println("{}", "a,b,c".replace(",", "-"))
+    println("{}", "  abc ".trim())
+}

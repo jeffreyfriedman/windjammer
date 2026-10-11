@@ -20,21 +20,14 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
     let temp_dir = TempDir::new()?;
     let output_dir = temp_dir.path();
 
-    // Check if target is JavaScript
-    if target_str == "javascript" || target_str == "js" {
-        // Build JavaScript to temp directory
+    // Go / JavaScript / TypeScript: build a ready-to-run directory, then run it with the native toolchain.
+    if matches!(target_str.to_lowercase().as_str(), "javascript" | "js" | "typescript" | "ts" | "go" | "golang") {
         crate::cli::build::execute(
             path,
             Some(output_dir),
             false,
             target_str,
-            crate::cli::build::BuildOptions {
-                minify: false,
-                tree_shake: false,
-                source_maps: false,
-                polyfills: false,
-                v8_optimize: false,
-            },
+            crate::cli::build::BuildOptions { minify: false, tree_shake: false, source_maps: false, polyfills: false, v8_optimize: false },
             false, // check
             false, // raw_errors
             false, // fix
@@ -51,27 +44,37 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
             false, // json_output
             false, // ir_shadow_validate
         )?;
-
-        // Run with Node.js
-        let output_file = output_dir.join("output.js");
-        let mut cmd = Command::new("node");
-        cmd.arg(&output_file).args(args);
-
+        let mut cmd = match target_str.to_lowercase().as_str() {
+            "go" | "golang" => {
+                let mut c = Command::new("go");
+                c.arg("run").arg(".");
+                c
+            }
+            "typescript" | "ts" => {
+                let mut c = Command::new("node");
+                c.arg("main.ts");
+                c
+            }
+            _ => {
+                let mut c = Command::new("node");
+                c.arg("main.mjs");
+                c
+            }
+        };
+        cmd.current_dir(output_dir).args(args);
         let status = cmd.status()?;
         if !status.success() {
             bail!("Program exited with error");
         }
-
         return Ok(());
     }
 
     // Build to temp directory (build_project handles both files and directories)
     let target = match target_str.to_lowercase().as_str() {
         "rust" => crate::CompilationTarget::Rust,
-        "go" | "golang" => crate::CompilationTarget::Go,
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
         _ => bail!(
-            "Unknown target: {}. Use 'rust', 'go', 'javascript', or 'wasm'",
+            "Unknown target: {}. Use 'rust', 'go', 'javascript', 'typescript', or 'wasm'",
             target_str
         ),
     };

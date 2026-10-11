@@ -1,0 +1,43 @@
+// expect: 1 2 3
+// expect: 1 2 3 4
+// expect: 9 2 3
+// expect: 1 2 3
+// expect: 1 9
+// expect: 3 2
+// expect: 0 4
+fn show(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first {
+            out = out + " "
+        }
+        out = out + x.to_string()
+        first = false
+    }
+    out
+}
+
+fn push_four(v: Vec<i64>) {
+    v.push(4)
+}
+
+fn main() {
+    let a = vec![1, 2, 3]
+    let mut b = a.clone()
+    println("{}", show(a.clone()))
+    b.push(4)
+    println("{}", show(b.clone()))
+    let mut c = a.clone()
+    c[0] = 9
+    println("{}", show(c.clone()))
+    println("{}", show(a.clone()))
+    let mut grid = vec![vec![1, 2], vec![3, 4]]
+    let copy = grid.clone()
+    grid[0][1] = 9
+    println("{} {}", grid[0][0], grid[0][1])
+    println("{} {}", copy[1][0], copy[0][1])
+    let mut d = vec![0]
+    push_four(d)
+    println("{}", show(d.clone()))
+}

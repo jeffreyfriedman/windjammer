@@ -1,0 +1,30 @@
+// expect: 3
+// expect: 2
+// expect: 1
+// expect: 6
+use std::collections::HashMap
+
+fn main() {
+    let mut counts: HashMap<string, i64> = HashMap::new()
+    let words = vec!["a", "b", "a", "c", "a", "b"]
+    for w in words {
+        *counts.entry(w).or_insert(0) += 1
+    }
+    match counts.get("a") {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    match counts.get("b") {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    match counts.get("c") {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    let mut total = 0
+    for v in counts.values() {
+        total += v
+    }
+    println("{}", total)
+}

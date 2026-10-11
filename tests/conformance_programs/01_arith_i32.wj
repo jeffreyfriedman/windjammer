@@ -1,0 +1,16 @@
+// expect: 7
+// expect: 3
+// expect: 10
+// expect: 1
+// expect: 1
+// expect: -3
+fn main() {
+    let a: i32 = 10
+    let b: i32 = 3
+    println("{}", a - b)
+    println("{}", a / b)
+    println("{}", a * b - 20)
+    println("{}", a % b)
+    println("{}", a % 3)
+    println("{}", -a / b)
+}

@@ -1,0 +1,44 @@
+// expect: circle 75
+// expect: rect 12
+// expect: big square
+// expect: tri 6
+// expect: point
+// expect: pos even
+// expect: neg
+// expect: zero
+fn describe(s: Shape) -> string {
+    match s {
+        Shape::Circle(r) => "circle ${3 * r * r}",
+        Shape::Rect(w, h) if w == h && w > 5 => "big square",
+        Shape::Rect(w, h) => "rect ${w * h}",
+        Shape::Tri { base, height } => "tri ${base * height / 2}",
+        Shape::Point => "point",
+    }
+}
+
+enum Shape {
+    Circle(i64),
+    Rect(i64, i64),
+    Tri { base: i64, height: i64 },
+    Point,
+}
+
+fn sign(n: i64) -> string {
+    match n {
+        0 => "zero",
+        x if x > 0 && x % 2 == 0 => "pos even",
+        x if x > 0 => "pos odd",
+        _ => "neg",
+    }
+}
+
+fn main() {
+    println("{}", describe(Shape::Circle(5)))
+    println("{}", describe(Shape::Rect(3, 4)))
+    println("{}", describe(Shape::Rect(6, 6)))
+    println("{}", describe(Shape::Tri { base: 3, height: 4 }))
+    println("{}", describe(Shape::Point))
+    println("{}", sign(4))
+    println("{}", sign(-4))
+    println("{}", sign(0))
+}

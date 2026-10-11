@@ -1,0 +1,27 @@
+// Published check value: CRC-32("123456789") = 0xCBF43926 = 3421780262
+// expect: 3421780262
+// expect: cbf43926
+// expect: 0
+fn crc32(data: string) -> u32 {
+    let mut crc: u32 = 4294967295
+    for b in data.bytes() {
+        crc = crc ^ (b as u32)
+        let mut k = 0
+        while k < 8 {
+            if (crc & 1) == 1 {
+                crc = (crc >> 1) ^ 3988292384
+            } else {
+                crc = crc >> 1
+            }
+            k += 1
+        }
+    }
+    crc ^ 4294967295
+}
+
+fn main() {
+    let c = crc32("123456789")
+    println("{}", c)
+    println("{:x}", c)
+    println("{}", crc32(""))
+}

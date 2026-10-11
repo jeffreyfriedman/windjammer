@@ -1,0 +1,19 @@
+// expect: small
+// expect: medium
+// expect: other
+// expect: neg
+fn cat(x: i32) -> string {
+    match x {
+        1 | 2 | 3 => "small",
+        4 | 5 | 6 => "medium",
+        n if n < 0 => "neg",
+        _ => "other",
+    }
+}
+
+fn main() {
+    println("{}", cat(2))
+    println("{}", cat(5))
+    println("{}", cat(99))
+    println("{}", cat(-4))
+}

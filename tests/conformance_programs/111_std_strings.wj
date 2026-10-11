@@ -1,0 +1,21 @@
+// expect: HELLO
+// expect: 3
+// expect: a-b-c
+// expect: true
+// expect: xxbxx
+// expect: 5
+// expect: abab
+// expect: 2
+use std::strings
+
+fn main() {
+    println("{}", strings::to_upper("hello"))
+    let parts = strings::split("a,b,c", ",")
+    println("{}", parts.len())
+    println("{}", strings::join(parts, "-"))
+    println("{}", strings::contains("haystack", "stack"))
+    println("{}", strings::replace("xxaxx", "a", "b"))
+    println("{}", strings::len(strings::trim("  hello  ")))
+    println("{}", strings::repeat("ab", 2))
+    println("{}", strings::char_count("日本"))
+}

@@ -87,29 +87,19 @@ pub fn execute(
     // Parse target string
     let target = match target_str.to_lowercase().as_str() {
         "rust" => crate::CompilationTarget::Rust,
-        "javascript" | "js" => {
-            // Use new JavaScript backend
+        "javascript" | "js" | "typescript" | "ts" | "go" | "golang" => {
             use crate::codegen::backend::{CodegenConfig, Target};
+            let target: Target = target_str.parse().map_err(|e: String| anyhow::anyhow!(e))?;
             let config = CodegenConfig {
-                target: Target::JavaScript,
+                target,
                 output_dir: output_dir.to_path_buf(),
                 minify: options.minify,
                 tree_shake: options.tree_shake,
-                source_maps: options.source_maps,
                 polyfills: options.polyfills,
                 v8_optimize: options.v8_optimize,
                 ..Default::default()
             };
-            return build_javascript(path, &config);
-        }
-        "go" | "golang" => {
-            use crate::codegen::backend::{CodegenConfig, Target};
-            let config = CodegenConfig {
-                target: Target::Go,
-                output_dir: output_dir.to_path_buf(),
-                ..Default::default()
-            };
-            return build_go(path, &config);
+            return build_portable(path, &config, options.source_maps);
         }
         "wasm" | "webassembly" => crate::CompilationTarget::Wasm,
         "wgsl" => {
@@ -124,7 +114,7 @@ pub fn execute(
         }
         _ => {
             anyhow::bail!(
-                "Unknown target: {}. Use 'rust', 'go', 'javascript', 'wasm', or 'wgsl'",
+                "Unknown target: {}. Use 'rust', 'go', 'javascript' (js), 'typescript' (ts), 'wasm', or 'wgsl'",
                 target_str
             );
         }
@@ -203,13 +193,6 @@ pub fn execute(
                 return Err(anyhow::anyhow!("Failed to execute cargo: {}", e));
             }
         }
-    } else if target_str == "javascript" || target_str == "js" {
-        println!(
-            "\n{} Your JavaScript project is ready!",
-            "Success!".green().bold()
-        );
-        println!("Run your project with:");
-        println!("  node {:?}/output.js", output_dir);
     } else if !run_cargo && target_str == "rust" {
         println!(
             "\n{} Transpilation complete (cargo build skipped)!",
@@ -284,82 +267,53 @@ fn build_with_json_output(
     Ok(())
 }
 
-fn build_javascript(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Result<()> {
-    use crate::codegen;
-    use crate::lexer::Lexer;
-    use crate::parser::Parser;
-    use std::fs;
-
-    // Read source file
-    let source = fs::read_to_string(path)?;
-
-    // Lex and parse
-    let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
-    let program = parser
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
-
-    // Generate JavaScript
-    let output = codegen::generate(&program, config.target, Some(config.clone()))?;
-
-    // Create output directory
-    fs::create_dir_all(&config.output_dir)?;
-
-    // Write main output
-    let output_path = config.output_dir.join("output.js");
-    fs::write(&output_path, &output.source)?;
-    println!("  {} {:?}", "Generated".green(), output_path);
-
-    // Write TypeScript definitions if available
-    if let Some(ref type_defs) = output.type_definitions {
-        let types_path = config.output_dir.join("output.d.ts");
-        fs::write(&types_path, type_defs)?;
-        println!("  {} {:?}", "Generated".green(), types_path);
+/// Resolve the single `.wj` source of a portable-backend build (a file, or a directory with `main.wj`).
+fn portable_source(path: &Path) -> Result<std::path::PathBuf> {
+    if path.is_file() {
+        return Ok(path.to_path_buf());
     }
-
-    // Write additional files (package.json, etc.)
-    for (filename, content) in &output.additional_files {
-        let file_path = config.output_dir.join(filename);
-        fs::write(&file_path, content)?;
-        println!("  {} {:?}", "Generated".green(), file_path);
+    let main = path.join("main.wj");
+    if main.is_file() {
+        return Ok(main);
     }
-
-    Ok(())
+    anyhow::bail!("expected a .wj file or a directory containing main.wj (multi-file projects are not supported by the Go/JS/TS backends yet): {}", path.display())
 }
 
-fn build_go(path: &Path, config: &crate::codegen::backend::CodegenConfig) -> Result<()> {
-    use crate::codegen;
-    use crate::lexer::Lexer;
-    use crate::parser::Parser;
+/// Build for Go / JavaScript / TypeScript: writes a ready-to-run directory
+/// (`main.go`+`go.mod`+`wj_core.go`, or `main.mjs`/`main.ts`+`wj_core.mjs`+`package.json`).
+fn build_portable(path: &Path, config: &crate::codegen::backend::CodegenConfig, source_maps: bool) -> Result<()> {
+    use crate::codegen::backend::Target;
     use std::fs;
 
-    let source = fs::read_to_string(path)?;
-
-    let mut lexer = Lexer::new(&source);
-    let tokens = lexer.tokenize_with_locations();
-    let mut parser = Parser::new(tokens);
-    let program = parser
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
-
-    let output = codegen::generate(&program, config.target, Some(config.clone()))?;
+    if source_maps {
+        anyhow::bail!("--source-maps is not supported by the Go/JS/TS backends (the previous implementation emitted placeholder maps)");
+    }
+    let file = portable_source(path)?;
+    let source = fs::read_to_string(&file)?;
+    let (parser, program) = crate::compiler::parse_wj_source(&file, &source)?;
+    crate::compiler::emit_parser_warnings(&parser)?;
+    let output = crate::codegen::generate(&program, config.target, Some(config.clone()))?;
 
     fs::create_dir_all(&config.output_dir)?;
-
-    let output_path = config.output_dir.join("main.go");
-    fs::write(&output_path, &output.source)?;
-    println!("  {} {:?}", "Generated".green(), output_path);
-
+    let entry = match config.target {
+        Target::Go => "main.go",
+        Target::TypeScript => "main.ts",
+        _ => "main.mjs",
+    };
+    let entry_path = config.output_dir.join(entry);
+    fs::write(&entry_path, &output.source)?;
+    println!("  {} {:?}", "Generated".green(), entry_path);
     for (filename, content) in &output.additional_files {
         let file_path = config.output_dir.join(filename);
         fs::write(&file_path, content)?;
         println!("  {} {:?}", "Generated".green(), file_path);
     }
-
-    println!("\n{} Go compilation complete!", "Success!".green().bold());
-
+    println!("\n{} {} project is ready!", "Success!".green().bold(), config.target.as_str());
+    let dir = &config.output_dir;
+    match config.target {
+        Target::Go => println!("Run with:\n  cd {:?} && go run .", dir),
+        _ => println!("Run with:\n  cd {:?} && node {entry}", dir),
+    }
     Ok(())
 }
 

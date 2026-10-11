@@ -1,0 +1,29 @@
+// expect: 1.4142135623730951
+// expect: 2
+// expect: 3
+// expect: -3
+// expect: 2
+// expect: 8
+// expect: 2.5
+// expect: 3.5
+// expect: 1
+// expect: -1
+// expect: 12
+fn main() {
+    let two: f64 = 2.0
+    println("{}", two.sqrt())
+    let x: f64 = 2.7
+    println("{}", x.floor())
+    println("{}", x.ceil())
+    let y: f64 = -2.5
+    println("{}", y.round())
+    println("{}", x.trunc())
+    println("{}", two.powi(3))
+    let z: f64 = -2.5
+    println("{}", z.abs())
+    println("{}", two.max(3.5))
+    println("{}", two.min(2.0) - 1.0)
+    let neg: f64 = -4.0
+    println("{}", neg.signum())
+    println("{}", (3.0 * 4.0).max(0.0))
+}

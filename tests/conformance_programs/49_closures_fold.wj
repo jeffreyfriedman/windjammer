@@ -1,0 +1,42 @@
+// Closures capturing by value and by reference semantics; fold over PRNG values.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+fn apply_n(f: fn(i64) -> i64, n: i64, v: i64) -> i64 {
+    let mut acc = v
+    let mut i = 0
+    while i < n {
+        acc = f(acc)
+        i += 1
+    }
+    acc
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let k: i64 = (s % 10) as i64 + 2
+    let scale = |x: i64| x * k % 1000003
+    let offset = |x: i64| x + k
+    let mut total: i64 = 0
+    let mut i = 0
+    while i < 1000 {
+        s = next(s)
+        let v = (s % 5000) as i64
+        total = (total + offset(scale(v))) % 1000003
+        i += 1
+    }
+    println("{}", total)
+    let mut a: i64 = 7
+    let mut j = 0
+    while j < 50 {
+        a = scale(a)
+        j += 1
+    }
+    println("{}", a)
+    println("{}", apply_n(|x: i64| x * 3 + 1, 12, 1))
+}

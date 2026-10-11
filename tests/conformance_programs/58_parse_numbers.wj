@@ -1,0 +1,34 @@
+// expect: 42
+// expect: invalid digit found in string
+// expect: cannot parse integer from empty string
+// expect: number too large to fit in target type
+// expect: -17
+// expect: 2.5
+// expect: invalid float literal
+// expect: true
+fn parse_i64(s: string) {
+    match s.parse::<i64>() {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+}
+
+fn main() {
+    parse_i64("42")
+    parse_i64("4x2")
+    parse_i64("")
+    parse_i64("99999999999999999999")
+    parse_i64("-17")
+    match "2.5".parse::<f64>() {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+    match "abc".parse::<f64>() {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+    match "true".parse::<bool>() {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+}

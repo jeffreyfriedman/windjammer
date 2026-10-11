@@ -1,0 +1,9 @@
+// expect: 2 4 6
+// expect: 12
+fn main() {
+    let v = vec![1, 2, 3, 4, 5, 6]
+    let evens: Vec<i32> = v.iter().filter(|x| *x % 2 == 0).cloned().collect()
+    println("{} {} {}", evens[0], evens[1], evens[2])
+    let total: i32 = evens.iter().sum()
+    println("{}", total)
+}

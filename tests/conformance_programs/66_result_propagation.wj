@@ -1,0 +1,37 @@
+// expect: 20
+// expect: parse: bad digit
+// expect: range: 500 too big
+// expect: 7
+fn parse(s: string) -> Result<i64, string> {
+    match s.parse::<i64>() {
+        Ok(v) => Ok(v),
+        Err(_) => Err("bad digit"),
+    }
+}
+
+fn check(v: i64) -> Result<i64, string> {
+    if v > 100 {
+        return Err("${v} too big")
+    }
+    Ok(v)
+}
+
+fn pipeline(s: string) -> Result<i64, string> {
+    let v = parse(s).map_err(|e| "parse: ${e}")?
+    let c = check(v).map_err(|e| "range: ${e}")?
+    Ok(c * 2)
+}
+
+fn report(r: Result<i64, string>) {
+    match r {
+        Ok(v) => println("{}", v),
+        Err(e) => println("{}", e),
+    }
+}
+
+fn main() {
+    report(pipeline("10"))
+    report(pipeline("x1"))
+    report(pipeline("500"))
+    println("{}", pipeline("3").unwrap_or(0) + 1)
+}

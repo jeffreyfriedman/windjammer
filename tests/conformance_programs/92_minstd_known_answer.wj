@@ -1,0 +1,11 @@
+// Park-Miller "minimal standard": x(n+1) = 16807 * x(n) mod (2^31 - 1); x(10000) from x(1)=1 is 1043618065 (published).
+// expect: 1043618065
+fn main() {
+    let mut x: i64 = 1
+    let mut i = 0
+    while i < 10000 {
+        x = x * 16807 % 2147483647
+        i += 1
+    }
+    println("{}", x)
+}
