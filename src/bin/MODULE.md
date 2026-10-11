@@ -21,7 +21,7 @@ Layer `driver`. May import: every module in a lower layer (support < syntax < re
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-`src/bin/wj.rs` (main), `wj-lint.rs`, `wj_cli_args.rs`, `wj_cli_cmds.rs`.
+`src/bin/wj.rs` (main), `wj-lint.rs`, `wj_cli_args.rs`, `wj_cli_cmds.rs`, `wj-docs.rs` (docs generator/verifier; logic in `tools/docs_truth/`, see docs/CONTRIBUTING-docs.md).
 
 ## Tests
 assert_cmd tests of the `wj` binary; tests/cli_lint_test.rs.
