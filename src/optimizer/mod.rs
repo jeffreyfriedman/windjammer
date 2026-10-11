@@ -34,7 +34,10 @@ pub fn run(config: &OptimizationConfig, rust_source: &str) -> OptimizationOutput
         return OptimizationOutput { code, applied };
     }
     for _ in 0..MAX_ROUNDS {
-        let Ok(file) = syn::parse_file(&code) else { break };
+        let file = match syn::parse_file(&code) {
+            Ok(f) => f,
+            Err(_) => break,
+        };
         if declares_macros(&file) {
             break;
         }
