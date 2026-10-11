@@ -17,7 +17,6 @@
 "src/cli/update.rs" = 1
 "src/cli_commands.rs" = 4
 "src/cli_project_build.rs" = 1
-"src/codegen/javascript/minifier.rs" = 3
 "src/codegen/javascript/tree_shaker.rs" = 1
 "src/codegen/rust/backend.rs" = 1
 "src/codegen/rust/codegen_helpers.rs" = 1
@@ -30,7 +29,6 @@
 "src/file_compiler.rs" = 1
 "src/interpreter/engine.rs" = 3
 "src/lib.rs" = 1
-"src/optimizer/phase15_simd_vectorization.rs" = 1
 "src/parser_impl.rs" = 1
 "src/shader/parser.rs" = 1
 "src/wjsl/diagnostics.rs" = 1
@@ -64,8 +62,6 @@
 "cli->compiler_config src/cli/build.rs" = 2
 "cli->formatter src/cli/fmt.rs" = 1
 "cli_project_build->compiler_config src/cli_project_build.rs" = 1
-"codegen->compiler src/codegen/go/ir_lowering.rs" = 1
-"codegen->compiler src/codegen/javascript/ir_lowering.rs" = 1
 "codegen->compiler src/codegen/rust/collection_detection.rs" = 1
 "codegen->compiler src/codegen/rust/function_generation_prepare.rs" = 3
 "codegen->compiler_config src/codegen/rust/generator.rs" = 4
@@ -154,9 +150,6 @@
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
 "src/cargo_integration.rs::create_cargo_toml_with_deps" = 489
 "src/cli_project_build.rs::build_project_single_crate" = 456
-"src/codegen/go/generator/expression_generation.rs::generate_expression" = 352
-"src/codegen/javascript/expression_generation.rs::generate_expression" = 309
-"src/codegen/javascript/statement_generation.rs::generate_statement" = 316
 "src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 651
 "src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1229
 "src/codegen/rust/block_generation.rs::generate_block" = 336

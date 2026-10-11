@@ -5,7 +5,8 @@ use crate::codegen::portable::builtins;
 use crate::codegen::portable::env::FnSig;
 use crate::codegen::portable::ir::*;
 use crate::codegen::portable::ty::{from_ast, Ty};
-use crate::parser::{Expression, Literal, MacroDelimiter, Type};
+use crate::intrinsics::Intrinsic;
+use crate::parser::{Expression, Type};
 
 type Args<'a> = [(Option<String>, &'a Expression<'a>)];
 
@@ -57,12 +58,11 @@ impl<'e> Lowerer<'e> {
 
     fn named_call(&mut self, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let plain: Vec<&Expression> = args.iter().map(|(_, e)| *e).collect();
-        match name {
-            "println" | "print" | "eprintln" | "eprint" => return self.print_macro(name, &plain),
-            "panic" => return self.panic_macro(&plain),
-            "assert" | "assert_eq" | "assert_ne" | "debug_assert" => return self.assert_macro(name, &plain),
-            "Some" | "Ok" | "Err" => return self.wrapper_ctor(name, &plain, want),
-            _ => {}
+        if let Some(intr) = Intrinsic::from_call_name(name).filter(|_| !self.shadows_intrinsic(name)) {
+            return self.intrinsic(intr, &plain, false, want);
+        }
+        if matches!(name, "Some" | "Ok" | "Err") {
+            return self.wrapper_ctor(name, &plain, want);
         }
         if let Some(l) = self.lookup(name) {
             if matches!(l.ty, Ty::Fn(..)) || l.ty.is_unknown() {
@@ -301,70 +301,12 @@ impl<'e> Lowerer<'e> {
         Ok(PExpr::new(ty, PK::Method { recv, name: method.to_string(), args: lowered, res: Resolution::Builtin }))
     }
 
-    pub(super) fn print_macro(&mut self, name: &str, args: &[&Expression]) -> PResult<PExpr> {
-        let newline = name.ends_with("ln");
-        let to_stderr = name.starts_with('e');
-        let pieces = self.pieces_from_args(args)?;
-        Ok(PExpr::new(Ty::Unit, PK::Print { newline, to_stderr, pieces }))
-    }
-
-    fn pieces_from_args(&mut self, args: &[&Expression]) -> PResult<Vec<FmtPiece>> {
-        match args.first() {
-            None => Ok(vec![]),
-            Some(Expression::Literal { value: Literal::String(s), .. }) => self.format_pieces(s, &args[1..]),
-            Some(other) => {
-                let v = self.expr(other, None)?;
-                Ok(vec![FmtPiece::Arg(v, FmtSpec::default())])
-            }
-        }
-    }
-
-    fn panic_macro(&mut self, args: &[&Expression]) -> PResult<PExpr> {
-        let pieces = self.pieces_from_args(args)?;
-        let msg = PExpr::new(Ty::Str, PK::Format(pieces));
-        Ok(PExpr::new(Ty::Unknown, PK::Panic(msg)))
-    }
-
-    fn assert_macro(&mut self, name: &str, args: &[&Expression]) -> PResult<PExpr> {
-        let Some(first) = args.first() else { return self.err("assert without condition") };
-        let cond = if name == "assert_eq" || name == "assert_ne" {
-            let second = args.get(1).ok_or_else(|| self.unsupported("assert_eq needs two arguments".into()))?;
-            let (a, b) = (self.expr(first, None)?, self.expr(second, Some(&Ty::Unknown))?);
-            let kind = if name == "assert_eq" { BinKind::Eq } else { BinKind::Ne };
-            PExpr::new(Ty::Bool, PK::Binary(kind, a, b))
-        } else {
-            self.expr(first, Some(&Ty::Bool))?
-        };
-        let msg_args = if name.starts_with("assert_") { &args[2.min(args.len())..] } else { &args[1.min(args.len())..] };
-        let pieces = if msg_args.is_empty() { vec![FmtPiece::Lit(format!("assertion failed ({name})"))] } else { self.pieces_from_args(msg_args)? };
-        let panic = PExpr::new(Ty::Unknown, PK::Panic(PExpr::new(Ty::Str, PK::Format(pieces))));
-        let not = PExpr::new(Ty::Bool, PK::Unary(UnKind::Not, cond));
-        let then = PBlock { stmts: vec![PStmt::Expr(panic)], tail: None };
-        Ok(PExpr::new(Ty::Unit, PK::If { cond: not, then, els: PBlock::default() }))
-    }
-
+    /// Deprecated `name!(..)` macro nodes the parser left in the AST (`format!`, `vec![..]`, and
+    /// intrinsic macros with non-literal arguments).
     pub(super) fn macro_call(&mut self, name: &str, args: &[&Expression], is_repeat: bool, want: Option<&Ty>) -> PResult<PExpr> {
-        let _ = MacroDelimiter::Parens;
-        match name {
-            "println" | "print" | "eprintln" | "eprint" => self.print_macro(name, args),
-            "panic" | "unreachable" | "todo" | "unimplemented" => self.panic_macro(args),
-            "assert" | "assert_eq" | "assert_ne" | "debug_assert" => self.assert_macro(name, args),
-            "format" => {
-                let pieces = self.pieces_from_args(args)?;
-                Ok(PExpr::new(Ty::Str, PK::Format(pieces)))
-            }
-            "vec" if is_repeat => {
-                let ew = match want {
-                    Some(Ty::Vec(t)) => Some((**t).clone()),
-                    _ => None,
-                };
-                let elem = self.expr(args[0], ew.as_ref())?;
-                let n = self.expr(args[1], Some(&Ty::usize()))?;
-                let n = self.ensure_usize(n);
-                Ok(PExpr::new(Ty::Vec(Box::new(elem.ty.clone())), PK::VecRepeat(self.own(elem), n)))
-            }
-            "vec" => self.vec_literal(args, want),
-            other => self.err(format!("macro `{other}!`")),
+        match Intrinsic::from_macro_name(name) {
+            Some(intr) => self.intrinsic(intr, args, is_repeat, want),
+            None => self.err(format!("macro `{name}!`")),
         }
     }
 }

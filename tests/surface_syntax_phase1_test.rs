@@ -462,64 +462,81 @@ fn wj_fix_cli_rewrites_in_place_and_check_mode_fails() {
 // 5. Other backends
 // ---------------------------------------------------------------------------
 
-fn build_target(target: &str, body: &str) -> String {
+/// Build `body` for `target` (`go`, `javascript`, `typescript`) and run it. `None` (after a
+/// loud `CONFORMANCE-SKIP`) when the toolchain is missing. Returns (stdout, stderr, exit code).
+fn run_target(target: &str, body: &str) -> Option<(String, String, i32)> {
+    let tool = if target == "go" { "go" } else { "node" };
+    if Command::new(tool).arg("version").output().or_else(|_| Command::new(tool).arg("--version").output()).is_err() {
+        println!("CONFORMANCE-SKIP: {tool} not installed; skipping {target} intrinsic lowering");
+        return None;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("p.wj");
     fs::write(&src, main_with(body)).unwrap();
     let out = tmp.path().join("out");
-    let res = run_wj_command([
-        "build",
-        src.to_str().unwrap(),
-        "-o",
-        out.to_str().unwrap(),
-        "--no-cargo",
-        "-t",
-        target,
-    ]);
+    let res = run_wj_command(["build", src.to_str().unwrap(), "-o", out.to_str().unwrap(), "--no-cargo", "-t", target]);
     assert!(res.status.success(), "{}", String::from_utf8_lossy(&res.stderr));
-    let file = match target {
-        "go" => "main.go",
-        _ => "output.js",
-    };
-    fs::read_to_string(out.join(file)).unwrap()
+    let run = match target {
+        "go" => {
+            // `go run` folds the program's exit status into its own; build and run the binary.
+            let built = Command::new("go").args(["build", "-o", "prog", "."]).current_dir(&out).output().expect("go build");
+            assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+            Command::new(out.join("prog")).current_dir(&out).output()
+        }
+        "typescript" => Command::new("node").args(["--experimental-strip-types", "--no-warnings", "main.ts"]).current_dir(&out).output(),
+        _ => Command::new("node").arg("main.mjs").current_dir(&out).output(),
+    }
+    .expect("run generated program");
+    Some((
+        String::from_utf8_lossy(&run.stdout).to_string(),
+        String::from_utf8_lossy(&run.stderr).to_string(),
+        run.status.code().unwrap_or(-1),
+    ))
 }
 
-#[test]
-fn go_backend_lowers_intrinsics() {
-    let go = build_target(
-        "go",
-        r#"    println("v=${f:.2} ${x}")
+const PORTABLE_PROGRAM: &str = r#"    println("v=${f:.2} ${x} [${x:>4}] ${name:?}")
     stderr.println("e ${x}")
     assert(x == 5, "x was ${x}")
     assert_eq(x, 5)
     let y = debug(x)
-    if y > 100 { panic("big ${y}") }
-    if y > 200 { todo() }
-    if y > 300 { unreachable() }"#,
-    );
-    assert!(go.contains("%.2f"), "{go}");
-    assert!(go.contains("println(fmt.Sprintf(\"e %v\""), "{go}");
-    assert!(go.contains("panic("), "{go}");
-    assert!(go.contains("wjDebug"), "{go}");
-    assert!(!go.contains("eprintln("), "{go}");
+    println("y=${y}")
+    assert_eq(y, 6, "y differs")
+    println("unreachable")"#;
+
+fn check_portable_target(target: &str) {
+    let Some((stdout, stderr, code)) = run_target(target, PORTABLE_PROGRAM) else { return };
+    assert_eq!(stdout, "v=3.14 5 [   5] \"bob\"\ny=5\n", "{target} stdout");
+    assert!(stderr.contains("e 5\n"), "{target} stderr: {stderr}");
+    assert!(stderr.contains("x = 5"), "{target} debug output: {stderr}");
+    assert!(stderr.contains("left: 5") && stderr.contains("right: 6") && stderr.contains("y differs"), "{target}: {stderr}");
+    assert_eq!(code, 101, "{target}: failed assert_eq exits like a Rust panic");
 }
 
 #[test]
-fn js_backend_lowers_intrinsics() {
-    let js = build_target(
-        "javascript",
-        r#"    println("v=${f:.2} ${x}")
-    stderr.println("e ${x}")
-    assert(x == 5, "x was ${x}")
-    assert_eq(x, 5)
-    let y = debug(x)
-    if y > 100 { panic("big ${y}") }
-    if y > 200 { todo() }"#,
-    );
-    assert!(js.contains("toFixed(2)"), "{js}");
-    assert!(js.contains("console.error("), "{js}");
-    assert!(js.contains("throw new Error"), "{js}");
-    assert!(!js.contains("/* macro"), "{js}");
+fn go_backend_runs_intrinsics_like_rust() {
+    check_portable_target("go");
+}
+
+#[test]
+fn js_backend_runs_intrinsics_like_rust() {
+    check_portable_target("javascript");
+}
+
+#[test]
+fn ts_backend_runs_intrinsics_like_rust() {
+    check_portable_target("typescript");
+}
+
+#[test]
+fn portable_backends_reject_unsupported_format_specs() {
+    let out = tempfile::tempdir().unwrap();
+    let src = out.path().join("p.wj");
+    fs::write(&src, main_with("    println(\"${x:+}\")")).unwrap();
+    for target in ["go", "javascript"] {
+        let res = run_wj_command(["build", src.to_str().unwrap(), "-o", out.path().join(target).to_str().unwrap(), "--no-cargo", "-t", target]);
+        assert!(!res.status.success(), "{target}: `${{x:+}}` must be an explicit error");
+        assert!(String::from_utf8_lossy(&res.stderr).contains("unsupported"), "{}", String::from_utf8_lossy(&res.stderr));
+    }
 }
 
 #[test]

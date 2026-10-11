@@ -49,6 +49,9 @@ impl<'m> Js<'m> {
 
     /// Display (or Debug / numeric-radix per spec) of one argument.
     pub fn display(&mut self, e: &PExpr, spec: &FmtSpec) -> PResult<String> {
+        if spec.pretty && !matches!(e.ty, Ty::Int(_) | Ty::F64 | Ty::F32 | Ty::Bool | Ty::Str | Ty::Char | Ty::Unit) {
+            return self.unsupported("pretty Debug `{:#?}` of an aggregate (use `{:?}`)");
+        }
         let v = self.expr(e)?;
         let base = if spec.debug {
             format!("{}({v})", self.dbg_fn(&e.ty)?)

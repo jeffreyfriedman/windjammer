@@ -6,7 +6,7 @@
 //! the deprecated `name!(..)` spellings arrive here as the same `Call` node.
 
 use crate::intrinsics::Intrinsic;
-use crate::parser::{Expression, Literal};
+use crate::parser::{Expression, Literal, Type};
 
 use super::CodeGenerator;
 
@@ -120,7 +120,8 @@ impl<'ast> CodeGenerator<'ast> {
         if is_place {
             let known_copy = self
                 .infer_expression_type(arg)
-                .is_some_and(|t| self.is_type_copy(&t));
+                // `[1, 2, 3]` infers as a fixed array but lowers to a growable `Vec`.
+                .is_some_and(|t| !matches!(t, Type::Array(..)) && self.is_type_copy(&t));
             if !known_copy {
                 let shown = inner.replace('\\', "\\\\").replace('"', "\\\"");
                 return format!(

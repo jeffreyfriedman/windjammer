@@ -51,6 +51,7 @@ export function $print(s) {
 }
 
 export function $eprint(s) {
+  $flush();
   if (fs) writeAll(2, s);
   else console.error(s);
 }
