@@ -419,16 +419,16 @@ fn register_json(r: &mut Registry) {
         let _ = (n, f);
     }
     macro_rules! pred {
-        ($name:literal, $m:ident) => {
-            r.func(concat!("json::", $name), |_, a| Ok(Value::Bool(json_of(&arg(&a, 0, $name)?)?.$m())));
+        ($path:literal, $m:ident) => {
+            r.func($path, |_, a| Ok(Value::Bool(json_of(&arg(&a, 0, $path)?)?.$m())));
         };
     }
-    pred!("is_object", is_object);
-    pred!("is_array", is_array);
-    pred!("is_string", is_string);
-    pred!("is_number", is_number);
-    pred!("is_bool", is_boolean);
-    pred!("is_null", is_null);
+    pred!("json::is_object", is_object);
+    pred!("json::is_array", is_array);
+    pred!("json::is_string", is_string);
+    pred!("json::is_number", is_number);
+    pred!("json::is_bool", is_boolean);
+    pred!("json::is_null", is_null);
     r.func("json::get", |_, a| {
         let j = json_of(&arg(&a, 0, "get")?)?;
         Ok(Value::option(j.get(arg_str(&a, 1, "get")?.as_str()).cloned().map(jv)))
@@ -524,20 +524,20 @@ fn register_regex(r: &mut Registry) {
     r.func("regex::new", |_, a| Ok(build(arg_str(&a, 0, "new")?.as_str(), false)));
     r.func("regex::compile_case_insensitive", |_, a| Ok(build(arg_str(&a, 0, "compile_case_insensitive")?.as_str(), true)));
     macro_rules! one_shot {
-        ($name:literal, |$re:ident, $a:ident| $body:expr) => {
-            r.func(concat!("regex::", $name), |_, $a| {
-                Ok(match regex::Regex::new(arg_str(&$a, 0, $name)?.as_str()) {
+        ($path:literal, |$re:ident, $a:ident| $body:expr) => {
+            r.func($path, |_, $a| {
+                Ok(match regex::Regex::new(arg_str(&$a, 0, $path)?.as_str()) {
                     Ok($re) => Value::ok($body),
                     Err(e) => Value::err(s(&e.to_string())),
                 })
             });
         };
     }
-    one_shot!("is_match", |re, a| Value::Bool(re.is_match(arg_str(&a, 1, "is_match")?.as_str())));
-    one_shot!("find", |re, a| Value::option(re.find(arg_str(&a, 1, "find")?.as_str()).map(|m| s(m.as_str()))));
-    one_shot!("replace", |re, a| s(&re.replace(arg_str(&a, 1, "replace")?.as_str(), arg_str(&a, 2, "replace")?.as_str())));
-    one_shot!("replace_all", |re, a| s(&re.replace_all(arg_str(&a, 1, "replace_all")?.as_str(), arg_str(&a, 2, "replace_all")?.as_str())));
-    one_shot!("split", |re, a| Value::vec(re.split(arg_str(&a, 1, "split")?.as_str()).map(s).collect()));
+    one_shot!("regex::is_match", |re, a| Value::Bool(re.is_match(arg_str(&a, 1, "is_match")?.as_str())));
+    one_shot!("regex::find", |re, a| Value::option(re.find(arg_str(&a, 1, "find")?.as_str()).map(|m| s(m.as_str()))));
+    one_shot!("regex::replace", |re, a| s(&re.replace(arg_str(&a, 1, "replace")?.as_str(), arg_str(&a, 2, "replace")?.as_str())));
+    one_shot!("regex::replace_all", |re, a| s(&re.replace_all(arg_str(&a, 1, "replace_all")?.as_str(), arg_str(&a, 2, "replace_all")?.as_str())));
+    one_shot!("regex::split", |re, a| Value::vec(re.split(arg_str(&a, 1, "split")?.as_str()).map(s).collect()));
     r.native("Regex", "is_match", |_, v, a| Ok(Value::Bool(re_of(v)?.is_match(arg_str(&a, 0, "is_match")?.as_str()))));
     r.native("Regex", "find", |_, v, a| Ok(Value::option(re_of(v)?.find(arg_str(&a, 0, "find")?.as_str()).map(match_val))));
     r.native("Regex", "find_all", |_, v, a| {

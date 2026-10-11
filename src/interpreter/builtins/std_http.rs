@@ -135,10 +135,10 @@ pub fn register(r: &mut Registry) {
         let _ = (name, method, has_body);
     }
     macro_rules! verb {
-        ($name:literal, $method:literal, $body:expr) => {
-            r.func(concat!("http::", $name), |it, a| {
-                let url = arg_str(&a, 0, $name)?;
-                let body = if $body { Some(arg_str(&a, 1, $name)?) } else { None };
+        ($path:literal, $method:literal, $body:expr) => {
+            r.func($path, |it, a| {
+                let url = arg_str(&a, 0, $path)?;
+                let body = if $body { Some(arg_str(&a, 1, $path)?) } else { None };
                 Ok(match send(&it.http, $method, &url, body.as_deref().map(|s| s.as_str())) {
                     Ok(resp) => Value::ok(Value::Native(Rc::new(resp))),
                     Err(e) => Value::err(Value::str(e)),
@@ -146,12 +146,12 @@ pub fn register(r: &mut Registry) {
             });
         };
     }
-    verb!("get", "GET", false);
-    verb!("post", "POST", true);
-    verb!("put", "PUT", true);
-    verb!("patch", "PATCH", true);
-    verb!("delete", "DELETE", false);
-    verb!("head", "HEAD", false);
+    verb!("http::get", "GET", false);
+    verb!("http::post", "POST", true);
+    verb!("http::put", "PUT", true);
+    verb!("http::patch", "PATCH", true);
+    verb!("http::delete", "DELETE", false);
+    verb!("http::head", "HEAD", false);
     r.native("Response", "text", |_, v, _| {
         Ok(match String::from_utf8(resp(v)?.body.clone()) {
             Ok(t) => Value::ok(Value::str(t)),

@@ -19,6 +19,7 @@ mod option;
 mod seq;
 mod shared;
 mod std_data;
+mod std_extra;
 mod std_fns;
 pub mod std_http;
 mod std_sys;
@@ -145,6 +146,7 @@ impl Registry {
         shared::register(&mut r);
         std_sys::register(&mut r);
         std_data::register(&mut r);
+        std_extra::register(&mut r);
         std_http::register(&mut r);
         channel::register(&mut r);
         sync::register(&mut r);
