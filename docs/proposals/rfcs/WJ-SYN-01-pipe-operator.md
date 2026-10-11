@@ -1,4 +1,8 @@
+---
+status: accepted
+---
 # WJ-SYN-01: Pipe Operator
+
 
 **Status:** 🟡 Draft (Optional)  
 **Author:** Windjammer Team  
@@ -341,7 +345,8 @@ fn parse_pipe_expr(&mut self) -> Result<Expr, Error> {
 ### Error Handling
 
 **Pipe with non-function:**
-```windjammer
+<!-- ignore: error-message sketch with `^^` annotations -->
+```windjammer,ignore
 let x = 5 |> 10
 //           ^^ ERROR: Expected function call after |>, found literal
 ```
@@ -394,7 +399,8 @@ let email = sql.escape(validation.validate_email(req.param("email")))
 
 **Idea:** Allow adding methods to types via `impl` blocks.
 
-```windjammer
+<!-- ignore: design alternative shown with elided bodies (`{ ... }`) -->
+```windjammer,ignore
 impl str {
     fn validate_email(self) -> Result<Clean<str>, Error> { ... }
     fn sql_escape(self) -> Clean<str> { ... }
@@ -441,7 +447,8 @@ let result = process(validate(parse(sanitize(input))))
 
 **Proposal:** Lower than function calls, higher than assignment.
 
-```windjammer
+<!-- ignore: precedence discussion of rejected forms -->
+```windjammer,ignore
 let x = a |> f() + b |> g()
 // Parses as: let x = ((a |> f()) + b) |> g()
 
@@ -464,7 +471,8 @@ let y = a |> f(b + c)
 
 **Question:** Should we support explicit placeholders for non-first arguments?
 
-```windjammer
+<!-- ignore: rejected placeholder syntax (`$$`) -->
+```windjammer,ignore
 // Hack-style
 let result = data |> func(arg1, $$, arg2)
 // Desugars to: func(arg1, data, arg2)
@@ -484,7 +492,8 @@ let result = data |> (|x| func(arg1, x, arg2))
 
 **Question:** How do pipes work with `async`/`await`?
 
-```windjammer
+<!-- ignore: open question: pipe into `await`, not yet defined -->
+```windjammer,ignore
 // Does this work?
 let result = input
     |> async_fetch()

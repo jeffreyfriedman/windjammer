@@ -24,5 +24,5 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 `generate_agent_index` (src/agent_index/mod.rs).
 
 ## Tests
-`tests/verified_examples_test.rs` (corpus oracle, lint, compiled path, freshness), `tests/agent_docs_test.rs` (doc code blocks, `wj docs`, `wj check --json`), MCP `tests/agent_tools_test.rs`.
+`tests/verified_examples_test.rs` (corpus oracle, lint, compiled path, freshness), `tests/agent_docs_test.rs` (doc code blocks, `wj docs`, `wj check --json`), MCP `crates/windjammer-mcp/tests/agent_tools_test.rs`.
 Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.

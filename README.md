@@ -49,7 +49,7 @@ Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [do
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
 | `wj errors` | Interactive error navigator (TUI) |
-| `wj docs` | Generate error documentation |
+| `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -89,13 +89,17 @@ Requirements: Rust 1.90 or newer (`rust-version` in `Cargo.toml`).
 git clone https://github.com/jeffreyfriedman/windjammer.git
 cd windjammer
 cargo build --release
-./target/release/wj --version        # wj 0.50.0
+```
+
+```sh,verify
+$ wj --version
+wj
 ```
 
 Optional, to keep build artifacts outside repositories:
 
-```bash
-./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory
+```bash,ignore
+./target/release/wj cache setup      # writes env.sh / env.ps1 under the platform cache directory (changes the user's environment: not run in CI)
 wj cache status | wj cache path | wj cache prune
 ```
 
@@ -113,9 +117,18 @@ fn main() {
 }
 ```
 
-```bash
-wj run hello.wj
+```sh,verify
+$ cat > hello.wj <<'EOF'
+fn main() {
+    let name = "World"
+    println("Hello, ${name}!")
+}
+EOF
+$ wj run --interpret hello.wj
+Hello, World!
 ```
+
+`wj run hello.wj` (without `--interpret`) transpiles to Rust and builds with cargo; `--interpret` runs it directly with no build step.
 
 ### Ownership inference
 
@@ -180,9 +193,8 @@ produced by a benchmark that runs in CI.
 - [Architecture](docs/ARCHITECTURE.md) and [improvement plan](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md)
 - [Architecture decision records](docs/adr/README.md) and [RFCs](docs/proposals/rfcs/README.md)
 - [Known gaps](docs/known-gaps.md), [Roadmap](ROADMAP.md), [Changelog](CHANGELOG.md)
-- [API reference](docs/API_REFERENCE.md), [Comparison with Rust and Go](docs/COMPARISON.md)
 - [Contributing](CONTRIBUTING.md), [Security policy](SECURITY.md), [Agent instructions](AGENTS.md)
-- [Documentation index](docs/INDEX.md)
+- [Documentation index](docs/README.md)
 
 ## Related projects
 - [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui) - UI framework written in Windjammer

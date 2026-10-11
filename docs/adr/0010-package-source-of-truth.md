@@ -20,7 +20,7 @@ Pros: complete story. Cons: needs hosting, auth, yanking and security review; bl
 Pros: least work. Cons: `.wj` packages cannot be distinguished from Rust crates; no effect/taint metadata travels with dependencies (ADR-0009).
 
 ## Recommendation
-Option A. Define the lock file schema and semantic-version rules first; make `wj add --path/--git` work; put the registry client behind a
+Option A. Define the lock file schema and semantic-version rules first; make path and git dependencies work through `wj add`; put the registry client behind a
 feature flag until a registry exists. Remove the default registry URL from code so nothing implies a service.
 
 ## Consequences

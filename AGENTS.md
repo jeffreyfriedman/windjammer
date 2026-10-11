@@ -17,7 +17,7 @@ generic failing test under `tests/` (`bug_<behavior>_test.rs`), then fix it. Kno
 
 ## Tests
 
-Add `tests/your_feature_test.rs`; `build.rs` picks it up automatically (see `tests/README.md`).
+Add `tests/<name>_test.rs`; `build.rs` picks it up automatically (see `tests/README.md`).
 
 ```bash
 cargo test --release --test all <filter>    # targeted
@@ -25,7 +25,7 @@ scripts/check-orphan-tests.sh                # every test file must be reached b
 scripts/update-architecture-baselines.sh    # after adding modules/files (also declare new top-level modules in src/lib.rs and src/main.rs)
 ```
 
-Never run tests with `--all-features` (it silently disables about 120 test files; use it for clippy only).
+Never run tests with `--all-features` (it silently disables many test files; use it for clippy only).
 
 ## Shared cargo cache
 

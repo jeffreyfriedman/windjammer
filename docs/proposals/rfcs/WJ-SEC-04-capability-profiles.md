@@ -1,4 +1,9 @@
+---
+status: proposal
+---
 # WJ-SEC-04: Capability Profiles & First-Import Security
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
 
 **Status:** 🟡 Draft  
 **Author:** Windjammer Team  
@@ -14,7 +19,7 @@
 1. [Executive Summary](#executive-summary)
 2. [Problem Statement: The First-Import Gap](#problem-statement-the-first-import-gap)
 3. [Solution: Capability Profiles](#solution-capability-profiles)
-4. [Heuristic-Based Analysis](#heuristic-based-analysis)
+4. Heuristic-Based Analysis
 5. [Community Trust Signals](#community-trust-signals)
 6. [Sandboxed Test Execution](#sandboxed-test-execution)
 7. [Graduated Trust Model](#graduated-trust-model)

@@ -721,8 +721,6 @@ db.set_source_text(uri, text);  // Creates memo
 
 - [Salsa Book](https://salsa-rs.github.io/salsa/)
 - [Rust Analyzer (uses Salsa)](https://github.com/rust-lang/rust-analyzer)
-- [Windjammer Benchmarks](/tmp/v0.24.0_BENCHMARK_RESULTS.md)
-- [Migration Guide](./SALSA_MIGRATION.md)
 
 ---
 

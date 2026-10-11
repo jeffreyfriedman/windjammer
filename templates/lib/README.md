@@ -38,7 +38,8 @@ Add this library to another project's `wj.toml`:
 
 Then use it:
 
-```windjammer
+<!-- ignore: template: `{{PROJECT_NAME}}` is substituted by `wj new` -->
+```windjammer,ignore
 use {{PROJECT_NAME}}
 
 fn main() {
