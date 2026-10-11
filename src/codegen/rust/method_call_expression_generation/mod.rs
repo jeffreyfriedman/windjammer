@@ -6,6 +6,7 @@ use crate::parser::*;
 
 mod arguments;
 mod finalize;
+mod iterator_lowering;
 mod receiver;
 mod signature_resolution;
 

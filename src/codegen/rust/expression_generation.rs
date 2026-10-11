@@ -1105,7 +1105,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 from_assignment
                                     .or(from_struct_field)
                                     .or(from_return)
-                                    .unwrap_or("f32"),
+                                    .unwrap_or("f64"),
                             )
                         }
                     };

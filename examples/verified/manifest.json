@@ -222,8 +222,7 @@
       "expect_lines": 5,
       "file": "algo_pascal_triangle.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<i64>' in the current s",
+      "rust": "ok",
       "tags": [
         "algorithm",
         "vec",
@@ -245,8 +244,7 @@
       "expect_lines": 2,
       "file": "algo_primes_sieve.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<i64>' in the current s",
+      "rust": "ok",
       "tags": [
         "algorithm",
         "sieve",
@@ -295,8 +293,7 @@
       "expect_lines": 2,
       "file": "algo_statistics.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'sum' found for struct 'Vec<f32>' in the current s",
+      "rust": "ok",
       "tags": [
         "algorithm",
         "math",
@@ -370,8 +367,7 @@
       "expect_lines": 3,
       "file": "basics_const.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "basics",
         "const"
@@ -613,8 +609,7 @@
       "expect_lines": 3,
       "file": "enum_data.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "enum",
         "match",
@@ -854,8 +849,7 @@
       "expect_lines": 2,
       "file": "iter_enumerate_zip.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'zip' found for struct 'Vec<String>' in the curren",
+      "rust": "ok",
       "tags": [
         "iterators",
         "enumerate",
@@ -866,8 +860,7 @@
       "expect_lines": 2,
       "file": "iter_filter_map_flat.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'filter_map' found for struct 'Vec<String>' in the",
+      "rust": "ok",
       "tags": [
         "iterators",
         "filter_map",
@@ -1123,8 +1116,7 @@
       "expect_lines": 4,
       "file": "numbers_float_special.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "output differs from interpreter/oracle",
+      "rust": "ok",
       "tags": [
         "numbers",
         "float",
@@ -1246,8 +1238,7 @@
       "expect_lines": 3,
       "file": "pipe_method_stage.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: '[i64; 4]' is not an iterator",
+      "rust": "ok",
       "tags": [
         "pipe",
         "methods",
@@ -1281,8 +1272,7 @@
       "expect_lines": 4,
       "file": "prog_csv_parse.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'map' found for struct 'Vec<Row>' in the current s",
+      "rust": "ok",
       "tags": [
         "program",
         "strings",
@@ -1383,8 +1373,7 @@
       "expect_lines": 3,
       "file": "prog_shapes_report.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "program",
         "traits",
@@ -1585,8 +1574,7 @@
       "expect_lines": 4,
       "file": "strings_parse.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0308]: mismatched types",
+      "rust": "ok",
       "tags": [
         "strings",
         "parse",
@@ -1952,8 +1940,7 @@
       "expect_lines": 4,
       "file": "vecdeque_queue.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "error[E0599]: no method named 'cloned' found for struct 'VecDeque<i64>' in the c",
+      "rust": "ok",
       "tags": [
         "vecdeque",
         "queue",

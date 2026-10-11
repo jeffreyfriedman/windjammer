@@ -26,6 +26,20 @@ impl<'ast> CodeGenerator<'ast> {
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));
         let inferred_receiver_ty = self.infer_expression_type(object);
+        // Method-call receivers (`m.keys()`, `s.split(..)`, `xs.filter(..)`) are already iterators or
+        // views whose inferred type is unreliable; only `clone`/`to_vec`/`collect` yield owned collections.
+        let recv_is_adapter_call = matches!(
+            object,
+            Expression::MethodCall { method: m, .. } if !matches!(m.as_str(), "clone" | "to_vec" | "collect")
+        );
+        if super::iterator_lowering::needs_iter_prefix_for(
+            inferred_receiver_ty.as_ref(),
+            method,
+            &obj_str,
+            recv_is_adapter_call,
+        ) {
+            obj_str.push_str(".iter()");
+        }
         let resolved_signature = resolved_signature.map(|mut sig| {
             if let Some(rt) = receiver_type_name.as_deref() {
                 if let Some(reg) = self.resolve_method_function_signature_specialized(
