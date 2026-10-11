@@ -67,7 +67,7 @@ fn support_manifest_refers_to_real_programs() {
     let support = Support::load(&root().join("SUPPORT.toml"));
     for (prog, backend) in support.keys() {
         assert!(programs.iter().any(|p| &p.name == prog), "SUPPORT.toml lists unknown program `{prog}`");
-        assert!(["rust", "go", "js"].contains(&backend.as_str()), "SUPPORT.toml lists unknown backend `{backend}`");
+        assert!(["rust", "go", "js", "ts"].contains(&backend.as_str()), "SUPPORT.toml lists unknown backend `{backend}`");
     }
 }
 
@@ -102,6 +102,34 @@ fn corpus_conforms_on_every_backend() {
     println!("{}", report.summary());
     let failures = report.failures();
     assert!(failures.is_empty(), "{}\n{} conformance failure(s):\n{}", report.summary(), failures.len(), failures.join("\n"));
+}
+
+/// ADR-0014 intrinsics (`NNN_intr_*` programs) must behave identically on the TypeScript flavour.
+#[test]
+fn intrinsic_corpus_conforms_on_typescript() {
+    let probe = probe_all();
+    if !probe.has(Tool::Node) {
+        return;
+    }
+    let version = std::process::Command::new("node").arg("--version").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+    let mut parts = version.trim().trim_start_matches('v').split('.').filter_map(|p| p.parse::<u32>().ok());
+    let (major, minor) = (parts.next().unwrap_or(0), parts.next().unwrap_or(0));
+    if (major, minor) < (22, 6) {
+        println!("CONFORMANCE-SKIP: node {} lacks TypeScript type stripping (needs >= 22.6)", version.trim());
+        return;
+    }
+    let support = Support::load(&root().join("SUPPORT.toml"));
+    let work = work_dir("ts");
+    let mut failures = Vec::new();
+    let mut ran = 0;
+    for p in program::discover(&root()).iter().filter(|p| p.name.contains("_intr_")) {
+        ran += 1;
+        if let Verdict::Fail(msg) = eval_program(&wj(), p, Backend::Ts, &support, &work) {
+            failures.push(format!("{} [ts]: {msg}", p.name));
+        }
+    }
+    assert!(ran >= 10, "intrinsic corpus went missing ({ran} programs)");
+    assert!(failures.is_empty(), "{} typescript failure(s):\n{}", failures.len(), failures.join("\n"));
 }
 
 // ---------------------------------------------------------------------------------------------

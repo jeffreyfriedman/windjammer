@@ -37,6 +37,19 @@ A divergence report names which voice disagrees with which (`oracle != go`), and
 | go-u64-as-i64 | unsigned treated as signed | 40, 45 |
 | go-clone-shares-backing-store | deep copy -> shallow copy | 11, 43 |
 | go-no-overflow-check | overflow wraps silently | 60 |
+| js-eprint-to-stdout | stderr output leaks into stdout | 120 |
+| js-center-pad-left-heavy | `^` alignment pads the wrong side | 121, 122 |
+| go-eprint-to-stdout | stderr output leaks into stdout | 120 |
+| go-panic-exit-zero | failed assertion exits 0 | 126 |
+
+## Stream checks (ADR-0014 intrinsics)
+
+Programs may declare expectations about stderr, which the stdout trace cannot see:
+`// stderr: line` (exact lines, in order), `// stderr-has: text` (substring, e.g. a panic message or `] x = 21`
+for `debug`), `// stderr-empty`. A `SUPPORT.toml` reason that says "explicit `unsupported" must be backed by a real
+`unsupported on this backend` build error: wrong output is never accepted as "unsupported". The `*_intr_*` programs
+(120-138) also run on the TypeScript flavour (`intrinsic_corpus_conforms_on_typescript`; skipped loudly when Node < 22.6).
+`WJ_CONFORMANCE_ONLY=<substring>` restricts the corpus matrix to matching programs (development knob).
 
 ## Trace-level comparison
 
@@ -66,6 +79,7 @@ Each cell is at least one corpus program (number in brackets) or a `SUPPORT.toml
 - [x] recursion depth (81), shadowing/blocks/if-expressions (77), tuples (78), consts (82)
 - [x] traits and generics (27, 28, 79, 80)
 - [x] std shims (110-113)
+- [x] intrinsics and format specs: stdout/stderr routing (120), width/align/fill/precision/radix/`?` (121, 122), `debug` (123), assert/assert_eq/assert_ne/todo/unreachable/panic exit status and messages (124-134), list literal (135), mixed seeded (136); explicit-error combos (137, 138)
 - [ ] async/spawn ordering: ABSENT on Go/JS (`SUPPORT.toml`); the AST nodes `AsyncCall`/`SpawnCall` are rejected with an explicit error
 - [ ] labeled loops, struct update syntax: not representable in the Windjammer AST today (language gap, not a backend gap)
 

@@ -27,4 +27,6 @@ methods = [
   "unwrap", "unwrap_or", "map_err", "and_then", "ok_or", "is_some", "unwrap_or",
   # macros / functions
   "vec", "println", "panic",
+  # ADR-0014 intrinsics
+  "print", "eprintln", "eprint", "assert", "assert_eq", "assert_ne", "todo", "unreachable", "debug",
 ]

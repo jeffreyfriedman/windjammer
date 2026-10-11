@@ -1,0 +1,9 @@
+// expect: before
+// exit: 101
+// stderr-has: x was 5
+fn main() {
+    let x = 5
+    println("before")
+    assert(x == 6, "x was ${x}")
+    println("after")
+}

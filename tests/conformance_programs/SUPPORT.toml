@@ -118,3 +118,35 @@ program = "56_float_math"
 backend = "rust"
 reason = "rust-int-literal-width-inference: a float literal is typed f32 where f64 is needed (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
 
+
+# ---- ADR-0014 format specs the portable (Go/JS/TS) emitters reject explicitly ---------------
+
+[[unsupported]]
+program = "137_intr_format_sign_alt"
+backend = "go"
+reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "137_intr_format_sign_alt"
+backend = "js"
+reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "137_intr_format_sign_alt"
+backend = "ts"
+reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "138_intr_format_pretty_debug"
+backend = "go"
+reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "138_intr_format_pretty_debug"
+backend = "js"
+reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "138_intr_format_pretty_debug"
+backend = "ts"
+reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"

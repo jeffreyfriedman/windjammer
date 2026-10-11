@@ -76,7 +76,10 @@ pub fn judge(label: &str, expected: &Trace, got: &Trace) -> Option<String> {
 fn run_cell(wj: &Path, p: &Program, b: Backend, seed: u64, work: &Path) -> Result<Trace, String> {
     match compile_and_run(wj, b, work, &p.source_for(seed)) {
         Outcome::BuildFailed(e) => Err(format!("seed {seed}: build/toolchain failure: {}", e.lines().take(12).collect::<Vec<_>>().join(" | "))),
-        Outcome::Ran(t, _) => Ok(t),
+        Outcome::Ran(t, exec) => match p.stderr.check(&exec.stderr) {
+            Some(why) => Err(format!("seed {seed}: stderr stream: {why}")),
+            None => Ok(t),
+        },
     }
 }
 
@@ -85,6 +88,10 @@ fn verdict_for(support: &Support, p: &Program, b: Backend, raw: Result<(), Strin
         (Ok(()), None) => Verdict::Pass,
         (Ok(()), Some(r)) => Verdict::Fail(format!("passes but SUPPORT.toml lists it unsupported ({r}); remove the entry (ratchet)")),
         (Err(e), None) => Verdict::Fail(e),
+        // A reason that promises an explicit build error must be backed by one: wrong output is never "unsupported".
+        (Err(e), Some(r)) if r.contains("explicit `unsupported") && !e.contains("unsupported on this backend") => {
+            Verdict::Fail(format!("SUPPORT.toml promises an explicit build error ({r}) but the failure was: {e}"))
+        }
         (Err(_), Some(r)) => Verdict::Unsupported(r.to_string()),
     }
 }
@@ -121,7 +128,9 @@ pub struct Ctx {
 
 pub fn run_all(ctx: std::sync::Arc<Ctx>) -> Report {
     let mut report = Report::default();
-    let jobs: Vec<(usize, Backend)> = (0..ctx.programs.len()).flat_map(|i| ALL_BACKENDS.map(|b| (i, b))).collect();
+    // Dev knob: `WJ_CONFORMANCE_ONLY=intr` runs only programs whose name contains the text.
+    let only = std::env::var("WJ_CONFORMANCE_ONLY").unwrap_or_default();
+    let jobs: Vec<(usize, Backend)> = (0..ctx.programs.len()).filter(|i| ctx.programs[*i].name.contains(&only)).flat_map(|i| ALL_BACKENDS.map(|b| (i, b))).collect();
     let c = ctx.clone();
     let results = super::parallel::map(jobs, 3, move |(i, b)| {
         let p = &c.programs[i];

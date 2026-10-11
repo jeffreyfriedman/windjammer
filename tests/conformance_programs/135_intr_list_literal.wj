@@ -1,0 +1,36 @@
+// `[a, b, c]` is the growable list literal; `[]` takes its element type from context.
+// expect: 3 6
+// expect: 2 30
+// expect: x,y
+// expect: 4 0
+// expect: 2 [1, 2]
+struct Bag {
+    items: Vec<i64>,
+}
+
+fn total(v: Vec<i64>) -> i64 {
+    let mut t = 0
+    for x in v {
+        t += x
+    }
+    t
+}
+
+fn main() {
+    let a: Vec<i64> = [1, 2, 3]
+    println("${a.len()} ${total(a)}")
+    let mut b: Vec<i64> = []
+    b.push(10)
+    b.push(20)
+    println("${b.len()} ${total(b)}")
+    let mut c: Vec<string> = []
+    c.push("x")
+    c.push("y")
+    println("${c.join(",")}")
+    let count: usize = 4
+    let z = [0; count]
+    let e: Vec<i64> = []
+    println("${z.len()} ${e.len()}")
+    let bag = Bag { items: [1, 2] }
+    println("${bag.items.len()} ${bag.items:?}")
+}

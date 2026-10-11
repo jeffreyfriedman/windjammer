@@ -1,0 +1,10 @@
+// expect: before
+// exit: 101
+// stderr-has: boom 12 [1, 2]
+fn main() {
+    let n = 12
+    let v = [1, 2]
+    println("before")
+    panic("boom ${n} ${v:?}")
+    println("after")
+}
