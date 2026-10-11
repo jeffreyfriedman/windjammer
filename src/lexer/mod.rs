@@ -324,6 +324,12 @@ impl Lexer {
                 self.advance();
                 Token::OrAssign
             }
+            Some('|') if self.peek(1) == Some('>') && self.peek(2) == Some('?') => {
+                self.advance();
+                self.advance();
+                self.advance();
+                Token::PipeTry
+            }
             Some('|') if self.peek(1) == Some('>') => {
                 self.advance();
                 self.advance();
@@ -405,6 +411,8 @@ impl Lexer {
 
     /// Get next token with its source location
     pub fn next_token_with_location(&mut self) -> TokenWithLocation {
+        // Leading blanks belong to no token: the span must start at the token itself.
+        self.skip_whitespace();
         let line = self.line;
         let column = self.column;
         let token = self.next_token();
