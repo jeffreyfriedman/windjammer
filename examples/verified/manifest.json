@@ -1910,7 +1910,8 @@
       "expect_lines": 4,
       "file": "vec_contains_position.wj",
       "kind": "program",
-      "rust": "ok",
+      "rust": "gap",
+      "rust_gap": "nondeterministic codegen: v.contains(15) is emitted with or without the borrow between runs",
       "tags": [
         "vec",
         "search",
