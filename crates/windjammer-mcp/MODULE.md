@@ -24,4 +24,4 @@ Depends on `windjammer` and `windjammer-lsp`; nothing depends on this crate.
 `src/main.rs` (binary `windjammer-mcp`), `McpServer` in `src/server.rs`, `tools/registry.rs`.
 
 ## Tests
-`cargo test -p windjammer-mcp` (crates/windjammer-mcp/tests); design notes in DESIGN.md.
+`cargo test -p windjammer-mcp` (crates/windjammer-mcp/tests).
