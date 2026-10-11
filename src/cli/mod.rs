@@ -12,6 +12,7 @@ pub mod fmt;
 pub mod json_diagnostics;
 pub mod lint;
 pub mod new;
+mod new_templates;
 pub mod remove;
 pub mod run;
 pub mod self_install;

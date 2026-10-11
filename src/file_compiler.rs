@@ -65,7 +65,10 @@ impl ModuleCompiler {
         let stdlib_path = config
             .stdlib_path
             .clone()
-            .unwrap_or_else(|| PathBuf::from("./std"));
+            .or_else(|| {
+                crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj)
+            })
+            .unwrap_or_default();
 
         Self {
             compiled_modules: HashMap::new(),
