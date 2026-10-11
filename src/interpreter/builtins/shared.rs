@@ -5,6 +5,8 @@
 //! mutex poisoning are not modelled: `borrow_mut()`/`lock()` always succeed.
 
 use super::*;
+use crate::interpreter::locks::{CellState, GuardToken};
+use crate::interpreter::sched::Wait;
 
 /// The argument with `&`-style references followed but an `Rc` kept as is.
 fn raw(args: &[Value], i: usize, what: &str) -> R<Value> {
@@ -70,10 +72,10 @@ pub fn register(r: &mut Registry) {
             }
         });
     }
-    r.func("RefCell::new", |_, a| Ok(Value::Cell(CellKind::RefCell, new_slot(raw(&a, 0, "new")?))));
-    r.func("Cell::new", |_, a| Ok(Value::Cell(CellKind::Cell, new_slot(raw(&a, 0, "new")?))));
-    r.func("Mutex::new", |_, a| Ok(Value::Cell(CellKind::Mutex, new_slot(raw(&a, 0, "new")?))));
-    r.func("RwLock::new", |_, a| Ok(Value::Cell(CellKind::RwLock, new_slot(raw(&a, 0, "new")?))));
+    r.func("RefCell::new", |_, a| Ok(new_cell(CellKind::RefCell, raw(&a, 0, "new")?)));
+    r.func("Cell::new", |_, a| Ok(new_cell(CellKind::Cell, raw(&a, 0, "new")?)));
+    r.func("Mutex::new", |_, a| Ok(new_cell(CellKind::Mutex, raw(&a, 0, "new")?)));
+    r.func("RwLock::new", |_, a| Ok(new_cell(CellKind::RwLock, raw(&a, 0, "new")?)));
 
     r.pure(Kind::Rc, "upgrade", |it, v, _| match v {
         Value::Weak(s) if it.strong_count(s) > 0 => Ok(Value::some(Value::Rc(s.clone()))),
@@ -84,24 +86,75 @@ pub fn register(r: &mut Registry) {
     register_cells(r);
 }
 
-fn cell_slot(v: &Value) -> R<(CellKind, Slot)> {
+fn new_cell(k: CellKind, v: Value) -> Value {
+    Value::Cell(k, new_slot(v), Rc::new(CellState::default()))
+}
+
+fn cell_parts(v: &Value) -> R<(CellKind, Slot, Rc<CellState>)> {
     match v {
-        Value::Cell(k, s) => Ok((*k, s.clone())),
+        Value::Cell(k, s, st) => Ok((*k, s.clone(), st.clone())),
         other => Err(semantic(format!("expected a cell, found {}", other.type_name()))),
     }
 }
 
-fn guard(slot: Slot) -> Value {
+fn cell_slot(v: &Value) -> R<(CellKind, Slot)> {
+    cell_parts(v).map(|(k, s, _)| (k, s))
+}
+
+fn guard(slot: Slot, tok: Rc<GuardToken>) -> Value {
+    Value::Ref(Place { slot, path: Vec::new(), guard: Some(tok) })
+}
+
+fn plain_ref(slot: Slot) -> Value {
     Value::Ref(Place::of_slot(slot))
 }
 
+fn borrow(v: &Value, exclusive: bool) -> Result<Value, &'static str> {
+    let (_, slot, st) = cell_parts(v).map_err(|_| "not a cell")?;
+    if exclusive && st.any_held() {
+        return Err("already borrowed: BorrowMutError");
+    }
+    if !exclusive && st.exclusively_held() {
+        return Err("already mutably borrowed: BorrowError");
+    }
+    Ok(guard(slot, st.acquire(exclusive)))
+}
+
+/// `Mutex::lock` / `RwLock::read|write`: wait (running other threads) until the lock is free.
+fn lock(it: &mut Interpreter, v: &Value, exclusive: bool) -> R {
+    let (_, slot, st) = cell_parts(v)?;
+    it.preempt()?;
+    it.block_on(Wait::Lock(st.clone(), exclusive))?;
+    Ok(Value::ok(guard(slot, st.acquire(exclusive))))
+}
+
 fn register_cells(r: &mut Registry) {
-    for n in ["borrow", "borrow_mut", "get_mut"] {
-        r.pure(Kind::Cell, n, |_, v, _| Ok(guard(cell_slot(v)?.1)));
-    }
-    for n in ["lock", "write", "read", "try_lock", "try_borrow", "try_borrow_mut"] {
-        r.pure(Kind::Cell, n, |_, v, _| Ok(Value::ok(guard(cell_slot(v)?.1))));
-    }
+    r.pure(Kind::Cell, "borrow", |_, v, _| borrow(v, false).map_err(panic_ctl));
+    r.pure(Kind::Cell, "borrow_mut", |_, v, _| borrow(v, true).map_err(panic_ctl));
+    r.pure(Kind::Cell, "try_borrow", |_, v, _| {
+        Ok(match borrow(v, false) {
+            Ok(g) => Value::ok(g),
+            Err(_) => Value::err(Value::str("BorrowError")),
+        })
+    });
+    r.pure(Kind::Cell, "try_borrow_mut", |_, v, _| {
+        Ok(match borrow(v, true) {
+            Ok(g) => Value::ok(g),
+            Err(_) => Value::err(Value::str("BorrowMutError")),
+        })
+    });
+    r.pure(Kind::Cell, "get_mut", |_, v, _| Ok(plain_ref(cell_slot(v)?.1)));
+    r.pure(Kind::Cell, "lock", |it, v, _| lock(it, v, true));
+    r.pure(Kind::Cell, "write", |it, v, _| lock(it, v, true));
+    r.pure(Kind::Cell, "read", |it, v, _| lock(it, v, false));
+    r.pure(Kind::Cell, "try_lock", |_, v, _| {
+        let (_, slot, st) = cell_parts(v)?;
+        Ok(if st.can_acquire(true) {
+            Value::ok(guard(slot, st.acquire(true)))
+        } else {
+            Value::err(Value::enum_val("TryLockError", "WouldBlock", 0, Payload::Unit))
+        })
+    });
     r.pure(Kind::Cell, "get", |_, v, _| Ok(cell_slot(v)?.1.borrow().clone()));
     r.pure(Kind::Cell, "set", |_, v, a| {
         *cell_slot(v)?.1.borrow_mut() = arg(&a, 0, "set")?;
@@ -109,6 +162,16 @@ fn register_cells(r: &mut Registry) {
     });
     r.pure(Kind::Cell, "replace", |_, v, a| {
         Ok(std::mem::replace(&mut *cell_slot(v)?.1.borrow_mut(), arg(&a, 0, "replace")?))
+    });
+    r.pure(Kind::Cell, "swap", |it, v, a| {
+        let (k, slot) = cell_slot(v)?;
+        if k == CellKind::Atomic {
+            it.preempt()?;
+            return Ok(std::mem::replace(&mut *slot.borrow_mut(), arg(&a, 0, "swap")?));
+        }
+        let (_, other) = cell_slot(&raw(&a, 0, "swap")?)?;
+        std::mem::swap(&mut *slot.borrow_mut(), &mut *other.borrow_mut());
+        Ok(Value::Unit)
     });
     r.pure(Kind::Cell, "take", |it, v, _| {
         let slot = cell_slot(v)?.1;
@@ -126,6 +189,6 @@ fn register_cells(r: &mut Registry) {
     r.pure(Kind::Cell, "clone", |it, v, _| {
         let (k, slot) = cell_slot(v)?;
         let inner = slot.borrow().clone();
-        Ok(Value::Cell(k, new_slot(it.fresh_identities(&inner))))
+        Ok(new_cell(k, it.fresh_identities(&inner)))
     });
 }

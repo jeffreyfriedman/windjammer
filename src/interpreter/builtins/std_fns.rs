@@ -244,33 +244,6 @@ pub fn register(r: &mut Registry) {
         }
         Ok(Value::ok(Value::usize(n)))
     });
-    r.func("time::Instant::now", |_, _| {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        Ok(strukt("Instant", vec![("t", Value::float(t))]))
-    });
-    r.func("Instant::now", |_, _| {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        Ok(strukt("Instant", vec![("t", Value::float(t))]))
-    });
-    r.pure(Kind::Struct, "elapsed", |_, v, _| {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        let t = match field(v, "t") {
-            Some(Value::Float(f, _)) => f,
-            _ => now,
-        };
-        Ok(strukt("Duration", vec![("secs", Value::float((now - t).max(0.0)))]))
-    });
-    fn secs(v: &Value) -> f64 {
-        match field(v, "secs") {
-            Some(Value::Float(f, _)) => f,
-            _ => 0.0,
-        }
-    }
-    r.pure(Kind::Struct, "as_secs_f64", |_, v, _| Ok(Value::float(secs(v))));
-    r.pure(Kind::Struct, "as_secs", |_, v, _| Ok(Value::Int(secs(v) as i128, IntTy::U64)));
-    r.pure(Kind::Struct, "as_millis", |_, v, _| Ok(Value::Int((secs(v) * 1e3) as i128, IntTy::U128)));
-    r.pure(Kind::Struct, "as_micros", |_, v, _| Ok(Value::Int((secs(v) * 1e6) as i128, IntTy::U128)));
-    r.pure(Kind::Struct, "as_nanos", |_, v, _| Ok(Value::Int((secs(v) * 1e9) as i128, IntTy::U128)));
     let _ = call;
     register_std_modules(r);
 }
@@ -353,11 +326,12 @@ fn register_std_modules(r: &mut Registry) {
     fn now() -> std::time::Duration {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
     }
-    r.func("time::now_millis", |_, _| Ok(Value::Int(now().as_millis() as i128, IntTy::I64)));
-    r.func("time::now_unix", |_, _| Ok(Value::Int(now().as_secs() as i128, IntTy::I64)));
-    r.func("time::now_unix_nano", |_, _| Ok(Value::Int(now().as_nanos() as i128, IntTy::I64)));
-    r.func("time::sleep_millis", |_, a| {
-        std::thread::sleep(std::time::Duration::from_millis(arg_int(&a, 0, "sleep_millis")?.max(0) as u64));
+    let _ = now;
+    r.func("time::now_millis", |it, _| Ok(Value::Int((it.wall_ns() / 1_000_000) as i128, IntTy::I64)));
+    r.func("time::now_unix", |it, _| Ok(Value::Int((it.wall_ns() / 1_000_000_000) as i128, IntTy::I64)));
+    r.func("time::now_unix_nano", |it, _| Ok(Value::Int(it.wall_ns() as i128, IntTy::I64)));
+    r.func("time::sleep_millis", |it, a| {
+        it.sleep_ns(arg_int(&a, 0, "sleep_millis")?.max(0) as u64 * 1_000_000)?;
         Ok(Value::Unit)
     });
     macro_rules! unary_math {

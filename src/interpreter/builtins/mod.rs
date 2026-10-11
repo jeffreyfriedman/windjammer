@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+pub(crate) mod channel;
 mod iter;
 mod map;
 mod num;
@@ -18,6 +19,9 @@ mod option;
 mod seq;
 mod shared;
 mod std_fns;
+pub(crate) mod sync;
+mod thread;
+pub(crate) mod time;
 mod text;
 
 pub use seq::collect_into;
@@ -48,6 +52,7 @@ pub enum Kind {
     Formatter,
     Rc,
     Cell,
+    Native,
 }
 
 impl Kind {
@@ -78,6 +83,7 @@ impl Kind {
             Value::Ref(_) => Kind::Any,
             Value::Rc(_) | Value::Weak(_) => Kind::Rc,
             Value::Cell(..) => Kind::Cell,
+            Value::Native(_) => Kind::Native,
         }
     }
 
@@ -121,6 +127,7 @@ pub struct Registry {
     consts: HashMap<String, Value>,
     types: HashSet<&'static str>,
     mutating: HashSet<&'static str>,
+    natives: HashMap<&'static str, HashMap<&'static str, PureFn>>,
 }
 
 impl Registry {
@@ -133,7 +140,19 @@ impl Registry {
         option::register(&mut r);
         std_fns::register(&mut r);
         shared::register(&mut r);
+        channel::register(&mut r);
+        sync::register(&mut r);
+        thread::register(&mut r);
+        time::register(&mut r);
         r
+    }
+
+    /// Method of a host object type (`Registry::native("Sender", "send", f)`).
+    pub fn native(&mut self, ty: &'static str, name: &'static str, f: PureFn) {
+        self.natives.entry(ty).or_default().insert(name, f);
+    }
+    pub fn native_method(&self, ty: &str, name: &str) -> Option<PureFn> {
+        self.natives.get(ty).and_then(|m| m.get(name)).copied()
     }
 
     pub fn pure(&mut self, k: Kind, name: &'static str, f: PureFn) {

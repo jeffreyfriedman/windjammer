@@ -65,7 +65,7 @@ fn descend<'v>(cur: &'v mut Value, p: &Proj) -> R<&'v mut Value> {
 
 impl Place {
     pub fn of_slot(slot: Slot) -> Place {
-        Place { slot, path: Vec::new() }
+        Place { slot, path: Vec::new(), guard: None }
     }
 
     pub fn temp(v: Value) -> Place {
@@ -75,7 +75,7 @@ impl Place {
     pub fn proj(&self, p: Proj) -> Place {
         let mut path = self.path.clone();
         path.push(p);
-        Place { slot: self.slot.clone(), path }
+        Place { slot: self.slot.clone(), path, guard: self.guard.clone() }
     }
 
     /// Run `f` on the target value with unique access (copy-on-write along the path).

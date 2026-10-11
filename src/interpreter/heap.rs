@@ -68,7 +68,8 @@ impl Walker {
                 }
             }
             Value::Ref(p) => self.walk_slot(&p.slot, f),
-            Value::Rc(slot) | Value::Cell(_, slot) => self.walk_slot(slot, f),
+            Value::Rc(slot) | Value::Cell(_, slot, _) => self.walk_slot(slot, f),
+            Value::Native(n) => n.for_each_value(&mut |x| self.walk(x, f)),
             Value::Iter(it) => {
                 if let super::iter::IterSrc::Buf { items, pos, end } = &it.src {
                     for x in &items[pos.get()..end.get()] {
@@ -101,6 +102,13 @@ impl Interpreter {
         w.walk_scope(&self.scope, f);
         for fr in &self.frames {
             w.walk_scope(fr, f);
+        }
+        let (scopes, vals) = self.sched.parked_roots();
+        for s in scopes {
+            w.walk_scope(s, f);
+        }
+        for v in vals {
+            w.walk(v, f);
         }
         for slot in self.globals.values() {
             w.walk_slot(slot, f);
@@ -209,7 +217,7 @@ impl Interpreter {
                     Self::glue_order(x, out, seen);
                 }
             }
-            Value::Rc(slot) | Value::Cell(_, slot) => {
+            Value::Rc(slot) | Value::Cell(_, slot, _) => {
                 if seen.insert(Rc::as_ptr(slot) as usize) {
                     let inner = slot.borrow().clone();
                     Self::glue_order(&inner, out, seen);

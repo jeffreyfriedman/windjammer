@@ -73,12 +73,15 @@ pub fn run(cli: Cli) -> Result<()> {
             args,
             target,
             interpret,
+            sched_seed,
+            deterministic_time,
             defer_drop,
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             if interpret {
-                interpret_file(&path, args)?;
+                let opts = windjammer::interpreter::runner::RunOptions { sched_seed, deterministic_time };
+                interpret_file(&path, args, opts)?;
             } else {
                 windjammer::cli::run::execute(&path, &args, &target)?;
             }
@@ -422,8 +425,8 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
 }
 
 /// Interpret a .wj file or project directory directly (no cargo, no rustc).
-fn interpret_file(file: &std::path::Path, args: Vec<String>) -> Result<()> {
-    let code = windjammer::interpreter::runner::run_path(file, args);
+fn interpret_file(file: &std::path::Path, args: Vec<String>, opts: windjammer::interpreter::runner::RunOptions) -> Result<()> {
+    let code = windjammer::interpreter::runner::run_path_with(file, args, opts);
     if code != 0 {
         std::process::exit(code);
     }

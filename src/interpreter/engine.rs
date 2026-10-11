@@ -119,6 +119,9 @@ pub struct Interpreter {
     pub(crate) type_aliases: HashMap<String, Type>,
     pub(crate) globals: HashMap<(usize, String), Slot>,
     pub(crate) scope: Scope,
+    /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
+    pub(crate) sched: super::sched::Sched,
+    pub(crate) epoch: std::time::Instant,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -168,6 +171,8 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             globals: HashMap::new(),
             scope: Scope::new(0),
+            sched: super::sched::Sched::new(),
+            epoch: std::time::Instant::now(),
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
@@ -203,6 +208,16 @@ impl Interpreter {
     pub fn guard_stack(&mut self) {
         let here = 0u8;
         self.stack_guard = Some((&here as *const u8 as usize, super::runner::STACK_BYTES - super::runner::STACK_HEADROOM));
+    }
+
+    /// Schedule seed: 0 = FIFO run-to-block, N = seeded exploration of other interleavings.
+    pub fn set_sched_seed(&mut self, seed: u64) {
+        self.sched.set_seed(seed);
+    }
+
+    /// Deterministic time: no real clock is read; time advances only through `sleep`.
+    pub fn set_deterministic_time(&mut self, on: bool) {
+        self.sched.deterministic = on;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {

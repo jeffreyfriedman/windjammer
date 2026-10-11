@@ -790,6 +790,11 @@ impl Interpreter {
         method: &str,
         args: Vec<Value>,
     ) -> R {
+        if let Value::Native(n) = &recv {
+            if let Some(f) = self.builtins.native_method(n.type_name(), method) {
+                return f(self, &recv, args);
+            }
+        }
         let kind = Kind::of(&recv);
         let imp = self.builtins.method(kind, method);
         match imp {
