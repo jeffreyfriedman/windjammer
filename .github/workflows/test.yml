@@ -83,13 +83,13 @@ jobs:
         run: cargo build --release --bin wj --bin wj-docs
 
       - name: Verify generated docs, doc examples, links, claims, freshness, EBNF, README quickstart (sh,verify fences run with this wj)
-        run: WJ_BIN=$PWD/target/release/wj scripts/docs_gen.sh --verify
+        run: WJ_DOCS_REQUIRE_EXEC=1 WJ_BIN=$PWD/target/release/wj scripts/docs_gen.sh --verify
 
       - name: Docs-truth mutation self-tests
         run: cargo test --release --features cli --test docs_truth
 
       - name: Interpreter feature registry, parser arena soundness, error-catalog determinism
-        run: cargo test --release --test all interpreter_features_test parser_arena_soundness_test && cargo test --release --lib error_catalog
+        run: cargo test --release --test interpreter_features --test parser_arena_soundness && cargo test --release --lib error_catalog
 
   examples-gate:
     name: Examples (every example runs or checks, or does not exist)
