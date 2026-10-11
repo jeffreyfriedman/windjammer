@@ -3613,7 +3613,7 @@
     "name": "The loop",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
-    "summary": "wj check --json FILE_OR_DIR     # parse + lint + transpile, no cargo; JSON diagnostics with spans",
+    "summary": "<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->",
     "tags": []
   },
   {
