@@ -18,7 +18,9 @@ mod num;
 mod option;
 mod seq;
 mod shared;
+mod std_data;
 mod std_fns;
+mod std_sys;
 pub(crate) mod sync;
 mod thread;
 pub(crate) mod time;
@@ -140,6 +142,8 @@ impl Registry {
         option::register(&mut r);
         std_fns::register(&mut r);
         shared::register(&mut r);
+        std_sys::register(&mut r);
+        std_data::register(&mut r);
         channel::register(&mut r);
         sync::register(&mut r);
         thread::register(&mut r);

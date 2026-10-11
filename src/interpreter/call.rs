@@ -356,6 +356,9 @@ impl Interpreter {
             }
             Some(Resolved::Builtin(p)) => {
                 let args = self.eval_args(arguments, None, false)?;
+                if p.ends_with("json::parse_string") && self.type_hint.is_none() {
+                    self.type_hint = targs.first().cloned().or(expected);
+                }
                 self.call_builtin_fn(&p, args)
             }
             Some(Resolved::Const(m, n)) => {
@@ -797,6 +800,12 @@ impl Interpreter {
     ) -> R {
         if let Value::Native(n) = &recv {
             if let Some(f) = self.builtins.native_method(n.type_name(), method) {
+                return f(self, &recv, args);
+            }
+        }
+        if let Value::Struct(sv) = &recv {
+            // builtin structs (`regex::Match`, `url::Url`...) keep their methods in the native table
+            if let Some(f) = self.builtins.native_method(&sv.name, method) {
                 return f(self, &recv, args);
             }
         }
