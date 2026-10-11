@@ -43,6 +43,13 @@ pub fn parse_info(info: &str) -> Ann {
     a
 }
 
+/// A `sh,verify` fence that could not run: a warning locally, a failure in CI (`WJ_DOCS_REQUIRE_EXEC=1`), so a
+/// missing `wj` can never turn the quickstart check into a silent pass.
+pub fn not_executed(file: &str, line: usize, require: bool) -> Finding {
+    let msg = "sh,verify fence not executed (no wj binary: set WJ_BIN)";
+    if require { Finding::fail("fences", file, line, msg) } else { Finding::warn("fences", file, line, msg) }
+}
+
 /// An `ignore`/`should_fail` fence must be justified by an HTML comment on the nearest non-blank line above it.
 pub fn has_reason(lines: &[&str], fence_line: usize) -> bool {
     let mut i = fence_line.saturating_sub(1); // index of the fence line itself (1-based -> 0-based)
@@ -119,7 +126,7 @@ pub fn check_doc(file: &str, text: &str, wj_bin: Option<&std::path::Path>) -> Re
                         r.raw.push(Finding::fail("fences", file, f.line, format!("sh,verify failed: {e}")));
                     }
                 }
-                None => r.raw.push(Finding::warn("fences", file, f.line, "sh,verify fence not executed (no wj binary)")),
+                None => r.raw.push(not_executed(file, f.line, std::env::var_os("WJ_DOCS_REQUIRE_EXEC").is_some())),
             }
             continue;
         }

@@ -385,7 +385,7 @@ fn freshness_front_matter_becomes_required_once_configured() {
     let s = Scratch::new();
     s.write("docs/design/d.md", "# no front matter\n");
     assert_eq!(failures(&s.all()), 0);
-    let toml = s.read("docs/docs-truth.toml").replace("tracked =", "require = true\ntracked =");
+    let toml = s.read("docs/docs-truth.toml").replace("tracked = [\"docs/design/*.md\"]", "require = true\ntracked = [\"docs/design/*.md\", \"docs/adr/0*.md\"]");
     s.write("docs/docs-truth.toml", &toml);
     assert!(has(&s.all(), "freshness", "no front matter"));
     s.write("docs/design/d.md", "---\nstatus: current\n---\n# D\n");
@@ -416,7 +416,7 @@ fn ebnf_ctx(grammar: &str) -> (Scratch, config::Config) {
     (s, cfg)
 }
 
-const MINI: &str = "program = { item } ;\nitem = function_decl ;\nfunction_decl = \"fn\" IDENT \"(\" \")\" block ;\nblock = \"{\" { statement } \"}\" ;\nstatement = let_stmt | if_stmt ;\nlet_stmt = \"let\" IDENT \"=\" expression ;\nif_stmt = \"if\" expression block [ \"else\" block ] ;\nexpression = INT_LIT | IDENT ;\nstruct_decl = \"struct\" IDENT \"{\" \"}\" ;\nIDENT = LETTER ;\nINT_LIT = DIGIT ;\n";
+const MINI: &str = "program = { item } ;\nitem = function_decl ;\nfunction_decl = \"fn\" IDENT \"(\" \")\" block ;\nblock = \"{\" { statement } \"}\" ;\nstatement = let_stmt | if_stmt ;\nlet_stmt = \"let\" IDENT \"=\" expression ;\nif_stmt = \"if\" expression block [ \"else\" block ] ;\nexpression = INT_LIT | IDENT ;\nstruct_decl = \"struct\" IDENT \"{\" \"}\" ;\nIDENT = LETTER ;\nINT_LIT = DIGIT ;\nLETTER = \"a\" ;\nDIGIT = \"0\" ;\n";
 
 #[test]
 fn ebnf_check_accepts_a_grammar_the_parser_accepts() {
@@ -445,22 +445,15 @@ fn ebnf_check_detects_structure_vocabulary_and_derivation_drift() {
     let (s, mut cfg) = ebnf_ctx(MINI);
     cfg.ebnf.divergences.insert("let_stmt#0".into(), "pretend".into());
     assert!(has(&ebnf::check_all(&s.ctx(), &cfg), "ebnf", "remove the entry"));
-    // ...and is tolerated while the parser still rejects it
+    // ...and is tolerated while the parser still rejects it: list every rejected sentence of the mutant grammar
     let (s, mut cfg) = ebnf_ctx(&MINI.replace("\"let\" IDENT \"=\" expression", "\"let\" IDENT expression"));
-    cfg.ebnf.divergences.insert("let_stmt#0".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("let_stmt#full".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("statement#0".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("block#full".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("item#0".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("function_decl#0".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("function_decl#full".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("program#0".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("program#full".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("item#full".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("statement#full".into(), "mutant".into());
-    cfg.ebnf.divergences.insert("block#0".into(), "mutant".into());
+    let rejected: Vec<String> = ebnf::check_all(&s.ctx(), &cfg).iter().filter_map(|f| f.msg.strip_prefix("grammar sentence `").and_then(|m| m.split('`').next()).map(String::from)).collect();
+    assert!(rejected.iter().any(|id| id == "let_stmt#0"), "{rejected:?}");
+    for id in &rejected {
+        cfg.ebnf.divergences.insert(id.clone(), "mutant".into());
+    }
     let fs = ebnf::check_all(&s.ctx(), &cfg);
-    assert!(!has(&fs, "ebnf", "rejected by the parser"), "{}", show(&fs));
+    assert!(fs.is_empty(), "{}", show(&fs));
 }
 
 #[allow(dead_code)]
@@ -520,6 +513,7 @@ fn paths_resolve_from_repo_root_or_document_directory_and_negations_exempt_comma
     s.write("crates/x/README.md", "See `src/server.rs` and `src/nope.rs`.\n");
     let fs = s.all();
     assert!(has(&fs, "links", "src/nope.rs") && !has(&fs, "links", "src/server.rs"), "{}", show(&fs));
+    s.write("crates/x/README.md", "See `src/server.rs`.\n");
     s.write("docs/n.md", "- `wj frobnicate` does not exist.\n- `wj frobnicate` is not started.\n");
     assert_eq!(failures(&s.all()), 0, "{}", show(&s.all()));
     s.write("docs/n.md", "- Run `wj frobnicate` to frobnicate.\n");
@@ -533,4 +527,13 @@ fn commands_under_planned_or_gap_headings_are_future_not_claims() {
     let fs = s.all();
     assert_eq!(fs.iter().filter(|f| f.check == "links" && f.msg.contains("not a subcommand")).count(), 1, "{}", show(&fs));
     assert!(fs.iter().any(|f| f.line == 9 && f.msg.contains("not a subcommand")), "{}", show(&fs));
+}
+
+#[test]
+fn unexecuted_sh_verify_fences_fail_when_execution_is_required() {
+    assert!(fences::not_executed("README.md", 3, false).warn);
+    assert!(!fences::not_executed("README.md", 3, true).warn);
+    // and without a binary the fence is reported rather than silently passing
+    let r = fences::check_doc("d.md", "```sh,verify\n$ wj --version\n```\n", None);
+    assert_eq!(r.raw.len(), 1);
 }
