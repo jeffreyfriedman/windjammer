@@ -1,0 +1,94 @@
+use std::fs
+
+struct Item {
+    id: i64,
+    text: string,
+    done: bool,
+}
+
+struct Todo {
+    items: Vec<Item>,
+    next_id: i64,
+}
+
+impl Todo {
+    fn find(self, id: i64) -> i64 {
+        let mut i: usize = 0
+        while i < self.items.len() {
+            if self.items[i].id == id { return i as i64 }
+            i += 1
+        }
+        -1
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut todo = Todo { items: Vec::new(), next_id: 1 }
+    for line in text.lines() {
+        if line.trim().len() == 0 { continue }
+        let (cmd, rest) = match line.find(" ") {
+            Some(p) => (line.as_str()[0..p].to_string(), line.as_str()[p + 1..].to_string()),
+            None => (line.to_string(), "".to_string()),
+        }
+        if cmd == "add" {
+            if rest.len() == 0 {
+                println("error: missing argument")
+            } else {
+                todo.items.push(Item { id: todo.next_id, text: rest, done: false })
+                println("added ${todo.next_id}")
+                todo.next_id += 1
+            }
+        } else if cmd == "done" || cmd == "del" {
+            if rest.len() == 0 {
+                println("error: missing argument")
+                continue
+            }
+            let id = rest.parse::<i64>().unwrap_or(0)
+            let idx = todo.find(id)
+            if idx < 0 {
+                println("error: no such item ${id}")
+            } else if cmd == "del" {
+                todo.items.remove(idx as usize)
+                println("deleted ${id}")
+            } else if todo.items[idx as usize].done {
+                println("error: already done ${id}")
+            } else {
+                todo.items[idx as usize].done = true
+                println("done ${id}")
+            }
+        } else if cmd == "list" {
+            let f = if rest.len() == 0 { "all".to_string() } else { rest }
+            if f != "all" && f != "open" && f != "done" {
+                println("error: bad filter ${f}")
+                continue
+            }
+            let mut shown = 0
+            for it in todo.items.iter() {
+                if f == "all" || (f == "done" && it.done) || (f == "open" && !it.done) {
+                    let mark = if it.done { "x" } else { " " }
+                    println("${it.id} [${mark}] ${it.text}")
+                    shown += 1
+                }
+            }
+            if shown == 0 { println("(none)") }
+        } else if cmd == "clear" {
+            let before = todo.items.len()
+            let mut keep: Vec<Item> = Vec::new()
+            for it in todo.items {
+                if !it.done { keep.push(it) }
+            }
+            todo.items = keep
+            println("cleared ${before - todo.items.len()}")
+        } else if cmd == "count" {
+            let mut open = 0
+            let mut done = 0
+            for it in todo.items.iter() {
+                if it.done { done += 1 } else { open += 1 }
+            }
+            println("open=${open} done=${done}")
+        } else {
+            println("error: unknown command ${cmd}")
+        }
+    }
+}

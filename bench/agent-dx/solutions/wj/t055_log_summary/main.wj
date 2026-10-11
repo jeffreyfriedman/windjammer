@@ -1,0 +1,74 @@
+use std::fs
+use std::collections::HashMap
+
+fn digits(s: string, from: usize, to: usize) -> bool {
+    let cs: Vec<char> = s.chars().collect()
+    let mut i = from
+    while i < to {
+        if cs[i] < '0' || cs[i] > '9' { return false }
+        i += 1
+    }
+    true
+}
+
+fn valid_ts(t: string) -> bool {
+    if t.len() != 19 { return false }
+    let cs: Vec<char> = t.chars().collect()
+    digits(t.clone(), 0, 4) && cs[4] == '-' && digits(t.clone(), 5, 7) && cs[7] == '-' && digits(t.clone(), 8, 10)
+        && cs[10] == 'T' && digits(t.clone(), 11, 13) && cs[13] == ':' && digits(t.clone(), 14, 16) && cs[16] == ':' && digits(t.clone(), 17, 19)
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut levels: HashMap<string, i64> = HashMap::new()
+    let mut comps: HashMap<string, i64> = HashMap::new()
+    let mut errors: Vec<string> = Vec::new()
+    let mut first = ""
+    let mut last = ""
+    let mut malformed: i64 = 0
+    let mut any = false
+    for line in text.lines() {
+        let parts: Vec<string> = line.splitn(4, " ").map(|s| s.to_string()).collect()
+        let lv = if parts.len() > 1 { parts[1].clone() } else { "".to_string() }
+        let level_ok = lv == "DEBUG" || lv == "INFO" || lv == "WARN" || lv == "ERROR"
+        if parts.len() < 3 || !valid_ts(parts[0].clone()) || !level_ok || parts[2].len() == 0 {
+            malformed += 1
+            continue
+        }
+        let ts = parts[0].clone()
+        let comp = parts[2].clone()
+        let msg = if parts.len() > 3 { parts[3].clone() } else { "".to_string() }
+        levels.insert(lv.clone(), levels.get(lv.as_str()).unwrap_or(&0) + 1)
+        comps.insert(comp.clone(), comps.get(comp.as_str()).unwrap_or(&0) + 1)
+        if !any || ts < first { first = ts.clone() }
+        if !any || ts > last { last = ts.clone() }
+        any = true
+        if lv == "ERROR" {
+            errors.push("  [${comp}] ${msg}")
+        }
+    }
+    println("levels: DEBUG=${levels.get("DEBUG").unwrap_or(&0)} INFO=${levels.get("INFO").unwrap_or(&0)} WARN=${levels.get("WARN").unwrap_or(&0)} ERROR=${levels.get("ERROR").unwrap_or(&0)}")
+    println("top components:")
+    let mut items: Vec<(string, i64)> = Vec::new()
+    for (k, v) in comps {
+        items.push((k, v))
+    }
+    items.sort_by(|a, b| {
+        if a.1 != b.1 { b.1.cmp(a.1) } else { a.0.cmp(b.0) }
+    })
+    let mut i: usize = 0
+    while i < items.len() && i < 3 {
+        println("  ${items[i].0} ${items[i].1}")
+        i += 1
+    }
+    if any {
+        println("first: ${first}")
+        println("last: ${last}")
+    } else {
+        println("first: -")
+        println("last: -")
+    }
+    println("errors:")
+    for e in errors { println(e) }
+    println("malformed: ${malformed}")
+}

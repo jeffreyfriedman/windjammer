@@ -1,0 +1,67 @@
+use std::fs
+use std::sync::mpsc
+use std::thread
+
+fn apply(stage: string, rx: mpsc::Receiver<i64>) -> mpsc::Receiver<i64> {
+    let (tx, out) = mpsc::channel()
+    thread::spawn(move || {
+        let mut prev1: i64 = 0
+        let mut prev2: i64 = 0
+        let mut seen: i64 = 0
+        for x in rx {
+            let mut keep = true
+            let mut v = x
+            if stage.starts_with("add:") {
+                v = x + stage[4..].parse::<i64>().unwrap_or(0)
+            } else if stage.starts_with("mul:") {
+                v = x * stage[4..].parse::<i64>().unwrap_or(0)
+            } else if stage.starts_with("gt:") {
+                keep = x > stage[3..].parse::<i64>().unwrap_or(0)
+            } else if stage == "even" {
+                keep = x % 2 == 0
+            } else if stage == "odd" {
+                keep = x % 2 != 0
+            } else {
+                if (seen >= 1 && x == prev1) || (seen >= 2 && x == prev2) {
+                    keep = false
+                }
+                prev2 = prev1
+                prev1 = x
+                seen += 1
+            }
+            if keep {
+                tx.send(v)
+            }
+        }
+    })
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let lines: Vec<string> = text.split("\n").map(|s| s.to_string()).collect()
+    let n = lines[0].trim().parse::<i64>().unwrap_or(0)
+    let stages: Vec<string> = lines[1].split_whitespace().map(|s| s.to_string()).collect()
+    let (tx, first) = mpsc::channel()
+    thread::spawn(move || {
+        let mut i: i64 = 1
+        while i <= n {
+            tx.send(i)
+            i += 1
+        }
+    })
+    let mut rx = first
+    for st in stages {
+        rx = apply(st, rx)
+    }
+    let mut items: Vec<i64> = Vec::new()
+    for x in rx {
+        items.push(x)
+    }
+    let strs: Vec<string> = items.iter().map(|x| x.to_string()).collect()
+    let mut sum: i64 = 0
+    for x in items.iter() { sum += *x }
+    println("${items.len()}")
+    println(strs.join(" "))
+    println("sum=${sum}")
+}

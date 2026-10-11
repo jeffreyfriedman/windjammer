@@ -25,14 +25,14 @@
  {
   "args": [],
   "files": {
-   "B": "upper",
+   "Bee": "upper",
    "a b": "space",
    "a/z": "zz",
    "b/a": "1",
    "b/c/d/e.txt": "deep"
   },
   "stdin": "",
-  "stdout": "B (5 bytes)\na/\n  z (2 bytes)\na b (5 bytes)\nb/\n  a (1 bytes)\n  c/\n    d/\n      e.txt (4 bytes)\n4 directories, 5 files\n"
+  "stdout": "Bee (5 bytes)\na/\n  z (2 bytes)\na b (5 bytes)\nb/\n  a (1 bytes)\n  c/\n    d/\n      e.txt (4 bytes)\n4 directories, 5 files\n"
  },
  {
   "args": [],

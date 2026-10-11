@@ -1,0 +1,93 @@
+use std::fs
+
+struct Seq {
+    kind: string,
+    index: i64,
+    a: i64,
+    b: i64,
+}
+
+impl Seq {
+    fn new(kind: string) -> Seq {
+        Seq { kind: kind, index: 0, a: 0, b: 1 }
+    }
+}
+
+impl Iterator for Seq {
+    type Item = i64
+
+    fn next(self) -> Option<i64> {
+        let i = self.index
+        self.index += 1
+        if self.kind == "fib" {
+            let v = self.a
+            let t = self.a + self.b
+            self.a = self.b
+            self.b = t
+            Some(v)
+        } else if self.kind == "squares" {
+            Some((i + 1) * (i + 1))
+        } else if self.kind == "evens" {
+            Some(2 * i)
+        } else if self.kind == "triangular" {
+            Some((i + 1) * (i + 2) / 2)
+        } else {
+            // primes: self.a holds the last prime (starts at 0)
+            let mut c = if self.a < 2 { 2 } else { self.a + 1 }
+            loop {
+                let mut d: i64 = 2
+                let mut is_p = true
+                while d * d <= c {
+                    if c % d == 0 {
+                        is_p = false
+                        break
+                    }
+                    d += 1
+                }
+                if is_p { break }
+                c += 1
+            }
+            self.a = c
+            Some(c)
+        }
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() < 3 { continue }
+        let n = p[2].parse::<i64>().unwrap_or(0)
+        let mut seq = Seq::new(p[0].clone())
+        let mut out: Vec<i64> = Vec::new()
+        if p[1] == "take" || p[1] == "sum" {
+            let mut k: i64 = 0
+            while k < n {
+                match seq.next() {
+                    Some(v) => { out.push(v) }
+                    None => { break }
+                }
+                k += 1
+            }
+        } else {
+            loop {
+                match seq.next() {
+                    Some(v) => {
+                        if v >= n { break }
+                        out.push(v)
+                    }
+                    None => { break }
+                }
+            }
+        }
+        if p[1] == "sum" {
+            let mut s: i64 = 0
+            for v in out { s += v }
+            println("${s}")
+        } else {
+            let strs: Vec<string> = out.iter().map(|x| x.to_string()).collect()
+            println(strs.join(" "))
+        }
+    }
+}

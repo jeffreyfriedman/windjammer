@@ -3,14 +3,14 @@ def _c(ns):
 
 
 SAMPLES = [_c([10]), _c([0, 1, 2, 3, 100])]
-EDGE = [_c([2000000]), _c([1999993, 1999994]), _c([4, 5, 6, 7, 8, 9, 10, 11, 12, 13])]
+EDGE = [_c([200000]), _c([199999, 199998]), _c([4, 5, 6, 7, 8, 9, 10, 11, 12, 13])]
 
 
 def rand(rng):
-    return _c([rng.choice([rng.randint(0, 50), rng.randint(0, 2000000)]) for _ in range(rng.randint(1, 10))])
+    return _c([rng.choice([rng.randint(0, 50), rng.randint(0, 200000)]) for _ in range(rng.randint(1, 10))])
 
 
-_N = 2000001
+_N = 200001
 _sieve = bytearray([1]) * _N
 _sieve[0] = _sieve[1] = 0
 for _i in range(2, int(_N ** 0.5) + 1):

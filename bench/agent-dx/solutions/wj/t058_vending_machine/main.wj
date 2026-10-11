@@ -1,0 +1,63 @@
+use std::fs
+
+fn change_for(amount: i64) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new()
+    let mut left = amount
+    let denoms: Vec<i64> = vec![100, 25, 10, 5]
+    for d in denoms {
+        while left >= d {
+            out.push(d)
+            left -= d
+        }
+    }
+    out
+}
+
+fn show_coins(c: Vec<i64>) -> string {
+    if c.len() == 0 { return "none".to_string() }
+    let strs: Vec<string> = c.iter().map(|x| x.to_string()).collect()
+    strs.join(" ")
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut credit: i64 = 0
+    let mut cola: i64 = 3
+    let mut chips: i64 = 2
+    let mut gum: i64 = 5
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        if p[0] == "coin" {
+            let v = p[1].parse::<i64>().unwrap_or(0)
+            if v == 5 || v == 10 || v == 25 || v == 100 {
+                credit += v
+                println("credit ${credit}")
+            } else {
+                println("rejected ${v}")
+            }
+        } else if p[0] == "select" {
+            let item = p[1].clone()
+            let price = if item == "cola" { 150 } else if item == "chips" { 100 } else if item == "gum" { 35 } else { 0 }
+            let stock = if item == "cola" { cola } else if item == "chips" { chips } else { gum }
+            if price == 0 {
+                println("error: unknown item ${item}")
+            } else if stock == 0 {
+                println("error: sold out ${item}")
+            } else if credit < price {
+                println("error: need ${price - credit} more")
+            } else {
+                if item == "cola" { cola -= 1 } else if item == "chips" { chips -= 1 } else { gum -= 1 }
+                let ch = change_for(credit - price)
+                credit = 0
+                println("dispensed ${item} change: ${show_coins(ch)}")
+            }
+        } else if p[0] == "refund" {
+            let ch = change_for(credit)
+            credit = 0
+            println("refund: ${show_coins(ch)}")
+        } else {
+            println("credit=${credit} cola=${cola} chips=${chips} gum=${gum}")
+        }
+    }
+}

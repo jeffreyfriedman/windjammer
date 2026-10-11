@@ -1,0 +1,100 @@
+use std::fs
+use std::collections::HashMap
+
+struct Stock {
+    qty: i64,
+    price: i64,
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut inv: HashMap<string, Stock> = HashMap::new()
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let cmd = p[0].clone()
+        if cmd == "stock" {
+            let sku = p[1].clone()
+            let q = p[2].parse::<i64>().unwrap_or(0)
+            let pr = p[3].parse::<i64>().unwrap_or(0)
+            if q <= 0 {
+                println("error: bad quantity")
+                continue
+            }
+            let existing = match inv.get(sku.as_str()) {
+                Some(s) => Some(Stock { qty: s.qty, price: s.price }),
+                None => None,
+            }
+            match existing {
+                Some(s) => {
+                    if s.price != pr {
+                        println("error: price mismatch for ${sku}")
+                    } else {
+                        inv.insert(sku, Stock { qty: s.qty + q, price: s.price })
+                        println("ok ${s.qty + q}")
+                    }
+                }
+                None => {
+                    inv.insert(sku, Stock { qty: q, price: pr })
+                    println("ok ${q}")
+                }
+            }
+        } else if cmd == "sell" {
+            let sku = p[1].clone()
+            let q = p[2].parse::<i64>().unwrap_or(0)
+            if q <= 0 {
+                println("error: bad quantity")
+                continue
+            }
+            let existing = match inv.get(sku.as_str()) {
+                Some(s) => Some(Stock { qty: s.qty, price: s.price }),
+                None => None,
+            }
+            match existing {
+                Some(s) => {
+                    if s.qty < q {
+                        println("error: insufficient stock for ${sku} (have ${s.qty}, need ${q})")
+                    } else {
+                        inv.insert(sku, Stock { qty: s.qty - q, price: s.price })
+                        println("sold ${q} for ${q * s.price}")
+                    }
+                }
+                None => { println("error: unknown sku ${sku}") }
+            }
+        } else if cmd == "remove" {
+            let sku = p[1].clone()
+            let existing = match inv.get(sku.as_str()) {
+                Some(s) => Some(Stock { qty: s.qty, price: s.price }),
+                None => None,
+            }
+            match existing {
+                Some(s) => {
+                    if s.qty > 0 {
+                        println("error: not empty ${sku}")
+                    } else {
+                        inv.remove(sku.as_str())
+                        println("removed ${sku}")
+                    }
+                }
+                None => { println("error: unknown sku ${sku}") }
+            }
+        } else {
+            if inv.len() == 0 {
+                println("(empty)")
+                continue
+            }
+            let mut skus: Vec<string> = Vec::new()
+            for (k, v) in inv.iter() {
+                skus.push(k.clone())
+            }
+            skus.sort()
+            let mut total: i64 = 0
+            for k in skus {
+                let s = inv.get(k.as_str()).unwrap()
+                println("${k} ${s.qty} x ${s.price} = ${s.qty * s.price}")
+                total += s.qty * s.price
+            }
+            println("total value ${total}")
+        }
+    }
+}

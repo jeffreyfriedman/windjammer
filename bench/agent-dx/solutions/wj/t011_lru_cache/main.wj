@@ -1,0 +1,72 @@
+use std::fs
+
+struct Lru {
+    keys: Vec<i64>,
+    vals: Vec<i64>,
+    cap: usize,
+}
+
+// keys[0] is the least recently used, last is the most recent
+impl Lru {
+    fn find(self, k: i64) -> i64 {
+        let mut i: usize = 0
+        while i < self.keys.len() {
+            if self.keys[i] == k {
+                return i as i64
+            }
+            i += 1
+        }
+        -1
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut lines = text.lines()
+    let cap = lines.next().unwrap_or("1").trim().parse::<usize>().unwrap_or(1)
+    let mut cache = Lru { keys: Vec::new(), vals: Vec::new(), cap: cap }
+    for line in lines {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        if p[0] == "put" {
+            let k = p[1].parse::<i64>().unwrap_or(0)
+            let v = p[2].parse::<i64>().unwrap_or(0)
+            let idx = cache.find(k)
+            if idx >= 0 {
+                cache.keys.remove(idx as usize)
+                cache.vals.remove(idx as usize)
+            }
+            cache.keys.push(k)
+            cache.vals.push(v)
+            if cache.keys.len() > cache.cap {
+                let ek = cache.keys.remove(0)
+                cache.vals.remove(0)
+                println("evict ${ek}")
+            }
+        } else if p[0] == "get" {
+            let k = p[1].parse::<i64>().unwrap_or(0)
+            let idx = cache.find(k)
+            if idx < 0 {
+                println("-1")
+            } else {
+                let kk = cache.keys.remove(idx as usize)
+                let vv = cache.vals.remove(idx as usize)
+                cache.keys.push(kk)
+                cache.vals.push(vv)
+                println("${vv}")
+            }
+        } else {
+            if cache.keys.len() == 0 {
+                println("<empty>")
+            } else {
+                let mut out: Vec<string> = Vec::new()
+                let mut i = cache.keys.len()
+                while i > 0 {
+                    i -= 1
+                    out.push(cache.keys[i].to_string())
+                }
+                println(out.join(" "))
+            }
+        }
+    }
+}
