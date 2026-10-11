@@ -38,7 +38,7 @@ impl FloatInference {
                         let current = self.inferred_types.get(&expr_id).copied();
                         match current {
                             Some(FloatType::F64) => {
-                                if std::env::var("WJ_DEBUG_FLOAT_CONFLICT").is_ok() {
+                                if crate::debug_env::enabled("WJ_DEBUG_FLOAT_CONFLICT") {
                                     let source_text = self
                                         .debug_source
                                         .as_ref()
@@ -78,7 +78,7 @@ impl FloatInference {
                         let current = self.inferred_types.get(&expr_id).copied();
                         match current {
                             Some(FloatType::F32) => {
-                                if std::env::var("WJ_DEBUG_FLOAT_CONFLICT").is_ok() {
+                                if crate::debug_env::enabled("WJ_DEBUG_FLOAT_CONFLICT") {
                                     let source_text = self
                                         .debug_source
                                         .as_ref()

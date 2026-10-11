@@ -23,7 +23,6 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 - [`EXPORT_TARGETS.md`](EXPORT_TARGETS.md) - Compilation targets (Rust, Go, JS)
 - [`MULTI_LANGUAGE_OPTIMIZATION.md`](MULTI_LANGUAGE_OPTIMIZATION.md) - Multi-backend optimization
 - [`MULTI_LANGUAGE_SDK_ARCHITECTURE.md`](MULTI_LANGUAGE_SDK_ARCHITECTURE.md) - SDK design
-- [`PLATFORM_ABSTRACTION.md`](PLATFORM_ABSTRACTION.md) - Platform abstraction layer
 - [`WEB_EXPORT_STRATEGY.md`](WEB_EXPORT_STRATEGY.md) - Web/WASM export
 
 **Compiler Internals:**
@@ -39,8 +38,7 @@ Welcome to the Windjammer documentation! This folder contains all core documenta
 
 **Project Management:**
 - [`PUBLISHING.md`](PUBLISHING.md) - Publishing and release process
-- [`VERSIONING_POLICY.md`](VERSIONING_POLICY.md) - Versioning strategy
-- [`VERSIONING_STRATEGY.md`](VERSIONING_STRATEGY.md) - Version management
+- [`VERSIONING.md`](VERSIONING.md) - Versioning and release policy
 
 ### Subdirectories
 
@@ -50,13 +48,14 @@ Request for Comments (RFCs) for major features:
 - **Language**: WJ-LANG-01 (Shader Language)
 - **Syntax**: WJ-SYN-01 (Pipe Operator), WJ-SYN-02 (Syntax Improvements)
 - **Implementation**: WJ-IMPL-01 (Compiler Refactoring), WJ-IMPL-02 (FFI Generation)
-- **Performance**: WJ-PERF-01 (Economic Efficiency) *[coming soon]*
+- **Performance**: WJ-PERF-01 (Economic Efficiency)
+- **Concurrency / packages / maps / strings**: WJ-CONC-01, WJ-PKG-01, WJ-LANG-03, WJ-LANG-04
 
 See [`proposals/rfcs/README.md`](proposals/rfcs/README.md) for full RFC index.
 
 #### [`design/`](design/)
 Language design documents:
-- Traits, async execution, auto-reference, multi-target codegen, error mapping, etc.
+- Traits, async execution (superseded), multi-target codegen, error mapping, etc.
 
 #### [`language-guide/`](language-guide/)
 User-facing language documentation and tutorials.
@@ -64,8 +63,14 @@ User-facing language documentation and tutorials.
 #### [`tutorials/`](tutorials/)
 Step-by-step tutorials for learning Windjammer.
 
-#### [`implementation/`](implementation/)
-Implementation-specific technical documents.
+#### [`adr/`](adr/README.md)
+Architecture decision records. All are `Proposed` until the project owner accepts them.
+
+#### [`archive/`](archive/README.md)
+Superseded documents kept for history.
+
+#### [`known-gaps.md`](known-gaps.md)
+Ranked gaps between the docs/RFCs and the code.
 
 ## Quick Navigation
 
@@ -88,7 +93,7 @@ Implementation-specific technical documents.
 
 Windjammer is built on these core principles:
 1. **Compiler Does the Hard Work, Not the Developer** - 80% of Rust's power with 20% of its complexity
-2. **Inference When It Doesn't Matter, Explicit When It Does** - Automatic ownership, explicit mutability
+2. **Inference When It Doesn't Matter, Explicit When It Does** - Automatic ownership; whether local mutability is inferred or explicit is an open decision ([ADR-0002](adr/0002-local-mutability.md))
 3. **No Workarounds, Only Proper Fixes** - Long-term robustness over short-term hacks
 4. **Backend-Agnostic by Design** - Compiles to Rust, Go, JavaScript, and more
 
@@ -102,10 +107,10 @@ See [`.cursor/rules/`](../.cursor/rules/) for detailed development rules.
 - Update this README if adding major new categories
 
 **Archiving old docs:**
-- Session logs and obsolete status reports are not kept in the repo (recover from git history if needed)
+- Superseded documents move to [`archive/`](archive/README.md) with a one-line reason; session logs and status snapshots are not kept
 - Keep only current, relevant documentation in root
 
-**Last cleaned:** 2026-03-21
+**Last cleaned:** 2026-10-10
 
 ---
 

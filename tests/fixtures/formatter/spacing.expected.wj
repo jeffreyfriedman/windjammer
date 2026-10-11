@@ -1,0 +1,7 @@
+fn add(a: int, b: int) -> int {
+    let x = a + b * 2
+    let y = -x
+    let z = !flag && other
+    if x>y { return x }
+    x
+}

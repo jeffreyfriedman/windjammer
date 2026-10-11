@@ -72,9 +72,7 @@ fn shadow_validation_strict_mode_passes_when_clean() {
         }
     "#,
     );
-    windjammer::ir::shadow::set_shadow_validate_strict(true);
-    let finish = finish_shadow_validation(&result);
-    windjammer::ir::shadow::set_shadow_validate_strict(false);
+    let finish = finish_shadow_validation(&result, true);
     assert!(finish.is_ok(), "clean result should pass strict mode");
 }
 

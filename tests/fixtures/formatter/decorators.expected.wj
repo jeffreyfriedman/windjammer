@@ -1,0 +1,5 @@
+@derive(Debug, Clone)
+struct S { a: int }
+
+@route("GET", "/x")
+pub fn handler() -> string { "ok" }

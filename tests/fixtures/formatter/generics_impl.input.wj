@@ -1,0 +1,8 @@
+impl<T:Clone> Stack<T>{
+pub fn push(self,item:T){
+self.items.push(item)
+}
+}
+trait Shape{
+fn area(self)->f64
+}
