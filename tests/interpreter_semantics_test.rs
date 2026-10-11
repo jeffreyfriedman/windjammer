@@ -307,3 +307,117 @@ fn unsupported_features_fail_loudly_not_silently() {
 fn main_exit_value_and_explicit_panic() {
     expect_err("fn main() {\n    panic(\"boom {}\", 7)\n}\n", "boom 7");
 }
+
+// ---------------------------------------------------------------- ADR-0014 Phase 1 intrinsics
+// Expected texts are hand-derived from rustc's panic/format messages (verified against compiled
+// output in interpreter_differential_test.rs), never from the interpreter's own output.
+
+fn main_with(body: &str) -> String {
+    format!("fn main() {{\n    let x = 5\n    let f = 2.0\n    let s = \"s\"\n    {}\n}}\n", body)
+}
+
+#[test]
+fn intrinsic_panic_family_messages_match_rust() {
+    for (body, want) in [
+        ("panic()", "explicit panic"),
+        ("panic(\"boom ${x}\")", "boom 5"),
+        ("todo()", "not yet implemented"),
+        ("todo(\"later ${x}\")", "not yet implemented: later 5"),
+        ("unreachable()", "internal error: entered unreachable code"),
+        ("unreachable(\"state ${x}\")", "internal error: entered unreachable code: state 5"),
+        ("assert(x == 6)", "assertion failed: x == 6"),
+        ("assert(x == 6, \"x was ${x}\")", "x was 5"),
+        ("assert_eq(x, 6)", "assertion `left == right` failed\n  left: 5\n right: 6"),
+        ("assert_eq(x, 6, \"ctx ${x}\")", "assertion `left == right` failed: ctx 5\n  left: 5\n right: 6"),
+        ("assert_ne(x, 5)", "assertion `left != right` failed\n  left: 5\n right: 5"),
+        ("assert_ne(x, 5, \"same\")", "assertion `left != right` failed: same\n  left: 5\n right: 5"),
+        ("assert_eq(\"a\", \"b\")", "left: \"a\"\n right: \"b\""),
+    ] {
+        match run(&main_with(body)) {
+            Ok(o) => panic!("{} must panic, printed {:?}", body, o),
+            Err(e) => assert!(e.contains(want), "{}: error {:?} lacks {:?}", body, e, want),
+        }
+    }
+}
+
+#[test]
+fn legacy_macro_spellings_behave_like_the_canonical_calls() {
+    for (legacy, canon) in [
+        ("println!(\"v={} {:?}\", x, s)", "println(\"v=${x} ${s:?}\")"),
+        ("print!(\"a{}\", x)", "print(\"a${x}\")"),
+        ("println!(\"{{}} lit\")", "println(\"{} lit\")"),
+        ("assert!(x == 5, \"m {}\", x)", "assert(x == 5, \"m ${x}\")"),
+        ("assert_eq!(x, 5)", "assert_eq(x, 5)"),
+        ("assert_ne!(x, 6, \"n\")", "assert_ne(x, 6, \"n\")"),
+        ("let y = dbg!(x)", "let y = debug(x)"),
+        ("let v = vec![1, 2, 3]\n    println(\"${v:?}\")", "let v = [1, 2, 3]\n    println(\"${v:?}\")"),
+        ("eprintln!(\"e {}\", x)", "stderr.println(\"e ${x}\")"),
+    ] {
+        assert_eq!(run(&main_with(legacy)), run(&main_with(canon)), "{} vs {}", legacy, canon);
+    }
+    // and the failing forms produce the same panic text
+    for (legacy, canon) in [
+        ("assert!(x == 6)", "assert(x == 6)"),
+        ("assert_eq!(x, 6, \"c {}\", x)", "assert_eq(x, 6, \"c ${x}\")"),
+        ("todo!(\"w {}\", x)", "todo(\"w ${x}\")"),
+        ("unreachable!()", "unreachable()"),
+    ] {
+        let (a, b) = (run(&main_with(legacy)).unwrap_err(), run(&main_with(canon)).unwrap_err());
+        let strip = |s: String| s.split(" (").next().unwrap().to_string();
+        assert_eq!(strip(a), strip(b), "{} vs {}", legacy, canon);
+    }
+}
+
+#[test]
+fn interpolation_specs_and_literal_braces() {
+    expect(
+        &main_with("println(\"${f:.2}|${x:?}|${x:>4}|${x:<4}|${x:04}|${x:x}|${s:?}|{lit}|${x}\")"),
+        "2.00|5|   5|5   |0005|5|\"s\"|{lit}|5\n",
+    );
+    // a plain (non-interpolated) literal is printed verbatim, braces included
+    expect(&main_with("println(\"{x} {{y}}\")"), "{x} {{y}}\n");
+}
+
+#[test]
+fn list_literal_is_a_growable_vec() {
+    expect(
+        "struct B {\n    items: Vec<int>,\n}\nfn main() {\n    let mut v = [1, 2]\n    v.push(3)\n    let mut b = B { items: [9] }\n    b.items.push(8)\n    let e: Vec<int> = []\n    println(\"${v:?} ${b.items:?} ${e.len()}\")\n}\n",
+        "[1, 2, 3] [9, 8] 0\n",
+    );
+}
+
+#[test]
+fn closure_literal_in_call_position_and_pipe() {
+    expect(&main_with("println(\"${(|v| v + 1)(x)} ${x |> |v| v * 2} ${x |> |v| v + 1 |> |w| w * 10}\")"), "6 10 60\n");
+}
+
+#[test]
+fn debug_returns_its_argument_and_stays_off_stdout() {
+    // run() captures stdout only: `debug` must not leak into it and must return the value.
+    expect(&main_with("let y = debug(x + 1)\n    println(\"${y}\")"), "6\n");
+}
+
+#[test]
+fn user_definitions_shadow_intrinsic_names() {
+    expect(
+        "fn debug(n: int) -> int {\n    n * 100\n}\nfn main() {\n    println(\"${debug(2)}\")\n}\n",
+        "200\n",
+    );
+}
+
+#[test]
+fn unsupported_intrinsic_shapes_are_explicit_errors() {
+    for (body, needle) in [
+        ("let y = debug(x, x)", "`debug` takes exactly one argument"),
+        ("assert()", "without a condition"),
+        ("assert_eq(x)", "needs two operands"),
+        ("println(a: x)", "named arguments"),
+    ] {
+        expect_err(&main_with(body), needle);
+    }
+}
+
+#[test]
+fn format_template_with_unused_argument_is_rejected() {
+    expect_err(&main_with("println(\"no placeholder\", x)"), "argument never used");
+}

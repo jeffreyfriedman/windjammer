@@ -1,0 +1,45 @@
+// seeds: 1 3 4 8
+// ADR-0014 list literal: [a, b, c] is a growable Vec in let/struct-field position; `let a: [T; N]` stays fixed.
+struct Bag {
+    items: Vec<int>,
+}
+
+fn main() {
+    let n: int = __SEED__
+    let n2 = n * 2
+    let n3 = n * 3
+    let n4 = n * 4
+    let hundred: int = 100
+    let one: int = 1
+    let two: int = 2
+    let n5 = n + 5
+    let n6 = n + 6
+    let n1 = n + one
+    let nn = n + two
+    let mut xs = [n, n2, n3]
+    xs.push(n4)
+    xs.push(hundred)
+    println("${xs:?} ${xs.len()}")
+    let mut bag = Bag { items: [n, one] }
+    bag.items.push(n5)
+    bag.items.push(n6)
+    println("${bag.items:?} ${bag.items.len()}")
+    let fixed: [int; 3] = [n, n1, nn]
+    println("${fixed:?} ${fixed.len()} ${fixed[2]}")
+    let mut e: Vec<int> = []
+    let mut i = 0
+    while i < n {
+        e.push(i * i)
+        i += 1
+    }
+    println("${e:?}")
+    let mut total: int = 0
+    let mut k = 0
+    while k < xs.len() {
+        total += xs[k]
+        k += 1
+    }
+    println("total=${total}")
+    let w = vec![n, n]
+    println("${w:?}")
+}

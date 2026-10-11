@@ -12,6 +12,7 @@ pub mod error;
 mod eval_expr;
 mod eval_stmt;
 mod format;
+mod intrinsics;
 pub mod int;
 pub mod loader;
 mod ops;

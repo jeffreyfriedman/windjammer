@@ -1,0 +1,10 @@
+n=42 f=6.00 f3=6.000 q="w-bat"
+r=[    42] l=[42    ] z=0042 hex=2a c=[  w-bat  ]
+sum=43 sq=1764 half=21.0
+literal {braces} and 42 kept
+v=[42, 43, 44] len=3
+o=Some(42)
+ab42
+
+
+end

@@ -38,12 +38,6 @@ pub(crate) fn expr_loc(e: &'static Expression<'static>) -> Option<&'static Locat
     }
 }
 
-/// `println("... ${x} ...")`: the argument is already a finished string (an interpolation
-/// lowered to `format!`), so braces inside it are data, not format directives.
-pub(crate) fn is_prebuilt_string(e: &Expression<'static>) -> bool {
-    matches!(e, Expression::MacroInvocation { name, .. } if name == "format")
-}
-
 pub(crate) fn stmt_loc(s: &'static Statement<'static>) -> Option<&'static Location> {
     use Statement::*;
     match s {
@@ -477,100 +471,26 @@ impl Interpreter {
         args: &'static [&'static Expression<'static>],
         is_repeat: bool,
     ) -> R {
+        if let Some(intr) = crate::intrinsics::Intrinsic::from_macro_name(name) {
+            let args: Vec<&'static Expression<'static>> = args.to_vec();
+            return self.eval_intrinsic(intr, whole, &args, is_repeat);
+        }
         match name {
-            "println" | "print" | "eprintln" | "eprint" => {
-                let vals = self.eval_all(args)?;
-                let mut s = if args.len() == 1 && is_prebuilt_string(args[0]) {
-                    self.display_string(&vals[0])?
-                } else {
-                    self.format_args(&vals)?
-                };
-                if name.ends_with("ln") {
-                    s.push('\n');
-                }
-                if name.starts_with('e') {
-                    self.write_err(&s);
-                } else {
-                    self.write_out(&s);
-                }
-                Ok(Value::Unit)
-            }
-            "format" => {
-                let vals = self.eval_all(args)?;
-                Ok(Value::str(self.format_args(&vals)?))
-            }
-            "vec" => {
-                if is_repeat && args.len() == 2 {
-                    let x = self.eval(args[0])?;
-                    let n = self.eval(args[1])?;
-                    let n = match n {
-                        Value::Int(n, _) if n >= 0 => n as usize,
-                        _ => return Err(semantic("vec![x; n] needs a non-negative integer length")),
-                    };
-                    return Ok(Value::vec(vec![x; n]));
-                }
-                Ok(Value::vec(self.eval_all(args)?))
-            }
-            "panic" | "unreachable" | "todo" | "unimplemented" => {
-                let vals = self.eval_all(args)?;
-                let msg = if vals.is_empty() {
-                    match name {
-                        "todo" => "not yet implemented".to_string(),
-                        "unimplemented" => "not implemented".to_string(),
-                        "unreachable" => "internal error: entered unreachable code".to_string(),
-                        _ => "explicit panic".to_string(),
+            "unimplemented" | "debug_assert" | "debug_assert_eq" | "debug_assert_ne" => {
+                let canon = name.trim_start_matches("debug_");
+                match (name, crate::intrinsics::Intrinsic::from_call_name(canon)) {
+                    (_, Some(intr)) if name != "unimplemented" => self.eval_intrinsic(intr, whole, args, false),
+                    _ => {
+                        let m = match args.len() {
+                            0 => "not implemented".to_string(),
+                            _ => {
+                                let vals = self.eval_all(args)?;
+                                format!("not implemented: {}", self.format_args(&vals)?)
+                            }
+                        };
+                        Err(self.panic_at(whole, m))
                     }
-                } else {
-                    let m = self.format_args(&vals)?;
-                    if name == "unreachable" { format!("internal error: entered unreachable code: {}", m) } else { m }
-                };
-                Err(panic_ctl(msg))
-            }
-            "assert" | "debug_assert" => {
-                if args.is_empty() {
-                    return Err(semantic("assert! needs a condition"));
                 }
-                let c = self.eval(args[0])?;
-                if matches!(c, Value::Bool(true)) {
-                    return Ok(Value::Unit);
-                }
-                let msg = if args.len() > 1 {
-                    let vals = self.eval_all(&args[1..])?;
-                    self.format_args(&vals)?
-                } else {
-                    "assertion failed".to_string()
-                };
-                Err(self.panic_at(whole, msg))
-            }
-            "assert_eq" | "assert_ne" | "debug_assert_eq" | "debug_assert_ne" => {
-                if args.len() < 2 {
-                    return Err(semantic("assert_eq! needs two operands"));
-                }
-                let a = self.eval(args[0])?;
-                let b = self.eval(args[1])?;
-                let want_eq = name.ends_with("eq");
-                let eq = matches!(self.binary(BinaryOp::Eq, a.clone(), b.clone())?, Value::Bool(true));
-                if eq == want_eq {
-                    return Ok(Value::Unit);
-                }
-                let extra = if args.len() > 2 {
-                    let vals = self.eval_all(&args[2..])?;
-                    format!(": {}", self.format_args(&vals)?)
-                } else {
-                    String::new()
-                };
-                let l = self.debug_string(&a)?;
-                let r = self.debug_string(&b)?;
-                Err(self.panic_at(
-                    whole,
-                    format!(
-                        "assertion `left {} right` failed{}\n  left: {}\n right: {}",
-                        if want_eq { "==" } else { "!=" },
-                        extra,
-                        l,
-                        r
-                    ),
-                ))
             }
             "write" | "writeln" => {
                 if args.is_empty() {
@@ -602,13 +522,6 @@ impl Interpreter {
                     }
                     other => Err(unsupported(format!("write! to {}", other.type_name()))),
                 }
-            }
-            "dbg" => {
-                let vals = self.eval_all(args)?;
-                let v = vals.into_iter().next().unwrap_or(Value::Unit);
-                let s = self.debug_string(&v)?;
-                self.write_err(&format!("[dbg] {}\n", s));
-                Ok(v)
             }
             "matches" => Err(unsupported("matches! macro")),
             other => Err(unsupported(format!("macro `{}!`", other))),
