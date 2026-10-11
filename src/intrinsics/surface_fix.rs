@@ -474,7 +474,15 @@ impl Rewriter {
                     out.push_str(&text[seg_start..body_start]);
                     let rewritten =
                         self.rewrite_range(&text[body_start..body_end], base + body_start, false);
-                    out.push_str(&rewritten);
+                    if rewritten.trim_start().starts_with('"')
+                        && rewritten != &text[body_start..body_end]
+                    {
+                        out.push('(');
+                        out.push_str(&rewritten);
+                        out.push(')');
+                    } else {
+                        out.push_str(&rewritten);
+                    }
                     seg_start = body_end;
                     j = body_end;
                 }
@@ -797,7 +805,7 @@ mod tests {
     fn nested_and_multiline() {
         assert_eq!(
             fx("println!(\"{}\", format!(\"[{}]\", x))"),
-            "println(\"${\"[${x}]\"}\")"
+            "println(\"${(\"[${x}]\")}\")"
         );
         let src = "println!(\n    \"a {} b {}\",\n    foo(1, 2),\n    bar,\n)";
         assert_eq!(fx(src), "println(\"a ${foo(1, 2)} b ${bar}\")");
@@ -835,7 +843,7 @@ mod tests {
     fn macros_in_interpolations() {
         assert_eq!(
             fx(r#"let a = "n=${format!("{}", n)}""#),
-            r#"let a = "n=${"${n}"}""#
+            r#"let a = "n=${("${n}")}""#
         );
     }
 

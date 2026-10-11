@@ -310,7 +310,7 @@ fn fix_golden() {
         ("unreachable!()", "unreachable()"),
         (r#"println("old {} style", x)"#, r#"println("old ${x} style")"#),
         ("println!(\n    \"a {} b {}\",\n    foo(1, \"x\"),\n    bar,\n)", "println(\"a ${foo(1, \"x\")} b ${bar}\")"),
-        (r#"println!("{}", format!("[{}]", x))"#, r#"println("${"[${x}]"}")"#),
+        (r#"println!("{}", format!("[{}]", x))"#, r#"println("${("[${x}]")}")"#),
         (r#"println!("cost $ {}", x)"#, r#"println("cost $ ${x}")"#),
         (r#"println!("{}", vec![1].len())"#, r#"println("${vec![1].len()}")"#),
     ];
@@ -371,7 +371,7 @@ fn random_program(seed: u64) -> String {
             0 => format!("    println!(\"{tmpl}\", {})\n", args.join(", ")),
             1 => format!("    print!(\"{tmpl}\\n\", {})\n", args.join(", ")),
             2 => format!("    eprintln!(\"{tmpl}\", {})\n", args.join(", ")),
-            3 => format!("    let s{} = format!(\"{tmpl}\", {})\n    println!(\"{{}}\", s{})\n", rng.next() % 1000, args.join(", "), 0),
+            3 => { let id = rng.next() % 1000; format!("    let s{id} = format!(\"{tmpl}\", {})\n    println!(\"{{}}\", s{id})\n", args.join(", ")) },
             4 => format!("    assert!(x == 5, \"{tmpl}\", {})\n    println(\"ok\")\n", args.join(", ")),
             _ => format!("    println(\"{tmpl}\", {})\n", args.join(", ")),
         };
@@ -430,7 +430,7 @@ fn main() {
     print!("no newline")
     println!()
     let t = format!("{}{}", words[0], words[1])
-    println!("{t}")
+    println!("{}", t)
 }
 "#,
     ];
