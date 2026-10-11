@@ -6,14 +6,14 @@ Cell = number of `crate::<column>` references inside the row module. `!` marks a
 
 | from \ to | analyzer | auto_clone | auto_fix | build_utils | cargo_cache | cargo_integration | cargo_toml | cli_args | cli_execution | cli_project_build | codegen | compilation_error_handling | compiler | compiler_config | compiler_database | component_analyzer | config | debug_env | decorator_registry | ejector | error | error_catalog | error_codes | error_handling | error_mapper | errors | file_compilation_pipeline | file_compiler | formatter | fuzzy_matcher | inference | interpreter | intrinsics | ir | lexer | linter | metadata | module_system | optimizer | output_generation | package | parser | parser_impl | project_paths | resolve | rust_integration_tests | source_map | stdlib_scanner | syntax_highlighter | test_module_gate | test_runner | test_utils | type_classification | type_display | type_inference | wjsl |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| **agent_index** (tooling) | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | |
+| **agent_index** (tooling) | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | | | | | 2 | | | | | | | | | | | | | | | | | | | | | | |
 | **analyzer** (ownership) | | 2 | | | | | | | | | 28! | | | | | | | 5 | | | | | | | | | | | | | | | | 12! | 7 | | 1! | | | | | 119 | | | | | | 2 | | | | 1 | 34 | | 1 | |
 | **auto_clone** (ownership) | 15 | | | | | | | | | | 3! | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 33 | | | | | | | | | | | 1 | | | |
 | **auto_clone_tests** (?) | 23 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 2 | | | | | | | 27 | | | | | | | | | | 1 | | | | |
 | **build_utils** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 4 | | | | | | 1 | | 2 | | | | 1 | 1 | | | | | |
 | **cargo_integration** (driver) | | | | | 2 | | 3 | | | | | | | 2 | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | 1 | | | | 1 | | | | | |
 | **cargo_toml** (driver) | | | | | | | | | | | | | 1 | 4 | | | 8 | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | |
-| **cli** (driver) | | | 1 | 1 | 7 | | | | | | 7 | | 2 | 2 | | | 2 | | | | | | | | 6 | | | | 1 | | | | 1 | 2 | 3 | 1 | | | | | | 3 | | | | | 3 | | | | 1 | | | | | 1 |
+| **cli** (driver) | | | 1 | 1 | 7 | | | | | | 7 | | 2 | 3 | | | 2 | | | | | | | | 6 | | | | 1 | | | | 1 | 2 | 4 | 4 | | | | | | 4 | | | | | 3 | | | | 1 | | | | | 1 |
 | **cli_commands** (driver) | | | | 1 | | 1 | | 1 | 1 | 3 | | | | | | | | | | 1 | | | | 1 | | | | | | | | | | | 1 | | | | | | | 1 | | | | | | | | | 1 | | | | | |
 | **cli_execution** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | | | |
 | **cli_output** (driver) | | | | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | | | | | | | | | | | | | | 1 | | | | | | | | | |

@@ -1,0 +1,17 @@
+// tags: vec, option, swap, take, mutation
+// rust: ok
+// expect: [2, 1]
+// expect: Some(5) None
+// expect: [1, 2] []
+fn main() {
+    let mut v = [1, 2]
+    v.swap(0, 1)
+    println("${v:?}")
+    let mut slot: Option<int> = Some(5)
+    let taken = slot.take()
+    println("${taken:?} ${slot:?}")
+    let mut items: Vec<int> = [1, 2]
+    let old = items
+    items = []
+    println("${old:?} ${items:?}")
+}

@@ -1,0 +1,17 @@
+// tags: strings, sort, compare
+// rust: gap error[E0658]: use of unstable library feature 'str_as_str'
+// expect: true
+// expect: false
+// expect: [apple, banana, cherry]
+// expect: [cherry, banana, apple]
+fn main() {
+    let lt = "apple" < "banana"
+    let eq = "abc" == "abd"
+    println("${lt}")
+    println("${eq}")
+    let mut fruits = ["cherry", "apple", "banana"]
+    fruits.sort()
+    println("[${fruits.join(", ")}]")
+    fruits.reverse()
+    println("[${fruits.join(", ")}]")
+}

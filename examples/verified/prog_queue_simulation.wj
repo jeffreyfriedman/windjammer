@@ -1,0 +1,20 @@
+// tags: program, simulation, vecdeque, struct
+// rust: ok
+// expect: t=1 serve c1 (waited 0)
+// expect: t=3 serve c2 (waited 1)
+// expect: t=5 serve c3 (waited 2)
+use std::collections::VecDeque
+
+struct Customer { id: string, arrival: int }
+
+fn main() {
+    let mut q: VecDeque<Customer> = VecDeque::new()
+    q.push_back(Customer { id: "c1", arrival: 1 })
+    q.push_back(Customer { id: "c2", arrival: 2 })
+    q.push_back(Customer { id: "c3", arrival: 3 })
+    let mut clock = 1
+    while let Some(c) = q.pop_front() {
+        println("t=${clock} serve ${c.id} (waited ${clock - c.arrival})")
+        clock += 2
+    }
+}

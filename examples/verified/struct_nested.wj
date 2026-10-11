@@ -1,0 +1,13 @@
+// tags: struct, nested, composition
+// rust: ok
+// expect: Ann lives in Oslo (NO)
+// expect: Ann moved to Bergen
+struct Address { city: string, country: string }
+struct User { name: string, addr: Address }
+
+fn main() {
+    let mut u = User { name: "Ann", addr: Address { city: "Oslo", country: "NO" } }
+    println("${u.name} lives in ${u.addr.city} (${u.addr.country})")
+    u.addr.city = "Bergen"
+    println("${u.name} moved to ${u.addr.city}")
+}

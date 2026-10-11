@@ -1,0 +1,22 @@
+// tags: basics, functions
+// rust: ok
+// expect: 7
+// expect: 25
+// expect: 120
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn square(x: int) -> int {
+    x * x
+}
+
+fn factorial(n: int) -> int {
+    if n <= 1 { 1 } else { n * factorial(n - 1) }
+}
+
+fn main() {
+    println("${add(3, 4)}")
+    println("${square(5)}")
+    println("${factorial(5)}")
+}

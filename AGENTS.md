@@ -4,6 +4,10 @@
 
 Open compiler bugs are tracked in `tests/COMPILER_REPRO_QUEUE.md` (being consolidated); `bd` is optional.
 
+## Writing Windjammer (`.wj`) code
+
+Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md) first. Loop: `wj check --json` -> `wj run --interpret` -> `wj test --interpret` -> `wj build`; look things up with `wj docs <terms>`; 150+ checked programs live in `examples/verified/`.
+
 ## Architecture
 
 The compiler now includes a **Safety-Typed IR** layer (`src/ir/`) providing:

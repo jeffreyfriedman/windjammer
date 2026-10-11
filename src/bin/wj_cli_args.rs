@@ -345,8 +345,21 @@ pub enum Commands {
         output: PathBuf,
     },
 
-    /// Generate error documentation
+    /// Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples,
+    /// error codes); with no query, generate error documentation
     Docs {
+        /// Search terms, e.g. `wj docs hashmap entry` (all terms must match)
+        #[arg(value_name = "QUERY")]
+        query: Vec<String>,
+
+        /// Maximum number of search results
+        #[arg(long, default_value_t = 8)]
+        limit: usize,
+
+        /// Print search results as JSON
+        #[arg(long)]
+        json: bool,
+
         /// Output directory for generated docs
         #[arg(short, long, default_value = "./docs/errors")]
         output: PathBuf,

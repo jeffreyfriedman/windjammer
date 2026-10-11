@@ -1,0 +1,23 @@
+// tags: program, bitwise, math, u32
+// rust: ok
+// expect: 5 -> 2 bits
+// expect: 255 -> 8 bits
+// expect: 1024 -> 1 bits
+// expect: 1023 is not a power of two
+fn popcount(n: u32) -> int {
+    let mut x = n
+    let mut c = 0
+    while x > 0 {
+        c += (x & 1) as int
+        x = x >> 1
+    }
+    c
+}
+
+fn main() {
+    for n in [5, 255, 1024] {
+        println("${n} -> ${popcount(n)} bits")
+    }
+    let m: u32 = 1023
+    if popcount(m) != 1 { println("${m} is not a power of two") }
+}

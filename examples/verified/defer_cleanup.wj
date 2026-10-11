@@ -1,0 +1,10 @@
+// tags: control-flow, defer
+// rust: gap output differs from interpreter/oracle
+// expect: start
+// expect: work
+// expect: cleanup
+fn main() {
+    println("start")
+    defer println("cleanup")
+    println("work")
+}

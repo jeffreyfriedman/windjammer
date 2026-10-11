@@ -1,0 +1,19 @@
+// tags: hashmap, remove, update
+// rust: gap error[E0308]: mismatched types
+// expect: Some(1)
+// expect: 11
+// expect: None
+// expect: 1
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("x", 1)
+    println("${m.get("x").copied():?}")
+    m.insert("x", 11)
+    println("${m["x"]}")
+    m.remove("x")
+    println("${m.get("x").copied():?}")
+    m.insert("y", 1)
+    println("${m.len()}")
+}

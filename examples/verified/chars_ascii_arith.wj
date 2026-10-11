@@ -1,0 +1,16 @@
+// tags: chars, ascii, arithmetic
+// rust: ok
+// expect: d
+// expect: 25
+// expect: ABC
+fn main() {
+    let c = 'a'
+    let d = (c as u8 + 3) as char
+    println("${d}")
+    println("${'z' as int - 'a' as int}")
+    let mut s = ""
+    for i in 0..3 {
+        s.push(('A' as u8 + i as u8) as char)
+    }
+    println(s)
+}

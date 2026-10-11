@@ -1,0 +1,25 @@
+// tags: std, cmp, ordering, sort
+// rust: gap error[E0308]: mismatched types
+// expect: Less
+// expect: Greater
+// expect: Equal
+// expect: [(1, b), (2, a), (2, c)]
+use std::cmp::Ordering
+
+fn name(o: Ordering) -> string {
+    match o {
+        Ordering::Less => "Less",
+        Ordering::Greater => "Greater",
+        Ordering::Equal => "Equal",
+    }
+}
+
+fn main() {
+    println(name(1.cmp(&2)))
+    println(name(5.cmp(&2)))
+    println(name(3.cmp(&3)))
+    let mut v = [(2, "c"), (1, "b"), (2, "a")]
+    v.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)))
+    let strs: Vec<string> = v.map(|p| "(${p.0}, ${p.1})").collect()
+    println("[${strs.join(", ")}]")
+}

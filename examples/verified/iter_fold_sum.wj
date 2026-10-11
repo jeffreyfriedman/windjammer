@@ -1,0 +1,15 @@
+// tags: iterators, fold, sum, product
+// rust: gap error[E0599]: no method named 'sum' found for struct 'Vec<i32>' in the current s
+// expect: 15
+// expect: 120
+// expect: 5
+// expect: 3.0
+fn main() {
+    let v = [1, 2, 3, 4, 5]
+    println("${v.sum::<int>()}")
+    println("${v.product::<int>()}")
+    println("${v.fold(0, |acc, x| if *x > acc { *x } else { acc })}")
+    let fs = [1.0, 2.0, 3.0, 4.0, 5.0]
+    let mean = fs.sum::<float>() / 5.0
+    println("${mean:.1}")
+}

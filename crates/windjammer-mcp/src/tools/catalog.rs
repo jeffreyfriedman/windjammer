@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use super::registry::ToolStability;
 use super::{
-    analyze_ssr_routing, analyze_types, explain_error, generate_code, generate_component,
+    analyze_ssr_routing, check_code, docs_search, format_code, run_code, test_code, analyze_types, explain_error, generate_code, generate_component,
     generate_game_entity, get_definition, get_language_info, parse_code, patch_change_type,
     patch_insert_statement, query_diagnostics, query_effects, refactor_extract_function,
     refactor_inline_variable, refactor_rename_symbol, search_workspace,
@@ -113,6 +113,36 @@ pub fn all_tool_specs() -> &'static [ToolSpec] {
             stability: ToolStability::Beta,
         },
         ToolSpec {
+            name: "check_code",
+            description: "Check Windjammer source (parse, lint, transpile) and return JSON diagnostics with spans and repair hints",
+            category: "agent-loop",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "run_code",
+            description: "Run Windjammer source in the interpreter (wj run --interpret); returns exit code, stdout, stderr",
+            category: "agent-loop",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "test_code",
+            description: "Run @test / test_* functions in the interpreter (wj test --interpret)",
+            category: "agent-loop",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "format_code",
+            description: "Format Windjammer source with the canonical formatter",
+            category: "agent-loop",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
+            name: "docs_search",
+            description: "Search offline docs: stdlib signatures, built-in methods, idioms, verified examples, error codes",
+            category: "knowledge",
+            stability: ToolStability::Stable,
+        },
+        ToolSpec {
             name: "insert_statement",
             description:
                 "Insert a Windjammer statement at a given location with optional validation",
@@ -145,6 +175,11 @@ pub fn input_schema_for(name: &str) -> Option<Value> {
         "get_language_info" => schema_for!(get_language_info::GetLanguageInfoRequest),
         "query_diagnostics" => schema_for!(query_diagnostics::QueryDiagnosticsRequest),
         "query_effects" => schema_for!(query_effects::QueryEffectsRequest),
+        "check_code" => schema_for!(check_code::CheckCodeRequest),
+        "run_code" => schema_for!(run_code::RunCodeRequest),
+        "test_code" => schema_for!(test_code::TestCodeRequest),
+        "format_code" => schema_for!(format_code::FormatCodeRequest),
+        "docs_search" => schema_for!(docs_search::DocsSearchRequest),
         "insert_statement" => schema_for!(patch_insert_statement::InsertStatementRequest),
         "change_type" => schema_for!(patch_change_type::ChangeTypeRequest),
         _ => return None,

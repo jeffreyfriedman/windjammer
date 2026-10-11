@@ -1,0 +1,19 @@
+// tags: basics, scope, blocks
+// rust: ok
+// expect: inner 2
+// expect: outer 1
+// expect: 15
+fn main() {
+    let x = 1
+    {
+        let x = 2
+        println("inner ${x}")
+    }
+    println("outer ${x}")
+    let y = {
+        let a = 5
+        let b = 10
+        a + b
+    }
+    println("${y}")
+}

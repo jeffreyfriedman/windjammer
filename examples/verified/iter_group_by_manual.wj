@@ -1,0 +1,17 @@
+// tags: iterators, hashmap, grouping, sort
+// rust: ok
+// expect: 3: [cat, dog]
+// expect: 4: [bird]
+// expect: 5: [horse]
+use std::collections::BTreeMap
+
+fn main() {
+    let words = ["cat", "bird", "dog", "horse"]
+    let mut groups: BTreeMap<int, Vec<string>> = BTreeMap::new()
+    for w in words {
+        groups.entry(w.len() as int).or_insert([]).push(w.to_string())
+    }
+    for (len, ws) in groups {
+        println("${len}: [${ws.join(", ")}]")
+    }
+}

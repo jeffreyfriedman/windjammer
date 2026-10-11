@@ -1,0 +1,30 @@
+// tags: trait, impl, polymorphism
+// rust: ok
+// expect: Woof
+// expect: Meow
+// expect: Rex says Woof
+trait Speak {
+    fn sound(self) -> string
+    fn speak(self, name: string) -> string {
+        "${name} says ${self.sound()}"
+    }
+}
+
+struct Dog {}
+struct Cat {}
+
+impl Speak for Dog {
+    fn sound(self) -> string { "Woof" }
+}
+
+impl Speak for Cat {
+    fn sound(self) -> string { "Meow" }
+}
+
+fn main() {
+    let d = Dog {}
+    let c = Cat {}
+    println(d.sound())
+    println(c.sound())
+    println(d.speak("Rex"))
+}

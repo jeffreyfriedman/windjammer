@@ -1,0 +1,26 @@
+// tags: algorithm, sieve, primes, vec
+// rust: gap error[E0599]: no method named 'map' found for struct 'Vec<i64>' in the current s
+// expect: 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59
+// expect: count below 60: 17
+fn sieve(limit: int) -> Vec<int> {
+    let mut is_prime = [true; 60]
+    let mut primes: Vec<int> = []
+    for i in 2..limit {
+        if is_prime[i] {
+            primes.push(i)
+            let mut j = i * i
+            while j < limit {
+                is_prime[j] = false
+                j += i
+            }
+        }
+    }
+    primes
+}
+
+fn main() {
+    let ps = sieve(60)
+    let strs: Vec<string> = ps.map(|p| p.to_string()).collect()
+    println(strs.join(" "))
+    println("count below 60: ${ps.len()}")
+}

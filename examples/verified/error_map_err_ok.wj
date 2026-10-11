@@ -1,0 +1,20 @@
+// tags: error-handling, map_err, ok_or, result, option
+// rust: gap error[E0308]: mismatched types
+// expect: Err("bad: abc")
+// expect: Ok(5)
+// expect: Err("missing")
+// expect: Ok(9)
+fn parse(s: string) -> Result<int, string> {
+    s.parse::<int>().map_err(|_| "bad: ${s}")
+}
+
+fn pick(xs: Vec<int>, i: int) -> Result<int, string> {
+    xs.get(i).copied().ok_or("missing")
+}
+
+fn main() {
+    println("${parse("abc"):?}")
+    println("${parse("5"):?}")
+    println("${pick([9], 3):?}")
+    println("${pick([9], 0):?}")
+}
