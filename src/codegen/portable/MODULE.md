@@ -49,3 +49,8 @@ Syntax, runtime representation of integers/strings, or naming (emitters do).
 ## Test
 Unit tests next to each module; end-to-end through `tests/backend_conformance_test.rs`
 (runs generated Go/JS against independent oracles). Add a corpus program in `tests/conformance_programs/` for every feature.
+
+## Closure-literal callee
+`(|v| body)(x)` (the desugaring of `x |> |v| body`) lowers the arguments first and types the
+closure parameters from them (`lower/call.rs`), so Go/JS agree with the argument's width.
+Corpus: `tests/conformance_programs/150_pipe_forms_mixed.wj`, `151_pipe_try.wj`.

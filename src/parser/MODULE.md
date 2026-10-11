@@ -26,3 +26,8 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 ## Tests
 tests/parser_*_test.rs and tests/ast_builders_tests.rs.
 Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
+
+## Pipe operator
+`pipe_parser.rs` is the single desugaring site for `|>` and `|>?` (spec:
+`docs/design/pipe-operator.md`). Backends see plain calls. Misuse diagnostics carry the
+1-based `file:line:col` of the offending token (`pipe_error`); tests: `tests/pipe_*_test.rs`.
