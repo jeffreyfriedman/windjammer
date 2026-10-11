@@ -1,16 +1,16 @@
 # Grammar and syntax conventions
 
-The normative grammar is `docs/spec/grammar.ebnf`. `tests/spec_grammar_test.rs` reads it, generates sentences, wraps them in a context and feeds them to the real lexer and parser; a disagreement fails the test. This chapter states the conventions that a context-free grammar cannot.
+The normative grammar is `docs/spec/grammar.ebnf`. The docs-truth check `tools/docs_truth/spec_grammar.rs` (run by `cargo test --release --test docs_truth spec_grammar` and `wj-docs check spec-grammar`) reads it with the shared EBNF reader of `tools/docs_truth/ebnf.rs`, derives every alternative plus a seeded random corpus, wraps each sentence in the production's `@ctx` template and parses it with the real parser; lexical productions must lex to one token of the stated kind. A disagreement fails the test. This chapter states the conventions that a context-free grammar cannot.
 
 Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/grammar/`.
 
 **What the grammar test does and does not prove.** It proves *grammar ⊆ parser*: everything the EBNF derives parses. It does not prove *parser ⊆ grammar*: the parser accepts more than the EBNF lists (Rust-style `&`/`*` unary operators, `as` casts, macro-style calls, ranges in expressions, `for`/`return` as expressions, turbofish, lifetimes). Those extensions are deliberately omitted from the normative grammar unless the language wants to keep them; the negative examples (`mode: parse-error`) police the other direction for a few important cases. Productions marked `@status unparsed` document constructs the old grammar advertised but the parser rejects.
 
-**Old grammar.** `docs/windjammer.ebnf` predates this spec and contains errors (nested block comments, `~`, `\xNN` escapes, range patterns, `loop` as expression, wrong operator precedence). It is superseded by `docs/spec/grammar.ebnf`.
+**Older grammar.** `docs/windjammer.ebnf` is the earlier reference grammar, also checked by docs-truth (`tools/docs_truth/ebnf.rs`). It predates this spec and lists Rust's operator precedence table, which the parser does not implement (see SPEC-EXPR-001); `docs/spec/grammar.ebnf` is normative where they differ.
 
 ## Normative grammar
 
-**SPEC-GRAM-001** The EBNF in docs/spec/grammar.ebnf is the normative syntax. Every sentence it derives is accepted by the real parser; productions the parser rejects are flagged `unparsed` in the file. (untestable: verified by tests/spec_grammar_test.rs, which generates sentences from the EBNF and parses them)
+**SPEC-GRAM-001** The EBNF in docs/spec/grammar.ebnf is the normative syntax. Every sentence it derives is accepted by the real parser; productions the parser rejects are flagged `unparsed` in the file. (untestable: verified by the docs-truth check tools/docs_truth/spec_grammar.rs, which derives sentences from the EBNF and parses them)
 
 ## Trailing commas
 
@@ -53,19 +53,29 @@ Output:
 2
 ```
 
-## Line-initial bracket
+## Line-initial tokens
 
-**SPEC-GRAM-004** [OPEN Q-019] A line that begins with `[` continues the previous expression as an index operation (`f()` newline `[1, 2]` is `f()[1, 2]`). Start such a list expression with `let` or parenthesise it.
+**SPEC-GRAM-004** A newline ends a statement unless the next line begins with `.`, a binary operator (`+ - / % == != < <= > >= && || |> ^ << >>`) or `|>`, which continue the expression; a line beginning with `(` or `[` starts a new statement; a line beginning with `*` is a dereference-assignment only when the line contains a depth-0 assignment. Normative table: docs/design/statement-boundaries.md.
 
 <!-- example: tests/spec/grammar/SPEC-GRAM-004.wj -->
-```windjammer
+<!-- ignore: known divergence Q-019; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn f() -> int { 5 }
 fn main() {
     let a = f()
     [1, 2].len()
+    let total = a
+        + 1
+    let n = [3, 4]
+        .len()
+    println("${a} ${total} ${n}")
 }
 ```
-Rejected at compile time.
+Output:
+```text
+5 6 2
+```
+> **Known divergence:** the implementation does not do this yet; see [Q-019](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Match arm separators
 
@@ -110,7 +120,8 @@ Output:
 **SPEC-GRAM-007** A `;` only terminates the statement before it; a second `;` with nothing before it is not a statement.
 
 <!-- example: tests/spec/grammar/SPEC-GRAM-007.wj -->
-```windjammer
+<!-- should_fail: the rule says this program is rejected -->
+```windjammer,should_fail
 fn main() {
     println("x");
     ;
@@ -120,7 +131,7 @@ Rejected at compile time.
 
 ## Labeled loops
 
-**SPEC-GRAM-008** [OPEN Q-020] Loop labels (`'outer: for ...`, `break 'outer`) do not exist; `break`/`continue` always target the innermost loop.
+**SPEC-GRAM-008** A loop may carry a label `'name:` before `for`, `while` or `loop`; `break 'name` / `continue 'name` target that loop, and `break 'name v` gives a labeled `loop` its value. Without a label they target the innermost loop.
 
 <!-- example: tests/spec/grammar/SPEC-GRAM-008.wj -->
 ```windjammer
@@ -128,11 +139,22 @@ fn main() {
     'outer: for i in 0..3 {
         for j in 0..3 {
             if j == 1 { continue 'outer }
+            println("${i}${j}")
         }
     }
+    let v = 'o: loop {
+        loop { break 'o 7 }
+    }
+    println("${v}")
 }
 ```
-Rejected at compile time.
+Output:
+```text
+00
+10
+20
+7
+```
 
 ## Struct literal versus block
 

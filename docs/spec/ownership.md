@@ -161,7 +161,8 @@ ann 3
 **SPEC-OWN-008** Parameters are immutable inside the callee unless the body mutates them (which makes the parameter a mutable borrow, OWN-004); `mut` on a parameter makes the callee's own copy mutable without affecting the caller. [OPEN Q-015] the interpreter lets the callee's `mut` parameter write through to the caller.
 
 <!-- example: tests/spec/ownership/SPEC-OWN-008.wj -->
-```windjammer
+<!-- ignore: known divergence Q-015; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn f(mut n: int) -> int {
     n += 10
     n

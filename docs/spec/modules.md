@@ -74,7 +74,8 @@ Output:
 **SPEC-MOD-004** An item without `pub` is visible only inside its own module and its children. Using it from outside is a compile-time error. [OPEN Q-009] the interpreter does not enforce privacy.
 
 <!-- example: tests/spec/modules/SPEC-MOD-004.wj -->
-```windjammer
+<!-- ignore: known divergence Q-009; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 mod m {
     fn secret() -> int { 1 }
     pub fn open() -> int { secret() }

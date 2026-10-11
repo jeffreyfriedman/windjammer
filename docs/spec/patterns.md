@@ -172,7 +172,7 @@ Output:
 
 ## Range patterns
 
-**SPEC-PAT-008** [OPEN Q-008] `lo..=hi` and `lo..hi` match integers and chars in the range. The pattern parser does not accept them today.
+**SPEC-PAT-008** `lo..=hi` (inclusive) and `lo..hi` (exclusive) match integers and chars in the range.
 
 <!-- example: tests/spec/patterns/SPEC-PAT-008.wj -->
 ```windjammer
@@ -191,7 +191,6 @@ Output:
 ```text
 digit two more
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-008](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Match with no matching arm
 

@@ -1,6 +1,5 @@
 // spec: SPEC-PAT-008
 // expect: digit two more
-// xfail: Q-008
 fn f(n: int) -> string {
     match n {
         0..=9 => "digit",

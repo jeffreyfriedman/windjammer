@@ -1,7 +1,4 @@
-(* SUPERSEDED: the machine-checked grammar is docs/spec/grammar.ebnf (verified against the parser by *)
-(* tests/spec_grammar_test.rs). This older file contains known errors (block comments, `~`, hex      *)
-(* escapes, range patterns, loop-as-expression, operator precedence); see docs/spec/OPEN_QUESTIONS.md. *)
-
+(* The normative, machine-checked grammar of the language specification is docs/spec/grammar.ebnf. *)
 (* Windjammer Formal Grammar — v0.50.0 *)
 (* This EBNF grammar is a reference for constrained-decoding harnesses and *)
 (* code-generation agents. It was reconciled with src/parser and src/lexer on 2026-10-10. *)

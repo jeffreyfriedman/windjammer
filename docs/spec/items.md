@@ -130,7 +130,8 @@ Output:
 **SPEC-ITEM-011** [OPEN Q-010] `type Name<T> = ...` introduces a generic synonym. Today the item parser accepts only `type Name = T`.
 
 <!-- example: tests/spec/items/SPEC-ITEM-011.wj -->
-```windjammer
+<!-- ignore: known divergence Q-010; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 type Pair<T> = (T, T)
 fn swap(p: Pair<int>) -> Pair<int> { (p.1, p.0) }
 fn main() {
@@ -166,7 +167,8 @@ end
 **SPEC-ITEM-008** [OPEN Q-011] `struct S { f: T = expr }` gives a field a default used when a struct literal omits it. The old grammar listed this; the struct parser rejects it.
 
 <!-- example: tests/spec/items/SPEC-ITEM-008.wj -->
-```windjammer
+<!-- ignore: known divergence Q-011; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 struct Cfg { w: int = 80, h: int = 24, name: string }
 fn main() {
     let c = Cfg { name: "x" }

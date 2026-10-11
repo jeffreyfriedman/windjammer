@@ -187,7 +187,8 @@ Output:
 **SPEC-NUM-011** [OPEN Q-003] `int(x)` and `float(x)` convert losslessly or panic when out of range (ADR-0015 section 2, accepted). Not implemented: the parser rejects `int(x)`.
 
 <!-- example: tests/spec/numeric/SPEC-NUM-011.wj -->
-```windjammer
+<!-- ignore: known divergence Q-003; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn main() {
     let a: i32 = 5
     let b = int(a)

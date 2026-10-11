@@ -1,9 +1,17 @@
 // spec: SPEC-GRAM-008
-// mode: parse-error
+// expect: 00
+// expect: 10
+// expect: 20
+// expect: 7
 fn main() {
     'outer: for i in 0..3 {
         for j in 0..3 {
             if j == 1 { continue 'outer }
+            println("${i}${j}")
         }
     }
+    let v = 'o: loop {
+        loop { break 'o 7 }
+    }
+    println("${v}")
 }

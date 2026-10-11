@@ -30,7 +30,8 @@ Output:
 **SPEC-ATTR-002** `@derive(T1, T2, ...)` on a struct or enum requests standard trait implementations: Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize. Many are also inferred when every field supports them. [OPEN Q-016] the interpreter does not implement `Default::default` for derived types.
 
 <!-- example: tests/spec/attributes/SPEC-ATTR-002.wj -->
-```windjammer
+<!-- ignore: known divergence Q-016; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 @derive(Clone, Debug, PartialEq, Default)
 struct Cfg { n: int, s: string }
 fn main() {

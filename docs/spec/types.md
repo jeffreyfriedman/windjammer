@@ -48,7 +48,8 @@ Output:
 **SPEC-TYP-003** Combining different numeric types in one operation, or passing one where another is declared, is a compile-time error; use `as` (NUM-010). [OPEN Q-017] The interpreter and the Rust backend's literal inference accept some mixes silently.
 
 <!-- example: tests/spec/types/SPEC-TYP-003.wj -->
-```windjammer
+<!-- ignore: known divergence Q-017; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn main() {
     let a: i32 = 1
     let b: i64 = 2
@@ -161,7 +162,8 @@ Output:
 **SPEC-TYP-009** A function parameter without a type annotation is a compile-time error.
 
 <!-- example: tests/spec/types/SPEC-TYP-009.wj -->
-```windjammer
+<!-- should_fail: the rule says this program is rejected -->
+```windjammer,should_fail
 fn f(x) -> int { 1 }
 fn main() {
     println("${f(1)}")

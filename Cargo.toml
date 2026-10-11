@@ -137,12 +137,8 @@ path = "tests/all.rs"
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
 
-# Language specification conformance (docs/spec): grammar vs parser, and executable rule examples.
-#   cargo test --release --test spec_grammar --test spec_conformance
-[[test]]
-name = "spec_grammar"
-path = "tests/spec_grammar_test.rs"
-
+# Language specification (docs/spec): executable rule examples. The grammar is checked by docs_truth.
+#   cargo test --release --test spec_conformance
 [[test]]
 name = "spec_conformance"
 path = "tests/spec_conformance_test.rs"

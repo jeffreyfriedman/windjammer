@@ -3,7 +3,7 @@
 #
 #   scripts/spec_check.sh           verify (exit 1 on any problem)
 #   scripts/spec_check.sh --write   also regenerate docs/spec/CONFORMANCE_MATRIX.md
-#   scripts/spec_check.sh --run     verify, then run the executable examples and the grammar test
+#   scripts/spec_check.sh --run     verify, then run the executable examples and the grammar check (docs_truth)
 #
 # Rules: a rule is a line in docs/spec/*.md that starts with **SPEC-<AREA>-<NNN>**. It needs at least
 # one tests/spec/**/*.wj example whose header has `// spec: SPEC-<AREA>-<NNN>`, unless the rule line
@@ -94,5 +94,6 @@ x=$(grep -c . "$tmp/xfails.tsv" || true)
 echo "spec-check: $n rules, $t example references, $u untestable, $x xfail"
 [ $err -eq 0 ] || exit 1
 if [ $run -eq 1 ]; then
-  cargo test --release --test spec_conformance --test spec_grammar
+  cargo test --release --test spec_conformance
+  cargo test --release --test docs_truth spec_grammar
 fi
