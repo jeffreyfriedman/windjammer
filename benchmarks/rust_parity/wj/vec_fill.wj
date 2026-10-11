@@ -1,0 +1,20 @@
+fn fill(n: usize) -> Vec<u64> {
+    let mut v = Vec::new()
+    for i in 0..n {
+        v.push((i as u64) * 2654435761 % 1000)
+    }
+    v
+}
+
+fn main() {
+    let mut total: u64 = 0
+    for round in 0..40 {
+        let v = fill(2000000)
+        let mut s: u64 = 0
+        for i in 0..v.len() {
+            s += v[i]
+        }
+        total += s + round
+    }
+    println!("{}", total)
+}

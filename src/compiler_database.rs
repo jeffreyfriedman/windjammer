@@ -188,34 +188,15 @@ pub fn perform_analysis<'ast>(
 ///
 /// **Caching:** Only re-optimize if program changes
 ///
-/// Runs: Phases 11 (String Interning), 12 (Dead Code Elimination), 13 (Loop Optimization)
-/// Future: Phases 14 (Escape Analysis), 15 (SIMD Vectorization)
+/// Identity: optimization runs on emitted Rust (`optimizer::run`), see `generate_rust`.
 #[salsa::tracked]
 pub fn optimize_program<'db>(
     db: &'db dyn salsa::Database,
     typed: TypedProgram<'db>,
 ) -> OptimizedProgram<'db> {
-    // OPTIMIZER INTENTIONALLY DISABLED: Architecture requires refactoring
-    //
-    // PROBLEM: The optimizer module (src/optimizer/) has 150 lifetime errors.
-    // - Optimizer owns an arena and returns Program<'arena> references
-    // - But OptimizedProgram expects Program<'db> (tied to Salsa database lifetime)
-    // - This is a fundamental architecture mismatch
-    //
-    // IMPACT: Compilation works perfectly without optimization
-    // - All syntax is supported
-    // - Code generation is correct
-    // - Tests pass (27/27 integration tests)
-    // - Only missing potential performance optimizations
-    //
-    // SOLUTION PATHS (see docs/ARENA_SESSION6_FINAL.md):
-    // 1. Clone-on-return: Optimizer returns fully owned Program (no arena refs)
-    // 2. Higher-level arena: ModuleCompiler owns arena, passes to optimizer
-    // 3. Skip optimization: Current approach (works great!)
-    //
-    // DECISION: Defer to separate PR focused on optimizer architecture.
-    // Core compiler is 100% arena-allocated with 87.5% stack reduction.
-
+    // The AST-level optimizer (arena-lifetime mismatch with Salsa) was retired; see
+    // docs/optimization/ASSESSMENT.md. Optimization now runs on the emitted Rust via
+    // `crate::optimizer::run` (hooked after `generate_program`), so this stage is identity.
     let program = typed.program(db);
     OptimizedProgram::new(db, program.clone())
 }
@@ -252,7 +233,9 @@ pub fn generate_rust<'db>(
         crate::CompilationTarget::Wasm,
     );
     generator.set_inferred_bounds(analysis.inferred_bounds);
-    let rust_code = generator.generate_program(program, &analysis.analyzed_functions);
+    let rust_code = crate::optimizer::run_default(
+        &generator.generate_program(program, &analysis.analyzed_functions),
+    );
 
     RustCode::new(db, rust_code)
 }

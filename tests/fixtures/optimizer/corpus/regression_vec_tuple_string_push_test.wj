@@ -1,0 +1,7 @@
+// From regression/bug_is_stored_enum_option_test.rs `test_tuple_in_push_keeps_owned` — Vec of (string, f32) receives owned pair.
+
+pub fn test_vec_push_tuple_string_f32_len() {
+    let mut rels: Vec<(string, f32)> = Vec::new()
+    rels.push(("guard".to_string(), 1.0))
+    assert_eq(rels.len() as int, 1)
+}
