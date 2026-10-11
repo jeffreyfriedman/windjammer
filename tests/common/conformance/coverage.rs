@@ -41,7 +41,7 @@ pub fn node_kinds(debug: &str) -> BTreeSet<String> {
 /// Method names invoked (`method: "name"`) and macros (`name: "vec"`) in the dump.
 pub fn used_methods(debug: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
-    for key in ["method: \"", "name: \""] {
+    for key in ["method: \"", "name: \"", "field: \""] {
         let mut rest = debug;
         while let Some(p) = rest.find(key) {
             rest = &rest[p + key.len()..];

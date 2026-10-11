@@ -1,3 +1,120 @@
 # Known-unsupported (program, backend) pairs. A listed pair must FAIL its oracle; if it starts
 # passing the harness fails until the entry is removed (ratchet: this file only shrinks).
 # Every entry needs a reason that names the missing capability.
+
+# ---- Rust target: generated Rust rejected by rustc (see docs/known-issues/) ------------------
+[[unsupported]]
+program = "114_hashmap_entry_counting"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "17_closure_counter_capture"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "22_vec_index_mutate"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "30_iter_map_filter"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "44_hashmap_counts"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "49_closures_fold"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "54_shifts_bitops"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "62_vec_alias_semantics"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "72_hashmap_ops"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "74_vec_algorithms"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "75_iterators"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "90_crc32_known_answer"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "93_pcg32_known_answer"
+backend = "rust"
+reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "18_option_match"
+backend = "rust"
+reason = "rust-tail-none-cast: see docs/known-issues/rust-tail-none-cast.md"
+
+[[unsupported]]
+program = "68_unwrap_none_panics"
+backend = "rust"
+reason = "rust-tail-none-cast: see docs/known-issues/rust-tail-none-cast.md"
+
+[[unsupported]]
+program = "63_closures_capture"
+backend = "rust"
+reason = "rust-closure-returned-as-fn-pointer: see docs/known-issues/rust-closure-returned-as-fn-pointer.md"
+
+[[unsupported]]
+program = "61_string_split_trim"
+backend = "rust"
+reason = "rust-str-vs-string-in-collect-and-concat: see docs/known-issues/rust-str-vs-string-in-collect-and-concat.md"
+
+[[unsupported]]
+program = "98_bignum_factorial"
+backend = "rust"
+reason = "rust-str-vs-string-in-collect-and-concat: see docs/known-issues/rust-str-vs-string-in-collect-and-concat.md"
+
+[[unsupported]]
+program = "110_std_math"
+backend = "rust"
+reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
+
+[[unsupported]]
+program = "111_std_strings"
+backend = "rust"
+reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
+
+[[unsupported]]
+program = "112_std_fs_roundtrip"
+backend = "rust"
+reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
+
+[[unsupported]]
+program = "113_std_time_monotonic"
+backend = "rust"
+reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
+
+[[unsupported]]
+program = "56_float_math"
+backend = "rust"
+reason = "rust-int-literal-width-inference: a float literal is typed f32 where f64 is needed (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
+
