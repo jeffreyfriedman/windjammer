@@ -1,0 +1,7 @@
+// expect: rustc:WJ0017
+fn main() {
+    let a: int = 1
+    let b: float = 2.0
+    let c = a + b
+    println("${c}")
+}

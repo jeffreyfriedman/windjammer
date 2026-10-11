@@ -44,7 +44,7 @@ Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [do
 
 Caveats, each tracked in [docs/known-gaps.md](docs/known-gaps.md):
 - `wj fmt` runs `cargo fmt --all`; it does not format `.wj` files.
-- `wj check` runs `cargo check` in the current directory; it does not check `.wj` sources.
+- `wj check` checks `.wj` sources with the front end only (no cargo/rustc). It does not yet catch moves, borrow conflicts, trait bounds, unknown methods, match exhaustiveness or operand types; see [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 - `wj eject` does not exist. The older `windjammer` binary has an `eject` subcommand that writes a standalone Rust project.
 - A language server (`crates/windjammer-lsp`) and an MCP server (`crates/windjammer-mcp`) exist as workspace crates.
 

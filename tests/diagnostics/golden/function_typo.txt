@@ -1,0 +1,7 @@
+error[WJ0002]: cannot find function `compute_totl` in this scope
+  --> function_typo.wj:7:13
+  |
+7 |     let r = compute_totl(1, 2)
+  |             ^^^^^^^^^^^^ not found in this scope
+  = help: a function with a similar name exists: `compute_total`
+  = explain: wj explain WJ0002

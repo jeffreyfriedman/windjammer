@@ -1,0 +1,13 @@
+// expect: rustc:WJ0018
+trait Shape {
+    fn area(self) -> float
+}
+
+struct Dot {}
+
+impl Shape for Dot {
+}
+
+fn main() {
+    println("x")
+}

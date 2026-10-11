@@ -1,0 +1,6 @@
+// expect: WJ0008
+fn main() {
+    let items = [1, 2, 3]
+    items.push(4)
+    println("${items.len()}")
+}
