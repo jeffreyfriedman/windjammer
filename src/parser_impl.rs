@@ -256,11 +256,6 @@ impl Parser {
         }
     }
 
-    /// Handle that outlives this parser and reports whether its AST arenas were ever freed.
-    pub fn arena_ledger(&self) -> ParserArenaLedger {
-        ParserArenaLedger(vec![self.expr_arena.ledger(), self.stmt_arena.ledger(), self.pattern_arena.ledger()])
-    }
-
     pub fn warnings(&self) -> &[ParseWarning] {
         &self.warnings
     }
@@ -295,6 +290,11 @@ impl Parser {
             column,
             is_error: true,
         });
+    }
+
+    /// Handle that outlives this parser and reports whether its AST arenas were ever freed.
+    pub fn arena_ledger(&self) -> ParserArenaLedger {
+        ParserArenaLedger(vec![self.expr_arena.ledger(), self.stmt_arena.ledger(), self.pattern_arena.ledger()])
     }
 
     /// Allocate an expression in the arena
