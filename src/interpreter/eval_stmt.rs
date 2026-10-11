@@ -280,6 +280,7 @@ impl Interpreter {
             }
             return Ok(Value::Unit);
         }
+        let src = if let Value::Native(_) = &src { Value::Iter(super::iter::as_iter(self, src)?) } else { src };
         if let Value::Iter(s) = &src {
             while let Some(item) = super::iter::next(self, s)? {
                 if self.run_iteration(pattern, item, body)? {
@@ -334,6 +335,10 @@ impl Interpreter {
                 Ok((a..b).map(|i| Value::Int(i, ty)).collect())
             }
             Value::Iter(s) => self.drain_iter(&s),
+            n @ Value::Native(_) => {
+                let s = super::iter::as_iter(self, n)?;
+                self.drain_iter(&s)
+            }
             Value::Map(m) => Ok(m.iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
             Value::Set(m) => Ok(m.keys().map(|k| k.0.clone()).collect()),
             Value::Enum(e) if &*e.ty == "Option" => Ok(match &e.payload {

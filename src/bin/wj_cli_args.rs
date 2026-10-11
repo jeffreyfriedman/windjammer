@@ -152,6 +152,15 @@ pub enum Commands {
         #[arg(long)]
         interpret: bool,
 
+        /// With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another
+        /// reproducible interleaving at every synchronisation point)
+        #[arg(long, value_name = "N", default_value = "0")]
+        sched_seed: u64,
+
+        /// With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it
+        #[arg(long)]
+        deterministic_time: bool,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,

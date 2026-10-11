@@ -48,6 +48,8 @@ pub enum IterSrc {
     Rev(Iter),
     Repeat(Value),
     RepeatWith(Value),
+    /// Messages from a channel receiver (blocking, or only what is queued when `true`).
+    Recv(Rc<super::builtins::channel::Chan>, bool),
     /// `from_fn(f)`: `f()` returns `Option`.
     FromFn(Value),
     /// `successors(first, f)`: `f(&prev)` returns `Option`.
@@ -74,6 +76,10 @@ pub fn as_iter(it: &mut Interpreter, v: Value) -> R<Iter> {
         Value::Iter(i) => i,
         Value::Vec(x) => IterState::from_rc(x),
         Value::Range(a, b, ty) => IterState::new(IterSrc::Range { cur: Cell::new(a), end: Cell::new(b), ty }),
+        Value::Native(ref n) if n.type_name() == "Receiver" => match super::builtins::channel::receiver_iter(&Value::Native(n.clone()), false) {
+            Some(Value::Iter(i)) => i,
+            _ => return Err(semantic("not a receiver")),
+        },
         other => IterState::from_items(it.to_items(other)?),
     })
 }
@@ -288,6 +294,7 @@ fn advance(it: &mut Interpreter, s: &Iter) -> R<Option<Value>> {
             Ok(Some(b[i].clone()))
         }
         IterSrc::Rev(inner) => next_back(it, inner),
+        IterSrc::Recv(chan, try_only) => it.chan_recv_item(chan, *try_only),
         IterSrc::Repeat(v) => Ok(Some(v.clone())),
         IterSrc::RepeatWith(f) => Ok(Some(it.call_value(f, vec![])?)),
         IterSrc::FromFn(f) => match it.call_value(f, vec![])?.as_option() {
@@ -418,6 +425,7 @@ pub fn clone_iter(s: &Iter) -> Iter {
             Cycle { inner: c(inner), buf: RefCell::new(buf.borrow().clone()), idx: Cell::new(idx.get()), replaying: Cell::new(replaying.get()) }
         }
         Rev(i) => Rev(c(i)),
+        Recv(ch, t) => Recv(ch.clone(), *t),
         Repeat(v) => Repeat(v.clone()),
         RepeatWith(f) => RepeatWith(f.clone()),
         FromFn(f) => FromFn(f.clone()),

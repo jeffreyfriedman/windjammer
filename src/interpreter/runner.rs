@@ -51,8 +51,19 @@ pub fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static)
         .unwrap_or_else(|_| panic!("interpreter thread crashed"))
 }
 
+/// Knobs of a run (CLI flags): scheduler seed and deterministic time.
+#[derive(Clone, Copy, Default)]
+pub struct RunOptions {
+    pub sched_seed: u64,
+    pub deterministic_time: bool,
+}
+
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
 pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
+    run_path_with(path, args, RunOptions::default())
+}
+
+pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
     let entry = match entry_file(path) {
         Ok(e) => e,
         Err(m) => {
@@ -63,6 +74,8 @@ pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
     with_big_stack(move || {
         let mut it = Interpreter::new();
         it.guard_stack();
+        it.set_sched_seed(opts.sched_seed);
+        it.set_deterministic_time(opts.deterministic_time);
         it.set_args(args);
         if let Err(e) = it.load_entry_file(&entry) {
             eprintln!("{}", e.render());

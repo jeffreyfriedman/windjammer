@@ -81,6 +81,8 @@ pub enum Proj {
 pub struct Place {
     pub slot: Slot,
     pub path: Vec<Proj>,
+    /// Set for lock/borrow guards: keeps the lock held while any copy of the guard lives.
+    pub guard: Option<Rc<super::locks::GuardToken>>,
 }
 
 
@@ -125,6 +127,7 @@ pub enum CellKind {
     Cell,
     Mutex,
     RwLock,
+    Atomic,
 }
 
 impl CellKind {
@@ -134,6 +137,7 @@ impl CellKind {
             CellKind::Cell => "Cell",
             CellKind::Mutex => "Mutex",
             CellKind::RwLock => "RwLock",
+            CellKind::Atomic => "Atomic",
         }
     }
 }
@@ -164,7 +168,9 @@ pub enum Value {
     /// `Weak<T>` of an `Rc` slot (does not keep it alive).
     Weak(Slot),
     /// `RefCell` / `Cell` / `Mutex` / `RwLock`: an interior-mutable slot.
-    Cell(CellKind, Slot),
+    Cell(CellKind, Slot, Rc<super::locks::CellState>),
+    /// Host objects: threads, channels, durations... (see `native.rs`).
+    Native(Rc<dyn super::native::Native>),
 }
 
 impl Value {
@@ -262,7 +268,8 @@ impl Value {
             Value::Ref(_) => "&mut".into(),
             Value::Rc(_) => "Rc".into(),
             Value::Weak(_) => "Weak".into(),
-            Value::Cell(k, _) => k.name().into(),
+            Value::Cell(k, ..) => k.name().into(),
+            Value::Native(n) => n.type_name().into(),
         }
     }
 
@@ -314,7 +321,11 @@ impl Value {
             }
             (Range(a, b, _), Range(c, d, _)) => (a, b).cmp(&(c, d)),
             (Rc(a), Rc(b)) => a.borrow().structural_cmp(&b.borrow()),
-            (Cell(_, a), Cell(_, b)) => a.borrow().structural_cmp(&b.borrow()),
+            (Cell(_, a, _), Cell(_, b, _)) => a.borrow().structural_cmp(&b.borrow()),
+            (Native(a), Native(b)) => match (a.order_key(), b.order_key()) {
+                (Some(x), Some(y)) => x.cmp(&y),
+                _ => (std::rc::Rc::as_ptr(a) as *const () as usize).cmp(&(std::rc::Rc::as_ptr(b) as *const () as usize)),
+            },
             (Rc(p), o) => p.borrow().structural_cmp(o),
             (s, Rc(p)) => s.structural_cmp(&p.borrow()),
             (Ref(p), o) => p.slot.borrow().structural_cmp(o),

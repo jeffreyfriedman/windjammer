@@ -17,6 +17,8 @@ mod heap;
 mod intrinsics;
 pub mod int;
 mod iter;
+mod locks;
+mod native;
 pub mod loader;
 mod ops;
 mod pattern;
@@ -24,6 +26,7 @@ mod place;
 mod register;
 pub mod repl;
 pub mod runner;
+mod sched;
 mod scope;
 pub mod value;
 
