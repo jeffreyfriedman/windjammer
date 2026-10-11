@@ -5,7 +5,7 @@
 //! productions only), UPPERCASE names are lexical productions, lowercase names are syntactic.
 //! Comments `(* ... *)` are ignored unless they start with `(*@`, which attach a directive to the
 //! NEXT production: `@ctx <template with $$>`, `@nl`, `@status <parsed|unparsed|informative>`,
-//! `@lex <TokenName>`, `@reject-keywords`.
+//! `@lex <TokenName>`, `@reject-keywords`, `@depth`.
 
 pub mod generate;
 pub mod parse;
@@ -32,6 +32,8 @@ pub struct Production {
     pub status: String,
     pub lex: Option<String>,
     pub reject_keywords: bool,
+    /// `@depth`: expanding this production consumes one level of the recursion budget.
+    pub depth: bool,
 }
 
 #[derive(Debug, Default)]

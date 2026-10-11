@@ -123,7 +123,7 @@ impl<'g> Gen<'g> {
                 out.push(c);
             }
             Expr::Ref(n) => {
-                let d = if depth > 0 && !n.chars().next().unwrap().is_ascii_uppercase() { depth - 1 } else { depth };
+                let d = if depth > 0 && self.g.prods[n].depth { depth - 1 } else { depth };
                 // lexical sub-expansions never run out of depth: they are bounded by their own repetition
                 let d = if lex { depth.max(1) } else { d };
                 let child_lex = lex && n.chars().next().unwrap().is_ascii_uppercase();

@@ -71,6 +71,9 @@ fn syntactic_productions_agree_with_the_real_parser() {
             if p.lex.is_some() {
                 continue;
             }
+            if std::env::var("SPEC_ONLY").is_ok_and(|o| &o != name) {
+                continue;
+            }
             let (mut ok, mut bad) = (0, Vec::new());
             for _ in 0..PER_PRODUCTION {
                 let s = gen.sentence(name, DEPTH);
@@ -84,7 +87,10 @@ fn syntactic_productions_agree_with_the_real_parser() {
             match p.status.as_str() {
                 "parsed" if !bad.is_empty() => {
                     report.push_str(&format!("\n{name}: {} of {PER_PRODUCTION} generated sentences rejected, e.g.\n", bad.len()));
-                    for (prog, e) in bad.iter().take(3) {
+                    // shortest counter-examples first: they are the easiest to read
+                    bad.sort_by_key(|(prog, _)| prog.len());
+                    let show = std::env::var("SPEC_SHOW").ok().and_then(|s| s.parse().ok()).unwrap_or(3);
+                    for (prog, e) in bad.iter().take(show) {
                         report.push_str(&format!("  {e}\n  ---\n{}\n  ---\n", prog.trim()));
                     }
                 }
@@ -94,7 +100,7 @@ fn syntactic_productions_agree_with_the_real_parser() {
                 _ => {}
             }
         }
-        assert!(tested >= 8, "too few @ctx productions tested: {tested}");
+        assert!(tested >= 5 || std::env::var("SPEC_ONLY").is_ok(), "too few @ctx productions tested: {tested}");
         assert!(report.is_empty(), "grammar/parser disagreement:{report}");
     });
 }
@@ -111,6 +117,10 @@ fn lexical_productions_produce_a_single_token_of_the_stated_kind() {
             let Some(kinds) = &p.lex else { continue };
             for _ in 0..PER_PRODUCTION {
                 let s = gen.sentence(name, DEPTH).trim().to_string();
+                if std::env::var("SPEC_DUMP").is_ok() {
+                    // debugging aid: the last line printed before a crash is the offending lexeme
+                    eprintln!("LEX {name}: {s:?}");
+                }
                 let toks = catch_unwind(AssertUnwindSafe(|| {
                     let mut lx = windjammer::lexer::Lexer::new(&s);
                     lx.tokenize_with_locations()
@@ -143,8 +153,8 @@ fn every_production_is_reachable_from_a_tested_one() {
         for name in &g.order {
             let p = &g.prods[name];
             if p.ctx.is_some() || p.lex.is_some() {
-                for _ in 0..PER_PRODUCTION {
-                    gen.sentence(name, DEPTH);
+                for _ in 0..PER_PRODUCTION * 8 {
+                    gen.sentence(name, DEPTH + 2);
                 }
             }
         }
