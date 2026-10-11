@@ -364,7 +364,34 @@ impl<'ast> CodeGenerator<'ast> {
         // Also detect when `generate_expression` already emitted a leading `&`.
         // P3.646: `values()`/`keys()` always track `&V` bindings — even when the
         // registry Item looks like owned Copy (`usize`), Rust still yields `&V`.
+        // `for tok in text.split(..)` yields `&str` values (already a reference to unsized `str`): the loop
+        // variable is used as a string, never dereferenced (`*tok == "a"` would compare `str` with `&str`).
+        let str_slice_methods = [
+            "split", "split_whitespace", "lines", "split_terminator", "rsplit", "splitn", "rsplitn",
+            "split_ascii_whitespace",
+        ];
+        let yields_str_slices = match iterable {
+            Expression::MethodCall { method, .. } => str_slice_methods.contains(&method.as_str()),
+            Expression::Call { function, .. } => matches!(
+                function,
+                Expression::FieldAccess { field, .. } if str_slice_methods.contains(&field.as_str())
+            ),
+            _ => false,
+        };
+        // The analyzer may have classified the loop variable as a borrowed param; for `&str` items that would
+        // insert `*tok`. Shadow it for the loop body and restore afterwards.
+        let mut str_slice_shadowed: Vec<String> = Vec::new();
+        if yields_str_slices {
+            let mut names = std::collections::HashSet::new();
+            self.extract_pattern_bindings(pattern, &mut names);
+            for n in names {
+                if self.inferred_borrowed_params.remove(&n) {
+                    str_slice_shadowed.push(n);
+                }
+            }
+        }
         let tracks_borrowed_loop_var = !use_copied_for_copy_elems
+            && !yields_str_slices
             && (is_map_shared_ref_iter || !by_value_owned_iter)
             && (needs_borrow
                 || is_borrowed_iterator
@@ -551,6 +578,9 @@ impl<'ast> CodeGenerator<'ast> {
         self.current_statement_idx = saved_idx;
         self.current_block_local_idx = saved_local_idx;
 
+        for n in str_slice_shadowed {
+            self.inferred_borrowed_params.insert(n);
+        }
         if is_borrowed_iterator {
             for var in &borrowed_bindings_added {
                 self.borrowed_iterator_vars.remove(var);

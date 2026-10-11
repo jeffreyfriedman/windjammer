@@ -727,7 +727,8 @@ impl<'ast> CodeGenerator<'ast> {
             Type::Reference(inner) | Type::MutableReference(inner) => inner.as_ref(),
             _ => return generated.to_string(),
         };
-        if !self.is_type_copy(pointee) {
+        // `&str` is itself the value: `*s` would be the unsized `str`.
+        if !self.is_type_copy(pointee) || matches!(pointee, Type::Custom(n) if n == "str") {
             return generated.to_string();
         }
         if self.match_arm_bindings.contains(name.as_str()) {
