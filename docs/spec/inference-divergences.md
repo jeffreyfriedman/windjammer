@@ -92,14 +92,22 @@ treats any single capital letter (or letter+digit) as a type parameter and pins 
 codegen later demotes it to `&B`, so the analyzer and the emitted signature disagree (`D-OWN-STAGES`). Type names
 should resolve to definitions (WP 6/7), not be guessed by spelling.
 
-## D-NUM-INTERP-CALL Calls inside `${...}` did not constrain literals (S1, fixed here)
-Expressions inside interpolation were lexed as a fragment, so their positions were relative to the fragment (1:1,
-1:5, ...). Numeric inference keys expressions by position, so every interpolation collided with every other and with
-real expressions on line 1; `println("${read_vec(v0)}")` did not make `vec![1, 2, 3]` an `i64` vector
-(`tests/inference_corpus/interp_call_width.wj`, rustc E0308). Fix: `parser/interpolated_string_expression_parser.rs`
-re-bases sub-expression positions onto the enclosing string (`tests/interpolation_expr_location_test.rs`). The same
-collision fed `auto_clone` and diagnostics (D-CLONE-LASTUSE for arguments inside interpolation is a probable
-consequence; re-measure after this change).
+## D-NUM-INTERP-CALL A call inside `${...}` does not constrain the literals it receives (S1)
+Found by the differential harness (seed 137, shrunk). `tests/inference_corpus/interp_call_width.wj`:
+```windjammer
+fn read_vec(v: Vec<int>) -> int { v.len() }
+fn main() {
+    let v0 = vec![1, 2, 3]
+    println("${read_vec(v0)}")      // emits vec![1_i32, ..] and read_vec(&v0) with v: &Vec<i64>: rustc E0308
+}
+```
+`let n = read_vec(v0)` and `println("{}", read_vec(v0))` both emit `i64`; only the `${}` form fails, so the legacy
+integer collector loses the call-argument constraint for interpolated expressions. Observation: sub-expressions of
+an interpolation are lexed as a separate fragment, so their positions are fragment-relative (1:1, ...), and a trailing
+bare identifier (`${a}`) has no location at all; numeric inference keys expressions by position
+(`int_inference/get_expr_id.rs`). Re-basing the positions onto the enclosing string (tried in this stream) made the
+positions correct but did not fix the width, so the root cause is elsewhere in the collector; not fixed. This is
+a very common shape (interpolating a call result), so it is the highest-value S1 found.
 
 ## D-OWN-OPTION-MATCH Matching an `Option` by value owns it (S2)
 `fn f(o: Option<string>) -> int { match o { Some(s) => s.len(), None => 0 } }` emits `o: Option<String>`; the
