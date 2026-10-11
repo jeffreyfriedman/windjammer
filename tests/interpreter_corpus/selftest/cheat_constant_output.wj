@@ -1,0 +1,7 @@
+// seeds: 1 2 3
+// Harness self-test: this program ignores its seed and prints a constant, as a print-faking
+// "interpreter" would. The oracle is seed-dependent, so the harness must REJECT it.
+fn main() {
+    let x: i64 = __SEED__
+    println("{}", 42)
+}

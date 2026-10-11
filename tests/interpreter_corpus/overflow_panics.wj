@@ -1,0 +1,13 @@
+// seeds: 1 2 3
+// exit: 101
+// Debug-build semantics: arithmetic overflow panics (exit status 101) after earlier output is flushed.
+fn main() {
+    let mut x: i32 = 2147483000 + __SEED__
+    println("start {}", x)
+    let mut i = 0
+    while i < 10 {
+        x = x + 100
+        println("{}", x)
+        i += 1
+    }
+}

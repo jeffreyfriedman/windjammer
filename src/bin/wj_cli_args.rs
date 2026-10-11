@@ -147,8 +147,8 @@ pub enum Commands {
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
-        /// Interpret directly (Windjammerscript mode) — no compilation, instant execution.
-        /// Same .wj source can later be compiled with `wj build` for production.
+        /// Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start.
+        /// Accepts a file or a project directory. Same source compiles with `wj build` for release.
         #[arg(long)]
         interpret: bool,
 
@@ -230,6 +230,9 @@ pub enum Commands {
         /// Exit 0 when no tests are found (default: finding none is an error)
         #[arg(long)]
         allow_empty: bool,
+        /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
+        #[arg(long)]
+        interpret: bool,
     },
 
     /// Format Windjammer code

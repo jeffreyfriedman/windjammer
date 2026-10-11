@@ -1,193 +1,330 @@
-//! Runtime values for the Windjammerscript interpreter.
+//! Runtime value model.
 //!
-//! Values use reference semantics — no ownership tracking.
-//! The compiler handles safety; the interpreter handles execution.
+//! Values are immutable trees shared through `Rc` with copy-on-write mutation
+//! (`Rc::make_mut`), so moving/cloning is cheap and `.clone()` is always independent.
+//! Mutation through `&mut` goes through [`Place`] projections, never raw aliasing.
+//! Integers carry their Rust width ([`IntTy`]).
 
-use std::collections::HashMap;
+use super::int::IntTy;
+use crate::parser::{Expression, Type};
+use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt;
+use std::rc::Rc;
 
-/// Runtime value in the interpreter
-#[derive(Debug, Clone)]
+pub type Slot = Rc<RefCell<Value>>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FloatTy {
+    F32,
+    F64,
+    Lit,
+}
+
+#[derive(Clone, Debug)]
+pub struct StructVal {
+    pub name: Rc<str>,
+    pub fields: Vec<(Rc<str>, Value)>,
+    /// `@derive(Copy)`: reading the place yields an independent copy.
+    pub copy: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum Payload {
+    Unit,
+    Tuple(Vec<Value>),
+    Struct(Vec<(Rc<str>, Value)>),
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumVal {
+    pub ty: Rc<str>,
+    pub variant: Rc<str>,
+    pub idx: u32,
+    pub payload: Payload,
+}
+
+/// Total-ordered map key wrapper.
+#[derive(Clone, Debug)]
+pub struct Key(pub Value);
+
+impl PartialEq for Key {
+    fn eq(&self, o: &Key) -> bool {
+        self.0.structural_cmp(&o.0) == Ordering::Equal
+    }
+}
+impl Eq for Key {}
+impl PartialOrd for Key {
+    fn partial_cmp(&self, o: &Key) -> Option<Ordering> {
+        Some(self.cmp(o))
+    }
+}
+impl Ord for Key {
+    fn cmp(&self, o: &Key) -> Ordering {
+        self.0.structural_cmp(&o.0)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Proj {
+    Field(Rc<str>),
+    Index(usize),
+    Key(Value),
+}
+
+/// A location inside a variable slot: the target of a `&mut` borrow.
+#[derive(Clone, Debug)]
+pub struct Place {
+    pub slot: Slot,
+    pub path: Vec<Proj>,
+}
+
+pub struct IterState {
+    pub items: Vec<Value>,
+    pub pos: usize,
+}
+
+pub enum Callable {
+    Closure {
+        params: &'static [String],
+        body: &'static Expression<'static>,
+        env: Vec<(&'static str, Slot)>,
+        module: usize,
+        self_ty: Option<Rc<str>>,
+    },
+    /// A user function addressed by (module, qualified name), e.g. `Type::method`.
+    Named { module: usize, name: Rc<str> },
+    /// A builtin function or enum-variant constructor addressed by path, e.g. `Some`.
+    Path(Rc<str>),
+}
+
+impl fmt::Debug for Callable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Callable::Closure { params, .. } => write!(f, "<closure |{}|>", params.join(", ")),
+            Callable::Named { name, .. } => write!(f, "<fn {}>", name),
+            Callable::Path(p) => write!(f, "<fn {}>", p),
+        }
+    }
+}
+
+impl fmt::Debug for IterState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<iter {}/{}>", self.pos, self.items.len())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Value {
-    /// Integer (i64)
-    Int(i64),
-    /// Floating point (f64)
-    Float(f64),
-    /// Boolean
+    Unit,
     Bool(bool),
-    /// String
-    String(String),
-    /// Character
+    Int(i128, IntTy),
+    Float(f64, FloatTy),
     Char(char),
-    /// A vector/array of values
-    Vec(Vec<Value>),
-    /// A struct instance: type name + field map
-    Struct {
-        type_name: String,
-        fields: HashMap<String, Value>,
-    },
-    /// An enum variant
-    Enum {
-        type_name: String,
-        variant: String,
-        data: EnumData,
-    },
-    /// A closure / function reference
-    Function(FunctionValue),
-    /// Option::None / null
-    Nil,
-    /// Unit type (void return)
-    Unit,
-    /// A HashMap
-    Map(HashMap<String, Value>),
-    /// A tuple
-    Tuple(Vec<Value>),
-}
-
-/// Data carried by an enum variant
-#[derive(Debug, Clone)]
-pub enum EnumData {
-    Unit,
-    Tuple(Vec<Value>),
-    Struct(HashMap<String, Value>),
-}
-
-/// A function value (for closures and function references)
-#[derive(Debug, Clone)]
-pub struct FunctionValue {
-    pub name: String,
-    pub params: Vec<String>,
-    /// Index into the interpreter's function table
-    pub body_id: usize,
+    Str(Rc<String>),
+    Vec(Rc<Vec<Value>>),
+    Tuple(Rc<Vec<Value>>),
+    Struct(Rc<StructVal>),
+    Enum(Rc<EnumVal>),
+    Map(Rc<BTreeMap<Key, Value>>),
+    Set(Rc<BTreeMap<Key, Value>>),
+    /// Half-open integer range; `a..=b` is stored as `a..b+1`.
+    Range(i128, i128, IntTy),
+    Iter(Rc<RefCell<IterState>>),
+    Func(Rc<Callable>),
+    /// `fmt::Formatter` / `String` sink used by `write!` inside `impl Display`.
+    Formatter(Rc<RefCell<String>>),
+    Ref(Place),
 }
 
 impl Value {
-    /// Check if this value is truthy
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Value::Bool(b) => *b,
-            Value::Int(n) => *n != 0,
-            Value::Float(f) => *f != 0.0,
-            Value::String(s) => !s.is_empty(),
-            Value::Nil => false,
-            Value::Unit => false,
-            _ => true,
+    pub fn int(v: i128) -> Value {
+        Value::Int(v, IntTy::Lit)
+    }
+    pub fn typed(v: i128, t: IntTy) -> Value {
+        Value::Int(v, t)
+    }
+    pub fn usize(v: usize) -> Value {
+        Value::Int(v as i128, IntTy::Usize)
+    }
+    pub fn str(s: impl Into<String>) -> Value {
+        Value::Str(Rc::new(s.into()))
+    }
+    pub fn vec(v: Vec<Value>) -> Value {
+        Value::Vec(Rc::new(v))
+    }
+    pub fn tuple(v: Vec<Value>) -> Value {
+        if v.is_empty() {
+            Value::Unit
+        } else {
+            Value::Tuple(Rc::new(v))
+        }
+    }
+    pub fn float(f: f64) -> Value {
+        Value::Float(f, FloatTy::F64)
+    }
+
+    pub fn enum_val(ty: &str, variant: &str, idx: u32, payload: Payload) -> Value {
+        Value::Enum(Rc::new(EnumVal {
+            ty: ty.into(),
+            variant: variant.into(),
+            idx,
+            payload,
+        }))
+    }
+    pub fn some(v: Value) -> Value {
+        Value::enum_val("Option", "Some", 1, Payload::Tuple(vec![v]))
+    }
+    pub fn none() -> Value {
+        Value::enum_val("Option", "None", 0, Payload::Unit)
+    }
+    pub fn ok(v: Value) -> Value {
+        Value::enum_val("Result", "Ok", 0, Payload::Tuple(vec![v]))
+    }
+    pub fn err(v: Value) -> Value {
+        Value::enum_val("Result", "Err", 1, Payload::Tuple(vec![v]))
+    }
+    pub fn option(v: Option<Value>) -> Value {
+        match v {
+            Some(v) => Value::some(v),
+            None => Value::none(),
         }
     }
 
-    /// Get the type name of this value (for error messages)
-    pub fn type_name(&self) -> &str {
+    /// Option/Result payload views.
+    pub fn as_option(&self) -> Option<Option<&Value>> {
         match self {
-            Value::Int(_) => "int",
-            Value::Float(_) => "float",
-            Value::Bool(_) => "bool",
-            Value::String(_) => "string",
-            Value::Char(_) => "char",
-            Value::Vec(_) => "Vec",
-            Value::Struct { type_name, .. } => type_name,
-            Value::Enum { type_name, .. } => type_name,
-            Value::Function(_) => "function",
-            Value::Nil => "nil",
-            Value::Unit => "()",
-            Value::Map(_) => "HashMap",
-            Value::Tuple(_) => "tuple",
-        }
-    }
-
-    /// Convert to integer, if possible
-    pub fn as_int(&self) -> Option<i64> {
-        match self {
-            Value::Int(n) => Some(*n),
-            Value::Float(f) => Some(*f as i64),
-            Value::Bool(b) => Some(if *b { 1 } else { 0 }),
-            _ => None,
-        }
-    }
-
-    /// Convert to float, if possible
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Value::Float(f) => Some(*f),
-            Value::Int(n) => Some(*n as f64),
-            _ => None,
-        }
-    }
-
-    /// Convert to string representation
-    pub fn to_display_string(&self) -> String {
-        match self {
-            Value::Int(n) => n.to_string(),
-            Value::Float(f) => {
-                let s = f.to_string();
-                if s.contains('.') {
-                    s
-                } else {
-                    format!("{}.0", s)
-                }
-            }
-            Value::Bool(b) => b.to_string(),
-            Value::String(s) => s.clone(),
-            Value::Char(c) => c.to_string(),
-            Value::Vec(items) => {
-                let strs: Vec<String> = items.iter().map(|v| v.to_display_string()).collect();
-                format!("[{}]", strs.join(", "))
-            }
-            Value::Struct { type_name, fields } => {
-                let field_strs: Vec<String> = fields
-                    .iter()
-                    .map(|(k, v)| format!("{}: {}", k, v.to_display_string()))
-                    .collect();
-                format!("{} {{ {} }}", type_name, field_strs.join(", "))
-            }
-            Value::Enum { variant, data, .. } => match data {
-                EnumData::Unit => variant.clone(),
-                EnumData::Tuple(vals) => {
-                    let strs: Vec<String> = vals.iter().map(|v| v.to_display_string()).collect();
-                    format!("{}({})", variant, strs.join(", "))
-                }
-                EnumData::Struct(fields) => {
-                    let strs: Vec<String> = fields
-                        .iter()
-                        .map(|(k, v)| format!("{}: {}", k, v.to_display_string()))
-                        .collect();
-                    format!("{} {{ {} }}", variant, strs.join(", "))
-                }
+            Value::Enum(e) if &*e.ty == "Option" => match &e.payload {
+                Payload::Tuple(v) if e.idx == 1 => Some(v.first()),
+                _ => Some(None),
             },
-            Value::Function(f) => format!("<fn {}>", f.name),
-            Value::Nil => "None".to_string(),
-            Value::Unit => "()".to_string(),
-            Value::Map(m) => {
-                let strs: Vec<String> = m
-                    .iter()
-                    .map(|(k, v)| format!("{}: {}", k, v.to_display_string()))
-                    .collect();
-                format!("{{{}}}", strs.join(", "))
-            }
-            Value::Tuple(items) => {
-                let strs: Vec<String> = items.iter().map(|v| v.to_display_string()).collect();
-                format!("({})", strs.join(", "))
-            }
+            _ => None,
         }
     }
-}
 
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_display_string())
-    }
-}
-
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Int(a), Value::Int(b)) => a == b,
-            (Value::Float(a), Value::Float(b)) => a == b,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Char(a), Value::Char(b)) => a == b,
-            (Value::Nil, Value::Nil) => true,
-            (Value::Unit, Value::Unit) => true,
+    pub fn is_copy_aggregate(&self) -> bool {
+        match self {
+            Value::Struct(s) => s.copy,
+            Value::Tuple(_) => true,
             _ => false,
         }
+    }
+
+    pub fn type_name(&self) -> String {
+        match self {
+            Value::Unit => "()".into(),
+            Value::Bool(_) => "bool".into(),
+            Value::Int(_, t) => t.name().into(),
+            Value::Float(_, FloatTy::F32) => "f32".into(),
+            Value::Float(..) => "f64".into(),
+            Value::Char(_) => "char".into(),
+            Value::Str(_) => "String".into(),
+            Value::Vec(_) => "Vec".into(),
+            Value::Tuple(_) => "tuple".into(),
+            Value::Struct(s) => s.name.to_string(),
+            Value::Enum(e) => e.ty.to_string(),
+            Value::Map(_) => "HashMap".into(),
+            Value::Set(_) => "HashSet".into(),
+            Value::Range(..) => "Range".into(),
+            Value::Iter(_) => "Iterator".into(),
+            Value::Func(_) => "fn".into(),
+            Value::Formatter(_) => "Formatter".into(),
+            Value::Ref(_) => "&mut".into(),
+        }
+    }
+
+    /// Total structural ordering (used for ==, <, sort, BTreeMap keys).
+    pub fn structural_cmp(&self, other: &Value) -> Ordering {
+        use Value::*;
+        match (self, other) {
+            (Unit, Unit) => Ordering::Equal,
+            (Bool(a), Bool(b)) => a.cmp(b),
+            (Int(a, _), Int(b, _)) => a.cmp(b),
+            (Float(a, _), Float(b, _)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+            (Int(a, _), Float(b, _)) => (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal),
+            (Float(a, _), Int(b, _)) => a.partial_cmp(&(*b as f64)).unwrap_or(Ordering::Equal),
+            (Char(a), Char(b)) => a.cmp(b),
+            (Str(a), Str(b)) => a.as_str().cmp(b.as_str()),
+            (Vec(a), Vec(b)) | (Tuple(a), Tuple(b)) => cmp_seq(a, b),
+            (Struct(a), Struct(b)) => {
+                for ((_, x), (_, y)) in a.fields.iter().zip(b.fields.iter()) {
+                    let o = x.structural_cmp(y);
+                    if o != Ordering::Equal {
+                        return o;
+                    }
+                }
+                Ordering::Equal
+            }
+            (Enum(a), Enum(b)) => a.idx.cmp(&b.idx).then_with(|| match (&a.payload, &b.payload) {
+                (Payload::Tuple(x), Payload::Tuple(y)) => cmp_seq(x, y),
+                (Payload::Struct(x), Payload::Struct(y)) => {
+                    for ((_, p), (_, q)) in x.iter().zip(y.iter()) {
+                        let o = p.structural_cmp(q);
+                        if o != Ordering::Equal {
+                            return o;
+                        }
+                    }
+                    Ordering::Equal
+                }
+                _ => Ordering::Equal,
+            }),
+            (Map(a), Map(b)) | (Set(a), Set(b)) => {
+                let ka: std::vec::Vec<_> = a.iter().collect();
+                let kb: std::vec::Vec<_> = b.iter().collect();
+                for ((k1, v1), (k2, v2)) in ka.iter().zip(kb.iter()) {
+                    let o = k1.cmp(k2).then_with(|| v1.structural_cmp(v2));
+                    if o != Ordering::Equal {
+                        return o;
+                    }
+                }
+                ka.len().cmp(&kb.len())
+            }
+            (Range(a, b, _), Range(c, d, _)) => (a, b).cmp(&(c, d)),
+            (Ref(p), o) => p.slot.borrow().structural_cmp(o),
+            (s, Ref(p)) => s.structural_cmp(&p.slot.borrow()),
+            _ => self.rank().cmp(&other.rank()),
+        }
+    }
+
+    fn rank(&self) -> u8 {
+        match self {
+            Value::Unit => 0,
+            Value::Bool(_) => 1,
+            Value::Int(..) => 2,
+            Value::Float(..) => 3,
+            Value::Char(_) => 4,
+            Value::Str(_) => 5,
+            _ => 6,
+        }
+    }
+
+    pub fn structural_eq(&self, other: &Value) -> bool {
+        // NaN != NaN like Rust
+        if let (Value::Float(a, _), Value::Float(b, _)) = (self, other) {
+            return a == b;
+        }
+        self.structural_cmp(other) == Ordering::Equal
+    }
+}
+
+fn cmp_seq(a: &[Value], b: &[Value]) -> Ordering {
+    for (x, y) in a.iter().zip(b.iter()) {
+        let o = x.structural_cmp(y);
+        if o != Ordering::Equal {
+            return o;
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
+/// `Type` helpers shared by evaluator and builtins.
+pub fn type_is_float(t: &Type) -> Option<FloatTy> {
+    match t {
+        Type::Float => Some(FloatTy::F64),
+        Type::Custom(n) if n == "f64" => Some(FloatTy::F64),
+        Type::Custom(n) if n == "f32" => Some(FloatTy::F32),
+        Type::Reference(i) | Type::MutableReference(i) => type_is_float(i),
+        _ => None,
     }
 }
