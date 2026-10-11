@@ -68,6 +68,8 @@ highlighting = ["dep:syntect"]
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
 # ownership/effect/taint as first-class types, and multi-target safety encodings.
 safety_typed_ir = []
+# Backend conformance soak mode: 5,000 generated programs instead of 200 (tests/backend_conformance_test.rs).
+conformance_soak = []
 # Opt-in test suite targets: `cargo test --features parser_tests`, etc.
 # With no *_tests feature enabled, `cargo test` runs the full suite.
 parser_tests = []
@@ -110,6 +112,12 @@ serde_json = "1.0"
 [[test]]
 name = "all"
 path = "tests/all.rs"
+
+# Backend conformance (Rust/Go/JS) also runs standalone for fast iteration and CI sharding:
+#   cargo test --release --test backend_conformance
+[[test]]
+name = "backend_conformance"
+path = "tests/backend_conformance_test.rs"
 
 [[bench]]
 name = "string_optimization_bench"
