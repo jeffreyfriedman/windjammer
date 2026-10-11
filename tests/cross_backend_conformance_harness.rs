@@ -133,6 +133,8 @@ pub fn compile_and_run_go(source: &str) -> Option<BackendResult> {
         .arg("--target")
         .arg("go")
         .arg("--no-cargo")
+        .arg("-o")
+        .arg(&output_dir)
         .arg(&test_file)
         .current_dir(temp_dir.path())
         .output()
@@ -150,10 +152,10 @@ pub fn compile_and_run_go(source: &str) -> Option<BackendResult> {
         });
     }
 
-    let go_file = output_dir.join("main.go");
+    // The Go backend emits a module directory (`main.go` + `wj_core.go` runtime + `go.mod`).
     let run = Command::new("go")
         .arg("run")
-        .arg(&go_file)
+        .arg(".")
         .current_dir(&output_dir)
         .output()
         .expect("Failed to execute go run");
@@ -179,6 +181,8 @@ pub fn compile_and_run_js(source: &str) -> BackendResult {
         .arg("--target")
         .arg("javascript")
         .arg("--no-cargo")
+        .arg("-o")
+        .arg(&output_dir)
         .arg(&test_file)
         .current_dir(temp_dir.path())
         .output()
@@ -196,36 +200,19 @@ pub fn compile_and_run_js(source: &str) -> BackendResult {
         };
     }
 
-    let js_file = output_dir.join("output.js");
+    // The JS backend emits an ES-module directory (`main.mjs` + `wj_core.mjs` runtime).
+    let js_file = output_dir.join("main.mjs");
     if !js_file.exists() {
         return BackendResult {
             backend: "js".into(),
             stdout: String::new(),
             success: false,
-            error: "No output.js generated".into(),
+            error: "No main.mjs generated".into(),
         };
     }
 
-    let js_code = fs::read_to_string(&js_file).unwrap();
-    let runner = output_dir.join("_run.mjs");
-
-    let stripped = js_code
-        .replace("export function", "function")
-        .replace("export class", "class")
-        .replace("export const", "const")
-        .replace("export let", "let");
-
-    let stripped = if let Some(idx) = stripped.find("// Auto-run main") {
-        stripped[..idx].to_string()
-    } else {
-        stripped
-    };
-
-    let runner_code = format!("{}\nif (typeof main === 'function') main();\n", stripped);
-    fs::write(&runner, &runner_code).unwrap();
-
     let run = Command::new("node")
-        .arg(&runner)
+        .arg(&js_file)
         .current_dir(&output_dir)
         .output()
         .expect("Failed to execute node");

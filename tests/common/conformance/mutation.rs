@@ -136,5 +136,33 @@ pub fn mutants() -> Vec<Mutant> {
             edits: vec![Edit::Replace { file: "wj_core.go", from: "	c, o := addC(a, b)\n	if o {\n		wjOverflow(\"add\")\n	}\n	return c", to: "	c, _ := addC(a, b)\n	return c" }],
             programs: &["60_overflow_panics"],
         },
+        Mutant {
+            name: "js-eprint-to-stdout",
+            models: "stderr output (stderr.println, debug) leaking into stdout",
+            backend: Backend::Js,
+            edits: vec![Edit::Replace { file: "wj_core.mjs", from: "if (fs) writeAll(2, s);", to: "if (fs) $print(s);" }],
+            programs: &["120_intr_streams"],
+        },
+        Mutant {
+            name: "js-center-pad-left-heavy",
+            models: "`^` alignment putting the extra pad column on the left",
+            backend: Backend::Js,
+            edits: vec![Edit::Replace { file: "wj_core.mjs", from: "fill.repeat(Math.floor(n / 2)) + s", to: "fill.repeat(Math.ceil(n / 2)) + s" }],
+            programs: &["121_intr_format_known", "122_intr_format_seeded"],
+        },
+        Mutant {
+            name: "go-eprint-to-stdout",
+            models: "stderr output (stderr.println, debug) leaking into stdout",
+            backend: Backend::Go,
+            edits: vec![Edit::Replace { file: "wj_core.go", from: "os.Stderr.WriteString(s)", to: "wjOut.WriteString(s)" }],
+            programs: &["120_intr_streams"],
+        },
+        Mutant {
+            name: "go-panic-exit-zero",
+            models: "failed assertion / panic exits with status 0",
+            backend: Backend::Go,
+            edits: vec![Edit::Replace { file: "wj_core.go", from: "code = 101", to: "code = 0" }],
+            programs: &["126_intr_assert_eq_fail"],
+        },
     ]
 }

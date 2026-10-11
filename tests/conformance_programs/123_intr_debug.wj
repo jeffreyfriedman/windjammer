@@ -1,0 +1,24 @@
+// debug(x): prints `[file:line:col] label = value` to stderr and returns x unchanged.
+// expect: 42
+// expect: hi
+// expect: 9
+// expect: 3 3
+// stderr-has: ] x = 21
+// stderr-has: ] s = "hi"
+fn double(n: i64) -> i64 {
+    n * 2
+}
+
+fn main() {
+    let x: i64 = 21
+    let y = debug(x) * 2
+    println("${y}")
+    let s = "hi"
+    let t = debug(s)
+    println("${t}")
+    let z = debug(double(4)) + 1
+    println("${z}")
+    let v = [1, 2, 3]
+    let w = debug(v)
+    println("${w.len()} ${v.len()}")
+}

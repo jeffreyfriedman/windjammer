@@ -14,6 +14,57 @@ pub struct Program {
     pub expect_exit: i32,
     pub has_ref: bool,
     pub seeded: bool,
+    pub stderr: StderrExpect,
+}
+
+/// Independent expectations about the stderr stream (ADR-0014 intrinsics write to it):
+/// `// stderr: line` (exact lines, in order), `// stderr-has: text` (substring), `// stderr-empty`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StderrExpect {
+    pub exact: Vec<String>,
+    pub has: Vec<String>,
+    pub empty: bool,
+}
+
+impl StderrExpect {
+    pub fn is_set(&self) -> bool {
+        self.empty || !self.exact.is_empty() || !self.has.is_empty()
+    }
+
+    /// None when `stderr` satisfies every expectation.
+    pub fn check(&self, stderr: &str) -> Option<String> {
+        if self.empty && !stderr.trim().is_empty() {
+            return Some(format!("expected empty stderr, got {:?}", stderr.trim()));
+        }
+        if !self.exact.is_empty() {
+            let got: Vec<&str> = stderr.lines().map(|l| l.trim_end()).collect();
+            if got != self.exact.iter().map(|s| s.as_str()).collect::<Vec<_>>() {
+                return Some(format!("stderr lines {:?} != expected {:?}", got, self.exact));
+            }
+        }
+        for h in &self.has {
+            if !stderr.contains(h.as_str()) {
+                return Some(format!("stderr lacks {h:?}; got {:?}", stderr.trim()));
+            }
+        }
+        None
+    }
+}
+
+pub fn parse_stderr_header(template: &str) -> StderrExpect {
+    let mut e = StderrExpect::default();
+    for line in template.lines() {
+        let Some(rest) = line.strip_prefix("// ") else { continue };
+        let value = |v: &str| v.strip_prefix(' ').unwrap_or(v).to_string();
+        if let Some(v) = rest.strip_prefix("stderr-has:") {
+            e.has.push(value(v));
+        } else if let Some(v) = rest.strip_prefix("stderr:") {
+            e.exact.push(value(v));
+        } else if rest.trim_end() == "stderr-empty" {
+            e.empty = true;
+        }
+    }
+    e
 }
 
 pub fn parse_header(template: &str) -> (Vec<u64>, Vec<String>, i32) {
@@ -42,7 +93,8 @@ pub fn load(path: &Path) -> Program {
     }
     let name = path.file_stem().unwrap().to_string_lossy().to_string();
     let has_ref = path.with_extension("ref.py").exists();
-    Program { name, path: path.to_path_buf(), template, seeds, known_expect, expect_exit, has_ref, seeded }
+    let stderr = parse_stderr_header(&template);
+    Program { name, path: path.to_path_buf(), template, seeds, known_expect, expect_exit, has_ref, seeded, stderr }
 }
 
 impl Program {
@@ -76,5 +128,17 @@ mod tests {
         assert_eq!(s, vec![3, 4]);
         assert_eq!(e, vec!["a b", "c"]);
         assert_eq!(x, 101);
+    }
+
+    #[test]
+    fn stderr_header_and_check() {
+        let e = parse_stderr_header("// stderr: a\n// stderr: b\n// stderr-has: zz\nfn main(){}");
+        assert_eq!(e.exact, vec!["a", "b"]);
+        assert!(e.check("a\nb\nzz here").is_some(), "exact lines must match exactly");
+        let h = parse_stderr_header("// stderr-has: ] x = 1\n");
+        assert!(h.check("[f:1:2] x = 1").is_none());
+        assert!(h.check("nothing").is_some());
+        assert!(parse_stderr_header("// stderr-empty\n").check("oops").is_some());
+        assert!(!parse_stderr_header("fn main(){}").is_set());
     }
 }

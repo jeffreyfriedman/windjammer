@@ -1,0 +1,9 @@
+// `{:#?}` of an aggregate is multi-line pretty Debug: Rust only, explicit error elsewhere.
+// expect: [
+// expect:     1,
+// expect:     2,
+// expect: ]
+fn main() {
+    let v: Vec<i64> = [1, 2]
+    println("${v:#?}")
+}

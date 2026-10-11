@@ -1,0 +1,11 @@
+// expect: before
+// exit: 101
+// stderr-has: ctx 7
+// stderr-has: left: "ab"
+// stderr-has: right: "ac"
+fn main() {
+    let n = 7
+    println("before")
+    assert_eq("ab", "ac", "ctx ${n}")
+    println("after")
+}
