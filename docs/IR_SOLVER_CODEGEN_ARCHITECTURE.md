@@ -97,8 +97,8 @@ Target-agnostic coercion decision:
 | Backend | IR integration | Coercion path |
 |---------|----------------|---------------|
 | **Rust** | Full (production) | `encode_call_argument(..., Target::Rust)` |
-| **Go** | Not consumed: `prepare_ir_context` result is bound to `_ir` and dropped (`src/codegen/go/generator/mod.rs`) | Go translation without IR ownership |
-| **JavaScript** | Not consumed: `let _ir = ...prepare_ir_context(...)` is dropped (`src/codegen/javascript/mod.rs`) | Pass-through; no IR-driven coercion |
+| **Go** | Via the portable layer: parameter modes come from the analyzer registry (`src/codegen/portable`) | Typed IR with explicit `Copy` nodes; emitter only spells Go |
+| **JavaScript / TypeScript** | Via the portable layer (same lowering as Go) | Typed IR with explicit `Copy` nodes; emitter only spells JS/TS |
 | **WASM** | Via Rust CodeGenerator | Linear memory pointer semantics |
 | **WGSL** | Out of scope | GPU types only, no ownership |
 | **Interpreter** | N/A (runtime refs) | Must pass cross-backend conformance |

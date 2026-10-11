@@ -11,6 +11,8 @@ JavaScript/TypeScript emitters print. All semantics that must agree across backe
 | `env.rs` | item tables (structs, enums, fns, methods, traits) + parameter modes from the analyzer registry |
 | `ir.rs` | `PModule`, `PFn`, `PStmt`, `PExpr`/`PK`; `Unsupported` (explicit "this construct is not implemented") |
 | `lower/` | bidirectional type inference with inference variables, `?`, interpolation, patterns, value-semantics `Copy` insertion |
+| `lower/intrinsics.rs` | ADR-0014 intrinsics (`print`/`assert*`/`panic`/`todo`/`unreachable`/`debug`/list literal) desugared to `Print`/`Panic`/`If`/`Block`; names come only from `crate::intrinsics` |
+| `lower/fmt.rs` | `{:spec}` parsing; unsupported flags (`+`, `#`, `E`, `x?`) are explicit errors |
 | `builtins.rs` | typing rules of std methods (`Vec`, `String`, `HashMap`, `Option`, iterators, ints, floats) |
 | `flatten.rs` | expression-position `if`/`match`/block/`?` become statements, preserving evaluation order |
 | `visit.rs` | mutable traversals (type resolution after inference) |
@@ -25,7 +27,7 @@ JavaScript/TypeScript emitters print. All semantics that must agree across backe
 **Owns / never decides.** Owns typing and ownership-driven copies. Never decides syntax, runtime representation of
 integers/strings, or naming (emitters do).
 
-**Allowed imports.** `crate::parser`, `crate::analyzer` (registry only), `crate::ir::analyze_and_lower` (done by backends).
+**Allowed imports.** `crate::intrinsics` (the intrinsic name registry; never match `println`/`panic`/... as strings here), `crate::parser`, `crate::analyzer` (registry only), `crate::ir::analyze_and_lower` (done by backends).
 
 **Entry points.** `lower::lower_program(&Program, Some(&registry))`, `flatten::flatten_module(&mut PModule)`.
 

@@ -11,6 +11,9 @@ One emitter serves both languages; `JavaScriptBackend::typescript()` adds type a
 - Strings are UTF-16 in memory but `len()`, slicing and `find` use UTF-8 byte semantics (`$strlen`, `$strSlice`).
 - Panics exit 101 (`$run`); output is buffered and flushed on exit.
 
+**Intrinsics.** Same as Go: lowered by the portable layer to `$print`/`$eprint`/`$panic`; format specs use `$pad`, `$fixed`, `$radix`, `$dbg*`.
+The TypeScript flavour is exercised on the intrinsic corpus (`intrinsic_corpus_conforms_on_typescript`, Node type stripping).
+
 **Invariants.** All value-semantics copies come from `PK::Copy` (lowering); the emitter never aliases a struct on assignment.
 
 **Owns / never decides.** Owns JS spelling and the runtime. Never decides typing/ownership.

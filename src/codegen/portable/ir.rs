@@ -191,6 +191,8 @@ pub struct PExpr {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FmtSpec {
     pub debug: bool,
+    /// `{:#?}`: pretty Debug. Identical to `{:?}` for scalars; emitters reject it for aggregates.
+    pub pretty: bool,
     pub precision: Option<usize>,
     pub width: Option<usize>,
     pub fill: Option<char>,

@@ -14,6 +14,9 @@
 - `&mut` params are pointers (`*T`); maps/sets are reference types and are passed as-is.
 - Panics (explicit, overflow, index, divide by zero) exit with status 101.
 
+**Intrinsics.** `println`/`stderr.println`/`assert*`/`panic`/`todo`/`unreachable`/`debug` need no code here: the portable layer lowers them to `PK::Print`/`PK::Panic`
+(`wjPrint`/`wjEprint`/`wjPanic`). Format specs: `wjPad`, `wjFixed`, `wjRadix`, `wjDbg`; unsupported specs are `Unsupported` errors.
+
 **Invariants.** No imports in `main.go` (everything goes through `wj*` helpers); every declared local gets `_ = x`
 (Go rejects unused variables); loops that need it get labels; non-terminating non-unit functions end in `panic`.
 
