@@ -37,7 +37,7 @@ Hooks: `file_compiler.rs`, `output_generation.rs`, `compiler_database.rs` (after
 ## Layout
 `config.rs` switches · `edit.rs` span edits · `facts.rs` per-fn binding facts ·
 `fn_walk.rs` fn iteration · `passes/*` one file per pass · `mutants.rs` deliberately
-unsound variants (tests only) · `quarantine/` retired AST-level phases (not compiled).
+unsound variants (tests only).
 
 ## Testing
 - `cargo test --lib optimizer::` (unit, per pass, with rejection cases)

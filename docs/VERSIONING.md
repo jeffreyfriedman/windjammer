@@ -1,7 +1,6 @@
 # Versioning and Releases
 
-This is the single versioning document; it replaces `VERSIONING_POLICY.md` and `VERSIONING_STRATEGY.md` (both archived in
-[archive/](archive/README.md)). The cross-repository policy is a proposal: [ADR-0011](adr/0011-release-version-policy.md).
+This is the single versioning document. The cross-repository policy is a proposal: [ADR-0011](adr/0011-release-version-policy.md).
 
 ## Current state (verified 2026-10-10)
 - The workspace version is `0.50.0` (`[workspace.package] version` in `Cargo.toml`). The compiler (`windjammer`), `windjammer-runtime`,
