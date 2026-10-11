@@ -518,6 +518,18 @@ impl IntInference {
                         .insert(full_name, (param_types, func_decl.return_type.clone()));
                 }
             }
+            Item::Enum { decl, .. } => {
+                // Tuple variants are constructor functions: `Maybe::Some(10)` must type its
+                // payload from the declaration (`int` → i64), not default to i32.
+                for variant in &decl.variants {
+                    if let crate::parser::EnumVariantData::Tuple(payload) = &variant.data {
+                        self.function_signatures.insert(
+                            format!("{}::{}", decl.name, variant.name),
+                            (payload.clone(), Some(Type::Custom(decl.name.clone()))),
+                        );
+                    }
+                }
+            }
             _ => {}
         }
     }
