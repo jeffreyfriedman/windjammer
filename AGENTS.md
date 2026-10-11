@@ -86,7 +86,7 @@ Add `tests/your_feature_test.rs` — `build.rs` picks it up automatically. No ed
 cargo test --release --test all
 ```
 
-See `tests/README.md` for suite features and filtering.
+See `tests/README.md` for suite features and filtering. **Never run tests with `--all-features`** (it silently disables ~120 test files; use it for clippy only). Run `scripts/check-orphan-tests.sh` to verify every test file is reached by a runner.
 
 Compiler-only changes: tests + `cargo test --release --test all` in `windjammer/` are sufficient.
 

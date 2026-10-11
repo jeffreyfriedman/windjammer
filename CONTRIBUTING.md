@@ -87,7 +87,8 @@ Use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.yml) w
 
 ## 🧪 Testing
 
-- **Run all tests**: `cargo test --release --test all`
+- **Run all tests**: `cargo test --release --test all` (never `--all-features`; it disables ~120 test files)
+- **Check no test file is orphaned**: `scripts/check-orphan-tests.sh`
 - **Run specific test**: `cargo test --release --test all -- test_name`
 - **Run with output**: `cargo test --release --test all -- test_name -- --nocapture`
 - **Run benchmarks**: `cargo bench`
