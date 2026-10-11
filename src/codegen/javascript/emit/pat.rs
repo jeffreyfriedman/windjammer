@@ -14,6 +14,16 @@ impl<'m> Js<'m> {
                 let lit = self.expr(e)?;
                 conds.push(format!("{scrut} === {lit}"));
             }
+            PPat::Range { lo, hi, inclusive } => {
+                if let Some(lo) = lo {
+                    let l = self.expr(lo)?;
+                    conds.push(format!("{scrut} >= {l}"));
+                }
+                if let Some(hi) = hi {
+                    let h = self.expr(hi)?;
+                    conds.push(format!("{scrut} {} {h}", if *inclusive { "<=" } else { "<" }));
+                }
+            }
             PPat::Tuple(ps) => {
                 for (i, sp) in ps.iter().enumerate() {
                     self.pat(sp, &format!("{scrut}[{i}]"), conds, binds)?;

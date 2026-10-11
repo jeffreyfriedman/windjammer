@@ -1,0 +1,12 @@
+// tags: basics, bool, operators
+// rust: ok
+// expect: true false true
+// expect: true
+// expect: false
+fn main() {
+    let a = true
+    let b = false
+    println("${a && !b} ${a && b} ${a || b}")
+    println("${1 < 2 && 2 < 3}")
+    println("${5 == 6 || 7 < 3}")
+}

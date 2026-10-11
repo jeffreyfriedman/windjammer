@@ -198,6 +198,10 @@ impl Interpreter {
                 let inner = p.read()?;
                 self.display_string(&inner)
             }
+            Value::Rc(slot) => {
+                let inner = slot.borrow().clone();
+                self.display_string(&inner)
+            }
             Value::Struct(_) | Value::Enum(_) => {
                 let tn = v.type_name();
                 let f = self
@@ -317,6 +321,40 @@ impl Interpreter {
                     Payload::Tuple(items) => self.debug_seq("(", ")", items.iter(), pretty, ind, out)?,
                     Payload::Struct(fs) => {
                         self.debug_fields(fs.iter().map(|(n, v)| (n.to_string(), v.clone())).collect(), pretty, ind, out)?
+                    }
+                }
+            }
+            Value::Rc(slot) => {
+                let inner = slot.borrow().clone();
+                self.debug_fmt(&inner, pretty, ind, out)?;
+            }
+            Value::Weak(_) => out.push_str("(Weak)"),
+            Value::Cell(kind, slot) => {
+                let inner = slot.borrow().clone();
+                let (name, field) = match kind {
+                    CellKind::RefCell => ("RefCell", "value"),
+                    CellKind::Cell => ("Cell", "value"),
+                    CellKind::Mutex => ("Mutex", "data"),
+                    CellKind::RwLock => ("RwLock", "data"),
+                };
+                out.push_str(name);
+                let mut fields = vec![(field.to_string(), inner)];
+                if matches!(kind, CellKind::Mutex | CellKind::RwLock) {
+                    fields.push(("poisoned".to_string(), Value::Bool(false)));
+                }
+                self.debug_fields(fields, pretty, ind, out)?;
+                if matches!(kind, CellKind::Mutex | CellKind::RwLock) {
+                    // rustc prints `, .. }` after the poison flag
+                    if pretty {
+                        out.truncate(out.len() - (4 * ind + 1));
+                        out.push_str(&"    ".repeat(ind + 1));
+                        out.push_str("..
+");
+                        out.push_str(&"    ".repeat(ind));
+                        out.push('}');
+                    } else {
+                        out.truncate(out.len() - 2);
+                        out.push_str(", .. }");
                     }
                 }
             }

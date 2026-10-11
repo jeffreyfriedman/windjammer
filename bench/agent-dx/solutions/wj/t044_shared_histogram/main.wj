@@ -1,0 +1,84 @@
+use std::fs
+use std::sync::{Arc, Mutex}
+use std::thread
+use std::thread::JoinHandle
+
+fn slice_i64(v: Vec<i64>, from: usize, to: usize) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new()
+    let mut i = from
+    while i < to && i < v.len() {
+        out.push(v[i])
+        i += 1
+    }
+    out
+}
+
+fn zeros(n: usize) -> Vec<i64> {
+    let mut v: Vec<i64> = Vec::new()
+    let mut i: usize = 0
+    while i < n {
+        v.push(0)
+        i += 1
+    }
+    v
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut nums: Vec<i64> = Vec::new()
+    for w in text.split_whitespace() {
+        nums.push(w.parse::<i64>().unwrap_or(0))
+    }
+    let workers = nums[0] as usize
+    let n = nums[1] as usize
+    let values: Vec<i64> = slice_i64(nums.clone(), 2, 2 + n)
+    let hist = Arc::new(Mutex::new(zeros(10)))
+    let mut handles: Vec<JoinHandle<i64>> = Vec::new()
+    let mut w: usize = 0
+    while w < workers {
+        let h = hist.clone()
+        let vals = values.clone()
+        handles.push(thread::spawn(move || {
+            let mut mine: i64 = 0
+            let mut i = w
+            while i < vals.len() {
+                match h.lock() {
+                    Ok(mut g) => { g[vals[i] as usize] += 1 }
+                    Err(_) => {}
+                }
+                mine += 1
+                i += workers
+            }
+            return mine
+        }))
+        w += 1
+    }
+    let mut counts: Vec<i64> = Vec::new()
+    for handle in handles {
+        counts.push(handle.join().unwrap_or(0))
+    }
+    let g = match hist.lock() {
+        Ok(guard) => guard.clone(),
+        Err(_) => zeros(10),
+    }
+    let mut hs = ""
+    let mut hi: usize = 0
+    while hi < 10 {
+        if hi > 0 { hs = hs + " " }
+        hs = hs + "${g[hi]}"
+        hi += 1
+    }
+    println("hist: ${hs}")
+    let mut idx: usize = 0
+    while idx < counts.len() {
+        println("worker ${idx}: ${counts[idx]}")
+        idx += 1
+    }
+    let mut checksum: i64 = 0
+    let mut d: usize = 0
+    while d < 10 {
+        checksum += (d as i64) * g[d]
+        d += 1
+    }
+    println("checksum: ${checksum}")
+}

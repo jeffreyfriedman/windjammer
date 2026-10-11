@@ -1,0 +1,17 @@
+// tags: option, filter, zip, flatten, or
+// rust: ok
+// expect: None
+// expect: Some(8)
+// expect: Some((1, "a"))
+// expect: Some(3)
+// expect: 9
+fn main() {
+    println("${Some(3).filter(|x| *x > 5):?}")
+    println("${Some(8).filter(|x| *x > 5):?}")
+    let z = Some(1).zip(Some("a"))
+    println("${z:?}")
+    let o: Option<int> = None
+    println("${o.or(Some(3)):?}")
+    let nested = Some(Some(9))
+    println("${nested.flatten().unwrap_or(0)}")
+}

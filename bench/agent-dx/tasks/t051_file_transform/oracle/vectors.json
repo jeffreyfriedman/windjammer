@@ -1,0 +1,507 @@
+[
+ {
+  "args": [
+   "in.txt",
+   "out.txt",
+   "upper"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out.txt\nBANANA\nAPPLE\nCHERRY\nAPPLE\nBANANA\n  PAD  \n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "sort"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to o\n  pad  \nApple\napple\nbanana\nbanana\ncherry\n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "dedupe"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 5 lines to o\nbanana\nApple\ncherry\napple\n  pad  \n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "trim"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to o\nbanana\nApple\ncherry\napple\nbanana\npad\n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "number"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to o\n1:banana\n2:Apple\n3:cherry\n4:apple\n5:banana\n6:  pad  \n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "reverse"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to o\n  pad  \nbanana\napple\ncherry\nApple\nbanana\n"
+ },
+ {
+  "args": [
+   "nope",
+   "o",
+   "upper"
+  ],
+  "code": 1,
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "error: cannot read nope\n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "weird"
+  ],
+  "code": 2,
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "error: unknown mode weird\n"
+ },
+ {
+  "args": [
+   "in.txt"
+  ],
+  "code": 2,
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "usage: transform INPUT OUTPUT MODE\n"
+ },
+ {
+  "args": [
+   "e",
+   "o",
+   "sort"
+  ],
+  "files": {
+   "e": ""
+  },
+  "stdin": "",
+  "stdout": "wrote 0 lines to o\n"
+ },
+ {
+  "args": [
+   "nl",
+   "nl",
+   "reverse"
+  ],
+  "files": {
+   "nl": "a\n\nb"
+  },
+  "stdin": "",
+  "stdout": "wrote 3 lines to nl\nb\n\na\n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "in.txt",
+   "upper"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to in.txt\nBANANA\nAPPLE\nCHERRY\nAPPLE\nBANANA\n  PAD  \n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": "a\n c \nB\nzz\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 4 lines to out\n1:a\n2: c \n3:B\n4:zz\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "reverse"
+  ],
+  "files": {
+   "in": ""
+  },
+  "stdin": "",
+  "stdout": "wrote 0 lines to out\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "dedupe"
+  ],
+  "files": {
+   "in": "a\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 1 lines to out\na\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "sort"
+  ],
+  "files": {
+   "in": "zz\nzz\nd d\nzz\na\n c \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out\n c \na\nd d\nzz\nzz\nzz\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "trim"
+  ],
+  "files": {
+   "in": "B\n\nzz\n c \n\n\nzz\n c \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 8 lines to out\nB\n\nzz\nc\n\n\nzz\nc\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": ""
+  },
+  "stdin": "",
+  "stdout": "wrote 0 lines to out\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "upper"
+  ],
+  "files": {
+   "in": "a\na\n\nB\nzz\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 5 lines to out\nA\nA\n\nB\nZZ\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": "a\n c \n\nzz\na\nd d\nd d\na\nB\nd d\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 10 lines to out\n1:a\n2: c \n3:\n4:zz\n5:a\n6:d d\n7:d d\n8:a\n9:B\n10:d d\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "sort"
+  ],
+  "files": {
+   "in": "zz\n c \na\nd d\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 4 lines to out\n c \na\nd d\nzz\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "upper"
+  ],
+  "files": {
+   "in": "zz\nd d\n c \nd d\nzz\nd d\na\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 7 lines to out\nZZ\nD D\n C \nD D\nZZ\nD D\nA\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "reverse"
+  ],
+  "files": {
+   "in": "B\n c \nzz\n\nd d\n\nzz\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 7 lines to out\nzz\n\nd d\n\nzz\n c \nB\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "dedupe"
+  ],
+  "files": {
+   "in": "zz\na\nd d\nzz\n c \n\n c \n c \n\nB"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out\nzz\na\nd d\n c \n\nB\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "trim"
+  ],
+  "files": {
+   "in": "a\n c \n\na\nzz\nzz\nd d\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 7 lines to out\na\nc\n\na\nzz\nzz\nd d\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "upper"
+  ],
+  "files": {
+   "in": " c "
+  },
+  "stdin": "",
+  "stdout": "wrote 1 lines to out\n C \n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "trim"
+  ],
+  "files": {
+   "in": " c \na\na\nd d\nzz\nzz\nB\n\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 8 lines to out\nc\na\na\nd d\nzz\nzz\nB\n\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": "a\nB\nB\n\n\nd d\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out\n1:a\n2:B\n3:B\n4:\n5:\n6:d d\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": "a\nd d\nzz\n\na\na\n c \na\nB\nzz"
+  },
+  "stdin": "",
+  "stdout": "wrote 10 lines to out\n1:a\n2:d d\n3:zz\n4:\n5:a\n6:a\n7: c \n8:a\n9:B\n10:zz\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "upper"
+  ],
+  "files": {
+   "in": "B\n\nzz\n\n c \n c \na\na\nd d\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 9 lines to out\nB\n\nZZ\n\n C \n C \nA\nA\nD D\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "dedupe"
+  ],
+  "files": {
+   "in": "\na\n\nB\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 3 lines to out\n\na\nB\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "reverse"
+  ],
+  "files": {
+   "in": "a\nB\nB\nB\n c \na"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out\na\n c \nB\nB\nB\na\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "reverse"
+  ],
+  "files": {
+   "in": " c \n\na\nzz\nzz\na\na\n c \n\na\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 10 lines to out\na\n\n c \na\na\nzz\nzz\na\n\n c \n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "dedupe"
+  ],
+  "files": {
+   "in": "\na\na\na\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 2 lines to out\n\na\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "dedupe"
+  ],
+  "files": {
+   "in": "\nd d\n c \n\nzz\nzz\nB\nB\na\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out\n\nd d\n c \nzz\nB\na\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": " c \nd d\nzz\nB\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 4 lines to out\n1: c \n2:d d\n3:zz\n4:B\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": "zz\nd d\nd d\nd d\nd d\na\nd d\nB\na\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 9 lines to out\n1:zz\n2:d d\n3:d d\n4:d d\n5:d d\n6:a\n7:d d\n8:B\n9:a\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "reverse"
+  ],
+  "files": {
+   "in": "a\nzz\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 2 lines to out\nzz\na\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "sort"
+  ],
+  "files": {
+   "in": "a\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 1 lines to out\na\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "reverse"
+  ],
+  "files": {
+   "in": "d d\na\nd d\n\nd d\n c \nzz\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 7 lines to out\nzz\n c \nd d\n\nd d\na\nd d\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "sort"
+  ],
+  "files": {
+   "in": "B\nB\nzz\nB\n"
+  },
+  "stdin": "",
+  "stdout": "wrote 4 lines to out\nB\nB\nB\nzz\n"
+ },
+ {
+  "args": [
+   "in",
+   "out",
+   "number"
+  ],
+  "files": {
+   "in": " c \n\nd d\n c \n c \na\nd d\na"
+  },
+  "stdin": "",
+  "stdout": "wrote 8 lines to out\n1: c \n2:\n3:d d\n4: c \n5: c \n6:a\n7:d d\n8:a\n"
+ }
+]

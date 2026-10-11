@@ -1,0 +1,24 @@
+// tags: trait, generics, bounds
+// rust: gap error[E0425]: cannot find type 'int' in this scope
+// expect: 6
+// expect: 3.5
+trait Doubler {
+    fn double(self) -> Self
+}
+
+impl Doubler for int {
+    fn double(self) -> int { self * 2 }
+}
+
+impl Doubler for float {
+    fn double(self) -> float { self * 2.0 }
+}
+
+fn twice<T: Doubler>(x: T) -> T {
+    x.double()
+}
+
+fn main() {
+    println("${twice(3)}")
+    println("${twice(1.75)}")
+}

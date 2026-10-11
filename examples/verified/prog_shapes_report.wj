@@ -1,0 +1,37 @@
+// tags: program, traits, enum, formatting, vec
+// rust: gap error[E0308]: mismatched types
+// expect: Circle         78.54
+// expect: Rectangle      24.00
+// expect: total          102.54
+enum Shape {
+    Circle(float),
+    Rectangle(float, float),
+}
+
+impl Shape {
+    fn name(self) -> string {
+        match self {
+            Shape::Circle(_) => "Circle",
+            Shape::Rectangle(_, _) => "Rectangle",
+        }
+    }
+    fn area(self) -> float {
+        match self {
+            Shape::Circle(r) => 3.14159 * r * r,
+            Shape::Rectangle(w, h) => w * h,
+        }
+    }
+}
+
+fn main() {
+    let shapes = [Shape::Circle(5.0), Shape::Rectangle(4.0, 6.0)]
+    let mut total = 0.0
+    for s in shapes {
+        let a = s.area()
+        let n = s.name()
+        println("${n:<14} ${a:.2}")
+        total += a
+    }
+    let label = "total"
+    println("${label:<14} ${total:.2}")
+}

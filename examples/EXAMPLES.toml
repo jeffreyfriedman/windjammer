@@ -1,0 +1,85 @@
+# Every example program (and project template) outside examples/verified/ (which tests/verified_examples_test.rs owns) is listed here, and
+# tests/examples_gate_test.rs exercises it in CI. Modes:
+#   run    interpreter run; the file's `// expect:` lines (hand-derived oracle, never copied from the interpreter) must equal stdout
+#   test   `wj test --interpret` passes
+#   check  parses and passes the analyzer in-process; `reason` says why it is not run
+# An example that fits no mode is deleted, not skipped.
+
+[[example]]
+glob = "examples/hello_world/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/pipe_operator/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/02_structs/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/03_enums/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/04_traits/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/12_simple_test/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/17_generics_test/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/33_generic_enums/main.wj"
+mode = "run"
+
+[[example]]
+glob = "examples/syntax_tests/**/*.wj"
+exclude = ["examples/syntax_tests/02_structs/main.wj", "examples/syntax_tests/03_enums/main.wj", "examples/syntax_tests/04_traits/main.wj", "examples/syntax_tests/12_simple_test/main.wj", "examples/syntax_tests/17_generics_test/main.wj", "examples/syntax_tests/33_generic_enums/main.wj"]
+mode = "check"
+reason = "feature demos without an independent output oracle (several need network, files or time); the language features they use are covered by the conformance corpus"
+
+[[example]]
+glob = "examples/*.wj"
+mode = "check"
+reason = "single-file feature demos: servers, network and storage APIs that cannot run in CI, or output with no independent oracle"
+
+[[example]]
+glob = "examples/*/main.wj"
+exclude = ["examples/hello_world/main.wj", "examples/pipe_operator/main.wj", "examples/wasm_hello/main.wj"]
+mode = "check"
+reason = "programs that start a server, parse the real command line or need network/filesystem; checked, not run"
+
+[[example]]
+glob = "examples/tests/*.wj"
+mode = "check"
+reason = "test-framework demos run by `wj test` against a project, not standalone"
+
+[[example]]
+glob = "examples/wasm_hello/*.wj"
+mode = "check"
+reason = "WebAssembly target demo (needs a wasm toolchain)"
+
+[[example]]
+glob = "examples/taskflow/**/*.wj"
+mode = "check"
+reason = "multi-file REST API (needs HTTP, a database and the module resolver); parse and analyzer pass per file"
+
+[[example]]
+glob = "examples/wjfind/**/*.wj"
+mode = "check"
+reason = "multi-file CLI that needs the real command line and filesystem"
+
+[[example]]
+glob = "examples/wschat/**/*.wj"
+mode = "check"
+reason = "multi-file WebSocket server (needs network)"
+
+[[example]]
+glob = "templates/*/*.wj"
+mode = "check"
+reason = "project templates copied out by `wj new`: a web server, a wasm module and a library cannot run standalone; the CLI template reads its command line"

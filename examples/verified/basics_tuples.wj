@@ -1,0 +1,24 @@
+// tags: basics, tuples
+// rust: gap error[E0308]: mismatched types
+// expect: 3 4
+// expect: (1, hello)
+// expect: min=1 max=9
+fn min_max(xs: Vec<int>) -> (int, int) {
+    let mut lo = xs[0]
+    let mut hi = xs[0]
+    for x in xs {
+        if x < lo { lo = x }
+        if x > hi { hi = x }
+    }
+    (lo, hi)
+}
+
+fn main() {
+    let p = (3, 4)
+    let (a, b) = p
+    println("${a} ${b}")
+    let t = (1, "hello")
+    println("(${t.0}, ${t.1})")
+    let (lo, hi) = min_max([5, 1, 9, 3])
+    println("min=${lo} max=${hi}")
+}

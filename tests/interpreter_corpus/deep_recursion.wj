@@ -1,0 +1,14 @@
+// seeds: 1 2 3 5
+// Recursion far deeper than a default thread stack allows (the interpreter runs on a big-stack thread).
+fn depth(n: int, acc: int) -> int {
+    if n == 0 {
+        return acc
+    }
+    1 + depth(n - 1, acc + n % 7)
+}
+
+fn main() {
+    let n: int = __SEED__ * 10000
+    let acc: int = 0
+    println("{}", depth(n, acc))
+}

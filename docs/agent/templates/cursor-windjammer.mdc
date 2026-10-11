@@ -1,0 +1,17 @@
+---
+description: Windjammer (.wj) coding rules
+globs: ["**/*.wj"]
+alwaysApply: false
+---
+
+Windjammer is a Rust-family language with inferred ownership; it is not in your training data.
+Do not write Rust syntax. Use `wj docs <terms>` to look up methods and idioms (offline).
+
+Loop for every edit: `wj check --json <path>` then `wj run --interpret <file>` then
+`wj test --interpret .` then `wj build`.
+
+- `println("${x}")`, never `println!`; `[1, 2]`, never `vec![]`; no semicolons; no trailing `return`.
+- No `#[derive]`, no `&`/`&mut` arguments, no `.iter()`, no `.unwrap()`/`.expect()`, no `"lit".to_string()`.
+- Mutation needs `let mut`; method receivers are plain `self`.
+- Handle `Result`/`Option` with `match`, `?`, `unwrap_or`; print them with `${x:?}`.
+- Sort `HashMap` keys before printing. Tests live in `*_test.wj` as `@test` functions.

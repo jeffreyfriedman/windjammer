@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n1\n",
+  "stdout": "0 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\n6\n7\n27\n",
+  "stdout": "8 16\n16 52\n111 9232\n"
+ }
+]

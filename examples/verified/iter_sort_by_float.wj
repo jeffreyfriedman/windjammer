@@ -1,0 +1,10 @@
+// tags: iterators, sort, float, partial_cmp
+// rust: ok
+// expect: [0.5, 1.5, 2.5, 9.0]
+use std::cmp::Ordering
+
+fn main() {
+    let mut v = [2.5, 0.5, 9.0, 1.5]
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+    println("${v:?}")
+}

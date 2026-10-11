@@ -1,0 +1,88 @@
+{
+  "module_path": "main",
+  "functions": {
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "emitted_rust_ref_params": [],
+      "string_ref_string_formal_params": [],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "line_at": {
+      "params": [
+        "Reference(Vec(String))",
+        "Custom(\"usize\")"
+      ],
+      "formal_params": [
+        "Reference(Vec(String))",
+        "Custom(\"usize\")"
+      ],
+      "return_type": "String",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        true,
+        false
+      ],
+      "string_ref_string_formal_params": [
+        false,
+        false
+      ],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "rest_lines": {
+      "params": [
+        "Reference(Vec(String))",
+        "Custom(\"usize\")"
+      ],
+      "formal_params": [
+        "Reference(Vec(String))",
+        "Custom(\"usize\")"
+      ],
+      "return_type": "Vec(String)",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed",
+        "Owned"
+      ],
+      "emitted_rust_ref_params": [
+        true,
+        false
+      ],
+      "string_ref_string_formal_params": [
+        false,
+        false
+      ],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "copy_structs": [],
+  "non_copy_structs": [],
+  "version": "0.50.0",
+  "analysis_fingerprint": {
+    "content_hash": 4706352155794710374,
+    "compiler_version": "0.50.0:765a91302c4a0920",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 1036948116798021520
+  }
+}

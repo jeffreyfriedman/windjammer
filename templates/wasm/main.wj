@@ -21,4 +21,3 @@ fn fibonacci(n: i32) -> i32 {
 
 // Note: Use i32 for WASM compatibility with JavaScript
 // JavaScript numbers are represented as i32/f64 in WASM
-

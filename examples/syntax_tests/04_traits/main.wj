@@ -1,3 +1,9 @@
+// expect: Circle at (0, 0) with radius 5
+// expect: Circle area: 75
+// expect: Square at (10, 10) with side 4
+// expect: Square area: 16
+// expect: After moving: Circle at (3, 4) with radius 5
+// expect: After moving: Square at (5, 5) with side 4
 // Example 4: Traits and Interfaces
 
 // Define a trait (Windjammer traits need default implementations)

@@ -1,0 +1,32 @@
+use std::fs
+
+fn eval_chain(line: string) -> string {
+    let parts: Vec<string> = line.split(" / ").map(|s| s.to_string()).collect()
+    let mut v: i64 = match parts[0].trim().parse::<i64>() {
+        Ok(x) => x,
+        Err(_) => 0,
+    }
+    let mut k: usize = 1
+    while k < parts.len() {
+        let d: i64 = match parts[k].trim().parse::<i64>() {
+            Ok(x) => x,
+            Err(_) => 0,
+        }
+        if d == 0 {
+            return "error: division by zero at step ${k}"
+        }
+        match v.checked_div(d) {
+            Some(q) => { v = q }
+            None => { return "error: overflow at step ${k}" }
+        }
+        k += 1
+    }
+    "${v}"
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        println(eval_chain(line.to_string()))
+    }
+}

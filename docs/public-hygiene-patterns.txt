@@ -1,0 +1,21 @@
+# Forbidden-term patterns for the public-hygiene test (tests/public_hygiene_test.rs).
+#
+# This repository is public. Names of private projects, ticket ids and personal paths must
+# not appear in any tracked file or file name. The terms are stored split into pieces so this
+# file does not itself spell them out.
+#
+# Format: <separator chars>:<piece>|<piece>|...
+# A term matches (case-insensitive) when its pieces appear in order, optionally separated by one
+# character from the separator set. An empty separator set means the pieces must be adjacent.
+# Lines starting with '#' and blank lines are ignored.
+-_ :windjammer|d|b
+:w|d|b
+-_:windjammer|gam|e
+-_ :breach|protocol
+-_ :ledger|kit
+-_ :financial|managemen|t
+-_ :finance|screen|s
+-_ :trash|panda
+:/users/jeffrey|friedman
+:euro|dollar|yen
+_:wj|_|pin

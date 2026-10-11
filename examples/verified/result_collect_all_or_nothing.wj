@@ -1,0 +1,12 @@
+// tags: result, iterators, collect, parsing
+// rust: gap error[E0282]: type annotations needed
+// expect: Ok([1, 2, 3])
+// expect: Err("bad: x")
+fn parse_all(items: Vec<string>) -> Result<Vec<int>, string> {
+    items.map(|s| s.parse::<int>().map_err(|_| "bad: ${s}")).collect()
+}
+
+fn main() {
+    println("${parse_all(["1", "2", "3"]):?}")
+    println("${parse_all(["1", "x", "3"]):?}")
+}

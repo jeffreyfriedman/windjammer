@@ -1,0 +1,69 @@
+use std::fs
+
+fn find(parent: Vec<usize>, x: usize) -> usize {
+    let mut cur = x
+    while parent[cur] != cur {
+        cur = parent[cur]
+    }
+    cur
+}
+
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let all: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let n = line_at(all.clone(), cursor).trim().parse::<usize>().unwrap_or(1)
+    cursor += 1
+    let mut parent: Vec<usize> = Vec::new()
+    let mut size: Vec<i64> = Vec::new()
+    let mut i: usize = 0
+    while i < n {
+        parent.push(i)
+        size.push(1)
+        i += 1
+    }
+    for line in rest_lines(all.clone(), cursor) {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let a = p[1].parse::<usize>().unwrap_or(0)
+        if p[0] == "union" {
+            let b = p[2].parse::<usize>().unwrap_or(0)
+            let ra = find(parent.clone(), a)
+            let rb = find(parent.clone(), b)
+            if ra == rb {
+                println("same")
+            } else {
+                parent[ra] = rb
+                size[rb] = size[rb] + size[ra]
+                println("merged")
+            }
+        } else if p[0] == "find" {
+            let b = p[2].parse::<usize>().unwrap_or(0)
+            if find(parent.clone(), a) == find(parent.clone(), b) { println("yes") } else { println("no") }
+        } else {
+            let r = find(parent.clone(), a)
+            println("${size[r]}")
+        }
+    }
+    let mut comps = 0
+    let mut j: usize = 0
+    while j < n {
+        if parent[j] == j { comps += 1 }
+        j += 1
+    }
+    println("components ${comps}")
+}

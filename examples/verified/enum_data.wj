@@ -1,0 +1,24 @@
+// tags: enum, match, data
+// rust: gap error[E0308]: mismatched types
+// expect: 78.5
+// expect: 6
+// expect: 9
+enum Shape {
+    Circle(float),
+    Rect(float, float),
+    Square { side: float },
+}
+
+fn area(s: Shape) -> float {
+    match s {
+        Shape::Circle(r) => 3.14 * r * r,
+        Shape::Rect(w, h) => w * h,
+        Shape::Square { side } => side * side,
+    }
+}
+
+fn main() {
+    println("${area(Shape::Circle(5.0)) * 1.0}")
+    println("${area(Shape::Rect(2.0, 3.0))}")
+    println("${area(Shape::Square { side: 3.0 })}")
+}

@@ -1,0 +1,18 @@
+// tags: algorithm, strings, sort, chars
+// rust: ok
+// expect: listen/silent: true
+// expect: apple/pale: false
+fn sorted_chars(s: string) -> Vec<char> {
+    let mut cs: Vec<char> = s.chars().collect()
+    cs.sort()
+    cs
+}
+
+fn is_anagram(a: string, b: string) -> bool {
+    sorted_chars(a) == sorted_chars(b)
+}
+
+fn main() {
+    println("listen/silent: ${is_anagram("listen", "silent")}")
+    println("apple/pale: ${is_anagram("apple", "pale")}")
+}

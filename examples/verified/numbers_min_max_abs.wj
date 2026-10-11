@@ -1,0 +1,14 @@
+// tags: numbers, math, builtin
+// rust: gap error[E0689]: can't call method 'abs' on ambiguous numeric type '{integer}'
+// expect: 3
+// expect: 9
+// expect: 4
+// expect: 5
+// expect: 5
+fn main() {
+    println("${3.min(9)}")
+    println("${3.max(9)}")
+    println("${(-4).abs()}")
+    println("${15.clamp(0, 5)}")
+    println("${(-8).clamp(5, 10)}")
+}

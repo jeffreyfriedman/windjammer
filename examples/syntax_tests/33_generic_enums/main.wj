@@ -1,3 +1,8 @@
+// expect: Found value: 42
+// expect: Result: 5
+// expect: Error: division by zero
+// expect: Container has: 123
+// expect: All generic enum examples working!
 // Example 33: Generic Enums
 // Demonstrates generic enum types with type parameters
 

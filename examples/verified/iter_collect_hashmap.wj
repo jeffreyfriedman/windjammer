@@ -1,0 +1,14 @@
+// tags: iterators, collect, hashmap
+// rust: gap error[E0599]: no method named 'map' found for struct 'Vec<String>' in the curren
+// expect: 3
+// expect: 2
+// expect: 3
+use std::collections::HashMap
+
+fn main() {
+    let words = ["a", "bb", "ccc"]
+    let lens: HashMap<string, int> = words.map(|w| (w.to_string(), w.len())).collect()
+    println("${lens.len()}")
+    println("${lens["bb"]}")
+    println("${lens["ccc"]}")
+}

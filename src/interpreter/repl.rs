@@ -55,7 +55,7 @@ impl Interpreter {
             let prog = parse_source(src, "<repl>").map_err(|e| sem(format!("parse error: {}", e)))?;
             let prog: &'static crate::parser::Program<'static> = Box::leak(Box::new(prog));
             self.register_items(0, &prog.items)?;
-            self.finish_registration();
+            self.finish_registration()?;
             return Ok(None);
         }
         let wrapped = format!("fn __repl__() {{\n{}\n}}", src);
@@ -90,6 +90,7 @@ pub fn run_repl_stdio() -> i32 {
     super::runner::with_big_stack(|| {
         let interactive = std::io::stdin().is_terminal();
         let mut it = Interpreter::new();
+        it.guard_stack();
         if interactive {
             println!("Windjammerscript REPL (interpreted, no cargo). Type :help for commands, exit or Ctrl-D to quit.");
         }
@@ -116,6 +117,7 @@ pub fn run_repl_stdio() -> i32 {
                     }
                     ":reset" => {
                         it = Interpreter::new();
+                        it.guard_stack();
                         continue;
                     }
                     _ => {}

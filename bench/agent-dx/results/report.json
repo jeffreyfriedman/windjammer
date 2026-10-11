@@ -1,0 +1,3014 @@
+{
+ "toolchains": {
+  "wj-interp": {
+   "available": true,
+   "version": "wj 0.50.0",
+   "reason": ""
+  },
+  "wj": {
+   "available": true,
+   "version": "wj 0.50.0 + cargo (wj built from the scrub-compiler worktree release binary, 11:46 Oct 11)",
+   "reason": ""
+  },
+  "rust": {
+   "available": true,
+   "version": "rustc 1.100.0-nightly (5db7f4be8 2026-09-01)",
+   "reason": ""
+  },
+  "go": {
+   "available": true,
+   "version": "go version go1.26.1 darwin/arm64",
+   "reason": ""
+  },
+  "python": {
+   "available": true,
+   "version": "Python 3.13.5",
+   "reason": ""
+  },
+  "ts": {
+   "available": true,
+   "version": "node v24.17.0; typecheck via deno",
+   "reason": ""
+  }
+ },
+ "matrix": [
+  {
+   "task": "t001_gcd_lcm",
+   "lang": "python",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t001_gcd_lcm",
+   "lang": "go",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t001_gcd_lcm",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t001_gcd_lcm",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t002_fizzbuzz_custom",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t002_fizzbuzz_custom",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t002_fizzbuzz_custom",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t002_fizzbuzz_custom",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t003_prime_counts",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t003_prime_counts",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t003_prime_counts",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t003_prime_counts",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t004_collatz",
+   "lang": "python",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t004_collatz",
+   "lang": "go",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t004_collatz",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t004_collatz",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t005_roman",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t005_roman",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t005_roman",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t005_roman",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t006_base_convert",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t006_base_convert",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t006_base_convert",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t006_base_convert",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t007_digit_stats",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t007_digit_stats",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t007_digit_stats",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t007_digit_stats",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t008_fib_mod",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t008_fib_mod",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t008_fib_mod",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t008_fib_mod",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t009_rpn_eval",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t009_rpn_eval",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t009_rpn_eval",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t009_rpn_eval",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t010_ring_buffer",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t010_ring_buffer",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t010_ring_buffer",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t010_ring_buffer",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t011_lru_cache",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t011_lru_cache",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t011_lru_cache",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t011_lru_cache",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t012_min_heap",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t012_min_heap",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t012_min_heap",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t012_min_heap",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t013_bst",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t013_bst",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t013_bst",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t013_bst",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t014_union_find",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t014_union_find",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t014_union_find",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t014_union_find",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t015_linked_list",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t015_linked_list",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t015_linked_list",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t015_linked_list",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t016_matrix_mult",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t016_matrix_mult",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t016_matrix_mult",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t016_matrix_mult",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t017_interval_merge",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t017_interval_merge",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t017_interval_merge",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t017_interval_merge",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t018_word_freq",
+   "lang": "python",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t018_word_freq",
+   "lang": "go",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t018_word_freq",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t018_word_freq",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t019_caesar",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t019_caesar",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t019_caesar",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t019_caesar",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t020_rle",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t020_rle",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t020_rle",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t020_rle",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t021_anagram_groups",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t021_anagram_groups",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t021_anagram_groups",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t021_anagram_groups",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t022_csv_parse",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t022_csv_parse",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t022_csv_parse",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t022_csv_parse",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t023_expr_eval",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t023_expr_eval",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t023_expr_eval",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t023_expr_eval",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t024_bracket_match",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t024_bracket_match",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t024_bracket_match",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t024_bracket_match",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t025_template_render",
+   "lang": "python",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t025_template_render",
+   "lang": "go",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t025_template_render",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t025_template_render",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t026_palindromes",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t026_palindromes",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t026_palindromes",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t026_palindromes",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t027_ini_parser",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t027_ini_parser",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t027_ini_parser",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t027_ini_parser",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t028_safe_div_chain",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t028_safe_div_chain",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t028_safe_div_chain",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t028_safe_div_chain",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t029_parse_report",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t029_parse_report",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t029_parse_report",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t029_parse_report",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t030_bank_ledger",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t030_bank_ledger",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t030_bank_ledger",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t030_bank_ledger",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t031_config_validate",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t031_config_validate",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t031_config_validate",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t031_config_validate",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t032_checked_arith",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t032_checked_arith",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t032_checked_arith",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t032_checked_arith",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t033_org_chart",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t033_org_chart",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t033_org_chart",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t033_org_chart",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t034_shapes_trait",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t034_shapes_trait",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t034_shapes_trait",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t034_shapes_trait",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t035_generic_minmax_stack",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t035_generic_minmax_stack",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t035_generic_minmax_stack",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t035_generic_minmax_stack",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t036_multikey_sort",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t036_multikey_sort",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t036_multikey_sort",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t036_multikey_sort",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t037_animal_traits",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t037_animal_traits",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t037_animal_traits",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t037_animal_traits",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t038_vec2_ops",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t038_vec2_ops",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t038_vec2_ops",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t038_vec2_ops",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t039_custom_iterators",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t039_custom_iterators",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t039_custom_iterators",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t039_custom_iterators",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t040_memoizer",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t040_memoizer",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t040_memoizer",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t040_memoizer",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t041_expr_tree",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t041_expr_tree",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t041_expr_tree",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t041_expr_tree",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t042_parallel_sum",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t042_parallel_sum",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t042_parallel_sum",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t042_parallel_sum",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t043_channel_pipeline",
+   "lang": "python",
+   "status": "pass",
+   "passed": 38,
+   "total": 38,
+   "categories": []
+  },
+  {
+   "task": "t043_channel_pipeline",
+   "lang": "go",
+   "status": "pass",
+   "passed": 38,
+   "total": 38,
+   "categories": []
+  },
+  {
+   "task": "t043_channel_pipeline",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 38,
+   "total": 38,
+   "categories": []
+  },
+  {
+   "task": "t043_channel_pipeline",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 38,
+   "total": 38,
+   "categories": []
+  },
+  {
+   "task": "t044_shared_histogram",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t044_shared_histogram",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t044_shared_histogram",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t044_shared_histogram",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t045_parallel_divisors",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t045_parallel_divisors",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t045_parallel_divisors",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t045_parallel_divisors",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t046_producer_consumer",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t046_producer_consumer",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t046_producer_consumer",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t046_producer_consumer",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t047_task_scheduler",
+   "lang": "python",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t047_task_scheduler",
+   "lang": "go",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t047_task_scheduler",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t047_task_scheduler",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t048_wc_clone",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t048_wc_clone",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t048_wc_clone",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t048_wc_clone",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t049_grep_clone",
+   "lang": "python",
+   "status": "pass",
+   "passed": 41,
+   "total": 41,
+   "categories": []
+  },
+  {
+   "task": "t049_grep_clone",
+   "lang": "go",
+   "status": "pass",
+   "passed": 41,
+   "total": 41,
+   "categories": []
+  },
+  {
+   "task": "t049_grep_clone",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 41,
+   "total": 41,
+   "categories": []
+  },
+  {
+   "task": "t049_grep_clone",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 41,
+   "total": 41,
+   "categories": []
+  },
+  {
+   "task": "t050_cat_number",
+   "lang": "python",
+   "status": "pass",
+   "passed": 39,
+   "total": 39,
+   "categories": []
+  },
+  {
+   "task": "t050_cat_number",
+   "lang": "go",
+   "status": "pass",
+   "passed": 39,
+   "total": 39,
+   "categories": []
+  },
+  {
+   "task": "t050_cat_number",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 39,
+   "total": 39,
+   "categories": []
+  },
+  {
+   "task": "t050_cat_number",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 39,
+   "total": 39,
+   "categories": []
+  },
+  {
+   "task": "t051_file_transform",
+   "lang": "python",
+   "status": "pass",
+   "passed": 42,
+   "total": 42,
+   "categories": []
+  },
+  {
+   "task": "t051_file_transform",
+   "lang": "go",
+   "status": "pass",
+   "passed": 42,
+   "total": 42,
+   "categories": []
+  },
+  {
+   "task": "t051_file_transform",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 42,
+   "total": 42,
+   "categories": []
+  },
+  {
+   "task": "t051_file_transform",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 42,
+   "total": 42,
+   "categories": []
+  },
+  {
+   "task": "t052_csv_columns",
+   "lang": "python",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t052_csv_columns",
+   "lang": "go",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t052_csv_columns",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t052_csv_columns",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t053_cli_flags",
+   "lang": "python",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t053_cli_flags",
+   "lang": "go",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t053_cli_flags",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t053_cli_flags",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t054_dir_tree",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t054_dir_tree",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t054_dir_tree",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t054_dir_tree",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t055_log_summary",
+   "lang": "python",
+   "status": "pass",
+   "passed": 32,
+   "total": 32,
+   "categories": []
+  },
+  {
+   "task": "t055_log_summary",
+   "lang": "go",
+   "status": "pass",
+   "passed": 32,
+   "total": 32,
+   "categories": []
+  },
+  {
+   "task": "t055_log_summary",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 32,
+   "total": 32,
+   "categories": []
+  },
+  {
+   "task": "t055_log_summary",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 32,
+   "total": 32,
+   "categories": []
+  },
+  {
+   "task": "t056_todo_manager",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t056_todo_manager",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t056_todo_manager",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t056_todo_manager",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t057_inventory",
+   "lang": "python",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t057_inventory",
+   "lang": "go",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t057_inventory",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t057_inventory",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t058_vending_machine",
+   "lang": "python",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t058_vending_machine",
+   "lang": "go",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t058_vending_machine",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t058_vending_machine",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t059_game_of_life",
+   "lang": "python",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t059_game_of_life",
+   "lang": "go",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t059_game_of_life",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t059_game_of_life",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t060_kv_transactions",
+   "lang": "python",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t060_kv_transactions",
+   "lang": "go",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t060_kv_transactions",
+   "lang": "rust",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t060_kv_transactions",
+   "lang": "ts",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t001_gcd_lcm",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t002_fizzbuzz_custom",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t003_prime_counts",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t004_collatz",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t005_roman",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t006_base_convert",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t007_digit_stats",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t008_fib_mod",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t009_rpn_eval",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t010_ring_buffer",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t011_lru_cache",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t012_min_heap",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t013_bst",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t014_union_find",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t015_linked_list",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t016_matrix_mult",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t017_interval_merge",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t018_word_freq",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t019_caesar",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t020_rle",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t021_anagram_groups",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t022_csv_parse",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t023_expr_eval",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t024_bracket_match",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t025_template_render",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t026_palindromes",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t027_ini_parser",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t028_safe_div_chain",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t029_parse_report",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t030_bank_ledger",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t031_config_validate",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t032_checked_arith",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t033_org_chart",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t034_shapes_trait",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t035_generic_minmax_stack",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t036_multikey_sort",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t037_animal_traits",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t038_vec2_ops",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t039_custom_iterators",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t040_memoizer",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t041_expr_tree",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t042_parallel_sum",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t043_channel_pipeline",
+   "lang": "wj",
+   "status": "build_error",
+   "passed": 0,
+   "total": 38,
+   "categories": [
+    "toolchain-bug"
+   ]
+  },
+  {
+   "task": "t044_shared_histogram",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t045_parallel_divisors",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t046_producer_consumer",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t047_task_scheduler",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t048_wc_clone",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t049_grep_clone",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 41,
+   "total": 41,
+   "categories": []
+  },
+  {
+   "task": "t050_cat_number",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 39,
+   "total": 39,
+   "categories": []
+  },
+  {
+   "task": "t051_file_transform",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 42,
+   "total": 42,
+   "categories": []
+  },
+  {
+   "task": "t052_csv_columns",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t053_cli_flags",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t054_dir_tree",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t055_log_summary",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 32,
+   "total": 32,
+   "categories": []
+  },
+  {
+   "task": "t056_todo_manager",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t057_inventory",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t058_vending_machine",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t059_game_of_life",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t060_kv_transactions",
+   "lang": "wj",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t001_gcd_lcm",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t002_fizzbuzz_custom",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t003_prime_counts",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t004_collatz",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t005_roman",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t006_base_convert",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t007_digit_stats",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t008_fib_mod",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t009_rpn_eval",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t010_ring_buffer",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t011_lru_cache",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t012_min_heap",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t013_bst",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t014_union_find",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t015_linked_list",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t016_matrix_mult",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t017_interval_merge",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t018_word_freq",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t019_caesar",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t020_rle",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t021_anagram_groups",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t022_csv_parse",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t023_expr_eval",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t024_bracket_match",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t025_template_render",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t026_palindromes",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t027_ini_parser",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t028_safe_div_chain",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t029_parse_report",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t030_bank_ledger",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t031_config_validate",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t032_checked_arith",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t033_org_chart",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t034_shapes_trait",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t035_generic_minmax_stack",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t036_multikey_sort",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t037_animal_traits",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  },
+  {
+   "task": "t038_vec2_ops",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t039_custom_iterators",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t040_memoizer",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t041_expr_tree",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t042_parallel_sum",
+   "lang": "wj-interp",
+   "status": "fail",
+   "passed": 0,
+   "total": 37,
+   "categories": [
+    "api-misuse"
+   ]
+  },
+  {
+   "task": "t043_channel_pipeline",
+   "lang": "wj-interp",
+   "status": "fail",
+   "passed": 0,
+   "total": 38,
+   "categories": [
+    "unsupported"
+   ]
+  },
+  {
+   "task": "t044_shared_histogram",
+   "lang": "wj-interp",
+   "status": "fail",
+   "passed": 0,
+   "total": 35,
+   "categories": [
+    "unsupported"
+   ]
+  },
+  {
+   "task": "t045_parallel_divisors",
+   "lang": "wj-interp",
+   "status": "fail",
+   "passed": 0,
+   "total": 34,
+   "categories": [
+    "api-misuse"
+   ]
+  },
+  {
+   "task": "t046_producer_consumer",
+   "lang": "wj-interp",
+   "status": "fail",
+   "passed": 0,
+   "total": 35,
+   "categories": [
+    "unsupported"
+   ]
+  },
+  {
+   "task": "t047_task_scheduler",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 36,
+   "total": 36,
+   "categories": []
+  },
+  {
+   "task": "t048_wc_clone",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t049_grep_clone",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 41,
+   "total": 41,
+   "categories": []
+  },
+  {
+   "task": "t050_cat_number",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 39,
+   "total": 39,
+   "categories": []
+  },
+  {
+   "task": "t051_file_transform",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 42,
+   "total": 42,
+   "categories": []
+  },
+  {
+   "task": "t052_csv_columns",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t053_cli_flags",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 46,
+   "total": 46,
+   "categories": []
+  },
+  {
+   "task": "t054_dir_tree",
+   "lang": "wj-interp",
+   "status": "fail",
+   "passed": 0,
+   "total": 34,
+   "categories": [
+    "unsupported"
+   ]
+  },
+  {
+   "task": "t055_log_summary",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 32,
+   "total": 32,
+   "categories": []
+  },
+  {
+   "task": "t056_todo_manager",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t057_inventory",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 33,
+   "total": 33,
+   "categories": []
+  },
+  {
+   "task": "t058_vending_machine",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 34,
+   "total": 34,
+   "categories": []
+  },
+  {
+   "task": "t059_game_of_life",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 37,
+   "total": 37,
+   "categories": []
+  },
+  {
+   "task": "t060_kv_transactions",
+   "lang": "wj-interp",
+   "status": "pass",
+   "passed": 35,
+   "total": 35,
+   "categories": []
+  }
+ ],
+ "agent_aggregates": {
+  "go": {
+   "trials": 3,
+   "pass_at_1": 1.0,
+   "pass_within_iterations": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0
+   },
+   "mean_iterations_to_green": 1.0,
+   "mean_fix_attempts": null,
+   "mean_fix_changed_lines": null,
+   "tokens_in": null,
+   "tokens_out": null,
+   "wall_seconds": 0.2,
+   "diagnostic_categories": {}
+  },
+  "python": {
+   "trials": 4,
+   "pass_at_1": 0.75,
+   "pass_within_iterations": {
+    "1": 0.75,
+    "2": 1.0,
+    "3": 1.0
+   },
+   "mean_iterations_to_green": 1.25,
+   "mean_fix_attempts": 1.0,
+   "mean_fix_changed_lines": 15.0,
+   "tokens_in": 3000,
+   "tokens_out": 300,
+   "wall_seconds": 0.7,
+   "diagnostic_categories": {
+    "syntax": 1
+   }
+  },
+  "rust": {
+   "trials": 3,
+   "pass_at_1": 1.0,
+   "pass_within_iterations": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0
+   },
+   "mean_iterations_to_green": 1.0,
+   "mean_fix_attempts": null,
+   "mean_fix_changed_lines": null,
+   "tokens_in": null,
+   "tokens_out": null,
+   "wall_seconds": 0.3,
+   "diagnostic_categories": {}
+  },
+  "ts": {
+   "trials": 3,
+   "pass_at_1": 1.0,
+   "pass_within_iterations": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0
+   },
+   "mean_iterations_to_green": 1.0,
+   "mean_fix_attempts": null,
+   "mean_fix_changed_lines": null,
+   "tokens_in": null,
+   "tokens_out": null,
+   "wall_seconds": 0.4,
+   "diagnostic_categories": {}
+  },
+  "wj-interp": {
+   "trials": 3,
+   "pass_at_1": 1.0,
+   "pass_within_iterations": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0
+   },
+   "mean_iterations_to_green": 1.0,
+   "mean_fix_attempts": null,
+   "mean_fix_changed_lines": null,
+   "tokens_in": null,
+   "tokens_out": null,
+   "wall_seconds": 0.5,
+   "diagnostic_categories": {}
+  }
+ }
+}

@@ -1,0 +1,9 @@
+// tags: std, env, args
+// rust: gap error[E0432]: unresolved import 'windjammer_runtime'
+// expect: args: 0
+use std::env
+
+fn main() {
+    let args: Vec<string> = env::args().skip(1).collect()
+    println("args: ${args.len()}")
+}

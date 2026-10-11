@@ -1,0 +1,15 @@
+// tags: struct, derive, debug, equality
+// rust: ok
+// expect: Item { id: 1, name: "pen" }
+// expect: true
+// expect: false
+struct Item { id: int, name: string }
+
+fn main() {
+    let a = Item { id: 1, name: "pen" }
+    let b = a
+    let c = Item { id: 2, name: "pen" }
+    println("${a:?}")
+    println("${a == b}")
+    println("${a == c}")
+}

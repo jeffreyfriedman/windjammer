@@ -17,6 +17,23 @@ use crate::parser_impl::Parser;
 type Args = Vec<(Option<String>, &'static Expression<'static>)>;
 
 impl Parser {
+    /// `format!()` is Rust syntax: point at string interpolation.
+    pub(in crate::parser) fn warn_if_format_macro(&mut self, name: &str) {
+        if name != "format" {
+            return;
+        }
+        let (file, line) = match self.current_location() {
+            Some(loc) => (Some(loc.file.display().to_string()), Some(loc.line)),
+            None => (None, None),
+        };
+        self.emit_warning(
+            "format!() is Rust syntax. Use string interpolation instead: \"text ${expr}\"".to_string(),
+            file,
+            line,
+            None,
+        );
+    }
+
     fn alloc_intrinsic_call(
         &mut self,
         intr: Intrinsic,
