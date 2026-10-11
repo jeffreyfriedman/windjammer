@@ -488,3 +488,31 @@ module_md = "crates/windjammer-mcp/MODULE.md"
 
 [crates.windjammer-runtime]
 module_md = "crates/windjammer-runtime/MODULE.md"
+
+[modules.resolve]
+layer = "resolve"
+owner_stage = "identity-based name resolution (DefId, shadow mode)"
+module_md = "src/resolve/MODULE.md"
+allowed_imports = ["lexer", "parser", "parser_impl", "source_map"]
+known_violations = []
+
+[modules.formatter]
+layer = "tooling"
+owner_stage = "lossless .wj source formatter"
+module_md = "src/formatter/MODULE.md"
+allowed_imports = ["lexer", "parser", "parser_impl", "source_map"]
+known_violations = []
+
+[modules.compiler_config]
+layer = "support"
+owner_stage = "single explicit compiler configuration"
+module_md = "src/compiler_config.MODULE.md"
+allowed_imports = []
+known_violations = ["codegen"]
+
+[modules.debug_env]
+layer = "support"
+owner_stage = "diagnostic env toggles (debug only)"
+module_md = ""
+allowed_imports = []
+known_violations = []
