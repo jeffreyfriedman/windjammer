@@ -120,7 +120,7 @@
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
 "src/codegen/rust/statement_generation.rs" = 2543
-"src/codegen/rust/stdlib_method_traits.rs" = 2480
+"src/codegen/rust/stdlib_method_traits.rs" = 2483
 "src/codegen/rust/string_utilities.rs" = 2093
 "src/compiler/multipass_bare_pass_demotion.rs" = 4677
 "src/stdlib_scanner.rs" = 2161
@@ -175,7 +175,7 @@
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
 "src/compiler/compilation_pipeline.rs::build_project_with_config" = 346
 "src/compiler/library_copy_registry.rs::collect_global_enum_variant_types_for_library" = 359
-"src/compiler/library_multipass.rs::build_library_multipass" = 1440
+"src/compiler/library_multipass.rs::build_library_multipass" = 1439
 "src/file_compilation_pipeline.rs::compile_file_impl" = 403
 "src/interpreter/builtins/option.rs::register" = 316
 "src/interpreter/builtins/seq.rs::register_iter" = 444

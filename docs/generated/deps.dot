@@ -114,12 +114,14 @@ digraph deps {
   "analyzer" -> "test_utils" [label="1"];
   "analyzer" -> "type_classification" [label="34"];
   "analyzer" -> "type_inference" [label="1"];
-  "auto_clone" -> "analyzer" [label="37"];
+  "auto_clone" -> "analyzer" [label="15"];
   "auto_clone" -> "codegen" [label="3",color=red,fontcolor=red];
-  "auto_clone" -> "lexer" [label="2"];
-  "auto_clone" -> "parser" [label="60"];
-  "auto_clone" -> "test_utils" [label="1"];
+  "auto_clone" -> "parser" [label="33"];
   "auto_clone" -> "type_classification" [label="1"];
+  "auto_clone_tests" -> "analyzer" [label="23"];
+  "auto_clone_tests" -> "lexer" [label="2"];
+  "auto_clone_tests" -> "parser" [label="27"];
+  "auto_clone_tests" -> "test_utils" [label="1"];
   "build_utils" -> "module_system" [label="4"];
   "build_utils" -> "project_paths" [label="1"];
   "build_utils" -> "rust_integration_tests" [label="2"];
@@ -178,8 +180,8 @@ digraph deps {
   "cli_project_build" -> "parser_impl" [label="1"];
   "cli_project_build" -> "project_paths" [label="1"];
   "cli_project_build" -> "type_classification" [label="1"];
-  "codegen" -> "analyzer" [label="631"];
-  "codegen" -> "auto_clone" [label="5"];
+  "codegen" -> "analyzer" [label="630"];
+  "codegen" -> "auto_clone" [label="7"];
   "codegen" -> "compiler" [label="7",color=red,fontcolor=red];
   "codegen" -> "compiler_config" [label="5"];
   "codegen" -> "component_analyzer" [label="2"];
@@ -187,7 +189,7 @@ digraph deps {
   "codegen" -> "decorator_registry" [label="3"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
-  "codegen" -> "ir" [label="372"];
+  "codegen" -> "ir" [label="370"];
   "codegen" -> "lexer" [label="21"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
   "codegen" -> "parser" [label="650"];
