@@ -1200,7 +1200,7 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     let type_str =
                         self.borrowed_formal_rust_type_for_param(param, func, param_idx);
-                    if std::env::var("WJ_DEBUG_FORMAL").is_ok() && param.name != "self" {
+                    if crate::debug_env::enabled("WJ_DEBUG_FORMAL") && param.name != "self" {
                         eprintln!("[FORMAL-BORROW] fn={} param={} type_str={}", func.name, param.name, type_str);
                     }
                     self.emitted_rust_ref_formals.insert(param.name.clone());
@@ -1459,7 +1459,7 @@ impl<'ast> CodeGenerator<'ast> {
                             let eff_ownership =
                                 self.get_effective_self_ownership(&func.name, analyzed);
                             let self_str = if let Some(ownership_mode) = eff_ownership {
-                                if std::env::var("WJ_DEBUG_SELF_RECV").is_ok()
+                                if crate::debug_env::enabled("WJ_DEBUG_SELF_RECV")
                                     && func.name.contains("update_death")
                                 {
                                     eprintln!(
@@ -2318,7 +2318,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove(&param.name);
                             }
 
-                            let _debug_formal = std::env::var("WJ_DEBUG_FORMAL").is_ok() && param.name == "grid" && func.name == "do_work";
+                            let _debug_formal = crate::debug_env::enabled("WJ_DEBUG_FORMAL") && param.name == "grid" && func.name == "do_work";
                             if _debug_formal {
                                 eprintln!("[FORMAL-INIT] fn={} param={} initial_mode={:?} ir_own={:?} analyzer_own={:?} registry_own={:?}",
                                     func.name, param.name, ownership_mode,
