@@ -126,11 +126,12 @@ if_let_stmt     = "if" "let" pattern "=" expression block [ "else" block ] ;
 match_stmt      = "match" expression "{" { match_arm } "}" ;
 match_arm       = pattern [ "if" expression ] "=>" ( expression | block ) [ "," ] ;
 
-for_stmt        = "for" pattern "in" expression block ;
-while_stmt      = "while" expression block ;
-loop_stmt       = "loop" block ;
-break_stmt      = "break" [ expression ] ;
-continue_stmt   = "continue" ;
+label           = LIFETIME ":" ;                (* 'outer: *)
+for_stmt        = [ label ] "for" pattern "in" expression block ;
+while_stmt      = [ label ] "while" expression block ;
+loop_stmt       = [ label ] "loop" block ;      (* also an expression: its value is the `break` value *)
+break_stmt      = "break" [ LIFETIME ] [ expression ] ;   (* value only when on the same line *)
+continue_stmt   = "continue" [ LIFETIME ] ;
 
 block           = "{" { statement } [ expression ] "}" ;
 
@@ -149,7 +150,9 @@ tuple_pattern   = "(" pattern { "," pattern } ")" ;
 struct_pattern  = IDENT "{" { field_pattern [ "," ] } [ ".." ] "}" ;
 field_pattern   = IDENT [ ":" pattern ] ;
 enum_pattern    = path "::" IDENT [ "(" pattern_list ")" ] ;
-range_pattern   = literal ".." literal | literal "..=" literal ;
+range_pattern   = range_bound ".." [ range_bound ] | range_bound "..=" range_bound
+                | ".." range_bound | "..=" range_bound ;
+range_bound     = [ "-" ] ( INT_LIT | FLOAT_LIT ) | CHAR_LIT ;
 or_pattern      = pattern "|" pattern ;
 pattern_list    = pattern { "," pattern } ;
 
@@ -226,7 +229,8 @@ visibility      = "pub" [ "(" "crate" ")" ] ;
 (* ── Lexical tokens (informative) ── *)
 
 IDENT           = LETTER { LETTER | DIGIT | "_" } ;
-INT_LIT         = DIGIT { DIGIT | "_" } [ int_suffix ] ;
+INT_LIT         = ( DIGIT { DIGIT | "_" } | "0x" HEX { HEX | "_" } | "0b" BIN { BIN | "_" } | "0o" OCT { OCT | "_" } ) [ int_suffix ] ;
+LIFETIME        = "'" LETTER { LETTER | DIGIT | "_" } ;
 int_suffix      = "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" ;
 FLOAT_LIT       = DIGIT { DIGIT } "." DIGIT { DIGIT } [ float_suffix ] ;
 float_suffix    = "f32" | "f64" ;
@@ -236,6 +240,8 @@ CHAR_LIT        = "'" ( CHAR - "'" | escape ) "'" ;
 escape          = "\\" ( "n" | "r" | "t" | "\\" | "'" | '"' | "0" | "x" HEX HEX ) ;
 LETTER          = "a"…"z" | "A"…"Z" | "_" ;
 DIGIT           = "0"…"9" ;
+BIN             = "0" | "1" ;
+OCT             = "0"…"7" ;
 HEX             = DIGIT | "a"…"f" | "A"…"F" ;
 
 (* ── Comments ── *)
