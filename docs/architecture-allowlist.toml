@@ -1,5 +1,5 @@
 # Architecture ratchet baseline. Read by tests/architecture.rs.
-# Numbers may only go DOWN. Lower them with scripts/depgraph.sh after an improvement.
+# Numbers may only go DOWN. Lower them with scripts/update-architecture-baselines.sh after an improvement.
 # Sections: forbidden_edges ("from->to file" = reference count), long_functions ("file::fn" = lines),
 # long_files, env_var_reads, thread_local, static_state, allow_dead_code,
 # crate_level_allow_dead_code, get_signature_calls.
@@ -198,6 +198,36 @@
 "src/test_runner/mod.rs::run_tests_with_options" = 309
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 407
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433
+
+[main_lib_module_mismatch]
+"lib_only:auto_clone" = 1
+"lib_only:auto_fix" = 1
+"lib_only:error_catalog" = 1
+"lib_only:error_statistics" = 1
+"lib_only:ffi" = 1
+"lib_only:fuzzy_matcher" = 1
+"lib_only:interpreter" = 1
+"lib_only:lib_rs_generator" = 1
+"lib_only:linter" = 1
+"lib_only:metadata" = 1
+"lib_only:parser" = 1
+"lib_only:parser_impl" = 1
+"lib_only:plugin" = 1
+"lib_only:project_paths" = 1
+"lib_only:shader" = 1
+"lib_only:source_map" = 1
+"lib_only:syntax_highlighter_stub" = 1
+"lib_only:test_runner" = 1
+"lib_only:test_utils" = 1
+"lib_only:type_inference" = 1
+"lib_only:type_registry" = 1
+"lib_only:wjsl" = 1
+"main_only:cli_args" = 1
+"main_only:cli_commands" = 1
+"main_only:cli_output" = 1
+"main_only:cli_project_build" = 1
+"main_only:optimizer" = 1
+"main_only:parser_recovery" = 1
 
 [static_state]
 "src/analyzer/program_initialization.rs" = 1
