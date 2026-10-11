@@ -422,6 +422,8 @@ impl Parser {
     }
 
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
+        // Location of the `return` keyword itself (lints and `wj fix` edit at this position).
+        let return_location = self.current_location();
         self.advance();
 
         // TDD FIX: Check for Comma too! Match arms can have: None => return,
@@ -432,13 +434,13 @@ impl Parser {
         ) {
             self.alloc_stmt(Statement::Return {
                 value: None,
-                location: self.current_location(),
+                location: return_location,
             })
         } else {
             let value = self.parse_expression()?;
             self.alloc_stmt(Statement::Return {
                 value: Some(value),
-                location: self.current_location(),
+                location: return_location,
             })
         };
 
