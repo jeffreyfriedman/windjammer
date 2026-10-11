@@ -324,17 +324,7 @@ impl Lexer {
                 self.advance();
                 Token::OrAssign
             }
-            Some('|') if self.peek(1) == Some('>') && self.peek(2) == Some('?') => {
-                self.advance();
-                self.advance();
-                self.advance();
-                Token::PipeTry
-            }
-            Some('|') if self.peek(1) == Some('>') => {
-                self.advance();
-                self.advance();
-                Token::PipeOp
-            }
+            Some('|') if self.peek(1) == Some('>') => self.pipe_operator(),
             Some('|') => {
                 self.advance();
                 Token::Pipe
@@ -407,6 +397,19 @@ impl Lexer {
         };
 
         token
+    }
+
+    /// `|>` or `|>?` (the cursor is on the `|`).
+    fn pipe_operator(&mut self) -> Token {
+        let try_form = self.peek(2) == Some('?');
+        for _ in 0..if try_form { 3 } else { 2 } {
+            self.advance();
+        }
+        if try_form {
+            Token::PipeTry
+        } else {
+            Token::PipeOp
+        }
     }
 
     /// Get next token with its source location
