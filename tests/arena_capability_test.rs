@@ -66,7 +66,7 @@ fn use_after_reset_is_reported_but_try_get_is_allowed() {
 #[test]
 fn copies_out_and_inner_collections_are_fine() {
     assert_clean(&format!(
-        "{P}fn f() -> string {{ let s = Scratch::new()\n let mut parts = s.list()\n parts.push(s.str(\"a\"))\n let mut out = \"\"\n out.push_str(parts[0])\n let n = parts.len()\n return s.str(\"b\").to_string() }}"
+        "{P}fn f() -> string {{ let s = Scratch::new()\n let mut parts = s.new_list()\n parts.push(s.str(\"a\"))\n let mut out = \"\"\n out.push_str(parts[0])\n let n = parts.len()\n return s.str(\"b\").to_string() }}"
     ));
     // Handles of an arena owned by the caller may leave the function.
     assert_clean(&format!("{P}fn spawn(pool: Arena<P>) -> Handle<P> {{ pool.alloc(P {{ x: 1 }}) }}"));

@@ -239,11 +239,11 @@ fn scratch_wj() -> f64 {
     let mut sc = Scratch::new();
     for frame in 0..FRAMES {
         sc.reset();
-        let mut labels = sc.list();
+        let mut labels = sc.new_list();
         for i in 0..K {
-            let mut s = sc.string();
+            let mut s = sc.new_string();
             write!(s, "entity#{} hp={} f={}", i, (i * 7 + frame) % 100, frame).unwrap();
-            labels.push(s.into_bump_str());
+            labels.push(s.into_str());
         }
         total += labels.iter().map(|s| s.len()).sum::<usize>();
     }

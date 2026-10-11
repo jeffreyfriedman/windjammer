@@ -218,15 +218,15 @@ pub(super) fn register(r: &mut Registry) {
         }
         Ok(Value::str(arg_str(&a, 0, "str")?.to_string()))
     });
-    r.pure(Kind::Struct, "string", |_, v, _| {
+    r.pure(Kind::Struct, "new_string", |_, v, _| {
         if !is(v, SCRATCH) {
-            return Err(not_arena("string", v));
+            return Err(not_arena("new_string", v));
         }
         Ok(Value::str(String::new()))
     });
-    r.pure(Kind::Struct, "list", |_, v, _| {
+    r.pure(Kind::Struct, "new_list", |_, v, _| {
         if !is(v, SCRATCH) {
-            return Err(not_arena("list", v));
+            return Err(not_arena("new_list", v));
         }
         Ok(Value::vec(Vec::new()))
     });
