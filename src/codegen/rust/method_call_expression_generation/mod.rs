@@ -106,6 +106,14 @@ impl<'ast> CodeGenerator<'ast> {
         let effective_method = mut_sibling.as_deref().unwrap_or(method);
 
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
+        // `reader.read_line(line)` / `read_to_string(buf)`: std fills a `&mut String`. The lint-clean spelling has no
+        // `&mut`, so a bare identifier argument is passed by mutable borrow, never cloned (a clone is filled and the
+        // caller's buffer stays empty, so read loops never end).
+        if matches!(effective_method, "read_line" | "read_to_string") && arguments.len() == 1 {
+            if let Expression::Identifier { name, .. } = arguments[0].1 {
+                return format!("{obj_str}.{effective_method}(&mut {name})");
+            }
+        }
         let method_signature =
             self.mc_resolve_method_call_signature(object, effective_method, arguments);
         let type_name = self

@@ -50,12 +50,12 @@ impl<'ast> RustLeakageLinter<'ast> {
         self.check_missing_values(program);
     }
 
-    /// W0010 (ADR-0015 #4): declared return type but the body definitely ends without a value.
+    /// W0011 (ADR-0015 #4): declared return type but the body definitely ends without a value.
     fn check_missing_values(&mut self, program: &Program<'ast>) {
         for m in super::missing_value::missing_values(program) {
             let location = to_source_location(m.location, &self.default_file);
             self.collector.add(LintDiagnostic {
-                lint_name: "W0010".to_string(),
+                lint_name: "W0011".to_string(),
                 category: LintCategory::Correctness,
                 level: LintLevel::Error,
                 message: format!("function `{}` declares a return type but ends without a value: {}", m.function, m.reason),
