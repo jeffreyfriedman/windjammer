@@ -138,12 +138,12 @@ digraph deps {
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="7"];
   "cli" -> "codegen" [label="7"];
-  "cli" -> "compiler" [label="2",color=red,fontcolor=red];
+  "cli" -> "compiler" [label="2"];
   "cli" -> "compiler_config" [label="2"];
   "cli" -> "config" [label="2"];
   "cli" -> "error_mapper" [label="6"];
-  "cli" -> "formatter" [label="1",color=red,fontcolor=red];
-  "cli" -> "intrinsics" [label="1",color=red,fontcolor=red];
+  "cli" -> "formatter" [label="1"];
+  "cli" -> "intrinsics" [label="1"];
   "cli" -> "ir" [label="2"];
   "cli" -> "lexer" [label="3"];
   "cli" -> "linter" [label="1"];
