@@ -148,7 +148,7 @@ pub fn create_cargo_toml_with_deps(
     use std::fs;
 
     // THE WINDJAMMER WAY: Copy FFI dependencies from source project's Cargo.toml
-    // This enables projects with FFI (like windjammer-game-core) to compile correctly
+    // This enables projects with FFI (like a game engine project) to compile correctly
     let mut source_cargo_deps = Vec::new();
 
     // Search upward for Cargo.toml (similar to windjammer.toml search)
@@ -350,7 +350,7 @@ pub fn create_cargo_toml_with_deps(
             || crate_name == "windjammer_runtime"
             || crate_name == "windjammer-runtime"
         {
-            // Try to find windjammer-game in the workspace
+            // Try to find a game engine project in the workspace
             // First, check if WINDJAMMER_GAME_PATH env var is set (for development)
             if let Some(game_path) = config.game_path.clone() {
                 if game_path.exists() {
@@ -372,7 +372,7 @@ pub fn create_cargo_toml_with_deps(
                 // windjammer-runtime is in windjammer/crates/windjammer-runtime
                 src_root.join("windjammer/crates/windjammer-runtime")
             } else {
-                // windjammer-app is in windjammer-game/windjammer-game-core
+                // windjammer-app is in <game-root>/<game-core>
                 let game_path = src_root.join("windjammer-game/windjammer-game-core");
                 let legacy_game_path = src_root.join("windjammer-game/windjammer-game");
 

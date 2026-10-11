@@ -85,7 +85,7 @@ wj build my-game.wj --target=rust
 Generates:
 ```rust
 // build/main.rs
-use windjammer_game_framework::prelude::*;
+use game_framework::prelude::*;
 
 struct MyGame {
     player_pos: Vec2,

@@ -107,7 +107,7 @@
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2357
-"src/analyzer/signature_registry.rs" = 2534
+"src/analyzer/signature_registry.rs" = 2533
 "src/analyzer/string_optimization.rs" = 2179
 "src/auto_clone.rs" = 2225
 "src/codegen/rust/call_signature_resolution.rs" = 3339
@@ -122,7 +122,7 @@
 "src/codegen/rust/statement_generation.rs" = 2543
 "src/codegen/rust/stdlib_method_traits.rs" = 2483
 "src/codegen/rust/string_utilities.rs" = 2093
-"src/compiler/multipass_bare_pass_demotion.rs" = 4677
+"src/compiler/multipass_bare_pass_demotion.rs" = 4676
 "src/stdlib_scanner.rs" = 2161
 
 [long_functions]

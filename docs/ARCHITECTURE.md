@@ -108,4 +108,3 @@ Links in this table may be missing on branches where that work has not merged ye
 - [known-gaps.md](known-gaps.md): ranked gaps against the docs and RFCs
 - [IR_SOLVER_CODEGEN_ARCHITECTURE.md](IR_SOLVER_CODEGEN_ARCHITECTURE.md), [SALSA_ARCHITECTURE.md](SALSA_ARCHITECTURE.md) (LSP incremental queries)
 - [proposals/rfcs/README.md](proposals/rfcs/README.md): proposals and their implementation status
-- [archive/ARCHITECTURE_2025-ui-components.md](archive/ARCHITECTURE_2025-ui-components.md): the previous version of this file (UI component compiler design, not current)

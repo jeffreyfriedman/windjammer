@@ -262,7 +262,7 @@ pub extern "C" fn wj_sprite_new(
         let col: Color = color.into();
         
         // Call Rust implementation (generated)
-        windjammer_game_framework::rendering::sprite_new(
+        game_framework::rendering::sprite_new(
             entity_handle,
             texture_handle,
             pos,

@@ -1,9 +1,9 @@
 # Test-adjacent files that no runner reaches on purpose. Format: <glob> | <reason>
 # `*` does not cross `/`; `**` does. Fixtures and helpers only; real tests must be wired or deleted.
 tests/conformance/run_conformance_tests.sh | manual end-to-end runner (rustc + execute); the compile stage is covered by tests/wj_corpus_test.rs
-tests/cli_gate_*.sh | manual red/green emit gates that need a built `wj` (WJ env var); repro history in tests/COMPILER_REPRO_QUEUE.md
+tests/cli_gate_*.sh | manual red/green emit gates that need a built `wj` (WJ env var)
 tests/reproducibility_test.sh | manual determinism probe; needs a game project path (WJ_GAME_DIR)
-tests/run_red_repro_bundle.sh | manual driver that runs the red-repro filters from tests/COMPILER_REPRO_QUEUE.md
+tests/run_red_repro_bundle.sh | manual driver that runs the red-repro filters listed in the script
 std/basic_test.wj | stdlib self-test module, run by `wj test std` (user-facing `wj test` target, not a cargo test)
 std/test_simple.wj | stdlib module-resolution fixture (no test functions), imported by `wj test` layout checks
 examples/syntax_tests/** | example package whose tests are run by `wj test examples/syntax_tests`
