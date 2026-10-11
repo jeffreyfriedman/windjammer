@@ -12,13 +12,12 @@ pub fn generate_literal(lit: &Literal) -> String {
         Literal::IntSuffixed(i, suffix) => format!("{}_{}", i, suffix),
         Literal::Float(f) => {
             let s = f.to_string();
-            // Windjammer convention: unconstrained float literals default to f32
-            // (game/graphics standard — most APIs use f32).
-            // Context-sensitive inference in expression_generation.rs may override this.
+            // ADR-0015 #1: unconstrained float literals are `float` = f64 (the interpreter and the
+            // portable backends agree); annotations/inference that fix f32 override this downstream.
             if !s.contains('.') && !s.contains('e') && !s.contains('E') {
-                format!("{}.0_f32", s)
+                format!("{}.0_f64", s)
             } else {
-                format!("{}_f32", s)
+                format!("{}_f64", s)
             }
         }
         Literal::String(s) => format!("\"{}\"", escape_string(s)),
@@ -86,8 +85,8 @@ mod tests {
 
     #[test]
     fn test_float_literal() {
-        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5_f32");
-        assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0_f32");
+        assert_eq!(generate_literal(&Literal::Float(2.5)), "2.5_f64");
+        assert_eq!(generate_literal(&Literal::Float(42.0)), "42.0_f64");
         let result = generate_literal(&Literal::Float(10.0));
         assert!(
             result.contains('.') && result.contains("f32"),

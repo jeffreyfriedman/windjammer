@@ -516,6 +516,14 @@ impl<'ast> CodeGenerator<'ast> {
                         return Some(obj_type.clone());
                     }
                 }
+                // Primitive float receivers first: the registry holds both `f32::m` and `f64::m`
+                // and an untyped `Type::Float` receiver (f64) must not resolve to the f32 entry.
+                if let Some(t) = Self::rust_primitive_float_method_return_type(
+                    obj_ty_early.as_ref(),
+                    method.as_str(),
+                ) {
+                    return Some(t);
+                }
                 // Prefer signature-registry return types (stdlib_meta) over hardcoded
                 // method-name tables — `String::trim` → `&str`, `HashMap::get` → `Option<&V>`.
                 // Must cover Parameterized/Vec/Option receivers via `type_to_name`.
@@ -531,12 +539,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                         return Some(ret);
                     }
-                }
-                if let Some(t) = Self::rust_primitive_float_method_return_type(
-                    obj_ty_early.as_ref(),
-                    method.as_str(),
-                ) {
-                    return Some(t);
                 }
                 // Look up from the method return type registry (populated during impl generation)
                 if let Some(t) = self.method_return_types.get(method.as_str()) {

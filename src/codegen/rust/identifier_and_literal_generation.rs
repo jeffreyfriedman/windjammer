@@ -268,15 +268,15 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(field_type) = fields.get(field_name) {
                             float_type_utilities::extract_float_type_from_context(field_type)
                         } else {
-                            "f32"
+                            "f64"
                         }
                     } else {
-                        "f32"
+                        "f64"
                     }
                 } else if let Some(return_type) = &self.current_function_return_type {
                     float_type_utilities::extract_float_type_from_context(return_type)
                 } else {
-                    "f32"
+                    "f64"
                 };
 
                 let s = f.to_string();
