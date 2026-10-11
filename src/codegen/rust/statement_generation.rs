@@ -815,14 +815,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_assignment_statement(target, value, compound_op),
             Statement::Thread { body, .. } => self.generate_thread_statement(body),
             Statement::Async { body, .. } => self.generate_async_statement(body),
-            Statement::Defer { statement: _, .. } => {
-                // Defer is not directly supported in Rust
-                // We'll generate a comment for now
-                let mut output = self.indent();
-                output.push_str("// TODO: defer not yet implemented\n");
-                output.push_str(&self.generate_statement(stmt));
-                output
-            }
+            Statement::Defer { statement, .. } => self.generate_defer_statement(statement, stmt),
         }
     }
 

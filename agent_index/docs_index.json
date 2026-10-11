@@ -2002,6 +2002,33 @@
   {
     "kind": "example",
     "module": "",
+    "name": "defer_panic_lifo",
+    "signature": "",
+    "source": "examples/verified/defer_panic_lifo.wj",
+    "summary": "verified program; first output line: open",
+    "tags": [
+      "control-flow",
+      "defer",
+      "panic"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "display_to_string",
+    "signature": "",
+    "source": "examples/verified/display_to_string.wj",
+    "summary": "verified program; first output line: (1, 2)",
+    "tags": [
+      "traits",
+      "display",
+      "to_string",
+      "interpolation"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "enum_basics",
     "signature": "",
     "source": "examples/verified/enum_basics.wj",
