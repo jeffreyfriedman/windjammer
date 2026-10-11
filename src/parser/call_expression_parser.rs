@@ -372,20 +372,8 @@ impl Parser {
                     }
 
                     let inclusive = self.current_token() == &Token::DotDotEq;
-                    // `start..` with no end (`(1..)`, `for i in 0.. {`) is `RangeFrom { start }`
-                    if !inclusive
-                        && matches!(
-                            self.peek(1),
-                            Some(Token::RParen | Token::Comma | Token::Semicolon | Token::RBrace | Token::LBrace)
-                        )
-                    {
-                        self.advance();
-                        let location = self.current_location();
-                        expr = self.alloc_expr(Expression::StructLiteral {
-                            name: "std::ops::RangeFrom".to_string(),
-                            fields: vec![("start".to_string(), expr)],
-                            location,
-                        });
+                    if let Some(open) = self.try_parse_range_from(expr) {
+                        expr = open;
                         continue;
                     }
                     self.advance();
@@ -482,19 +470,7 @@ impl Parser {
 
                         self.expect(end_token)?;
 
-                        if name == "format" {
-                            let (file, line) = if let Some(loc) = self.current_location() {
-                                (Some(loc.file.display().to_string()), Some(loc.line))
-                            } else {
-                                (None, None)
-                            };
-                            self.emit_warning(
-                                "format!() is Rust syntax. Use string interpolation instead: \"text ${expr}\"".to_string(),
-                                file,
-                                line,
-                                None,
-                            );
-                        }
+                        self.warn_if_format_macro(name);
 
                         if let Some(lowered) = self.lower_intrinsic_macro(name, &args) {
                             lowered

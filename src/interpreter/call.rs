@@ -175,10 +175,29 @@ impl Interpreter {
                 if self.builtins.has_function(name) {
                     return Ok(Value::Func(Rc::new(Callable::Path(Rc::from(name)))));
                 }
+                if let Some(p) = self.std_import_member(name, false) {
+                    if let Some(v) = self.builtins.constant(&p) {
+                        return Ok(v);
+                    }
+                    return Ok(Value::Func(Rc::new(Callable::Path(Rc::from(p.as_str())))));
+                }
                 // method path used as a function value: Type::method for builtin types
                 Err(semantic(format!("cannot find value `{}` in this scope", name)))
             }
         }
+    }
+
+    /// A bare name that a glob-style `use std::module` makes visible (`sqrt` after `use std::math`).
+    fn std_import_member(&self, name: &str, function: bool) -> Option<String> {
+        let module = self.scope.module;
+        self.modules[module].imports.values().find_map(|imp| match imp {
+            Import::Std(p) => {
+                let path = format!("{}::{}", p, name);
+                let hit = if function { self.builtins.has_function(&path) } else { self.builtins.constant(&path).is_some() || self.builtins.has_function(&path) };
+                hit.then_some(path)
+            }
+            _ => None,
+        })
     }
 
     pub(crate) fn global_value(&mut self, module: usize, name: &str) -> R {
@@ -366,6 +385,9 @@ impl Interpreter {
                 if self.builtins.has_function(name) {
                     return self.call_builtin_fn(name, args);
                 }
+                if let Some(p) = self.std_import_member(name, true) {
+                    return self.call_builtin_fn(&p, args);
+                }
                 Err(semantic(format!("cannot find function `{}` in this scope", name)))
             }
         }
@@ -460,6 +482,7 @@ impl Interpreter {
                     }
                 }
             }
+            Callable::Deferred { .. } => Err(semantic("a future is not callable; `.await` it")),
             Callable::Path(p) => {
                 let p = p.to_string();
                 if let Some((en, var)) = p.rsplit_once("::") {
@@ -502,11 +525,15 @@ impl Interpreter {
     }
 
     fn depth_check(&mut self) -> R<()> {
-        if self.depth > self.max_depth {
-            return Err(super::error::panic_ctl(format!(
-                "stack overflow: recursion depth exceeded {} frames",
-                self.max_depth
-            )));
+        let over_stack = match self.stack_guard {
+            Some((base, budget)) => {
+                let here = 0u8;
+                base.saturating_sub(&here as *const u8 as usize) > budget
+            }
+            None => self.depth > self.max_depth,
+        };
+        if over_stack {
+            return Err(super::error::panic_ctl("stack overflow: recursion too deep for the interpreter stack"));
         }
         Ok(())
     }
@@ -517,6 +544,35 @@ impl Interpreter {
 
     /// `call_func` with explicit type arguments and the expected result type (generic dispatch).
     pub(crate) fn call_func_g(
+        &mut self,
+        f: &Rc<FuncDef>,
+        args: Vec<Value>,
+        self_val: Option<Value>,
+        targs: &[Type],
+        expected: Option<Type>,
+    ) -> R {
+        if f.is_async {
+            // Rust semantics: calling an async fn does nothing until the future is awaited
+            return Ok(Value::Func(Rc::new(Callable::Deferred { func: f.clone(), args, self_val, targs: targs.to_vec(), expected })));
+        }
+        self.call_func_run(f, args, self_val, targs, expected)
+    }
+
+    /// `.await`: run a deferred async call to completion; any other value is already a result.
+    pub(crate) fn await_value(&mut self, v: Value) -> R {
+        match &v {
+            Value::Func(c) => match &**c {
+                Callable::Deferred { func, args, self_val, targs, expected } => {
+                    let r = self.call_func_run(func, args.clone(), self_val.clone(), targs, expected.clone())?;
+                    self.await_value(r)
+                }
+                _ => Ok(v),
+            },
+            _ => Ok(v),
+        }
+    }
+
+    fn call_func_run(
         &mut self,
         f: &Rc<FuncDef>,
         mut args: Vec<Value>,
@@ -545,7 +601,11 @@ impl Interpreter {
 
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         let mut it = args.drain(..);
-        if has_self {
+        if !has_self {
+            if let Some(v) = self_val {
+                self.define("self", v);
+            }
+        } else {
             let sv = match self_val {
                 Some(v) => Some(v),
                 None => it.next(),
@@ -641,6 +701,28 @@ impl Interpreter {
                 _ => {}
             }
         }
+        // legacy `Enum.Variant(args)` / `Type.assoc(args)` spelling
+        if let Expression::Identifier { name, .. } = object {
+            if self.lookup_var(name).is_none() && (self.enums.contains_key(name.as_str()) || self.structs.contains_key(name.as_str())) {
+                let path = format!("{}::{}", name, method);
+                self.mark(loc);
+                return self.call_named(&path, arguments, &[], None);
+            }
+        }
+        // legacy `module.func(args)` on an imported std module (`fs.exists(p)`, `time.now_millis()`)
+        if let Expression::Identifier { name, .. } = object {
+            if self.lookup_var(name).is_none() {
+                let module = self.scope.module;
+                if let Some(Import::Std(p)) = self.modules[module].imports.get(name.as_str()).cloned() {
+                    let path = format!("{}::{}", p, method);
+                    if self.builtins.has_function(&path) {
+                        let args = self.eval_args(arguments, None, false)?;
+                        self.mark(loc);
+                        return self.call_builtin_fn(&path, args);
+                    }
+                }
+            }
+        }
         // `Type.method` on a type name used like a path (e.g. `Self.new()`) is not valid; ignore.
         let place = if Self::is_place_expr(object) { self.resolve_place(object)? } else { None };
         let recv = match &place {
@@ -678,8 +760,9 @@ impl Interpreter {
     fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         if !has_self {
-            // associated function called through an instance: not valid Rust
-            return self.call_func(f, args, None);
+            // `fn render() -> T` written without `self` but called on an instance: the body may
+            // still mention `self` (implicit receiver), so bind it
+            return self.call_func(f, args, Some(recv));
         }
         let self_val = if place.is_some() && self.self_mutation(f) {
             // release our clone of the receiver so in-place mutation stays copy-free

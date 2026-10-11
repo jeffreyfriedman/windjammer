@@ -27,6 +27,8 @@ pub struct FuncDef {
     pub self_ty: Option<Rc<str>>,
     pub decorators: &'static [Decorator<'static>],
     pub is_extern: bool,
+    /// `async fn`: calling it yields a lazy future that runs when awaited.
+    pub is_async: bool,
     /// Generic parameters in scope for the body: impl-level first, then the function's own.
     pub type_params: Vec<String>,
     /// Per-parameter (self excluded): does the body mutate it? Computed lazily.
@@ -132,6 +134,9 @@ pub struct Interpreter {
     pub(crate) builtins: Registry,
     pub(crate) depth: usize,
     pub(crate) max_depth: usize,
+    /// (stack base address, byte budget) when running on the big interpreter thread: recursion is then
+    /// bounded by stack bytes used instead of a frame count.
+    pub(crate) stack_guard: Option<(usize, usize)>,
     pub(crate) args: Vec<String>,
     pub(crate) closure_counter: usize,
     pub(crate) mutating_analysis: HashSet<usize>,
@@ -175,6 +180,7 @@ impl Interpreter {
             builtins: Registry::standard(),
             depth: 0,
             max_depth: 10_000,
+            stack_guard: None,
             args: Vec::new(),
             closure_counter: 0,
             mutating_analysis: HashSet::new(),
@@ -191,6 +197,12 @@ impl Interpreter {
         let mut s = Self::new();
         s.capture_output = true;
         s
+    }
+
+    /// Call first thing on the big-stack thread (see `runner::with_big_stack`).
+    pub fn guard_stack(&mut self) {
+        let here = 0u8;
+        self.stack_guard = Some((&here as *const u8 as usize, super::runner::STACK_BYTES - super::runner::STACK_HEADROOM));
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {
@@ -245,7 +257,7 @@ impl Interpreter {
             .get("main")
             .cloned()
             .ok_or_else(|| RuntimeError::new(ErrorKind::Semantic, "No main() function found"))?;
-        let r = self.call_func(&main, Vec::new(), None);
+        let r = self.call_func(&main, Vec::new(), None).and_then(|v| self.await_value(v));
         self.finish(r)
     }
 

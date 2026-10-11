@@ -272,13 +272,20 @@ impl Interpreter {
                 self.pop_scope(r)
             }
 
-            Expression::Await { location, .. }
-            | Expression::AsyncCall { location, .. }
+            Expression::Await { expr, location } => {
+                let v = self.eval(expr)?;
+                self.mark(location.as_ref());
+                self.await_value(v)
+            }
+
+            Expression::AsyncCall { location, .. }
             | Expression::SpawnCall { location, .. }
             | Expression::ChannelSend { location, .. }
             | Expression::ChannelRecv { location, .. } => {
                 self.mark(location.as_ref());
-                Err(unsupported("async/await, spawn and channels"))
+                Err(unsupported(
+                    "`async expr`, `spawn`, channels and `<-` (ADR-0004: the concurrency surface is not settled; only `async fn` + `.await` run, sequentially)",
+                ))
             }
         }
     }

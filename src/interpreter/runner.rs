@@ -36,10 +36,15 @@ pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
     Err(format!("File not found: {}", path.display()))
 }
 
+/// Stack of the interpreter thread; recursion is limited by the bytes actually used (not a frame count),
+/// so the limit does not depend on debug/release frame sizes.
+pub(crate) const STACK_BYTES: usize = 4 << 30;
+pub(crate) const STACK_HEADROOM: usize = 256 << 20;
+
 /// Run `f` on a thread with a large stack (deeply recursive programs).
 pub fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     std::thread::Builder::new()
-        .stack_size(4 << 30)
+        .stack_size(STACK_BYTES)
         .spawn(f)
         .expect("spawn interpreter thread")
         .join()
@@ -57,6 +62,7 @@ pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
     };
     with_big_stack(move || {
         let mut it = Interpreter::new();
+        it.guard_stack();
         it.set_args(args);
         if let Err(e) = it.load_entry_file(&entry) {
             eprintln!("{}", e.render());
@@ -121,6 +127,7 @@ pub fn run_tests(path: &Path, filter: Option<&str>) -> Vec<TestResult> {
         for f in files {
             // names are discovered once, then each test runs against its own interpreter
             let mut probe = Interpreter::new_capturing();
+            probe.guard_stack();
             if let Err(e) = probe.load_entry_file(&f) {
                 results.push(TestResult { file: f.clone(), name: "<load>".into(), passed: false, message: e.render() });
                 continue;
@@ -133,6 +140,7 @@ pub fn run_tests(path: &Path, filter: Option<&str>) -> Vec<TestResult> {
                     }
                 }
                 let mut it = Interpreter::new_capturing();
+                it.guard_stack();
                 if it.load_entry_file(&f).is_err() {
                     continue;
                 }

@@ -90,6 +90,7 @@ pub fn run_repl_stdio() -> i32 {
     super::runner::with_big_stack(|| {
         let interactive = std::io::stdin().is_terminal();
         let mut it = Interpreter::new();
+        it.guard_stack();
         if interactive {
             println!("Windjammerscript REPL (interpreted, no cargo). Type :help for commands, exit or Ctrl-D to quit.");
         }
@@ -116,6 +117,7 @@ pub fn run_repl_stdio() -> i32 {
                     }
                     ":reset" => {
                         it = Interpreter::new();
+                        it.guard_stack();
                         continue;
                     }
                     _ => {}

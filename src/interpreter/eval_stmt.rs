@@ -162,7 +162,7 @@ impl Interpreter {
                 Ok(Value::Unit)
             }
             Statement::Use { .. } => Ok(Value::Unit),
-            Statement::Thread { .. } | Statement::Async { .. } => Err(unsupported("thread/async blocks")),
+            Statement::Thread { .. } | Statement::Async { .. } => Err(unsupported("`thread {}` / `async {}` blocks (ADR-0004: surface not settled; use `async fn` + `.await`)")),
         }
     }
 
