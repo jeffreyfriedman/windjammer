@@ -119,7 +119,7 @@
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2153
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
-"src/codegen/rust/statement_generation.rs" = 2558
+"src/codegen/rust/statement_generation.rs" = 2535
 "src/codegen/rust/stdlib_method_traits.rs" = 2483
 "src/codegen/rust/string_utilities.rs" = 2093
 "src/compiler/multipass_bare_pass_demotion.rs" = 4676
@@ -184,7 +184,7 @@
 "src/lexer/mod.rs::next_token" = 304
 "src/parser/call_expression_parser.rs::parse_postfix_expression" = 489
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
-"src/parser/primary_expression_parser.rs::parse_primary_expression" = 595
+"src/parser/primary_expression_parser.rs::parse_primary_expression" = 558
 "src/parser/type_parser.rs::parse_type" = 428
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 407
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433

@@ -440,4 +440,43 @@ impl Parser {
             location: self.current_location(),
         }))
     }
+
+    /// `self` the value, or `self::f` the module-relative path. They must stay distinct in the
+    /// AST: `self.f()` is a method call on the value (MethodCall), `self::f()` calls the free
+    /// function `f` of the current module (Call on a path identifier). Cursor on `self`.
+    pub(in crate::parser) fn parse_self_value_or_path(&mut self) -> &'static Expression<'static> {
+        self.advance();
+        let mut name = "self".to_string();
+        while self.current_token() == &Token::ColonColon {
+            if let Some(Token::Ident(seg)) = self.peek(1) {
+                name.push_str("::");
+                name.push_str(seg);
+                self.advance();
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.alloc_expr(Expression::Identifier {
+            name,
+            location: self.current_location(),
+        })
+    }
+
+    /// `loop { .. break value .. }` / `'label: loop/while/for { .. }` used as a value: a block whose
+    /// tail statement is the loop (a `loop` evaluates to its `break` value).
+    pub(in crate::parser) fn parse_loop_expression(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
+        let stmt = if self.current_token() == &Token::Loop {
+            self.parse_loop(None)?
+        } else {
+            self.parse_statement()?
+        };
+        Ok(self.alloc_expr(Expression::Block {
+            statements: vec![stmt],
+            is_unsafe: false,
+            location: self.current_location(),
+        }))
+    }
 }

@@ -1463,9 +1463,7 @@ impl AutoCloneAnalysis {
                 crate::parser::EnumPatternBinding::None
                 | crate::parser::EnumPatternBinding::Wildcard => {}
             },
-            crate::parser::Pattern::Wildcard
-            | crate::parser::Pattern::Literal(_)
-            | crate::parser::Pattern::Range { .. } => {}
+            crate::parser::Pattern::Wildcard | crate::parser::Pattern::Literal(_) | crate::parser::Pattern::Range { .. } => {}
         }
     }
 
