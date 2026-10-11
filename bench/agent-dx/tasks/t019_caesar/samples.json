@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "enc 3\nHello, World!\n",
+  "stdout": "Khoor, Zruog!\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dec 3\nKhoor, Zruog!\n",
+  "stdout": "Hello, World!\n"
+ }
+]

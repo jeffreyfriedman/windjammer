@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add buy milk\nadd write code\ndone 1\nlist\nlist open\ncount\n",
+  "stdout": "added 1\nadded 2\ndone 1\n1 [x] buy milk\n2 [ ] write code\n2 [ ] write code\nopen=1 done=1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list\ndone 3\nbogus\n",
+  "stdout": "(none)\nerror: no such item 3\nerror: unknown command bogus\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add a\nadd b\ndel 1\nadd c\nlist\ndone 2\ndone 2\nclear\nlist done\nlist x\ndone\ndel\n\nadd\ncount\nadd two  spaces\n",
+  "stdout": "added 1\nadded 2\ndeleted 1\nadded 3\n2 [ ] b\n3 [ ] c\ndone 2\nerror: already done 2\ncleared 1\n(none)\nerror: bad filter x\nerror: missing argument\nerror: missing argument\nerror: missing argument\nopen=1 done=0\nadded 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\ndone 2\nlist all\nadd item 9\nadd item 2\nadd item 30\ndone\ndone 3\ndone 2\nlist open\nadd item 98\nclear\ndel 6\nclear\nlist open\nclear\nadd item 29\nadd item 24\nclear\nadd item 75\n",
+  "stdout": "error: no such item 2\n(none)\nadded 1\nadded 2\nadded 3\nerror: missing argument\ndone 3\ndone 2\n1 [ ] item 9\nadded 4\ncleared 2\nerror: no such item 6\ncleared 0\n1 [ ] item 9\n4 [ ] item 98\ncleared 0\nadded 5\nadded 6\ncleared 0\nadded 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "done 4\nlist\nadd item 79\ndel 5\nclear\nadd item 74\ndone 5\nlist\nadd item 31\nlist all\nadd item 66\nclear\nadd item 19\nadd item 89\nlist done\ndel 4\nlist open\n\nlist\nlist\n\nadd item 7\nadd item 60\n",
+  "stdout": "error: no such item 4\n(none)\nadded 1\nerror: no such item 5\ncleared 0\nadded 2\nerror: no such item 5\n1 [ ] item 79\n2 [ ] item 74\nadded 3\n1 [ ] item 79\n2 [ ] item 74\n3 [ ] item 31\nadded 4\ncleared 0\nadded 5\nadded 6\n(none)\ndeleted 4\n1 [ ] item 79\n2 [ ] item 74\n3 [ ] item 31\n5 [ ] item 19\n6 [ ] item 89\n1 [ ] item 79\n2 [ ] item 74\n3 [ ] item 31\n5 [ ] item 19\n6 [ ] item 89\n1 [ ] item 79\n2 [ ] item 74\n3 [ ] item 31\n5 [ ] item 19\n6 [ ] item 89\nadded 7\nadded 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 72\nnope 1\nlist zz\nlist open\nadd item 67\ndel 6\nlist zz\nadd item 30\nlist open\nlist open\nadd item 1\nlist open\nlist done\nlist\ndone 4\n\nadd item 50\nclear\nadd item 51\nadd item 21\ndone 3\ndone 1\nadd item 33\nadd item 67\nadd item 49\ndone 6\ndone 3\nadd item 89\n",
+  "stdout": "added 1\nerror: unknown command nope\nerror: bad filter zz\n1 [ ] item 72\nadded 2\nerror: no such item 6\nerror: bad filter zz\nadded 3\n1 [ ] item 72\n2 [ ] item 67\n3 [ ] item 30\n1 [ ] item 72\n2 [ ] item 67\n3 [ ] item 30\nadded 4\n1 [ ] item 72\n2 [ ] item 67\n3 [ ] item 30\n4 [ ] item 1\n(none)\n1 [ ] item 72\n2 [ ] item 67\n3 [ ] item 30\n4 [ ] item 1\ndone 4\nadded 5\ncleared 1\nadded 6\nadded 7\ndone 3\ndone 1\nadded 8\nadded 9\nadded 10\ndone 6\nerror: already done 3\nadded 11\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list open\nadd item 24\nclear\nclear\nadd item 21\ndone 3\ndone\nclear\nlist done\n\ndone 1\nadd item 35\ndone 3\ndone 1\nadd item 85\ndone 5\ncount\nadd item 58\ndone 3\ndel 4\ndel 3\ndone 6\nlist done\nclear\ncount\ndone 5\nlist done\nadd item 33\nlist zz\nnope 1\nadd item 98\nadd item 16\ndone 6\ndone 5\ncount\nlist all\nlist\nadd item 61\ndone 1\ndone 1\n",
+  "stdout": "(none)\nadded 1\ncleared 0\ncleared 0\nadded 2\nerror: no such item 3\nerror: missing argument\ncleared 0\n(none)\ndone 1\nadded 3\ndone 3\nerror: already done 1\nadded 4\nerror: no such item 5\nopen=2 done=2\nadded 5\nerror: already done 3\ndeleted 4\ndeleted 3\nerror: no such item 6\n1 [x] item 24\ncleared 1\nopen=2 done=0\ndone 5\n5 [x] item 58\nadded 6\nerror: bad filter zz\nerror: unknown command nope\nadded 7\nadded 8\ndone 6\nerror: already done 5\nopen=3 done=2\n2 [ ] item 21\n5 [x] item 58\n6 [x] item 33\n7 [ ] item 98\n8 [ ] item 16\n2 [ ] item 21\n5 [x] item 58\n6 [x] item 33\n7 [ ] item 98\n8 [ ] item 16\nadded 9\nerror: no such item 1\nerror: no such item 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 42\nlist all\nadd item 34\ndel 1\nnope 1\ncount\nadd item 57\ndone 4\nlist zz\nadd item 28\nlist open\ncount\nadd item 55\nadd item 68\nlist all\ndone 4\ndel 3\nlist\nadd item 82\nadd item 86\ndone 2\ncount\n\ndone 1\ndone 1\nadd item 71\n\n",
+  "stdout": "added 1\n1 [ ] item 42\nadded 2\ndeleted 1\nerror: unknown command nope\nopen=1 done=0\nadded 3\nerror: no such item 4\nerror: bad filter zz\nadded 4\n2 [ ] item 34\n3 [ ] item 57\n4 [ ] item 28\nopen=3 done=0\nadded 5\nadded 6\n2 [ ] item 34\n3 [ ] item 57\n4 [ ] item 28\n5 [ ] item 55\n6 [ ] item 68\ndone 4\ndeleted 3\n2 [ ] item 34\n4 [x] item 28\n5 [ ] item 55\n6 [ ] item 68\nadded 7\nadded 8\ndone 2\nopen=4 done=2\nerror: no such item 1\nerror: no such item 1\nadded 9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list zz\ndone\nadd item 7\nlist zz\ndel 5\nlist all\nadd item 19\ndone 4\nlist done\ncount\nadd item 98\nadd item 89\nlist done\nadd item 50\ndel 1\ndone 6\ndel 3\ndel 5\nadd item 80\nnope 1\nlist open\nadd item 49\nadd item 77\nlist open\nadd item 25\n\nadd item 15\n",
+  "stdout": "error: bad filter zz\nerror: missing argument\nadded 1\nerror: bad filter zz\nerror: no such item 5\n1 [ ] item 7\nadded 2\nerror: no such item 4\n(none)\nopen=2 done=0\nadded 3\nadded 4\n(none)\nadded 5\ndeleted 1\nerror: no such item 6\ndeleted 3\ndeleted 5\nadded 6\nerror: unknown command nope\n2 [ ] item 19\n4 [ ] item 89\n6 [ ] item 80\nadded 7\nadded 8\n2 [ ] item 19\n4 [ ] item 89\n6 [ ] item 80\n7 [ ] item 49\n8 [ ] item 77\nadded 9\nadded 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "del 6\nadd item 71\ndone 6\nadd item 31\ndel 2\nnope 1\nadd item 49\ndone 3\nadd item 30\ndone\n\n\nclear\ndel 6\ndone 4\ncount\nadd item 43\nlist zz\ndone 4\ncount\nadd item 22\nadd item 86\nadd item 7\n\ndone 5\nnope 1\ndone 4\ndone 2\nadd item 15\ndel 5\ndel 5\n\nadd item 62\n",
+  "stdout": "error: no such item 6\nadded 1\nerror: no such item 6\nadded 2\ndeleted 2\nerror: unknown command nope\nadded 3\ndone 3\nadded 4\nerror: missing argument\ncleared 1\nerror: no such item 6\ndone 4\nopen=1 done=1\nadded 5\nerror: bad filter zz\nerror: already done 4\nopen=2 done=1\nadded 6\nadded 7\nadded 8\ndone 5\nerror: unknown command nope\nerror: already done 4\nerror: no such item 2\nadded 9\ndeleted 5\nerror: no such item 5\nadded 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 38\ndone\ndel 3\nadd item 71\nadd item 42\ndone 6\nadd item 95\nadd item 72\ndone 2\nlist open\nadd item 17\n",
+  "stdout": "added 1\nerror: missing argument\nerror: no such item 3\nadded 2\nadded 3\nerror: no such item 6\nadded 4\nadded 5\ndone 2\n1 [ ] item 38\n3 [ ] item 42\n4 [ ] item 95\n5 [ ] item 72\nadded 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "clear\ndone 1\ndone 5\nadd item 89\ndone 1\nadd item 75\ndone 1\ndone 1\ndel 6\ndone\nlist done\n\nlist zz\nlist done\nadd item 5\ncount\nnope 1\nadd item 92\ndel 5\ndone 5\ndone\nadd item 46\nadd item 35\nclear\nadd item 96\nlist open\nlist\n",
+  "stdout": "cleared 0\nerror: no such item 1\nerror: no such item 5\nadded 1\ndone 1\nadded 2\nerror: already done 1\nerror: already done 1\nerror: no such item 6\nerror: missing argument\n1 [x] item 89\nerror: bad filter zz\n1 [x] item 89\nadded 3\nopen=2 done=1\nerror: unknown command nope\nadded 4\nerror: no such item 5\nerror: no such item 5\nerror: missing argument\nadded 5\nadded 6\ncleared 1\nadded 7\n2 [ ] item 75\n3 [ ] item 5\n4 [ ] item 92\n5 [ ] item 46\n6 [ ] item 35\n7 [ ] item 96\n2 [ ] item 75\n3 [ ] item 5\n4 [ ] item 92\n5 [ ] item 46\n6 [ ] item 35\n7 [ ] item 96\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list zz\ndone\nadd item 57\nadd item 57\nlist\nadd item 88\nlist open\nadd item 79\n\n\nlist done\nlist\nadd item 10\nlist all\nadd item 71\ncount\ndone 3\n",
+  "stdout": "error: bad filter zz\nerror: missing argument\nadded 1\nadded 2\n1 [ ] item 57\n2 [ ] item 57\nadded 3\n1 [ ] item 57\n2 [ ] item 57\n3 [ ] item 88\nadded 4\n(none)\n1 [ ] item 57\n2 [ ] item 57\n3 [ ] item 88\n4 [ ] item 79\nadded 5\n1 [ ] item 57\n2 [ ] item 57\n3 [ ] item 88\n4 [ ] item 79\n5 [ ] item 10\nadded 6\nopen=6 done=0\ndone 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list open\ncount\nlist open\nadd item 83\nlist done\nadd item 31\nlist all\nlist zz\ndone 5\nlist done\n\nlist all\nadd item 53\nlist all\nadd item 83\nlist open\ndone 5\n\nadd item 78\ndel 4\nadd item 79\nadd item 39\nlist zz\nclear\n",
+  "stdout": "(none)\nopen=0 done=0\n(none)\nadded 1\n(none)\nadded 2\n1 [ ] item 83\n2 [ ] item 31\nerror: bad filter zz\nerror: no such item 5\n(none)\n1 [ ] item 83\n2 [ ] item 31\nadded 3\n1 [ ] item 83\n2 [ ] item 31\n3 [ ] item 53\nadded 4\n1 [ ] item 83\n2 [ ] item 31\n3 [ ] item 53\n4 [ ] item 83\nerror: no such item 5\nadded 5\ndeleted 4\nadded 6\nadded 7\nerror: bad filter zz\ncleared 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "done 6\nadd item 64\nadd item 91\ndone 3\nadd item 57\nadd item 90\nadd item 51\nnope 1\ndone 1\ndel 2\nadd item 32\nadd item 1\nadd item 11\nlist done\nadd item 71\nadd item 72\nclear\nlist zz\nadd item 12\ndel 6\nadd item 31\nclear\nadd item 73\nclear\ncount\n",
+  "stdout": "error: no such item 6\nadded 1\nadded 2\nerror: no such item 3\nadded 3\nadded 4\nadded 5\nerror: unknown command nope\ndone 1\ndeleted 2\nadded 6\nadded 7\nadded 8\n1 [x] item 64\nadded 9\nadded 10\ncleared 1\nerror: bad filter zz\nadded 11\ndeleted 6\nadded 12\ncleared 0\nadded 13\ncleared 0\nopen=10 done=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list done\ndel 3\nadd item 94\ndone 5\nlist\nlist done\ndone 4\ndel 1\nadd item 1\nnope 1\ndone 6\ndel 5\nlist\nlist\n\nadd item 77\nclear\nadd item 13\nnope 1\n",
+  "stdout": "(none)\nerror: no such item 3\nadded 1\nerror: no such item 5\n1 [ ] item 94\n(none)\nerror: no such item 4\ndeleted 1\nadded 2\nerror: unknown command nope\nerror: no such item 6\nerror: no such item 5\n2 [ ] item 1\n2 [ ] item 1\nadded 3\ncleared 0\nadded 4\nerror: unknown command nope\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "done 2\ndel 6\nlist open\nadd item 41\ndel 5\ndone 3\nadd item 72\nclear\nadd item 71\nlist open\ndone 1\nadd item 63\ndone 4\ndel 5\ndone\ndone 1\nadd item 57\n",
+  "stdout": "error: no such item 2\nerror: no such item 6\n(none)\nadded 1\nerror: no such item 5\nerror: no such item 3\nadded 2\ncleared 0\nadded 3\n1 [ ] item 41\n2 [ ] item 72\n3 [ ] item 71\ndone 1\nadded 4\ndone 4\nerror: no such item 5\nerror: missing argument\nerror: already done 1\nadded 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 82\nlist all\ndone 4\nadd item 14\nadd item 17\nnope 1\nlist all\ndone 3\ndel 3\ndone 5\nclear\nlist open\nadd item 19\nadd item 79\nadd item 81\nadd item 80\nadd item 71\ndone\ndone 6\n",
+  "stdout": "added 1\n1 [ ] item 82\nerror: no such item 4\nadded 2\nadded 3\nerror: unknown command nope\n1 [ ] item 82\n2 [ ] item 14\n3 [ ] item 17\ndone 3\ndeleted 3\nerror: no such item 5\ncleared 0\n1 [ ] item 82\n2 [ ] item 14\nadded 4\nadded 5\nadded 6\nadded 7\nadded 8\nerror: missing argument\ndone 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list\nlist open\n\n\nadd item 34\n",
+  "stdout": "(none)\n(none)\nadded 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list done\nadd item 21\nadd item 4\nlist zz\nadd item 64\nclear\nlist\nlist\ndone 2\ndone 2\ndone 3\nadd item 69\nadd item 21\ndone 1\nadd item 27\ndel 4\ndone 1\nlist open\nlist all\nadd item 56\nlist done\ndone 3\nadd item 14\ndone 1\ndone 2\ndone 4\nadd item 52\n",
+  "stdout": "(none)\nadded 1\nadded 2\nerror: bad filter zz\nadded 3\ncleared 0\n1 [ ] item 21\n2 [ ] item 4\n3 [ ] item 64\n1 [ ] item 21\n2 [ ] item 4\n3 [ ] item 64\ndone 2\nerror: already done 2\ndone 3\nadded 4\nadded 5\ndone 1\nadded 6\ndeleted 4\nerror: already done 1\n5 [ ] item 21\n6 [ ] item 27\n1 [x] item 21\n2 [x] item 4\n3 [x] item 64\n5 [ ] item 21\n6 [ ] item 27\nadded 7\n1 [x] item 21\n2 [x] item 4\n3 [x] item 64\nerror: already done 3\nadded 8\nerror: already done 1\nerror: already done 2\nerror: no such item 4\nadded 9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "nope 1\ndone 3\ndel 2\nnope 1\ndone 6\nadd item 56\ndone 5\nadd item 17\ndone 2\nlist\nadd item 51\ndone\nlist\nlist\ndone 4\nlist open\nadd item 78\nadd item 37\nlist zz\ndone 5\nadd item 17\nlist zz\nadd item 72\nnope 1\nadd item 80\ndone 3\ndone 1\nlist done\nadd item 57\nlist\nlist open\nlist open\nlist open\nadd item 0\nlist open\nlist all\nlist open\n",
+  "stdout": "error: unknown command nope\nerror: no such item 3\nerror: no such item 2\nerror: unknown command nope\nerror: no such item 6\nadded 1\nerror: no such item 5\nadded 2\ndone 2\n1 [ ] item 56\n2 [x] item 17\nadded 3\nerror: missing argument\n1 [ ] item 56\n2 [x] item 17\n3 [ ] item 51\n1 [ ] item 56\n2 [x] item 17\n3 [ ] item 51\nerror: no such item 4\n1 [ ] item 56\n3 [ ] item 51\nadded 4\nadded 5\nerror: bad filter zz\ndone 5\nadded 6\nerror: bad filter zz\nadded 7\nerror: unknown command nope\nadded 8\ndone 3\ndone 1\n1 [x] item 56\n2 [x] item 17\n3 [x] item 51\n5 [x] item 37\nadded 9\n1 [x] item 56\n2 [x] item 17\n3 [x] item 51\n4 [ ] item 78\n5 [x] item 37\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\n4 [ ] item 78\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\n4 [ ] item 78\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\n4 [ ] item 78\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\nadded 10\n4 [ ] item 78\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\n10 [ ] item 0\n1 [x] item 56\n2 [x] item 17\n3 [x] item 51\n4 [ ] item 78\n5 [x] item 37\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\n10 [ ] item 0\n4 [ ] item 78\n6 [ ] item 17\n7 [ ] item 72\n8 [ ] item 80\n9 [ ] item 57\n10 [ ] item 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "list\ndone\ndel 2\ndel 6\nlist done\nlist open\nnope 1\n",
+  "stdout": "(none)\nerror: missing argument\nerror: no such item 2\nerror: no such item 6\n(none)\n(none)\nerror: unknown command nope\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "done\n\nadd item 90\ndel 1\ndone 2\nadd item 2\n",
+  "stdout": "error: missing argument\nadded 1\ndeleted 1\nerror: no such item 2\nadded 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "clear\ndone 2\ndone 5\nlist open\nlist open\ndel 2\nlist all\nadd item 43\nadd item 93\nlist done\nadd item 81\nlist open\nlist done\ndone 6\nlist zz\nlist done\nlist zz\ndel 5\n",
+  "stdout": "cleared 0\nerror: no such item 2\nerror: no such item 5\n(none)\n(none)\nerror: no such item 2\n(none)\nadded 1\nadded 2\n(none)\nadded 3\n1 [ ] item 43\n2 [ ] item 93\n3 [ ] item 81\n(none)\nerror: no such item 6\nerror: bad filter zz\n(none)\nerror: bad filter zz\nerror: no such item 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 8\nclear\nadd item 37\n\ndel 1\nadd item 9\nlist\nlist zz\nlist open\nlist zz\nlist all\nlist all\nnope 1\nlist\nadd item 55\nnope 1\nadd item 19\nlist all\ncount\ndone 5\nlist done\n",
+  "stdout": "added 1\ncleared 0\nadded 2\ndeleted 1\nadded 3\n2 [ ] item 37\n3 [ ] item 9\nerror: bad filter zz\n2 [ ] item 37\n3 [ ] item 9\nerror: bad filter zz\n2 [ ] item 37\n3 [ ] item 9\n2 [ ] item 37\n3 [ ] item 9\nerror: unknown command nope\n2 [ ] item 37\n3 [ ] item 9\nadded 4\nerror: unknown command nope\nadded 5\n2 [ ] item 37\n3 [ ] item 9\n4 [ ] item 55\n5 [ ] item 19\nopen=4 done=0\ndone 5\n5 [x] item 19\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\nadd item 53\ncount\ndone 1\ncount\nadd item 97\ndel 5\ncount\nadd item 52\ncount\nlist open\nlist zz\ndone\n\nlist\nlist all\nadd item 23\nnope 1\nlist done\n",
+  "stdout": "added 1\nopen=1 done=0\ndone 1\nopen=0 done=1\nadded 2\nerror: no such item 5\nopen=1 done=1\nadded 3\nopen=2 done=1\n2 [ ] item 97\n3 [ ] item 52\nerror: bad filter zz\nerror: missing argument\n1 [x] item 53\n2 [ ] item 97\n3 [ ] item 52\n1 [x] item 53\n2 [ ] item 97\n3 [ ] item 52\nadded 4\nerror: unknown command nope\n1 [x] item 53\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 87\nadd item 38\ndone\nlist\nadd item 51\nadd item 13\nadd item 68\ndel 2\nadd item 11\nadd item 4\ndel 1\nadd item 29\nadd item 73\nadd item 31\nadd item 99\ndone 1\nlist open\ndone 1\nlist all\n",
+  "stdout": "added 1\nadded 2\nerror: missing argument\n1 [ ] item 87\n2 [ ] item 38\nadded 3\nadded 4\nadded 5\ndeleted 2\nadded 6\nadded 7\ndeleted 1\nadded 8\nadded 9\nadded 10\nadded 11\nerror: no such item 1\n3 [ ] item 51\n4 [ ] item 13\n5 [ ] item 68\n6 [ ] item 11\n7 [ ] item 4\n8 [ ] item 29\n9 [ ] item 73\n10 [ ] item 31\n11 [ ] item 99\nerror: no such item 1\n3 [ ] item 51\n4 [ ] item 13\n5 [ ] item 68\n6 [ ] item 11\n7 [ ] item 4\n8 [ ] item 29\n9 [ ] item 73\n10 [ ] item 31\n11 [ ] item 99\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "del 3\ndone 3\nlist zz\nnope 1\nlist open\n",
+  "stdout": "error: no such item 3\nerror: no such item 3\nerror: bad filter zz\nerror: unknown command nope\n(none)\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\ndone 3\ndone 5\ndone\nadd item 44\nlist all\n",
+  "stdout": "error: no such item 3\nerror: no such item 5\nerror: missing argument\nadded 1\n1 [ ] item 44\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "count\nlist done\nadd item 74\ndone 6\n\nlist open\nlist\ndel 6\nlist open\ndone 5\nlist\ndel 6\nadd item 94\n\n\ndone 1\nlist all\nclear\nadd item 47\ndone 2\ndone\ndone 4\ncount\nadd item 58\nadd item 15\nadd item 78\nadd item 73\ncount\ncount\n\nadd item 44\nlist\ndone\nclear\nclear\nadd item 78\nlist done\ndone 2\ndone 4\nadd item 33\n",
+  "stdout": "open=0 done=0\n(none)\nadded 1\nerror: no such item 6\n1 [ ] item 74\n1 [ ] item 74\nerror: no such item 6\n1 [ ] item 74\nerror: no such item 5\n1 [ ] item 74\nerror: no such item 6\nadded 2\ndone 1\n1 [x] item 74\n2 [ ] item 94\ncleared 1\nadded 3\ndone 2\nerror: missing argument\nerror: no such item 4\nopen=1 done=1\nadded 4\nadded 5\nadded 6\nadded 7\nopen=5 done=1\nopen=5 done=1\nadded 8\n2 [x] item 94\n3 [ ] item 47\n4 [ ] item 58\n5 [ ] item 15\n6 [ ] item 78\n7 [ ] item 73\n8 [ ] item 44\nerror: missing argument\ncleared 1\ncleared 0\nadded 9\n(none)\nerror: no such item 2\ndone 4\nadded 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 32\ndone 1\nlist\nlist all\nadd item 85\ndone\nlist\nlist\n",
+  "stdout": "added 1\ndone 1\n1 [x] item 32\n1 [x] item 32\nadded 2\nerror: missing argument\n1 [x] item 32\n2 [ ] item 85\n1 [x] item 32\n2 [ ] item 85\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add item 82\ndone 2\nadd item 70\ndel 5\nadd item 21\ndel 2\nlist\ncount\nlist zz\nnope 1\ndone 5\n",
+  "stdout": "added 1\nerror: no such item 2\nadded 2\nerror: no such item 5\nadded 3\ndeleted 2\n1 [ ] item 82\n3 [ ] item 21\nopen=2 done=0\nerror: bad filter zz\nerror: unknown command nope\nerror: no such item 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "done 4\ndone 1\nlist\nadd item 52\nlist zz\ndel 3\nlist done\ndone 4\nnope 1\ndone 2\nadd item 83\nadd item 46\ndel 1\nadd item 21\ndone 5\nadd item 16\nadd item 31\ndel 1\nadd item 60\ndone 4\ndone\nnope 1\nclear\nadd item 85\nlist done\ncount\nadd item 53\ndone 6\nlist\ndone 2\n",
+  "stdout": "error: no such item 4\nerror: no such item 1\n(none)\nadded 1\nerror: bad filter zz\nerror: no such item 3\n(none)\nerror: no such item 4\nerror: unknown command nope\nerror: no such item 2\nadded 2\nadded 3\ndeleted 1\nadded 4\nerror: no such item 5\nadded 5\nadded 6\nerror: no such item 1\nadded 7\ndone 4\nerror: missing argument\nerror: unknown command nope\ncleared 1\nadded 8\n(none)\nopen=6 done=0\nadded 9\ndone 6\n2 [ ] item 83\n3 [ ] item 46\n5 [ ] item 16\n6 [x] item 31\n7 [ ] item 60\n8 [ ] item 85\n9 [ ] item 53\ndone 2\n"
+ }
+]

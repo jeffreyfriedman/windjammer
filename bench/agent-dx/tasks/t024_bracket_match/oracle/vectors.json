@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "()\n([{}])\n(]\n",
+  "stdout": "ok\nok\nerror 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "((\na(b)c)\n\n",
+  "stdout": "error 2\nerror 6\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "{[()]}[\n]\n([)]\n(()\nno brackets here\n(a[b{c}d]e)f)\n{{{{\n",
+  "stdout": "error 7\nerror 1\nerror 3\nerror 1\nok\nerror 13\nerror 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " b]}\n{[ab [ a]}(} [\n\n}\n{b(b{ )\n}({\n)(bb((aab[[]}b\n([{\n",
+  "stdout": "error 3\nerror 10\nok\nerror 1\nerror 7\nerror 1\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "]\n[)) )\n( a\nb} ]}(a((){(}{\n ]{b) \n[b]a\n(}ba}bb{(\n}bb \n[)}))} {b]][)(\n}[}}( \n([{\n",
+  "stdout": "error 1\nerror 2\nerror 1\nerror 2\nerror 2\nok\nerror 2\nerror 1\nerror 2\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "}){  {\n){))}b{[[b(((\n})({a{}]\n[ }}({\n{a[(\naa( () )] ab\n]})({[a ba\n[{  }}\n([{\n",
+  "stdout": "error 1\nerror 1\nerror 1\nerror 3\nerror 4\nerror 9\nerror 1\nerror 6\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " \n[ )[\n[[[{[\n )]){ \n]b[([b][)aa ]\n aa}[() [\n](]]a)[{) {\n))(b ()    [ a\n) b  ba) \n([{\n",
+  "stdout": "ok\nerror 3\nerror 5\nerror 2\nerror 1\nerror 4\nerror 1\nerror 1\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "(}{b]{]a  {\n()][ )\n]b)}(( }{{\n{a ](}aba  {\n a[){\n]a]\na[))aa[b}\nb() b}}{b\na]({\n(ab}{\n([{\n",
+  "stdout": "error 2\nerror 3\nerror 1\nerror 4\nerror 4\nerror 1\nerror 3\nerror 6\nerror 2\nerror 4\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[b )}(\n ab{(](})\n{]] ()bab \n\n\n\n)}]b[)b\n}b(ab{ }a(]\nb] ((({]\n([{\n",
+  "stdout": "error 4\nerror 6\nerror 2\nok\nok\nok\nerror 1\nerror 1\nerror 2\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n([[\naba}[]a))a ]\n \n([{\n",
+  "stdout": "ok\nerror 3\nerror 4\nok\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[b})]()]){]a( \n([\n)][[{{a]a {}[b\nb{ ) ( ]{a \n{{])}{ba\n[aa{{][a[\n }{\n([{\n",
+  "stdout": "error 3\nerror 2\nerror 1\nerror 4\nerror 3\nerror 6\nerror 2\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " aaa)]a\na){\n{[)}bb)]]]} (\n)[([\nb{\na}[(} [) }{\n[]))])(a(b[ \n( (b{] b] }a\n\n([{\n",
+  "stdout": "error 5\nerror 2\nerror 3\nerror 1\nerror 2\nerror 2\nerror 3\nerror 6\nok\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "()a] ]]\n)b]b)a  [a\n(} )}]} \naba{) a}]{{}a\n)} ()\n([{\n",
+  "stdout": "error 4\nerror 1\nerror 2\nerror 5\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a)[([[(])][b\n)}(b) ()]{\n)[][bab{\nab[abb[b{{b\n([{\n",
+  "stdout": "error 2\nerror 1\nerror 1\nerror 10\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "){{{]({]{b{b{)\n{ (](a{ \na][a}}bab][{a(\n)]a{([a{{b{] \n a\n\n}[\nb\n([{\n",
+  "stdout": "error 1\nerror 4\nerror 2\nerror 1\nok\nok\nerror 1\nok\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "))[b  [\n{}{\n]]a}b{b) }b[\na]a{((]  \n([a{} \n([{\n",
+  "stdout": "error 1\nerror 3\nerror 1\nerror 2\nerror 2\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "}[[b))\n{b({]  a]\n((a[\n([{\n",
+  "stdout": "error 1\nerror 5\nerror 4\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "{]{(b}{\n])\n])a a ((\n(aa}aa\n(}b][ a[b\n] {ba][)}\n{{ (  (\n (]([[}]b](}{[\nb][a\n()(}{(](}()\n([{\n",
+  "stdout": "error 2\nerror 1\nerror 1\nerror 4\nerror 2\nerror 1\nerror 7\nerror 3\nerror 2\nerror 4\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a]}b[\n{ ({ a{ab[]\n{a ()b] [{\nb{}a)\n]}({b}\n(]}[} }a(b\n{b} ]a}}b[[\n()}}\n)[((}ba{({})\n([{\n",
+  "stdout": "error 2\nerror 7\nerror 7\nerror 5\nerror 1\nerror 2\nerror 5\nerror 3\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " [b  \n)\n{}()aa{a]a}\n  (])  \n}b{] b\n{b[a]{}}{))[\n([{\n",
+  "stdout": "error 2\nerror 1\nerror 9\nerror 4\nerror 1\nerror 10\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "}aa]b )[bb\n{]([{a](\n]b(bbabb[\n[b]]a) [a]\n([{\n",
+  "stdout": "error 1\nerror 2\nerror 1\nerror 4\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " \na{))ab [ba)[\n\n) )a[}){]\na(}]\n([{\n",
+  "stdout": "ok\nerror 3\nok\nerror 1\nerror 3\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": ") ] a]](\n{})a}}\n]}]b )a{}[a}{\n([{\n",
+  "stdout": "error 1\nerror 3\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[{{{})({}{({a\n])[}\n\n([{\n",
+  "stdout": "error 6\nerror 1\nok\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a)[[{{({[( (]}\nbaa}a]b\n(])b \n)  {)\n){ b[]]b)}}{[\n [\n({\n a( }a][b(\n([{\n",
+  "stdout": "error 2\nerror 4\nerror 2\nerror 1\nerror 1\nerror 2\nerror 2\nerror 5\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "b( a{b\na ])}a}{\n[)a(}b)\na}b}{\n{]]{a]ba }]{}b\n)]] []}]}]() b\n\n  }]{a()\n\n(}{(( b \n([{\n",
+  "stdout": "error 5\nerror 3\nerror 2\nerror 2\nerror 2\nerror 1\nok\nerror 3\nok\nerror 2\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " ][}}aa\n) a}}(b([]({({\n)(a} ]{{{}aba[\n(bb{({]}{)[\n([{\n",
+  "stdout": "error 2\nerror 1\nerror 1\nerror 7\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "a\n([[]  a[]({b\n(a]{)({(\n [}bb\n([{\n",
+  "stdout": "ok\nerror 11\nerror 3\nerror 3\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": " {( [{}{]\n{{}(({a({\n{(]}{})\n([{\n",
+  "stdout": "error 9\nerror 9\nerror 3\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "({a\n\n(}}[[ a ]}aa(\n}\nab]]{\nab)b[\n)(])}(a) \n\n))a{ )ba\n([{\n",
+  "stdout": "error 2\nok\nerror 2\nerror 1\nerror 3\nerror 3\nerror 1\nok\nerror 1\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "}}])b a}\n)[ )}{b\n )b](\n]]\n{b}(}]\n([{\n",
+  "stdout": "error 1\nerror 1\nerror 2\nerror 1\nerror 5\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "{{}b[})]] {\nb]a] \n} }(]()[)((\na}){{]\n([{\n",
+  "stdout": "error 6\nerror 2\nerror 1\nerror 2\nerror 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "[}]]{ ]))}) \n)\n(}([{}]]a{\n([{\n",
+  "stdout": "error 2\nerror 1\nerror 2\nerror 3\n"
+ }
+]

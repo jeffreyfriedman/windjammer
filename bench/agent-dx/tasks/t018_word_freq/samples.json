@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nthe cat and the dog. The end!\n",
+  "stdout": "the 3\nand 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\na b a\nB c\n",
+  "stdout": "a 2\nb 2\nc 1\n"
+ }
+]

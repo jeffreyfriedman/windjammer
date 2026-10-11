@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E aaabcc\nD 3a1b2c\n",
+  "stdout": "3a1b2c\naaabcc\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "E z\nD 1z\nE \nD \n",
+  "stdout": "1z\nz\n\n\n"
+ }
+]
