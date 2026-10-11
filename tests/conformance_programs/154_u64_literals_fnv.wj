@@ -1,0 +1,23 @@
+// expect: 12638187200555641996
+// expect: 14695981039346656037
+// expect: 18446744073709551615
+// expect: 9223372036854775808
+// expect: 14695981039346656037 12638190499090526629
+fn fnv1a(s: string) -> u64 {
+    let mut h: u64 = 14695981039346656037
+    for b in s.bytes() {
+        h = (h ^ (b as u64)).wrapping_mul(1099511628211)
+    }
+    h
+}
+
+fn main() {
+    println("${fnv1a("a")}")
+    let basis: u64 = 14695981039346656037
+    println("${basis}")
+    let max: u64 = 18446744073709551615
+    println("${max}")
+    let top: u64 = 0x8000000000000000u64
+    println("${top}")
+    println("${fnv1a("")} ${fnv1a("b")}")
+}

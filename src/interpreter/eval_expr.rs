@@ -88,6 +88,8 @@ impl Interpreter {
             Literal::IntSuffixed(i, suf) => match suf.as_str() {
                 "f64" => Value::Float(*i as f64, FloatTy::F64),
                 "f32" => Value::Float(*i as f64, FloatTy::F32),
+                // `u64`/`usize` payloads above i64::MAX are stored as their bit pattern (negative).
+                "u64" | "usize" => Value::Int(*i as u64 as i128, IntTy::from_name(suf).unwrap_or(IntTy::Lit)),
                 s => Value::Int(*i as i128, IntTy::from_name(s).unwrap_or(IntTy::Lit)),
             },
             Literal::Float(f) => Value::Float(*f, FloatTy::Lit),

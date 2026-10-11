@@ -61,6 +61,21 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             },
             Pattern::Literal(lit) => self.generate_literal(lit),
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+            } => {
+                let lo = start
+                    .as_ref()
+                    .map(|l| self.generate_literal(l))
+                    .unwrap_or_default();
+                let hi = end
+                    .as_ref()
+                    .map(|l| self.generate_literal(l))
+                    .unwrap_or_default();
+                format!("{}{}{}", lo, if *inclusive { "..=" } else { ".." }, hi)
+            }
             Pattern::Or(patterns) => {
                 let rust_patterns: Vec<String> =
                     patterns.iter().map(|p| self.pattern_to_rust(p)).collect();
@@ -134,6 +149,21 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Pattern::Literal(lit) => self.generate_literal(lit),
+            Pattern::Range {
+                start,
+                end,
+                inclusive,
+            } => {
+                let lo = start
+                    .as_ref()
+                    .map(|l| self.generate_literal(l))
+                    .unwrap_or_default();
+                let hi = end
+                    .as_ref()
+                    .map(|l| self.generate_literal(l))
+                    .unwrap_or_default();
+                format!("{}{}{}", lo, if *inclusive { "..=" } else { ".." }, hi)
+            }
             Pattern::Tuple(patterns) => {
                 let pattern_strs: Vec<String> = patterns
                     .iter()
