@@ -156,8 +156,8 @@ impl Parser {
                             self.advance();
                         } else {
                             return Err(format!(
-                                "Expected identifier in tuple pattern (at token position {})",
-                                self.position
+                                "Expected identifier in tuple pattern (at {})",
+                                self.pos_desc()
                             ));
                         }
 
@@ -165,8 +165,8 @@ impl Parser {
                             self.advance();
                         } else if self.current_token() != &Token::RParen {
                             return Err(format!(
-                                "Expected ',' or ')' in tuple pattern (at token position {})",
-                                self.position
+                                "Expected ',' or ')' in tuple pattern (at {})",
+                                self.pos_desc()
                             ));
                         }
                     }
@@ -208,8 +208,8 @@ impl Parser {
                 }
                 _ => {
                     return Err(format!(
-                        "Expected parameter name in closure (at token position {})",
-                        self.position
+                        "Expected parameter name in closure (at {})",
+                        self.pos_desc()
                     ));
                 }
             };
@@ -238,7 +238,7 @@ impl Parser {
             // Expression closure: |x| expr
             // Check if this looks like a compound assignment (e.g., *c += 1)
             // by peeking ahead for compound assignment operators
-            let checkpoint = self.position;
+            let checkpoint = self.mark();
 
             // Try to parse the left side
             let _left_expr = self.parse_primary_expression()?;
@@ -255,7 +255,7 @@ impl Parser {
 
             if is_compound_assign {
                 // Reset and parse as a statement
-                self.position = checkpoint;
+                self.rewind(checkpoint);
                 let stmt = self.parse_statement()?;
                 self.alloc_expr(Expression::Block {
                     statements: vec![stmt],
@@ -264,7 +264,7 @@ impl Parser {
                 })
             } else {
                 // Reset and parse as a normal expression
-                self.position = checkpoint;
+                self.rewind(checkpoint);
                 self.parse_expression()?
             }
         };

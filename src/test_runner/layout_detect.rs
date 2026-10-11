@@ -106,11 +106,23 @@ fn infer_dogfood_build_layout(project_root: &Path, opts: &mut TestRunOptions) {
     if !abs_build.join("lib.rs").exists() {
         return;
     }
+    // `src/lib.rs` is hand-written Rust (the cargo default, e.g. the compiler checkout
+    // itself), never an outbound tree. Same for any directory holding Windjammer sources is the source tree, not an outbound tree.
+    if build_dir == Path::new("src") || dir_has_wj_sources(&abs_build) {
+        return;
+    }
 
     opts.use_build_dir = Some(build_dir);
     if !opts.use_project_cargo {
         opts.use_project_cargo = true;
     }
+}
+
+fn dir_has_wj_sources(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|rd| {
+        rd.flatten()
+            .any(|e| e.path().extension().and_then(|x| x.to_str()) == Some("wj"))
+    })
 }
 
 fn read_toml_lib_path(content: &str) -> Option<String> {
@@ -219,6 +231,34 @@ path = "build/lib.rs"
         apply_inferred_test_options(root, &mut opts);
         assert_eq!(opts.use_build_dir.as_deref(), Some(Path::new("build")));
         assert!(opts.use_project_cargo);
+    }
+
+    #[test]
+    fn hand_written_src_lib_rs_is_not_a_prebuilt_tree() {
+        // Regression: `wj test` inside the compiler checkout treated `src/lib.rs`
+        // ([lib] path = "src/lib.rs") as a pre-built library and cargo failed with
+        // "single file packages cannot be used as dependencies".
+        for (lib_dir, extra) in [("src", None), ("gen", Some("gen/a.wj"))] {
+            let tmp = TempDir::new().unwrap();
+            let root = tmp.path();
+            fs::create_dir_all(root.join(lib_dir)).unwrap();
+            fs::write(root.join(lib_dir).join("lib.rs"), "// rust\n").unwrap();
+            if let Some(x) = extra {
+                fs::write(root.join(x), "fn main() {}\n").unwrap();
+            }
+            fs::write(
+                root.join("Cargo.toml"),
+                format!("[package]\nname = \"x\"\nversion = \"0.1.0\"\n[lib]\npath = \"{lib_dir}/lib.rs\"\n"),
+            )
+            .unwrap();
+            let mut opts = TestRunOptions::default();
+            apply_inferred_test_options(root, &mut opts);
+            assert!(
+                opts.use_build_dir.is_none(),
+                "{lib_dir} inferred as build dir"
+            );
+            assert!(!opts.use_project_cargo);
+        }
     }
 
     #[test]

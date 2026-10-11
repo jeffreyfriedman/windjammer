@@ -1,15 +1,59 @@
 use super::{Lexer, StringPart, Token};
 
 impl Lexer {
+    /// Length (in chars) of a char literal starting at the cursor (`'x'`, `'\\n'`), or 0.
+    fn nested_char_literal_len(&self) -> usize {
+        match (self.peek(1), self.peek(2), self.peek(3)) {
+            (Some('\\'), Some(_), Some('\'')) => 4,
+            (Some(c), Some('\''), _) if c != '\\' && c != '\'' => 3,
+            _ => 0,
+        }
+    }
+
+    /// Copy a nested string literal (cursor on its opening quote) verbatim into `out`.
+    fn copy_nested_string(&mut self, out: &mut String) {
+        out.push('"');
+        self.advance();
+        while let Some(c) = self.current_char {
+            out.push(c);
+            self.advance();
+            if c == '\\' {
+                if let Some(e) = self.current_char {
+                    out.push(e);
+                    self.advance();
+                }
+            } else if c == '"' {
+                break;
+            }
+        }
+    }
+
+    /// Cursor is on `$` of `${"`. True when the nested string literal is immediately followed by
+    /// `.` or `[`, i.e. it is the receiver of a call/index and not a bare literal followed by `}`.
+    fn interpolation_starts_with_string(&self) -> bool {
+        let mut i = 3; // after `${"`
+        while let Some(c) = self.peek(i) {
+            match c {
+                '\\' => i += 2,
+                '"' => return matches!(self.peek(i + 1), Some('.') | Some('[')),
+                '\n' => return false,
+                _ => i += 1,
+            }
+        }
+        false
+    }
+
     pub(in crate::lexer) fn read_string(&mut self) -> Token {
         self.advance(); // Skip opening quote
         let mut parts = Vec::new();
         let mut current_literal = String::new();
         let mut has_interpolation = false;
 
+        let mut terminated = false;
         while let Some(ch) = self.current_char {
             if ch == '"' {
                 self.advance(); // Skip closing quote
+                terminated = true;
                 break;
             } else if ch == '\\' {
                 self.advance();
@@ -33,8 +77,9 @@ impl Lexer {
                 self.advance();
                 self.advance();
             } else if ch == '$' && self.peek(1) == Some('{') {
-                // `${"` in source is a literal dollar-brace, not interpolation.
-                if self.peek(2) == Some('"') {
+                // `${"` is a literal dollar-brace unless a string literal followed by a method
+                // call / index starts the interpolation (`"${"abc".len()}"`).
+                if self.peek(2) == Some('"') && !self.interpolation_starts_with_string() {
                     current_literal.push('$');
                     current_literal.push('{');
                     self.advance();
@@ -53,11 +98,19 @@ impl Lexer {
                     self.advance();
                     self.advance();
 
-                    // Read expression until }
+                    // Read expression until the matching }, skipping over nested string and
+                    // char literals so quotes and braces inside them do not end the expression.
                     let mut expr = String::new();
                     let mut brace_depth = 1;
                     while let Some(expr_ch) = self.current_char {
-                        if expr_ch == '{' {
+                        if expr_ch == '"' {
+                            self.copy_nested_string(&mut expr);
+                        } else if expr_ch == '\'' && self.nested_char_literal_len() > 0 {
+                            for _ in 0..self.nested_char_literal_len() {
+                                expr.extend(self.current_char);
+                                self.advance();
+                            }
+                        } else if expr_ch == '{' {
                             brace_depth += 1;
                             expr.push(expr_ch);
                             self.advance();
@@ -81,6 +134,10 @@ impl Lexer {
                 current_literal.push(ch);
                 self.advance();
             }
+        }
+
+        if !terminated {
+            return Token::Invalid("unterminated string literal".to_string());
         }
 
         // Add final literal part if any
@@ -108,7 +165,7 @@ impl Lexer {
             self.advance();
         }
         if self.current_char != Some('"') {
-            panic!("Expected '\"' after r#+ in raw string literal");
+            return Token::Invalid("expected '\"' after r#+ in raw string literal".to_string());
         }
         self.advance(); // opening "
 

@@ -28,6 +28,15 @@ impl Parser {
                 if precedence < min_precedence {
                     break;
                 }
+                // Statement-boundary rule (docs/design/statement-boundaries.md): a `*` that
+                // starts a new line and begins a deref-assignment (`*p = v`, `*p += 1`) is a
+                // new statement, not multiplication continuing the previous line.
+                if self.current_token() == &Token::Star
+                    && self.had_newline_before_current()
+                    && self.line_is_deref_assignment()
+                {
+                    break;
+                }
 
                 self.advance();
                 let right = self.parse_binary_expression(precedence + 1)?;
@@ -46,25 +55,41 @@ impl Parser {
         Ok(left)
     }
 
-    /// A `*` that opens a line and whose line contains an assignment (`*g += 1`, `*r = x`) starts a
-    /// new deref-assignment statement; it is not a multiplication continuing the previous line.
-    fn star_starts_assignment_statement(&self) -> bool {
-        let Some(cur) = self.tokens.get(self.position) else { return false };
-        let Some(prev) = self.position.checked_sub(1).and_then(|i| self.tokens.get(i)) else { return false };
-        if prev.line >= cur.line {
+    /// True when the tokens from the current `*` to the end of its line contain an assignment
+    /// operator at bracket depth 0. A binary-operator continuation can never contain one, so
+    /// the test cannot misclassify a genuine `a\n  * b` continuation.
+    fn line_is_deref_assignment(&self) -> bool {
+        let Some(first) = self.tokens.get(self.position) else {
             return false;
-        }
-        self.tokens[self.position + 1..].iter().take_while(|t| t.line == cur.line).any(|t| {
-            matches!(
-                t.token,
+        };
+        let line = first.line;
+        let mut depth: i32 = 0;
+        for t in self.tokens[self.position..].iter().take_while(|t| t.line == line) {
+            match t.token {
+                Token::LParen | Token::LBracket | Token::LBrace => depth += 1,
+                Token::RParen | Token::RBracket | Token::RBrace => depth -= 1,
                 Token::Assign
-                    | Token::PlusAssign
-                    | Token::MinusAssign
-                    | Token::StarAssign
-                    | Token::SlashAssign
-                    | Token::PercentAssign
-            )
-        })
+                | Token::PlusAssign
+                | Token::MinusAssign
+                | Token::StarAssign
+                | Token::SlashAssign
+                | Token::PercentAssign
+                | Token::AndAssign
+                | Token::OrAssign
+                | Token::XorAssign
+                | Token::ShlAssign
+                | Token::ShrAssign
+                    if depth == 0 =>
+                {
+                    return true;
+                }
+                _ => {}
+            }
+            if depth < 0 {
+                return false;
+            }
+        }
+        false
     }
 
     pub(in crate::parser) fn get_binary_op(&self) -> Option<(BinaryOp, u8)> {
@@ -86,7 +111,6 @@ impl Parser {
             Token::Minus => Some((BinaryOp::Sub, 8)),
             Token::Shl => Some((BinaryOp::Shl, 9)), // Shift left
             Token::Shr => Some((BinaryOp::Shr, 9)), // Shift right
-            Token::Star if self.star_starts_assignment_statement() => None,
             Token::Star => Some((BinaryOp::Mul, 10)),
             Token::Slash => Some((BinaryOp::Div, 10)),
             Token::Percent => Some((BinaryOp::Mod, 10)),

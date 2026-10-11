@@ -14,8 +14,6 @@ Status: these programs are not built by CI. They may lag the compiler; the langu
 
 ## Running
 
-Run from outside the compiler checkout (see [known issue](../docs/known-issues/wj-test-inside-compiler-checkout.md)).
-
 ```bash
 wj run examples/hello_world/main.wj      # adjust to the file in that directory
 wj test examples/syntax_tests

@@ -180,7 +180,7 @@ fn collect_locals_from_pattern(pattern: &crate::parser::Pattern, locals: &mut Ha
                 }
             }
         },
-        Pattern::Wildcard | Pattern::Literal(_) => {}
+        Pattern::Wildcard | Pattern::Literal(_) | Pattern::Range { .. } => {}
     }
 }
 

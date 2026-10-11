@@ -99,7 +99,11 @@ impl<'e> Lowerer<'e> {
                 }
             },
             Literal::IntSuffixed(n, suffix) => match IntKind::from_name(suffix) {
-                Some(k) => PExpr::new(Ty::Int(k), PK::Int(*n as i128)),
+                Some(k) => {
+                    // u64/usize above i64::MAX are stored as their (negative) bit pattern.
+                    let v = if matches!(suffix.as_str(), "u64" | "usize") { *n as u64 as i128 } else { *n as i128 };
+                    PExpr::new(Ty::Int(k), PK::Int(v))
+                }
                 None if suffix == "f64" => PExpr::new(Ty::F64, PK::Float(*n as f64)),
                 None if suffix == "f32" => PExpr::new(Ty::F32, PK::Float(*n as f64)),
                 None => return self.err(format!("numeric literal suffix `{suffix}`")),

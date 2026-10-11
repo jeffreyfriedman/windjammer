@@ -131,37 +131,41 @@ impl Interpreter {
 
             Statement::Match { value, arms, .. } => self.exec_match(value, arms),
 
-            Statement::While { condition, body, .. } => {
+            Statement::While { condition, body, label, .. } => {
                 loop {
                     match self.eval(condition)? {
                         Value::Bool(true) => {}
                         Value::Bool(false) => break,
                         other => return Err(semantic(format!("`while` condition must be bool, found {}", other.type_name()))),
                     }
-                    match self.exec_block(body) {
-                        Ok(_) | Err(Ctl::Continue) => {}
-                        Err(Ctl::Break) => break,
-                        Err(e) => return Err(e),
+                    let r = self.exec_block(body);
+                    if loop_exit(r, label.as_deref())?.is_some() {
+                        break;
                     }
                 }
                 Ok(Value::Unit)
             }
 
-            Statement::Loop { body, .. } => {
+            // A `loop` evaluates to its `break value` (Unit for a plain `break`).
+            Statement::Loop { body, label, .. } => {
                 loop {
-                    match self.exec_block(body) {
-                        Ok(_) | Err(Ctl::Continue) => {}
-                        Err(Ctl::Break) => break,
-                        Err(e) => return Err(e),
+                    let r = self.exec_block(body);
+                    if let Some(v) = loop_exit(r, label.as_deref())? {
+                        return Ok(v);
                     }
                 }
-                Ok(Value::Unit)
             }
 
-            Statement::For { pattern, iterable, body, .. } => self.exec_for(pattern, iterable, body),
+            Statement::For { pattern, iterable, body, label, .. } => self.exec_for(pattern, iterable, body, label.as_deref()),
 
-            Statement::Break { .. } => Err(Ctl::Break),
-            Statement::Continue { .. } => Err(Ctl::Continue),
+            Statement::Break { label, value, .. } => {
+                let v = match value {
+                    Some(e) => self.eval(e)?,
+                    None => Value::Unit,
+                };
+                Err(Ctl::Break { label: label.clone(), value: v })
+            }
+            Statement::Continue { label, .. } => Err(Ctl::Continue { label: label.clone() }),
             Statement::Defer { statement, .. } => {
                 self.scope.defers.push(statement);
                 Ok(Value::Unit)
@@ -246,6 +250,7 @@ impl Interpreter {
         pattern: &'static Pattern<'static>,
         iterable: &'static Expression<'static>,
         body: &'static [&'static Statement<'static>],
+        label: Option<&'static str>,
     ) -> R {
         let raw = self.eval_raw(iterable)?;
         // by-reference iteration: `for x in &mut v`
@@ -273,7 +278,7 @@ impl Interpreter {
         if let Value::Range(a, b, ty) = &src {
             let (mut i, end, ty) = (*a, *b, *ty);
             while i < end {
-                if self.run_iteration(pattern, Value::Int(i, ty), body)? {
+                if self.run_iteration(pattern, Value::Int(i, ty), body, label)?.is_some() {
                     break;
                 }
                 i += 1;
@@ -283,7 +288,7 @@ impl Interpreter {
         let src = if let Value::Native(_) = &src { Value::Iter(super::iter::as_iter(self, src)?) } else { src };
         if let Value::Iter(s) = &src {
             while let Some(item) = super::iter::next(self, s)? {
-                if self.run_iteration(pattern, item, body)? {
+                if self.run_iteration(pattern, item, body, label)?.is_some() {
                     break;
                 }
             }
@@ -291,15 +296,15 @@ impl Interpreter {
         }
         let items = self.to_items(src)?;
         for item in items {
-            if self.run_iteration(pattern, item, body)? {
+            if self.run_iteration(pattern, item, body, label)?.is_some() {
                 break;
             }
         }
         Ok(Value::Unit)
     }
 
-    /// Returns true when the loop must stop (`break`).
-    fn run_iteration(&mut self, pattern: &'static Pattern<'static>, item: Value, body: &'static [&'static Statement<'static>]) -> R<bool> {
+    /// `Some(value)` when the loop must stop (`break`), `None` to keep iterating.
+    fn run_iteration(&mut self, pattern: &'static Pattern<'static>, item: Value, body: &'static [&'static Statement<'static>], label: Option<&str>) -> R<Option<Value>> {
         self.push_scope();
         match pattern {
             Pattern::Identifier(n) | Pattern::MutBinding(n) => self.define(n.as_str(), item),
@@ -317,11 +322,7 @@ impl Interpreter {
         }
         let r = self.exec_stmts(body);
         let r = self.pop_scope(r);
-        match r {
-            Ok(_) | Err(Ctl::Continue) => Ok(false),
-            Err(Ctl::Break) => Ok(true),
-            Err(e) => Err(e),
-        }
+        loop_exit(r, label)
     }
 
     /// Materialise anything iterable.
@@ -437,5 +438,21 @@ fn retag(old: Value, new: Value) -> Value {
         (Value::Float(_, ot), Value::Float(n, FloatTy::Lit)) => Value::Float(*n, *ot),
         (Value::Float(_, ot), Value::Int(n, IntTy::Lit)) => Value::Float(*n as f64, *ot),
         _ => new,
+    }
+}
+
+/// Decide what a loop does with the result of one body execution.
+/// `Ok(None)`: keep looping (normal completion, or a `continue` aimed at this loop).
+/// `Ok(Some(v))`: stop with value `v` (a `break` aimed at this loop).
+/// `Err(..)`: propagate (return, error, or a labeled `break`/`continue` aimed at an outer loop).
+/// A jump without a label targets the innermost loop; a labeled jump targets the loop that
+/// carries exactly that label.
+pub(crate) fn loop_exit(r: R, my_label: Option<&str>) -> R<Option<Value>> {
+    let mine = |l: &Option<String>| l.is_none() || l.as_deref() == my_label;
+    match r {
+        Ok(_) => Ok(None),
+        Err(Ctl::Continue { label }) if mine(&label) => Ok(None),
+        Err(Ctl::Break { label, value }) if mine(&label) => Ok(Some(value)),
+        Err(e) => Err(e),
     }
 }

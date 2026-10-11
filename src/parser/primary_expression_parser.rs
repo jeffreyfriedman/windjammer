@@ -141,10 +141,24 @@ impl Parser {
                 })
             }
             Token::Self_ => {
-                // self keyword used in expressions
+                // `self` the value, or `self::f` the module-relative path. They must stay
+                // distinct in the AST: `self.f()` is a method call on the value (MethodCall),
+                // `self::f()` calls the free function `f` of the current module (Call on a path
+                // identifier). Conflating them made the resolver pick method candidates for a path.
                 self.advance();
+                let mut name = "self".to_string();
+                while self.current_token() == &Token::ColonColon {
+                    if let Some(Token::Ident(seg)) = self.peek(1) {
+                        name.push_str("::");
+                        name.push_str(seg);
+                        self.advance();
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
                 self.alloc_expr(Expression::Identifier {
-                    name: "self".to_string(),
+                    name,
                     location: self.current_location(),
                 })
             }
@@ -465,7 +479,7 @@ impl Parser {
 
                 // Try to detect map literal by parsing first item
                 // Save position in case we need to backtrack
-                let checkpoint = self.position;
+                let checkpoint = self.mark();
 
                 // Try parsing as map literal first
                 let is_map = if let Ok(_key) = self.parse_ternary_expression() {
@@ -476,7 +490,7 @@ impl Parser {
                 };
 
                 // Restore position
-                self.position = checkpoint;
+                self.rewind(checkpoint);
 
                 if is_map {
                     // Parse as map literal
@@ -520,6 +534,24 @@ impl Parser {
                     })
                 }
             }
+            // `loop { .. break value .. }` / `'label: loop { .. }` used as a value: a block whose
+            // tail statement is the loop (the loop evaluates to its `break` value).
+            Token::Loop => {
+                let stmt = self.parse_loop(None)?;
+                self.alloc_expr(Expression::Block {
+                    statements: vec![stmt],
+                    is_unsafe: false,
+                    location: self.current_location(),
+                })
+            }
+            Token::Lifetime(_) if self.peek(1) == Some(&Token::Colon) => {
+                let stmt = self.parse_statement()?;
+                self.alloc_expr(Expression::Block {
+                    statements: vec![stmt],
+                    is_unsafe: false,
+                    location: self.current_location(),
+                })
+            }
             Token::Return => {
                 // Return expression: return expr
                 self.advance(); // consume 'return'
@@ -559,9 +591,9 @@ impl Parser {
             }
             _ => {
                 return Err(format!(
-                    "Unexpected token in expression: {:?} (at token position {})",
+                    "Unexpected token in expression: {:?} (at {}); expected an expression: a literal, identifier, `(`, `[`, `{{`, `|`, `if`, `match`, a unary operator (`-`, `!`, `*`, `&`) or `self`",
                     self.current_token(),
-                    self.position
+                    self.pos_desc()
                 ));
             }
         };

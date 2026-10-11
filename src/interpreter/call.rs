@@ -652,7 +652,7 @@ impl Interpreter {
         let r = self.run_defers(r);
         let r = match r {
             Err(Ctl::Return(v)) => Ok(v),
-            Err(Ctl::Break) | Err(Ctl::Continue) => Err(semantic("`break`/`continue` outside of a loop")),
+            Err(Ctl::Break { .. }) | Err(Ctl::Continue { .. }) => Err(semantic("`break`/`continue` outside of a loop")),
             other => other,
         };
         let r = match r {
