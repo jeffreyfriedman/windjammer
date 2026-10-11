@@ -7,7 +7,8 @@ use crate::codegen::portable::ty::{IntKind, Ty};
 
 fn has_break(ss: &[PStmt]) -> bool {
     ss.iter().any(|s| match s {
-        PStmt::Break => true,
+        PStmt::Break | PStmt::BreakTo(_) => true,
+        PStmt::Labeled { stmt, .. } => has_break(std::slice::from_ref(stmt)),
         PStmt::If { then, els, .. } => has_break(then) || has_break(els),
         PStmt::Block(b) => has_break(b),
         PStmt::Match { arms, .. } => arms.iter().any(|a| has_break(&a.body.stmts)),
@@ -50,6 +51,10 @@ impl<'m> Go<'m> {
     fn looped(&mut self, head: &str, body: &[PStmt], prelude: &[String]) -> PResult<()> {
         let label = self.fresh("L");
         self.loops.push(label.clone());
+        let user = self.pending_label.take();
+        if let Some(u) = &user {
+            self.user_labels.push((u.clone(), label.clone()));
+        }
         let saved = std::mem::take(&mut self.out);
         let ind = self.ind;
         self.ind += 1;
@@ -60,6 +65,9 @@ impl<'m> Go<'m> {
         self.ind = ind;
         let inner = std::mem::replace(&mut self.out, saved);
         self.loops.pop();
+        if user.is_some() {
+            self.user_labels.pop();
+        }
         r?;
         let used = inner.contains(&format!("break {label}")) || inner.contains(&format!("continue {label}"));
         if used {
@@ -113,6 +121,19 @@ impl<'m> Go<'m> {
             PStmt::ForRange { var, start, end, inclusive, body } => self.for_range(var, start, end, *inclusive, body)?,
             PStmt::ForIn { pat, iter, body } => self.for_in(pat, iter, body)?,
             PStmt::Match { scrutinee, arms } => self.match_stmt(scrutinee, arms)?,
+            PStmt::Labeled { label, stmt } => {
+                self.pending_label = Some(label.clone());
+                let r = self.stmt(stmt);
+                self.pending_label = None;
+                r?;
+            }
+            PStmt::BreakTo(l) | PStmt::ContinueTo(l) => {
+                let Some(go) = self.user_labels.iter().rev().find(|(u, _)| u == l).map(|(_, g)| g.clone()) else {
+                    return self.unsupported("labeled jump to an unknown loop");
+                };
+                let kw = if matches!(s, PStmt::BreakTo(_)) { "break" } else { "continue" };
+                self.line(&format!("{kw} {go}"));
+            }
             PStmt::Break => {
                 let l = self.loops.last().cloned();
                 match l {

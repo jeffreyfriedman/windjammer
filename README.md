@@ -49,7 +49,7 @@ Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [do
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
 | `wj errors` | Interactive error navigator (TUI) |
-| `wj docs` | Generate error documentation |
+| `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |

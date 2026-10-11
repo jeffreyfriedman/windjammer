@@ -1,6 +1,91 @@
 use super::{Lexer, Token};
 
+/// Build the integer token for `value` (already radix-decoded, `_` removed).
+///
+/// Typing rule (one place, tested by `tests/lexer_integer_literal_test.rs`):
+/// * explicit suffix: the literal carries that suffix; its payload is the two's-complement bit
+///   pattern of the value (`bits as i64`), so `u64`/`usize` payloads above `i64::MAX` are
+///   negative `i64`s. Consumers must reinterpret with `as u64`.
+/// * no suffix, `<= i64::MAX`: plain `IntLiteral`.
+/// * no suffix, exactly 2^63: the `i64::MIN` bit pattern (pinned by `hex_literal_u64_test`).
+/// * no suffix, `<= u64::MAX`: `u64`-suffixed (an unsuffixed constant that does not fit `i64`
+///   can only be a `u64`; this is what FNV-1a / xorshift constants need).
+/// * anything wider than 64 bits: `Token::Invalid` with a diagnostic, never a panic.
+///   (128-bit literals need a wider `Literal` payload; see docs/design/lexical-grammar.md.)
+pub(in crate::lexer) fn int_token(value: u128, suffix: Option<String>) -> Token {
+    if value > u64::MAX as u128 {
+        return Token::Invalid(format!(
+            "integer literal `{value}` does not fit in 64 bits (128-bit integer literals are not supported yet)"
+        ));
+    }
+    match suffix {
+        Some(s) => {
+            if s.starts_with('i') && value > i64::MAX as u128 {
+                return Token::Invalid(format!(
+                    "integer literal `{value}` is out of range for `{s}`"
+                ));
+            }
+            Token::IntLiteralSuffixed(value as u64 as i64, s)
+        }
+        None if value <= i64::MAX as u128 => Token::IntLiteral(value as i64),
+        None if value == 1u128 << 63 => Token::IntLiteral(i64::MIN),
+        None => Token::IntLiteralSuffixed(value as u64 as i64, "u64".to_string()),
+    }
+}
+
 impl Lexer {
+    /// Consume an optional numeric type suffix (`u64`, `i32`, `usize`, ...). Leaves the cursor
+    /// untouched (and returns `None`) when the letters are not a real suffix (`0ux` is `0`, `ux`).
+    fn read_int_suffix(&mut self) -> Option<String> {
+        if self.current_char != Some('u') && self.current_char != Some('i') {
+            return None;
+        }
+        let mut suffix = String::new();
+        let mut ahead = 0;
+        while let Some(ch) = self.peek(ahead) {
+            if ch.is_ascii_alphanumeric() {
+                suffix.push(ch);
+                ahead += 1;
+            } else {
+                break;
+            }
+        }
+        if crate::type_classification::is_numeric_suffix(&suffix) {
+            for _ in 0..ahead {
+                self.advance();
+            }
+            Some(suffix)
+        } else {
+            None
+        }
+    }
+
+    /// Read digits of `radix` (with `_` separators) after a `0x`/`0b`/`0o` prefix.
+    fn read_radix_literal(&mut self, radix: u32, name: &str) -> Token {
+        self.advance(); // skip '0'
+        self.advance(); // skip the radix letter
+
+        let mut digits = String::new();
+        while let Some(ch) = self.current_char {
+            if ch.is_digit(radix) {
+                digits.push(ch);
+                self.advance();
+            } else if ch == '_' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        if digits.is_empty() {
+            return Token::Invalid(format!("{name} literal has no digits"));
+        }
+        let suffix = self.read_int_suffix();
+        match u128::from_str_radix(&digits, radix) {
+            Ok(v) => int_token(v, suffix),
+            Err(_) => Token::Invalid(format!("{name} literal is too large (more than 128 bits)")),
+        }
+    }
+
     pub(in crate::lexer) fn read_number(&mut self) -> Token {
         let int_only_after_field_dot = self.numeric_field_index_after_dot;
         self.numeric_field_index_after_dot = false;
@@ -8,119 +93,12 @@ impl Lexer {
         let mut num_str = String::new();
         let mut is_float = false;
 
-        // Check for hex, binary, or octal prefix
         if self.current_char == Some('0') {
-            if let Some(prefix) = self.peek(1) {
-                match prefix {
-                    'x' | 'X' => {
-                        // Hexadecimal: 0xFF, 0xDEADBEEF
-                        self.advance(); // skip '0'
-                        self.advance(); // skip 'x'
-
-                        let mut hex_str = String::new();
-                        while let Some(ch) = self.current_char {
-                            if ch.is_ascii_hexdigit() {
-                                hex_str.push(ch);
-                                self.advance();
-                            } else if ch == '_' {
-                                self.advance(); // skip underscore separator
-                            } else {
-                                break;
-                            }
-                        }
-
-                        // Optional type suffix after hex digits (e.g. 0xFFu64)
-                        let type_suffix =
-                            if self.current_char == Some('u') || self.current_char == Some('i') {
-                                let mut suffix = String::new();
-                                while let Some(ch) = self.current_char {
-                                    if ch.is_ascii_alphanumeric() {
-                                        suffix.push(ch);
-                                        self.advance();
-                                    } else {
-                                        break;
-                                    }
-                                }
-                                if crate::type_classification::is_numeric_suffix(&suffix) {
-                                    Some(suffix)
-                                } else {
-                                    for _ in 0..suffix.len() {
-                                        self.position = self.position.saturating_sub(1);
-                                    }
-                                    self.current_char = if self.position < self.input.len() {
-                                        Some(self.input[self.position])
-                                    } else {
-                                        None
-                                    };
-                                    None
-                                }
-                            } else {
-                                None
-                            };
-
-                        let parsed =
-                            u128::from_str_radix(&hex_str, 16).expect("Invalid hex literal");
-
-                        if let Some(suffix) = type_suffix {
-                            let bits = parsed as u64;
-                            return Token::IntLiteralSuffixed(bits as i64, suffix);
-                        }
-
-                        if parsed <= i64::MAX as u128 {
-                            return Token::IntLiteral(parsed as i64);
-                        }
-                        if parsed == 1u128 << 63 {
-                            return Token::IntLiteral(i64::MIN);
-                        }
-                        let bits = parsed as u64;
-                        return Token::IntLiteralSuffixed(bits as i64, "u64".to_string());
-                    }
-                    'b' | 'B' => {
-                        // Binary: 0b1010, 0b1111_0000
-                        self.advance(); // skip '0'
-                        self.advance(); // skip 'b'
-
-                        let mut bin_str = String::new();
-                        while let Some(ch) = self.current_char {
-                            if ch == '0' || ch == '1' {
-                                bin_str.push(ch);
-                                self.advance();
-                            } else if ch == '_' {
-                                self.advance(); // skip underscore separator
-                            } else {
-                                break;
-                            }
-                        }
-
-                        let value =
-                            i64::from_str_radix(&bin_str, 2).expect("Invalid binary literal");
-                        return Token::IntLiteral(value);
-                    }
-                    'o' | 'O' => {
-                        // Octal: 0o755, 0o644
-                        self.advance(); // skip '0'
-                        self.advance(); // skip 'o'
-
-                        let mut oct_str = String::new();
-                        while let Some(ch) = self.current_char {
-                            if ('0'..='7').contains(&ch) {
-                                oct_str.push(ch);
-                                self.advance();
-                            } else if ch == '_' {
-                                self.advance(); // skip underscore separator
-                            } else {
-                                break;
-                            }
-                        }
-
-                        let value =
-                            i64::from_str_radix(&oct_str, 8).expect("Invalid octal literal");
-                        return Token::IntLiteral(value);
-                    }
-                    _ => {
-                        // Regular decimal number starting with 0
-                    }
-                }
+            match self.peek(1) {
+                Some('x') | Some('X') => return self.read_radix_literal(16, "hexadecimal"),
+                Some('b') | Some('B') => return self.read_radix_literal(2, "binary"),
+                Some('o') | Some('O') => return self.read_radix_literal(8, "octal"),
+                _ => {}
             }
         }
 
@@ -166,51 +144,20 @@ impl Lexer {
             is_float = true;
         }
 
-        // TDD FIX: Handle type suffixes for integer literals (0u64, 0i32, 0u32, etc.)
-        // Without this, "0u64" gets tokenized as IntLiteral(0) + Ident("u64"),
-        // which causes the "u64" to become a stray expression statement "u64;"
-        // resulting in E0423: expected value, found builtin type `u64`
-        if !is_float {
-            // Check for type suffix: u64, i64, u32, i32, u16, i16, u8, i8, usize, isize
-            let _type_suffix = if self.current_char == Some('u') || self.current_char == Some('i') {
-                let mut suffix = String::new();
-                while let Some(ch) = self.current_char {
-                    if ch.is_ascii_alphanumeric() {
-                        suffix.push(ch);
-                        self.advance();
-                    } else {
-                        break;
-                    }
-                }
-
-                // Validate it's a real type suffix
-                match suffix.as_str() {
-                    s if crate::type_classification::is_numeric_suffix(s) => Some(suffix),
-                    _ => {
-                        // Not a valid type suffix, backtrack
-                        // This handles cases like "0ux" which should be "0" + "ux" (identifier)
-                        for _ in 0..suffix.len() {
-                            self.position -= 1;
-                        }
-                        self.current_char = if self.position < self.input.len() {
-                            Some(self.input[self.position])
-                        } else {
-                            None
-                        };
-                        None
-                    }
-                }
-            } else {
-                None
+        if is_float {
+            return match num_str.parse() {
+                Ok(f) => Token::FloatLiteral(f),
+                Err(_) => Token::Invalid(format!("malformed float literal `{num_str}`")),
             };
+        }
 
-            if let Some(suffix) = _type_suffix {
-                Token::IntLiteralSuffixed(num_str.parse().unwrap(), suffix)
-            } else {
-                Token::IntLiteral(num_str.parse().unwrap())
-            }
-        } else {
-            Token::FloatLiteral(num_str.parse().unwrap())
+        // Type suffixes (0u64, 0i32, ...): without this `0u64` would lex as `0` + `u64`.
+        let suffix = self.read_int_suffix();
+        match num_str.parse::<u128>() {
+            Ok(v) => int_token(v, suffix),
+            Err(_) => Token::Invalid(format!(
+                "integer literal `{num_str}` is too large (more than 128 bits)"
+            )),
         }
     }
 }

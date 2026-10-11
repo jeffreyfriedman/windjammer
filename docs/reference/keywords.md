@@ -123,3 +123,4 @@ Every punctuation string of up to three characters that the lexer turns into exa
 | `..=` | DotDotEq |
 | `<<=` | ShlAssign |
 | `>>=` | ShrAssign |
+| `\|>?` | PipeTry |

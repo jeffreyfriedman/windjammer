@@ -98,8 +98,10 @@ impl fmt::Display for RuntimeError {
 /// Non-local exits threaded through `Result<Value, Ctl>`.
 #[derive(Debug)]
 pub enum Ctl {
-    Break,
-    Continue,
+    /// `break`, `break 'label`, `break value`. `value` is `Unit` for a plain break.
+    Break { label: Option<String>, value: Value },
+    /// `continue`, `continue 'label`.
+    Continue { label: Option<String> },
     Return(Value),
     Err(Box<RuntimeError>),
 }
