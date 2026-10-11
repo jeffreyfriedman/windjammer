@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (2026-10-10) — see "Decision" below
 - **Date:** 2026-10-10
-- **Related:** [WJ-CONC-01](../proposals/rfcs/WJ-CONC-01-async-concurrency.md), [design/ASYNC_EXECUTION_MODEL.md](../design/ASYNC_EXECUTION_MODEL.md), [CONCURRENCY_ARCHITECTURE.md](../CONCURRENCY_ARCHITECTURE.md), `std/sync.wj`, `std/async.wj`
+- **Related:** [WJ-CONC-01](../proposals/rfcs/WJ-CONC-01-async-concurrency.md), `design/ASYNC_EXECUTION_MODEL.md` (deleted; see git history), [CONCURRENCY_ARCHITECTURE.md](../CONCURRENCY_ARCHITECTURE.md), `std/sync.wj`, `std/async.wj`
 
 ## Context
 Several incompatible concurrency stories exist at once:

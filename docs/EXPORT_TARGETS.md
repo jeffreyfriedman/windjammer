@@ -1,5 +1,7 @@
 # Export Target System - Design Document
 
+> **Status (2026-10-11): background, not verified.** Design proposal. Only the `@export` decorator's WASM-only filtering exists (`src/decorator_registry.rs`); the layered target detection below is not implemented as described. See [ADR-0007](adr/0007-target-tiers-conformance.md).
+
 ## Problem
 
 How does the compiler know which backend to use for `@export`?

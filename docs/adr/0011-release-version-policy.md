@@ -2,12 +2,12 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** [VERSIONING.md](../VERSIONING.md), `Cargo.toml` (`[workspace.package] version = "0.50.0"`), `CHANGELOG.md`, `.github/workflows/{release,publish}.yml`, [PUBLISHING.md](../PUBLISHING.md)
+- **Related:** [VERSIONING.md](../VERSIONING.md), `Cargo.toml` (`[workspace.package] version = "0.50.0"`), `CHANGELOG.md`, `.github/workflows/{release,publish}.yml`
 
 ## Context
 The workspace (compiler, `windjammer-runtime`, `windjammer-lsp`, `windjammer-mcp`) shares one version (`0.50.0`). Other repositories
 (`windjammer-ui`, the game engine, the database, dogfood applications) live beside it and pin the compiler in different ways
-Before this change three documents gave three different versions and policies
+. Before this change three documents gave three different versions and policies
 (`VERSIONING_POLICY.md` said 0.46.0 with separate versioning, `VERSIONING_STRATEGY.md` described a 0.1.0 plan, the README said 0.38.6).
 Breaking changes happen in minor versions while the project is 0.x; there is no stated rule for stdlib/runtime compatibility, for the minimum
 `wj` version a `wj.toml` can require, or for how generated-code expectations are versioned.

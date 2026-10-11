@@ -3,8 +3,7 @@
 *Last updated: 2026-10-10. Version in `Cargo.toml`: 0.50.0.*
 
 This roadmap lists only work with a concrete plan or decision attached. It does not carry dates, performance targets or
-feature promises that nothing in the repository supports. The previous, much longer roadmap (versions 0.34 to 0.41) is
-is no longer kept in this repository.
+feature promises that nothing in the repository supports. The previous, much longer roadmap is in git history.
 
 Related: [known gaps](docs/known-gaps.md) (ranked), [architecture improvement plan](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md)
 (work packages), [ADRs](docs/adr/README.md) (open decisions), [RFC status](docs/proposals/rfcs/README.md).

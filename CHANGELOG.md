@@ -1,5 +1,21 @@
 # Changelog
 
+Entries before 0.50.0 were written during rapid development; test counts and performance figures in old entries are
+historical and were not re-verified. The workspace version in `Cargo.toml` is 0.50.0; entries below "Unreleased" describe
+what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
+
+## [Unreleased]
+
+### Added
+- Post-codegen, `syn`-based Rust optimizer (`src/optimizer/`) replacing the retired AST-level phases (ADR-0006).
+- `wj fmt` formats `.wj` files; `wj fix` migrates deprecated surface syntax (ADR-0014 phase 1); architecture fitness tests
+  (`tests/architecture.rs`), orphan-test checker, per-module `MODULE.md` files, ADR-0001 to ADR-0015.
+- Interpreter (`wj run --interpret`, `wj test --interpret`, `wj repl`): experimental subset.
+
+### Removed
+- Stale documentation, SDK/docker leftovers, committed binaries, game/UI-era examples and the per-ticket repro queue
+  (2026-10-11 cleanup; history is in git).
+
 ## [0.50.0] - 2026-07-07
 
 ### Added

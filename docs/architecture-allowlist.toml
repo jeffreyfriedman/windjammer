@@ -29,7 +29,6 @@
 "src/file_compiler.rs" = 1
 "src/interpreter/engine.rs" = 1
 "src/lib.rs" = 1
-"src/optimizer/quarantine/phase15_simd_vectorization.rs" = 1
 "src/parser_impl.rs" = 1
 "src/wjsl/diagnostics.rs" = 1
 "src/wjsl/lexer.rs" = 2

@@ -90,7 +90,7 @@ The previous table listed WJ-LANG-02 and WJ-LANG-04 nowhere (they were missing) 
 CHANGELOG lists them as added in 0.50.0; the statuses and target versions that used to be here were not tied to evidence and were removed.
 
 ### Superseded documents
-- [design/ASYNC_EXECUTION_MODEL.md](../../design/ASYNC_EXECUTION_MODEL.md) is superseded by WJ-CONC-01 and ADR-0004 (its "APPROVED" status is historical).
+- `design/ASYNC_EXECUTION_MODEL.md` (deleted; see git history) is superseded by WJ-CONC-01 and ADR-0004 (its "APPROVED" status is historical).
 - [archive/design/auto-reference.md](../../archive/design/auto-reference.md) is superseded by the IR solver ([ADR-0001](../../adr/0001-ownership-truth.md)).
 
 ### Decisions that gate RFC work
