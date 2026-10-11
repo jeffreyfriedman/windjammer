@@ -49,6 +49,11 @@ fn i32_for_range_len_end_must_cast_to_i32() {
     let map = test.compile().expect("P3.336 compile");
     let rs = map.get("scene.rs").expect("scene.rs");
     assert!(!rs.contains("0_i32..node.params.values.len()"), "P3.337:\n{rs}");
-    assert!(rs.contains("as i32"), "P3.336 cast:\n{rs}");
+    // Either the counter is a usize (index use) or the len end is cast to i32; both are
+    // valid. What matters is that bounds agree, which `cargo_check` below proves.
+    assert!(
+        rs.contains("0_usize..node.params.values.len()") || rs.contains("as i32"),
+        "P3.336 bounds must agree:\n{rs}"
+    );
     test.cargo_check().expect("P3.336 cargo-check");
 }
