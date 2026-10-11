@@ -97,7 +97,7 @@ pub struct Parser {
     /// True while parsing a `|>` stage: `_` is then a placeholder expression.
     pub(crate) in_pipe_stage: bool,
     /// Number of `_` placeholders produced in the current pipe stage.
-    pub(crate) pipe_placeholders: usize,
+    pub(crate) pipe_placeholders: Vec<usize>,
     // Arena allocators for AST nodes (eliminates recursive Drop)
     // When Parser is dropped, these arenas drop all allocated AST nodes at once
     // without recursive calls to Drop, solving the Windows stack overflow issue
@@ -137,7 +137,7 @@ impl Parser {
             warnings: Vec::new(),
             in_extern_fn: false,
             in_pipe_stage: false,
-            pipe_placeholders: 0,
+            pipe_placeholders: Vec::new(),
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -157,7 +157,7 @@ impl Parser {
             warnings: Vec::new(),
             in_extern_fn: false,
             in_pipe_stage: false,
-            pipe_placeholders: 0,
+            pipe_placeholders: Vec::new(),
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),

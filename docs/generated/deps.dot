@@ -331,7 +331,7 @@ digraph deps {
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
   "parser" -> "lexer" [label="20"];
   "parser" -> "parser_impl" [label="19"];
-  "parser" -> "source_map" [label="1"];
+  "parser" -> "source_map" [label="2"];
   "parser_impl" -> "lexer" [label="4"];
   "parser_impl" -> "parser" [label="1"];
   "parser_impl" -> "source_map" [label="2"];

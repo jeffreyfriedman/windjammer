@@ -10,13 +10,19 @@ impl Parser {
     ) -> Result<&'static Expression<'static>, String> {
         let expr = match self.current_token() {
             Token::Underscore if self.in_pipe_stage => {
-                self.pipe_placeholders += 1;
+                self.pipe_placeholders.push(self.position);
                 let location = self.current_location();
                 self.advance();
                 self.alloc_expr(Expression::Identifier {
                     name: "_".to_string(),
                     location,
                 })
+            }
+            Token::Underscore => {
+                return Err(self.pipe_error(
+                    self.position,
+                    "placeholder `_` is only valid as a direct argument of a `|>` stage (e.g. `x |> f(a, _)`)",
+                ));
             }
             Token::Thread => {
                 // Check if this is a thread block or a module path
@@ -552,23 +558,6 @@ impl Parser {
                 })
             }
             _ => {
-                eprintln!(
-                    "DEBUG: Unexpected token at position {}: {:?}",
-                    self.position,
-                    self.current_token()
-                );
-                if self.position > 0 {
-                    eprintln!(
-                        "DEBUG: Previous token: {:?}",
-                        self.tokens.get(self.position - 1)
-                    );
-                }
-                if self.position > 1 {
-                    eprintln!(
-                        "DEBUG: Token before that: {:?}",
-                        self.tokens.get(self.position - 2)
-                    );
-                }
                 return Err(format!(
                     "Unexpected token in expression: {:?} (at token position {})",
                     self.current_token(),
