@@ -1,0 +1,29 @@
+[
+ {
+  "args": [
+   "hello",
+   "a.txt"
+  ],
+  "files": {
+   "a.txt": "Hello World\nfoo bar\nhello again\n",
+   "b.txt": "nothing here\nWORLD of foo\n"
+  },
+  "stdin": "",
+  "stdout": "hello again\n"
+ },
+ {
+  "args": [
+   "-i",
+   "-n",
+   "hello",
+   "a.txt",
+   "b.txt"
+  ],
+  "files": {
+   "a.txt": "Hello World\nfoo bar\nhello again\n",
+   "b.txt": "nothing here\nWORLD of foo\n"
+  },
+  "stdin": "",
+  "stdout": "a.txt:1:Hello World\na.txt:3:hello again\n"
+ }
+]

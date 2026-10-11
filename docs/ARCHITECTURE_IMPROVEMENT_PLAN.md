@@ -24,7 +24,7 @@ Implemented: pipe operator, ternary/auto-derive, WJSL front end, shared cargo ca
 solver (partial). Partial: ownership inference (analyzer still patches the IR), capability/taint/lock/profile
 enforcement, async per WJ-CONC-01, package management (stubs), multi-target (Go/JS discard the IR),
 diagnostics (rustc errors translated). Not started: comptime/const generics, `wj economics`,
-`wj optimize` (optimizer disabled), `wj fmt` for `.wj` (runs `cargo fmt`), `wj watch/doc/publish/eject`.
+`wj optimize` (not started; optimizer disabled), `wj fmt` for `.wj` (runs `cargo fmt`), `wj watch/doc/publish/eject`.
 
 ### Test discovery
 Compiler `tests/*.rs` are auto-discovered by `build.rs` (top level only). See §5 for the orphan audit.

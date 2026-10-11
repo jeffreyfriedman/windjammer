@@ -64,7 +64,7 @@
 //   - parser/items.rs - Top-level item parsing
 
 use crate::lexer::Token;
-use typed_arena::Arena;
+use typed_arena::Arena as RawArena;
 
 // Import all AST types from the new parser::ast module
 pub use crate::parser::ast::*;
@@ -98,16 +98,113 @@ pub struct Parser {
     pub(crate) in_pipe_stage: bool,
     /// Number of `_` placeholders produced in the current pipe stage.
     pub(crate) pipe_placeholders: Vec<usize>,
-    // Arena allocators for AST nodes (eliminates recursive Drop)
-    // When Parser is dropped, these arenas drop all allocated AST nodes at once
-    // without recursive calls to Drop, solving the Windows stack overflow issue
+    // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
-    // SAFETY: We use 'static here because the arena owns the memory. The actual
-    // lifetime is tied to Parser through the parse() method signature. References
-    // returned from parse() will have lifetime 'parser tied to &'parser self.
+    // SOUNDNESS: `parse()` returns `Program<'static>`, so nothing ties the AST to this Parser. The
+    // arenas therefore must outlive every Program, and the wrapper `Arena` never frees them (see its docs).
+    // Dropping the Parser after `parse()` used to free the nodes under a live `Program` (use after free).
     pub(crate) expr_arena: Arena<Expression<'static>>,
     pub(crate) stmt_arena: Arena<Statement<'static>>,
     pub(crate) pattern_arena: Arena<Pattern<'static>>,
+    /// Errors already reported and recovered from (statement-level recovery); `parse()` fails
+    /// with all of them plus the final one.
+    pub(crate) recovered_errors: Vec<String>,
+    /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
+    pub(crate) recovering: bool,
+}
+
+/// An AST arena that is **never freed** (same API as `typed_arena::Arena` for the calls the parser makes).
+///
+/// `Program<'static>` borrows from the arenas owned by the `Parser` that produced it, but the type system
+/// does not know that: the `'static` lifetime lets the program outlive the parser. Freeing the arenas when
+/// the parser is dropped is therefore a use-after-free for every caller that drops the parser first (the
+/// common pattern). Until `Program` owns a reference-counted handle to its arenas (design in
+/// `docs/design/parser-arena-ownership.md`), the sound choice is to retire the arena: leak it and count it.
+/// Cost: AST memory of each parse lives until process exit (short-lived `wj` runs; the LSP should re-use
+/// parses). `ArenaLedger` backs the drop-order test in `tests/parser_arena_soundness_test.rs`.
+pub struct Arena<T> {
+    raw: std::mem::ManuallyDrop<RawArena<T>>,
+    ledger: ArenaLedger,
+    free_on_drop: bool,
+}
+
+/// Counts whether one arena was retired (leaked on purpose) or actually freed. A clone outlives the arena,
+/// so a test can drop the parser and then assert `freed() == 0`. (Per arena, not process-global: the
+/// architecture ratchet forbids new global state.)
+#[derive(Clone, Default, Debug)]
+pub struct ArenaLedger(std::sync::Arc<LedgerCounts>);
+
+#[derive(Default, Debug)]
+struct LedgerCounts {
+    retired: std::sync::atomic::AtomicUsize,
+    freed: std::sync::atomic::AtomicUsize,
+}
+
+impl ArenaLedger {
+    /// Arenas intentionally leaked because their owner was dropped.
+    pub fn retired(&self) -> usize {
+        self.0.retired.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Arenas actually freed. Must stay 0 for every arena a `Parser` creates; a non-zero value means some
+    /// code path can invalidate a live `Program<'static>`.
+    pub fn freed(&self) -> usize {
+        self.0.freed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// The ledgers of a parser's three arenas (expression, statement, pattern), summed.
+#[derive(Clone, Debug)]
+pub struct ParserArenaLedger(Vec<ArenaLedger>);
+
+impl ParserArenaLedger {
+    pub fn retired(&self) -> usize {
+        self.0.iter().map(ArenaLedger::retired).sum()
+    }
+    pub fn freed(&self) -> usize {
+        self.0.iter().map(ArenaLedger::freed).sum()
+    }
+}
+
+impl<T> Default for Arena<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Arena<T> {
+    pub fn new() -> Self {
+        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: false }
+    }
+
+    /// The unsound behavior, kept only so a test can prove `ArenaLedger::freed()` detects it.
+    #[doc(hidden)]
+    pub fn new_freeing_for_mutation_test() -> Self {
+        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: true }
+    }
+
+    pub fn ledger(&self) -> ArenaLedger {
+        self.ledger.clone()
+    }
+}
+
+impl<T> std::ops::Deref for Arena<T> {
+    type Target = RawArena<T>;
+    fn deref(&self) -> &RawArena<T> {
+        &self.raw
+    }
+}
+
+impl<T> Drop for Arena<T> {
+    fn drop(&mut self) {
+        if self.free_on_drop {
+            // SAFETY: only reachable from `Arena::new_freeing_for_mutation_test`, whose arena nothing borrows.
+            unsafe { std::mem::ManuallyDrop::drop(&mut self.raw) };
+            self.ledger.0.freed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        } else {
+            self.ledger.0.retired.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
 }
 
 impl Parser {
@@ -141,6 +238,8 @@ impl Parser {
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
+            recovered_errors: Vec::new(),
+            recovering: false,
         }
     }
 
@@ -161,7 +260,132 @@ impl Parser {
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
+            recovered_errors: Vec::new(),
+            recovering: false,
         }
+    }
+
+    /// `line L, column C` of the current token (the last token when past the end).
+    pub(crate) fn pos_desc(&self) -> String {
+        match self.tokens.get(self.position).or_else(|| self.tokens.last()) {
+            Some(t) => format!("line {}, column {}", t.line, t.column),
+            None => "end of input".to_string(),
+        }
+    }
+
+    /// Guarantee `line L, column C` in a parse error (many call sites build bare messages).
+    /// The position is that of the token the parser stopped at.
+    pub(crate) fn with_position(&self, message: String) -> String {
+        if message.contains("line ") && message.contains(", column ") {
+            message
+        } else {
+            format!("{} (at {})", message, self.pos_desc())
+        }
+    }
+
+    /// Position + diagnostics watermark for speculative parsing; pair with `rewind`.
+    pub(crate) fn mark(&self) -> (usize, usize) {
+        (self.position, self.recovered_errors.len())
+    }
+
+    /// Undo everything since `mark` (tokens consumed and errors recovered inside a speculation).
+    pub(crate) fn rewind(&mut self, mark: (usize, usize)) {
+        self.position = mark.0;
+        self.recovered_errors.truncate(mark.1);
+    }
+
+    /// One message per `Token::Invalid` in the stream, each with line and column.
+    pub fn lexical_errors(&self) -> Vec<String> {
+        self.tokens
+            .iter()
+            .filter_map(|t| match &t.token {
+                Token::Invalid(m) => Some(format!(
+                    "Lexical error: {} (at line {}, column {})",
+                    m, t.line, t.column
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Skip to a safe resume point after a failed statement that began at `start`: the next
+    /// token that starts a new line with all brackets opened since `start` closed, or a `;`
+    /// (consumed), or the `}` that ends the enclosing block (not consumed). Always makes progress.
+    pub(crate) fn recover_to_statement_boundary(&mut self, start: usize) {
+        let mut depth: i32 = 0;
+        let fail_at = self.position.max(start);
+        let mut i = start;
+        while i < self.tokens.len() {
+            let t = &self.tokens[i].token;
+            match t {
+                Token::Eof => break,
+                Token::LParen | Token::LBracket | Token::LBrace => depth += 1,
+                Token::RParen | Token::RBracket | Token::RBrace => {
+                    if depth == 0 && i >= fail_at && *t == Token::RBrace {
+                        break; // end of the enclosing block
+                    }
+                    depth -= 1;
+                }
+                Token::Semicolon if depth <= 0 && i >= fail_at => {
+                    i += 1;
+                    break;
+                }
+                _ => {}
+            }
+            let next_starts_line = self
+                .tokens
+                .get(i + 1)
+                .is_some_and(|n| n.line > self.tokens[i].line);
+            if i >= fail_at && depth <= 0 && next_starts_line && i + 1 > start {
+                i += 1;
+                break;
+            }
+            i += 1;
+        }
+        self.position = i.max(start + 1).min(self.tokens.len().saturating_sub(1));
+    }
+
+    /// Skip to the next top-level item after a failed item that began at `start`.
+    fn recover_to_item_boundary(&mut self, start: usize) {
+        let fail_at = self.position.max(start);
+        let mut depth: i32 = 0;
+        let mut i = start;
+        while i < self.tokens.len() {
+            let t = &self.tokens[i].token;
+            match t {
+                Token::Eof => break,
+                Token::LBrace => depth += 1,
+                Token::RBrace => {
+                    depth -= 1;
+                    if depth <= 0 && i >= fail_at {
+                        i += 1;
+                        break;
+                    }
+                }
+                Token::Fn
+                | Token::Struct
+                | Token::Enum
+                | Token::Trait
+                | Token::Impl
+                | Token::Use
+                | Token::Mod
+                | Token::Pub
+                | Token::Const
+                | Token::Static
+                | Token::Extern
+                | Token::Decorator(_)
+                    if depth <= 0
+                        && i > start
+                        && i >= fail_at
+                        && self.tokens[i].line > self.tokens[i - 1].line =>
+                {
+                    break;
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        self.position = i.max(start + 1).min(self.tokens.len().saturating_sub(1));
     }
 
     pub fn warnings(&self) -> &[ParseWarning] {
@@ -200,10 +424,15 @@ impl Parser {
         });
     }
 
+    /// Handle that outlives this parser and reports whether its AST arenas were ever freed.
+    pub fn arena_ledger(&self) -> ParserArenaLedger {
+        ParserArenaLedger(vec![self.expr_arena.ledger(), self.stmt_arena.ledger(), self.pattern_arena.ledger()])
+    }
+
     /// Allocate an expression in the arena
     /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'ast (result lifetime)
     /// This is safe because:
-    /// 1. Parser owns the arena, so references live as long as Parser does
+    /// 1. The arena is never freed (`Arena` wrapper), so references outlive the Parser and any Program
     /// 2. We use a separate 'ast lifetime (not tied to &self borrow) to allow multiple allocations
     /// 3. The arena uses interior mutability (Cell), so &self is sufficient
     pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
@@ -261,10 +490,10 @@ impl Parser {
             Ok(())
         } else {
             Err(format!(
-                "Expected {:?}, got {:?} (at token position {})",
+                "Expected {:?}, got {:?} (at {})",
                 expected,
                 self.current_token(),
-                self.position
+                self.pos_desc()
             ))
         }
     }
@@ -295,9 +524,9 @@ impl Parser {
                 Ok(true) // Was a split >>
             }
             _ => Err(format!(
-                "Expected '>' or '>>', got {:?} (at token position {})",
+                "Expected '>' or '>>', got {:?} (at {})",
                 self.current_token(),
-                self.position
+                self.pos_desc()
             )),
         }
     }
@@ -309,8 +538,34 @@ impl Parser {
     pub fn parse(&mut self) -> Result<Program<'static>, String> {
         let mut items = Vec::new();
 
+        // Lexical errors first, each with line:column. Parsing a stream with invalid tokens
+        // would only add cascading noise.
+        let lexical = self.lexical_errors();
+        if !lexical.is_empty() {
+            return Err(lexical.join("\n"));
+        }
+
+        self.recovering = true;
+        const MAX_ERRORS: usize = 25;
+        let mut errors: Vec<String> = Vec::new();
         while self.current_token() != &Token::Eof {
-            items.push(self.parse_item()?);
+            let start = self.position;
+            match self.parse_item() {
+                Ok(item) => items.push(item),
+                Err(e) => {
+                    errors.append(&mut self.recovered_errors);
+                    errors.push(self.with_position(e));
+                    if errors.len() >= MAX_ERRORS {
+                        break;
+                    }
+                    self.recover_to_item_boundary(start);
+                }
+            }
+        }
+        self.recovering = false;
+        errors.append(&mut self.recovered_errors);
+        if !errors.is_empty() {
+            return Err(errors.join("\n"));
         }
 
         self.emit_surface_syntax_warnings();
@@ -603,9 +858,9 @@ impl Parser {
                 })
             }
             _ => Err(format!(
-                "Unexpected token: {:?} (at token position {})",
+                "Unexpected token: {:?} (at {}); expected an item: one of `fn`, `struct`, `enum`, `trait`, `impl`, `use`, `mod`, `const`, `static`, `type`, `extern`, `pub`, `async`, a decorator such as `@derive(..)`, or a doc comment",
                 self.current_token(),
-                self.position
+                self.pos_desc()
             )),
         }
     }

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "set a 10\nget a\ncount 10\nbegin\nset a 20\nget a\nrollback\nget a\n",
+  "stdout": "10\n1\n20\n10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rollback\ncommit\nget zz\n",
+  "stdout": "NO TRANSACTION\nNO TRANSACTION\nNULL\n"
+ }
+]

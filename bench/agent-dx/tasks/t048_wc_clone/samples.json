@@ -1,0 +1,24 @@
+[
+ {
+  "args": [
+   "a.txt"
+  ],
+  "files": {
+   "a.txt": "hello world\nfoo\n"
+  },
+  "stdin": "",
+  "stdout": "2 3 16 a.txt\n"
+ },
+ {
+  "args": [
+   "x",
+   "y"
+  ],
+  "files": {
+   "x": "one two\n",
+   "y": "three\n\nfour five six\n"
+  },
+  "stdin": "",
+  "stdout": "1 2 8 x\n3 4 21 y\n4 6 29 total\n"
+ }
+]

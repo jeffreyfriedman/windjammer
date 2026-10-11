@@ -40,6 +40,7 @@ digraph deps {
     label="ownership";
     "analyzer";
     "auto_clone";
+    "auto_clone_tests";
   }
   subgraph cluster_resolve {
     label="resolve";
@@ -55,6 +56,7 @@ digraph deps {
     "config";
     "debug_env";
     "decorator_registry";
+    "embedded_assets";
     "error";
     "error_codes";
     "errors";
@@ -106,6 +108,7 @@ digraph deps {
   "analyzer" -> "auto_clone" [label="2"];
   "analyzer" -> "codegen" [label="28",color=red,fontcolor=red];
   "analyzer" -> "debug_env" [label="5"];
+  "analyzer" -> "embedded_assets" [label="2"];
   "analyzer" -> "ir" [label="12",color=red,fontcolor=red];
   "analyzer" -> "lexer" [label="7"];
   "analyzer" -> "metadata" [label="1",color=red,fontcolor=red];
@@ -121,14 +124,14 @@ digraph deps {
   "auto_clone_tests" -> "analyzer" [label="23"];
   "auto_clone_tests" -> "lexer" [label="2"];
   "auto_clone_tests" -> "parser" [label="27"];
-  "auto_clone_tests" -> "test_utils" [label="1"];
+  "auto_clone_tests" -> "test_utils" [label="1",color=red,fontcolor=red];
   "build_utils" -> "module_system" [label="4"];
   "build_utils" -> "project_paths" [label="1"];
   "build_utils" -> "rust_integration_tests" [label="2"];
   "build_utils" -> "test_module_gate" [label="1"];
   "build_utils" -> "test_runner" [label="1"];
   "cargo_integration" -> "cargo_cache" [label="2"];
-  "cargo_integration" -> "cargo_toml" [label="3"];
+  "cargo_integration" -> "cargo_toml" [label="4"];
   "cargo_integration" -> "compiler_config" [label="2"];
   "cargo_integration" -> "error_mapper" [label="1"];
   "cargo_integration" -> "source_map" [label="1"];
@@ -136,6 +139,7 @@ digraph deps {
   "cargo_toml" -> "compiler" [label="1"];
   "cargo_toml" -> "compiler_config" [label="4"];
   "cargo_toml" -> "config" [label="8"];
+  "cargo_toml" -> "embedded_assets" [label="2"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="7"];
@@ -187,6 +191,7 @@ digraph deps {
   "codegen" -> "component_analyzer" [label="2"];
   "codegen" -> "debug_env" [label="9"];
   "codegen" -> "decorator_registry" [label="3"];
+  "codegen" -> "embedded_assets" [label="2"];
   "codegen" -> "inference" [label="2"];
   "codegen" -> "intrinsics" [label="3",color=red,fontcolor=red];
   "codegen" -> "ir" [label="370"];
@@ -210,6 +215,7 @@ digraph deps {
   "compiler" -> "config" [label="2"];
   "compiler" -> "debug_env" [label="5"];
   "compiler" -> "decorator_registry" [label="1"];
+  "compiler" -> "embedded_assets" [label="2"];
   "compiler" -> "inference" [label="1"];
   "compiler" -> "ir" [label="7"];
   "compiler" -> "lexer" [label="4"];
@@ -270,6 +276,7 @@ digraph deps {
   "file_compiler" -> "codegen" [label="1"];
   "file_compiler" -> "compilation_error_handling" [label="1"];
   "file_compiler" -> "compiler_config" [label="3"];
+  "file_compiler" -> "embedded_assets" [label="2"];
   "file_compiler" -> "file_compilation_pipeline" [label="1"];
   "file_compiler" -> "ir" [label="1"];
   "file_compiler" -> "lexer" [label="1"];
@@ -287,7 +294,7 @@ digraph deps {
   "inference" -> "test_utils" [label="1"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
   "interpreter" -> "lexer" [label="1"];
-  "interpreter" -> "parser" [label="51"];
+  "interpreter" -> "parser" [label="57"];
   "interpreter" -> "source_map" [label="3"];
   "intrinsics" -> "error_catalog" [label="2"];
   "ir" -> "analyzer" [label="57"];
@@ -312,9 +319,6 @@ digraph deps {
   "metadata" -> "parser" [label="20"];
   "metadata" -> "type_classification" [label="2"];
   "module_system" -> "test_module_gate" [label="1"];
-  "optimizer" -> "parser" [label="27"];
-  "optimizer" -> "parser_impl" [label="1"];
-  "optimizer" -> "test_utils" [label="5"];
   "output_generation" -> "analyzer" [label="1"];
   "output_generation" -> "cargo_toml" [label="1"];
   "output_generation" -> "codegen" [label="4"];
@@ -329,8 +333,8 @@ digraph deps {
   "output_generation" -> "project_paths" [label="1"];
   "package" -> "config" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
-  "parser" -> "lexer" [label="20"];
-  "parser" -> "parser_impl" [label="19"];
+  "parser" -> "lexer" [label="21"];
+  "parser" -> "parser_impl" [label="20"];
   "parser" -> "source_map" [label="2"];
   "parser_impl" -> "lexer" [label="4"];
   "parser_impl" -> "parser" [label="1"];
@@ -342,6 +346,7 @@ digraph deps {
   "stdlib_scanner" -> "analyzer" [label="17",color=red,fontcolor=red];
   "stdlib_scanner" -> "cargo_toml" [label="1",color=red,fontcolor=red];
   "stdlib_scanner" -> "codegen" [label="9",color=red,fontcolor=red];
+  "stdlib_scanner" -> "embedded_assets" [label="2"];
   "stdlib_scanner" -> "parser" [label="4"];
   "test_runner" -> "build_utils" [label="1"];
   "test_runner" -> "cargo_cache" [label="3"];

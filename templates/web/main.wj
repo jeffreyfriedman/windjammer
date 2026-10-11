@@ -2,14 +2,12 @@
 use std::http
 use std::json
 
-@derive(Serialize, Deserialize)
 struct User {
     id: int,
     name: string,
     email: string,
 }
 
-@derive(Serialize, Deserialize)
 struct ApiResponse {
     message: string,
     status: string,
@@ -21,7 +19,7 @@ fn main() {
     println("This is a template for building web services with Windjammer")
     println("")
     println("Example: Making an HTTP request")
-    
+
     // Example API call
     match http.get("https://jsonplaceholder.typicode.com/users/1").await {
         Ok(response) => {
@@ -33,8 +31,7 @@ fn main() {
         },
         Err(e) => println("Error making request: ${e:?}")
     }
-    
+
     // TODO: Add HTTP server support in future Windjammer version
     // http.serve("0.0.0.0:8080", handler)
 }
-

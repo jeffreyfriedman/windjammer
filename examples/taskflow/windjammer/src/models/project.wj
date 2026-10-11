@@ -2,7 +2,7 @@
 
 use std::time
 
-@derive(Debug, Clone, Serialize, Deserialize)
+@derive(Debug, Clone)
 pub struct Project {
     pub id: int,
     pub name: string,
@@ -12,19 +12,19 @@ pub struct Project {
     pub updated_at: int,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct CreateProjectRequest {
     pub name: string,
     pub description: string,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct UpdateProjectRequest {
     pub name: Option<string>,
     pub description: Option<string>,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct ProjectResponse {
     pub id: int,
     pub name: string,
@@ -33,7 +33,7 @@ pub struct ProjectResponse {
     pub created_at: int,
 }
 
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub struct ProjectMember {
     pub project_id: int,
     pub user_id: int,

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock bolt 100 5\nstock nut 50 2\nsell bolt 30\nreport\n",
+  "stdout": "ok 100\nok 50\nsold 30 for 150\nbolt 70 x 5 = 350\nnut 50 x 2 = 100\ntotal value 450\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "report\nsell x 1\nremove x\n",
+  "stdout": "(empty)\nerror: unknown sku x\nerror: unknown sku x\n"
+ }
+]

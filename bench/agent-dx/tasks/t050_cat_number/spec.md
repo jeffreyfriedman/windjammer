@@ -1,0 +1,3 @@
+Write `cat`. Arguments: an optional `-n` flag (anywhere) and file names. Concatenate the named files to standard output, in order. With no file names read standard input. A file that does not exist prints `cat: <name>: No such file` (to standard output, in order with the other output) and the exit status will be 1 (otherwise 0).
+
+With `-n`, number ALL output lines continuously across files (the counter does not reset) using the format `%6d` (the number right-aligned in a 6-character field), then a TAB, then the line. A final line lacking a trailing newline is still printed with a newline added when numbering, and printed exactly as-is (no newline added) when not numbering. Files contain only ASCII text.

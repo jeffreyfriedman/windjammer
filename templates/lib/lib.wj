@@ -17,14 +17,14 @@ pub fn multiply(a: int, b: int) -> int {
 @derive(Debug, Clone, PartialEq)
 pub struct Point {
     pub x: float,
-    pub y: float
+    pub y: float,
 }
 
 impl Point {
     pub fn new(x: float, y: float) -> Point {
         Point { x: x, y: y }
     }
-    
+
     pub fn distance(self, other: Point) -> float {
         let dx = self.x - other.x
         let dy = self.y - other.y
@@ -58,4 +58,3 @@ fn test_point_distance() {
     let dist = p1.distance(p2)
     assert_eq(dist, 5.0)
 }
-

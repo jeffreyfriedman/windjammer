@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 5\ninsert 3\ninsert 8\ninsert 3\ninorder\nheight\ncontains 8\nmin\nmax\n",
+  "stdout": "ok\nok\nok\ndup\n3 5 8\n2\nyes\n3\n8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "inorder\nheight\nmin\ndelete 1\n",
+  "stdout": "<empty>\n0\nempty\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 1\ninsert 2\ninsert 3\ninsert 4\ninsert 5\ninsert 6\ninsert 7\nheight\ndelete 1\ndelete 4\ninorder\nheight\ndelete 99\n",
+  "stdout": "ok\nok\nok\nok\nok\nok\nok\n7\nok\nok\n2 3 5 6 7\n5\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 4\ninsert 2\ninsert 6\ninsert 5\ninsert 7\ndelete 4\ninorder\nheight\nmin\nmax\n",
+  "stdout": "ok\nok\nok\nok\nok\nok\n2 5 6 7\n3\n2\n7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "min\ninsert 5\ninsert -14\ninsert -14\ninsert -9\ninsert -6\nheight\ndelete -13\ninsert -14\ninsert 3\ncontains 10\nmax\ninsert 10\ninsert 1\ninsert -9\ninsert -9\ninsert 12\ndelete -11\n",
+  "stdout": "empty\nok\nok\ndup\nok\nok\n4\nmissing\ndup\nok\nno\n5\nok\nok\ndup\ndup\nok\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 9\nheight\ncontains -9\ncontains -6\ncontains -6\ninsert -1\ninsert -1\nmin\ninorder\ncontains -6\nheight\ninsert 8\ninorder\ninorder\ninsert -6\ndelete 9\nmin\ninsert -1\ndelete 6\ninsert 10\ndelete 4\ninsert 9\ndelete 8\ncontains -6\ncontains -3\ncontains 1\ndelete 11\ninsert -9\ninsert 14\ninsert -1\ncontains -7\n",
+  "stdout": "ok\n1\nno\nno\nno\nok\ndup\n-1\n-1 9\nno\n2\nok\n-1 8 9\n-1 8 9\nok\nok\n-6\ndup\nmissing\nok\nmissing\nok\nok\nyes\nno\nno\nmissing\nok\nok\ndup\nno\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 13\nmin\ncontains -12\ndelete -8\ninorder\ninsert 13\ninsert 7\nmax\ncontains -13\nmin\ninsert -1\ninsert 3\ninsert -1\ninorder\nheight\nheight\ncontains 13\ndelete 10\nmax\ncontains 9\nheight\ninsert -13\ncontains -3\nheight\ninsert 0\ninsert 13\ncontains -13\ninsert -3\ninsert 13\ncontains -9\ncontains 14\ncontains -2\ncontains -12\ninsert 4\ninsert 3\ninsert 7\ninsert -8\nheight\ninsert -14\nheight\ninsert 2\ninsert 7\nmax\ndelete -5\nmax\nmax\ndelete -4\ndelete 8\ninsert 14\ncontains -15\ninsert -8\ninsert -15\ninsert 5\ncontains -3\n",
+  "stdout": "ok\n13\nno\nmissing\n13\ndup\nok\n13\nno\n7\nok\nok\ndup\n-1 3 7 13\n4\n4\nyes\nmissing\n13\nno\n4\nok\nno\n4\nok\ndup\nyes\nok\ndup\nno\nno\nno\nno\nok\ndup\ndup\nok\n6\nok\n6\nok\ndup\n13\nmissing\n13\n13\nmissing\nmissing\nok\nno\ndup\nok\nok\nyes\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete 2\ncontains 7\ninorder\ndelete 6\ninsert 15\ndelete -7\ninsert 5\ninsert 6\ninsert -3\ninsert 12\ninsert -3\ncontains 13\ninsert 15\ndelete 4\ndelete -1\ndelete -3\ninsert -9\ninsert 5\nheight\nmin\ninsert -8\ninsert 7\nheight\ndelete -8\ninsert 6\ninsert 6\ncontains -2\ninsert -11\ninsert 7\ninsert -9\ncontains -1\nheight\ncontains 14\ninsert -9\ncontains -15\ninsert -14\ninsert 10\nheight\ndelete 0\ncontains -1\ninsert 1\ncontains -6\ndelete 11\nmax\ninsert 1\ninsert 3\nheight\ninorder\ndelete 6\ndelete 5\ndelete 12\ninsert -12\n",
+  "stdout": "missing\nno\n<empty>\nmissing\nok\nmissing\nok\nok\nok\nok\ndup\nno\ndup\nmissing\nmissing\nok\nok\ndup\n4\n-9\nok\nok\n5\nok\ndup\ndup\nno\nok\ndup\ndup\nno\n5\nno\ndup\nno\nok\nok\n6\nmissing\nno\nok\nno\nmissing\n15\ndup\nok\n6\n-14 -11 -9 1 3 5 6 7 10 12 15\nok\nok\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 7\ncontains -5\nmax\nmin\nheight\nheight\nmin\nheight\ninsert 4\nheight\ninsert -7\ncontains -15\ncontains 13\ncontains -9\ninsert -9\ncontains -3\ndelete 4\nmin\ninsert 9\nmin\ninorder\ninsert 2\ncontains -5\nmin\ninorder\ndelete -5\ncontains 4\ninorder\ncontains 3\nheight\ninsert 7\ninorder\ninsert 12\ninsert -8\nmax\ninsert -2\ninsert -12\ndelete 15\ninsert 8\ndelete -5\ninsert -8\ninsert -2\ninsert 12\nheight\ninsert -8\nmin\ninsert -11\ninsert -14\ndelete 5\ncontains 14\nmin\ncontains -12\ncontains 11\nmin\ninorder\ninsert -11\ninorder\ninsert 1\n",
+  "stdout": "ok\nno\n7\n7\n1\n1\n7\n1\nok\n2\nok\nno\nno\nno\nok\nno\nok\n-9\nok\n-9\n-9 -7 7 9\nok\nno\n-9\n-9 -7 2 7 9\nmissing\nno\n-9 -7 2 7 9\nno\n3\ndup\n-9 -7 2 7 9\nok\nok\n12\nok\nok\nmissing\nok\nmissing\ndup\ndup\ndup\n4\ndup\n-12\nok\nok\nmissing\nno\n-14\nyes\nno\n-14\n-14 -12 -11 -9 -8 -7 -2 2 7 8 9 12\ndup\n-14 -12 -11 -9 -8 -7 -2 2 7 8 9 12\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "height\nmax\ninsert 3\ncontains -6\ninsert 14\nheight\nheight\ndelete 12\ninsert 6\ninsert 6\nheight\ninsert -11\ndelete -12\ninsert -14\nmax\ninsert 7\nmax\ndelete 4\ninsert -2\nmax\ninorder\nmin\ndelete -12\ncontains 5\nmax\nmax\nmin\nmax\nmax\nheight\ninsert -13\ninsert 14\nmin\ninsert -12\ninorder\ninsert 2\nmax\ndelete 5\ninsert 15\ninsert 2\ninorder\ninsert 14\nheight\ninsert 10\nheight\n",
+  "stdout": "0\nempty\nok\nno\nok\n2\n2\nmissing\nok\ndup\n3\nok\nmissing\nok\n14\nok\n14\nmissing\nok\n14\n-14 -11 -2 3 6 7 14\n-14\nmissing\nno\n14\n14\n-14\n14\n14\n4\nok\ndup\n-14\nok\n-14 -13 -12 -11 -2 3 6 7 14\nok\n14\nmissing\nok\ndup\n-14 -13 -12 -11 -2 2 3 6 7 14 15\ndup\n5\nok\n5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete -2\ninsert -6\ncontains 0\ninorder\ncontains 10\ninsert 7\nheight\ninsert 6\ncontains -15\ninsert -1\nheight\ncontains 7\ninsert -9\ninsert 9\ninsert -8\nheight\ndelete -15\ninsert 14\ncontains 2\ndelete 1\ninsert 12\ncontains -4\ndelete 7\ninsert -10\nmin\ndelete 12\nmin\n",
+  "stdout": "missing\nok\nno\n-6\nno\nok\n2\nok\nno\nok\n4\nyes\nok\nok\nok\n4\nmissing\nok\nno\nmissing\nok\nno\nok\nok\n-10\nok\n-10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 10\ninorder\nmin\ndelete -6\ncontains -7\ninsert -7\nmax\ninsert 1\ninsert -13\ninsert 3\ninsert 8\ninorder\ninsert 6\nmin\ndelete -3\ncontains 12\nmax\ndelete 11\ninsert -8\ninsert 14\ninsert 8\ninsert 10\ndelete -4\ninsert 11\ninsert 5\n",
+  "stdout": "ok\n10\n10\nmissing\nno\nok\n10\nok\nok\nok\nok\n-13 -7 1 3 8 10\nok\n-13\nmissing\nno\n10\nmissing\nok\nok\ndup\ndup\nmissing\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert -15\ninsert 14\ninsert -9\ncontains 8\ninsert -15\nmin\ncontains 10\ninsert -10\ninsert -12\ninsert 9\ninsert 5\nmin\nmin\nmin\ninsert -15\ninsert -7\ninsert -1\ndelete -5\ndelete -14\nmax\ninsert 1\ninsert -3\ninsert -3\ncontains 3\nmin\ninsert -11\ncontains 5\nmax\ninsert -4\ninsert -4\ninsert -9\ninsert -6\nmax\ndelete -2\ncontains 6\ninsert -11\ndelete -14\ncontains 4\nmin\ninsert 5\ndelete 6\ncontains -1\ncontains -12\ndelete -1\ncontains 9\nmax\ninorder\ninsert 3\ninsert -12\ninsert -1\nmax\ninorder\ninsert -14\nmin\ninsert -4\ninsert -9\ndelete 1\ninsert -11\ndelete -4\ninsert 13\n",
+  "stdout": "ok\nok\nok\nno\ndup\n-15\nno\nok\nok\nok\nok\n-15\n-15\n-15\ndup\nok\nok\nmissing\nmissing\n14\nok\nok\ndup\nno\n-15\nok\nyes\n14\nok\ndup\ndup\nok\n14\nmissing\nno\ndup\nmissing\nno\n-15\ndup\nmissing\nyes\nyes\nok\nyes\n14\n-15 -12 -11 -10 -9 -7 -6 -4 -3 1 5 9 14\nok\ndup\nok\n14\n-15 -12 -11 -10 -9 -7 -6 -4 -3 -1 1 3 5 9 14\nok\n-15\ndup\ndup\nok\ndup\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "contains -10\nheight\nmin\ninsert 11\ncontains -2\ndelete 4\ndelete -14\ndelete 8\ninsert 12\nheight\nmax\ninsert -6\ninsert 7\ndelete -10\ninsert -14\ninsert -13\ninsert 4\nheight\nmin\ninsert 2\ncontains 0\ncontains -8\ninsert -13\ninsert -3\ninsert 11\nheight\nmax\ninsert 4\ninsert 7\ninsert 15\ninsert -15\nmin\ndelete 14\ninsert 9\ninsert -5\ninsert -11\ninsert 0\ninsert 8\ncontains 4\nmin\ndelete 0\n",
+  "stdout": "no\n0\nempty\nok\nno\nmissing\nmissing\nmissing\nok\n2\n12\nok\nok\nmissing\nok\nok\nok\n4\n-14\nok\nno\nno\ndup\nok\ndup\n6\n12\ndup\ndup\nok\nok\n-15\nmissing\nok\nok\nok\nok\nok\nyes\n-15\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "inorder\ninorder\ninsert 11\ninsert -1\ninsert -13\ninsert 4\nmin\ninsert -4\ndelete 2\ninsert 8\ncontains 2\ncontains 12\ndelete 13\ninsert -2\nmin\nmin\ninsert 5\ninsert 0\ncontains -15\ncontains -9\ninorder\ncontains 0\ninsert 15\ncontains 5\ninsert 9\nmin\ninsert 3\nmax\ninsert 12\nheight\nmax\nheight\ndelete 7\ninsert -1\ndelete 9\nheight\nheight\ninsert 8\ndelete 6\ndelete -15\ninsert 11\nheight\ninsert -1\nmax\ninsert 14\ncontains -7\ninsert 12\ninsert -1\nmin\ninsert 13\ninsert 9\ninsert 8\ncontains 5\ninsert 4\ncontains 13\n",
+  "stdout": "<empty>\n<empty>\nok\nok\nok\nok\n-13\nok\nmissing\nok\nno\nno\nmissing\nok\n-13\n-13\nok\nok\nno\nno\n-13 -4 -2 -1 0 4 5 8 11\nyes\nok\nyes\nok\n-13\nok\n15\nok\n5\n15\n5\nmissing\ndup\nok\n5\n5\ndup\nmissing\nmissing\ndup\n5\ndup\n15\nok\nno\ndup\ndup\n-13\nok\nok\ndup\nyes\ndup\nyes\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete 1\ncontains 12\nmax\ninorder\ninsert -2\ninorder\ninsert -2\nmax\ninorder\ninorder\ninsert 3\ndelete -13\ninorder\ndelete 3\ninsert -3\ninsert -8\ndelete -4\ncontains 1\ninsert 7\nmax\ncontains 0\ninsert 6\nmax\ninsert 2\ninsert 5\ncontains 12\nmax\ndelete -5\ninsert 2\ncontains 14\ncontains 2\ninsert -14\ncontains 14\ninsert -4\ndelete -14\ndelete -3\ninsert 9\ninsert -9\ninorder\nmax\ndelete 5\ninsert -13\ninsert -8\ninsert -2\ndelete -14\ncontains -12\ninsert 14\n",
+  "stdout": "missing\nno\nempty\n<empty>\nok\n-2\ndup\n-2\n-2\n-2\nok\nmissing\n-2 3\nok\nok\nok\nmissing\nno\nok\n7\nno\nok\n7\nok\nok\nno\n7\nmissing\ndup\nno\nyes\nok\nno\nok\nok\nok\nok\nok\n-9 -8 -4 -2 2 5 6 7 9\n9\nok\nok\ndup\ndup\nmissing\nno\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert -5\ncontains -2\ncontains 7\ninsert 15\ninsert -11\ninorder\nheight\ninorder\ninsert 12\ninsert -15\ninsert -9\ninsert -3\ninsert 0\ndelete 14\ninsert 0\ndelete -15\ninsert -7\ninorder\ninsert -5\ncontains 1\nmax\ninsert -7\ninorder\nmin\ninsert -2\ninsert 0\nmax\nheight\ninsert 11\n",
+  "stdout": "ok\nno\nno\nok\nok\n-11 -5 15\n2\n-11 -5 15\nok\nok\nok\nok\nok\nmissing\ndup\nok\nok\n-11 -9 -7 -5 -3 0 12 15\ndup\nno\n15\ndup\n-11 -9 -7 -5 -3 0 12 15\n-11\nok\ndup\n15\n6\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "contains 6\nheight\ninsert 1\ninsert -11\ninsert 7\ninsert -2\ndelete -4\ndelete 13\ncontains -13\ninorder\nheight\nmin\ncontains 0\nheight\nmin\ncontains -8\ninsert 11\ninsert -11\nmax\ndelete -12\ninsert 8\ninsert 9\nmax\ndelete 4\ninsert 11\ninsert -9\ninsert 15\ninsert 4\nmin\ndelete 1\nmin\nmax\ninsert 6\ninsert 11\nheight\ndelete -7\ndelete 10\ninsert -15\ninsert -14\ncontains 10\ninorder\ndelete -12\ndelete 9\ncontains 6\ndelete 14\ncontains 14\ncontains 15\ndelete -4\ninsert 9\ndelete -15\n",
+  "stdout": "no\n0\nok\nok\nok\nok\nmissing\nmissing\nno\n-11 -2 1 7\n3\n-11\nno\n3\n-11\nno\nok\ndup\n11\nmissing\nok\nok\n11\nmissing\ndup\nok\nok\nok\n-11\nok\n-11\n15\nok\ndup\n5\nmissing\nmissing\nok\nok\nno\n-15 -14 -11 -9 -2 4 6 7 8 9 11 15\nmissing\nok\nyes\nmissing\nno\nyes\nmissing\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 7\ninsert -3\ninsert -3\nmin\ninsert -15\nmin\ninsert -1\nmin\ninsert 1\ndelete 4\ninsert 8\ninsert -9\nheight\ncontains 5\ninorder\nheight\ncontains 10\ninsert -15\ndelete -9\ninsert 1\ncontains 12\ncontains -13\ninsert -9\nheight\ndelete 13\ninsert 9\nmin\ndelete 4\ncontains -1\ninsert -11\ncontains -2\ndelete -4\ninsert 5\ninsert -10\nmax\ninsert -14\nheight\ninsert -9\ninsert -10\nheight\ninorder\nmin\ndelete -5\nmax\ndelete -8\ninorder\ndelete -10\ncontains 8\ndelete -11\ndelete -1\ndelete -10\ndelete -12\ncontains -9\ninorder\ninsert 1\n",
+  "stdout": "ok\nok\ndup\n-3\nok\n-15\nok\n-15\nok\nmissing\nok\nok\n4\nno\n-15 -9 -3 -1 1 7 8\n4\nno\ndup\nok\ndup\nno\nno\nok\n4\nmissing\nok\n-15\nmissing\nyes\nok\nno\nmissing\nok\nok\n9\nok\n6\ndup\ndup\n6\n-15 -14 -11 -10 -9 -3 -1 1 5 7 8 9\n-15\nmissing\n9\nmissing\n-15 -14 -11 -10 -9 -3 -1 1 5 7 8 9\nok\nyes\nok\nok\nmissing\nmissing\nyes\n-15 -14 -9 -3 1 5 7 8 9\ndup\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert -1\nmin\ninsert -9\nmin\ninsert 1\ndelete 11\ninsert -5\nheight\ncontains -11\nheight\ninorder\ncontains -12\ninsert -2\ninsert 13\ninsert 12\ncontains -10\ninorder\ninsert 7\ninsert 6\nmax\ninsert 8\ninsert -12\ninsert -1\ndelete -6\ninorder\ninsert -3\nmin\nmin\ninsert 13\ninsert -5\nmax\nheight\ninsert -10\n",
+  "stdout": "ok\n-1\nok\n-9\nok\nmissing\nok\n3\nno\n3\n-9 -5 -1 1\nno\nok\nok\nok\nno\n-9 -5 -2 -1 1 12 13\nok\nok\n13\nok\nok\ndup\nmissing\n-12 -9 -5 -2 -1 1 6 7 8 12 13\nok\n-12\n-12\ndup\ndup\n13\n6\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert -7\ninsert -12\ninsert -4\nmax\nmax\ninorder\ninsert 9\ncontains -6\ndelete 12\ndelete 7\ninorder\ncontains 15\nheight\nmax\ncontains 5\ncontains -5\nmin\ninsert -14\ninsert 2\ncontains -9\ninsert -6\ninsert -11\ninsert -2\ninsert -5\nmin\ninsert 3\ndelete 8\nmax\ninorder\nmin\ninsert -11\nmax\ninsert -9\nmin\ninsert -1\ncontains -8\ndelete 7\nmin\nmax\ninsert 6\ncontains 5\ncontains -9\nheight\ninsert 4\ninsert -2\ninorder\ncontains 11\ncontains 9\ninsert 10\nheight\nheight\ndelete -8\ndelete 10\ninsert -6\ninsert -2\ndelete 9\ninsert -10\ncontains -3\n",
+  "stdout": "ok\nok\nok\n-4\n-4\n-12 -7 -4\nok\nno\nmissing\nmissing\n-12 -7 -4 9\nno\n3\n9\nno\nno\n-12\nok\nok\nno\nok\nok\nok\nok\n-14\nok\nmissing\n9\n-14 -12 -11 -7 -6 -5 -4 -2 2 3 9\n-14\ndup\n9\nok\n-14\nok\nno\nmissing\n-14\n9\nok\nno\nyes\n6\nok\ndup\n-14 -12 -11 -9 -7 -6 -5 -4 -2 -1 2 3 4 6 9\nno\nyes\nok\n7\n7\nmissing\nok\ndup\ndup\nok\nok\nno\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "height\ninsert 9\ndelete -12\nmin\ndelete -6\ninsert 12\ncontains 2\nmax\ncontains 0\nmin\nmin\nmin\ninsert -2\ncontains -15\ndelete -2\ninsert 3\nheight\nmax\ncontains -2\nmin\ninsert 2\ncontains -5\nmax\ninsert 1\ninsert 7\ninsert -9\ninsert 11\ninsert 9\ninorder\ninorder\ndelete -15\ncontains 10\nmin\ninsert -4\nheight\nheight\nmax\ninsert 4\nmax\ninorder\ncontains 6\ninsert 13\ncontains 11\ninsert -11\ninsert -11\ninsert 3\ninsert 7\nheight\ninsert -10\ncontains -3\ndelete -6\ncontains -9\ninorder\nmin\ncontains -15\ncontains -5\ninsert -10\ninsert -6\ninsert 13\n",
+  "stdout": "0\nok\nmissing\n9\nmissing\nok\nno\n12\nno\n9\n9\n9\nok\nno\nok\nok\n2\n12\nno\n3\nok\nno\n12\nok\nok\nok\nok\ndup\n-9 1 2 3 7 9 11 12\n-9 1 2 3 7 9 11 12\nmissing\nno\n-9\nok\n6\n6\n12\nok\n12\n-9 -4 1 2 3 4 7 9 11 12\nno\nok\nyes\nok\ndup\ndup\ndup\n6\nok\nno\nmissing\nyes\n-11 -10 -9 -4 1 2 3 4 7 9 11 12 13\n-11\nno\nno\ndup\nok\ndup\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "height\nmax\ndelete -1\ninsert 12\nmin\ndelete -6\nmin\ndelete -14\ncontains -13\ninsert 4\nheight\ninsert 6\ndelete -6\nheight\nmin\ninsert 9\ndelete -11\ninsert 7\ndelete -12\ninsert 0\n",
+  "stdout": "0\nempty\nmissing\nok\n12\nmissing\n12\nmissing\nno\nok\n2\nok\nmissing\n3\n4\nok\nmissing\nok\nmissing\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 14\ninsert 12\ninsert -15\ninsert -11\ninsert 8\nmin\ninsert 2\ninsert -9\ninsert -12\ninsert 8\ninsert 7\ninsert 4\nmin\ndelete -5\ninsert -2\ndelete 3\ndelete 6\nmin\ninsert 5\nmax\ninsert 1\ninsert 15\nheight\ninsert -12\ndelete 1\ninsert -3\ncontains 13\ncontains 5\ndelete 5\ninsert 7\ninsert -12\ninsert -11\ndelete -11\ninsert -6\ndelete 10\ninsert 11\ndelete -14\ncontains 6\nheight\ndelete 7\n",
+  "stdout": "ok\nok\nok\nok\nok\n-15\nok\nok\nok\ndup\nok\nok\n-15\nmissing\nok\nmissing\nmissing\n-15\nok\n14\nok\nok\n9\ndup\nok\nok\nno\nyes\nok\ndup\ndup\ndup\nok\nok\nmissing\nok\nmissing\nno\n9\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "contains -4\ninsert 5\ninsert 13\ndelete -15\ninsert -7\ndelete 1\nmin\nheight\ninsert 9\nmin\ninsert 2\nheight\ndelete -7\ninsert 6\ninsert 6\ninsert -4\ninsert 12\ncontains 8\ndelete 2\ninorder\ndelete -7\nmin\ncontains 6\nmax\nmin\ninsert 13\nmax\nheight\ninsert 7\nmax\ninsert 9\ninsert 6\ninsert -5\nmax\ncontains 0\ndelete -8\ninsert -10\n",
+  "stdout": "no\nok\nok\nmissing\nok\nmissing\n-7\n2\nok\n-7\nok\n3\nok\nok\ndup\nok\nok\nno\nok\n-4 5 6 9 12 13\nmissing\n-4\nyes\n13\n-4\ndup\n13\n4\nok\n13\ndup\ndup\nok\n13\nno\nmissing\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "contains 4\ndelete -4\nheight\nheight\ninsert -1\nheight\ninsert -7\ninsert -10\ninsert 10\nmin\ndelete -11\ncontains 14\ninsert 7\ninsert -10\ncontains -4\ninsert 9\ndelete -1\ndelete 4\ninsert -8\ninsert 12\ncontains 6\ninsert 15\nmin\ninorder\nmax\ndelete 2\ninsert -12\ninsert -2\nmin\ndelete -14\nmax\n",
+  "stdout": "no\nmissing\n0\n0\nok\n1\nok\nok\nok\n-10\nmissing\nno\nok\ndup\nno\nok\nok\nmissing\nok\nok\nno\nok\n-10\n-10 -8 -7 7 9 10 12 15\n15\nmissing\nok\nok\n-12\nmissing\n15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 2\ninsert 9\ncontains -14\nheight\ninsert 5\ninsert -11\ninsert 6\ninsert -6\ninorder\ncontains -12\ncontains 11\ninsert -8\nmax\nheight\nmin\ndelete 2\ndelete -4\ncontains 10\ninsert -9\ninsert 10\ncontains 14\ninsert 6\ndelete -2\nheight\ninsert -15\ncontains -7\ncontains -5\ninsert -8\n",
+  "stdout": "ok\nok\nno\n2\nok\nok\nok\nok\n-11 -6 2 5 6 9\nno\nno\nok\n9\n4\n-11\nok\nmissing\nno\nok\nok\nno\ndup\nmissing\n5\nok\nno\nno\ndup\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert -8\ncontains 3\ncontains 4\ninsert 10\ninsert -14\ninsert 4\ncontains 9\ninsert 3\ninsert 1\ninorder\ndelete 12\ninorder\ncontains -6\ninsert -2\ninorder\ninsert -4\ncontains -5\ninsert -11\nmin\ninsert 14\ninsert -9\ninsert -2\nheight\nmin\nmin\ndelete 15\ninsert 3\ninsert 9\ninorder\ndelete 4\n",
+  "stdout": "ok\nno\nno\nok\nok\nok\nno\nok\nok\n-14 -8 1 3 4 10\nmissing\n-14 -8 1 3 4 10\nno\nok\n-14 -8 -2 1 3 4 10\nok\nno\nok\n-14\nok\nok\ndup\n7\n-14\n-14\nmissing\ndup\nok\n-14 -11 -9 -8 -4 -2 1 3 4 9 10 14\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete -8\ncontains -3\ndelete -11\ninorder\ninsert 13\ninsert -9\ninsert -13\nmin\ninorder\ndelete -11\ndelete -2\nmax\nmax\ndelete -12\ninsert -10\ninsert -11\ncontains -12\ninsert 15\ninsert 4\ninsert -13\nmax\ninsert -4\ncontains -1\ndelete -7\ndelete 7\ninsert -9\ncontains -6\ninsert 3\ninorder\ninorder\nmax\ninorder\ninsert 14\ninsert -6\ninsert 4\ndelete -8\nmax\ninorder\nheight\ninsert 15\ninorder\ninsert 14\ninorder\ndelete -11\ninsert 7\ncontains -2\ncontains -2\ndelete 11\ninsert -6\ninsert -6\ninorder\ndelete -6\ninsert -3\ndelete -9\ndelete -2\n",
+  "stdout": "missing\nno\nmissing\n<empty>\nok\nok\nok\n-13\n-13 -9 13\nmissing\nmissing\n13\n13\nmissing\nok\nok\nno\nok\nok\ndup\n15\nok\nno\nmissing\nmissing\ndup\nno\nok\n-13 -11 -10 -9 -4 3 4 13 15\n-13 -11 -10 -9 -4 3 4 13 15\n15\n-13 -11 -10 -9 -4 3 4 13 15\nok\nok\ndup\nmissing\n15\n-13 -11 -10 -9 -6 -4 3 4 13 14 15\n5\ndup\n-13 -11 -10 -9 -6 -4 3 4 13 14 15\ndup\n-13 -11 -10 -9 -6 -4 3 4 13 14 15\nok\nok\nno\nno\nmissing\ndup\ndup\n-13 -10 -9 -6 -4 3 4 7 13 14 15\nok\nok\nok\nmissing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 0\ninsert 10\ndelete 9\ninsert -12\ninsert 9\nmin\ninorder\ncontains 12\ncontains 14\ninorder\ninsert -12\ninsert -9\ninsert -13\ninsert -5\nheight\ninsert -15\nmax\ninsert -14\nmax\ninsert 0\nmin\ninsert 1\ndelete 13\nheight\ninsert -7\nmax\ninorder\ninsert 14\ninsert -8\ncontains -15\nheight\ninsert -12\ncontains 8\ndelete 15\ncontains 7\ndelete -9\ninsert -12\ninorder\nheight\ninsert 11\ninsert -3\ninorder\nheight\ndelete -15\ninsert 5\ninsert 0\ninsert 14\ninsert 4\ninsert 3\ndelete 9\ninsert 2\ndelete 2\ncontains 6\n",
+  "stdout": "ok\nok\nmissing\nok\nok\n-12\n-12 0 9 10\nno\nno\n-12 0 9 10\ndup\nok\nok\nok\n4\nok\n10\nok\n10\ndup\n-15\nok\nmissing\n5\nok\n10\n-15 -14 -13 -12 -9 -7 -5 0 1 9 10\nok\nok\nyes\n6\ndup\nno\nmissing\nno\nok\ndup\n-15 -14 -13 -12 -8 -7 -5 0 1 9 10 14\n5\nok\nok\n-15 -14 -13 -12 -8 -7 -5 -3 0 1 9 10 11 14\n5\nok\nok\ndup\ndup\nok\nok\nok\nok\nok\nno\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "insert 5\ncontains -5\nheight\ninsert -9\ndelete -11\ninsert -1\nheight\ninsert 6\ninsert -8\ninsert 5\ninsert -1\ninsert 15\ninsert -1\ninorder\ndelete -2\ninsert -3\ndelete -11\ninsert 9\ncontains 8\ninsert -13\ninsert -8\ninsert 1\nmax\ninsert 4\ninsert 1\nmax\ninsert -10\ncontains 0\ninsert -1\ninsert 15\ninorder\ninsert -11\nmin\n",
+  "stdout": "ok\nno\n1\nok\nmissing\nok\n3\nok\nok\ndup\ndup\nok\ndup\n-9 -8 -1 5 6 15\nmissing\nok\nmissing\nok\nno\nok\ndup\nok\n15\nok\ndup\n15\nok\nno\ndup\ndup\n-13 -10 -9 -8 -3 -1 1 4 5 6 9 15\nok\n-13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "height\nheight\ninsert -11\ninsert -1\ninsert -5\ndelete 5\ninsert -13\ninsert -9\nmax\nheight\ninsert -15\ninsert 0\ncontains -11\ndelete -7\ninsert 9\ninsert -6\nmin\nmax\ninsert 15\ninsert 15\ninorder\nmin\ninsert -2\ninsert -11\ndelete 11\ndelete -13\ncontains 4\ninsert 2\nmin\ncontains 7\ninsert 12\ninorder\nheight\nheight\ncontains -8\ninsert -6\ndelete -10\ninsert -15\nmax\nheight\n",
+  "stdout": "0\n0\nok\nok\nok\nmissing\nok\nok\n-1\n4\nok\nok\nyes\nmissing\nok\nok\n-15\n9\nok\ndup\n-15 -13 -11 -9 -6 -5 -1 0 9 15\n-15\nok\ndup\nmissing\nok\nno\nok\n-15\nno\nok\n-15 -11 -9 -6 -5 -2 -1 0 2 9 12 15\n6\n6\nno\ndup\nmissing\ndup\n15\n6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "delete -12\ndelete 0\ncontains 3\ninorder\ninsert -6\ninsert -13\ninsert 2\ninsert -4\ndelete 13\ncontains -10\nmin\ninorder\ninorder\ninsert 11\ncontains 10\ndelete -8\ncontains -1\ninsert 8\nmax\nheight\ninorder\ndelete 6\ndelete 14\ninsert -8\ncontains -14\nmin\ninsert 2\nmax\ndelete 14\ncontains 0\ninsert -2\ninorder\ninsert 10\ninsert 13\n",
+  "stdout": "missing\nmissing\nno\n<empty>\nok\nok\nok\nok\nmissing\nno\n-13\n-13 -6 -4 2\n-13 -6 -4 2\nok\nno\nmissing\nno\nok\n11\n4\n-13 -6 -4 2 8 11\nmissing\nmissing\nok\nno\n-13\ndup\n11\nmissing\nno\nok\n-13 -8 -6 -4 -2 2 8 11\nok\nok\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "height\ncontains -11\ncontains -10\ninsert 2\ninsert -6\ninsert 13\ninsert 9\ninorder\ninsert -4\ninorder\ninorder\ncontains -4\ninsert -13\ninsert -6\ncontains -9\ninsert -12\ncontains 11\ninsert 10\nmax\ncontains 13\ninsert 15\ninsert 6\ninsert 9\ninsert 8\ninsert 9\ndelete -9\ninsert 5\nmin\nmax\ninsert -8\ninsert 9\ncontains 3\ninsert -9\nmin\ninsert -15\nmax\ninsert -14\ninsert -7\nmax\ncontains 1\n",
+  "stdout": "0\nno\nno\nok\nok\nok\nok\n-6 2 9 13\nok\n-6 -4 2 9 13\n-6 -4 2 9 13\nyes\nok\ndup\nno\nok\nno\nok\n13\nyes\nok\nok\ndup\nok\ndup\nmissing\nok\n-13\n15\nok\ndup\nno\nok\n-13\nok\n15\nok\nok\n15\nno\n"
+ }
+]

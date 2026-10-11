@@ -10,7 +10,7 @@ In: `Program` and analyzed functions. Out: warnings with locations and explanati
 - Never rejects a program; produces warnings only.
 
 ## Owns
-Lint rules and wording.
+Lint rules and wording; `codes.rs` is the W-code registry (source of the lint table in docs/reference/errors.md).
 
 ## Never decides
 Compilation success/failure.

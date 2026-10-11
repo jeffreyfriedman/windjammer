@@ -58,6 +58,7 @@ pub mod parser_recovery;
 pub mod rust_integration_tests;
 pub mod source_map; // Source map for error message translation
 pub mod source_map_cache; // Source map caching for performance
+pub mod embedded_assets;
 pub mod stdlib_scanner;
 pub mod syntax_highlighter;
 pub mod test_module_gate;

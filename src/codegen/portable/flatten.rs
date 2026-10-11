@@ -140,7 +140,14 @@ impl Flatten {
                 let mut v = self.stmt(*inner);
                 PStmt::Defer(Box::new(if v.len() == 1 { v.remove(0) } else { PStmt::Block(v) }))
             }
-            other @ (PStmt::Break | PStmt::Continue) => other,
+            PStmt::Labeled { label, stmt } => {
+                // Hoisted pre-statements stay outside; the label stays on the loop itself.
+                let mut inner = self.stmt(*stmt);
+                let last = inner.pop().expect("labeled statement lowers to at least one statement");
+                inner.push(PStmt::Labeled { label, stmt: Box::new(last) });
+                return inner;
+            }
+            other @ (PStmt::Break | PStmt::Continue | PStmt::BreakTo(_) | PStmt::ContinueTo(_)) => other,
         };
         pre.push(main);
         pre

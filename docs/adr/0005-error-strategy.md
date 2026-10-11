@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: 3406ef05bb35
+---
 # ADR-0005: Error strategy: front-end checking vs rustc translation
 
 - **Status:** Proposed

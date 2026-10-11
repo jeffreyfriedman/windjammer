@@ -3,9 +3,9 @@
 use std::http
 use std::log
 
-use ../auth/jwt
-use ../models/api_key
-use ../models/role
+use ../auth::jwt
+use ../models::api_key
+use ../models::role
 use ../config
 use ../db
 

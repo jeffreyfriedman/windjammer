@@ -1,0 +1,50 @@
+use std::fs
+use std::thread
+use std::thread::JoinHandle
+
+fn slice_i64(v: Vec<i64>, from: usize, to: usize) -> Vec<i64> {
+    let mut out: Vec<i64> = Vec::new()
+    let mut i = from
+    while i < to && i < v.len() {
+        out.push(v[i])
+        i += 1
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut nums: Vec<i64> = Vec::new()
+    for w in text.split_whitespace() {
+        nums.push(w.parse::<i64>().unwrap_or(0))
+    }
+    let workers = nums[0] as usize
+    let n = nums[1] as usize
+    let q = n / workers
+    let r = n % workers
+    let mut handles: Vec<JoinHandle<i64>> = Vec::new()
+    let mut pos: usize = 2
+    let mut i: usize = 0
+    while i < workers {
+        let len = if i < r { q + 1 } else { q }
+        let chunk: Vec<i64> = slice_i64(nums.clone(), pos, pos + len)
+        pos += len
+        handles.push(thread::spawn(move || {
+            let mut s: i64 = 0
+            for x in chunk {
+                s += x
+            }
+            return s
+        }))
+        i += 1
+    }
+    let mut total: i64 = 0
+    let mut idx: usize = 0
+    for h in handles {
+        let s = h.join().unwrap_or(0)
+        println("chunk ${idx}: ${s}")
+        total += s
+        idx += 1
+    }
+    println("total: ${total}")
+}

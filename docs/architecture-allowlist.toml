@@ -29,7 +29,6 @@
 "src/file_compiler.rs" = 1
 "src/interpreter/engine.rs" = 1
 "src/lib.rs" = 1
-"src/optimizer/quarantine/phase15_simd_vectorization.rs" = 1
 "src/parser_impl.rs" = 1
 "src/wjsl/diagnostics.rs" = 1
 "src/wjsl/lexer.rs" = 2
@@ -55,6 +54,7 @@
 "analyzer->ir src/analyzer/usage_tracking/storage_tracking.rs" = 6
 "analyzer->metadata src/analyzer/signature_registry.rs" = 1
 "auto_clone->codegen src/auto_clone.rs" = 3
+"auto_clone_tests->test_utils src/auto_clone_tests.rs" = 1
 "codegen->compiler src/codegen/portable/tests.rs" = 3
 "codegen->compiler src/codegen/rust/collection_detection.rs" = 1
 "codegen->compiler src/codegen/rust/function_generation_prepare.rs" = 3
@@ -107,7 +107,7 @@
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2357
-"src/analyzer/signature_registry.rs" = 2533
+"src/analyzer/signature_registry.rs" = 2531
 "src/analyzer/string_optimization.rs" = 2179
 "src/auto_clone.rs" = 2225
 "src/codegen/rust/call_signature_resolution.rs" = 3339
@@ -123,7 +123,7 @@
 "src/codegen/rust/stdlib_method_traits.rs" = 2483
 "src/codegen/rust/string_utilities.rs" = 2093
 "src/compiler/multipass_bare_pass_demotion.rs" = 4676
-"src/stdlib_scanner.rs" = 2161
+"src/stdlib_scanner.rs" = 2156
 
 [long_functions]
 "src/analyzer/function_analysis.rs::analyze_function" = 682
@@ -134,7 +134,7 @@
 "src/auto_clone.rs::collect_usages_from_expression" = 394
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 504
 "src/build_utils/nested_module_structure.rs::generate_nested_module_structure" = 348
-"src/cargo_integration.rs::create_cargo_toml_with_deps" = 489
+"src/cargo_integration.rs::create_cargo_toml_with_deps" = 476
 "src/cli_project_build.rs::build_project_single_crate" = 456
 "src/codegen/rust/assignment_statement_generation.rs::generate_assignment_statement" = 647
 "src/codegen/rust/binary_expression_generation.rs::generate_binary_expression" = 1229

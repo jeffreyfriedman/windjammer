@@ -1,0 +1,44 @@
+use std::fs
+use std::collections::HashMap
+
+fn sorted_key(w: string) -> string {
+    let mut cs: Vec<char> = w.chars().collect()
+    cs.sort()
+    let mut out = ""
+    for c in cs {
+        out = out + c.to_string()
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut groups: HashMap<string, Vec<string>> = HashMap::new()
+    for w in text.split_whitespace() {
+        let lw = w.to_lowercase()
+        let key = sorted_key(lw.clone())
+        let known = match groups.get(key) {
+            Some(l) => l.contains(lw.clone()),
+            None => false,
+        }
+        if !known {
+            groups.entry(key).or_insert(Vec::new()).push(lw)
+        }
+    }
+    let mut lines: Vec<string> = Vec::new()
+    for (k, v) in groups {
+        if v.len() >= 2 {
+            let mut ws = v.clone()
+            ws.sort()
+            lines.push(ws.join(" "))
+        }
+    }
+    lines.sort()
+    if lines.len() == 0 {
+        println("none")
+    } else {
+        for l in lines {
+            println(l)
+        }
+    }
+}

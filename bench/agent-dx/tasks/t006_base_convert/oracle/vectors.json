@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "255 10 16\n",
+  "stdout": "FF\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1010 2 10\nZZ 36 2\n0 7 3\n",
+  "stdout": "10\n10100001111\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9223372036854775807 10 2\n1Y2P0IJ32E8E7 36 10\n0 2 2\n1 36 2\n",
+  "stdout": "111111111111111111111111111111111111111111111111111111111111111\n9223372036854775807\n0\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "55 18 33\n26E296792C3AEF8A 16 30\n",
+  "stdout": "2T\n5854KL2PO7B1O\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "535JC8081LHN6A 25 12\n67 13 3\nT 35 22\n33 21 3\n",
+  "stdout": "354100A639152A7B36\n10011\n17\n2110\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "GL015HGD0327L 30 22\n1223541134525002045345505 6 30\n",
+  "stdout": "1988H895JG99AD9\nCGBQE01OJPG1B\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "21 21 22\n38778778523866411474 9 28\n152 6 31\n3C 14 30\n4GGR1KA2M60K8 29 31\nC 33 18\n11 24 14\n",
+  "stdout": "1L\nN57RBORNBMQH6\n26\n1O\n21KHHKHP3D393\nC\n1B\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7 10 36\n1000001 2 15\n3N 24 9\n20 29 13\n",
+  "stdout": "7\n45\n115\n46\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8 10 16\n29 18 2\n136077863204340B8B 12 20\n3709B64ABC0A8986 16 32\n2774824877202630725 10 19\n19C333JL79KKDD7 22 33\n17 24 16\n",
+  "stdout": "8\n101101\n1EJGDJ287F6FF57\n3E2DM9AU0L2C6\n38ID4779514I3B8\n5BI4VHVPBFFR7\n1F\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12AE10JD51G1FE1 21 36\n",
+  "stdout": "RL7O3ZV95S3P\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "518AIJ21FJ29123 20 16\n27 30 5\n1200 4 18\n23 8 36\n",
+  "stdout": "734F3FE79B8768FB\n232\n56\nJ\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2A9AA02B9B3689259 14 22\n3 29 5\n43C3EBDF2CCBFHH 18 5\n131 6 36\n4 24 2\n1050EAA6C729623EE 15 3\n",
+  "stdout": "L66H1D7FH1L2FL\n3\n101204344220134433240404341\n1J\n100\n1122202011112211220220110220002100011022\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "22 33 24\n8337055549087724121 10 3\nCEACF053F48E27D 16 23\n3M 23 36\n1B 29 23\n1F 31 9\nC2HSD7MF41XV 35 3\n",
+  "stdout": "2K\n2001112201112122221200102021121202111200\n1JAK75C02MG88B\n2J\n1H\n51\n21202122210220002201120000020210010101\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "95EEAIF66H6B323 19 21\n37 22 21\n1LSO28SO6KUBK 31 30\n",
+  "stdout": "262D44BJ4FII2GJ\n3A\n2FRE8G3433H1D\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "N 30 33\n321 4 4\n146 7 3\n2JA9A7G618IHN1 25 12\n646100670373023542744 8 4\n31 26 36\n1001221102200201122201022102111112111001 3 19\n",
+  "stdout": "N\n321\n10002\n1A4663804819143243\n12212020012320133120103230113210\n27\n585CI5B3F1FBFG5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "CNEAT5CP7J93O 30 21\n220 3 19\n8 12 19\n66 15 23\n3E711828F0A30CF5 16 4\n",
+  "stdout": "21KAGI51I03G5G3\n15\n8\n44\n3321301012002203300220300303311\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "10 10 8\n",
+  "stdout": "12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1X 34 3\n19 19 22\n133 7 23\n38 23 15\n",
+  "stdout": "2111\n16\n34\n52\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "AB4B8792BB77A39A1 12 34\n2L 29 24\nRNHJ8BO7WLFA 34 20\n883837A3B80814A42 13 4\n",
+  "stdout": "SSQMQM2OLH4L\n37\n13EA93CG2166258\n10333001330013220201221022120322\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1141223535524015152320151 6 5\n",
+  "stdout": "402022033304440410100001324\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8 18 31\n11 31 29\n5D10GGDG339DCHB 18 33\n",
+  "stdout": "8\n13\n19F5609RKLCNH\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "163 7 19\n45 6 29\n3A 19 23\n712B8FHEB1621F0 19 25\n51 7 29\n1531352044401223050124315 6 4\n26 22 3\n10022 3 27\n",
+  "stdout": "4I\n10\n2L\n3JFNI34FG7FF93\n17\n13322021320101023020232132013113\n1212\n38\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "156 7 11\n34 14 6\nA42FT9D4E5WJ 35 28\nUMKG3G6JQHH 32 15\n46 7 17\n9A7U306QFS4L 35 26\n8V22S4IMLD8F 33 32\n54H57RRB1PJ2K 29 20\n",
+  "stdout": "82\n114\n45LER16NMHB0C\n12B70D90CAEC0B9\n20\n9AB5FLO9FKONP\nCHC44NAPBK4C\n125BCH48E2FAJ62\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 30 19\n",
+  "stdout": "1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "19 35 13\n18AK911EDI1H5G8 22 7\n1U 36 36\n3F 25 8\n210 5 9\n1GT1TK1HGKA0R 35 14\n49 19 36\n",
+  "stdout": "35\n21304300312051002452152\n1U\n132\n61\n2424A14B3800B731D\n2D\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4B 12 17\nC65G0KM6HHFCC 23 16\nHWZES5CR85NN 36 22\n3A3A83492015111885 12 8\n1001210001111201000020022220220201222220 3 19\n2 14 33\n",
+  "stdout": "38\n3BB6CEE71E1108E\n879GAH9K339H3L\n733335153006714534245\n57DD17GBH58D18G\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "J 29 22\nJ 28 13\n120054111130454351243125 6 7\n70 14 28\n29QCGLKCK5G79 30 9\n",
+  "stdout": "J\n16\n1614521063311234122533\n3E\n8220420414327525413\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3A 16 23\n81 9 14\n8E47FNE71EEI6L 24 22\nN 30 23\n2K 27 12\n75B80FE17D99A1B8 16 24\n4F8C82IB4D91DBH 19 10\n",
+  "stdout": "2C\n53\n14DG8LG0LAK917F\n10\n62\n9G6ANH0352INL0\n3845975907188439596\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "233A056H3II92DD 20 21\n",
+  "stdout": "11IH8GHC5J5B54E\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2BKJ79FI66GB9EI 21 32\n54078464655221727275 9 35\n",
+  "stdout": "77G7HOVNIJH45\n26BG9Y5DDWPDI\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "234 6 9\n28AAKA0NGKTFP 35 19\n2454542050025221060145 7 35\n",
+  "stdout": "114\n98E6DDHAB45H339\nFJ5DT57KU8GC\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1F2018941ECB4C46 16 5\nA6KRB1PSCAL1S 31 10\n1 28 7\n71 9 36\n42NVSJKIVLE16 33 7\n17D2A706F8AFA9F 21 34\n1012 4 13\n1597140090615084A26 11 29\n",
+  "stdout": "122303231323430412112421004\n8046194567116515350\n1\n1S\n15122404111342312616631\n1SXV5PCVISK80\n55\nO35DKLP20LOHH\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "15HJCPMB310606 27 9\n121 3 36\n48 13 22\n1100 2 17\nC86LFRFCACQCA 30 9\n11201111210200012003113132200231 4 23\nF 30 34\n10111111123031202222200131323033 4 7\n",
+  "stdout": "35581427742101006006\nG\n2G\nC\n47411607420166416141\nCEA96H7082CF25\nF\n11642012500065203540013\n"
+ }
+]

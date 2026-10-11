@@ -144,16 +144,26 @@ pub(crate) fn assign_module_names(paths: &[PathBuf], root: &Path) -> Vec<String>
         .map(|p| {
             let s = stem(p);
             if counts[&s] == 1 {
-                return s;
+                return reserve_module_name(s);
             }
             let rel = p.strip_prefix(root).unwrap_or(p).with_extension("");
             let joined: Vec<String> = rel
                 .components()
                 .map(|c| c.as_os_str().to_string_lossy().to_string())
                 .collect();
-            sanitize_ident(&joined.join("__"))
+            reserve_module_name(sanitize_ident(&joined.join("__")))
         })
         .collect()
+}
+
+/// The harness crate root is `lib.rs`; a test file named `lib.wj` (the `lib` template's
+/// own source) would emit `lib.rs` over it and `pub mod lib;` ("circular modules").
+/// Rust path keywords cannot be module names either.
+fn reserve_module_name(name: String) -> String {
+    match name.as_str() {
+        "lib" | "self" | "super" | "crate" | "mod" => format!("wj_{name}"),
+        _ => name,
+    }
 }
 
 fn sanitize_ident(raw: &str) -> String {
@@ -187,6 +197,13 @@ mod tests {
         ];
         let names = assign_module_names(&paths, root);
         assert_eq!(names, vec!["a__util_test", "b__util_test", "solo_test"]);
+    }
+
+    #[test]
+    fn lib_wj_gets_a_module_name_that_cannot_clobber_the_harness_root() {
+        let root = Path::new("/p");
+        let names = assign_module_names(&[root.join("src/lib.wj"), root.join("src/mod.wj")], root);
+        assert_eq!(names, vec!["wj_lib", "wj_mod"]);
     }
 
     #[test]

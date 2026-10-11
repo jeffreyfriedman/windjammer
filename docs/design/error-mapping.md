@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 203e43d114c9
+---
 # Error Mapping System Design
 
 ## Problem Statement
@@ -218,9 +222,9 @@ Explanation: The compiler inferred this as immutable. Use 'let mut' to make it m
 - [ ] Create lookup utility
 
 **Files to Modify**:
-- `src/parser.rs` - Add source locations to AST
-- `src/codegen.rs` - Track line mappings
-- Create `src/source_map.rs`
+- the parser (`src/parser/`) - add source locations to AST
+- the Rust code generator (`src/codegen/rust/`) - track line mappings
+- create a source-map module
 
 ### Phase 2: Error Interception
 - [ ] Capture `cargo build` JSON output
@@ -229,8 +233,8 @@ Explanation: The compiler inferred this as immutable. Use 'let mut' to make it m
 - [ ] Basic error translation
 
 **Files to Create**:
-- `src/error_translator.rs`
-- Update `src/main.rs` to use error translator
+- the error translator (implemented as `src/error_mapper.rs`)
+- update the CLI to use the error translator
 
 ### Phase 3: Error Translation
 - [ ] Build Rust→Windjammer terminology dictionary

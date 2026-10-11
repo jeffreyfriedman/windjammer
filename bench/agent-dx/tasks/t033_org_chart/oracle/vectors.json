@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nann - 300\nbob ann 200\ncat bob 100\ndan cat 90\neve zed 50\ncat\ndan\n",
+  "stdout": "300\n200\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nann - 300\nbob ann 200\ncat bob 100\ndan cat 90\neve zed 50\nann\nbob\nnobody\n",
+  "stdout": "none: no manager ann\nnone: no skip-level ann\nnone: unknown nobody\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "0\nx\n",
+  "stdout": "none: unknown x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nann - 300\nbob ann 200\ncat bob 100\ndan cat 90\neve zed 50\neve\ndan\ncat\nbob\nann\n",
+  "stdout": "none: unknown zed\n200\n300\nnone: no skip-level ann\nnone: no manager ann\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\na - -5\nb a 0\nc b 7\nc\nb\na\n",
+  "stdout": "-5\nnone: no skip-level a\nnone: no manager a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 901\np1 p0 398\np2 p0 297\np3 - 36\np4 p0 370\np5 p0 252\np6 p0 626\np7 p6 519\np5\np5\np2\n",
+  "stdout": "none: no skip-level p0\nnone: no skip-level p0\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 365\np1 p0 864\np2 - 634\np3 p1 201\np4 p1 326\np5 p0 908\np6 p0 41\np7 - 643\np6\np3\np2\np6\nnobody\n",
+  "stdout": "none: no skip-level p0\n365\nnone: no manager p2\nnone: no skip-level p0\nnone: unknown nobody\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 860\np1 p0 -37\np2 p0 609\np3 - 613\np4 p2 735\np5 p4 857\np6 p0 978\np7 p3 717\np4\np3\np3\np7\np7\np2\n",
+  "stdout": "860\nnone: no manager p3\nnone: no manager p3\nnone: no skip-level p3\nnone: no skip-level p3\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 535\np1 - 292\np2 - 708\np3 - 30\np4 p2 831\np5 p1 682\np6 p3 671\np7 p0 621\np3\np4\np1\np5\n",
+  "stdout": "none: no manager p3\nnone: no skip-level p2\nnone: no manager p1\nnone: no skip-level p1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 746\np1 - 74\np2 p0 562\np3 p0 90\np4 p3 821\np5 p0 238\np6 p3 868\np7 - -4\np4\n",
+  "stdout": "746\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 809\np1 - 41\np2 p1 921\np3 p0 739\np4 p3 803\np5 p2 399\np6 p0 215\np7 p1 -94\np3\np5\nnobody\np3\n",
+  "stdout": "none: no skip-level p0\n41\nnone: unknown nobody\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 425\np1 p0 230\np2 p0 121\np3 p2 982\np4 p1 981\np5 p2 -47\np6 p5 260\np7 p5 447\np5\np4\np3\np0\np7\np4\np7\n",
+  "stdout": "425\n425\n425\nnone: no manager p0\n121\n425\n121\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 376\np1 - 229\np2 p0 280\np3 p1 926\np4 p0 81\np5 - 240\np6 p5 762\np7 p0 195\np3\np5\n",
+  "stdout": "none: no skip-level p1\nnone: no manager p5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 33\np1 p0 258\np2 p0 44\np3 p0 266\np4 p0 776\np5 p2 303\np6 p1 904\np7 p2 427\np7\np7\np5\np2\np0\nnobody\np0\n",
+  "stdout": "33\n33\n33\nnone: no skip-level p0\nnone: no manager p0\nnone: unknown nobody\nnone: no manager p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 279\np1 p0 246\np2 - -92\np3 - 596\np4 p0 581\np5 - 246\np6 p4 252\np7 p2 977\np5\n",
+  "stdout": "none: no manager p5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 880\np1 - 522\np2 p1 48\np3 - 124\np4 p2 947\np5 p0 -48\np6 p5 641\np7 p6 60\np5\np0\n",
+  "stdout": "none: no skip-level p0\nnone: no manager p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 827\np1 p0 918\np2 - 59\np3 p1 97\np4 p3 60\np5 p2 719\np6 p4 314\np7 p4 53\np1\np1\np4\np7\np1\np2\np6\np5\n",
+  "stdout": "none: no skip-level p0\nnone: no skip-level p0\n918\n97\nnone: no skip-level p0\nnone: no manager p2\n97\nnone: no skip-level p2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 485\np1 ghost 239\np2 p0 859\np3 p1 806\np4 ghost 877\np5 p0 542\np6 p5 -26\np7 p1 813\np0\np1\np2\n",
+  "stdout": "none: no manager p0\nnone: unknown ghost\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 53\np1 p0 123\np2 p0 267\np3 - 390\np4 p1 969\np5 p4 847\np6 p1 78\np7 p5 22\np4\nnobody\np3\nnobody\np3\np0\np4\n",
+  "stdout": "53\nnone: unknown nobody\nnone: no manager p3\nnone: unknown nobody\nnone: no manager p3\nnone: no manager p0\n53\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 782\np1 p0 586\np2 ghost 316\np3 p1 439\np4 - 681\np5 p0 640\np6 p5 -88\np7 p1 -81\np2\np3\np6\np1\np3\np3\np4\n",
+  "stdout": "none: unknown ghost\n782\n782\nnone: no skip-level p0\n782\n782\nnone: no manager p4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 672\np1 p0 659\np2 p1 138\np3 p1 886\np4 p2 968\np5 - 433\np6 p3 -35\np7 p3 314\np3\np2\np7\n",
+  "stdout": "672\n672\n659\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 234\np1 p0 171\np2 p1 -44\np3 p0 431\np4 p0 456\np5 p3 315\np6 p4 193\np7 p0 861\nnobody\np3\np5\np1\np0\np7\n",
+  "stdout": "none: unknown nobody\nnone: no skip-level p0\n234\nnone: no skip-level p0\nnone: no manager p0\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - -5\np1 p0 114\np2 p1 -33\np3 p2 298\np4 p1 188\np5 p1 101\np6 p3 646\np7 p0 194\np0\np7\np0\np5\np6\np1\np5\np7\n",
+  "stdout": "none: no manager p0\nnone: no skip-level p0\nnone: no manager p0\n-5\n-33\nnone: no skip-level p0\n-5\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - -97\np1 p0 613\np2 p1 624\np3 p2 37\np4 p3 39\np5 p4 -58\np6 p0 508\np7 - 939\np0\np2\np6\np6\np2\n",
+  "stdout": "none: no manager p0\n-97\nnone: no skip-level p0\nnone: no skip-level p0\n-97\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 160\np1 - 232\np2 p0 327\np3 p0 -36\np4 p0 163\np5 p2 299\np6 - 721\np7 p1 171\np0\np6\np6\np3\np7\n",
+  "stdout": "none: no manager p0\nnone: no manager p6\nnone: no manager p6\nnone: no skip-level p0\nnone: no skip-level p1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 387\np1 p0 355\np2 - 556\np3 p0 916\np4 p3 138\np5 p3 626\np6 p0 537\np7 p1 158\np5\np2\np7\np6\n",
+  "stdout": "387\nnone: no manager p2\n387\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 999\np1 p0 37\np2 - 286\np3 ghost 847\np4 p2 84\np5 p0 592\np6 p0 524\np7 p1 1\np2\np7\np4\n",
+  "stdout": "none: no manager p2\n999\nnone: no skip-level p2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 243\np1 - 455\np2 p1 28\np3 p1 -6\np4 p2 223\np5 p3 706\np6 p1 157\np7 p5 135\np1\np5\nnobody\np7\n",
+  "stdout": "none: no manager p1\n455\nnone: unknown nobody\n-6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 537\np1 p0 -12\np2 p0 912\np3 p0 126\np4 p1 636\np5 p3 320\np6 p1 614\np7 p6 57\np0\np4\np1\nnobody\n",
+  "stdout": "none: no manager p0\n537\nnone: no skip-level p0\nnone: unknown nobody\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - -56\np1 - 126\np2 p1 64\np3 - 529\np4 p0 784\np5 - 140\np6 p4 673\np7 p1 164\np5\nnobody\np4\n",
+  "stdout": "none: no manager p5\nnone: unknown nobody\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 445\np1 p0 985\np2 p1 162\np3 p0 71\np4 p1 81\np5 p3 974\np6 p5 234\np7 p5 361\np3\np6\np0\np6\np4\np2\n",
+  "stdout": "none: no skip-level p0\n71\nnone: no manager p0\n71\n445\n445\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 18\np1 p0 967\np2 p0 153\np3 p2 476\np4 - 645\np5 p0 56\np6 p4 388\np7 p0 76\np1\np5\n",
+  "stdout": "none: no skip-level p0\nnone: no skip-level p0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 674\np1 p0 365\np2 p0 -75\np3 p2 69\np4 - 601\np5 p3 441\np6 - 721\np7 p6 416\nnobody\np3\n",
+  "stdout": "none: unknown nobody\n674\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - 262\np1 p0 136\np2 p1 588\np3 p2 387\np4 p0 657\np5 p2 764\np6 p4 44\np7 p5 230\np2\np0\np6\np7\np5\np4\np6\np5\n",
+  "stdout": "262\nnone: no manager p0\n262\n588\n136\nnone: no skip-level p0\n262\n136\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8\np0 - -41\np1 p0 416\np2 p0 922\np3 p0 302\np4 p1 425\np5 p2 411\np6 p2 840\np7 p3 180\nnobody\np4\np1\np1\np7\np5\np1\n",
+  "stdout": "none: unknown nobody\n-41\nnone: no skip-level p0\nnone: no skip-level p0\n-41\n-41\nnone: no skip-level p0\n"
+ }
+]

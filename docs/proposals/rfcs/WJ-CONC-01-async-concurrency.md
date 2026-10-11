@@ -1,10 +1,15 @@
+---
+status: proposal
+---
 # WJ-CONC-01: Async/Await & Concurrency Model
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
 
 **Status:** Draft  
 **Author:** Windjammer Core Team  
 **Created:** 2026-03-21  
 **Updated:** 2026-03-21 (Extended with Erlang/Go patterns)  
-**Supersedes:** `docs/design/ASYNC_EXECUTION_MODEL.md` (approved design)
+**Supersedes:** the former ASYNC_EXECUTION_MODEL design document (deleted; see git history)
 
 ---
 
@@ -35,7 +40,7 @@ This RFC formalizes Windjammer's concurrency model for v2.0, implementing a **ca
 6. [Type System](#type-system)
 7. [Backend Implementation](#backend-implementation)
 8. [Economic Benefits](#economic-benefits)
-9. [Migration Path](#migration-path)
+9. Migration Path
 10. [Testing Strategy](#testing-strategy)
 11. [Terminology Improvements](#terminology-improvements)
 12. [Implementation Roadmap](#implementation-roadmap)
@@ -3102,7 +3107,7 @@ wj benchmark concurrency
 ## References
 
 ### Windjammer Docs
-- **Design doc:** `docs/design/ASYNC_EXECUTION_MODEL.md` (approved design)
+- **Design doc:** the former ASYNC_EXECUTION_MODEL design document (deleted; see git history)
 - **Concurrency arch:** `docs/CONCURRENCY_ARCHITECTURE.md` (implementation guide)
 - **WJ-PERF-01:** Economic efficiency framework
 - **WJ-PKG-01:** Package management (dependency on channels/supervision)

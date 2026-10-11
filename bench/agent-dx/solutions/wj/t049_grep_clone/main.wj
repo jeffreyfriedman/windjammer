@@ -1,0 +1,80 @@
+use std::env
+use std::fs
+use std::process
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
+fn main() {
+    let mut args: Vec<string> = Vec::new()
+    for a0 in env::args() {
+        args.push(a0)
+    }
+    let mut ignore_case = false
+    let mut numbers = false
+    let mut count_only = false
+    let mut invert = false
+    let mut positional: Vec<string> = Vec::new()
+    for a in rest_lines(args.clone(), 1) {
+        if a == "-i" {
+            ignore_case = true
+        } else if a == "-n" {
+            numbers = true
+        } else if a == "-c" {
+            count_only = true
+        } else if a == "-v" {
+            invert = true
+        } else {
+            positional.push(a.clone())
+        }
+    }
+    let pattern = if ignore_case { positional[0].to_lowercase() } else { positional[0].clone() }
+    let files: Vec<string> = rest_lines(positional.clone(), 1)
+    let multi = files.len() > 1
+    let mut matched: i64 = 0
+    let mut status = 0
+    for f in files {
+        let text = match fs::read_to_string(f) {
+            Ok(t) => t,
+            Err(_) => {
+                println("grep: ${f}: No such file")
+                status = 2
+                continue
+            }
+        }
+        let mut n: i64 = 0
+        let mut cnt: i64 = 0
+        for line in text.lines() {
+            n += 1
+            let hay = if ignore_case { line.to_lowercase() } else { line.to_string() }
+            let mut hit = hay.contains(pattern)
+            if invert { hit = !hit }
+            if hit {
+                cnt += 1
+                if !count_only {
+                    let mut prefix = ""
+                    if multi { prefix = prefix + f + ":" }
+                    if numbers { prefix = prefix + "${n}:" }
+                    println("${prefix}${line}")
+                }
+            }
+        }
+        matched += cnt
+        if count_only {
+            if multi { println("${f}:${cnt}") } else { println("${cnt}") }
+        }
+    }
+    if status == 0 && matched == 0 {
+        status = 1
+    }
+    if status != 0 {
+        process::exit(status)
+    }
+}
