@@ -13,6 +13,8 @@ mod layout_detect;
 mod options;
 mod test_discovery;
 pub mod test_execution;
+mod test_extraction;
+mod test_harness;
 mod test_reporting;
 mod util;
 
@@ -38,8 +40,8 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     use std::process::Command;
     use std::time::Instant;
 
-    use test_discovery::{compile_test_file, discover_test_files};
     use test_execution::generate_test_harness;
+    use test_harness::select_files;
     use test_reporting::{generate_coverage_report, parse_test_output};
 
     let start_time = Instant::now();
@@ -74,36 +76,42 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
         println!("{} Discovering tests...", "→".bright_blue().bold());
     }
 
-    let test_files = discover_test_files(test_dir)?;
+    let discovery = test_discovery::discover(test_dir)?;
+    if !discovery.errors.is_empty() {
+        anyhow::bail!("{}", discovery.error_summary());
+    }
 
-    if test_files.is_empty() {
-        if opts.json {
-            println!("{{\"error\": \"No test files found\", \"files\": [], \"tests\": []}}");
-        } else {
-            println!();
-            println!("{} No test files found", "✗".red().bold());
-            println!();
-            println!("  {} Test files should:", "ℹ".blue());
-            println!(
-                "    • Live under {} with names like {}",
-                "tests/".yellow(),
-                "*_test.wj".yellow()
-            );
-            println!(
-                "    • Mark tests with {} or name functions {}",
-                "@test".yellow(),
-                "test_*".yellow()
-            );
-            println!();
-        }
+    if opts.list {
+        print_listing(&discovery, opts.json);
         return Ok(());
     }
 
+    if discovery.test_count() == 0 {
+        return report_no_tests(test_dir, opts.allow_empty, opts.json);
+    }
+
+    let selected = select_files(&discovery.files, opts.filter.as_deref());
+    if selected.is_empty() {
+        let filter = opts.filter.as_deref().unwrap_or_default();
+        if opts.allow_empty {
+            println!("No tests match filter {filter:?} (--allow-empty).");
+            return Ok(());
+        }
+        anyhow::bail!(
+            "filter {filter:?} matched none of the {} discovered test(s); \
+             use `wj test --list` to see them, or --allow-empty",
+            discovery.test_count()
+        );
+    }
+    let test_files: Vec<&std::path::PathBuf> = selected.iter().map(|f| &f.path).collect();
+    let all_tests: Vec<_> = selected.iter().flat_map(|f| f.tests.clone()).collect();
+
     if !opts.json {
         println!(
-            "{} Found {} test file(s)",
+            "{} Found {} test file(s), {} test function(s)",
             "✓".green().bold(),
-            test_files.len().to_string().bright_white().bold()
+            test_files.len().to_string().bright_white().bold(),
+            all_tests.len().to_string().bright_white().bold()
         );
         for file in &test_files {
             println!(
@@ -128,35 +136,11 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     }
     fs::create_dir_all(&temp_dir)?;
 
-    // Compile test files
+    // Compile test files and generate the harness crate
     if !opts.json {
         println!("{} Compiling tests...", "→".bright_blue().bold());
     }
-
-    let mut all_tests = Vec::new();
-
-    for test_file in &test_files {
-        let tests = compile_test_file(test_file, &temp_dir)?;
-        all_tests.extend(tests);
-    }
-
-    if !opts.json {
-        println!(
-            "{} Found {} test function(s)",
-            "✓".green().bold(),
-            all_tests.len().to_string().bright_white().bold()
-        );
-        println!();
-    }
-
-    // Generate test harness (pass project root for library detection)
-    generate_test_harness(
-        &temp_dir,
-        &all_tests,
-        opts.filter.as_deref(),
-        &project_root,
-        &opts,
-    )?;
+    generate_test_harness(&temp_dir, &selected, &project_root, &opts)?;
 
     // Run tests
     if !opts.json {
@@ -226,21 +210,22 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
         for (i, test) in all_tests.iter().enumerate() {
             // Look up the status for this test
             // The test name in cargo output is "module::test_name"
-            let full_test_name = format!(
-                "{}::{}",
-                test.file.file_stem().unwrap().to_string_lossy(),
-                test.name
-            );
+            let module_name = selected
+                .iter()
+                .find(|f| f.path == test.file)
+                .map(|f| f.module_name.as_str())
+                .unwrap_or_default();
+            let full_test_name = format!("{}::{}", module_name, test.display_name());
             let status = test_results
                 .individual_results
                 .get(&full_test_name)
-                .or_else(|| test_results.individual_results.get(&test.name))
+                .or_else(|| test_results.individual_results.get(&test.display_name()))
                 .map(|s| s.as_str())
                 .unwrap_or("unknown");
 
             println!(
                 "    {{\"name\": \"{}\", \"file\": \"{}\", \"status\": \"{}\"}}{}",
-                test.name,
+                test.display_name(),
                 test.file.display(),
                 status,
                 if i < all_tests.len() - 1 { "," } else { "" }
@@ -340,4 +325,59 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// `--list`: print discovered files and tests without compiling anything.
+fn print_listing(discovery: &test_discovery::Discovery, json: bool) {
+    if json {
+        let files: Vec<String> = discovery
+            .files
+            .iter()
+            .map(|f| {
+                let tests: Vec<String> = f
+                    .tests
+                    .iter()
+                    .map(|t| format!("\"{}\"", t.display_name()))
+                    .collect();
+                format!(
+                    "{{\"file\": \"{}\", \"module\": \"{}\", \"tests\": [{}]}}",
+                    f.path.display(),
+                    f.module_name,
+                    tests.join(", ")
+                )
+            })
+            .collect();
+        println!("{{\"files\": [{}], \"total_tests\": {}}}", files.join(", "), discovery.test_count());
+        return;
+    }
+    for f in &discovery.files {
+        println!("{} (module {})", f.path.display(), f.module_name);
+        for t in &f.tests {
+            println!("    {}", t.display_name());
+        }
+    }
+    println!(
+        "{} test(s) in {} file(s)",
+        discovery.test_count(),
+        discovery.files.len()
+    );
+}
+
+/// Nothing to run: an error (non-zero exit) unless `--allow-empty` was given.
+fn report_no_tests(dir: &Path, allow_empty: bool, json: bool) -> Result<()> {
+    let message = format!(
+        "no tests found under {}. Tests are `@test` functions or `test_*` functions in any .wj \
+         file (top level, inline `mod`, or receiver-less `impl` functions); files named \
+         `*_test.wj`/`test_*.wj` or under `tests/` are always scanned.",
+        dir.display()
+    );
+    if allow_empty {
+        if json {
+            println!("{{\"files\": [], \"tests\": [], \"note\": \"no tests found\"}}");
+        } else {
+            println!("{message} (--allow-empty: exiting successfully)");
+        }
+        return Ok(());
+    }
+    anyhow::bail!("{message} Pass --allow-empty if an empty test set is expected.")
 }

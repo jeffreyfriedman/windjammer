@@ -101,6 +101,8 @@ pub fn run(cli: Cli) -> Result<()> {
             copy_runtime,
             runtime_path,
             no_generate_cargo_toml,
+            list,
+            allow_empty,
         } => {
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -117,6 +119,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 copy_runtime,
                 runtime_path,
                 no_generate_cargo_toml,
+                list,
+                allow_empty,
             })?;
         }
         Commands::Fmt { check } => {

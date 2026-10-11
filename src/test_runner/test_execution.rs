@@ -5,8 +5,12 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 use super::options::TestRunOptions;
-use super::test_discovery::TestFunction;
+use super::test_discovery::DiscoveredFile;
+use super::test_harness::{mark_tests, render_harness_lib_rs};
 use super::util::copy_dir_recursive;
+
+/// `(lib crate name, cargo package name, library path, metadata dir)` of the project library.
+type LibraryDependency = (String, String, PathBuf, PathBuf);
 
 /// Windjammer test sources use `use crate::module::...` (same as in-crate unit tests).
 /// When the harness compiles tests into a separate `windjammer-tests` crate, rewrite those
@@ -75,7 +79,7 @@ fn resolve_dependency_path(project_root: &Path, path: &str) -> PathBuf {
 fn resolve_prebuilt_library(
     build_dir: &Path,
     project_root: &Path,
-) -> Result<Option<(String, String, PathBuf, PathBuf)>> {
+) -> Result<Option<LibraryDependency>> {
     use colored::*;
 
     let build_dir = if build_dir.is_absolute() {
@@ -892,96 +896,62 @@ pub fn path_to_toml_string(path: &Path) -> String {
     s.replace('\\', "/")
 }
 
-/// Generate Rust test harness from Windjammer tests
+/// Compile one discovered file into `output_dir/<module_name>.rs`.
+///
+/// A file whose module name equals its stem compiles in place. A file renamed to avoid a stem
+/// collision compiles into a private scratch directory and its output is moved to the
+/// collision-free name, so two `util_test.wj` files never overwrite each other.
+fn compile_test_module(
+    file: &DiscoveredFile,
+    output_dir: &Path,
+    library_dependency: Option<&LibraryDependency>,
+) -> Result<PathBuf> {
+    let stem = file.path.file_stem().unwrap().to_string_lossy().to_string();
+    let build_dir = if stem == file.module_name {
+        output_dir.to_path_buf()
+    } else {
+        output_dir.join(".wj-scratch").join(&file.module_name)
+    };
+    if let Some((lib_crate_name, _, _, meta_dir)) = library_dependency {
+        let meta = [(lib_crate_name.as_str(), meta_dir.as_path())];
+        build_project_ext(&file.path, &build_dir, CompilationTarget::Rust, false, false, &meta)?;
+    } else {
+        build_project(&file.path, &build_dir, CompilationTarget::Rust, false)?;
+    }
+    let produced = build_dir.join(format!("{stem}.rs"));
+    let target = output_dir.join(format!("{}.rs", file.module_name));
+    if produced != target {
+        std::fs::rename(&produced, &target)
+            .with_context(|| format!("moving {} to {}", produced.display(), target.display()))?;
+    }
+    Ok(target)
+}
+
+/// Generate Rust test harness from Windjammer tests (`files` are already filter-selected).
 pub(crate) fn generate_test_harness(
     output_dir: &Path,
-    tests: &[TestFunction],
-    filter: Option<&str>,
+    files: &[&DiscoveredFile],
     project_root: &Path,
     opts: &TestRunOptions,
 ) -> Result<()> {
-    use std::collections::HashMap;
     use std::fs;
-
-    // Group tests by file
-    let mut tests_by_file: HashMap<PathBuf, Vec<&TestFunction>> = HashMap::new();
-    for test in tests {
-        tests_by_file
-            .entry(test.file.clone())
-            .or_default()
-            .push(test);
-    }
 
     // Compile the library first so test codegen can load `emitted_rust_ref_params`
     // from metadata.json (otherwise format! temps miss `&` for demoted `&str` formals).
     let library_dependency = detect_and_compile_library(project_root, output_dir, opts)?;
 
-    // Compile each test file using the existing infrastructure
-    for (file, file_tests) in &tests_by_file {
-        // Skip if filter doesn't match
-        if let Some(filter_str) = filter {
-            if !file_tests.iter().any(|t| t.name.contains(filter_str)) {
-                continue;
-            }
-        }
-
-        // Compile the file to Rust — pass library metadata when available.
-        if let Some((lib_crate_name, _, _, meta_dir)) = &library_dependency {
-            let meta = [(lib_crate_name.as_str(), meta_dir.as_path())];
-            build_project_ext(
-                file,
-                output_dir,
-                CompilationTarget::Rust,
-                false,
-                false,
-                &meta,
-            )?;
-        } else {
-            build_project(file, output_dir, CompilationTarget::Rust, false)?;
-        }
-
-        // Read the generated Rust code
-        let output_file = output_dir.join(format!(
-            "{}.rs",
-            file.file_stem().unwrap().to_string_lossy()
-        ));
-        let mut rust_code = fs::read_to_string(&output_file)?;
-
-        // Add #[test] when codegen did not; skip when auto-test attribute already emitted.
-        for test in file_tests.iter() {
-            let already_marked = [
-                format!("#[test]\npub fn {}()", test.name),
-                format!("#[test]\nfn {}()", test.name),
-                format!("#[test]\n#[inline]\npub fn {}()", test.name),
-                format!("#[test]\n#[inline]\nfn {}()", test.name),
-            ]
-            .iter()
-            .any(|pat| rust_code.contains(pat));
-            if already_marked {
-                continue;
-            }
-            for sig in [
-                format!("pub fn {}()", test.name),
-                format!("fn {}()", test.name),
-            ] {
-                if rust_code.contains(&sig) {
-                    rust_code = rust_code.replace(&sig, &format!("#[test]\n{}", sig));
-                    break;
-                }
-            }
-        }
-
-        // Write back
-        fs::write(&output_file, rust_code)?;
+    let mut module_names = Vec::new();
+    for file in files {
+        let output_file = compile_test_module(file, output_dir, library_dependency.as_ref())?;
+        let rust_code = fs::read_to_string(&output_file)?;
+        fs::write(&output_file, mark_tests(rust_code, &file.tests))?;
+        module_names.push(file.module_name.clone());
     }
 
     // Tests compiled above still contain `use crate::...`; point them at the library crate.
     if let Some((lib_crate_name, _, _, _)) = &library_dependency {
-        for file in tests_by_file.keys() {
-            let output_file = output_dir.join(format!(
-                "{}.rs",
-                file.file_stem().unwrap().to_string_lossy()
-            ));
+        for module_name in &module_names {
+            let output_file = output_dir.join(format!("{module_name}.rs"));
             if output_file.exists() {
                 let rust_code = fs::read_to_string(&output_file)?;
                 let rewritten = rewrite_test_crate_imports(&rust_code, lib_crate_name);
@@ -1086,13 +1056,8 @@ path = "lib.rs"
 
     fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
 
-    // Create lib.rs that includes all test modules
-    let mut lib_rs = String::from("// Auto-generated test harness\n\n");
-    for (file, _) in tests_by_file {
-        let module_name = file.file_stem().unwrap().to_string_lossy();
-        lib_rs.push_str(&format!("pub mod {};\n", module_name));
-    }
-    fs::write(output_dir.join("lib.rs"), lib_rs)?;
+    // Declare exactly the modules compiled above (a module without a .rs file is E0583).
+    fs::write(output_dir.join("lib.rs"), render_harness_lib_rs(&module_names))?;
 
     Ok(())
 }
