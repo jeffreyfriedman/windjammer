@@ -44,11 +44,22 @@ pub(super) struct Lowerer<'e> {
     /// Inference variables introduced by integer / float literals (default to i64 / f64).
     pub int_vars: std::collections::HashSet<u32>,
     pub float_vars: std::collections::HashSet<u32>,
+    /// Enclosing loops, innermost last (for labels and `break value`).
+    pub loop_stack: Vec<LoopCtx>,
+}
+
+/// One enclosing loop while lowering its body.
+pub(super) struct LoopCtx {
+    pub label: Option<String>,
+    /// Set when some `break 'label` / `continue 'label` targeted this loop (label must be emitted).
+    pub used: bool,
+    /// Local that receives `break value` (value-producing `loop` only) and its type.
+    pub result: Option<(String, Ty)>,
 }
 
 impl<'e> Lowerer<'e> {
     pub fn new(env: &'e ItemEnv) -> Self {
-        Lowerer { env, scopes: vec![HashMap::new()], rets: vec![], generics: vec![], bounds: HashMap::new(), owner: None, tmp: 0, line: 0, used: Default::default(), vars: vec![], int_vars: Default::default(), float_vars: Default::default() }
+        Lowerer { env, scopes: vec![HashMap::new()], rets: vec![], generics: vec![], bounds: HashMap::new(), owner: None, tmp: 0, line: 0, used: Default::default(), vars: vec![], int_vars: Default::default(), float_vars: Default::default(), loop_stack: vec![] }
     }
 
     pub fn push(&mut self) {
