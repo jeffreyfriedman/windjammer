@@ -16,6 +16,7 @@ pub mod gen_cli;
 pub mod gen_errors;
 pub mod gen_interp;
 pub mod gen_lang;
+pub mod gen_llms;
 pub mod gen_meta;
 pub mod gen_stdlib;
 pub mod gen_targets;
