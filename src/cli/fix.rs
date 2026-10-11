@@ -20,10 +20,14 @@ pub struct FixSummary {
 }
 
 fn parses(path: &str, source: &str) -> bool {
-    let tokens = crate::lexer::Lexer::new(source).tokenize_with_locations();
-    let mut parser =
-        crate::parser::Parser::new_with_source(tokens, path.to_string(), source.to_string());
-    parser.parse().is_ok()
+    // The lexer panics on invalid characters; treat that as "does not parse".
+    let (path, source) = (path.to_string(), source.to_string());
+    std::panic::catch_unwind(move || {
+        let tokens = crate::lexer::Lexer::new(&source).tokenize_with_locations();
+        let mut parser = crate::parser::Parser::new_with_source(tokens, path, source.clone());
+        parser.parse().is_ok()
+    })
+    .unwrap_or(false)
 }
 
 fn is_target(p: &Path, docs: bool) -> bool {
@@ -80,8 +84,8 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
             continue;
         }
         let name = file.display().to_string();
-        if !is_md && parses(&name, &source) && !parses(&name, &out.text) {
-            eprintln!("warning: {name}: rewritten file does not parse; left unchanged");
+        if !is_md && !(parses(&name, &source) && parses(&name, &out.text)) {
+            eprintln!("warning: {name}: does not parse before/after rewrite; left unchanged");
             continue;
         }
         summary.files_changed += 1;

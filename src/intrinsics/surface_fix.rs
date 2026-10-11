@@ -543,6 +543,24 @@ impl Rewriter {
         // ---- vec![..] -> [..]
         if intr == Intrinsic::Vec {
             let msg = format!("`{name}!` is deprecated: use the list literal `[..]`");
+            // A `[` at the start of a line continues the previous expression (indexing).
+            let head = &text[..start];
+            let trimmed_head = head.trim_end();
+            if head[trimmed_head.len()..].contains('\n')
+                && trimmed_head
+                    .chars()
+                    .last()
+                    .is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']' | '}' | '"' | '\''))
+            {
+                self.record(
+                    "W0007",
+                    abs,
+                    original,
+                    None,
+                    format!("{msg} (not auto-fixable here: a line starting with `[` would parse as indexing)"),
+                );
+                return None;
+            }
             if inner.trim().is_empty() {
                 self.record("W0007", abs, original, Some("[]".to_string()), msg);
                 return Some(("[]".to_string(), close + 1));
@@ -846,6 +864,7 @@ mod tests {
         // argument position is type dependent: kept
         assert_eq!(fx("foo(vec![1, 2])"), "foo(vec![1, 2])");
         assert_eq!(fx("x = vec![1]"), "x = vec![1]");
+        assert_eq!(fx("let _ = a\n    vec![]"), "let _ = a\n    vec![]");
         assert_eq!(fx("for p in vec![1, 2] {"), "for p in [1, 2] {");
         assert_eq!(fx("S { items: vec![1] }"), "S { items: [1] }");
         assert_eq!(fx("let v: Vec<int> = vec![1]"), "let v: Vec<int> = [1]");
