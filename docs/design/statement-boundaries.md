@@ -1,8 +1,12 @@
+---
+status: current
+last_verified: 203e43d114c9
+---
 # Statement boundaries and newline sensitivity
 
 Windjammer has optional semicolons. A newline ends a statement **unless the parser can
 prove the next line continues the expression**. This file is the precise rule; the parser
-implements exactly this table and `tests/parser_statement_boundary_test.rs` checks it (including
+implements exactly this table and `tests/parser_gaps_test.rs` checks it (including
 the property "splitting a program across lines at a boundary token never changes the AST").
 
 ## Tokens that begin a new line
