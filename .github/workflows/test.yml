@@ -54,6 +54,16 @@ jobs:
             -W clippy::complexity \
             -W clippy::perf
 
+  orphan-tests:
+    name: Orphan Test Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Fail on test files no runner reaches
+        run: scripts/check-orphan-tests.sh
+
   version-check:
     name: Version Alignment
     runs-on: ubuntu-latest
@@ -257,7 +267,9 @@ jobs:
       
       - name: Build tests (release mode)
         shell: bash
-        run: cargo test --release --all-features --no-run
+        # NEVER --all-features here: it enables every *_tests suite feature and compiles out the
+        # ~120 files gated with #![cfg(not(any(...))). tests/feature_gate_guard_test.rs fails if it happens.
+        run: cargo test --release --workspace --no-run
       
       - name: Clean debug artifacts before running tests
         shell: bash
@@ -270,7 +282,7 @@ jobs:
         run: |
           export PATH="$PWD/target/release:$PATH"
           set +e
-          cargo nextest run --release --all-features \
+          cargo nextest run --release --workspace \
             --profile ci \
             --failure-output immediate-final \
             --success-output never 2>&1 | tee /tmp/nextest-output.txt
@@ -321,6 +333,11 @@ jobs:
       - name: Run doctests
         shell: bash
         run: cargo test --release --doc
+
+      - name: Test scripts parse
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash -n scripts/check-test-ratchet.sh scripts/check-orphan-tests.sh
       
       - name: Test examples (Unix)
         if: matrix.rust == 'stable' && runner.os != 'Windows'

@@ -1,5 +1,5 @@
 .PHONY: help test test-all test-stdlib test-ui test-game test-integration \
-        test-quick test-verbose clippy fmt check build build-all install \
+        test-quick test-orphans test-verbose clippy fmt check build build-all install \
         example-ui example-game example-http example-physics example-audio \
         test-examples clean doc setup-hooks check-versions
 
@@ -48,12 +48,16 @@ help:
 # Run all tests
 test:
 	@echo "🧪 Running all tests..."
-	cargo test --all-features --workspace
+	cargo test --release --workspace   # never --all-features: it disables the gated test files
 
 # Run all tests with nocapture
 test-verbose:
 	@echo "🧪 Running all tests (verbose)..."
-	cargo test --all-features --workspace -- --nocapture
+	cargo test --release --workspace -- --nocapture
+
+# Fail on test files that no runner reaches
+test-orphans:
+	@scripts/check-orphan-tests.sh
 
 # Quick smoke test
 test-quick:
@@ -325,7 +329,7 @@ ci: fmt-check clippy test build-all
 # Watch and test (requires cargo-watch)
 watch:
 	@echo "👀 Watching for changes..."
-	cargo watch -x "test --all-features"
+	cargo watch -x "test"
 
 # Watch specific crate
 watch-stdlib:
@@ -360,7 +364,7 @@ stats:
 	@find src crates -name '*.rs' | xargs wc -l | tail -1
 	@echo ""
 	@echo "Test count:"
-	@cargo test --workspace --all-features -- --list 2>/dev/null | grep -c "test " || echo "Run 'make test' first"
+	@cargo test --workspace -- --list 2>/dev/null | grep -c "test " || echo "Run 'make test' first"
 	@echo ""
 	@echo "Crates:"
 	@ls -1 crates/ | wc -l
