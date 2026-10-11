@@ -200,6 +200,7 @@ fn render(p: &Program) -> String {
         seen.insert(ty, 1);
     }
     let mut made = std::collections::HashMap::<Ty, usize>::new();
+    let mut results = 0usize;
     for c in &p.calls {
         let tpl = &TEMPLATES[c.template];
         let args: Vec<String> = tpl.params.iter().zip(&c.args).map(|((_, ty, _), n)| var_name(*ty, *n)).collect();
@@ -219,7 +220,12 @@ fn render(p: &Program) -> String {
                 s.push_str(&format!("    println(\"${{{show}}}\")\n"));
             }
             None => {
-                s.push_str(&format!("    println(\"${{{}({})}}\")\n", tpl.name, args.join(", ")));
+                // Bound through a `let`: a call written directly inside `${}` hits the open
+                // divergence D-NUM-INTERP-CALL (covered by tests/inference_corpus/interp_call_width.wj).
+                results += 1;
+                let name = format!("r{results}");
+                s.push_str(&format!("    let {name} = {}({})\n", tpl.name, args.join(", ")));
+                s.push_str(&format!("    println(\"${{{name}}}\")\n"));
             }
         }
     }
