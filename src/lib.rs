@@ -26,6 +26,7 @@ pub mod error;
 pub mod error_codes;
 pub mod errors;
 pub mod ffi;
+pub mod formatter;
 pub mod fuzzy_matcher;
 pub mod ide_analysis;
 pub mod inference;
