@@ -424,7 +424,11 @@ pub enum Commands {
 
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
-    SelfInstall,
+    SelfInstall {
+        /// Print what would be installed (binary, plugins, embedded std/ files) without writing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
