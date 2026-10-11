@@ -1,0 +1,37 @@
+// seeds: 1 2 4 9
+// impl Drop: reverse declaration order at scope exit, inner blocks, reassignment, explicit drop,
+// values returned from functions, and a struct holding a Vec of guards (elements in order).
+struct Guard { id: int }
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        println("drop {}", self.id)
+    }
+}
+
+struct Pair { items: Vec<Guard>, tag: int }
+
+fn make(id: int) -> Guard {
+    let tmp = Guard { id: id + 100 }
+    println("made {}", tmp.id)
+    Guard { id: id }
+}
+
+fn main() {
+    let s: int = __SEED__
+    let a = Guard { id: s }
+    let b = make(s + 1)
+    {
+        let c = Guard { id: s + 2 }
+        println("inner {}", c.id)
+    }
+    let mut d = Guard { id: s + 3 }
+    d = Guard { id: s + 4 }
+    let e = Guard { id: s + 5 }
+    drop(e)
+    let mut items: Vec<Guard> = Vec::new()
+    items.push(Guard { id: s + 6 })
+    items.push(Guard { id: s + 7 })
+    let p = Pair { items: items, tag: s }
+    println("end {} {} {}", a.id, b.id, p.tag)
+}
