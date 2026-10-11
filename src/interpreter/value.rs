@@ -6,6 +6,7 @@
 //! Integers carry their Rust width ([`IntTy`]).
 
 use super::int::IntTy;
+pub use super::iter::{Iter, IterState};
 use crate::parser::{Expression, Type};
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -28,6 +29,8 @@ pub struct StructVal {
     pub fields: Vec<(Rc<str>, Value)>,
     /// `@derive(Copy)`: reading the place yields an independent copy.
     pub copy: bool,
+    /// Identity of an instance whose type has `impl Drop` (0 = no destructor). See `heap.rs`.
+    pub uid: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -80,10 +83,6 @@ pub struct Place {
     pub path: Vec<Proj>,
 }
 
-pub struct IterState {
-    pub items: Vec<Value>,
-    pub pos: usize,
-}
 
 pub enum Callable {
     Closure {
@@ -92,6 +91,7 @@ pub enum Callable {
         env: Vec<(&'static str, Slot)>,
         module: usize,
         self_ty: Option<Rc<str>>,
+        tparams: Vec<(Rc<str>, Option<Type>)>,
     },
     /// A user function addressed by (module, qualified name), e.g. `Type::method`.
     Named { module: usize, name: Rc<str> },
@@ -111,7 +111,27 @@ impl fmt::Debug for Callable {
 
 impl fmt::Debug for IterState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<iter {}/{}>", self.pos, self.items.len())
+        write!(f, "<iter>")
+    }
+}
+
+/// The interior-mutability wrappers (`Rc`/`Arc` are `Value::Rc`, not a cell).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CellKind {
+    RefCell,
+    Cell,
+    Mutex,
+    RwLock,
+}
+
+impl CellKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            CellKind::RefCell => "RefCell",
+            CellKind::Cell => "Cell",
+            CellKind::Mutex => "Mutex",
+            CellKind::RwLock => "RwLock",
+        }
     }
 }
 
@@ -131,11 +151,17 @@ pub enum Value {
     Set(Rc<BTreeMap<Key, Value>>),
     /// Half-open integer range; `a..=b` is stored as `a..b+1`.
     Range(i128, i128, IntTy),
-    Iter(Rc<RefCell<IterState>>),
+    Iter(Iter),
     Func(Rc<Callable>),
     /// `fmt::Formatter` / `String` sink used by `write!` inside `impl Display`.
     Formatter(Rc<RefCell<String>>),
     Ref(Place),
+    /// `Rc<T>` / `Arc<T>`: a shared slot. Clones alias; strong counts are computed by reachability.
+    Rc(Slot),
+    /// `Weak<T>` of an `Rc` slot (does not keep it alive).
+    Weak(Slot),
+    /// `RefCell` / `Cell` / `Mutex` / `RwLock`: an interior-mutable slot.
+    Cell(CellKind, Slot),
 }
 
 impl Value {
@@ -231,6 +257,9 @@ impl Value {
             Value::Func(_) => "fn".into(),
             Value::Formatter(_) => "Formatter".into(),
             Value::Ref(_) => "&mut".into(),
+            Value::Rc(_) => "Rc".into(),
+            Value::Weak(_) => "Weak".into(),
+            Value::Cell(k, _) => k.name().into(),
         }
     }
 
@@ -281,6 +310,10 @@ impl Value {
                 ka.len().cmp(&kb.len())
             }
             (Range(a, b, _), Range(c, d, _)) => (a, b).cmp(&(c, d)),
+            (Rc(a), Rc(b)) => a.borrow().structural_cmp(&b.borrow()),
+            (Cell(_, a), Cell(_, b)) => a.borrow().structural_cmp(&b.borrow()),
+            (Rc(p), o) => p.borrow().structural_cmp(o),
+            (s, Rc(p)) => s.structural_cmp(&p.borrow()),
             (Ref(p), o) => p.slot.borrow().structural_cmp(o),
             (s, Ref(p)) => s.structural_cmp(&p.slot.borrow()),
             _ => self.rank().cmp(&other.rank()),

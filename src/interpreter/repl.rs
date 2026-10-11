@@ -55,7 +55,7 @@ impl Interpreter {
             let prog = parse_source(src, "<repl>").map_err(|e| sem(format!("parse error: {}", e)))?;
             let prog: &'static crate::parser::Program<'static> = Box::leak(Box::new(prog));
             self.register_items(0, &prog.items)?;
-            self.finish_registration();
+            self.finish_registration()?;
             return Ok(None);
         }
         let wrapped = format!("fn __repl__() {{\n{}\n}}", src);

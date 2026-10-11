@@ -158,7 +158,8 @@ impl Interpreter {
 
             Expression::Call { function, arguments, location } => {
                 self.mark(location.as_ref());
-                self.eval_call(function, arguments)
+                let expected = self.take_expected(e);
+                self.eval_call(function, arguments, expected)
             }
 
             Expression::MethodCall { object, method, type_args, arguments, location } => {
@@ -217,6 +218,7 @@ impl Interpreter {
                     env: self.scope.vars.clone(),
                     module: self.scope.module,
                     self_ty: self.scope.self_ty.clone(),
+                    tparams: self.scope.tparams.clone(),
                 })))
             }
 
@@ -263,8 +265,7 @@ impl Interpreter {
             Expression::Block { statements, .. } => {
                 self.push_scope();
                 let r = self.exec_stmts(statements);
-                self.pop_scope();
-                r
+                self.pop_scope(r)
             }
 
             Expression::Await { location, .. }
@@ -373,6 +374,16 @@ impl Interpreter {
         name: &'static str,
         fields: &'static [(String, &'static Expression<'static>)],
     ) -> R {
+        if matches!(name, "RangeFrom" | "std::ops::RangeFrom") && !self.structs.contains_key("RangeFrom") {
+            // `start..`: an unbounded integer range (`end == i128::MAX` marks "no end")
+            return match fields {
+                [(f, ex)] if f == "start" => match self.eval(ex)? {
+                    Value::Int(a, t) => Ok(Value::Range(a, i128::MAX, t)),
+                    other => Err(unsupported(format!("`..` range from {}", other.type_name()))),
+                },
+                _ => Err(semantic("malformed RangeFrom")),
+            };
+        }
         let mut name = name.to_string();
         if let Some(rest) = name.strip_prefix("Self::") {
             name = format!("{}::{}", self.scope.self_ty.as_deref().unwrap_or("Self"), rest);
@@ -434,7 +445,7 @@ impl Interpreter {
                 return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
             }
         }
-        Ok(Value::Struct(Rc::new(StructVal { name: Rc::from(name.as_str()), fields: out, copy })))
+        Ok(self.make_struct(name.as_str(), out, copy))
     }
 
     pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {

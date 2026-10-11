@@ -27,8 +27,7 @@ impl Interpreter {
     pub(crate) fn exec_block(&mut self, stmts: &[&'static Statement<'static>]) -> R {
         self.push_scope();
         let r = self.exec_stmts(stmts);
-        self.pop_scope();
-        r
+        self.pop_scope(r)
     }
 
     pub(crate) fn run_defers(&mut self, r: R) -> R {
@@ -50,6 +49,9 @@ impl Interpreter {
             Statement::Expression { expr, .. } => self.eval(expr),
 
             Statement::Let { pattern, type_, value, else_block, .. } => {
+                if let Some(t) = type_ {
+                    self.expect_type_of(value, t);
+                }
                 let mut v = match pattern {
                     // `let r = &mut x` keeps the reference
                     Pattern::Identifier(_) | Pattern::MutBinding(_) => self.eval_raw_binding(value)?,
@@ -99,7 +101,12 @@ impl Interpreter {
 
             Statement::Return { value, .. } => {
                 let v = match value {
-                    Some(e) => self.eval(e)?,
+                    Some(e) => {
+                        if let Some(rt) = self.scope.ret_ty {
+                            self.expect_type_of(e, rt);
+                        }
+                        self.eval(e)?
+                    }
                     None => Value::Unit,
                 };
                 Err(Ctl::Return(v))
@@ -217,7 +224,11 @@ impl Interpreter {
                 self.binary(bop, cur, rhs)?
             }
         };
+        let old = if self.drop_types.is_empty() { None } else { place.read().ok() };
         place.write(new)?;
+        if let Some(old) = old {
+            self.drop_unreachable(&[old], &[])?;
+        }
         Ok(())
     }
 
@@ -260,6 +271,14 @@ impl Interpreter {
             }
             return Ok(Value::Unit);
         }
+        if let Value::Iter(s) = &src {
+            while let Some(item) = super::iter::next(self, s)? {
+                if self.run_iteration(pattern, item, body)? {
+                    break;
+                }
+            }
+            return Ok(Value::Unit);
+        }
         let items = self.to_items(src)?;
         for item in items {
             if self.run_iteration(pattern, item, body)? {
@@ -278,7 +297,7 @@ impl Interpreter {
             pat => {
                 let mut binds = Vec::new();
                 if !self.match_pattern(pat, &item, None, false, &mut binds) {
-                    self.pop_scope();
+                    let _ = self.pop_scope(Ok(Value::Unit));
                     return Err(semantic("refutable pattern in `for`"));
                 }
                 for (n, v) in binds {
@@ -287,7 +306,7 @@ impl Interpreter {
             }
         }
         let r = self.exec_stmts(body);
-        self.pop_scope();
+        let r = self.pop_scope(r);
         match r {
             Ok(_) | Err(Ctl::Continue) => Ok(false),
             Err(Ctl::Break) => Ok(true),
@@ -305,12 +324,7 @@ impl Interpreter {
                 }
                 Ok((a..b).map(|i| Value::Int(i, ty)).collect())
             }
-            Value::Iter(it) => {
-                let mut st = it.borrow_mut();
-                let rest = st.items[st.pos..].to_vec();
-                st.pos = st.items.len();
-                Ok(rest)
-            }
+            Value::Iter(s) => self.drain_iter(&s),
             Value::Map(m) => Ok(m.iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
             Value::Set(m) => Ok(m.keys().map(|k| k.0.clone()).collect()),
             Value::Enum(e) if &*e.ty == "Option" => Ok(match &e.payload {
@@ -373,20 +387,18 @@ impl Interpreter {
                     match self.eval(g) {
                         Ok(Value::Bool(true)) => {}
                         Ok(_) => {
-                            self.pop_scope();
+                            let _ = self.pop_scope(Ok(Value::Unit));
                             continue;
                         }
                         Err(e) => {
-                            self.pop_scope();
-                            return Err(e);
+                            return self.pop_scope(Err(e));
                         }
                     }
                 }
                 let r = self.eval(arm.body);
-                self.pop_scope();
-                return r;
+                return self.pop_scope(r);
             }
-            self.pop_scope();
+            let _ = self.pop_scope(Ok(Value::Unit));
         }
         Err(panic_ctl(format!("no match arm matched value of type `{}`", v.type_name())))
     }
