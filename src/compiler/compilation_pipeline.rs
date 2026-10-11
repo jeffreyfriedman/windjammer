@@ -671,3 +671,22 @@ pub fn parse_level(text: &str) -> Option<u8> { None }
         );
     }
 }
+
+/// Shadow-mode name resolution over every `.wj` under `path` (optional hook; read-only, no
+/// output, no effect on codegen). Files that fail to parse are skipped.
+pub fn resolve_project_shadow(path: &Path) -> Result<crate::resolve::ResolveReport> {
+    let files = find_wj_files(path)?;
+    let root = if path.is_file() { path.parent().unwrap_or(path) } else { path };
+    let mut parsed = Vec::new();
+    for f in &files {
+        let Ok(src) = std::fs::read_to_string(f) else { continue };
+        if let Ok((parser, program)) = super::parse_wj_source(f, &src) {
+            parsed.push((crate::resolve::module_path_from_file(root, f), f.clone(), parser, program));
+        }
+    }
+    let inputs: Vec<_> = parsed
+        .iter()
+        .map(|(m, f, _parser, p)| crate::resolve::ParsedFile::new(m.clone(), f.clone(), p))
+        .collect();
+    Ok(crate::resolve::resolve_program(&inputs).report)
+}

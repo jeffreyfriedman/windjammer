@@ -1,0 +1,30 @@
+// A free function that shares its name with a trait method (and its impls) must stay a free
+// function: it must not be dropped, and must not inherit the method's receiver.
+trait Measure {
+    fn area(self) -> int
+    fn scale(self, k: int) -> int
+}
+
+struct Square { side: int }
+struct Circle { radius: int }
+
+impl Measure for Square {
+    fn area(self) -> int { self.side * self.side }
+    fn scale(self, k: int) -> int { self.side * k }
+}
+
+impl Measure for Circle {
+    fn area(self) -> int { self.radius * self.radius * 3 }
+    fn scale(self, k: int) -> int { self.radius * k }
+}
+
+fn area(w: int, h: int) -> int { w * h }
+fn scale(v: int) -> int { v * 2 }
+
+pub fn run(sq: Square, c: Circle) -> int {
+    let a = area(2, 3)
+    let b = sq.area()
+    let d = c.scale(4)
+    let e = scale(5)
+    a + b + d + e
+}

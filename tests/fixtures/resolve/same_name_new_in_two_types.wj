@@ -1,0 +1,22 @@
+// Two types each define `new` / `len`, plus a free `len`; each call must pick its own owner.
+struct Stack { n: int }
+struct Queue { n: int }
+
+impl Stack {
+    fn new() -> Stack { Stack { n: 0 } }
+    fn len(self) -> int { self.n }
+}
+
+impl Queue {
+    fn new(capacity: int) -> Queue { Queue { n: capacity } }
+    fn len(self) -> int { self.n }
+}
+
+fn len(values: Vec<int>) -> int { values.len() }
+
+pub fn run() -> int {
+    let s = Stack::new()
+    let q = Queue::new(8)
+    let total = len(Vec::new())
+    s.len() + q.len() + total
+}
