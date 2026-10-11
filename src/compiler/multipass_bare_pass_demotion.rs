@@ -7,11 +7,39 @@ use crate::parser::{Expression, FunctionDecl, Item, Pattern, Program, Statement,
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-thread_local! {
-    /// Memoize `callee_arg_is_hard_owned` during a promote/restore pass — db-layers
-    /// has ~16k sigs; uncached body walks are pathological.
-    static HARD_OWNED_CACHE: RefCell<Option<HashMap<(String, usize), bool>>> =
-        RefCell::new(None);
+/// Memoizes `callee_arg_is_hard_owned` during a promote/restore pass (db-layers has
+/// ~16k sigs; uncached body walks are pathological). Owned by the pass entry point.
+pub(crate) struct HardOwnedCache {
+    enabled: bool,
+    memo: RefCell<HashMap<(String, usize), bool>>,
+}
+
+impl HardOwnedCache {
+    /// Memoizing cache scoped to one pass.
+    pub(crate) fn memoizing() -> Self {
+        Self {
+            enabled: true,
+            memo: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// Pass-through: every lookup recomputes (entry points outside a promote pass).
+    pub(crate) fn uncached() -> Self {
+        Self {
+            enabled: false,
+            memo: RefCell::new(HashMap::new()),
+        }
+    }
+
+    fn get(&self, key: &(String, usize)) -> Option<bool> {
+        self.memo.borrow().get(key).copied()
+    }
+
+    fn insert(&self, key: (String, usize), value: bool) {
+        if self.enabled {
+            self.memo.borrow_mut().insert(key, value);
+        }
+    }
 }
 
 /// Precomputed AST indexes for bare-pass restore (P3.585).
@@ -139,14 +167,7 @@ pub fn promote_callees_from_bare_pass_callers(
     programs: &[&Program],
     copy_types: &std::collections::HashSet<String>,
 ) {
-    HARD_OWNED_CACHE.with(|c| *c.borrow_mut() = Some(HashMap::new()));
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        promote_callees_from_bare_pass_callers_inner(registry, programs, copy_types);
-    }));
-    HARD_OWNED_CACHE.with(|c| *c.borrow_mut() = None);
-    if let Err(payload) = result {
-        std::panic::resume_unwind(payload);
-    }
+    promote_callees_from_bare_pass_callers_inner(registry, programs, copy_types);
 }
 
 fn promote_callees_from_bare_pass_callers_inner(
@@ -154,6 +175,7 @@ fn promote_callees_from_bare_pass_callers_inner(
     programs: &[&Program],
     copy_types: &std::collections::HashSet<String>,
 ) {
+    let cache = HardOwnedCache::memoizing();
     let mut hints: Vec<(String, usize, OwnershipMode)> = Vec::new();
     for program in programs {
         collect_bare_pass_hints(program, programs, registry, copy_types, &mut hints);
@@ -161,7 +183,9 @@ fn promote_callees_from_bare_pass_callers_inner(
     hints.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     hints.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
     for (callee_key, param_idx, mode) in hints {
-        if bare_pass_hint_should_skip(programs, registry, &callee_key, param_idx, mode, copy_types)
+        if bare_pass_hint_should_skip(
+            programs, registry, &callee_key, param_idx, mode, copy_types, &cache,
+        )
         {
             continue;
         }
@@ -175,11 +199,11 @@ fn promote_callees_from_bare_pass_callers_inner(
     // Undo bare-pass MutBorrowed when the callee returns the whole binding (identity /
     // chain helpers like `col_string(row, name) -> (Row, string)`).
     restore_owned_returned_formals(registry, programs);
-    restore_pub_owned_non_copy_api_formals(registry, programs);
+    restore_pub_owned_non_copy_api_formals_with_cache(registry, programs, &cache);
     restore_owned_formals_for_producer_only_call_sites(registry, programs);
     // DB-216/275/276: wrappers that forward bare into owned FFI/`Vec` formals must
     // stay owned — demoting to `&Vec` then bare-passing into `*_ffi(Vec)` is E0308.
-    restore_owned_formals_forwarded_to_owned_callees(registry, programs);
+    restore_owned_formals_forwarded_to_owned_callees_with_cache(registry, programs, &cache);
 }
 
 /// DB-190: when every call site passes an owned producer (`encode_startup(…)`), keep
@@ -247,13 +271,20 @@ pub fn restore_owned_formals_forwarded_to_owned_callees(
     registry: &mut SignatureRegistry,
     programs: &[&Program],
 ) {
-    // Ensure cache exists when called outside `promote_callees` (library_multipass
-    // invokes this a second time after promote).
-    HARD_OWNED_CACHE.with(|c| {
-        if c.borrow().is_none() {
-            *c.borrow_mut() = Some(HashMap::new());
-        }
-    });
+    restore_owned_formals_forwarded_to_owned_callees_with_cache(
+        registry,
+        programs,
+        &HardOwnedCache::memoizing(),
+    );
+}
+
+/// Same as [`restore_owned_formals_forwarded_to_owned_callees`], sharing the memo of the
+/// enclosing promote pass.
+fn restore_owned_formals_forwarded_to_owned_callees_with_cache(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+    cache: &HardOwnedCache,
+) {
     let keys: Vec<String> = registry.signatures.keys().cloned().collect();
     for key in keys {
         let Some(sig) = registry.get_signature(&key).cloned() else {
@@ -275,7 +306,7 @@ pub fn restore_owned_formals_forwarded_to_owned_callees(
             };
             // DB-366: soft AST-Custom "owned" peers (mutual BT ticks) must not undo
             // analyzer Borrowed — only extern / Vec / consuming-body Custom are hard.
-            if !param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs) {
+            if !param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs, cache) {
                 continue;
             }
             new_sig.param_ownership[idx] = OwnershipMode::Owned;
@@ -649,6 +680,18 @@ pub fn restore_pub_owned_non_copy_api_formals(
     registry: &mut SignatureRegistry,
     programs: &[&Program],
 ) {
+    restore_pub_owned_non_copy_api_formals_with_cache(
+        registry,
+        programs,
+        &HardOwnedCache::uncached(),
+    );
+}
+
+fn restore_pub_owned_non_copy_api_formals_with_cache(
+    registry: &mut SignatureRegistry,
+    programs: &[&Program],
+    cache: &HardOwnedCache,
+) {
     let lookup = ProgramLookup::build(programs);
     let keys: Vec<String> = registry.signatures.keys().cloned().collect();
     for key in keys {
@@ -694,6 +737,7 @@ pub fn restore_pub_owned_non_copy_api_formals(
                 &key,
                 idx,
                 Some(&lookup),
+                cache,
             ) {
                 continue;
             }
@@ -2182,6 +2226,7 @@ fn bare_pass_hint_should_skip(
     param_idx: usize,
     mode: OwnershipMode,
     copy_types: &HashSet<String>,
+    cache: &HardOwnedCache,
 ) -> bool {
     let Some(sig) = registry.get_signature(callee_key) else {
         return false;
@@ -2221,7 +2266,7 @@ fn bare_pass_hint_should_skip(
     }
     if matches!(mode, OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)
         && callee_pub_owned_formal_skip_bare_pass(
-            &sig, programs, registry, callee_key, param_idx, None,
+            &sig, programs, registry, callee_key, param_idx, None, cache,
         )
     {
         return true;
@@ -2241,7 +2286,7 @@ fn bare_pass_hint_should_skip(
                 || param_whole_binding_returned(body, param_name)
                 || param_moved_into_let_binding(body, param_name)
                 || param_used_only_as_match_scrutinee(body, param_name)
-                || param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs)
+                || param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs, cache)
                 || param_has_consuming_field_or_index_move(
                     body, param_name, formal_ty, programs, copy_types,
                 )
@@ -2875,6 +2920,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
     callee_key: &str,
     param_idx: usize,
     lookup: Option<&ProgramLookup<'_>>,
+    cache: &HardOwnedCache,
 ) -> bool {
     let formal_ty = sig
         .formal_param_types
@@ -2925,7 +2971,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
         // DB-216/275/276: bare forward into hard Owned (extern / Vec / consuming
         // Custom). Soft Owned AST peers that are themselves readonly walks must not
         // lock the formal — DB-366 mutual BT ticks converge to Borrowed.
-        if param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs) {
+        if param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs, cache) {
             return true;
         }
     }
@@ -2966,7 +3012,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
             // look Owned from AST stubs — those are not hard consumes.
             if param_is_readonly_custom_walk_body(body, param_name)
                 && !param_forwarded_bare_into_hard_owned_callee(
-                    body, param_name, registry, programs,
+                    body, param_name, registry, programs, cache,
                 )
             {
                 return false;
@@ -3226,9 +3272,10 @@ fn param_forwarded_bare_into_hard_owned_callee(
     param_name: &str,
     registry: &SignatureRegistry,
     programs: &[&Program],
+    cache: &HardOwnedCache,
 ) -> bool {
     body.iter()
-        .any(|stmt| stmt_forwards_bare_into_hard_owned_callee(stmt, param_name, registry, programs))
+        .any(|stmt| stmt_forwards_bare_into_hard_owned_callee(stmt, param_name, registry, programs, cache))
 }
 
 fn stmt_forwards_bare_into_hard_owned_callee(
@@ -3236,6 +3283,7 @@ fn stmt_forwards_bare_into_hard_owned_callee(
     param_name: &str,
     registry: &SignatureRegistry,
     programs: &[&Program],
+    cache: &HardOwnedCache,
 ) -> bool {
     match stmt {
         Statement::Expression { expr, .. }
@@ -3243,15 +3291,15 @@ fn stmt_forwards_bare_into_hard_owned_callee(
             value: Some(expr), ..
         }
         | Statement::Assignment { value: expr, .. } => {
-            expr_forwards_bare_into_hard_owned_callee(expr, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(expr, param_name, registry, programs, cache)
         }
         Statement::Let {
             value, else_block, ..
         } => {
-            expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs, cache)
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
-                        stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                        stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs, cache)
                     })
                 })
         }
@@ -3261,35 +3309,35 @@ fn stmt_forwards_bare_into_hard_owned_callee(
             condition,
             ..
         } => {
-            expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs, cache)
                 || then_block.iter().any(|s| {
-                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs, cache)
                 })
                 || else_block.as_ref().is_some_and(|b| {
                     b.iter().any(|s| {
-                        stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                        stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs, cache)
                     })
                 })
         }
         Statement::While {
             body, condition, ..
         } => {
-            expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(condition, param_name, registry, programs, cache)
                 || body.iter().any(|s| {
-                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs, cache)
                 })
         }
         Statement::For { body, iterable, .. } => {
-            expr_forwards_bare_into_hard_owned_callee(iterable, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(iterable, param_name, registry, programs, cache)
                 || body.iter().any(|s| {
-                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)
+                    stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs, cache)
                 })
         }
         Statement::Match { value, arms, .. } => {
-            expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(value, param_name, registry, programs, cache)
                 || arms.iter().any(|arm| {
                     expr_forwards_bare_into_hard_owned_callee(
-                        &arm.body, param_name, registry, programs,
+                        &arm.body, param_name, registry, programs, cache,
                     )
                 })
         }
@@ -3302,6 +3350,7 @@ fn expr_forwards_bare_into_hard_owned_callee(
     param_name: &str,
     registry: &SignatureRegistry,
     programs: &[&Program],
+    cache: &HardOwnedCache,
 ) -> bool {
     match expr {
         Expression::Call {
@@ -3312,15 +3361,15 @@ fn expr_forwards_bare_into_hard_owned_callee(
             if let Some(name) = callee_name_from_expr(function) {
                 for (arg_i, (_, arg)) in arguments.iter().enumerate() {
                     if expr_is_bare_param(arg, param_name)
-                        && callee_arg_is_hard_owned(registry, programs, &name, arg_i)
+                        && callee_arg_is_hard_owned(registry, programs, &name, arg_i, cache)
                     {
                         return true;
                     }
                 }
             }
-            expr_forwards_bare_into_hard_owned_callee(function, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(function, param_name, registry, programs, cache)
                 || arguments.iter().any(|(_, arg)| {
-                    expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs)
+                    expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs, cache)
                 })
         }
         Expression::MethodCall {
@@ -3331,22 +3380,22 @@ fn expr_forwards_bare_into_hard_owned_callee(
         } => {
             for (arg_i, (_, arg)) in arguments.iter().enumerate() {
                 if expr_is_bare_param(arg, param_name)
-                    && callee_arg_is_hard_owned(registry, programs, method, arg_i)
+                    && callee_arg_is_hard_owned(registry, programs, method, arg_i, cache)
                 {
                     return true;
                 }
             }
-            expr_forwards_bare_into_hard_owned_callee(object, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(object, param_name, registry, programs, cache)
                 || arguments.iter().any(|(_, arg)| {
-                    expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs)
+                    expr_forwards_bare_into_hard_owned_callee(arg, param_name, registry, programs, cache)
                 })
         }
         Expression::Block { statements, .. } => statements
             .iter()
-            .any(|s| stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs)),
+            .any(|s| stmt_forwards_bare_into_hard_owned_callee(s, param_name, registry, programs, cache)),
         Expression::Binary { left, right, .. } => {
-            expr_forwards_bare_into_hard_owned_callee(left, param_name, registry, programs)
-                || expr_forwards_bare_into_hard_owned_callee(right, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(left, param_name, registry, programs, cache)
+                || expr_forwards_bare_into_hard_owned_callee(right, param_name, registry, programs, cache)
         }
         Expression::Unary { operand, .. }
         | Expression::FieldAccess {
@@ -3357,13 +3406,13 @@ fn expr_forwards_bare_into_hard_owned_callee(
         }
         | Expression::TryOp { expr: operand, .. }
         | Expression::Await { expr: operand, .. } => {
-            expr_forwards_bare_into_hard_owned_callee(operand, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(operand, param_name, registry, programs, cache)
         }
         Expression::Array { elements, .. } | Expression::Tuple { elements, .. } => elements
             .iter()
-            .any(|e| expr_forwards_bare_into_hard_owned_callee(e, param_name, registry, programs)),
+            .any(|e| expr_forwards_bare_into_hard_owned_callee(e, param_name, registry, programs, cache)),
         Expression::StructLiteral { fields, .. } => fields.iter().any(|(_, e)| {
-            expr_forwards_bare_into_hard_owned_callee(e, param_name, registry, programs)
+            expr_forwards_bare_into_hard_owned_callee(e, param_name, registry, programs, cache)
         }),
         _ => false,
     }
@@ -3374,19 +3423,14 @@ fn callee_arg_is_hard_owned(
     programs: &[&Program],
     callee_name: &str,
     arg_index: usize,
+    cache: &HardOwnedCache,
 ) -> bool {
     let cache_key = (callee_name.to_string(), arg_index);
-    if let Some(hit) =
-        HARD_OWNED_CACHE.with(|c| c.borrow().as_ref().and_then(|m| m.get(&cache_key).copied()))
-    {
+    if let Some(hit) = cache.get(&cache_key) {
         return hit;
     }
     let result = callee_arg_is_hard_owned_uncached(registry, programs, callee_name, arg_index);
-    HARD_OWNED_CACHE.with(|c| {
-        if let Some(m) = c.borrow_mut().as_mut() {
-            m.insert(cache_key, result);
-        }
-    });
+    cache.insert(cache_key, result);
     result
 }
 

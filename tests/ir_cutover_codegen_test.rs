@@ -3,8 +3,8 @@
 use windjammer::codegen::rust::IrCutoverConfig;
 
 #[test]
-fn cutover_default_all_off() {
-    let config = IrCutoverConfig::default();
+fn cutover_legacy_all_off_is_explicit() {
+    let config = IrCutoverConfig::legacy_all_off();
     assert!(!config.all_enabled());
     assert!(!config.call_sites);
     assert!(!config.locals);
@@ -12,7 +12,7 @@ fn cutover_default_all_off() {
 
 #[test]
 fn cutover_formal_flags_on_call_sites_on_by_default() {
-    let config = IrCutoverConfig::from_env();
+    let config = IrCutoverConfig::default();
     assert!(config.ownership);
     assert!(config.clones);
     assert!(config.param_types);
@@ -37,6 +37,6 @@ fn cutover_all_flags_enabled() {
 
 #[test]
 fn cutover_all_disabled() {
-    let config = IrCutoverConfig::default();
+    let config = IrCutoverConfig::legacy_all_off();
     assert!(config.all_disabled());
 }

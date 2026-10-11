@@ -6,6 +6,7 @@ mod completion;
 pub mod database;
 mod debug_adapter;
 mod diagnostics;
+mod formatting;
 mod hover;
 mod ide_queries;
 mod inlay_hints;

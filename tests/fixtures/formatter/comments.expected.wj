@@ -1,0 +1,8 @@
+// header
+// indented comment
+fn main() { // trailing
+    // own line in body
+    let a = 1 // after let
+    /// doc inside
+    a
+}

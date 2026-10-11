@@ -1,5 +1,7 @@
 # Windjammer Optimization Architecture
 
+> **Status warning (2026-10-10).** The compile-time optimizer described here (`src/optimizer/`, "15 phases") is disabled in the pipeline (`optimize_program` in `src/compiler_database.rs`), and no benchmark in the repository supports the performance figures below. Read this as a design history, not as shipped behaviour. Decision: [ADR-0006](adr/0006-optimizer-fate.md).
+
 ## Two-Tier Optimization System
 
 Windjammer provides **two complementary optimization systems** that work together to deliver maximum performance across all supported languages.

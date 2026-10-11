@@ -1,5 +1,12 @@
 # Ownership Inference Philosophy - Clarified 2026-03-12
 
+> **Doc/code mismatch (verified 2026-10-10).** The rule below ("`let mut` is never inferred") describes the March 2026
+> design intent. The Rust code generator does infer it: `let_statement_generation.rs` computes `auto_needs_mut` and emits
+> `let mut` for an un-annotated local that is later mutated, and `function_formal_parameter_generation.rs` does the same for
+> parameters. Which behaviour is intended is an open decision: [ADR-0002](../adr/0002-local-mutability.md). Until it is
+> accepted, treat explicit `let mut` as always valid and inferred `mut` as current but unspecified behaviour.
+
+
 ## TL;DR
 
 **Windjammer automatically infers ownership (`&`, `&mut`, owned) but keeps mutability (`let mut`) explicit.**

@@ -3,7 +3,7 @@
 use crate::lexer::Lexer;
 use crate::parser::{Expression, Item, Parser};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Copy-shape check for library PASS 0.
 /// Delegates to the canonical implementation in `type_classification`.
@@ -632,11 +632,10 @@ pub(crate) fn stdlib_modules_from_source(source: &str) -> HashSet<String> {
     stdlib_modules
 }
 
-pub(crate) fn find_stdlib_dir_for_api_types() -> Option<PathBuf> {
-    if let Ok(p) = std::env::var("WINDJAMMER_STDLIB") {
-        let pb = PathBuf::from(p);
+pub(crate) fn find_stdlib_dir_for_api_types(override_dir: Option<&Path>) -> Option<PathBuf> {
+    if let Some(pb) = override_dir {
         if pb.is_dir() {
-            return Some(pb);
+            return Some(pb.to_path_buf());
         }
     }
     let manifest_std = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std");
@@ -700,6 +699,7 @@ fn stdlib_module_rust_path(module: &str) -> Option<String> {
 /// source only imports a sibling type (`ServerRequest` without `HttpMethod`).
 pub(crate) fn collect_stdlib_api_types_for_modules(
     modules: &HashSet<String>,
+    stdlib_override: Option<&Path>,
 ) -> (
     HashMap<String, HashMap<String, crate::parser::Type>>,
     HashMap<String, Vec<crate::parser::Type>>,
@@ -710,7 +710,7 @@ pub(crate) fn collect_stdlib_api_types_for_modules(
     let mut struct_fields: HashMap<String, HashMap<String, crate::parser::Type>> = HashMap::new();
     let mut enum_variants: HashMap<String, Vec<crate::parser::Type>> = HashMap::new();
     let mut type_rust_paths: HashMap<String, String> = HashMap::new();
-    let Some(stdlib_dir) = find_stdlib_dir_for_api_types() else {
+    let Some(stdlib_dir) = find_stdlib_dir_for_api_types(stdlib_override) else {
         return (struct_fields, enum_variants, type_rust_paths);
     };
 

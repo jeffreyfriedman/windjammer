@@ -352,7 +352,7 @@ impl<'ast> CodeGenerator<'ast> {
             validate_arg_count(sig, arguments.len()) && !has_stale_owned_non_copy_params(sig)
         };
 
-        let trace = std::env::var("WJ_SIGNATURE_TRACE").is_ok();
+        let trace = crate::debug_env::enabled("WJ_SIGNATURE_TRACE");
 
         let receiver_type_name = self
             .mc_infer_method_receiver_type_name(object)

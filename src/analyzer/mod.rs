@@ -269,6 +269,31 @@ impl<'ast> ImplSelfFieldContext<'ast> {
     }
 }
 
+/// Per-analyzer recursion depth counters (explicit state instead of thread-locals).
+#[derive(Debug, Default)]
+pub(crate) struct RecursionDepths {
+    pub(crate) self_field_stmt: std::cell::Cell<u32>,
+    pub(crate) self_field_expr: std::cell::Cell<u32>,
+    pub(crate) self_call_stmt: std::cell::Cell<u32>,
+    pub(crate) self_call_expr: std::cell::Cell<u32>,
+}
+
+impl RecursionDepths {
+    /// Enter a level; returns false (and leaves the counter unchanged) past the limit.
+    pub(crate) fn enter(counter: &std::cell::Cell<u32>) -> bool {
+        let cur = counter.get();
+        if cur > 1000 {
+            return false;
+        }
+        counter.set(cur + 1);
+        true
+    }
+
+    pub(crate) fn leave(counter: &std::cell::Cell<u32>) {
+        counter.set(counter.get() - 1);
+    }
+}
+
 pub struct Analyzer<'ast> {
     // Track variable ownership modes (reserved for future use)
     #[allow(dead_code)]
@@ -307,6 +332,8 @@ pub struct Analyzer<'ast> {
     pub ownership_preconverged: bool,
     /// Top-level module functions in the current file (for mutual-recursion string contracts).
     top_level_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
+    /// Recursion guards for the self-mutation walkers (owned by this analyzer pass).
+    pub(crate) recursion_depths: RecursionDepths,
 }
 
 impl<'ast> Analyzer<'ast> {
@@ -330,6 +357,7 @@ impl<'ast> Analyzer<'ast> {
             convergence_only: false,
             ownership_preconverged: false,
             top_level_functions: None,
+            recursion_depths: RecursionDepths::default(),
         }
     }
 

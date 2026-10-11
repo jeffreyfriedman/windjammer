@@ -19,6 +19,8 @@ pub struct ModuleCompiler {
     pub target: CompilationTarget,
     pub enable_lint: bool, // Run Rust leakage linter (W0001-W0004)
     pub stdlib_path: PathBuf,
+    /// Explicit compiler configuration shared by every file this compiler handles.
+    pub config: crate::compiler_config::CompilerConfig,
     pub source_roots: Vec<PathBuf>, // Additional source roots (e.g., ../game-host-core/src)
     pub imported_stdlib_modules: HashSet<String>, // Track which stdlib modules are used
     pub external_crates: Vec<String>, // Track external crates (e.g., windjammer_ui)
@@ -47,16 +49,30 @@ pub struct ModuleCompiler {
 #[allow(dead_code)]
 impl ModuleCompiler {
     pub fn new(target: CompilationTarget, enable_lint: bool) -> Self {
-        // Check for WINDJAMMER_STDLIB env var, otherwise use ./std
-        let stdlib_path = std::env::var("WINDJAMMER_STDLIB")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("./std"));
+        Self::with_config(
+            target,
+            enable_lint,
+            crate::compiler_config::CompilerConfig::default(),
+        )
+    }
+
+    /// Construct with an explicit configuration (stdlib path override, IR cutover, ...).
+    pub fn with_config(
+        target: CompilationTarget,
+        enable_lint: bool,
+        config: crate::compiler_config::CompilerConfig,
+    ) -> Self {
+        let stdlib_path = config
+            .stdlib_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("./std"));
 
         Self {
             compiled_modules: HashMap::new(),
             target,
             enable_lint,
             stdlib_path,
+            config,
             source_roots: Vec::new(),
             imported_stdlib_modules: HashSet::new(),
             external_crates: Vec::new(),
@@ -314,6 +330,7 @@ impl ModuleCompiler {
         per_file_registry.merge(&signatures);
 
         let mut generator = codegen::CodeGenerator::new_for_module(per_file_registry, self.target);
+        generator.set_config(self.config.clone());
         generator.set_numeric_inference(numeric_inference);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
         generator

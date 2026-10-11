@@ -21,10 +21,15 @@ pub(crate) fn sanitize_path_for_toml(path: &Path) -> String {
 
 /// Find windjammer-runtime path for Cargo.toml dependency
 pub(crate) fn find_windjammer_runtime_path() -> PathBuf {
-    if let Ok(path) = std::env::var("WINDJAMMER_RUNTIME_PATH") {
-        let p = PathBuf::from(path);
+    find_windjammer_runtime_path_with(None)
+}
+
+/// Like [`find_windjammer_runtime_path`], honoring an explicit override
+/// (`CompilerConfig::runtime_path`) when it points at a crate.
+pub(crate) fn find_windjammer_runtime_path_with(override_path: Option<&Path>) -> PathBuf {
+    if let Some(p) = override_path {
         if p.join("Cargo.toml").exists() {
-            return p;
+            return p.to_path_buf();
         }
     }
 
@@ -505,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn find_runtime_respects_windjammer_runtime_path_env() {
+    fn find_runtime_respects_explicit_runtime_path_override() {
         let compiler_runtime =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("crates/windjammer-runtime");
         let temp = tempfile::TempDir::new().expect("tempdir");
@@ -517,9 +522,7 @@ mod tests {
         )
         .expect("write");
 
-        std::env::set_var("WINDJAMMER_RUNTIME_PATH", fake.to_str().unwrap());
-        let found = find_windjammer_runtime_path();
-        std::env::remove_var("WINDJAMMER_RUNTIME_PATH");
+        let found = find_windjammer_runtime_path_with(Some(&fake));
 
         assert_eq!(found, fake);
 

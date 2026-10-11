@@ -251,11 +251,22 @@ export WINDJAMMER_STDLIB=/path/to/custom/stdlib
 
 ### Import Syntax
 
-- **Standard library**: `use std::module_name`
-- **Submodules** (future): `use std::http.client`
-- **Qualified imports** (future): `use std::fs as filesystem`
+Verified against `src/module_system/`, `src/file_compiler.rs` and the tests in `tests/` (for example `tests/use_crate_path_test.wj`).
 
-Currently, only `std.*` imports are supported. User modules and relative imports will be added in future versions.
+- **Standard library:** `use std::module_name`.
+- **Crate-local modules:** `use crate::path::to::item`. The path is preserved in the generated Rust.
+- **Relative paths:** `use super::...` (including repeated `super::super::`) and `use self::...`.
+- **Declared modules:** `mod name` declares an external file module (`name.wj` or `name/mod.wj`); `mod name { ... }` is an inline module;
+  `pub mod` / `pub use` in a `mod.wj` are honoured when it lists explicit modules.
+- **Auto-discovery:** modules are discovered from the directory layout. `wj build --module-file` additionally generates
+  `mod.rs` files with `pub mod` declarations and re-exports; `--library` excludes test `main()` functions.
+- **Source roots:** `[sources] roots = [...]` in `wj.toml` lists extra directories searched for modules.
+- **Path dependencies:** `[dependencies]` entries with `path = "..."` are forwarded to the generated `Cargo.toml`, and
+  `metadata.json` from path dependencies is discovered so ownership signatures cross crate boundaries
+  (`src/compiler/dependency_resolution.rs`). There is no registry; see [ADR-0010](adr/0010-package-source-of-truth.md).
+
+Not supported or not verified: aliases in `use` (`use std::fs as filesystem`) and the dotted submodule form (`use std::http.client`)
+that earlier versions of this document proposed. Check `tests/` before relying on them.
 
 ## Best Practices
 
@@ -307,28 +318,11 @@ fn process_data() {
 }
 ```
 
-## Future Enhancements
+## Open design questions
 
-The module system will be expanded in future versions:
-
-### v0.6.0
-- User-defined modules (not just stdlib)
-- Relative imports (`use ./my_module`)
-- Module aliases (`use std::fs as filesystem`)
-- Re-exports (`pub use`)
-
-### v0.7.0
-- Submodule imports (`use std::http.client`)
-- Selective imports (`use std::fs.{read, write}`)
-- Private vs public module items
-- Cross-module visibility control
-
-### v0.10.0
-- Module caching for faster compilation
-- Precompiled stdlib binaries
-- Module documentation generation
-- Workspace/package system
-- Production confidence-building before v1.0.0
+Package sources, lock files and a registry are tracked in [ADR-0010](adr/0010-package-source-of-truth.md); which std modules are
+available on which targets in [ADR-0008](adr/0008-stdlib-portability.md); how Rust crates are named from `.wj` in
+[ADR-0012](adr/0012-rust-interop-boundary.md). The old version-numbered wish list (v0.6 to v0.10) was removed because those versions have passed.
 
 ## Contributing to Stdlib
 
