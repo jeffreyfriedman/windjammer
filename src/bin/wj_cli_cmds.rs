@@ -78,7 +78,7 @@ pub fn run(cli: Cli) -> Result<()> {
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             if interpret {
-                interpret_file(&path)?;
+                interpret_file(&path, args)?;
             } else {
                 windjammer::cli::run::execute(&path, &args, &target)?;
             }
@@ -101,7 +101,11 @@ pub fn run(cli: Cli) -> Result<()> {
             copy_runtime,
             runtime_path,
             no_generate_cargo_toml,
+            interpret,
         } => {
+            if interpret {
+                return interpret_tests(path.as_deref(), filter.as_deref());
+            }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
                 filter,
@@ -407,142 +411,32 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Interpret a .wj file directly using the Windjammerscript tree-walking interpreter.
-fn interpret_file(file: &std::path::Path) -> Result<()> {
-    use colored::*;
-
-    if !file.exists() {
-        anyhow::bail!("File not found: {:?}", file);
+/// Interpret a .wj file or project directory directly (no cargo, no rustc).
+fn interpret_file(file: &std::path::Path, args: Vec<String>) -> Result<()> {
+    let code = windjammer::interpreter::runner::run_path(file, args);
+    if code != 0 {
+        std::process::exit(code);
     }
-    if file.extension().is_none_or(|ext| ext != "wj") {
-        anyhow::bail!("File must have .wj extension: {:?}", file);
-    }
-
-    println!(
-        "{} {:?} (Windjammerscript interpreter)",
-        "Interpreting".green().bold(),
-        file
-    );
-
-    let source = std::fs::read_to_string(file)?;
-    let mut lex = windjammer::lexer::Lexer::new(&source);
-    let tokens = lex.tokenize_with_locations();
-    let mut parse = windjammer::parser::Parser::new_with_source(
-        tokens,
-        file.to_string_lossy().to_string(),
-        source.clone(),
-    );
-    let program = parse
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
-
-    let mut interp = windjammer::interpreter::Interpreter::new();
-    match interp.run(&program) {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            eprintln!("{} {}", "Runtime error:".red().bold(), e);
-            std::process::exit(1);
-        }
-    }
+    Ok(())
 }
 
-/// Run the Windjammerscript REPL
+/// Run the Windjammerscript REPL (state persists between inputs).
 fn run_repl() -> Result<()> {
-    use colored::*;
-    use std::io::{BufRead, Write};
+    windjammer::interpreter::repl::run_repl_stdio();
+    Ok(())
+}
 
-    println!(
-        "{} {} {}",
-        "Windjammerscript".cyan().bold(),
-        "REPL".white().bold(),
-        "(type 'exit' or Ctrl-D to quit)".dimmed()
-    );
-    println!(
-        "{}",
-        "Tip: Any code here can be compiled with `wj build` for production.".dimmed()
-    );
-    println!();
-
-    let stdin = std::io::stdin();
-    let mut accumulated_source = String::new();
-    let mut line_buffer = String::new();
-    let mut in_block = false;
-    let mut brace_depth: i32 = 0;
-
-    loop {
-        if in_block {
-            print!("{} ", "...".dimmed());
-        } else {
-            print!("{} ", "wj>".green().bold());
-        }
-        std::io::stdout().flush()?;
-
-        line_buffer.clear();
-        let bytes_read = stdin.lock().read_line(&mut line_buffer)?;
-        if bytes_read == 0 {
-            println!();
-            break;
-        }
-
-        let line = line_buffer.trim_end();
-
-        if line == "exit" || line == "quit" {
-            break;
-        }
-
-        for ch in line.chars() {
-            match ch {
-                '{' => brace_depth += 1,
-                '}' => brace_depth -= 1,
-                _ => {}
-            }
-        }
-
-        accumulated_source.push_str(line);
-        accumulated_source.push('\n');
-
-        if brace_depth > 0 {
-            in_block = true;
-            continue;
-        }
-
-        in_block = false;
-        brace_depth = 0;
-
-        let source = if accumulated_source.contains("fn main()") {
-            accumulated_source.clone()
-        } else {
-            format!("fn main() {{\n{}\n}}", accumulated_source)
-        };
-
-        let mut lex = windjammer::lexer::Lexer::new(&source);
-        let tokens = lex.tokenize_with_locations();
-        let mut parse =
-            windjammer::parser::Parser::new_with_source(tokens, "repl".to_string(), source.clone());
-
-        match parse.parse() {
-            Ok(program) => {
-                let mut interp = windjammer::interpreter::Interpreter::new();
-                match interp.run(&program) {
-                    Ok(val) => {
-                        let display = val.to_display_string();
-                        if display != "()" {
-                            println!("{}", display);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{} {}", "Error:".red().bold(), e);
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("{} {}", "Parse error:".red().bold(), e);
-            }
-        }
-
-        accumulated_source.clear();
+/// `wj test --interpret`: run `@test` / `test_*` functions without compiling.
+fn interpret_tests(path: Option<&std::path::Path>, filter: Option<&str>) -> Result<()> {
+    let root = path.unwrap_or_else(|| std::path::Path::new("."));
+    let results = windjammer::interpreter::runner::run_tests(root, filter);
+    let code = windjammer::interpreter::runner::report_tests(&results);
+    if results.is_empty() {
+        eprintln!("no test files (*_test.wj) found under {}", root.display());
+        std::process::exit(1);
     }
-
-    println!("{}", "Goodbye!".dimmed());
+    if code != 0 {
+        std::process::exit(code);
+    }
     Ok(())
 }

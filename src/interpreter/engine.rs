@@ -1,81 +1,182 @@
-//! The Windjammerscript tree-walking interpreter engine.
+//! The interpreter state and public entry points.
 //!
-//! Walks the AST directly, evaluating expressions and executing statements.
-//! Uses the same parser as the compiler backends — same `.wj` source runs
-//! everywhere.
+//! Responsibilities are split across sibling modules:
+//! `register` (definitions) / `loader` (files) / `eval_expr`, `eval_stmt`, `pattern`,
+//! `place` (evaluation) / `call` (functions, methods, closures) / `ops`, `coerce`
+//! (integer-width semantics) / `format` (println/format!) / `builtins` (stdlib).
 
-use super::environment::Environment;
-use super::value::Value;
-use crate::parser::{FunctionDecl, Item, Program};
-use std::collections::HashMap;
+use super::builtins::Registry;
+use super::error::{ErrorKind, Frame, RuntimeError, Span, R};
+use super::value::{Slot, Value};
+use crate::parser::{Decorator, Parameter, Program, Statement, Type};
+use crate::source_map::Location;
+use std::cell::{OnceCell, RefCell};
+use std::collections::{HashMap, HashSet};
+use std::io::Write;
+use std::path::PathBuf;
+use std::rc::Rc;
 
-/// Control flow signal returned by statement execution
-pub(crate) enum ControlFlow {
-    Continue,
-    Return(Value),
-    Break,
-    LoopContinue,
+/// A user function / method / default trait method.
+pub struct FuncDef {
+    pub name: String,
+    pub qual: Rc<str>,
+    pub params: &'static [Parameter<'static>],
+    pub ret: Option<&'static Type>,
+    pub body: &'static [&'static Statement<'static>],
+    pub module: usize,
+    pub self_ty: Option<Rc<str>>,
+    pub decorators: &'static [Decorator<'static>],
+    pub is_extern: bool,
+    /// Per-parameter (self excluded): does the body mutate it? Computed lazily.
+    pub mutated: OnceCell<Rc<Vec<bool>>>,
+    pub self_mutated: OnceCell<bool>,
 }
 
-/// Stored function definition
-pub(crate) struct FunctionDef<'a> {
-    pub(crate) decl: &'a FunctionDecl<'a>,
-    #[allow(dead_code)]
-    pub(crate) receiver_type: Option<String>,
+pub struct StructDef {
+    pub fields: Vec<(&'static str, Type)>,
+    pub tuple: bool,
+    pub copy: bool,
 }
 
-/// Information about an enum variant for runtime construction
-#[derive(Debug, Clone)]
-pub(crate) struct EnumVariantInfo {
-    pub(crate) enum_name: String,
-    pub(crate) variant_name: String,
-    pub(crate) data_kind: EnumVariantKind,
+pub struct VariantDef {
+    pub name: &'static str,
+    pub kind: VariantKind,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum EnumVariantKind {
+pub enum VariantKind {
     Unit,
-    Tuple {
-        #[allow(dead_code)]
-        count: usize,
-    },
-    Struct {
-        #[allow(dead_code)]
-        field_names: Vec<String>,
-    },
+    Tuple(Vec<Type>),
+    Struct(Vec<(&'static str, Type)>),
 }
 
-/// The Windjammerscript interpreter
-#[derive(Default)]
-pub struct Interpreter<'a> {
-    pub(crate) env: Environment,
-    /// All function/method definitions indexed by name
-    pub(crate) functions: HashMap<String, Vec<FunctionDef<'a>>>,
-    /// Struct definitions: name → field names
-    pub(crate) struct_defs: HashMap<String, Vec<String>>,
-    /// Enum variant info: "EnumName::Variant" → EnumVariantInfo
-    pub(crate) enum_variants: HashMap<String, EnumVariantInfo>,
-    /// Captured stdout (for testing)
+pub struct EnumDef {
+    pub variants: Vec<VariantDef>,
+}
+
+pub struct TraitDef {
+    pub supertraits: Vec<String>,
+}
+
+/// What a `use` introduced into a module's namespace.
+#[derive(Clone, Debug)]
+pub enum Import {
+    Module(usize),
+    /// Item `name` inside `module`.
+    Item(usize, String),
+    /// A builtin (native) std path such as `std::fs`.
+    Std(String),
+}
+
+pub struct Module {
+    pub name: String,
+    pub file: PathBuf,
+    pub parent: Option<usize>,
+    pub funcs: HashMap<String, Rc<FuncDef>>,
+    pub imports: HashMap<String, Import>,
+    pub children: HashMap<String, usize>,
+    pub consts: HashMap<String, &'static crate::parser::Expression<'static>>,
+    pub const_types: HashMap<String, &'static Type>,
+}
+
+pub struct Scope {
+    pub vars: Vec<(&'static str, Slot)>,
+    pub marks: Vec<usize>,
+    pub module: usize,
+    pub self_ty: Option<Rc<str>>,
+    pub ret_ty: Option<&'static Type>,
+    pub defers: Vec<&'static Statement<'static>>,
+}
+
+impl Scope {
+    pub fn new(module: usize) -> Self {
+        Scope {
+            vars: Vec::new(),
+            marks: Vec::new(),
+            module,
+            self_ty: None,
+            ret_ty: None,
+            defers: Vec::new(),
+        }
+    }
+}
+
+pub struct Interpreter {
+    pub(crate) modules: Vec<Module>,
+    pub(crate) structs: HashMap<String, StructDef>,
+    pub(crate) enums: HashMap<String, EnumDef>,
+    pub(crate) traits: HashMap<String, TraitDef>,
+    pub(crate) trait_methods: HashMap<String, Vec<&'static crate::parser::TraitMethod<'static>>>,
+    pub(crate) trait_impls: Vec<(String, String)>,
+    pub(crate) methods: HashMap<(String, String), Rc<FuncDef>>,
+    pub(crate) user_mutating: HashSet<String>,
+    pub(crate) type_aliases: HashMap<String, Type>,
+    pub(crate) globals: HashMap<(usize, String), Slot>,
+    pub(crate) scope: Scope,
+    /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
+    pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
+    pub(crate) cur: Option<&'static Location>,
     pub(crate) output: Vec<String>,
-    /// Whether to capture output instead of printing
     pub(crate) capture_output: bool,
+    pub(crate) out: std::io::BufWriter<std::io::Stdout>,
+    pub(crate) builtins: Registry,
+    pub(crate) depth: usize,
+    pub(crate) max_depth: usize,
+    pub(crate) args: Vec<String>,
+    pub(crate) closure_counter: usize,
+    pub(crate) mutating_analysis: HashSet<usize>,
+    /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
+    pub(crate) type_hint: Option<Type>,
+    /// (module, name) pairs already probed on disk and not found.
+    pub(crate) missing_modules: HashSet<(usize, String)>,
 }
 
-impl<'a> Interpreter<'a> {
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Interpreter {
     pub fn new() -> Self {
-        Self::default()
+        let mut s = Interpreter {
+            modules: Vec::new(),
+            structs: HashMap::new(),
+            enums: HashMap::new(),
+            traits: HashMap::new(),
+            trait_methods: HashMap::new(),
+            trait_impls: Vec::new(),
+            methods: HashMap::new(),
+            user_mutating: HashSet::new(),
+            type_aliases: HashMap::new(),
+            globals: HashMap::new(),
+            scope: Scope::new(0),
+            backtrace: Vec::new(),
+            cur: None,
+            output: Vec::new(),
+            capture_output: false,
+            out: std::io::BufWriter::new(std::io::stdout()),
+            builtins: Registry::standard(),
+            depth: 0,
+            max_depth: 50_000,
+            args: Vec::new(),
+            closure_counter: 0,
+            mutating_analysis: HashSet::new(),
+            type_hint: None,
+            missing_modules: HashSet::new(),
+        };
+        s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
+        s
     }
 
-    /// Create an interpreter that captures output (for testing)
+    /// Create an interpreter that captures output (for testing).
     pub fn new_capturing() -> Self {
-        Self {
-            env: Environment::new(),
-            functions: HashMap::new(),
-            struct_defs: HashMap::new(),
-            enum_variants: HashMap::new(),
-            output: Vec::new(),
-            capture_output: true,
-        }
+        let mut s = Self::new();
+        s.capture_output = true;
+        s
+    }
+
+    pub fn set_args(&mut self, args: Vec<String>) {
+        self.args = args;
     }
 
     /// Get captured output
@@ -83,111 +184,109 @@ impl<'a> Interpreter<'a> {
         self.output.join("")
     }
 
-    /// Run a complete program
-    pub fn run(&mut self, program: &'a Program<'a>) -> Result<Value, String> {
-        self.register_definitions(program);
+    pub fn flush(&mut self) {
+        let _ = self.out.flush();
+    }
 
-        if self.functions.contains_key("main") {
-            self.call_function("main", &[])
+    pub(crate) fn write_out(&mut self, s: &str) {
+        if self.capture_output {
+            self.output.push(s.to_string());
         } else {
-            Err("No main() function found".to_string())
+            let _ = self.out.write_all(s.as_bytes());
         }
     }
 
-    /// Register all top-level definitions
-    fn register_definitions(&mut self, program: &'a Program<'a>) {
-        for item in &program.items {
-            match item {
-                Item::Function { decl, .. } => {
-                    let name = decl.name.clone();
-                    self.functions.entry(name).or_default().push(FunctionDef {
-                        decl,
-                        receiver_type: None,
-                    });
-                }
-                Item::Struct { decl, .. } => {
-                    let field_names: Vec<String> =
-                        decl.fields.iter().map(|f| f.name.clone()).collect();
-                    self.struct_defs.insert(decl.name.clone(), field_names);
-                }
-                Item::Impl { block, .. } => {
-                    let type_name = block.type_name.clone();
-                    for method in &block.functions {
-                        let method_key = format!("{}::{}", type_name, method.name);
-                        self.functions
-                            .entry(method_key)
-                            .or_default()
-                            .push(FunctionDef {
-                                decl: method,
-                                receiver_type: Some(type_name.clone()),
-                            });
-                    }
-                }
-                Item::Enum { decl, .. } => {
-                    for variant in &decl.variants {
-                        let key = format!("{}::{}", decl.name, variant.name);
-                        let data_kind = match &variant.data {
-                            crate::parser::EnumVariantData::Unit => EnumVariantKind::Unit,
-                            crate::parser::EnumVariantData::Tuple(types) => {
-                                EnumVariantKind::Tuple { count: types.len() }
-                            }
-                            crate::parser::EnumVariantData::Struct(fields) => {
-                                EnumVariantKind::Struct {
-                                    field_names: fields
-                                        .iter()
-                                        .map(|(name, _)| name.clone())
-                                        .collect(),
-                                }
-                            }
-                        };
-                        self.enum_variants.insert(
-                            key,
-                            EnumVariantInfo {
-                                enum_name: decl.name.clone(),
-                                variant_name: variant.name.clone(),
-                                data_kind,
-                            },
-                        );
-                    }
-                }
-                Item::Const { name, value, .. } => {
-                    let val = self.eval_expression(value);
-                    self.env.define(name, val);
-                }
-                _ => {}
+    pub(crate) fn write_err(&mut self, s: &str) {
+        if !self.capture_output {
+            let _ = self.out.flush();
+            eprint!("{}", s);
+        }
+    }
+
+    /// Run a complete program (single file). Compatibility entry point.
+    pub fn run(&mut self, program: &Program<'static>) -> Result<Value, String> {
+        self.run_checked(program).map_err(|e| {
+            self.flush();
+            match &e.span {
+                Some(s) => format!("{} ({})", e.message, s),
+                None => e.message.clone(),
             }
-        }
+        })
     }
 
-    /// Call a named function with arguments
-    pub(crate) fn call_function(&mut self, name: &str, args: &[Value]) -> Result<Value, String> {
-        let decl = {
-            let func_defs = self
-                .functions
-                .get(name)
-                .ok_or_else(|| format!("Undefined function: {}", name))?;
-            let func_def = func_defs
-                .first()
-                .ok_or_else(|| format!("No definition for function: {}", name))?;
-            func_def.decl
+    /// Run a program, keeping the structured error (kind, span, backtrace).
+    pub fn run_checked(&mut self, program: &Program<'static>) -> Result<Value, RuntimeError> {
+        let prog: &'static Program<'static> = Box::leak(Box::new(program.clone()));
+        self.load_program(0, prog)?;
+        self.call_main()
+    }
+
+    pub fn call_main(&mut self) -> Result<Value, RuntimeError> {
+        let main = self.modules[0]
+            .funcs
+            .get("main")
+            .cloned()
+            .ok_or_else(|| RuntimeError::new(ErrorKind::Semantic, "No main() function found"))?;
+        let r = self.call_func(&main, Vec::new(), None);
+        self.finish(r)
+    }
+
+    pub(crate) fn finish(&mut self, r: R) -> Result<Value, RuntimeError> {
+        let out = match r {
+            Ok(v) => Ok(v),
+            Err(super::error::Ctl::Return(v)) => Ok(v),
+            Err(super::error::Ctl::Err(e)) => Err(*e),
+            Err(_) => Ok(Value::Unit),
         };
+        self.flush();
+        out
+    }
 
-        self.env.push_scope();
+    pub(crate) fn span_of(&self, loc: Option<&'static Location>) -> Option<Span> {
+        loc.map(|l| Span {
+            file: l.file.to_string_lossy().to_string(),
+            line: l.line,
+            column: l.column,
+        })
+    }
 
-        let param_iter = decl.parameters.iter().filter(|p| p.name != "self");
-
-        for (param, arg) in param_iter.zip(args.iter()) {
-            self.env.define(&param.name, arg.clone());
+    /// Attach the current span and backtrace to an error that has none yet.
+    pub(crate) fn annotate(&self, mut e: RuntimeError) -> RuntimeError {
+        if e.span.is_none() {
+            e.span = self.span_of(self.cur);
         }
+        if e.backtrace.is_empty() {
+            e.backtrace = self
+                .backtrace
+                .iter()
+                .rev()
+                .map(|(name, site)| Frame { function: name.to_string(), call_site: self.span_of(*site) })
+                .collect();
+        }
+        e
+    }
 
-        let result = self.exec_body(&decl.body);
-
-        self.env.pop_scope();
-
-        match result {
-            ControlFlow::Return(val) => Ok(val),
-            ControlFlow::Continue => Ok(Value::Unit),
-            _ => Ok(Value::Unit),
+    pub(crate) fn mark(&mut self, loc: Option<&'static Location>) {
+        if loc.is_some() {
+            self.cur = loc;
         }
     }
 }
+
+impl Module {
+    pub fn new(name: &str, file: PathBuf, parent: Option<usize>) -> Module {
+        Module {
+            name: name.to_string(),
+            file,
+            parent,
+            funcs: HashMap::new(),
+            imports: HashMap::new(),
+            children: HashMap::new(),
+            consts: HashMap::new(),
+            const_types: HashMap::new(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) type SharedCell<T> = Rc<RefCell<T>>;

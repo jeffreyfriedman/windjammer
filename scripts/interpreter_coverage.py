@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Measure the Windjammer interpreter against .wj programs.
 
-Usage: interpreter_coverage.py WJ_BIN OUT_JSON [--corpus DIR] [--rust-diff] [--strip-banner] [ROOT ...]
+Usage: interpreter_coverage.py WJ_BIN OUT_JSON [--corpus DIR] [--rust-diff [--rust-cache FILE]] [--strip-banner] [--driver TEST_BIN] [ROOT ...]
 
 For every *.wj under ROOT (default: tests examples) that defines `fn main`:
   * interp_ok   : `wj run --interpret` exits 0 within the timeout
-  * rust_ok     : (with --rust-diff) `wj build --no-cargo` + rustc + run succeeds
-  * match       : both ran and stdout is byte-identical (differential vs compiled Rust)
+  * rust_ran    : (with --rust-diff) `wj build --no-cargo` + rustc compiled, and the binary ran
+  * match       : rust_ran and interpreter stdout + exit code equal the compiled binary's
 For --corpus DIR (programs with `// expect:` / `// seeds:` / `.vectors/<seed>.out`
 oracles, the conventions used by the cross-backend conformance corpus):
   * oracle_ok   : interpreter stdout equals the independent oracle for every seed
@@ -25,9 +25,24 @@ def run(cmd, **kw):
 
 
 STRIP_BANNER = False
+DRIVER = None  # test binary exposing interpreter_probe_test::probe_one (in-process, faster in debug builds)
+
+
+class Result:
+    def __init__(self, stdout, returncode, stderr):
+        self.stdout, self.returncode, self.stderr = stdout, returncode, stderr
 
 
 def interp(wj, path):
+    if DRIVER:
+        env = dict(os.environ, WJ_PROBE_FILE=os.path.abspath(path))
+        p = run([DRIVER, "interpreter_probe_test::probe_one", "--exact", "--ignored", "--nocapture"], env=env)
+        if p is None:
+            return None
+        m = re.search(r"@@STDOUT-BEGIN\n(.*?)@@STDOUT-END\n@@EXIT (-?\d+)\n@@ERR (.*)", p.stdout, re.S)
+        if not m:
+            return Result("", p.returncode or 1, "driver crashed: " + p.stderr[-200:])
+        return Result(m.group(1), int(m.group(2)), m.group(3).replace("\\n", "\n"))
     r = run([wj, "run", "--interpret", path])
     if r is not None and STRIP_BANNER:
         # pre-fix binaries print an "Interpreting ..." banner on stdout; drop it so the
@@ -105,7 +120,18 @@ def main():
     a = sys.argv[1:]
     wj, out = a[0], a[1]
     rest = a[2:]
-    global STRIP_BANNER
+    global STRIP_BANNER, DRIVER
+    if "--driver" in a:
+        i = a.index("--driver")
+        DRIVER = a[i + 1]
+        del a[i : i + 2]
+        wj, out = a[0], a[1]
+        rest = a[2:]
+    rust_cache = None
+    if "--rust-cache" in rest:
+        i = rest.index("--rust-cache")
+        rust_cache = rest[i + 1]
+        del rest[i : i + 2]
     rust_diff = "--rust-diff" in rest
     STRIP_BANNER = "--strip-banner" in rest
     rest = [x for x in rest if x not in ("--rust-diff", "--strip-banner")]
@@ -124,6 +150,9 @@ def main():
                     p = os.path.join(dp, f)
                     if re.search(r"\bfn\s+main\s*\(", open(p, errors="replace").read()):
                         files.append(p)
+    cache = {}
+    if rust_cache and os.path.exists(rust_cache):
+        cache = json.load(open(rust_cache))
     res = {"files": {}, "corpus": {}}
     for p in sorted(files):
         r = interp(wj, p)
@@ -132,10 +161,15 @@ def main():
             e["why"] = (r.stderr.strip().splitlines() or [""])[-1][:160]
         if r is None:
             e["why"] = "timeout"
-        if rust_diff and e["interp_ok"]:
-            rr = rust_run(wj, p)
-            e["rust_ok"] = bool(rr and rr.returncode == 0)
-            e["match"] = bool(e["rust_ok"] and rr.stdout == r.stdout)
+        if rust_diff:
+            if p not in cache:
+                rr = rust_run(wj, p)
+                cache[p] = {"ran": rr is not None, "stdout": rr.stdout if rr else "", "exit": rr.returncode if rr else -1}
+                if rust_cache:
+                    json.dump(cache, open(rust_cache, "w"))
+            c = cache[p]
+            e["rust_ran"] = c["ran"]
+            e["match"] = bool(c["ran"] and r is not None and r.stdout == c["stdout"] and r.returncode == c["exit"])
         res["files"][p] = e
     if corp:
         res["corpus"] = corpus(wj, corp)
@@ -143,8 +177,8 @@ def main():
     ok = sum(1 for e in res["files"].values() if e["interp_ok"])
     summ = {"files_with_main": n, "interp_ok": ok}
     if rust_diff:
-        summ["interp_ok_and_rust_ok"] = sum(1 for e in res["files"].values() if e.get("rust_ok"))
-        summ["match"] = sum(1 for e in res["files"].values() if e.get("match"))
+        summ["rust_compiled_and_ran"] = sum(1 for e in res["files"].values() if e.get("rust_ran"))
+        summ["match_rust_output_and_exit"] = sum(1 for e in res["files"].values() if e.get("match"))
     if corp:
         summ["corpus_total"] = len(res["corpus"])
         summ["corpus_oracle_ok"] = sum(1 for e in res["corpus"].values() if e["oracle_ok"])
