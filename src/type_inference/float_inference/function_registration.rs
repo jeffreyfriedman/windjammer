@@ -42,6 +42,20 @@ impl FloatInference {
                         .insert(full_name, (param_types, func_decl.return_type.clone()));
                 }
             }
+            // `mod ffi { mod api { fn f(..) } }`: register `f`, `api::f` and `ffi::api::f`.
+            Item::Mod { name, items, .. } => {
+                for sub in items.iter() {
+                    let before: std::collections::HashSet<String> = self.function_signatures.keys().cloned().collect();
+                    self.register_function_signature(sub);
+                    let added: Vec<(String, (Vec<Type>, Option<Type>))> = self
+                        .function_signatures
+                        .iter()
+                        .filter(|(k, _)| !before.contains(*k))
+                        .map(|(k, v)| (format!("{name}::{k}"), v.clone()))
+                        .collect();
+                    self.function_signatures.extend(added);
+                }
+            }
             _ => {}
         }
     }

@@ -198,7 +198,10 @@ impl FloatInference {
                     (0..segs.len()).map(|i| segs[i..].join("::")).collect()
                 }
             }
-            Expression::Identifier { name, .. } => vec![name.clone()],
+            Expression::Identifier { name, .. } => {
+                let segs: Vec<&str> = name.split("::").collect();
+                (0..segs.len()).map(|i| segs[i..].join("::")).collect()
+            }
             _ => Vec::new(),
         }
     }
