@@ -1,0 +1,58 @@
+use std::fs
+
+fn to_roman(n: i64) -> string {
+    let values: Vec<i64> = vec![1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    let symbols: Vec<string> = vec!["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+    let mut rest = n
+    let mut out = ""
+    let mut i: usize = 0
+    while i < values.len() {
+        while rest >= values[i] {
+            out = out + symbols[i]
+            rest -= values[i]
+        }
+        i += 1
+    }
+    out
+}
+
+fn roman_value(c: char) -> i64 {
+    match c {
+        'I' => 1,
+        'V' => 5,
+        'X' => 10,
+        'L' => 50,
+        'C' => 100,
+        'D' => 500,
+        'M' => 1000,
+        _ => 0,
+    }
+}
+
+fn from_roman(s: string) -> i64 {
+    let chars: Vec<char> = s.chars().collect()
+    let mut total: i64 = 0
+    let mut i: usize = 0
+    while i < chars.len() {
+        let v = roman_value(chars[i])
+        if i + 1 < chars.len() && roman_value(chars[i + 1]) > v {
+            total -= v
+        } else {
+            total += v
+        }
+        i += 1
+    }
+    total
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let t = line.trim()
+        if t.len() == 0 { continue }
+        match t.parse::<i64>() {
+            Ok(n) => { println(to_roman(n)) }
+            Err(_) => { println("${from_roman(t.to_string())}") }
+        }
+    }
+}

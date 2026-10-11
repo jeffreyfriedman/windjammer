@@ -1,0 +1,85 @@
+use std::fs
+
+trait Animal {
+    fn name(self) -> string
+    fn kind(self) -> string
+    fn sound(self) -> string
+    fn legs(self) -> i64
+
+    fn describe(self) -> string {
+        "${self.name()} the ${self.kind()} says ${self.sound()} on ${self.legs()} legs"
+    }
+}
+
+struct Dog { n: string }
+struct Cat { n: string }
+struct Duck { n: string }
+struct Snake { n: string }
+struct Spider { n: string }
+
+impl Animal for Dog {
+    fn name(self) -> string { self.n.clone() }
+    fn kind(self) -> string { "dog" }
+    fn sound(self) -> string { "woof" }
+    fn legs(self) -> i64 { 4 }
+}
+
+impl Animal for Cat {
+    fn name(self) -> string { self.n.clone() }
+    fn kind(self) -> string { "cat" }
+    fn sound(self) -> string { "meow" }
+    fn legs(self) -> i64 { 4 }
+    fn describe(self) -> string { "${self.n} the cat purrs softly" }
+}
+
+impl Animal for Duck {
+    fn name(self) -> string { self.n.clone() }
+    fn kind(self) -> string { "duck" }
+    fn sound(self) -> string { "quack" }
+    fn legs(self) -> i64 { 2 }
+}
+
+impl Animal for Snake {
+    fn name(self) -> string { self.n.clone() }
+    fn kind(self) -> string { "snake" }
+    fn sound(self) -> string { "hiss" }
+    fn legs(self) -> i64 { 0 }
+}
+
+impl Animal for Spider {
+    fn name(self) -> string { self.n.clone() }
+    fn kind(self) -> string { "spider" }
+    fn sound(self) -> string { "..." }
+    fn legs(self) -> i64 { 8 }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut total: i64 = 0
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() < 2 { continue }
+        let name = p[1].clone()
+        let animal: Option<Box<dyn Animal>> = if p[0] == "dog" {
+            Some(Box::new(Dog { n: name }))
+        } else if p[0] == "cat" {
+            Some(Box::new(Cat { n: name }))
+        } else if p[0] == "duck" {
+            Some(Box::new(Duck { n: name }))
+        } else if p[0] == "snake" {
+            Some(Box::new(Snake { n: name }))
+        } else if p[0] == "spider" {
+            Some(Box::new(Spider { n: name }))
+        } else {
+            None
+        }
+        match animal {
+            Some(a) => {
+                println(a.describe())
+                total += a.legs()
+            }
+            None => { println("unknown kind ${p[0]}") }
+        }
+    }
+    println("legs total=${total}")
+}

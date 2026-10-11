@@ -1,0 +1,44 @@
+// expect: nonpos digit digit two two big
+// expect: 1 1 2 0 0
+// expect: low mid high
+// expect: neg zero pos
+fn classify(n: int) -> string {
+    match n {
+        ..=0 => "nonpos",
+        1..=9 => "digit",
+        10..100 => "two",
+        100.. => "big",
+    }
+}
+
+fn kind(c: char) -> int {
+    match c {
+        'a'..='z' => 1,
+        'A'..='Z' => 2,
+        _ => 0,
+    }
+}
+
+fn band(n: int) -> string {
+    match n {
+        0..=3 => "low",
+        4..=6 => "mid",
+        _ => "high",
+    }
+}
+
+fn sign(n: int) -> string {
+    match n {
+        -100..0 => "neg",
+        0 => "zero",
+        1..=100 => "pos",
+        _ => "out",
+    }
+}
+
+fn main() {
+    println("${classify(0)} ${classify(1)} ${classify(9)} ${classify(10)} ${classify(99)} ${classify(100)}")
+    println("${kind('a')} ${kind('z')} ${kind('Q')} ${kind('5')} ${kind('{')}")
+    println("${band(3)} ${band(5)} ${band(7)}")
+    println("${sign(-5)} ${sign(0)} ${sign(50)}")
+}

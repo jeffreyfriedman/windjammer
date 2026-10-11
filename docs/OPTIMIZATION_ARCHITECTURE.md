@@ -28,8 +28,8 @@ private-struct `#[repr(C)]` / unreferenced `to_bytes`. Every pass is a switch in
 
 ## Retired
 The former 15-phase AST optimizer (`phase11`-`phase15`), its `OptimizerConfig`, and the
-`ir/optimizations.rs` pass stubs were never wired into the compiler and are kept
-under `src/optimizer/quarantine/` as history only. The earlier "two-tier" description
+`ir/optimizations.rs` pass stubs were never wired into the compiler and were deleted
+(2026-10-11; history in git). The earlier "two-tier" description
 (`compiler_analysis.rs`, `batching_codegen.rs`, runtime batching optimizers) referred
 to files that do not exist in this repository and has been removed. See ADR-0006.
 

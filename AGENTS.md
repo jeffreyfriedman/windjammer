@@ -1,117 +1,53 @@
-# Agent Instructions
+# Agent instructions
 
-**Read the [windjammer-engineering skill](../.cursor/skills/windjammer-engineering/SKILL.md) before starting work.**
+Orientation: [docs/README.md](docs/README.md) (index), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), per-module `MODULE.md`
+files under `src/` (one module's context should be enough to work on it), [docs/known-gaps.md](docs/known-gaps.md).
 
-Open compiler bugs are tracked outside this repository; `bd` is optional.
+## Architecture in one paragraph
 
-## Writing Windjammer (`.wj`) code
+The IR solver (`src/ir/`) is the single source of truth for ownership, clone insertion and integer widths
+([ADR-0001](docs/adr/0001-ownership-truth.md)). Legacy analyzer/codegen heuristics are being deleted, not extended.
+Details and migration status: [docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md](docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md).
 
-Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md) first. Loop: `wj check --json` -> `wj run --interpret` -> `wj test --interpret` -> `wj build`; look things up with `wj docs <terms>`; 150+ checked programs live in `examples/verified/`.
+## Bugs and issues
 
-## Architecture
+Compiler bugs are not tracked in the repository tree ([ADR-0013](docs/adr/0013-bug-triage-tracker.md)). Add a minimal,
+generic failing test under `tests/` (`bug_<behavior>_test.rs`), then fix it. Known failures live in
+`.config/known-test-failures.txt` (a ratchet: it only shrinks). `bd` is an optional local tracker.
 
-The compiler now includes a **Safety-Typed IR** layer (`src/ir/`) providing:
-- Unified constraint solver (ownership, types, effects, taint)
-- Effect system with manifest enforcement (WJ-SEC-01)
-- Taint tracking with flow propagation (WJ-SEC-02)
-- Caller-controlled execution modes (WJ-CONC-01)
-- Multi-target safety encodings (Rust, Go, JS, TS, WASM)
+## Tests
 
-The IR solver is the **single source of truth** for ownership, clone insertion and integer widths. Legacy analyzer/codegen heuristics are being deleted, not extended.
-
-**Architecture reference:** [docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md](docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md) — solver-driven codegen migration plan, cutover flags, TDD protocol, and backend consumption model.
-
-## Quick Reference
+Add `tests/<name>_test.rs`; `build.rs` picks it up automatically (see `tests/README.md`).
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
-bd close <id>         # Complete work
-bd sync               # Sync with git
-
-# Shared Cargo cache (outside repos — see docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md)
-wj cache status       # sizes + free disk
-wj cache prune        # reclaim when disk is low
-wj cache setup        # write env.sh for bare `cargo`
-source ~/Library/Caches/windjammer/env.sh   # macOS; Linux uses ~/.cache/windjammer/env.sh
-export CARGO_TARGET_DIR="$(wj cache path)"  # overrides Cursor sandbox redirects
+cargo test --release --test all <filter>    # targeted
+scripts/check-orphan-tests.sh                # every test file must be reached by a runner
+scripts/update-architecture-baselines.sh    # after adding modules/files (also declare new top-level modules in src/lib.rs and src/main.rs)
 ```
 
-## Ecosystem seed
+Never run tests with `--all-features` (it silently disables many test files; use it for clippy only).
 
-Public apps/packages live in the sibling repo `windjammer-ecosystem`
-([README](../windjammer-ecosystem/README.md), [AGENTS.md](../windjammer-ecosystem/AGENTS.md)).
+## Shared cargo cache
 
-When a seed app hits a compiler bug:
-
-1. Keep the **idiomatic** ecosystem shape (e.g. flat `src/lib.wj` + `use crate::fn` from `tests/`).
-2. Do **not** ask the seed to nest modules, avoid `HashMap::get`, or add `ffi/` to paper over codegen.
-3. Add a minimal failing repro under `tests/` here (see `package_flat_lib_wj_test_exports_test.rs`).
-4. Fix via signatures / IR / solver — no method-name heuristics — then resume the seed.
-
-Game, a database project, and finance remain separate dogfoods; seed bugs still get TDD fixes in this tree.
-
-## Landing the Plane (Session Completion)
-
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd sync
-   git push   # push the current feature/working branch only; never force-push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-
-Use 'bd' for task tracking
-
-## Compiler tests
-
-Add `tests/your_feature_test.rs` — `build.rs` picks it up automatically. No edits to `all.rs` or `tests/lib.rs`.
-
-**Canonical full suite:**
-
-```bash
-cargo test --release --test all
+<!-- ignore: machine-level cache commands: they change the user's environment, so CI does not run them -->
+```bash,ignore
+wj cache status | wj cache prune | wj cache path | wj cache setup
+export CARGO_TARGET_DIR="$(wj cache path)"
 ```
+Design: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md).
 
-See `tests/README.md` for suite features and filtering. **Never run tests with `--all-features`** (it silently disables ~120 test files; use it for clippy only). Run `scripts/check-orphan-tests.sh` to verify every test file is reached by a runner.
+## Hardening rules
 
-Compiler-only changes: tests + `cargo test --release --test all` in `windjammer/` are sufficient.
-
-When fixes enable or change player-visible behavior in **a game project** or the engine render path, agents must validate through the game — not only unit tests:
-
-1. Build the game: `wj game build --release` in `../a game project/`
-2. Headless playthrough with screenshots (see `../a game project/AGENTS.md`)
-3. Dual-persona jury per `../.cursor/rules/dual-persona-jury-evaluation.mdc`
-
-Do not claim rendering or gameplay fixes are done without screenshot evidence and three-tier verdict.
-
-## Hardening rules (compiler)
-
-1. **One decision-maker.** Ownership, clones, borrows and int/float widths are decided by the IR solver (`src/ir/`). Never add method-name string matches (`"push"`, `"insert"`, `"clone"`) or special-case heuristics in `src/codegen`; add a constraint/signature instead.
-2. **Tests = production.** No test-only defaults. `IrCutoverConfig::default()` must match `from_env()`; unit tests exercise the same paths as `wj build`.
-3. **Done means tip-green.** A fix must pass both the isolate test and the whole-program multipass ("tip") test. An isolate-GREEN/tip-RED fix is not done.
-4. **Never silently change semantics.** Clone insertion must not drop mutations (`x.clone().mutate()`); mutating `self` methods infer `&mut self`. Prefer a hard Windjammer diagnostic over emitting code that compiles but behaves differently.
-5. **Repros are generic.** Name tests by behavior (`bug_<behavior>_test.rs`), not by dogfood ticket (project-specific ticket ids, downstream project names, game file names). Project-specific fixtures belong in the project repo. The compiler never references a dogfood project's code.
-6. **Minimal repros, one bug each.** Reduce before filing; delete redundant/duplicate tests when a broader test subsumes them.
-7. **Tests write to temp dirs only.** Always `--out-dir`/`tempfile` for `rustc`; never write `*.rlib`, `tmp_*`, `*.zip` in the repo root.
-8. **No status docs** at the repo root or in `docs/` for sessions; update `CHANGELOG.md` instead.
-9. **Gates before commit:** `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --release --test all`.
-10. **Disk:** shared target dir via `wj cache path`; `wj cache prune` when free disk is below the threshold. Don't leave worktrees behind (`git worktree remove`); use `isolation: worktree` only for short tasks.
-11. **Docs honesty.** README/CLI help may only claim what exists. Mark experimental backends (JS/Go/WASM/interpreter) as such.
+1. One decision-maker: ownership, clones, borrows and numeric widths are decided by the IR solver. No method-name string
+   matches (`"push"`, `"clone"`) or special cases in `src/codegen`; add a constraint or signature instead.
+2. Tests exercise production paths; no test-only defaults.
+3. Done means whole-program green: a fix must pass the isolated test and the multi-file test.
+4. Never silently change semantics; prefer a Windjammer diagnostic over code that compiles but behaves differently.
+5. Repros are generic: name tests by behavior, never by a downstream project or ticket. The compiler never references a
+   downstream project's code or name.
+6. Minimal repros, one bug each; delete duplicates a broader test subsumes.
+7. Tests write to temp dirs only; no `*.rlib`, `tmp_*`, binaries or archives in the repo.
+8. No status/session docs in the repo; user-visible changes go in `CHANGELOG.md`.
+9. Gates before commit: `cargo fmt --check`, `cargo clippy -- -D warnings`, targeted tests, `tests/architecture.rs`.
+10. Docs honesty: README and CLI help claim only what exists and is tested. Mark experimental backends (JS, Go, WASM,
+    interpreter) as such.

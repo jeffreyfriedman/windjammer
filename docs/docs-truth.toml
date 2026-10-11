@@ -1,0 +1,46 @@
+# docs-truth configuration (see docs/CONTRIBUTING-docs.md). Checked by tests/docs_truth_test.rs.
+# Exclusions need a reason. Baselines are ratchets: they may only shrink; `wj-docs update-baseline`
+# rewrites the [baseline.*] tables at the end of this file.
+
+[[exclude]]
+check = "all"
+glob = "docs/archive/**"
+reason = "historical documents, kept as written"
+
+[[exclude]]
+check = "claims"
+glob = "CHANGELOG.md"
+reason = "release notes record numbers as of their release"
+
+[[exclude]]
+check = "fences"
+glob = "CHANGELOG.md"
+reason = "release notes quote the syntax as it was at their release"
+
+[[exclude]]
+check = "links"
+glob = "CHANGELOG.md"
+reason = "release notes name files, commands and docs as they were at their release; many were deleted or renamed since"
+
+[freshness]
+tracked = ["docs/adr/0*.md", "docs/design/*.md"]
+changed_lines = 200
+require = true
+
+# Shell fences that run `wj` in these documents must be `sh,verify` (executed in CI with the built wj).
+[verify]
+required = ["README.md", "AGENTS.md", "docs/agent/WINDJAMMER_FOR_AGENTS.md", "examples/README.md", "examples/*/README.md", "templates/*/README.md"]
+
+# Rule-id namespaces: ids cited in docs must be defined in the matching files. A namespace is
+# inactive until at least one defining file exists.
+[[rule_ids]]
+prefix = "SPEC-"
+defs = "docs/spec/**/*.md"
+
+# docs/windjammer.ebnf is cross-checked against the parser (tools/docs_truth/ebnf.rs, docs/CONTRIBUTING-docs.md).
+# Lexer keywords deliberately absent from the grammar: "keyword" = "reason". May only shrink.
+[ebnf.unlisted_keywords]
+
+# Grammar sentences the parser rejects: "production#alternative" = "reason". An entry the parser accepts fails the check.
+[ebnf.divergences]
+

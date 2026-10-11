@@ -686,12 +686,10 @@ impl SignatureRegistry {
     }
 
     fn load_stdlib_meta(registry: &mut Self) {
-        use std::path::Path;
-
-        let candidates = [
-            Path::new("stdlib_meta").to_path_buf(),
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("stdlib_meta"),
-        ];
+        let candidates: Vec<std::path::PathBuf> =
+            crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdlibMeta)
+                .into_iter()
+                .collect();
 
         for dir in &candidates {
             if dir.is_dir() {

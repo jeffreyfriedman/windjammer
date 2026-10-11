@@ -104,8 +104,8 @@ impl Parser {
                             }
                         } else {
                             return Err(format!(
-                                "Expected field or method name (at token position {})",
-                                self.position
+                                "Expected field or method name (at {})",
+                                self.pos_desc()
                             ));
                         }
                     }

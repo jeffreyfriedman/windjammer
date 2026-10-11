@@ -17,7 +17,14 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(input) = std::str::from_utf8(data) {
         // Test lexer doesn't panic
         let mut lexer = Lexer::new(input);
-        let _ = lexer.tokenize();
+        let first = lexer.tokenize_with_locations();
+        // Locations are 1-based and never go backwards.
+        let mut prev = (1usize, 1usize);
+        for t in &first {
+            assert!(t.line >= 1 && t.column >= 1);
+            assert!((t.line, t.column) >= prev, "token positions went backwards");
+            prev = (t.line, t.column);
+        }
         
         // Test that tokenize is deterministic
         let mut lexer2 = Lexer::new(input);

@@ -22,7 +22,7 @@ impl RateLimiter {
         }
     }
     
-    pub fn check_rate_limit(mut self, key: string) -> Result<(), RateLimitError> {
+    pub fn check_rate_limit(self, key: string) -> Result<(), RateLimitError> {
         let now = time.now().timestamp()
         
         // Get or create bucket for this key

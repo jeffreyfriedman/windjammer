@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 3 2\n",
+  "stdout": "items: 6\nchars: 24\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 0 1\n",
+  "stdout": "items: 0\nchars: 0\nconsumers_total: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 200 4\n",
+  "stdout": "items: 1200\nchars: 6552\nfirst: p0-1\nfirst: p0-10\nfirst: p0-100\nconsumers_total: 1200\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 1 4\n",
+  "stdout": "items: 3\nchars: 12\nfirst: p0-1\nfirst: p1-1\nfirst: p2-1\nconsumers_total: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 10 1\n",
+  "stdout": "items: 60\nchars: 246\nfirst: p0-1\nfirst: p0-10\nfirst: p0-2\nconsumers_total: 60\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 26 4\n",
+  "stdout": "items: 26\nchars: 121\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 26\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 9 4\n",
+  "stdout": "items: 9\nchars: 36\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 2 4\n",
+  "stdout": "items: 2\nchars: 8\nfirst: p0-1\nfirst: p0-2\nconsumers_total: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 38 2\n",
+  "stdout": "items: 76\nchars: 362\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 76\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 29 1\n",
+  "stdout": "items: 29\nchars: 136\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 29\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4 27 4\n",
+  "stdout": "items: 108\nchars: 504\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 108\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4 27 1\n",
+  "stdout": "items: 108\nchars: 504\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 108\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 37 2\n",
+  "stdout": "items: 74\nchars: 352\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 74\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 13 1\n",
+  "stdout": "items: 13\nchars: 56\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 31 2\n",
+  "stdout": "items: 155\nchars: 730\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 155\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 6 2\n",
+  "stdout": "items: 12\nchars: 48\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 27 2\n",
+  "stdout": "items: 162\nchars: 756\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 162\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 4 3\n",
+  "stdout": "items: 8\nchars: 32\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 4 4\n",
+  "stdout": "items: 12\nchars: 48\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 35 3\n",
+  "stdout": "items: 105\nchars: 498\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 105\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 13 2\n",
+  "stdout": "items: 65\nchars: 280\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 65\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 0 3\n",
+  "stdout": "items: 0\nchars: 0\nconsumers_total: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 4 4\n",
+  "stdout": "items: 8\nchars: 32\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 27 4\n",
+  "stdout": "items: 54\nchars: 252\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 54\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 11 1\n",
+  "stdout": "items: 22\nchars: 92\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 38 3\n",
+  "stdout": "items: 228\nchars: 1086\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 228\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 35 1\n",
+  "stdout": "items: 210\nchars: 996\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 210\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 21 2\n",
+  "stdout": "items: 105\nchars: 480\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 105\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "6 4 3\n",
+  "stdout": "items: 24\nchars: 96\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 24\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4 1 2\n",
+  "stdout": "items: 4\nchars: 16\nfirst: p0-1\nfirst: p1-1\nfirst: p2-1\nconsumers_total: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 15 2\n",
+  "stdout": "items: 30\nchars: 132\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 30\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 0 4\n",
+  "stdout": "items: 0\nchars: 0\nconsumers_total: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4 30 3\n",
+  "stdout": "items: 120\nchars: 564\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 120\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4 35 1\n",
+  "stdout": "items: 140\nchars: 664\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 140\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 33 1\n",
+  "stdout": "items: 165\nchars: 780\nfirst: p0-1\nfirst: p0-10\nfirst: p0-11\nconsumers_total: 165\n"
+ }
+]

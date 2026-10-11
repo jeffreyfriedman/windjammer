@@ -1,0 +1,194 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-03-05T14:07:09 INFO web started\n2024-03-05T14:07:10 ERROR db connection lost\ngarbage\n",
+  "stdout": "levels: DEBUG=0 INFO=1 WARN=0 ERROR=1\ntop components:\n  db 1\n  web 1\nfirst: 2024-03-05T14:07:09\nlast: 2024-03-05T14:07:10\nerrors:\n  [db] connection lost\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "levels: DEBUG=0 INFO=0 WARN=0 ERROR=0\ntop components:\nfirst: -\nlast: -\nerrors:\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n2024-01-01T00:00:00 DEBUG a\n2024-01-01T00:00:00 WARN a x y z\n2023-12-31T23:59:59 ERROR b \n2024-1-1T00:00:00 INFO a hi\n2024-01-01T00:00:00 TRACE a hi\n2024-01-01T00:00:00 INFO\n",
+  "stdout": "levels: DEBUG=1 INFO=0 WARN=1 ERROR=1\ntop components:\n  a 2\n  b 1\nfirst: 2023-12-31T23:59:59\nlast: 2024-01-01T00:00:00\nerrors:\n  [b] \nmalformed: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-01-01T00:00:00 INFO c0 m\n2024-01-02T00:00:01 INFO c1 m\n2024-01-03T00:00:02 INFO c2 m\n2024-01-04T00:00:03 INFO c3 m\n2024-01-05T00:00:04 INFO c4 m\n2024-01-06T00:00:05 INFO c0 m\n2024-01-07T00:00:06 INFO c1 m\n2024-01-08T00:00:07 INFO c2 m\n2024-01-09T00:00:08 INFO c3 m\n2024-01-01T00:00:09 INFO c4 m\n2024-01-02T00:00:00 INFO c0 m\n2024-01-03T00:00:01 INFO c1 m\n2024-01-04T00:00:02 INFO c2 m\n2024-01-05T00:00:03 INFO c3 m\n2024-01-06T00:00:04 INFO c4 m\n2024-01-07T00:00:05 INFO c0 m\n2024-01-08T00:00:06 INFO c1 m\n2024-01-09T00:00:07 INFO c2 m\n2024-01-01T00:00:08 INFO c3 m\n2024-01-02T00:00:09 INFO c4 m\n2024-01-03T00:00:00 INFO c0 m\n2024-01-04T00:00:01 INFO c1 m\n2024-01-05T00:00:02 INFO c2 m\n2024-01-06T00:00:03 INFO c3 m\n2024-01-07T00:00:04 INFO c4 m\n2024-01-08T00:00:05 INFO c0 m\n2024-01-09T00:00:06 INFO c1 m\n2024-01-01T00:00:07 INFO c2 m\n2024-01-02T00:00:08 INFO c3 m\n2024-01-03T00:00:09 INFO c4 m\n",
+  "stdout": "levels: DEBUG=0 INFO=30 WARN=0 ERROR=0\ntop components:\n  c0 6\n  c1 6\n  c2 6\nfirst: 2024-01-01T00:00:00\nlast: 2024-01-09T00:00:08\nerrors:\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-14T08:43:34 WARN auth \n2024-04-16T03:42:35 WARN web ok\n2024-02-12T05:55:39 WARN web ok\n2024-06-16T06:41:10 WARN db ok\n2024-04-15T06:53:49 ERROR cache x=1 y=2\n2024-02-19T00:26:46 WARN cache \njunk line\n2024-09-11T04:36:58 DEBUG auth failed to connect\n2024-01-13T05:45:58 DEBUG web \n2024-01-16T05:43:32 DEBUG auth \n2024-09-19T09:15:32 DEBUG db failed to connect\n2024-02-19T02:12:20 ERROR auth x=1 y=2\n2024-06-10T04:35:27 DEBUG auth failed to connect\njunk line\n2024-01-14T07:40:12 WARN cache failed to connect\n2024-07-13T06:23:28 ERROR auth \n",
+  "stdout": "levels: DEBUG=5 INFO=0 WARN=6 ERROR=3\ntop components:\n  auth 6\n  cache 3\n  web 3\nfirst: 2024-01-13T05:45:58\nlast: 2024-09-19T09:15:32\nerrors:\n  [cache] x=1 y=2\n  [auth] x=1 y=2\n  [auth] \nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-19T06:27:49 INFO auth ok\n2024-07-11T07:34:37 DEBUG auth x=1 y=2\njunk line\n2024-08-12T08:14:34 INFO auth failed to connect\n2024-07-11T03:44:42 DEBUG db failed to connect\n\n2024-02-19T06:53:48 INFO cache failed to connect\n2024-09-15T07:10:10 ERROR db failed to connect\n2024-04-16T04:12:55 ERROR cache x=1 y=2\n2024-09-15T07:21:29 INFO auth x=1 y=2\n2024-02-18T00:14:15 INFO cache \n2024-01-18T03:57:40 ERROR cache x=1 y=2\n2024-02-18T09:59:47 INFO cache failed to connect\n2024-04-10T02:34:26 ERROR db x=1 y=2\n2024-03-11T04:30:51 DEBUG db x=1 y=2\n2024-02-18T03:26:47 ERROR auth x=1 y=2\n2024-06-16T06:20:17 ERROR cache failed to connect\n2024-04-10T04:54:16 ERROR web x=1 y=2\n2024 INFO a b\n2024-01-17T02:11:30 DEBUG db failed to connect\n2024-08-12T04:44:51 WARN web x=1 y=2\n2024-02-17T03:42:22 DEBUG cache failed to connect\n",
+  "stdout": "levels: DEBUG=5 INFO=6 WARN=1 ERROR=7\ntop components:\n  cache 7\n  auth 5\n  db 5\nfirst: 2024-01-17T02:11:30\nlast: 2024-09-15T07:21:29\nerrors:\n  [db] failed to connect\n  [cache] x=1 y=2\n  [cache] x=1 y=2\n  [db] x=1 y=2\n  [auth] x=1 y=2\n  [cache] failed to connect\n  [web] x=1 y=2\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-08-12T03:34:44 WARN auth x=1 y=2\n2024-02-10T06:38:58 ERROR db \n2024-02-17T08:32:11 ERROR auth \n2024-08-12T00:17:13 INFO auth \n2024-06-16T09:34:40 INFO cache failed to connect\n2024-09-18T05:19:35 ERROR web \n2024-09-16T00:51:14 ERROR cache x=1 y=2\n2024-08-12T09:26:36 ERROR cache x=1 y=2\n\n2024-09-15T07:48:31 ERROR auth \n2024-05-16T07:21:24 ERROR db \n2024 INFO a b\n\n2024-04-13T04:30:25 INFO auth failed to connect\n2024-06-19T01:58:28 ERROR db ok\n2024-08-17T04:54:47 DEBUG cache x=1 y=2\n2024-07-18T03:54:28 ERROR web \n2024-04-13T01:56:49 ERROR auth ok\njunk line\n2024-06-17T06:32:22 INFO web x=1 y=2\n2024-07-13T02:15:15 DEBUG web ok\n2024-01-15T02:22:28 INFO db failed to connect\n2024-06-15T00:44:58 ERROR web ok\n",
+  "stdout": "levels: DEBUG=2 INFO=5 WARN=1 ERROR=11\ntop components:\n  auth 6\n  web 5\n  cache 4\nfirst: 2024-01-15T02:22:28\nlast: 2024-09-18T05:19:35\nerrors:\n  [db] \n  [auth] \n  [web] \n  [cache] x=1 y=2\n  [cache] x=1 y=2\n  [auth] \n  [db] \n  [db] ok\n  [web] \n  [auth] ok\n  [web] ok\nmalformed: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n2024-02-12T09:24:13 ERROR auth failed to connect\n2024 INFO a b\n2024-03-12T08:52:52 INFO auth \n2024-04-12T03:34:56 INFO auth failed to connect\n2024-08-18T03:55:33 ERROR auth failed to connect\n",
+  "stdout": "levels: DEBUG=0 INFO=2 WARN=0 ERROR=2\ntop components:\n  auth 4\nfirst: 2024-02-12T09:24:13\nlast: 2024-08-18T03:55:33\nerrors:\n  [auth] failed to connect\n  [auth] failed to connect\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-06-13T05:37:41 INFO auth x=1 y=2\n2024-05-14T06:11:37 DEBUG web failed to connect\n2024-02-13T09:28:24 INFO web failed to connect\n2024-07-16T09:54:14 INFO web x=1 y=2\n2024-05-15T00:46:59 WARN db \n2024-02-13T08:36:10 ERROR cache failed to connect\n2024-01-12T02:55:14 WARN db failed to connect\n2024-03-14T09:40:33 INFO db \njunk line\n2024-02-17T09:14:55 INFO web x=1 y=2\n2024-06-19T01:20:21 DEBUG web \njunk line\n2024-06-10T05:21:33 DEBUG web x=1 y=2\njunk line\n2024-04-15T05:21:16 WARN cache x=1 y=2\n2024-07-16T03:56:48 DEBUG web \n2024-04-17T08:17:27 DEBUG db ok\n",
+  "stdout": "levels: DEBUG=5 INFO=5 WARN=3 ERROR=1\ntop components:\n  web 7\n  db 4\n  cache 2\nfirst: 2024-01-12T02:55:14\nlast: 2024-07-16T09:54:14\nerrors:\n  [cache] failed to connect\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-09-15T07:25:52 ERROR cache x=1 y=2\n2024-04-11T01:52:47 WARN db failed to connect\n2024-02-11T01:17:30 DEBUG web \n2024-05-18T03:34:33 DEBUG web failed to connect\n2024-09-13T05:40:12 ERROR auth ok\n2024-09-12T00:55:12 ERROR db failed to connect\n2024-05-10T01:23:40 WARN web x=1 y=2\n2024-05-17T01:26:54 ERROR web x=1 y=2\n2024-08-18T09:12:28 WARN web x=1 y=2\n2024-07-19T07:10:28 INFO cache ok\n2024-02-13T02:27:14 WARN cache ok\n\n2024-07-14T07:24:36 WARN cache failed to connect\n2024-09-10T00:37:28 DEBUG cache \n2024-03-15T08:40:29 WARN cache \n2024-08-17T07:28:13 DEBUG auth x=1 y=2\n2024-03-16T02:49:18 DEBUG web \n2024-01-16T02:14:58 ERROR db ok\n2024-08-12T01:43:52 ERROR web x=1 y=2\n2024-09-16T06:40:32 DEBUG cache \n2024-02-11T08:54:18 DEBUG web failed to connect\n2024-01-15T03:58:21 ERROR web \n",
+  "stdout": "levels: DEBUG=7 INFO=1 WARN=6 ERROR=7\ntop components:\n  web 9\n  cache 7\n  db 3\nfirst: 2024-01-15T03:58:21\nlast: 2024-09-16T06:40:32\nerrors:\n  [cache] x=1 y=2\n  [auth] ok\n  [db] failed to connect\n  [web] x=1 y=2\n  [db] ok\n  [web] x=1 y=2\n  [web] \nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-01-16T05:10:36 ERROR cache ok\n2024-06-17T04:15:41 ERROR cache failed to connect\n2024-09-17T06:48:48 WARN web ok\n2024-09-16T09:45:40 INFO auth ok\n2024-01-12T01:38:46 WARN web ok\n2024-03-16T03:51:58 DEBUG web ok\njunk line\n2024-09-19T00:44:26 WARN auth x=1 y=2\n2024-09-16T04:21:15 ERROR cache failed to connect\n2024-02-12T01:56:19 ERROR web failed to connect\n2024-01-11T06:35:15 DEBUG cache failed to connect\n2024-09-11T07:11:21 ERROR db ok\n",
+  "stdout": "levels: DEBUG=2 INFO=1 WARN=3 ERROR=5\ntop components:\n  cache 4\n  web 4\n  auth 2\nfirst: 2024-01-11T06:35:15\nlast: 2024-09-19T00:44:26\nerrors:\n  [cache] ok\n  [cache] failed to connect\n  [cache] failed to connect\n  [web] failed to connect\n  [db] ok\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-04-10T04:36:55 WARN auth ok\n2024-04-12T04:52:51 ERROR web ok\n2024-08-11T07:20:52 ERROR auth failed to connect\n2024-04-18T01:45:29 ERROR auth ok\n2024-09-19T02:21:28 DEBUG cache x=1 y=2\n2024-04-18T05:36:21 WARN db failed to connect\n2024-07-10T08:57:42 DEBUG db \n2024-02-14T04:54:35 DEBUG db ok\n\n2024-05-14T05:26:45 DEBUG db failed to connect\n2024-06-15T05:54:28 ERROR auth ok\n2024-02-17T01:35:45 ERROR cache \n2024-04-18T03:46:34 DEBUG auth \n2024-05-18T00:58:28 INFO web \n",
+  "stdout": "levels: DEBUG=5 INFO=1 WARN=2 ERROR=5\ntop components:\n  auth 5\n  db 4\n  cache 2\nfirst: 2024-02-14T04:54:35\nlast: 2024-09-19T02:21:28\nerrors:\n  [web] ok\n  [auth] failed to connect\n  [auth] ok\n  [auth] ok\n  [cache] \nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-18T04:17:53 ERROR web x=1 y=2\n2024-06-18T09:31:28 ERROR web \n2024-08-14T09:26:35 INFO auth x=1 y=2\n2024-02-12T02:54:13 ERROR db \n",
+  "stdout": "levels: DEBUG=0 INFO=1 WARN=0 ERROR=3\ntop components:\n  web 2\n  auth 1\n  db 1\nfirst: 2024-02-12T02:54:13\nlast: 2024-08-14T09:26:35\nerrors:\n  [web] x=1 y=2\n  [web] \n  [db] \nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-16T02:24:43 DEBUG auth ok\n2024-01-11T05:10:50 INFO web failed to connect\njunk line\n2024-01-13T00:30:54 INFO web x=1 y=2\n2024-05-13T01:16:54 ERROR cache failed to connect\n",
+  "stdout": "levels: DEBUG=1 INFO=2 WARN=0 ERROR=1\ntop components:\n  web 2\n  auth 1\n  cache 1\nfirst: 2024-01-11T05:10:50\nlast: 2024-07-16T02:24:43\nerrors:\n  [cache] failed to connect\nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-02-10T06:54:48 WARN web \n2024-01-13T08:59:21 WARN web failed to connect\n2024-04-11T07:59:33 INFO db ok\njunk line\n2024-03-11T09:27:13 ERROR db failed to connect\n2024-06-10T06:39:35 WARN cache \n2024-03-18T02:34:32 ERROR db failed to connect\n2024-07-17T06:27:45 INFO db x=1 y=2\n2024-08-13T08:33:41 ERROR auth failed to connect\n2024-06-12T03:30:14 WARN web ok\n2024-03-16T03:28:44 DEBUG cache x=1 y=2\n2024-07-11T01:37:15 INFO auth x=1 y=2\n2024-08-14T08:53:37 INFO cache x=1 y=2\n2024-02-10T00:50:36 DEBUG web ok\n2024-01-19T05:29:38 DEBUG auth ok\n\n",
+  "stdout": "levels: DEBUG=3 INFO=4 WARN=4 ERROR=3\ntop components:\n  db 4\n  web 4\n  auth 3\nfirst: 2024-01-13T08:59:21\nlast: 2024-08-14T08:53:37\nerrors:\n  [db] failed to connect\n  [db] failed to connect\n  [auth] failed to connect\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-04-10T05:53:48 INFO web x=1 y=2\n2024-02-18T07:58:46 ERROR web x=1 y=2\n2024-08-16T09:27:46 ERROR web failed to connect\n2024-05-16T00:17:57 ERROR auth \n2024-07-12T02:23:16 INFO cache ok\n2024-03-17T09:52:29 ERROR db x=1 y=2\n2024-09-17T00:31:14 DEBUG db ok\n2024-01-11T05:35:37 ERROR cache ok\n2024-08-16T03:19:49 ERROR db x=1 y=2\n2024-07-15T05:43:22 WARN auth \n2024-08-18T02:10:32 DEBUG web \n2024-06-15T03:54:50 DEBUG web failed to connect\n2024-08-17T01:40:22 ERROR cache ok\n2024-05-17T09:53:13 ERROR web \n2024-04-12T00:46:12 ERROR auth failed to connect\n2024-09-16T04:18:26 WARN auth failed to connect\n2024-05-10T09:21:29 ERROR cache x=1 y=2\n2024-01-14T04:40:13 WARN web x=1 y=2\n",
+  "stdout": "levels: DEBUG=3 INFO=2 WARN=3 ERROR=10\ntop components:\n  web 7\n  auth 4\n  cache 4\nfirst: 2024-01-11T05:35:37\nlast: 2024-09-17T00:31:14\nerrors:\n  [web] x=1 y=2\n  [web] failed to connect\n  [auth] \n  [db] x=1 y=2\n  [cache] ok\n  [db] x=1 y=2\n  [cache] ok\n  [web] \n  [auth] failed to connect\n  [cache] x=1 y=2\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-04-13T06:27:11 ERROR cache \n\n2024-05-15T03:20:47 WARN web x=1 y=2\n2024-01-14T04:19:37 ERROR web x=1 y=2\n2024-09-16T03:24:49 WARN cache ok\n2024-02-17T01:52:22 ERROR web x=1 y=2\n2024-07-11T07:56:13 ERROR db x=1 y=2\n\n2024-02-11T07:26:24 WARN web failed to connect\n2024-02-10T02:57:59 ERROR db failed to connect\n\n",
+  "stdout": "levels: DEBUG=0 INFO=0 WARN=3 ERROR=5\ntop components:\n  web 4\n  cache 2\n  db 2\nfirst: 2024-01-14T04:19:37\nlast: 2024-09-16T03:24:49\nerrors:\n  [cache] \n  [web] x=1 y=2\n  [web] x=1 y=2\n  [db] x=1 y=2\n  [db] failed to connect\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-06-13T04:48:21 ERROR web x=1 y=2\n2024-02-18T09:27:29 ERROR cache ok\n2024-08-13T06:23:25 ERROR auth ok\n\n2024 INFO a b\n2024-07-18T07:38:56 DEBUG web \n2024-04-12T05:45:40 ERROR web failed to connect\n2024-02-12T09:10:46 DEBUG auth x=1 y=2\n2024-08-15T06:33:36 INFO cache ok\n2024-08-19T08:29:41 WARN cache \n2024-06-17T04:39:35 DEBUG db \n2024-02-17T04:58:48 DEBUG web \n2024-05-17T09:44:24 ERROR db x=1 y=2\n2024-09-17T03:29:29 WARN db x=1 y=2\n2024-09-12T04:53:44 DEBUG cache \n2024-07-19T00:56:38 WARN db failed to connect\n2024-03-12T01:33:16 ERROR web failed to connect\n2024-05-19T06:23:36 INFO auth failed to connect\n2024-06-11T01:35:33 DEBUG auth x=1 y=2\n2024-07-10T04:30:58 DEBUG db failed to connect\n2024-06-10T06:42:22 ERROR db \n2024-06-12T01:34:56 DEBUG web failed to connect\n2024-05-19T07:32:20 DEBUG db \n",
+  "stdout": "levels: DEBUG=9 INFO=2 WARN=3 ERROR=7\ntop components:\n  db 7\n  web 6\n  auth 4\nfirst: 2024-02-12T09:10:46\nlast: 2024-09-17T03:29:29\nerrors:\n  [web] x=1 y=2\n  [cache] ok\n  [auth] ok\n  [web] failed to connect\n  [db] x=1 y=2\n  [web] failed to connect\n  [db] \nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-16T07:56:28 DEBUG web failed to connect\n2024-04-17T07:22:53 WARN web ok\n2024-06-15T09:57:59 DEBUG cache failed to connect\n2024-05-10T02:22:25 ERROR cache x=1 y=2\n2024-06-13T02:47:46 ERROR web failed to connect\njunk line\n2024-07-10T06:35:47 DEBUG web \n2024-05-16T09:21:35 DEBUG cache \n2024 INFO a b\n2024 INFO a b\n2024-05-10T09:51:57 DEBUG web x=1 y=2\n2024-06-14T04:13:44 DEBUG cache ok\n",
+  "stdout": "levels: DEBUG=6 INFO=0 WARN=1 ERROR=2\ntop components:\n  web 5\n  cache 4\nfirst: 2024-04-17T07:22:53\nlast: 2024-07-16T07:56:28\nerrors:\n  [cache] x=1 y=2\n  [web] failed to connect\nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-06-11T05:21:11 ERROR auth x=1 y=2\n2024-07-19T07:41:50 ERROR db failed to connect\n2024-05-16T05:23:21 WARN db x=1 y=2\n2024-07-11T09:41:20 WARN db \n2024-04-10T09:10:54 DEBUG auth ok\n2024-04-17T07:20:13 WARN web x=1 y=2\n2024-08-12T03:36:59 DEBUG db failed to connect\n2024-03-10T07:16:54 WARN web ok\n2024-01-10T03:33:49 WARN web x=1 y=2\n2024-08-10T08:52:27 INFO auth ok\n2024-09-11T08:18:27 ERROR db x=1 y=2\n2024-01-19T05:12:34 INFO auth \n2024-07-19T09:10:21 DEBUG auth x=1 y=2\n2024-02-14T04:51:56 INFO auth failed to connect\n",
+  "stdout": "levels: DEBUG=3 INFO=3 WARN=5 ERROR=3\ntop components:\n  auth 6\n  db 5\n  web 3\nfirst: 2024-01-10T03:33:49\nlast: 2024-09-11T08:18:27\nerrors:\n  [auth] x=1 y=2\n  [db] failed to connect\n  [db] x=1 y=2\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-01-14T05:14:47 DEBUG db \n\n2024-09-19T03:43:36 ERROR auth \n2024-04-14T05:20:52 ERROR db x=1 y=2\n2024-02-18T03:27:14 ERROR auth x=1 y=2\n2024-05-12T07:20:25 ERROR db x=1 y=2\n2024-05-14T02:32:58 WARN auth ok\n2024-06-12T06:48:20 DEBUG cache \n2024-06-19T08:35:26 INFO db ok\n2024-08-17T00:17:59 DEBUG web \n2024-01-19T09:28:38 DEBUG db \n2024-06-13T08:34:29 INFO db \n2024-09-12T06:30:51 ERROR auth x=1 y=2\n2024-07-15T06:16:33 DEBUG cache x=1 y=2\n2024-08-16T05:46:16 ERROR cache \n2024-08-19T03:38:45 ERROR cache x=1 y=2\n2024-08-10T09:21:32 INFO db x=1 y=2\n2024-08-11T06:12:25 ERROR db \n",
+  "stdout": "levels: DEBUG=5 INFO=3 WARN=1 ERROR=8\ntop components:\n  db 8\n  auth 4\n  cache 4\nfirst: 2024-01-14T05:14:47\nlast: 2024-09-19T03:43:36\nerrors:\n  [auth] \n  [db] x=1 y=2\n  [auth] x=1 y=2\n  [db] x=1 y=2\n  [auth] x=1 y=2\n  [cache] \n  [cache] x=1 y=2\n  [db] \nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-06-11T03:33:49 WARN web x=1 y=2\n2024-01-17T04:29:46 ERROR web failed to connect\n2024-08-13T01:38:30 ERROR auth x=1 y=2\n2024-09-17T00:59:52 ERROR auth \n",
+  "stdout": "levels: DEBUG=0 INFO=0 WARN=1 ERROR=3\ntop components:\n  auth 2\n  web 2\nfirst: 2024-01-17T04:29:46\nlast: 2024-09-17T00:59:52\nerrors:\n  [web] failed to connect\n  [auth] x=1 y=2\n  [auth] \nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-01-18T01:26:49 ERROR auth failed to connect\n2024-02-10T06:33:55 WARN db ok\n2024-09-16T05:51:58 WARN auth ok\n2024-03-19T00:33:57 ERROR cache \n2024-04-11T09:32:58 ERROR db failed to connect\n2024-09-18T05:42:45 ERROR cache \n2024-02-14T04:17:38 ERROR db x=1 y=2\n2024-02-17T04:29:58 DEBUG db x=1 y=2\n",
+  "stdout": "levels: DEBUG=1 INFO=0 WARN=2 ERROR=5\ntop components:\n  db 4\n  auth 2\n  cache 2\nfirst: 2024-01-18T01:26:49\nlast: 2024-09-18T05:42:45\nerrors:\n  [auth] failed to connect\n  [cache] \n  [db] failed to connect\n  [cache] \n  [db] x=1 y=2\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-01-12T09:34:23 ERROR auth ok\n2024-07-16T02:10:26 DEBUG auth ok\n\n2024-08-13T05:35:51 ERROR db ok\n2024-04-13T05:37:17 DEBUG db ok\n2024-07-15T07:31:41 ERROR auth x=1 y=2\n\n2024-07-16T06:39:20 INFO db x=1 y=2\n2024 INFO a b\n2024-02-16T04:57:12 DEBUG db failed to connect\n2024-02-16T05:11:43 ERROR auth \n2024-02-17T02:37:26 WARN web ok\n2024-06-15T02:57:58 WARN web \n",
+  "stdout": "levels: DEBUG=3 INFO=1 WARN=2 ERROR=4\ntop components:\n  auth 4\n  db 4\n  web 2\nfirst: 2024-01-12T09:34:23\nlast: 2024-08-13T05:35:51\nerrors:\n  [auth] ok\n  [db] ok\n  [auth] x=1 y=2\n  [auth] \nmalformed: 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-15T09:17:44 WARN web failed to connect\n2024-08-10T08:13:59 DEBUG web ok\n2024-02-10T04:43:46 WARN db \n\n2024-02-16T07:12:26 DEBUG cache \n2024-02-16T07:38:59 WARN cache ok\n2024-04-19T00:35:35 ERROR cache failed to connect\n2024-04-18T03:41:39 ERROR db \n2024-02-19T02:53:11 ERROR db failed to connect\n2024-05-10T01:34:19 WARN cache ok\n\n2024-03-14T07:31:38 INFO web failed to connect\n2024-07-16T00:49:15 ERROR web failed to connect\n2024-06-11T01:22:20 INFO cache ok\n2024-02-15T09:31:19 ERROR cache failed to connect\n2024-07-15T06:45:47 ERROR cache \n2024-09-14T09:44:54 WARN db failed to connect\n",
+  "stdout": "levels: DEBUG=2 INFO=2 WARN=5 ERROR=6\ntop components:\n  cache 7\n  db 4\n  web 4\nfirst: 2024-02-10T04:43:46\nlast: 2024-09-14T09:44:54\nerrors:\n  [cache] failed to connect\n  [db] \n  [db] failed to connect\n  [web] failed to connect\n  [cache] failed to connect\n  [cache] \nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-02-15T03:41:33 WARN web \n2024-03-10T03:54:54 ERROR cache ok\n2024-09-10T07:25:34 WARN web ok\n2024-02-13T05:14:41 WARN auth failed to connect\n2024-01-14T02:44:14 INFO auth failed to connect\n2024-01-15T08:26:42 ERROR auth x=1 y=2\n2024-02-18T08:31:59 INFO auth \n2024-01-17T05:22:55 ERROR cache ok\n2024-09-14T01:42:36 WARN auth x=1 y=2\n2024-02-19T03:46:50 ERROR auth x=1 y=2\n2024-07-17T03:49:17 ERROR web \n2024-03-18T05:39:48 DEBUG db failed to connect\n2024-07-10T00:14:46 INFO db failed to connect\n2024-03-19T07:19:56 ERROR web \n2024-09-15T04:25:48 ERROR db failed to connect\n",
+  "stdout": "levels: DEBUG=1 INFO=3 WARN=4 ERROR=7\ntop components:\n  auth 6\n  web 4\n  db 3\nfirst: 2024-01-14T02:44:14\nlast: 2024-09-15T04:25:48\nerrors:\n  [cache] ok\n  [auth] x=1 y=2\n  [cache] ok\n  [auth] x=1 y=2\n  [web] \n  [web] \n  [db] failed to connect\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "junk line\n2024-02-17T00:57:36 WARN auth ok\n2024-07-13T03:56:54 WARN db ok\n2024-03-14T02:38:32 ERROR auth \n2024-02-10T08:19:29 DEBUG web \n2024-09-18T04:17:15 DEBUG db x=1 y=2\n",
+  "stdout": "levels: DEBUG=2 INFO=0 WARN=2 ERROR=1\ntop components:\n  auth 2\n  db 2\n  web 1\nfirst: 2024-02-10T08:19:29\nlast: 2024-09-18T04:17:15\nerrors:\n  [auth] \nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-05-12T01:40:28 WARN cache ok\n2024-05-10T03:58:42 INFO web failed to connect\n2024-06-19T02:27:22 WARN db ok\n2024-09-12T07:16:27 WARN db x=1 y=2\n2024-07-11T02:16:50 INFO auth failed to connect\n2024-04-10T08:50:16 ERROR web ok\n2024-01-17T03:46:34 WARN web \n\n2024-07-11T07:14:16 INFO auth x=1 y=2\n2024-06-11T04:16:34 ERROR cache x=1 y=2\n2024-09-10T06:40:32 INFO db x=1 y=2\njunk line\n2024-01-10T05:56:21 ERROR auth failed to connect\n2024-03-15T01:58:21 INFO auth ok\n",
+  "stdout": "levels: DEBUG=0 INFO=5 WARN=4 ERROR=3\ntop components:\n  auth 4\n  db 3\n  web 3\nfirst: 2024-01-10T05:56:21\nlast: 2024-09-12T07:16:27\nerrors:\n  [web] ok\n  [cache] x=1 y=2\n  [auth] failed to connect\nmalformed: 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-07-10T00:13:55 ERROR db x=1 y=2\n2024-03-17T00:51:27 DEBUG cache x=1 y=2\n2024-08-15T04:13:42 INFO db failed to connect\n2024-09-17T09:50:44 ERROR cache x=1 y=2\n2024-02-18T05:55:48 DEBUG auth ok\n",
+  "stdout": "levels: DEBUG=2 INFO=1 WARN=0 ERROR=2\ntop components:\n  cache 2\n  db 2\n  auth 1\nfirst: 2024-02-18T05:55:48\nlast: 2024-09-17T09:50:44\nerrors:\n  [db] x=1 y=2\n  [cache] x=1 y=2\nmalformed: 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-09-19T05:22:25 ERROR db failed to connect\n2024-01-16T06:33:41 ERROR cache \n2024-05-10T05:48:50 WARN db failed to connect\n2024-03-12T03:37:14 DEBUG web ok\n2024-05-15T09:24:35 INFO web x=1 y=2\n2024-09-14T01:36:17 INFO db \njunk line\n2024-08-12T07:18:58 WARN auth \n2024-06-14T02:47:16 WARN web x=1 y=2\n2024-05-18T09:14:44 DEBUG web \njunk line\n2024-01-11T09:36:45 INFO auth \n2024-07-18T06:54:26 ERROR web ok\n2024-02-12T04:56:19 WARN auth ok\n2024-04-17T00:40:41 WARN web failed to connect\njunk line\n2024-02-17T04:48:41 ERROR cache \n2024-01-18T05:57:45 ERROR web \n2024-04-19T05:30:22 INFO web x=1 y=2\n2024 INFO a b\n2024-02-13T09:23:37 WARN web \n",
+  "stdout": "levels: DEBUG=2 INFO=4 WARN=6 ERROR=5\ntop components:\n  web 9\n  auth 3\n  db 3\nfirst: 2024-01-11T09:36:45\nlast: 2024-09-19T05:22:25\nerrors:\n  [db] failed to connect\n  [cache] \n  [web] ok\n  [cache] \n  [web] \nmalformed: 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-06-15T07:15:49 DEBUG cache failed to connect\n2024-04-13T04:27:50 WARN cache \n2024-09-14T01:25:26 INFO db x=1 y=2\n2024-05-11T05:38:21 ERROR web ok\n2024-02-11T08:18:36 ERROR cache ok\n2024 INFO a b\n2024-04-13T01:28:22 ERROR db ok\n2024-08-17T02:47:19 DEBUG db \n2024-04-14T01:42:13 ERROR db \n2024-09-12T05:24:44 DEBUG cache failed to connect\n2024-05-15T03:49:11 WARN web ok\n2024-07-18T04:15:10 INFO auth failed to connect\n2024-05-13T00:53:15 WARN auth failed to connect\n",
+  "stdout": "levels: DEBUG=3 INFO=2 WARN=3 ERROR=4\ntop components:\n  cache 4\n  db 4\n  auth 2\nfirst: 2024-02-11T08:18:36\nlast: 2024-09-14T01:25:26\nerrors:\n  [web] ok\n  [cache] ok\n  [db] ok\n  [db] \nmalformed: 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2024-08-17T05:58:35 DEBUG db x=1 y=2\n2024-05-14T03:52:46 ERROR cache x=1 y=2\njunk line\n2024-03-14T09:44:37 INFO cache \n2024-06-19T06:17:32 WARN cache ok\n2024-04-13T00:11:19 DEBUG web \n2024 INFO a b\n\n2024-02-13T08:30:31 ERROR cache ok\n2024-05-12T05:37:38 WARN auth \n2024-07-17T04:23:11 ERROR db \n2024-01-16T07:33:37 ERROR db ok\n2024-05-13T05:44:17 ERROR db failed to connect\n2024-03-15T06:23:21 DEBUG web x=1 y=2\n2024-04-10T04:15:34 ERROR web failed to connect\n2024-06-11T08:19:27 ERROR auth failed to connect\n2024-09-12T06:54:24 INFO db \n2024-06-15T09:21:48 DEBUG auth ok\n2024-04-16T07:32:59 WARN db x=1 y=2\n",
+  "stdout": "levels: DEBUG=4 INFO=2 WARN=3 ERROR=7\ntop components:\n  db 6\n  cache 4\n  auth 3\nfirst: 2024-01-16T07:33:37\nlast: 2024-09-12T06:54:24\nerrors:\n  [cache] x=1 y=2\n  [cache] ok\n  [db] \n  [db] ok\n  [db] failed to connect\n  [web] failed to connect\n  [auth] failed to connect\nmalformed: 3\n"
+ }
+]

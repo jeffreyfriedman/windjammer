@@ -1,0 +1,41 @@
+use std::fs
+
+fn shift_char(c: char, n: i64) -> char {
+    let code = c as i64
+    if code >= 97 && code <= 122 {
+        let r = ((code - 97 + n) % 26 + 26) % 26
+        ((r + 97) as u8) as char
+    } else if code >= 65 && code <= 90 {
+        let r = ((code - 65 + n) % 26 + 26) % 26
+        ((r + 65) as u8) as char
+    } else {
+        c
+    }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let pieces: Vec<string> = text.split("\n").map(|s| s.to_string()).collect()
+    let head = pieces[0].clone()
+    let body = rest_lines(pieces.clone(), 1).join("\n")
+    let parts: Vec<string> = head.split_whitespace().map(|s| s.to_string()).collect()
+    let mut n = parts[1].parse::<i64>().unwrap_or(0)
+    if parts[0] == "dec" {
+        n = -n
+    }
+    let mut out = ""
+    for c in body.chars() {
+        out = out + shift_char(c, n).to_string()
+    }
+    print(out)
+}

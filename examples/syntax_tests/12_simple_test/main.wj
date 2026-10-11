@@ -1,3 +1,8 @@
+// expect: === Simple Language Test ===
+// expect:
+// expect: 10 + 20 = 30
+// expect:
+// expect: ✅ Test complete!
 // Simple test without stdlib - just core language features
 
 fn add(a: i64, b: i64) -> i64 {

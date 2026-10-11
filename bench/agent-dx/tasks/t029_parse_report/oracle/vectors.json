@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "42\n-7\nabc\n99999999999\n",
+  "stdout": "ok 42\nok -7\nerror invalid abc\nerror overflow 99999999999\nsummary ok=2 invalid=1 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n+5\n-\n1 2\n",
+  "stdout": "error empty\nok 5\nerror invalid -\nerror invalid 1 2\nsummary ok=1 invalid=2 overflow=0 empty=1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2147483647\n2147483648\n-2147483648\n-2147483649\n007\n-0\n+0\n--1\n1.0\n 1\n+\n000000000000000000000000000012\n",
+  "stdout": "ok 2147483647\nerror overflow 2147483648\nok -2147483648\nerror overflow -2147483649\nok 7\nok 0\nok 0\nerror invalid --1\nerror invalid 1.0\nerror invalid  1\nerror invalid +\nok 12\nsummary ok=6 invalid=4 overflow=2 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "00\n-302506605\n00\n+\n+9\n-1485720624\n-201633146\n-176711707\n1_000\n",
+  "stdout": "ok 0\nok -302506605\nok 0\nerror invalid +\nok 9\nok -1485720624\nok -201633146\nok -176711707\nerror invalid 1_000\nsummary ok=7 invalid=2 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1_000\n3 4\n-\n2147483647\n",
+  "stdout": "error invalid 1_000\nerror invalid 3 4\nerror invalid -\nok 2147483647\nsummary ok=1 invalid=3 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2797409502\n-1197329378\nx\n2147483647\n99999999999999999999\n\n",
+  "stdout": "error overflow 2797409502\nok -1197329378\nerror invalid x\nok 2147483647\nerror overflow 99999999999999999999\nerror empty\nsummary ok=2 invalid=1 overflow=2 empty=1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-822242876\n1\n2103835203\n2827793119\n",
+  "stdout": "ok -822242876\nok 1\nok 2103835203\nerror overflow 2827793119\nsummary ok=3 invalid=0 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-703114282\n99999999999999999999\n1_000\n99999999999999999999\n286762756\n99999999999999999999\n2121002774\n-119514390\n-2147483648\n00\n",
+  "stdout": "ok -703114282\nerror overflow 99999999999999999999\nerror invalid 1_000\nerror overflow 99999999999999999999\nok 286762756\nerror overflow 99999999999999999999\nok 2121002774\nok -119514390\nok -2147483648\nok 0\nsummary ok=6 invalid=1 overflow=3 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "178740211\n1\n1_000\n99999999999999999999\n3 4\n-1\n2643253047\n2147483647\n-1078408268\n",
+  "stdout": "ok 178740211\nok 1\nerror invalid 1_000\nerror overflow 99999999999999999999\nerror invalid 3 4\nok -1\nerror overflow 2643253047\nok 2147483647\nok -1078408268\nsummary ok=5 invalid=2 overflow=2 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1_000\n",
+  "stdout": "error invalid 1_000\nsummary ok=0 invalid=1 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-1370615890\n2147483647\n",
+  "stdout": "ok -1370615890\nok 2147483647\nsummary ok=2 invalid=0 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "+9\n",
+  "stdout": "ok 9\nsummary ok=1 invalid=0 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-1582739932\n+9\n2209098284\n-2147483648\n1691670451\n",
+  "stdout": "ok -1582739932\nok 9\nerror overflow 2209098284\nok -2147483648\nok 1691670451\nsummary ok=4 invalid=0 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "+\n\n-007\n",
+  "stdout": "error invalid +\nerror empty\nok -7\nsummary ok=1 invalid=1 overflow=0 empty=1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "99999999999999999999\n2056788045\n-\n-2774911348\n",
+  "stdout": "error overflow 99999999999999999999\nok 2056788045\nerror invalid -\nerror overflow -2774911348\nsummary ok=1 invalid=1 overflow=2 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-007\n-007\n1041562834\n",
+  "stdout": "ok -7\nok -7\nok 1041562834\nsummary ok=3 invalid=0 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n2147483647\n3 4\n1952017904\n2147483647\nx\n2308596360\n00\n1082777564\n",
+  "stdout": "ok 1\nok 2147483647\nerror invalid 3 4\nok 1952017904\nok 2147483647\nerror invalid x\nerror overflow 2308596360\nok 0\nok 1082777564\nsummary ok=6 invalid=2 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1069226990\n826810742\n-\n1_000\nx\n1_000\n-1\n3 4\n",
+  "stdout": "ok 1069226990\nok 826810742\nerror invalid -\nerror invalid 1_000\nerror invalid x\nerror invalid 1_000\nok -1\nerror invalid 3 4\nsummary ok=3 invalid=5 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-2147483648\n",
+  "stdout": "ok -2147483648\nsummary ok=1 invalid=0 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-1\n",
+  "stdout": "ok -1\nsummary ok=1 invalid=0 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2147483648\n00\n",
+  "stdout": "error overflow 2147483648\nok 0\nsummary ok=1 invalid=0 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n+\n12a\n12a\n0\n",
+  "stdout": "ok 1\nerror invalid +\nerror invalid 12a\nerror invalid 12a\nok 0\nsummary ok=2 invalid=3 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-1\n-1504012043\n2147483648\n-1\n0\n99999999999999999999\n0\n-1\n2147483647\n",
+  "stdout": "ok -1\nok -1504012043\nerror overflow 2147483648\nok -1\nok 0\nerror overflow 99999999999999999999\nok 0\nok -1\nok 2147483647\nsummary ok=7 invalid=0 overflow=2 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "+\n",
+  "stdout": "error invalid +\nsummary ok=0 invalid=1 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "00\n1_000\n0\n181284578\n",
+  "stdout": "ok 0\nerror invalid 1_000\nok 0\nok 181284578\nsummary ok=3 invalid=1 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1560288057\n1_000\n2147483648\nx\n",
+  "stdout": "ok 1560288057\nerror invalid 1_000\nerror overflow 2147483648\nerror invalid x\nsummary ok=1 invalid=2 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x\n+\n-007\n",
+  "stdout": "error invalid x\nerror invalid +\nok -7\nsummary ok=1 invalid=2 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-1848005373\n+\n2002325393\n+\n",
+  "stdout": "ok -1848005373\nerror invalid +\nok 2002325393\nerror invalid +\nsummary ok=2 invalid=2 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n-2766739465\n-276022640\n1\n2110028022\n0\n-1671643996\n-\n-1261226999\n",
+  "stdout": "error empty\nerror overflow -2766739465\nok -276022640\nok 1\nok 2110028022\nok 0\nok -1671643996\nerror invalid -\nok -1261226999\nsummary ok=6 invalid=1 overflow=1 empty=1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "x\n2147483648\n-\n-1599700118\n\n\n12a\n2782788714\n-226131344\n0\n",
+  "stdout": "error invalid x\nerror overflow 2147483648\nerror invalid -\nok -1599700118\nerror empty\nerror empty\nerror invalid 12a\nerror overflow 2782788714\nok -226131344\nok 0\nsummary ok=3 invalid=3 overflow=2 empty=2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "00\n3 4\n-1887462514\n-767261901\n963829711\n-2147483648\n",
+  "stdout": "ok 0\nerror invalid 3 4\nok -1887462514\nok -767261901\nok 963829711\nok -2147483648\nsummary ok=5 invalid=1 overflow=0 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-\n-1\n12a\n184258805\n835768298\n99999999999999999999\n3 4\n-2147279620\n+\n",
+  "stdout": "error invalid -\nok -1\nerror invalid 12a\nok 184258805\nok 835768298\nerror overflow 99999999999999999999\nerror invalid 3 4\nok -2147279620\nerror invalid +\nsummary ok=4 invalid=4 overflow=1 empty=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "0\n-1\n2147483648\n2147483648\n+\n1\n\n-1\n12a\n",
+  "stdout": "ok 0\nok -1\nerror overflow 2147483648\nerror overflow 2147483648\nerror invalid +\nok 1\nerror empty\nok -1\nerror invalid 12a\nsummary ok=4 invalid=2 overflow=2 empty=1\n"
+ }
+]

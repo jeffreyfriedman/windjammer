@@ -1,0 +1,26 @@
+[
+ {
+  "args": [
+   "in.txt",
+   "out.txt",
+   "upper"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to out.txt\nBANANA\nAPPLE\nCHERRY\nAPPLE\nBANANA\n  PAD  \n"
+ },
+ {
+  "args": [
+   "in.txt",
+   "o",
+   "sort"
+  ],
+  "files": {
+   "in.txt": "banana\nApple\ncherry\napple\nbanana\n  pad  \n"
+  },
+  "stdin": "",
+  "stdout": "wrote 6 lines to o\n  pad  \nApple\napple\nbanana\nbanana\ncherry\n"
+ }
+]

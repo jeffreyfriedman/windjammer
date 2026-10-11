@@ -69,8 +69,87 @@ fn generate_test_all_rs() {
     }
 }
 
+/// Emit `$OUT_DIR/embedded_assets_generated.rs`: byte tables for the runtime assets
+/// (`std/`, `stdlib_meta/`, `crates/windjammer-runtime/`) so an installed `wj` never
+/// reads them from a source checkout. See `src/embedded_assets.rs`.
+fn generate_embedded_assets() {
+    use std::fs;
+    use std::path::Path;
+
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(rd) = fs::read_dir(dir) else { return };
+        let mut entries: Vec<_> = rd.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        for e in entries {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, base, out);
+            } else {
+                let rel = p
+                    .strip_prefix(base)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.push((rel, p.to_string_lossy().replace('\\', "/")));
+            }
+        }
+    }
+
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    let manifest = Path::new(&manifest);
+    let sets: [(&str, &str, &[&str]); 3] = [
+        ("STDLIB_META", "stdlib_meta", &[""]),
+        ("STD_WJ", "std", &[""]),
+        (
+            "RUNTIME_CRATE",
+            "crates/windjammer-runtime",
+            &["Cargo.toml", "src"],
+        ),
+    ];
+    let mut code = String::new();
+    for (name, dir, roots) in sets {
+        let base = manifest.join(dir);
+        println!("cargo:rerun-if-changed={}", base.display());
+        let mut files = Vec::new();
+        for r in roots {
+            let p = base.join(r);
+            if p.is_dir() {
+                walk(&p, &base, &mut files);
+            } else if p.is_file() {
+                files.push((r.to_string(), p.to_string_lossy().replace('\\', "/")));
+            }
+        }
+        code.push_str(&format!("pub static {name}: &[(&str, &[u8])] = &[\n"));
+        let hashed = files.clone();
+        for (rel, abs) in files {
+            code.push_str(&format!("    ({rel:?}, include_bytes!({abs:?})),\n"));
+        }
+        code.push_str("];\n");
+        // Content hash computed at build time (FNV-1a over paths + bytes): keys the cache dir.
+        let mut h: u64 = 0xcbf29ce484222325;
+        for (rel, abs) in &hashed {
+            for b in rel
+                .bytes()
+                .chain([0u8])
+                .chain(fs::read(abs).unwrap_or_default())
+            {
+                h ^= b as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
+        }
+        code.push_str(&format!("pub const {name}_HASH: u64 = {h};\n"));
+    }
+    let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+    fs::write(
+        Path::new(&out_dir).join("embedded_assets_generated.rs"),
+        code,
+    )
+    .expect("write embedded assets table");
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    generate_embedded_assets();
     println!("cargo:rerun-if-changed=tests");
     println!("cargo:rerun-if-changed=build_support");
     println!("cargo::rustc-check-cfg=cfg(tarpaulin)");

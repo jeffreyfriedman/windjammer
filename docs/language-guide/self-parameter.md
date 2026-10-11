@@ -43,7 +43,8 @@ let mut y = 0      // Mutable (explicit)
 
 ## Don't Write `mut self`
 
-```windjammer
+<!-- should_fail: `mut self` is rejected by the compiler (that is the point of this example) -->
+```windjammer,should_fail
 // ❌ WRONG - mut is not needed
 fn update(mut self) {
     self.x = 1

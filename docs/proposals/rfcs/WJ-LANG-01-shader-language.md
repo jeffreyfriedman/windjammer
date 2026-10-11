@@ -1,4 +1,9 @@
+---
+status: proposal
+---
 # RFC: Windjammer Shader Language (WJSL)
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
 
 **Status:** Draft  
 **Author:** Windjammer Team  
@@ -714,7 +719,7 @@ Warning: storage buffer 'gbuffer' indexed without bounds check
 - **WGSL spec:** https://www.w3.org/TR/WGSL/
 - **WGSL Transpiler Status:** `windjammer/WGSL_TRANSPILER_STATUS.md`
 - **Shader metadata:** `windjammer/src/codegen/wgsl/shader_metadata.rs`
-- **Pain point docs:** `docs/SCREEN_SIZE_TYPE_MISMATCH_BUG.md`, `docs/TDD_BLACK_SCREEN_FIX_FINAL.md`
+- **Pain point docs:** two bug write-ups (deleted; see git history)
 
 ---
 

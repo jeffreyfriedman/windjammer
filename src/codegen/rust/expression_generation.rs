@@ -950,7 +950,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             Literal::IntSuffixed(i, suffix) => {
-                format!("{}_{}", i, suffix)
+                crate::codegen::rust::literals::int_suffixed_literal(*i, suffix)
             }
             Literal::Int(i) => {
                 // Index positions infer `usize` from context — bare literals avoid `_usize`.

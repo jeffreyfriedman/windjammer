@@ -1,8 +1,12 @@
+---
+status: proposed
+last_verified: 3406ef05bb35
+---
 # ADR-0010: Package source of truth
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** [WJ-PKG-01](../proposals/rfcs/WJ-PKG-01-package-management.md), `src/config.rs` (`DependencySpec`), `src/package/{manifest,resolver,registry}.rs`, `src/cli/{add,remove,update}.rs`, [PUBLISHING.md](../PUBLISHING.md)
+- **Related:** [WJ-PKG-01](../proposals/rfcs/WJ-PKG-01-package-management.md), `src/config.rs` (`DependencySpec`), `src/package/{manifest,resolver,registry}.rs`, `src/cli/{add,remove,update}.rs`
 
 ## Context
 `wj.toml` already parses `dependencies` with `version`, `path`, `git`, `branch`, `features`, `package` (a Cargo rename) and `registry`.
@@ -20,7 +24,7 @@ Pros: complete story. Cons: needs hosting, auth, yanking and security review; bl
 Pros: least work. Cons: `.wj` packages cannot be distinguished from Rust crates; no effect/taint metadata travels with dependencies (ADR-0009).
 
 ## Recommendation
-Option A. Define the lock file schema and semantic-version rules first; make `wj add --path/--git` work; put the registry client behind a
+Option A. Define the lock file schema and semantic-version rules first; make path and git dependencies work through `wj add`; put the registry client behind a
 feature flag until a registry exists. Remove the default registry URL from code so nothing implies a service.
 
 ## Consequences

@@ -23,7 +23,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
 - `builtins/`            native stdlib registry (`Registry`): `num`, `text`, `seq`, `map`, `option`, `std_fns`
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
-- `error.rs`             `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces
+- `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists
 
 ## Invariants
 - Values are immutable trees behind `Rc` with copy-on-write; `&mut` is a `Place` (slot + projections).
@@ -57,4 +57,4 @@ Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` i
 - `cargo test --test interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
 - `cargo test --test interpreter_cli_test` real `wj` binary: no-cargo, multi-file, `wj test`, REPL, exit codes
 - `python3 scripts/interpreter_coverage.py <wj> out.json --corpus <dir> --rust-diff tests examples`
-- `python3 scripts/interpreter_probes.py <wj>` quick feature matrix
+- `cargo test --test interpreter_features` every registry entry's probe program behaves as registered (replaces the old probes script)

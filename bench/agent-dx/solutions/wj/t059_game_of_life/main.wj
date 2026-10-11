@@ -1,0 +1,80 @@
+use std::fs
+
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let all: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let head: Vec<i64> = line_at(all.clone(), cursor).split_whitespace().map(|s| s.parse::<i64>().unwrap_or(0)).collect()
+    cursor += 1
+    let w = head[0]
+    let h = head[1]
+    let gens = head[2]
+    let mut grid: Vec<bool> = Vec::new()
+    for l in rest_lines(all.clone(), cursor) {
+        for c in l.chars() {
+            grid.push(c == '#')
+        }
+    }
+    let mut g: i64 = 0
+    while g < gens {
+        let mut next: Vec<bool> = Vec::new()
+        let mut y: i64 = 0
+        while y < h {
+            let mut x: i64 = 0
+            while x < w {
+                let mut n = 0
+                let mut dy: i64 = -1
+                while dy <= 1 {
+                    let mut dx: i64 = -1
+                    while dx <= 1 {
+                        if dy != 0 || dx != 0 {
+                            let yy = (y + dy + h) % h
+                            let xx = (x + dx + w) % w
+                            if grid[(yy * w + xx) as usize] { n += 1 }
+                        }
+                        dx += 1
+                    }
+                    dy += 1
+                }
+                let alive = grid[(y * w + x) as usize]
+                next.push(n == 3 || (alive && n == 2))
+                x += 1
+            }
+            y += 1
+        }
+        grid = next
+        g += 1
+    }
+    let mut alive_count = 0
+    let mut y: i64 = 0
+    while y < h {
+        let mut row = ""
+        let mut x: i64 = 0
+        while x < w {
+            if grid[(y * w + x) as usize] {
+                row = row + "#"
+                alive_count += 1
+            } else {
+                row = row + "."
+            }
+            x += 1
+        }
+        println(row)
+        y += 1
+    }
+    println("alive: ${alive_count}")
+}

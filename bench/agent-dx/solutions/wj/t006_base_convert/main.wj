@@ -1,0 +1,39 @@
+use std::fs
+
+fn digit_value(c: char) -> i64 {
+    let code = c as i64
+    if code >= 48 && code <= 57 {
+        code - 48
+    } else {
+        code - 65 + 10
+    }
+}
+
+fn digit_char(d: i64) -> string {
+    let digits: Vec<string> = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars().map(|c| c.to_string()).collect()
+    digits[d as usize].clone()
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let parts: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if parts.len() < 3 { continue }
+        let from = parts[1].parse::<i64>().unwrap_or(10)
+        let to = parts[2].parse::<i64>().unwrap_or(10)
+        let mut value: i64 = 0
+        for c in parts[0].chars() {
+            value = value * from + digit_value(c)
+        }
+        if value == 0 {
+            println("0")
+            continue
+        }
+        let mut out = ""
+        while value > 0 {
+            out = digit_char(value % to) + out
+            value = value / to
+        }
+        println(out)
+    }
+}

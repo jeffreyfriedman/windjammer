@@ -1,4 +1,9 @@
+---
+status: proposal
+---
 # WJ-PERF-01: Economic Efficiency Framework
+
+> **Proposal: not implemented.** This document describes a possible future design. The commands, flags, syntax, error codes and file formats it names do not exist in the current compiler unless a later section says otherwise; `wj-docs` does not check them against the code. For what works today, see `docs/reference/cli.md` and `docs/known-gaps.md`.
 
 **Status:** Draft  
 **Author:** Windjammer Core Team  
@@ -65,7 +70,7 @@ Deploy with confidence!
    - [Pillar 4: Binary Size Economics](#pillar-4-binary-size-economics)
    - [Pillar 5: Energy Efficiency Economics](#pillar-5-energy-efficiency-economics)
 3. [Automatic Cost Tracking](#automatic-cost-tracking)
-4. [Economic Optimization Modes](#economic-optimization-modes)
+4. Economic Optimization Modes
 5. [Compiler-Driven Economics](#compiler-driven-economics)
 6. [TDD for Economics](#tdd-for-economics)
 7. [Integration with Existing Features](#integration-with-existing-features)
@@ -4363,7 +4368,7 @@ Tests: 5 economic tests generated
 Run: wj test --economics
 ```
 
-**Generated `tests/economics_test.wj`:**
+**Generated economics test (sketch):**
 
 ```windjammer
 // Auto-generated economic tests for CLI tool

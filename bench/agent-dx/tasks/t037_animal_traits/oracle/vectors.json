@@ -1,0 +1,212 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog Rex\ncat Tom\nduck Don\n",
+  "stdout": "Rex the dog says woof on 4 legs\nTom the cat purrs softly\nDon the duck says quack on 2 legs\nlegs total=10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake Sid\nspider Sam\nfish Wanda\n",
+  "stdout": "Sid the snake says hiss on 0 legs\nSam the spider says ... on 8 legs\nunknown kind fish\nlegs total=8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "legs total=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cat A\ncat B\n",
+  "stdout": "A the cat purrs softly\nB the cat purrs softly\nlegs total=8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog x\ndog x\ndog x\ndog x\ndog x\n",
+  "stdout": "x the dog says woof on 4 legs\nx the dog says woof on 4 legs\nx the dog says woof on 4 legs\nx the dog says woof on 4 legs\nx the dog says woof on 4 legs\nlegs total=20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N65\nspider N80\ncow N7\ncow N35\nduck N49\nsnake N74\ncat N52\nsnake N42\n",
+  "stdout": "N65 the snake says hiss on 0 legs\nN80 the spider says ... on 8 legs\nunknown kind cow\nunknown kind cow\nN49 the duck says quack on 2 legs\nN74 the snake says hiss on 0 legs\nN52 the cat purrs softly\nN42 the snake says hiss on 0 legs\nlegs total=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cow N85\nsnake N61\nspider N19\ncat N61\nsnake N93\nspider N64\n",
+  "stdout": "unknown kind cow\nN61 the snake says hiss on 0 legs\nN19 the spider says ... on 8 legs\nN61 the cat purrs softly\nN93 the snake says hiss on 0 legs\nN64 the spider says ... on 8 legs\nlegs total=20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "duck N36\n",
+  "stdout": "N36 the duck says quack on 2 legs\nlegs total=2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fish N3\n",
+  "stdout": "unknown kind fish\nlegs total=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N80\nfish N90\nduck N56\nsnake N97\ndog N59\nspider N2\nduck N96\ndog N40\ndog N32\nduck N93\n",
+  "stdout": "N80 the snake says hiss on 0 legs\nunknown kind fish\nN56 the duck says quack on 2 legs\nN97 the snake says hiss on 0 legs\nN59 the dog says woof on 4 legs\nN2 the spider says ... on 8 legs\nN96 the duck says quack on 2 legs\nN40 the dog says woof on 4 legs\nN32 the dog says woof on 4 legs\nN93 the duck says quack on 2 legs\nlegs total=26\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N30\ndog N64\ndog N46\nsnake N87\nspider N6\nsnake N35\ncat N30\nduck N1\ncow N41\n",
+  "stdout": "N30 the snake says hiss on 0 legs\nN64 the dog says woof on 4 legs\nN46 the dog says woof on 4 legs\nN87 the snake says hiss on 0 legs\nN6 the spider says ... on 8 legs\nN35 the snake says hiss on 0 legs\nN30 the cat purrs softly\nN1 the duck says quack on 2 legs\nunknown kind cow\nlegs total=22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "spider N17\ncow N88\ncow N11\ncat N98\nspider N67\ncow N88\ncat N49\ncow N29\ncow N5\n",
+  "stdout": "N17 the spider says ... on 8 legs\nunknown kind cow\nunknown kind cow\nN98 the cat purrs softly\nN67 the spider says ... on 8 legs\nunknown kind cow\nN49 the cat purrs softly\nunknown kind cow\nunknown kind cow\nlegs total=24\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fish N19\ndog N80\ncow N81\ncat N84\nsnake N49\nsnake N8\nduck N8\nspider N53\nsnake N97\nsnake N52\n",
+  "stdout": "unknown kind fish\nN80 the dog says woof on 4 legs\nunknown kind cow\nN84 the cat purrs softly\nN49 the snake says hiss on 0 legs\nN8 the snake says hiss on 0 legs\nN8 the duck says quack on 2 legs\nN53 the spider says ... on 8 legs\nN97 the snake says hiss on 0 legs\nN52 the snake says hiss on 0 legs\nlegs total=18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "duck N5\ndog N69\ndog N34\n",
+  "stdout": "N5 the duck says quack on 2 legs\nN69 the dog says woof on 4 legs\nN34 the dog says woof on 4 legs\nlegs total=10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog N42\ncow N81\ncow N35\nspider N19\n",
+  "stdout": "N42 the dog says woof on 4 legs\nunknown kind cow\nunknown kind cow\nN19 the spider says ... on 8 legs\nlegs total=12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N86\nduck N96\nspider N68\nfish N27\nspider N61\nfish N24\nspider N29\ncow N6\nfish N94\n",
+  "stdout": "N86 the snake says hiss on 0 legs\nN96 the duck says quack on 2 legs\nN68 the spider says ... on 8 legs\nunknown kind fish\nN61 the spider says ... on 8 legs\nunknown kind fish\nN29 the spider says ... on 8 legs\nunknown kind cow\nunknown kind fish\nlegs total=26\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cow N18\ndog N9\ndog N23\nsnake N15\nduck N3\nspider N14\ncow N94\nduck N17\n",
+  "stdout": "unknown kind cow\nN9 the dog says woof on 4 legs\nN23 the dog says woof on 4 legs\nN15 the snake says hiss on 0 legs\nN3 the duck says quack on 2 legs\nN14 the spider says ... on 8 legs\nunknown kind cow\nN17 the duck says quack on 2 legs\nlegs total=20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fish N6\nduck N25\ndog N49\nfish N73\n",
+  "stdout": "unknown kind fish\nN25 the duck says quack on 2 legs\nN49 the dog says woof on 4 legs\nunknown kind fish\nlegs total=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fish N63\nfish N43\nduck N10\ncow N57\ncow N42\nduck N70\n",
+  "stdout": "unknown kind fish\nunknown kind fish\nN10 the duck says quack on 2 legs\nunknown kind cow\nunknown kind cow\nN70 the duck says quack on 2 legs\nlegs total=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "duck N37\ncat N65\nfish N77\nfish N91\nspider N45\nsnake N39\nfish N8\nsnake N64\n",
+  "stdout": "N37 the duck says quack on 2 legs\nN65 the cat purrs softly\nunknown kind fish\nunknown kind fish\nN45 the spider says ... on 8 legs\nN39 the snake says hiss on 0 legs\nunknown kind fish\nN64 the snake says hiss on 0 legs\nlegs total=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N37\nduck N37\ncow N24\ndog N45\ncow N13\ncow N92\ndog N22\ncow N36\ndog N68\n",
+  "stdout": "N37 the snake says hiss on 0 legs\nN37 the duck says quack on 2 legs\nunknown kind cow\nN45 the dog says woof on 4 legs\nunknown kind cow\nunknown kind cow\nN22 the dog says woof on 4 legs\nunknown kind cow\nN68 the dog says woof on 4 legs\nlegs total=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fish N27\ncat N43\nspider N28\nduck N71\nsnake N59\n",
+  "stdout": "unknown kind fish\nN43 the cat purrs softly\nN28 the spider says ... on 8 legs\nN71 the duck says quack on 2 legs\nN59 the snake says hiss on 0 legs\nlegs total=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cow N49\nfish N28\nspider N56\n",
+  "stdout": "unknown kind cow\nunknown kind fish\nN56 the spider says ... on 8 legs\nlegs total=8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog N61\nfish N79\ncat N76\ncat N4\nspider N88\nsnake N45\nduck N81\ncat N87\ncat N75\n",
+  "stdout": "N61 the dog says woof on 4 legs\nunknown kind fish\nN76 the cat purrs softly\nN4 the cat purrs softly\nN88 the spider says ... on 8 legs\nN45 the snake says hiss on 0 legs\nN81 the duck says quack on 2 legs\nN87 the cat purrs softly\nN75 the cat purrs softly\nlegs total=30\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cow N24\n",
+  "stdout": "unknown kind cow\nlegs total=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog N77\ncow N66\nfish N56\nduck N90\nfish N56\n",
+  "stdout": "N77 the dog says woof on 4 legs\nunknown kind cow\nunknown kind fish\nN90 the duck says quack on 2 legs\nunknown kind fish\nlegs total=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "spider N50\nfish N66\nduck N84\nfish N19\nfish N34\ncow N51\ncat N62\n",
+  "stdout": "N50 the spider says ... on 8 legs\nunknown kind fish\nN84 the duck says quack on 2 legs\nunknown kind fish\nunknown kind fish\nunknown kind cow\nN62 the cat purrs softly\nlegs total=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N86\nfish N45\nspider N89\ndog N25\ncat N69\ncat N19\nsnake N71\nspider N1\n",
+  "stdout": "N86 the snake says hiss on 0 legs\nunknown kind fish\nN89 the spider says ... on 8 legs\nN25 the dog says woof on 4 legs\nN69 the cat purrs softly\nN19 the cat purrs softly\nN71 the snake says hiss on 0 legs\nN1 the spider says ... on 8 legs\nlegs total=28\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cow N21\ndog N56\nduck N52\ndog N73\ncat N53\ncow N69\n",
+  "stdout": "unknown kind cow\nN56 the dog says woof on 4 legs\nN52 the duck says quack on 2 legs\nN73 the dog says woof on 4 legs\nN53 the cat purrs softly\nunknown kind cow\nlegs total=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog N21\nspider N77\nfish N78\ncat N88\nspider N38\ncow N42\ndog N86\ncat N75\ndog N77\ncow N17\n",
+  "stdout": "N21 the dog says woof on 4 legs\nN77 the spider says ... on 8 legs\nunknown kind fish\nN88 the cat purrs softly\nN38 the spider says ... on 8 legs\nunknown kind cow\nN86 the dog says woof on 4 legs\nN75 the cat purrs softly\nN77 the dog says woof on 4 legs\nunknown kind cow\nlegs total=36\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake N94\ndog N43\nspider N68\ncat N46\n",
+  "stdout": "N94 the snake says hiss on 0 legs\nN43 the dog says woof on 4 legs\nN68 the spider says ... on 8 legs\nN46 the cat purrs softly\nlegs total=16\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "spider N33\ncow N14\ncow N45\nsnake N95\ncat N58\nspider N79\nspider N22\ndog N79\ncow N2\n",
+  "stdout": "N33 the spider says ... on 8 legs\nunknown kind cow\nunknown kind cow\nN95 the snake says hiss on 0 legs\nN58 the cat purrs softly\nN79 the spider says ... on 8 legs\nN22 the spider says ... on 8 legs\nN79 the dog says woof on 4 legs\nunknown kind cow\nlegs total=32\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog N47\ncat N77\nduck N94\ncat N94\nspider N26\ncow N53\n",
+  "stdout": "N47 the dog says woof on 4 legs\nN77 the cat purrs softly\nN94 the duck says quack on 2 legs\nN94 the cat purrs softly\nN26 the spider says ... on 8 legs\nunknown kind cow\nlegs total=22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog N25\nspider N81\nfish N9\nfish N96\nfish N95\nfish N95\nsnake N74\nfish N33\n",
+  "stdout": "N25 the dog says woof on 4 legs\nN81 the spider says ... on 8 legs\nunknown kind fish\nunknown kind fish\nunknown kind fish\nunknown kind fish\nN74 the snake says hiss on 0 legs\nunknown kind fish\nlegs total=12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "cow N43\nduck N64\nduck N73\n",
+  "stdout": "unknown kind cow\nN64 the duck says quack on 2 legs\nN73 the duck says quack on 2 legs\nlegs total=4\n"
+ }
+]

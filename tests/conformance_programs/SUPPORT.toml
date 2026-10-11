@@ -150,3 +150,20 @@ reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portabl
 program = "138_intr_format_pretty_debug"
 backend = "ts"
 reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
+
+# `&mut int` parameters / `let r = &mut z` locals: the Go and JS backends pass integers by value
+# and the Rust backend infers the parameter as an owned i64 (E0614 on `*c`).
+[[unsupported]]
+program = "159_deref_assign_ref_params"
+backend = "rust"
+reason = "mut-ref-to-int-parameters: Rust backend emits an owned i64 parameter so `*c = ..` fails with E0614"
+
+[[unsupported]]
+program = "159_deref_assign_ref_params"
+backend = "go"
+reason = "mut-ref-to-int-locals: Go backend does not alias `let r = &mut z` for integers"
+
+[[unsupported]]
+program = "159_deref_assign_ref_params"
+backend = "js"
+reason = "mut-ref-to-int-parameters: JavaScript backend passes integers by value so `*c = ..` does not reach the caller"
