@@ -62,7 +62,10 @@ pub fn gen_stmt(r: &mut Rng, depth: u32, loops: usize) -> Stmt {
     match r.below(if nested { 12 } else { 8 }) {
         0 | 1 => Stmt::Assign(r.below(NVARS as u64) as usize, e(r)),
         2 => Stmt::AssignField(r.below(2) as usize, r.chance(1, 2), e(r)),
-        3 => Stmt::CopyStruct(r.below(2) as usize, r.below(2) as usize),
+        3 => {
+            let d = r.below(2) as usize;
+            Stmt::CopyStruct(d, 1 - d)
+        }
         4 => Stmt::VecSet(e(r), e(r)),
         5 => Stmt::MapInsert(e(r), e(r)),
         6 | 7 => Stmt::Check(e(r)),

@@ -175,6 +175,11 @@ func maxVal[T integer]() T {
 	return ^minVal[T]()
 }
 
+func wjWAdd[T integer](a, b T) T { return a + b }
+func wjWSub[T integer](a, b T) T { return a - b }
+func wjWMul[T integer](a, b T) T { return a * b }
+func wjWNeg[T integer](a T) T     { return -a }
+
 func addC[T integer](a, b T) (T, bool) {
 	c := a + b
 	if isSigned[T]() {

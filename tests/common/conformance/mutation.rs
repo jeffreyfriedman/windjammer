@@ -127,7 +127,7 @@ pub fn mutants() -> Vec<Mutant> {
             models: "deep copy replaced by shallow copy (aliasing)",
             backend: Backend::Go,
             edits: vec![Edit::Replace { file: "wj_core.go", from: "return wjCopyValue(reflect.ValueOf(&x).Elem()).Interface().(T)", to: "return x" }],
-            programs: &["11_struct_clone_independent", "43_struct_value_semantics"],
+            programs: &["115_clone_vec_field"],
         },
         Mutant {
             name: "go-no-overflow-check",
