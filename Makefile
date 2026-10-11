@@ -1,7 +1,7 @@
 .PHONY: help test test-all test-stdlib test-ui test-integration \
         test-quick test-orphans test-verbose clippy fmt check build build-all install \
         example-ui example-http \
-        test-examples clean doc setup-hooks check-versions
+        test-examples clean doc setup-hooks check-versions docs-gen docs-check
 
 # Default target
 help:
@@ -52,6 +52,13 @@ test:
 test-verbose:
 	@echo "🧪 Running all tests (verbose)..."
 	cargo test --release --workspace -- --nocapture
+
+# Documentation truth (docs/CONTRIBUTING-docs.md)
+docs-gen:
+	@scripts/docs_gen.sh
+
+docs-check:
+	@scripts/docs_gen.sh --verify
 
 # Fail on test files that no runner reaches
 test-orphans:

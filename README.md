@@ -21,8 +21,8 @@ decisions are in [docs/adr/](docs/adr/README.md).
 ### Language
 - Functions, structs, enums, traits, `impl` blocks, generics, closures, pattern matching with guards.
 - Ownership of function parameters and `self` inferred (borrow, mutable borrow, move); clones inserted by the compiler.
-- Local `let` bindings that are mutated are currently emitted as `let mut` even if you omit `mut`. [ADR-0002](docs/adr/0002-local-mutability.md)
-  (Accepted) decides that `let mut` must be explicit; enforcement is not done yet (`wj run` on `let v = Vec::new(); v.push(1)` is still accepted).
+- Local `let` bindings that are mutated are emitted as `let mut` even if you omit `mut` (see
+  [ADR-0002](docs/adr/0002-local-mutability.md) for the open decision on whether this is the intended rule).
 - String interpolation (`"${name}"`), pipe operator (`|>`: `x |> f(a)`, `x |> .method()`, `x |> f(a, _)`, closures, `?` per stage, multi-line chains; see [docs/design/pipe-operator.md](docs/design/pipe-operator.md)), `defer`, `if`/`else` as expressions, `?` error propagation,
   decorators (`@name`), `mod`, `extern`, `unsafe`, `static`, `where` clauses.
 - Concurrency keywords that exist in the lexer: `thread { }`, `async`/`await`, `async fn`. Channel send/receive operators (`ch <- v`, `<-ch`) are parsed. There is no `go` keyword,
@@ -32,20 +32,40 @@ decisions are in [docs/adr/](docs/adr/README.md).
 Formal grammar: [docs/windjammer.ebnf](docs/windjammer.ebnf). Module system: [docs/MODULE_SYSTEM.md](docs/MODULE_SYSTEM.md).
 
 ### Tooling (the `wj` binary)
+<!-- wj:gen name=cli_commands -->
 | Command | What it does |
-|---------|--------------|
-| `wj new`, `wj build`, `wj run`, `wj test` | Create, transpile + build, build and run, run tests (`wj new` reads `templates/` relative to the current directory, so run it from a checkout) |
-| `wj fmt` | Format `.wj` files (`--check`, `-` for stdin; `--rust` runs `cargo fmt --all` on generated crates) |
-| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`) to Windjammer forms |
-| `wj lint` | Rust-leakage lint rules (W0001-W0004) on `.wj` files |
-| `wj add` / `wj remove` / `wj update` | Edit `wj.toml` dependencies / update the toolchain |
-| `wj run --interpret`, `wj test --interpret`, `wj repl` | Interpreted dev loop, no cargo (experimental subset; see [docs/INTERPRETER.md](docs/INTERPRETER.md)) |
-| `wj explain`, `wj errors`, `wj stats`, `wj docs` | Error catalogue and diagnostics browsing |
-| `wj shader-compile`, `wj validate-wjsl` | WJSL shader front end to WGSL |
-| `wj cache`, `wj clean`, `wj self-install`, `wj agent-index` | Shared cargo cache, cleanup, install, agent artifacts |
+|---|---|
+| `wj new` | Create a new Windjammer project |
+| `wj build` | Build a Windjammer project |
+| `wj run` | Compile and run a Windjammer file |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj test` | Run tests |
+| `wj fmt` | Format Windjammer code |
+| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
+| `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
+| `wj check` | Type check without building |
+| `wj add` | Add a dependency to wj.toml |
+| `wj remove` | Remove a dependency from wj.toml |
+| `wj update` | Update Windjammer to the latest version |
+| `wj stats` | Show error statistics |
+| `wj errors` | Interactive error navigator (TUI) |
+| `wj docs` | Generate error documentation |
+| `wj explain` | Explain an error code |
+| `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
+| `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
+| `wj validate-wjsl` | Validate WJSL shader files (transpile to WGSL and check for errors) |
+| `wj clean` | Clean build artifacts and stale temp files |
+| `wj cache` | Manage the shared Cargo target cache (outside application repos) |
+| `wj cache path` | Print the shared (or --verify) Cargo target directory |
+| `wj cache status` | Show cache sizes and free disk |
+| `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) |
+| `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations |
+| `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH |
+<!-- wj:end -->
 
 Caveats, each tracked in [docs/known-gaps.md](docs/known-gaps.md):
-- `wj check` accepts `PATH` and `--json` but ignores both: it runs `cargo check` in the current directory and does not check `.wj` sources (`src/bin/wj_cli_cmds.rs`).
+- `wj fmt` runs `cargo fmt --all`; it does not format `.wj` files.
+- `wj check` runs `cargo check` in the current directory; it does not check `.wj` sources.
 - `wj eject` does not exist. The older `windjammer` binary has an `eject` subcommand that writes a standalone Rust project.
 - A language server (`crates/windjammer-lsp`) and an MCP server (`crates/windjammer-mcp`) exist as workspace crates.
 
@@ -111,11 +131,11 @@ inferred is in [docs/language-design/ownership-inference.md](docs/language-desig
 ## Test
 
 ```bash
-cargo test --release --test all --no-fail-fast      # long (many minutes on a loaded machine)
+cargo test --release --test all --no-fail-fast      # about 5,500 tests; 15-20 minutes
 cargo test --release --test all <name-filter>       # targeted
 ```
 
-Known failing tests are listed in `.config/known-test-failures.txt` (a ratchet: it may only shrink). The test count changes constantly; run the command to see it.
+Known failing tests are listed in `.config/known-test-failures.txt` (a ratchet: it may only shrink).
 Backend-neutral behaviour tests live in [tests/conformance/](tests/conformance/README.md). Strategy:
 [docs/TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md).
 
@@ -127,7 +147,7 @@ Work described in [docs/ARCHITECTURE_IMPROVEMENT_PLAN.md](docs/ARCHITECTURE_IMPR
 - Single ownership/clone/numeric-width owner (the IR solver) replacing the legacy analyzer patches.
 - Name resolution to stable identities instead of string lookups.
 - Layering and fitness tests, per-module `MODULE.md` documents, removal of global state and environment toggles.
-- A real `wj check` (front-end diagnostics without cargo).
+- A `.wj` formatter and a real `wj check`.
 
 ## Planned (not implemented)
 
@@ -137,7 +157,7 @@ Status per RFC, with evidence, is in [docs/proposals/rfcs/README.md](docs/propos
 - Comptime evaluation, const generics, `owned` argument convention, map type hierarchy.
 - `wj doc`, `wj watch`, `wj publish`, `wj optimize`, `wj economics`.
 - Capability lock file enforcement, taint errors failing the build, capability profiles.
-- IR-level optimization passes, `wj optimize`. The only optimizer today is a post-codegen, `syn`-based rewrite of the emitted Rust (`src/optimizer/`, [ADR-0006](docs/adr/0006-optimizer-fate.md)).
+- An optimizer. The optimizer module exists but is disabled in the pipeline ([ADR-0006](docs/adr/0006-optimizer-fate.md)).
 
 Performance claims (speed relative to Rust, incremental-build multipliers) are intentionally absent until they are
 produced by a benchmark that runs in CI.
@@ -151,17 +171,18 @@ produced by a benchmark that runs in CI.
 | `src/` | Compiler: lexer, parser, analyzer, `ir/` (solver), `codegen/` (Rust, Go, JS, WASM, WGSL), CLI |
 | `crates/` | `windjammer-runtime`, `windjammer-lsp`, `windjammer-mcp` |
 | `std/` | Standard library written in `.wj` (wrappers over the runtime crate) |
-| `tests/` | Rust integration tests, `.wj` fixtures, conformance suite |
-| `docs/` | Architecture, RFCs, ADRs, language design, known gaps (index: `docs/README.md`) |
-| `editors/`, `vscode-extension/` | Editor support (vim, IntelliJ, VS Code) |
+| `tests/`, `tests_wj/` | Rust integration tests, `.wj` fixtures, conformance suite |
+| `docs/` | Architecture, RFCs, ADRs, language design, known gaps |
+| `editors/`, `vscode-extension/` | Editor support |
 | `examples/` | Example programs (not all are maintained; see `examples/README.md`) |
 
 ## Documentation
 - [Architecture](docs/ARCHITECTURE.md) and [improvement plan](docs/ARCHITECTURE_IMPROVEMENT_PLAN.md)
 - [Architecture decision records](docs/adr/README.md) and [RFCs](docs/proposals/rfcs/README.md)
 - [Known gaps](docs/known-gaps.md), [Roadmap](ROADMAP.md), [Changelog](CHANGELOG.md)
+- [API reference](docs/API_REFERENCE.md), [Comparison with Rust and Go](docs/COMPARISON.md)
 - [Contributing](CONTRIBUTING.md), [Security policy](SECURITY.md), [Agent instructions](AGENTS.md)
-- [Documentation index](docs/README.md)
+- [Documentation index](docs/INDEX.md)
 
 ## Related projects
 - [windjammer-ui](https://github.com/jeffreyfriedman/windjammer-ui) - UI framework written in Windjammer

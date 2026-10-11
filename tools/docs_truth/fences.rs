@@ -1,0 +1,145 @@
+//! Executable docs: every ```windjammer / ```wj fence in Markdown and rustdoc is checked.
+//!
+//! Annotations (comma-separated after the language, e.g. `wj,should_fail=WJ0007`):
+//! * (none)               must parse (as a program, else as the body of `fn main`)
+//! * `ignore`             not checked (use sparingly; counted in the report)
+//! * `check`              must also pass the analyzer
+//! * `should_fail`        must fail to parse/analyze; `should_fail=WJ0007` the error must carry the code;
+//!                        `should_fail=W0002` the Rust-leakage linter must report that lint
+//! * `run`                must run in the interpreter
+//! * `// expect: line`    inside the code: run in the interpreter, stdout lines must equal (in order)
+//! * `sh,verify`          (bash fences) executed in a sandbox temp dir, see `fence_run::run_sh`
+
+use super::config::Config;
+use super::{fence_run, md, util, Ctx, Finding};
+
+#[derive(Debug, Default, Clone)]
+pub struct Ann {
+    pub wj: bool,
+    pub sh_verify: bool,
+    pub ignore: bool,
+    pub check: bool,
+    pub run: bool,
+    pub should_fail: Option<Option<String>>,
+}
+
+pub fn parse_info(info: &str) -> Ann {
+    let mut a = Ann::default();
+    let mut parts = info.split([',', ' ']).filter(|p| !p.is_empty());
+    let lang = parts.next().unwrap_or("");
+    a.wj = matches!(lang, "windjammer" | "wj");
+    let sh = matches!(lang, "sh" | "bash" | "shell" | "console");
+    for p in parts {
+        match p {
+            "ignore" => a.ignore = true,
+            "check" => a.check = true,
+            "run" => a.run = true,
+            "verify" if sh => a.sh_verify = true,
+            "should_fail" => a.should_fail = Some(None),
+            p if p.starts_with("should_fail=") => a.should_fail = Some(Some(p["should_fail=".len()..].to_string())),
+            _ => {}
+        }
+    }
+    a
+}
+
+/// Documents scanned: Markdown anywhere, plus rustdoc (`///`, `//!`) of `.rs` under `src/` and `crates/`.
+pub fn sources(ctx: &Ctx) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for f in util::walk(&ctx.root) {
+        if f.ends_with(".md") {
+            out.push((f.clone(), ctx.read(&f)));
+        } else if f.ends_with(".rs") && (f.starts_with("src/") || (f.starts_with("crates/") && f.contains("/src/"))) {
+            let text = ctx.read(&f);
+            if text.contains("```windjammer") || text.contains("```wj") {
+                out.push((f, rustdoc_as_markdown(&text)));
+            }
+        }
+    }
+    out
+}
+
+/// Doc-comment lines become Markdown lines; everything else blank, so line numbers are preserved.
+pub fn rustdoc_as_markdown(src: &str) -> String {
+    src.lines()
+        .map(|l| {
+            let t = l.trim_start();
+            let rest = t.strip_prefix("///").or_else(|| t.strip_prefix("//!"));
+            rest.map(|r| r.strip_prefix(' ').unwrap_or(r)).unwrap_or("").to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub struct Report {
+    pub checked: usize,
+    pub ignored: usize,
+    pub raw: Vec<Finding>,
+}
+
+/// Check one document's fences. `wj_bin` enables `sh,verify` execution.
+pub fn check_doc(file: &str, text: &str, wj_bin: Option<&std::path::Path>) -> Report {
+    let mut r = Report { checked: 0, ignored: 0, raw: vec![] };
+    for f in md::fences(text) {
+        let a = parse_info(&f.info);
+        if a.ignore {
+            r.ignored += 1;
+            continue;
+        }
+        if a.sh_verify {
+            r.checked += 1;
+            match wj_bin {
+                Some(bin) => {
+                    if let Err(e) = fence_run::run_sh(&f.body, bin) {
+                        r.raw.push(Finding::fail("fences", file, f.line, format!("sh,verify failed: {e}")));
+                    }
+                }
+                None => r.raw.push(Finding::warn("fences", file, f.line, "sh,verify fence not executed (no wj binary)")),
+            }
+            continue;
+        }
+        if !a.wj {
+            continue;
+        }
+        r.checked += 1;
+        if let Err(e) = fence_run::check_wj(&f.body, &a) {
+            r.raw.push(Finding::fail("fences", file, f.line, e));
+        }
+    }
+    r
+}
+
+/// Locate the `wj` binary for `sh,verify` (env override, then Cargo's test-time variable).
+pub fn wj_bin() -> Option<std::path::PathBuf> {
+    std::env::var_os("WJ_BIN").map(Into::into).or_else(|| option_env!("CARGO_BIN_EXE_wj").map(Into::into)).filter(|p: &std::path::PathBuf| p.exists())
+}
+
+pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
+    let bin = wj_bin();
+    let mut raw = Vec::new();
+    for (file, text) in sources(ctx) {
+        if cfg.excluded("fences", &file) {
+            continue;
+        }
+        raw.extend(check_doc(&file, &text, bin.as_deref()).raw);
+    }
+    let (warns, fails): (Vec<_>, Vec<_>) = raw.into_iter().partition(|f| f.warn);
+    let mut out = cfg.ratchet("fences", fails);
+    out.extend(warns);
+    out
+}
+
+/// Raw per-file failure counts (for `--update-baseline`).
+pub fn raw_counts(ctx: &Ctx, cfg: &Config) -> std::collections::BTreeMap<String, usize> {
+    let mut m = std::collections::BTreeMap::new();
+    for (file, text) in sources(ctx) {
+        if cfg.excluded("fences", &file) {
+            continue;
+        }
+        let n = check_doc(&file, &text, None).raw.iter().filter(|f| !f.warn).count();
+        if n > 0 {
+            m.insert(file, n);
+        }
+    }
+    m
+}

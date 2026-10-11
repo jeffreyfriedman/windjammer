@@ -11,7 +11,7 @@ In: `&str`. Out: `Vec<Token>` or `Vec<TokenWithLocation>`.
 - Imports nothing above the syntax layer (one known exception, below).
 
 ## Owns
-Token definitions and lexing rules.
+Token definitions and lexing rules; `keywords.rs` is the documented keyword table (source of docs/reference/keywords.md, pinned to the lexer by tests).
 
 ## Never decides
 Syntax structure, types, semantics.
