@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+mod arena;
 mod iter;
 mod map;
 mod num;
@@ -133,6 +134,7 @@ impl Registry {
         option::register(&mut r);
         std_fns::register(&mut r);
         shared::register(&mut r);
+        arena::register(&mut r);
         r
     }
 

@@ -76,6 +76,8 @@ default = ["cli", "safety_typed_ir"]
 cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
+# std::arena (ADR-0016): arena types, escape check, interpreter support. Unstable surface.
+unstable_arenas = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
 # ownership/effect/taint as first-class types, and multi-target safety encodings.
 safety_typed_ir = []
@@ -157,6 +159,15 @@ path = "tests/interpreter_features_test.rs"
 [[test]]
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
+
+[[test]]
+name = "optimizer_scratch_reuse"
+path = "tests/optimizer_scratch_reuse_test.rs"
+
+[[test]]
+name = "arena_capability"
+path = "tests/arena_capability_test.rs"
+required-features = ["unstable_arenas"]
 
 [[test]]
 name = "parser_arena_memory"

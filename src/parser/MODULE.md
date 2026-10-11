@@ -4,7 +4,7 @@
 Recursive-descent parser and AST definitions (`parser/ast/`). Expression, statement, item, type and pattern parsing are split per file. The `Parser` struct itself lives in `src/parser_impl.rs`.
 
 ## Inputs/Outputs
-In: tokens from `lexer`. Out: arena-allocated `Program<'ast>`.
+In: tokens from `lexer`. Out: arena-allocated `Program<'ast>`; the program owns its arena bundle (`ast/owner.rs`, `AstOwner`), so the parser can be dropped first and the arenas are freed with the last program clone (docs/design/parser-arena-ownership.md).
 
 ## Invariants
 - AST types are the shared vocabulary of every later stage; changing them touches everything.

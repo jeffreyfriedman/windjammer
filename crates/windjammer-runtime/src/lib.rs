@@ -21,6 +21,7 @@ pub mod mime;
 pub mod profiling;
 
 // Additional stdlib modules
+pub mod arena;
 pub mod async_runtime;
 pub mod bench;
 pub mod cli;

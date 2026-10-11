@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 // Import compiler internals (ModuleCompiler is defined in this file)
 use crate::{analyzer, codegen};
-use crate::{lexer, parser, parser_impl, CompilationTarget};
+use crate::{lexer, parser, CompilationTarget};
 pub struct ModuleCompiler {
     pub compiled_modules: HashMap<String, String>, // module path -> generated Rust code
     pub target: CompilationTarget,

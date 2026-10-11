@@ -105,6 +105,8 @@ pub struct Parser {
     // (as its `AstOwner`) and installs a fresh bundle here. The arenas live exactly as long as the last
     // program (or merged program) that borrows them; the parser can be dropped at any time.
     pub(crate) arenas: Arc<AstArenas>,
+    /// `AstArenas` is `Sync` only once sealed; a parser allocates through `&self`, so it must not be shared.
+    _not_sync: std::marker::PhantomData<std::cell::Cell<()>>,
     /// Errors already reported and recovered from (statement-level recovery); `parse()` fails
     /// with all of them plus the final one.
     pub(crate) recovered_errors: Vec<String>,
@@ -141,6 +143,7 @@ impl Parser {
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
             arenas: Arc::new(AstArenas::new()),
+            _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
             recovering: false,
         }
@@ -161,6 +164,7 @@ impl Parser {
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
             arenas: Arc::new(AstArenas::new()),
+            _not_sync: std::marker::PhantomData,
             recovered_errors: Vec::new(),
             recovering: false,
         }
@@ -323,6 +327,14 @@ impl Parser {
             column,
             is_error: true,
         });
+    }
+
+    /// A sub-parser (string interpolation) that allocates into `parent`'s arena bundle, so its nodes are owned
+    /// by the `Program` the parent's `parse()` returns. Only used synchronously on the parent's thread.
+    pub(crate) fn new_sharing_arenas(tokens: Vec<crate::lexer::TokenWithLocation>, parent: &Parser) -> Self {
+        let mut p = Parser::new(tokens);
+        p.arenas = parent.arenas.clone();
+        p
     }
 
     /// Ledger of the arena bundle currently being filled (the one the next `parse()` will seal).
