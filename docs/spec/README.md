@@ -49,7 +49,7 @@ Example file format (`tests/spec/<area>/SPEC-XXX-NNN.wj`): header comments `// s
 | [attributes.md](attributes.md) | ATTR | `@derive`, `@test`, ... |
 | [stdlib.md](stdlib.md) | STD | portable core and std index |
 | [execution.md](execution.md) | EXEC | cross-backend guarantees, tiers |
-| [CONFORMANCE.md](CONFORMANCE.md), [CONFORMANCE_MATRIX.md](CONFORMANCE_MATRIX.md) | | rule to test mapping, current status |
+| [CONFORMANCE.md](CONFORMANCE.md), [CONFORMANCE_MATRIX.md](CONFORMANCE_MATRIX.md), [BACKEND_STATUS.md](BACKEND_STATUS.md) | | rule to test mapping; measured status on the Rust and JavaScript backends |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | Q-NNN | contradictions and ambiguities with recommendations |
 
 ## Rule markers

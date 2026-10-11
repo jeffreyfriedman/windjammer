@@ -10,7 +10,7 @@ An implementation conforms to a rule when the example for the rule produces exac
 
 ## Current status (evidence, not claims)
 
-- Executor used for these examples: the interpreter (`wj run --interpret`), in-process, because it needs no toolchain. It is the weakest oracle voice (docs/backends/CONFORMANCE.md), so expectations were derived independently. Running the same examples through the Rust/Go/JS/TS backends is not done yet (Q-022); the existing multi-oracle corpus in `tests/conformance_programs/` already covers many of the same semantics there and uses the same `// expect:` convention.
+- Executor used for these examples: the interpreter (`wj run --interpret`), in-process, because it needs no toolchain. It is the weakest oracle voice (docs/backends/CONFORMANCE.md), so expectations were derived independently. The same examples were also run through the Rust and JavaScript backends once (`scripts/spec_backends.sh`; results in [BACKEND_STATUS.md](BACKEND_STATUS.md): Rust 101/167, JS 128/167 runnable examples pass, with five Rust bugs diagnosed as Q-027..Q-031); Go/TS/WASM were not run and no backend is a CI gate yet (Q-022). The existing multi-oracle corpus in `tests/conformance_programs/` already covers many of the same semantics there and uses the same `// expect:` convention.
 - Pass/fail summary: run `cargo test --release --test spec_conformance`. Examples marked `xfail` are the known divergences (see OPEN_QUESTIONS.md); every other example must pass.
 
 ## Adding a rule

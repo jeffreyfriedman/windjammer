@@ -218,3 +218,24 @@ Output:
 1
 ```
 
+## Bare return
+
+**SPEC-STMT-011** [OPEN Q-026] A bare `return` (no value) ends the function even when the next line starts another statement. The parser currently treats a newline after `return` as nothing and parses the next line as the returned expression, so `return` newline `println(..)` runs the `println`.
+
+<!-- example: tests/spec/statements/SPEC-STMT-011.wj -->
+```windjammer
+fn g() {
+    return
+    println("g after")
+}
+fn main() {
+    g()
+    println("done")
+}
+```
+Output:
+```text
+done
+```
+> **Known divergence:** the implementation does not do this yet; see [Q-026](OPEN_QUESTIONS.md). The example is marked `xfail`.
+

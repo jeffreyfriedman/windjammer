@@ -9,6 +9,7 @@
 (*   @status S   parsed (default) | unparsed (documented but rejected today) | informative          *)
 (*   @lex K      lexical rule: must lex to exactly one token whose kind starts with K ("A|B")      *)
 (*   @reject-keywords  generated identifiers must not be reserved words                            *)
+(*   @depth      expanding this production consumes one level of the generator's recursion budget  *)
 
 (* ======================== Lexical structure ======================== *)
 
@@ -21,16 +22,18 @@ TYPE_IDENT   = /A-Z/ { /a-zA-Z0-9/ } ;
 
 (*@lex IntLiteral *)
 INT_LIT      = DEC_DIGITS | "0x" HEX_DIGITS | "0b" BIN_DIGITS | "0o" OCT_DIGITS | DEC_DIGITS INT_SUFFIX ;
-DEC_DIGITS   = /0-9/ { /0-9/ | "_" } ;
-HEX_DIGITS   = /0-9a-fA-F/ { /0-9a-fA-F/ | "_" } ;
-BIN_DIGITS   = /01/ { /01/ | "_" } ;
-OCT_DIGITS   = /0-7/ { /0-7/ | "_" } ;
+DEC_DIGITS   = /0-9/ { [ "_" ] /0-9/ } ;
+HEX_DIGITS   = /0-9a-fA-F/ { [ "_" ] /0-9a-fA-F/ } ;
+BIN_DIGITS   = /01/ { [ "_" ] /01/ } ;
+OCT_DIGITS   = /0-7/ { [ "_" ] /0-7/ } ;
 INT_SUFFIX   = "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "usize" | "isize" ;
 
 (*@lex FloatLiteral *)
 FLOAT_LIT    = DEC_DIGITS "." DEC_DIGITS [ EXPONENT ] | DEC_DIGITS EXPONENT ;
-EXPONENT     = ( "e" | "E" ) [ "+" | "-" ] DEC_DIGITS ;
+EXPONENT     = ( "e" | "E" ) [ "+" | "-" ] /0-9/ { /0-9/ } ;
 
+(*@lex StringLiteral *)
+PLAIN_STRING = "\"" { STR_CHAR } "\"" ;
 (*@lex StringLiteral|InterpolatedString *)
 STRING_LIT   = "\"" { STR_CHAR | STR_ESCAPE | INTERPOLATION } "\"" ;
 STR_CHAR     = /a-zA-Z0-9 .,:;!?_-/ ;
@@ -43,52 +46,62 @@ CHAR_LIT     = "'" ( /a-zA-Z0-9 / | "\\n" | "\\t" | "\\\\" | "\\'" | "\\0" ) "'"
 
 (* ======================== Items ======================== *)
 
+(*@ctx $$ *)
 program      = { item } ;
 
+(*@depth *)
 (*@ctx $$ *)
 (*@nl *)
 item         = [ attributes ] ( use_decl | struct_decl | enum_decl | trait_decl | impl_block
                  | function_decl | const_decl | static_decl | type_alias | mod_decl ) ;
 
 attributes   = attribute { attribute } ;
-attribute    = "@" IDENT [ "(" attr_args ")" ] ;
+(*@lex Decorator *)
+ATTR_NAME    = "@" IDENT ;
+attribute    = ATTR_NAME [ "(" attr_args ")" ] ;
 attr_args    = attr_arg { "," attr_arg } ;
 attr_arg     = IDENT [ ":" expression ] | STRING_LIT ;
 
-use_decl     = "use" use_path [ "as" IDENT ] [ "::" "{" IDENT { "," IDENT } "}" ] ;
+use_decl     = "use" use_path [ "as" IDENT | "::" "{" IDENT { "," IDENT } "}" ] ;
 use_path     = IDENT { "::" IDENT } ;
 
 struct_decl  = [ visibility ] "struct" TYPE_IDENT [ generic_params ] "{" { field_decl [ "," ] } "}" ;
 field_decl   = [ visibility ] IDENT ":" type ;
 
 enum_decl    = [ visibility ] "enum" TYPE_IDENT [ generic_params ] "{" { variant [ "," ] } "}" ;
-variant      = TYPE_IDENT [ "(" type { "," type } ")" | "{" field_decl { "," field_decl } "}" ] ;
+variant      = TYPE_IDENT [ "(" type { "," type } ")" | "{" variant_field { "," variant_field } "}" ] ;
+variant_field = IDENT ":" type ;
 
-trait_decl   = [ visibility ] "trait" TYPE_IDENT [ generic_params ] "{" { trait_member } "}" ;
-trait_member = function_sig | function_decl ;
+trait_decl   = [ visibility ] "trait" TYPE_IDENT [ plain_generics ] [ ":" bound { "+" bound } ] "{" { trait_member } "}" ;
+plain_generics = "<" TYPE_IDENT { "," TYPE_IDENT } ">" ;
+trait_member = trait_sig | trait_fn ;
+trait_sig    = "fn" IDENT "(" [ params ] ")" [ "->" type ] ;
+trait_fn     = trait_sig block ;
 
-impl_block   = "impl" [ generic_params ] type [ "for" type ] "{" { function_decl } "}" ;
+impl_block   = "impl" [ generic_params ] path_type [ "for" path_type ] "{" { function_decl } "}" ;
 
 function_decl = function_sig block ;
 function_sig = [ visibility ] [ "async" ] "fn" IDENT [ generic_params ] "(" [ params ] ")"
                [ "->" type ] [ where_clause ] ;
 params       = param { "," param } [ "," ] ;
-param        = [ "mut" ] IDENT ":" type | "self" | "mut" "self" ;
+param        = [ "mut" ] IDENT ":" type | "self" ;
 
 generic_params = "<" generic_param { "," generic_param } ">" ;
 generic_param  = TYPE_IDENT [ ":" bound { "+" bound } ] ;
-bound          = TYPE_IDENT [ "<" type { "," type } ">" ] ;
+(* Q-024: bounds cannot take type arguments (`T: Into<string>` is rejected today) *)
+bound          = TYPE_IDENT ;
 where_clause   = "where" where_pred { "," where_pred } ;
 where_pred     = TYPE_IDENT ":" bound { "+" bound } ;
 
 const_decl   = [ visibility ] "const" IDENT ":" type "=" expression ;
 static_decl  = [ visibility ] "static" [ "mut" ] IDENT ":" type "=" expression ;
-type_alias   = [ visibility ] "type" TYPE_IDENT [ generic_params ] "=" type ;
+type_alias   = [ visibility ] "type" TYPE_IDENT "=" type ;
 mod_decl     = [ visibility ] "mod" IDENT "{" { item } "}" ;
 visibility   = "pub" ;
 
 (* ======================== Types ======================== *)
 
+(*@depth *)
 (*@ctx fn main() { let _v: $$ = 0 } *)
 type         = path_type | list_type | tuple_type | fn_type | ref_type | PRIMITIVE ;
 PRIMITIVE    = "int" | "float" | "bool" | "string" | "i32" | "i64" | "u8" | "u32" | "u64" | "f32" | "f64" | "usize" ;
@@ -100,24 +113,28 @@ ref_type     = "&" [ "mut" ] type ;
 
 (* ======================== Statements ======================== *)
 
+(*@depth *)
 block        = "{" { statement } [ expression ] "}" ;
 
+(*@depth *)
 (*@ctx fn main() { $$ } *)
 (*@nl *)
 statement    = let_stmt | assign_stmt | return_stmt | if_stmt | while_stmt | loop_stmt | for_stmt
                | break_stmt | continue_stmt | defer_stmt | match_stmt | expr_stmt ;
 
-let_stmt     = "let" [ "mut" ] pattern [ ":" type ] "=" expression
+let_stmt     = "let" [ "mut" ] binding [ ":" type ] "=" expression
              | "let" pattern "=" expression "else" block ;
 assign_stmt  = place assign_op expression ;
-place        = IDENT { "." IDENT | "[" expression "]" } ;
+place        = IDENT { "." IDENT | "[" or_expr "]" } ;
 assign_op    = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
-return_stmt  = "return" [ expression ] ;
+(* a bare `return` must be followed by `;` or `}`: a newline does not end it (Q-026) *)
+return_stmt  = "return" expression | "return" ";" ;
 if_stmt      = "if" cond block { "else" "if" cond block } [ "else" block ] ;
 cond         = cond_expr | "let" pattern "=" cond_expr ;
 while_stmt   = "while" cond block ;
 loop_stmt    = "loop" block ;
-for_stmt     = "for" pattern "in" ( cond_expr | range_expr ) block ;
+for_stmt     = "for" binding "in" ( cond_expr | range_expr ) block ;
+binding      = IDENT | "_" | "(" binding "," binding { "," binding } ")" | TYPE_IDENT "{" IDENT { "," IDENT } "}" ;
 range_expr   = additive_expr ( ".." | "..=" ) additive_expr ;
 break_stmt   = "break" ;
 continue_stmt = "continue" ;
@@ -127,10 +144,13 @@ expr_stmt    = call_expr | method_call ;
 
 (* ======================== Patterns ======================== *)
 
+(*@ctx fn main() { if let $$ = v { } } *)
+pattern      = simple_pattern ;
+(* or-patterns exist only at the top of a match arm; they do not nest inside other patterns *)
 (*@ctx fn main() { match v { $$ => 0 } } *)
-pattern      = or_pattern ;
 or_pattern   = simple_pattern { "|" simple_pattern } ;
-simple_pattern = "_" | IDENT | INT_LIT | STRING_LIT | "true" | "false" | "None"
+(*@depth *)
+simple_pattern = "_" | IDENT | INT_LIT | PLAIN_STRING | "true" | "false" | "None"
                | "(" pattern "," pattern { "," pattern } ")"
                | "Some" "(" pattern ")" | "Ok" "(" pattern ")" | "Err" "(" pattern ")"
                | path "::" TYPE_IDENT [ "(" pattern { "," pattern } ")" ]
@@ -144,6 +164,7 @@ range_pattern = INT_LIT ( ".." | "..=" ) INT_LIT ;
 
 (* ======================== Expressions ======================== *)
 
+(*@depth *)
 (*@ctx fn main() { let _v = $$ } *)
 expression   = pipe_expr ;
 pipe_expr    = or_expr { "|>" stage } ;
@@ -159,7 +180,7 @@ additive_expr = shift_expr { ( "+" | "-" ) shift_expr } ;
 shift_expr   = mul_expr { ( "<<" | ">>" ) mul_expr } ;
 mul_expr     = unary_expr { ( "*" | "/" | "%" ) unary_expr } ;
 unary_expr   = ( "-" | "!" ) unary_expr | postfix_expr ;
-postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ args ] ")" | "(" [ args ] ")" | "[" expression "]" | "?" | "as" type } ;
+postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ args ] ")" | "(" [ args ] ")" | "[" or_expr "]" | "?" | "as" type } ;
 args         = expression { "," expression } ;
 call_expr    = IDENT "(" [ args ] ")" ;
 method_call  = IDENT "." IDENT "(" [ args ] ")" ;
@@ -175,5 +196,5 @@ struct_lit   = TYPE_IDENT "{" [ field_init { "," field_init } [ "," ] ] "}" ;
 field_init   = IDENT [ ":" expression ] ;
 if_expr      = "if" cond block "else" block ;
 match_expr   = "match" cond_expr "{" { match_arm } "}" ;
-match_arm    = pattern [ "if" expression ] "=>" ( expression "," | block ) ;
+match_arm    = or_pattern [ "if" expression ] "=>" ( expression "," | block ) ;
 closure      = "|" [ IDENT { "," IDENT } ] "|" ( expression | block ) ;
