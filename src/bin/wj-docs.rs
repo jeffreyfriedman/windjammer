@@ -1,8 +1,8 @@
 //! `wj-docs`: generate and verify documentation (see docs/CONTRIBUTING-docs.md).
 //!
 //!   wj-docs gen [--check]      rewrite (or verify) generated files and `wj:gen` regions
-//!   wj-docs check [NAME..]     run all checks (or: fences links claims freshness gen)
-//!   wj-docs update-baseline    re-record ratchet baselines (they may only shrink in review)
+//!   wj-docs check [NAME..]     run all checks (or: gen regions fences links claims freshness proposal ebnf)
+//!   wj-docs update-baseline    lower ratchet baselines to the current counts; refuses to raise or add any
 //!   wj-docs stamp FILE [STATUS]  set front matter `last_verified` to HEAD
 
 use clap::CommandFactory;
@@ -14,7 +14,7 @@ mod docs_truth;
 #[path = "wj_cli_args.rs"]
 mod wj_cli_args;
 
-use docs_truth::{claims, config, failures, fences, freshness, genfiles, links, regions, Ctx, Finding};
+use docs_truth::{claims, config, ebnf, failures, fences, freshness, genfiles, links, proposal, regions, Ctx, Finding};
 
 fn main() {
     std::panic::set_hook(Box::new(|_| {})); // the parser/lexer panic on junk snippets; checks catch it
@@ -33,7 +33,7 @@ fn main() {
             }
         },
         _ => {
-            eprintln!("usage: wj-docs gen [--check] | check [gen|regions|fences|links|claims|freshness].. | update-baseline | stamp FILE [STATUS]");
+            eprintln!("usage: wj-docs gen [--check] | check [gen|regions|fences|links|claims|freshness|proposal|ebnf].. | update-baseline | stamp FILE [STATUS]");
             2
         }
     };
@@ -91,6 +91,8 @@ fn check(ctx: &Ctx, which: &[String]) -> i32 {
             "links" => fs.extend(links::check_all(ctx, &cfg)),
             "claims" => fs.extend(claims::check_all(ctx, &cfg)),
             "freshness" => fs.extend(freshness::check_all(ctx, &cfg)),
+            "proposal" => fs.extend(proposal::check_all(ctx)),
+            "ebnf" => fs.extend(ebnf::check_all(ctx, &cfg)),
             other => {
                 eprintln!("unknown check {other}");
                 return 2;
@@ -106,6 +108,10 @@ fn update_baseline(ctx: &Ctx) -> i32 {
     counts.insert("claims", claims::raw_counts(ctx, &cfg));
     counts.insert("fences", fences::raw_counts(ctx, &cfg));
     counts.insert("links", links::raw_counts(ctx, &cfg));
+    if let Err(e) = config::check_no_increase(&cfg.baseline, &counts) {
+        eprintln!("refusing to update baselines (they are ratchets: fix the documents, never raise a baseline):\n{e}");
+        return 1;
+    }
     let text = ctx.read(config::PATH);
     let new = format!("{}{}", config::head_without_baseline(&text), config::render_baseline(&counts));
     std::fs::write(ctx.root.join(config::PATH), new).expect("write config");

@@ -10,9 +10,8 @@ fn parse(src: &str) -> Result<windjammer::parser::Program<'static>, String> {
     let src = src.to_string();
     catch_unwind(AssertUnwindSafe(|| {
         let tokens = Lexer::new(&src).tokenize_with_locations();
-        // The parser owns the arena the Program borrows from (`'static` by contract): leak it.
-        let parser: &'static mut Parser = Box::leak(Box::new(Parser::new_with_source(tokens, "doc.wj".to_string(), src.clone())));
-        parser.parse()
+        // Dropping the parser is sound: its arenas are retired, not freed (docs/design/parser-arena-ownership.md).
+        Parser::new_with_source(tokens, "doc.wj".to_string(), src.clone()).parse()
     }))
     .unwrap_or_else(|_| Err("parser panicked".to_string()))
 }
@@ -104,13 +103,23 @@ fn check_wj_inner(code: &str, a: &Ann) -> Result<(), String> {
 
 /// Run a `sh,verify` fence: lines starting `$ ` are commands (run with `sh -c` in a fresh temp dir
 /// whose PATH starts with the directory of `wj_bin`); other lines are expected output lines, each
-/// of which must appear, in order, in the combined output of the preceding command.
+/// of which must appear, in order, in the combined output of the preceding command. A command with a
+/// `<<'EOF'` here-document continues until its terminator line (so fences can create their input files).
 pub fn run_sh(body: &str, wj_bin: &Path) -> Result<(), String> {
     let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
     let path = format!("{}:{}", wj_bin.parent().unwrap().display(), std::env::var("PATH").unwrap_or_default());
     let mut cmds: Vec<(String, Vec<String>)> = Vec::new();
+    let mut heredoc: Option<String> = None; // terminator of an open `<<'EOF'` here-document
     for l in body.lines() {
-        if let Some(c) = l.trim_start().strip_prefix("$ ") {
+        if let Some(end) = &heredoc {
+            let last = cmds.last_mut().expect("heredoc belongs to a command");
+            last.0.push('\n');
+            last.0.push_str(l);
+            if l.trim() == end {
+                heredoc = None;
+            }
+        } else if let Some(c) = l.trim_start().strip_prefix("$ ") {
+            heredoc = c.split_once("<<").map(|(_, r)| r.trim().trim_matches(['\'', '"', '-']).split_whitespace().next().unwrap_or("EOF").trim_matches(['\'', '"']).to_string());
             cmds.push((c.to_string(), vec![]));
         } else if let Some(last) = cmds.last_mut() {
             if !l.trim().is_empty() {
