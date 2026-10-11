@@ -10,7 +10,7 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::cargo_toml::{find_windjammer_runtime_path, path_to_toml_string};
+use crate::cargo_toml::{find_windjammer_runtime_path_with, path_to_toml_string};
 use crate::test_runner;
 use crate::{error_mapper, source_map, CompilationTarget};
 pub enum RustFileType {
@@ -142,6 +142,7 @@ pub fn create_cargo_toml_with_deps(
     external_crates: &[String],
     target: CompilationTarget,
     source_dir: &Path,
+    config: &crate::compiler_config::CompilerConfig,
 ) -> Result<()> {
     use std::env;
     use std::fs;
@@ -245,7 +246,7 @@ pub fn create_cargo_toml_with_deps(
 
     // For WASM target, generate WASM-specific Cargo.toml
     if target == CompilationTarget::Wasm {
-        return create_wasm_cargo_toml(output_dir, imported_modules);
+        return create_wasm_cargo_toml(output_dir, imported_modules, config);
     }
 
     // Map imported stdlib modules to their Cargo dependencies
@@ -253,7 +254,7 @@ pub fn create_cargo_toml_with_deps(
 
     // If ANY stdlib module is used, add windjammer-runtime
     if !imported_modules.is_empty() {
-        let windjammer_runtime_path = find_windjammer_runtime_path();
+        let windjammer_runtime_path = find_windjammer_runtime_path_with(config.runtime_path.as_deref());
         let mut runtime_features: Vec<&str> = Vec::new();
         if imported_modules.iter().any(|m| m == "http") {
             runtime_features.push("server");
@@ -351,8 +352,7 @@ pub fn create_cargo_toml_with_deps(
         {
             // Try to find game-host in the workspace
             // First, check if game-host_PATH env var is set (for development)
-            if let Ok(game_path) = std::env::var("game-host_PATH") {
-                let game_path = PathBuf::from(game_path);
+            if let Some(game_path) = config.game_path.clone() {
                 if game_path.exists() {
                     external_deps.push(format!(
                         "game-host = {{ path = \"{}\" }}",
@@ -627,7 +627,11 @@ edition = "2021"
 }
 
 /// Create WASM-specific Cargo.toml
-pub fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<String>) -> Result<()> {
+pub fn create_wasm_cargo_toml(
+    output_dir: &Path,
+    imported_modules: &HashSet<String>,
+    config: &crate::compiler_config::CompilerConfig,
+) -> Result<()> {
     use std::fs;
 
     // Check if platform APIs are used (requires windjammer-runtime)
@@ -645,7 +649,7 @@ pub fn create_wasm_cargo_toml(output_dir: &Path, imported_modules: &HashSet<Stri
     });
 
     // Find windjammer-runtime path
-    let windjammer_runtime_path = find_windjammer_runtime_path();
+    let windjammer_runtime_path = find_windjammer_runtime_path_with(config.runtime_path.as_deref());
 
     // Find the first .rs file in the output directory to use as lib.rs
     let lib_file = fs::read_dir(output_dir)?

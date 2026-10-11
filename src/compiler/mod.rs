@@ -16,7 +16,7 @@ mod salsa_library_build;
 
 pub use cache_management::write_if_changed;
 pub(crate) use compilation_pipeline::load_path_dep_signatures_into_registry;
-pub use compilation_pipeline::{build_project, build_project_ext};
+pub use compilation_pipeline::{build_project, build_project_ext, build_project_with_config};
 
 use crate::parser::ast::core::Item;
 use anyhow::Result;
@@ -72,6 +72,7 @@ pub(crate) fn generate_cargo_manifests(
     output: &std::path::Path,
     target: crate::CompilationTarget,
     clean_nested: bool,
+    config: &crate::compiler_config::CompilerConfig,
 ) -> anyhow::Result<()> {
     let source_dir = if input_path.is_file() {
         input_path.parent().unwrap_or(input_path)
@@ -82,10 +83,12 @@ pub(crate) fn generate_cargo_manifests(
         if clean_nested {
             cache_management::clean_nested_cargo_toml(output);
         }
-        crate::cargo_toml::generate_single_file_cargo_toml(output, source_dir, target)?;
+        crate::cargo_toml::generate_single_file_cargo_toml_with_config(
+            output, source_dir, target, config,
+        )?;
     }
     if target == crate::CompilationTarget::Wasm {
-        crate::cargo_toml::generate_wasm_cargo_toml(output, source_dir)?;
+        crate::cargo_toml::generate_wasm_cargo_toml_with_config(output, source_dir, config)?;
     }
     Ok(())
 }
