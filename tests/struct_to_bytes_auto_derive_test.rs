@@ -13,10 +13,12 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
+// Structs are `pub` on purpose: the host engine calls to_bytes() across modules for GPU upload, and the
+// optimizer (PASSES.md P7 dead_helpers) legitimately drops an unreferenced to_bytes on a *private* struct.
 #[test]
 fn test_struct_with_mixed_numeric_fields_generates_to_bytes() {
     let source = r#"
-        struct DenoiseParams {
+        pub struct DenoiseParams {
             alpha: f32,
             sigma_color: f32,
             sigma_normal: f32,
@@ -47,7 +49,7 @@ fn test_struct_with_mixed_numeric_fields_generates_to_bytes() {
 #[test]
 fn test_all_f32_struct_generates_to_bytes() {
     let source = r#"
-        struct LightConfig {
+        pub struct LightConfig {
             intensity: f32,
             radius: f32,
             falloff: f32,
@@ -65,7 +67,7 @@ fn test_all_f32_struct_generates_to_bytes() {
 #[test]
 fn test_all_u32_struct_generates_to_bytes() {
     let source = r#"
-        struct ScreenSize {
+        pub struct ScreenSize {
             width: u32,
             height: u32,
         }
@@ -116,7 +118,7 @@ fn test_struct_with_vec_does_not_generate_to_bytes() {
 #[test]
 fn test_struct_with_bool_generates_to_bytes() {
     let source = r#"
-        struct Flags {
+        pub struct Flags {
             enabled: bool,
             count: u32,
         }
@@ -139,7 +141,7 @@ fn test_struct_with_bool_generates_to_bytes() {
 #[test]
 fn test_struct_with_i32_generates_to_bytes() {
     let source = r#"
-        struct Offset {
+        pub struct Offset {
             x: i32,
             y: i32,
             scale: f32,
@@ -162,7 +164,7 @@ fn test_struct_with_i32_generates_to_bytes() {
 #[test]
 fn test_struct_with_fixed_array_generates_to_bytes() {
     let source = r#"
-        struct Transform {
+        pub struct Transform {
             matrix: [f32; 16],
             position: f32,
         }
@@ -185,7 +187,7 @@ fn test_struct_with_fixed_array_generates_to_bytes() {
 #[test]
 fn test_to_bytes_returns_vec_u8() {
     let source = r#"
-        struct Params {
+        pub struct Params {
             value: f32,
         }
     "#;
@@ -215,7 +217,7 @@ fn test_empty_struct_does_not_generate_to_bytes() {
 #[test]
 fn test_to_bytes_with_extend_from_slice() {
     let source = r#"
-        struct Pair {
+        pub struct Pair {
             x: f32,
             y: u32,
         }
@@ -337,7 +339,7 @@ fn test_generated_to_bytes_runtime_bit_correctness() {
 #[test]
 fn test_struct_with_user_impl_still_gets_to_bytes() {
     let source = r#"
-        struct Params {
+        pub struct Params {
             value: f32,
             count: u32,
         }
