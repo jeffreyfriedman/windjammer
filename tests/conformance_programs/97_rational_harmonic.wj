@@ -1,0 +1,30 @@
+// Harmonic number H(20) = 55835135/15519504 (exact rational arithmetic)
+// expect: 55835135/15519504
+// expect: 3/2
+fn gcd(a: i64, b: i64) -> i64 {
+    let mut x = a
+    let mut y = b
+    while y != 0 {
+        let t = x % y
+        x = y
+        y = t
+    }
+    x
+}
+
+fn main() {
+    let mut num: i64 = 0
+    let mut den: i64 = 1
+    let mut k: i64 = 1
+    while k <= 20 {
+        num = num * k + den
+        den = den * k
+        let g = gcd(num, den)
+        num = num / g
+        den = den / g
+        k += 1
+    }
+    println("{}/{}", num, den)
+    let g2 = gcd(6, 4)
+    println("{}/{}", 6 / g2 * 1 + 0, 4 / g2)
+}

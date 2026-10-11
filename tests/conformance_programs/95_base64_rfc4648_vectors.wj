@@ -1,0 +1,44 @@
+// RFC 4648 section 10 test vectors
+// expect:
+// expect: Zg==
+// expect: Zm8=
+// expect: Zm9v
+// expect: Zm9vYg==
+// expect: Zm9vYmE=
+// expect: Zm9vYmFy
+fn encode(input: string) -> string {
+    let alphabet: Vec<char> = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".chars().collect()
+    let data: Vec<u8> = input.bytes().collect()
+    let mut out = ""
+    let mut i = 0
+    while i < data.len() {
+        let b0 = data[i] as u32
+        let b1 = if i + 1 < data.len() { data[i + 1] as u32 } else { 0 }
+        let b2 = if i + 2 < data.len() { data[i + 2] as u32 } else { 0 }
+        let triple = (b0 << 16) | (b1 << 8) | b2
+        out = out + alphabet[((triple >> 18) & 63) as usize].to_string()
+        out = out + alphabet[((triple >> 12) & 63) as usize].to_string()
+        if i + 1 < data.len() {
+            out = out + alphabet[((triple >> 6) & 63) as usize].to_string()
+        } else {
+            out = out + "="
+        }
+        if i + 2 < data.len() {
+            out = out + alphabet[(triple & 63) as usize].to_string()
+        } else {
+            out = out + "="
+        }
+        i += 3
+    }
+    out
+}
+
+fn main() {
+    println("{}", encode(""))
+    println("{}", encode("f"))
+    println("{}", encode("fo"))
+    println("{}", encode("foo"))
+    println("{}", encode("foob"))
+    println("{}", encode("fooba"))
+    println("{}", encode("foobar"))
+}

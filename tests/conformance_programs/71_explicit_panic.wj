@@ -1,0 +1,14 @@
+// expect: start
+// exit: 101
+fn check(x: i32) {
+    if x > 2 {
+        panic("value too large: {}", x)
+    }
+}
+
+fn main() {
+    println("start")
+    check(1)
+    check(5)
+    println("unreachable")
+}

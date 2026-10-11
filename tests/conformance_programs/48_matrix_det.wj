@@ -1,0 +1,64 @@
+// Determinant of a 5x5 integer matrix by Laplace expansion (i64), entries from PRNG.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+fn minor(m: Vec<Vec<i64>>, skip_col: usize) -> Vec<Vec<i64>> {
+    let mut out: Vec<Vec<i64>> = Vec::new()
+    let mut r = 1
+    while r < m.len() {
+        let mut row: Vec<i64> = Vec::new()
+        let mut c = 0
+        while c < m.len() {
+            if c != skip_col {
+                row.push(m[r][c])
+            }
+            c += 1
+        }
+        out.push(row)
+        r += 1
+    }
+    out
+}
+
+fn det(m: Vec<Vec<i64>>) -> i64 {
+    if m.len() == 1 {
+        return m[0][0]
+    }
+    let mut total: i64 = 0
+    let mut c = 0
+    while c < m.len() {
+        let sub = minor(m, c)
+        let term = m[0][c] * det(sub)
+        if c % 2 == 0 {
+            total += term
+        } else {
+            total -= term
+        }
+        c += 1
+    }
+    total
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut m: Vec<Vec<i64>> = Vec::new()
+    let mut r = 0
+    while r < 5 {
+        let mut row: Vec<i64> = Vec::new()
+        let mut c = 0
+        while c < 5 {
+            s = next(s)
+            row.push((s % 2001) as i64 - 1000)
+            c += 1
+        }
+        m.push(row)
+        r += 1
+    }
+    println("{}", det(m))
+    println("{}", m[2][3])
+}

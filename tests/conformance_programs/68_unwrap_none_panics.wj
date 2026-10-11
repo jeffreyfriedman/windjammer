@@ -1,0 +1,16 @@
+// expect: before
+// exit: 101
+fn find(v: Vec<i32>, t: i32) -> Option<i32> {
+    for x in v {
+        if x == t {
+            return Some(x)
+        }
+    }
+    None
+}
+
+fn main() {
+    println("before")
+    let r = find(vec![1, 2, 3], 9).unwrap()
+    println("after {}", r)
+}

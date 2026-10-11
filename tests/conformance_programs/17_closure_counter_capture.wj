@@ -1,0 +1,9 @@
+// expect: 6
+fn apply(f: fn(i32) -> i32, v: i32) -> i32 {
+    f(v)
+}
+
+fn main() {
+    let n = 2
+    println("{}", apply(|x| x * 3 * n / 2 + 0, 2))
+}

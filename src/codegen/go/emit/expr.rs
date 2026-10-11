@@ -50,6 +50,7 @@ impl<'m> Go<'m> {
         match &*e.kind {
             PK::Local(n) if self.ptr_locals.contains_key(n) => Ok(format!("*{}", ident(n))),
             PK::Copy(inner) => self.place(inner),
+            PK::Index(a, i) if matches!(a.ty, Ty::Map(..)) => Ok(format!("{}[{}]", self.expr(a)?, self.expr(i)?)),
             _ => self.expr(e),
         }
     }
@@ -146,7 +147,7 @@ impl<'m> Go<'m> {
         let v = self.expr(a)?;
         Ok(match (op, &a.ty) {
             (UnKind::Neg, Ty::Int(_)) => format!("wjNeg({v})"),
-            (UnKind::Neg, _) => format!("(-{v})"),
+            (UnKind::Neg, _) => format!("wjFneg({v})"),
             (UnKind::Not, Ty::Bool) => format!("(!{v})"),
             (UnKind::Not, Ty::Int(_)) => format!("(^{v})"),
             (UnKind::Not, _) => format!("(!{v})"),

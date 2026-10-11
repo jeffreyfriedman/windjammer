@@ -1,0 +1,28 @@
+// expect: 6
+// expect: 11
+// expect: 2
+// expect: 30
+// expect: 3
+fn make_adder(n: i64) -> fn(i64) -> i64 {
+    |x: i64| x + n
+}
+
+fn main() {
+    let add5 = make_adder(5)
+    println("{}", add5(1))
+    let k: i64 = 1
+    let f = |x: i64| x + k
+    println("{}", f(10))
+    let mut counter: i64 = 0
+    let mut bump = || {
+        counter += 1
+        counter
+    }
+    bump()
+    println("{}", bump())
+    let compose = |a: i64, b: i64| a * b
+    println("{}", compose(5, 6))
+    let items = vec![1, 2, 3]
+    let total = items.iter().fold(0, |acc, x| acc + x)
+    println("{}", total / 2)
+}

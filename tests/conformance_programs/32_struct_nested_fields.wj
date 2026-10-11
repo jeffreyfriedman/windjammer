@@ -1,0 +1,16 @@
+// expect: 1 2 7
+struct Inner {
+    a: i32,
+}
+
+struct Outer {
+    i: Inner,
+    b: i32,
+}
+
+fn main() {
+    let mut o = Outer { i: Inner { a: 1 }, b: 2 }
+    let before = o.i.a
+    o.i.a = 7
+    println("{} {} {}", before, o.b, o.i.a)
+}

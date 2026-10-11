@@ -1,0 +1,34 @@
+// expect: 1024
+// expect: 15
+// expect: 240
+// expect: 255
+// expect: -6
+// expect: -4
+// expect: 2147483648
+// expect: 3
+// expect: 28
+// expect: 2
+// expect: 2147483649
+fn main() {
+    let one: i32 = 1
+    println("{}", one << 10)
+    let x: u8 = 255
+    println("{}", x & 15)
+    println("{}", x ^ 15)
+    let zero: u8 = 0
+    println("{}", !zero)
+    let five: i32 = 5
+    println("{}", !five)
+    let m: i32 = -16
+    println("{}", m >> 2)
+    let u: u32 = 1
+    println("{}", u << 31)
+    let bits: u32 = 11
+    println("{}", bits.count_ones())
+    let z: u32 = 8
+    println("{}", z.leading_zeros())
+    let t: u32 = 4
+    println("{}", t.trailing_zeros())
+    let r: u32 = 3221225472
+    println("{}", r.rotate_left(1))
+}

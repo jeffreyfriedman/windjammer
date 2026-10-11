@@ -1,0 +1,14 @@
+// expect: 10
+fn bump(p: Acc) {
+    p.total += 10
+}
+
+struct Acc {
+    total: i32,
+}
+
+fn main() {
+    let mut a = Acc { total: 0 }
+    bump(a)
+    println("{}", a.total)
+}

@@ -1,0 +1,17 @@
+// Published FNV-1a 64-bit vectors (Fowler/Noll/Vo reference): "", "a", "foobar"
+// expect: 14695981039346656037
+// expect: 12638187200555641996
+// expect: 9625390261332436968
+fn fnv1a(data: string) -> u64 {
+    let mut h: u64 = (3421674724 << 32) | 2216829733
+    for b in data.bytes() {
+        h = (h ^ (b as u64)).wrapping_mul(1099511628211)
+    }
+    h
+}
+
+fn main() {
+    println("{}", fnv1a(""))
+    println("{}", fnv1a("a"))
+    println("{}", fnv1a("foobar"))
+}

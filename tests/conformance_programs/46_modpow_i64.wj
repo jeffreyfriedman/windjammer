@@ -1,0 +1,29 @@
+// i64 modular exponentiation: products reach ~1e18 (beyond 2^53) so f64-backed i64 is caught.
+fn modpow(base: i64, exp: i64, m: i64) -> i64 {
+    let mut result: i64 = 1
+    let mut b = base % m
+    let mut e = exp
+    while e > 0 {
+        if e % 2 == 1 {
+            result = result * b % m
+        }
+        b = b * b % m
+        e = e / 2
+    }
+    result
+}
+
+fn main() {
+    let seed: i64 = __SEED__
+    let m: i64 = 1000000007
+    let mut acc: i64 = 0
+    let mut i: i64 = 1
+    while i <= 200 {
+        let v = modpow(seed * 7919 + i, 1000000005 - i, m)
+        acc = (acc + v * i) % m
+        if i % 50 == 0 {
+            println("{} {} {}", i, v, acc)
+        }
+        i += 1
+    }
+}

@@ -1,0 +1,3 @@
+# Known-unsupported (program, backend) pairs. A listed pair must FAIL its oracle; if it starts
+# passing the harness fails until the entry is removed (ratchet: this file only shrinks).
+# Every entry needs a reason that names the missing capability.

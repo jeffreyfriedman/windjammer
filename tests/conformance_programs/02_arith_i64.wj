@@ -1,0 +1,10 @@
+// expect: 3000000000
+// expect: 9000000000
+// expect: 1000000
+fn main() {
+    let a: i64 = 3000000000
+    let b: i64 = 3
+    println("{}", a)
+    println("{}", a * b)
+    println("{}", a / 3000)
+}

@@ -1,0 +1,48 @@
+// expect: 0.30000000000000004
+// expect: 1
+// expect: 1000000000000000000000
+// expect: 0.00000015
+// expect: 1.0
+// expect: 2.67
+// expect: 0
+// expect: 2
+// expect: 2
+// expect: NaN
+// expect: inf
+// expect: -inf
+// expect: -0
+// expect: 0.1
+// expect: 3.5
+// expect: 100
+fn main() {
+    let a: f64 = 0.1
+    let b: f64 = 0.2
+    println("{}", a + b)
+    let one: f64 = 1.0
+    println("{}", one)
+    let big: f64 = 1.0e21
+    println("{}", big)
+    let tiny: f64 = 1.5e-7
+    println("{}", tiny)
+    println("{:?}", one)
+    let q: f64 = 2.675
+    println("{:.2}", q)
+    let h: f64 = 0.5
+    println("{:.0}", h)
+    let h2: f64 = 1.5
+    println("{:.0}", h2)
+    let h3: f64 = 2.5
+    println("{:.0}", h3)
+    let zero: f64 = 0.0
+    println("{}", zero / zero)
+    println("{}", one / zero)
+    println("{}", -one / zero)
+    let nz: f64 = -0.0
+    println("{}", nz)
+    let f32v: f32 = 0.1
+    println("{}", f32v)
+    let sum: f64 = 1.5 + 2.0
+    println("{}", sum)
+    let hundred: f64 = 100.0
+    println("{}", hundred)
+}

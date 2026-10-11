@@ -1,0 +1,8 @@
+// expect: 3
+// exit: 101
+fn main() {
+    let v = vec![1, 2, 3]
+    println("{}", v.len())
+    let i: usize = 7
+    println("{}", v[i])
+}

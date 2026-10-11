@@ -1,0 +1,61 @@
+// Value semantics: Copy structs are independent after assignment; callee mutation is visible;
+// clone is independent; nested aggregates; Vec element copy. Checksummed over 3000 PRNG-driven steps.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+struct P {
+    x: i64,
+    y: i64,
+}
+
+struct Body {
+    pos: P,
+    hist: Vec<i64>,
+}
+
+fn bump(p: P, d: i64) {
+    p.x += d
+    p.y -= d
+}
+
+fn bump_body(b: Body, d: i64) {
+    b.pos.x += d
+    b.hist.push(d)
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut a = P { x: 1, y: 2 }
+    let mut b = a
+    let mut body = Body { pos: a, hist: Vec::new() }
+    let snapshot = body.clone()
+    let mut h: i64 = 7
+    let mut i = 0
+    while i < 3000 {
+        s = next(s)
+        let d = (s % 1000) as i64
+        if d % 3 == 0 {
+            bump(a, d)
+        } else if d % 3 == 1 {
+            b.x += d
+            let c = b
+            b.y += c.x
+        } else {
+            bump_body(body, d)
+            let copy = body.pos
+            body.pos.y = copy.y + 1
+        }
+        h = (h * 131 + a.x + b.y * 3 + body.pos.x + body.pos.y) % 1000000007
+        i += 1
+    }
+    println("{} {}", a.x, a.y)
+    println("{} {}", b.x, b.y)
+    println("{} {} {}", body.pos.x, body.pos.y, body.hist.len())
+    println("{} {} {}", snapshot.pos.x, snapshot.pos.y, snapshot.hist.len())
+    println("{}", h)
+}

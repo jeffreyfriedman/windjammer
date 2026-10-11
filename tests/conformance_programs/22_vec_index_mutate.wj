@@ -1,0 +1,6 @@
+// expect: 1 9 3
+fn main() {
+    let mut v = vec![1, 2, 3]
+    v[1] = 9
+    println("{} {} {}", v[0], v[1], v[2])
+}

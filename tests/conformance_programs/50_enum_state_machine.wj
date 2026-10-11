@@ -1,0 +1,72 @@
+// Enum state machine with data variants and guards driven by PRNG; per-state counters.
+fn next(state: u64) -> u64 {
+    let mut x = state
+    x = x ^ (x << 13)
+    x = x ^ (x >> 7)
+    x = x ^ (x << 17)
+    x
+}
+
+enum State {
+    Idle,
+    Running(i64),
+    Paused(i64, i64),
+    Done,
+}
+
+fn step(st: State, input: i64) -> State {
+    match st {
+        State::Idle => {
+            if input % 4 == 0 {
+                State::Running(input)
+            } else {
+                State::Idle
+            }
+        }
+        State::Running(n) => {
+            if n > 9000 {
+                State::Done
+            } else if input % 5 == 0 {
+                State::Paused(n, input)
+            } else {
+                State::Running(n + input)
+            }
+        }
+        State::Paused(n, m) => {
+            if input % 3 == 0 {
+                State::Running(n + m)
+            } else {
+                State::Paused(n, m + 1)
+            }
+        }
+        State::Done => State::Idle,
+    }
+}
+
+fn code(st: State) -> i64 {
+    match st {
+        State::Idle => 0,
+        State::Running(n) => 1 + n % 7,
+        State::Paused(a, b) => 10 + (a + b) % 11,
+        State::Done => 99,
+    }
+}
+
+fn main() {
+    let mut s: u64 = __SEED__
+    let mut st = State::Idle
+    let mut h: i64 = 5
+    let mut dones: i64 = 0
+    let mut i = 0
+    while i < 5000 {
+        s = next(s)
+        st = step(st, (s % 100) as i64)
+        let c = code(st)
+        if c == 99 {
+            dones += 1
+        }
+        h = (h * 257 + c) % 1000000007
+        i += 1
+    }
+    println("{} {}", dones, h)
+}

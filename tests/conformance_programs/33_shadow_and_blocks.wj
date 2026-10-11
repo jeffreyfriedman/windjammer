@@ -1,0 +1,10 @@
+// expect: 3
+// expect: 30
+fn main() {
+    let x = 1
+    let x = x + 2
+    println("{}", x)
+    let y = { let t = 10
+        t * x }
+    println("{}", y)
+}

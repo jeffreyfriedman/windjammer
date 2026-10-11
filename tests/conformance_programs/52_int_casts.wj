@@ -1,0 +1,39 @@
+// expect: 4294967295
+// expect: 44
+// expect: 18446744073709551615
+// expect: 3
+// expect: -3
+// expect: 2147483647
+// expect: -2147483648
+// expect: 0
+// expect: 255
+// expect: 65
+// expect: 97
+// expect: -1
+fn main() {
+    let a: i32 = -1
+    println("{}", a as u32)
+    let b: i32 = 300
+    println("{}", b as u8)
+    let c: i64 = -1
+    println("{}", c as u64)
+    let f: f64 = 3.99
+    println("{}", f as i32)
+    let g: f64 = -3.99
+    println("{}", g as i32)
+    let big: f64 = 1.0e20
+    println("{}", big as i32)
+    let small: f64 = -1.0e20
+    println("{}", small as i32)
+    let zero: f64 = 0.0
+    let nan = zero / zero
+    println("{}", nan as i32)
+    let neg: i32 = -1
+    println("{}", neg as u8)
+    let code: u8 = 65
+    println("{}", code as u32)
+    let ch = 'a'
+    println("{}", ch as u32)
+    let w: u32 = 4294967295
+    println("{}", w as i32)
+}

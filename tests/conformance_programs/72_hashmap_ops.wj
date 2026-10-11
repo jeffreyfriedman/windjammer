@@ -1,0 +1,65 @@
+// expect: 3
+// expect: 20
+// expect: old 20
+// expect: 99
+// expect: gone
+// expect: a=1 b=99 c=3
+// expect: 5
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<string, i64> = HashMap::new()
+    m.insert("a", 1)
+    m.insert("b", 20)
+    m.insert("c", 3)
+    println("{}", m.len())
+    match m.get("b") {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    match m.insert("b", 99) {
+        Some(old) => println("old {}", old),
+        None => println("new"),
+    }
+    match m.get("b") {
+        Some(v) => println("{}", v),
+        None => println("none"),
+    }
+    m.remove("c")
+    m.insert("c", 3)
+    m.remove("zzz")
+    let mut keys: Vec<string> = Vec::new()
+    for k in m.keys() {
+        keys.push(k)
+    }
+    keys.sort()
+    let mut out = ""
+    for k in keys {
+        if out.len() > 0 {
+            out = out + " "
+        }
+        match m.get(k) {
+            Some(v) => out = out + k + "=" + v.to_string(),
+            None => {}
+        }
+    }
+    match m.get("zzz") {
+        Some(v) => println("{}", v),
+        None => println("gone"),
+    }
+    println("{}", out)
+    let mut counts: HashMap<i64, i64> = HashMap::new()
+    let words = vec![3, 1, 3, 3, 1]
+    for w in words {
+        let cur = match counts.get(w) {
+            Some(v) => v,
+            None => 0,
+        }
+        counts.insert(w, cur + 1)
+    }
+    let mut total = 0
+    for v in counts.values() {
+        total += v
+    }
+    println("{}", total)
+}
