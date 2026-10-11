@@ -26,3 +26,7 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 ## Tests
 tests/lexer_tests.rs; inline tests in src/lexer/mod.rs.
 Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
+
+## Pipe tokens
+`|>` is `PipeOp`, `|>?` (no space) is `PipeTry`. `next_token_with_location` skips blanks before
+recording the position, so token columns are 1-based and start at the token itself.
