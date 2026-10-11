@@ -21,7 +21,9 @@ pub mod auto_fix;
 pub mod cargo_toml;
 pub mod codegen;
 pub mod component_analyzer;
+pub mod compiler_config;
 pub mod config;
+pub mod debug_env;
 pub mod error;
 pub mod error_codes;
 pub mod errors;
@@ -94,7 +96,7 @@ pub mod test_runner;
 
 /// Build a Windjammer project - compiles .wj files to Rust.
 /// Used by integration tests and CLI.
-pub use compiler::{build_project, build_project_ext};
+pub use compiler::{build_project, build_project_ext, build_project_with_config};
 
 pub use rust_integration_tests::sync_rust_integration_tests;
 
