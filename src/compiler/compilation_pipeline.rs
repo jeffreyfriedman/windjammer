@@ -19,6 +19,7 @@ use super::dependency_resolution::{
     find_dependency_metadata_roots, find_wj_files,
 };
 use super::salsa_library_build::build_library;
+use crate::compiler_config::CompilerConfig;
 
 /// Merge CLI `--metadata` with auto-discovered path-dep and import-based `metadata.json`
 /// roots. Explicit CLI entries win when both define the same crate key.
@@ -104,6 +105,27 @@ pub fn build_project_ext(
     library: bool,
     external_metadata: &[(&str, &Path)],
 ) -> Result<()> {
+    build_project_with_config(
+        path,
+        output,
+        target,
+        enable_lint,
+        library,
+        external_metadata,
+        &CompilerConfig::default(),
+    )
+}
+
+/// Build with an explicit [`CompilerConfig`] (built once at the driver edge).
+pub fn build_project_with_config(
+    path: &Path,
+    output: &Path,
+    target: CompilationTarget,
+    enable_lint: bool,
+    library: bool,
+    external_metadata: &[(&str, &Path)],
+    config: &CompilerConfig,
+) -> Result<()> {
     let wj_files = find_wj_files(path)?;
     if wj_files.is_empty() {
         return Ok(());
@@ -134,6 +156,7 @@ pub fn build_project_ext(
             enable_lint,
             &external_paths,
             crate_metadata,
+            config,
         );
     }
 
@@ -266,6 +289,7 @@ pub fn build_project_ext(
         let explicit_copy: HashSet<String> =
             analyzer.get_explicit_copy_structs().into_iter().collect();
         let mut codegen = CodeGenerator::new(registry.clone(), target);
+        codegen.set_config(config.clone());
         codegen.set_global_signature_registry(std::sync::Arc::new(global_signatures.clone()));
         codegen.set_source_file(file);
         codegen.set_analyzed_trait_methods(analyzer.analyzed_trait_methods.clone());
@@ -282,7 +306,10 @@ pub fn build_project_ext(
             let std_mods = super::library_copy_registry::stdlib_modules_from_source(&source_text);
             if !std_mods.is_empty() {
                 let (std_fields, std_variants, std_paths) =
-                    super::library_copy_registry::collect_stdlib_api_types_for_modules(&std_mods);
+                    super::library_copy_registry::collect_stdlib_api_types_for_modules(
+                        &std_mods,
+                        config.stdlib_path.as_deref(),
+                    );
                 if !std_fields.is_empty() {
                     codegen.set_global_struct_field_types(std_fields);
                 }
@@ -423,7 +450,7 @@ pub fn build_project_ext(
         write_if_changed(&lib_rs_path, &(cleaned + "\n"))?;
     }
 
-    super::generate_cargo_manifests(path, output, target, false)?;
+    super::generate_cargo_manifests(path, output, target, false, config)?;
 
     let _ = super::cache_management::write_compiler_stamp(output);
 

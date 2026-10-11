@@ -367,14 +367,16 @@ fn detect_and_compile_library(
         src_dir.clone()
     };
 
-    crate::cargo_toml::set_skip_cargo_toml_generation(opts.no_generate_cargo_toml);
-    match build_project_ext(
+    let build_config = crate::compiler_config::CompilerConfig::from_env()
+        .with_skip_cargo_toml_generation(opts.no_generate_cargo_toml);
+    match crate::build_project_with_config(
         &build_entry,
         &lib_output_dir,
         CompilationTarget::Rust,
         true,
         opts.library,
         &[],
+        &build_config,
     ) {
         Ok(_) => {
             crate::build_utils::apply_library_build_post_steps(

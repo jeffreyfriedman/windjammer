@@ -117,6 +117,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         } else {
             codegen::CodeGenerator::new(generator_signatures, target)
         };
+        generator.set_config(module_compiler.config.clone());
         generator.set_numeric_inference(numeric_inference);
         generator.set_inferred_bounds(inferred_bounds_map);
         generator.set_analyzed_trait_methods(analyzed_trait_methods);
@@ -190,6 +191,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
     } else {
         codegen::CodeGenerator::new(generator_signatures, target)
     };
+    generator.set_config(module_compiler.config.clone());
     generator.set_numeric_inference(numeric_inference);
     generator.set_inferred_bounds(inferred_bounds_map);
     generator.set_analyzed_trait_methods(analyzed_trait_methods);
@@ -205,7 +207,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
     // IR cutover: when any cutover flag is enabled, run the IR pipeline and
     // attach the IrModule so codegen can read from SafetyType.
     let run_ir_pipeline =
-        !generator.ir_cutover.all_disabled() || crate::ir::shadow::shadow_validate_strict();
+        !generator.ir_cutover.all_disabled() || generator.config.shadow_validate_strict;
     if run_ir_pipeline {
         let mut ir_pipeline = crate::ir::IrPipeline::new();
         // Same registry as codegen: path-dep ABI + import aliases overwrite
@@ -214,7 +216,10 @@ pub(crate) fn generate_main_rust_code<'ast>(
 
         // Shadow validation: compare solver results against legacy analyzer.
         let shadow_result = crate::ir::shadow::validate_shadow_module(&ir_module, analyzed);
-        if let Err(e) = crate::ir::shadow::finish_shadow_validation(&shadow_result) {
+        if let Err(e) = crate::ir::shadow::finish_shadow_validation(
+            &shadow_result,
+            generator.config.shadow_validate_strict,
+        ) {
             return Err(anyhow::anyhow!("{}", e));
         }
 
