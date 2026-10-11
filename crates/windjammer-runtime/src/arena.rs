@@ -7,7 +7,7 @@
 //!   which are free for types without destructors). Handles carry the arena generation; debug builds check it
 //!   on every access and panic on a stale or foreign handle. Release builds skip the check: a stale handle then
 //!   reads another live value or panics on bounds, it is a logic error but never undefined behaviour.
-//! * [`Scratch`]: an untyped bump allocator for transient strings and lists (`str`, `string`, `list`). The
+//! * [`Scratch`]: an untyped bump allocator for transient strings and lists (`str`, `new_string`, `new_list`). The
 //!   borrow checker ties every scratch value to `&Scratch`, so `reset(&mut self)` cannot run while one is alive;
 //!   Windjammer's escape check (ADR-0016) reports the same mistake earlier, in Windjammer terms.
 //!
@@ -189,10 +189,110 @@ impl<T: fmt::Debug> fmt::Debug for Arena<T> {
     }
 }
 
-/// Arena-backed growable string (`Scratch::string`).
-pub type ScratchString<'s> = bumpalo::collections::String<'s>;
-/// Arena-backed growable list (`Scratch::list`).
-pub type ScratchList<'s, T> = bumpalo::collections::Vec<'s, T>;
+/// Arena-backed growable string (`Scratch::new_string`). Lengths are `i64` (Windjammer `int`).
+pub struct ScratchString<'s>(bumpalo::collections::String<'s>);
+
+impl<'s> ScratchString<'s> {
+    #[inline]
+    pub fn push_str(&mut self, s: &str) {
+        self.0.push_str(s)
+    }
+    #[inline]
+    pub fn push(&mut self, c: char) {
+        self.0.push(c)
+    }
+    pub fn len(&self) -> i64 {
+        self.0.len() as i64
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+    /// Freeze into an arena `&str` (no copy).
+    pub fn into_str(self) -> &'s str {
+        self.0.into_bump_str()
+    }
+}
+
+impl std::ops::Deref for ScratchString<'_> {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl fmt::Write for ScratchString<'_> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.push_str(s);
+        Ok(())
+    }
+}
+
+impl fmt::Display for ScratchString<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.as_str())
+    }
+}
+
+impl fmt::Debug for ScratchString<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(self.0.as_str(), f)
+    }
+}
+
+/// Arena-backed growable list (`Scratch::new_list`). Lengths are `i64`; slices via `Deref`.
+pub struct ScratchList<'s, T>(bumpalo::collections::Vec<'s, T>);
+
+impl<'s, T> ScratchList<'s, T> {
+    #[inline]
+    pub fn push(&mut self, v: T) {
+        self.0.push(v)
+    }
+    pub fn pop(&mut self) -> Option<T> {
+        self.0.pop()
+    }
+    pub fn len(&self) -> i64 {
+        self.0.len() as i64
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    pub fn clear(&mut self) {
+        self.0.clear()
+    }
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.0.iter()
+    }
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        self.0.iter_mut()
+    }
+}
+
+impl<T> std::ops::Deref for ScratchList<'_, T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for ScratchList<'_, T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        &mut self.0
+    }
+}
+
+impl<'a, T> IntoIterator for &'a ScratchList<'_, T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
 
 /// Untyped bump allocator for transient strings and lists; `reset` frees everything at once.
 #[derive(Default)]
@@ -218,14 +318,14 @@ impl Scratch {
 
     /// An empty growable string in the scratch arena.
     #[inline]
-    pub fn string(&self) -> ScratchString<'_> {
-        ScratchString::new_in(&self.bump)
+    pub fn new_string(&self) -> ScratchString<'_> {
+        ScratchString(bumpalo::collections::String::new_in(&self.bump))
     }
 
     /// An empty growable list in the scratch arena.
     #[inline]
-    pub fn list<T>(&self) -> ScratchList<'_, T> {
-        ScratchList::new_in(&self.bump)
+    pub fn new_list<T>(&self) -> ScratchList<'_, T> {
+        ScratchList(bumpalo::collections::Vec::new_in(&self.bump))
     }
 
     /// Place a value without a destructor in the arena (destructors would never run).
@@ -331,14 +431,16 @@ mod tests {
         let mut s = Scratch::new();
         {
             let a = s.str("hello");
-            let mut b = s.string();
+            let mut b = s.new_string();
             b.push_str(a);
             b.push_str(", world");
-            let mut l = s.list();
+            let mut l = s.new_list();
             for i in 0..100 {
                 l.push(i * 2);
             }
             assert_eq!(b.as_str(), "hello, world");
+            assert_eq!((b.len(), l.len()), (12, 100));
+            assert_eq!(format!("<{b}>"), "<hello, world>");
             assert_eq!(l.iter().sum::<i32>(), 9900);
             *s.alloc(7i64) += 1;
         }
@@ -349,7 +451,7 @@ mod tests {
         // Steady state: the same work after reset needs no new chunk.
         let after_reset = s.allocated_bytes();
         {
-            let mut b = s.string();
+            let mut b = s.new_string();
             b.push_str("hello, world");
         }
         assert_eq!(s.allocated_bytes(), after_reset);

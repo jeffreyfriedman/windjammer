@@ -10,9 +10,9 @@ fn main() {
     let mut total = 0
     for frame in 0..2 {
         scratch.reset()
-        let mut parts = scratch.list()
+        let mut parts = scratch.new_list()
         for i in 0..3 {
-            let mut s = scratch.string()
+            let mut s = scratch.new_string()
             s.push_str("e")
             s.push_str(scratch.str((i + frame).to_string()))
             parts.push(s)
@@ -21,9 +21,9 @@ fn main() {
         let mut line = ""
         for p in parts.iter() {
             if line.len() > 0 {
-                line = line + ","
+                line = "${line},"
             }
-            line = line + p
+            line = "${line}${p}"
         }
         if frame == 0 {
             kept = parts[2].to_string()

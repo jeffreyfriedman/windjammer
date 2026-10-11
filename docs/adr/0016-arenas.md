@@ -26,8 +26,8 @@ so it can offer the same performance with the lifetime reasoning done by the com
 2. **Typed arenas hand out `Copy` handles,** not references: `let h = particles.alloc(p)`, `particles.get(h)`,
    `particles.get_mut(h).x += 1`, `particles.reset()`. A handle is two `u32`s plus an arena id; debug builds check
    the generation and the arena id on every access.
-3. **`Scratch`** is an untyped bump allocator for transient strings and lists: `s.str("..")`, `s.string()`,
-   `s.list()`, `s.reset()`. In Rust it is `bumpalo`; the borrow checker ties every scratch value to the scratch.
+3. **`Scratch`** is an untyped bump allocator for transient strings and lists: `s.str("..")`, `s.new_string()`,
+   `s.new_list()`, `s.reset()`. In Rust it is `bumpalo`; the borrow checker ties every scratch value to the scratch.
 4. **Escape check (WJ0160):** a value allocated in an arena declared in a function may not leave the arena's scope
    (returned, assigned to an outer variable or field, stored into an outer collection, used as a block value, or
    used after `reset()`). Inferred, no annotations; error with a fix hint. Runs on the compiler and interpreter paths.
@@ -76,7 +76,7 @@ on Rust and interpreter, Go/JS lowerings exist, and the benchmark keeps its win 
   `iter`, `iter_mut`, `len`, `is_empty`, `reset`, `generation`. `reset` drops every value (destructors run) and
   bumps the generation. Release builds skip the generation check: a stale handle then reads another live value or
   panics on bounds, a logic error but never memory unsafety. `try_get` always checks.
-- `Scratch`: `str(s)`, `string()`, `list()`, `alloc(v)` (Copy values only), `reset`, `allocated_bytes`.
+- `Scratch`: `str(s)`, `new_string()`, `new_list()` (`ScratchString`/`ScratchList`: `len() -> int`, `push`/`push_str`, slices), `alloc(v)` (Copy values only), `reset`, `allocated_bytes`.
 - Escape rules (WJ0160), per function, no annotations: a value is *arena-bound* if it comes from an allocation
   method of a local arena, is a copy of an arena-bound variable, or is a struct/tuple/list literal or block value
   containing one. Copies out (`to_string`, `to_vec`, `push_str`) are not arena-bound. Arenas reached through a

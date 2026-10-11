@@ -9,7 +9,7 @@
 //! * An *arena* is a local `let a = Arena::new()` / `Scratch::new()` (or `with_capacity`). Its scope is the
 //!   block that declares it. Arenas reached through parameters or `self` fields are *external*: values from
 //!   them may leave the function (the caller owns the arena), but use after `reset()` is still checked.
-//! * A value is *arena-bound* to `a` when it is `a.alloc(..)`, `a.str(..)`, `a.string()`, `a.list()`, a copy of
+//! * A value is *arena-bound* to `a` when it is `a.alloc(..)`, `a.str(..)`, `a.new_string()`, `a.new_list()`, a copy of
 //!   an arena-bound variable, a struct/tuple/list literal containing one, or a block whose tail is one.
 //! * Escapes (errors): returning a value bound to a local arena (`return`, implicit final expression); assigning
 //!   it to a variable, field or index place rooted outside the arena's scope; storing it into a collection
@@ -38,7 +38,7 @@ impl ArenaEscape {
     }
 }
 
-const ALLOC_METHODS: &[&str] = &["alloc", "str", "string", "list"];
+const ALLOC_METHODS: &[&str] = &["alloc", "str", "new_string", "new_list"];
 const STORE_METHODS: &[&str] = &["push", "insert", "push_back", "push_front", "extend", "add", "set", "append"];
 
 #[derive(Clone)]
