@@ -64,6 +64,27 @@ jobs:
       - name: Fail on test files no runner reaches
         run: scripts/check-orphan-tests.sh
 
+  docs-truth:
+    name: Docs Truth (generated docs, examples, links)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Build wj and wj-docs
+        run: cargo build --release --bin wj --bin wj-docs
+
+      - name: Verify generated docs, doc examples, links, claims, freshness
+        run: WJ_BIN=$PWD/target/release/wj scripts/docs_gen.sh --verify
+
   version-check:
     name: Version Alignment
     runs-on: ubuntu-latest
