@@ -13,17 +13,20 @@ fn bin_dir() -> PathBuf {
     wj_home().join("bin")
 }
 
-pub fn execute() -> Result<()> {
-    println!("{}", "Installing Windjammer toolchain...".cyan().bold());
+pub fn execute(dry_run: bool) -> Result<()> {
+    let verb = if dry_run { "Planning installation of" } else { "Installing" };
+    println!("{}", format!("{verb} Windjammer toolchain...").cyan().bold());
     println!();
 
     let bin = bin_dir();
-    std::fs::create_dir_all(&bin)
-        .with_context(|| format!("Failed to create directory: {}", bin.display()))?;
+    if !dry_run {
+        std::fs::create_dir_all(&bin)
+            .with_context(|| format!("Failed to create directory: {}", bin.display()))?;
+    }
 
-    let installed = install_compiler_binary(&bin)?;
-    let plugins = install_plugins(&bin)?;
-    install_stdlib()?;
+    let installed = install_compiler_binary(&bin, dry_run)?;
+    let plugins = install_plugins(&bin, dry_run)?;
+    install_stdlib(dry_run)?;
 
     println!();
     check_path(&bin);
@@ -43,7 +46,7 @@ pub fn execute() -> Result<()> {
     Ok(())
 }
 
-fn install_compiler_binary(bin: &Path) -> Result<usize> {
+fn install_compiler_binary(bin: &Path, dry_run: bool) -> Result<usize> {
     let current_exe =
         std::env::current_exe().context("Failed to determine current executable path")?;
 
@@ -61,6 +64,14 @@ fn install_compiler_binary(bin: &Path) -> Result<usize> {
         .unwrap_or(&current_exe);
 
     let dest = bin.join("wj");
+    if dry_run {
+        println!("  {} wj: {} -> {}", "would install".yellow(), source.display(), dest.display());
+        return Ok(1);
+    }
+    if source == &dest {
+        println!("  {} wj is already {}", "ok".green(), dest.display());
+        return Ok(1);
+    }
     std::fs::copy(source, &dest)
         .with_context(|| format!("Failed to copy {} -> {}", source.display(), dest.display()))?;
 
@@ -75,7 +86,7 @@ fn install_compiler_binary(bin: &Path) -> Result<usize> {
     Ok(1)
 }
 
-fn install_plugins(bin: &Path) -> Result<usize> {
+fn install_plugins(bin: &Path, dry_run: bool) -> Result<usize> {
     let current_exe =
         std::env::current_exe().context("Failed to determine current executable path")?;
     let repo_root = find_repo_root(&current_exe);
@@ -103,6 +114,11 @@ fn install_plugins(bin: &Path) -> Result<usize> {
             let source = dir.join(name);
             if source.exists() {
                 let dest = bin.join(name);
+                if dry_run {
+                    println!("  {} {}: {} -> {}", "would install".yellow(), name, source.display(), dest.display());
+                    count += 1;
+                    break;
+                }
                 std::fs::copy(&source, &dest).with_context(|| {
                     format!("Failed to copy {} -> {}", source.display(), dest.display())
                 })?;
@@ -123,20 +139,28 @@ fn install_plugins(bin: &Path) -> Result<usize> {
     Ok(count)
 }
 
-fn install_stdlib() -> Result<()> {
-    let current_exe =
-        std::env::current_exe().context("Failed to determine current executable path")?;
-    let repo_root = find_repo_root(&current_exe);
-
-    if let Some(root) = repo_root {
-        let std_src = root.join("std");
-        if std_src.exists() {
-            let std_dest = wj_home().join("std");
-            copy_dir_recursive(&std_src, &std_dest)?;
-            println!("  {} stdlib -> {}", "installed".green(), std_dest.display());
-        }
+/// Install `std/` from the copy embedded in the binary (`embedded_assets`), so an installed `wj`
+/// needs no source checkout next to it.
+fn install_stdlib(dry_run: bool) -> Result<()> {
+    let std_dest = wj_home().join("std");
+    let files = crate::embedded_assets::file_count(crate::embedded_assets::Asset::StdWj);
+    if dry_run {
+        println!(
+            "  {} stdlib: {} embedded files -> {}",
+            "would install".yellow(),
+            files,
+            std_dest.display()
+        );
+        return Ok(());
     }
-
+    // replace, not merge: files removed from std/ must not linger from an older install
+    if std_dest.exists() {
+        std::fs::remove_dir_all(&std_dest)
+            .with_context(|| format!("Failed to replace {}", std_dest.display()))?;
+    }
+    crate::embedded_assets::write_to(crate::embedded_assets::Asset::StdWj, &std_dest)
+        .with_context(|| format!("Failed to install stdlib into {}", std_dest.display()))?;
+    println!("  {} stdlib ({} files) -> {}", "installed".green(), files, std_dest.display());
     Ok(())
 }
 
@@ -149,21 +173,6 @@ fn find_repo_root(exe_path: &Path) -> Option<PathBuf> {
         dir = dir.parent()?;
     }
     None
-}
-
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let dest_path = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_recursive(&entry.path(), &dest_path)?;
-        } else {
-            std::fs::copy(entry.path(), &dest_path)?;
-        }
-    }
-    Ok(())
 }
 
 fn check_path(bin: &Path) {

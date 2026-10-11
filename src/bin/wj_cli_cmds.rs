@@ -204,8 +204,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::cli::cache::execute_setup()?;
             }
         },
-        Commands::SelfInstall => {
-            windjammer::cli::self_install::execute()?;
+        Commands::SelfInstall { dry_run } => {
+            windjammer::cli::self_install::execute(dry_run)?;
         }
         Commands::Plugin(plugin_args) => {
             if plugin_args.is_empty() {
