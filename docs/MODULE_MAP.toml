@@ -268,7 +268,7 @@ layer = "tooling"
 owner_stage = "tree-walking interpreter"
 module_md = "src/interpreter/MODULE.md"
 allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "optimizer", "parser", "parser_impl", "parser_recovery", "project_paths", "source_map", "source_map_cache", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
-known_violations = []
+known_violations = ["intrinsics"]
 
 [modules.ir]
 layer = "ir"

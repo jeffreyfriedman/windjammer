@@ -20,7 +20,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
 - `builtins/`            native stdlib registry (`Registry`): `num`, `text`, `seq`, `map`, `option`, `std_fns`
-- `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread. Only place with process I/O policy.
+- `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
 - `error.rs`             `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces
 
 ## Invariants
@@ -32,15 +32,12 @@ Status and measurements: `docs/INTERPRETER.md`.
   error naming it. No silent `Nil` fallbacks.
 - No `cargo`/`rustc` spawn anywhere in this module (asserted by `tests/interpreter_cli_test.rs`).
 
-## Owns
-Evaluation semantics, the value model, the native stdlib registry, the CLI port (`runner`, `repl`).
-
-## Never decides
-Compiled-path behaviour (codegen/analyzer); it mirrors Rust semantics rather than defining its own.
+## Owns / never decides
+Owns evaluation semantics, value model, native stdlib registry, CLI port. Never decides compiled-path behaviour (mirrors Rust).
 
 ## Allowed imports
-`crate::parser` (AST), `crate::lexer`, `crate::source_map::Location`, `crate::intrinsics` (name registry only), std. Nothing from `codegen`,
-`analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*` and `Interpreter`.
+`crate::parser` (AST), `crate::lexer`, `crate::source_map::Location`, `crate::intrinsics` (name registry only; a
+ratcheted known violation like codegen/parser/linter), std. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*` and `Interpreter`.
 
 ## Entry points
 `runner::run_path`, `runner::run_tests`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
@@ -51,8 +48,7 @@ Names come only from `crate::intrinsics::Intrinsic` (plain call and `name!` spel
 same name shadows the intrinsic. Add a new intrinsic: extend the registry, then one arm in `eval_intrinsic`.
 
 ## Extending the stdlib
-Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in the matching
-`builtins/*.rs`; no evaluator change needed. Mutating methods receive `&mut Value` (taken out of its place).
+Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in the matching `builtins/*.rs`.
 
 ## Test
 - `cargo test --test interpreter_semantics_test` hand-derived Rust semantics
