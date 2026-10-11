@@ -1,6 +1,5 @@
 // spec: SPEC-EXPR-016
 // expect: 40
-// xfail: Q-005
 fn main() {
     let mut k = 0
     let r = loop {

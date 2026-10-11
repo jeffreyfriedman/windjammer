@@ -146,7 +146,8 @@ Output:
 **SPEC-TRT-007** [OPEN Q-025] A trait method may declare its own type parameters (`fn map<U>(self, f: fn(T) -> U)`). The trait parser rejects `<` after a method name in a trait body.
 
 <!-- example: tests/spec/traits/SPEC-TRT-007.wj -->
-```windjammer
+<!-- ignore: known divergence Q-025; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 trait Conv { fn conv<T>(self, x: T) -> T }
 struct S {}
 impl Conv for S { fn conv<T>(self, x: T) -> T { x } }
@@ -166,7 +167,8 @@ Output:
 **SPEC-TRT-008** [OPEN Q-024] A bound may carry type arguments (`T: Into<string>`, `trait A: B<int>`) and a generic trait parameter may be bounded. Today bounds are plain trait names only.
 
 <!-- example: tests/spec/traits/SPEC-TRT-008.wj -->
-```windjammer
+<!-- ignore: known divergence Q-024; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn show<T: Into<string>>(x: T) -> string { x.into() }
 fn main() {
     println(show("hi"))

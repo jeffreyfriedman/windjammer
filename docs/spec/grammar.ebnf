@@ -3,7 +3,7 @@
 (* This file is machine-checked by tests/spec_grammar_test.rs: sentences are generated from it and  *)
 (* fed to the real parser. Notation: "x" terminal; { x } repetition; [ x ] option; ( x ) group;     *)
 (* /a-z_/ character class (lexical rules only). UPPERCASE names are lexical, lowercase syntactic.   *)
-(* Directives (comments starting "(*@") apply to the NEXT production:                               *)
+(* Directives (a comment whose text starts with "@") apply to the NEXT production:                               *)
 (*   @ctx T      generate sentences for this production, substitute into template T at "$$"        *)
 (*   @nl         a newline follows each expansion (statement/item separator)                       *)
 (*   @status S   parsed (default) | unparsed (documented but rejected today) | informative          *)
@@ -38,7 +38,10 @@ PLAIN_STRING = "\"" { STR_CHAR } "\"" ;
 STRING_LIT   = "\"" { STR_CHAR | STR_ESCAPE | INTERPOLATION } "\"" ;
 STR_CHAR     = /a-zA-Z0-9 .,:;!?_-/ ;
 STR_ESCAPE   = "\\n" | "\\t" | "\\r" | "\\\\" | "\\\"" | "$$" ;
-INTERPOLATION = "${" expression [ ":" FORMAT_SPEC ] "}" ;
+INTERPOLATION = "${" interp_expr [ ":" FORMAT_SPEC ] "}" ;
+(* interpolations hold ordinary expressions; the generator keeps them to arithmetic, calls and fields *)
+interp_expr  = interp_atom { ( "+" | "-" | "*" | "==" | "<" | "&&" ) interp_atom } ;
+interp_atom  = IDENT { "." IDENT [ "(" [ interp_expr ] ")" ] } | INT_LIT | IDENT "(" [ interp_expr ] ")" | "(" interp_expr ")" ;
 FORMAT_SPEC  = /0-9a-z.<>?/ { /0-9a-z.<>?/ } ;
 
 (*@lex CharLiteral *)
@@ -53,14 +56,15 @@ program      = { item } ;
 (*@ctx $$ *)
 (*@nl *)
 item         = [ attributes ] ( use_decl | struct_decl | enum_decl | trait_decl | impl_block
-                 | function_decl | const_decl | static_decl | type_alias | mod_decl ) ;
+                 | function_decl | const_decl | static_decl | type_alias | mod_decl | extern_fn ) ;
+extern_fn    = "extern" "fn" IDENT "(" [ params ] ")" [ "->" type ] ;
 
 attributes   = attribute { attribute } ;
 (*@lex Decorator *)
 ATTR_NAME    = "@" IDENT ;
 attribute    = ATTR_NAME [ "(" attr_args ")" ] ;
 attr_args    = attr_arg { "," attr_arg } ;
-attr_arg     = IDENT [ ":" expression ] | STRING_LIT ;
+attr_arg     = IDENT [ ":" cond_expr ] | STRING_LIT ;
 
 use_decl     = "use" use_path [ "as" IDENT | "::" "{" IDENT { "," IDENT } "}" ] ;
 use_path     = IDENT { "::" IDENT } ;
@@ -103,7 +107,7 @@ visibility   = "pub" ;
 
 (*@depth *)
 (*@ctx fn main() { let _v: $$ = 0 } *)
-type         = path_type | list_type | tuple_type | fn_type | ref_type | PRIMITIVE ;
+type         = path_type | list_type | tuple_type | fn_type | ref_type | PRIMITIVE | "dyn" TYPE_IDENT ;
 PRIMITIVE    = "int" | "float" | "bool" | "string" | "i32" | "i64" | "u8" | "u32" | "u64" | "f32" | "f64" | "usize" ;
 path_type    = TYPE_IDENT [ "<" type { "," type } ">" ] ;
 list_type    = "[" type [ ";" INT_LIT ] "]" ;
@@ -114,13 +118,19 @@ ref_type     = "&" [ "mut" ] type ;
 (* ======================== Statements ======================== *)
 
 (*@depth *)
-block        = "{" { statement } [ expression ] "}" ;
+(* A block's final expression may not begin with a block-like keyword (`if`, `match`, `loop`, `unsafe`):
+   at the start of a line those are statements, so `loop { } as int` is a statement followed by an error. *)
+block        = "{" { statement } [ tail_expr ] "}" ;
+tail_expr    = ( IDENT | INT_LIT | STRING_LIT | "true" | "false" | call_expr | method_call | "(" expression ")" )
+               [ ( "+" | "-" | "*" | "==" | "<" ) cond_atom ] ;
 
 (*@depth *)
 (*@ctx fn main() { $$ } *)
 (*@nl *)
 statement    = let_stmt | assign_stmt | return_stmt | if_stmt | while_stmt | loop_stmt | for_stmt
-               | break_stmt | continue_stmt | defer_stmt | match_stmt | expr_stmt ;
+               | break_stmt | continue_stmt | defer_stmt | match_stmt | expr_stmt | thread_stmt ;
+(* deprecated by ADR-0004 (accepted); still parsed *)
+thread_stmt  = "thread" block ;
 
 let_stmt     = "let" [ "mut" ] binding [ ":" type ] "=" expression
              | "let" pattern "=" expression "else" block ;
@@ -131,13 +141,17 @@ assign_op    = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<
 return_stmt  = "return" expression | "return" ";" ;
 if_stmt      = "if" cond block { "else" "if" cond block } [ "else" block ] ;
 cond         = cond_expr | "let" pattern "=" cond_expr ;
-while_stmt   = "while" cond block ;
-loop_stmt    = "loop" block ;
-for_stmt     = "for" binding "in" ( cond_expr | range_expr ) block ;
+while_stmt   = [ label ] "while" cond block ;
+label        = LIFETIME ":" ;
+(*@lex Lifetime *)
+LIFETIME     = "'" /a-z/ { /a-z0-9_/ } ;
+loop_stmt    = [ label ] "loop" block ;
+for_stmt     = [ label ] "for" binding "in" ( cond_expr | range_expr ) block ;
 binding      = IDENT | "_" | "(" binding "," binding { "," binding } ")" | TYPE_IDENT "{" IDENT { "," IDENT } "}" ;
-range_expr   = additive_expr ( ".." | "..=" ) additive_expr ;
-break_stmt   = "break" ;
-continue_stmt = "continue" ;
+range_expr   = cond_atom ( ".." | "..=" ) cond_atom ;
+(* like `return`, `break`/`continue` read a label on the next line as theirs (Q-026): the grammar ends them with `;` *)
+break_stmt   = "break" [ LIFETIME ] [ expression ] ";" ;
+continue_stmt = "continue" [ LIFETIME ] ";" ;
 defer_stmt   = "defer" call_expr ;
 match_stmt   = match_expr ;
 expr_stmt    = call_expr | method_call ;
@@ -150,7 +164,7 @@ pattern      = simple_pattern ;
 (*@ctx fn main() { match v { $$ => 0 } } *)
 or_pattern   = simple_pattern { "|" simple_pattern } ;
 (*@depth *)
-simple_pattern = "_" | IDENT | INT_LIT | PLAIN_STRING | "true" | "false" | "None"
+simple_pattern = "_" | IDENT | INT_LIT | PLAIN_STRING | range_pattern | "true" | "false" | "None"
                | "(" pattern "," pattern { "," pattern } ")"
                | "Some" "(" pattern ")" | "Ok" "(" pattern ")" | "Err" "(" pattern ")"
                | path "::" TYPE_IDENT [ "(" pattern { "," pattern } ")" ]
@@ -158,9 +172,8 @@ simple_pattern = "_" | IDENT | INT_LIT | PLAIN_STRING | "true" | "false" | "None
                | TYPE_IDENT "{" IDENT [ ":" simple_pattern ] { "," IDENT [ ":" simple_pattern ] } [ "," ".." ] "}" ;
 path         = TYPE_IDENT { "::" TYPE_IDENT } ;
 
-(*@status unparsed *)
 (*@ctx fn main() { match v { $$ => 0 } } *)
-range_pattern = INT_LIT ( ".." | "..=" ) INT_LIT ;
+range_pattern = INT_LIT ( ".." | "..=" ) INT_LIT | CHAR_LIT "..=" CHAR_LIT ;
 
 (* ======================== Expressions ======================== *)
 
@@ -180,21 +193,25 @@ additive_expr = shift_expr { ( "+" | "-" ) shift_expr } ;
 shift_expr   = mul_expr { ( "<<" | ">>" ) mul_expr } ;
 mul_expr     = unary_expr { ( "*" | "/" | "%" ) unary_expr } ;
 unary_expr   = ( "-" | "!" ) unary_expr | postfix_expr ;
-postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ args ] ")" | "(" [ args ] ")" | "[" or_expr "]" | "?" | "as" type } ;
+postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ args ] ")" | "." "await" | "[" or_expr "]" | "?" } [ "as" PRIMITIVE ] ;
 args         = expression { "," expression } ;
 call_expr    = IDENT "(" [ args ] ")" ;
 method_call  = IDENT "." IDENT "(" [ args ] ")" ;
 primary      = INT_LIT | FLOAT_LIT | STRING_LIT | CHAR_LIT | "true" | "false" | IDENT
              | "(" expression ")" | "(" expression "," [ args ] ")" | "[" [ args ] "]" | "[" expression ";" INT_LIT "]"
              | TYPE_IDENT "::" IDENT | TYPE_IDENT "::" IDENT "(" [ args ] ")"
-             | struct_lit | if_expr | match_expr | closure | block ;
+             | IDENT "(" [ args ] ")" | struct_lit | if_expr | match_expr | closure | loop_expr | "unsafe" block ;
+loop_expr    = [ label ] "loop" block ;
 
-(* an expression usable in `if`/`while`/`for`/`match` heads: no struct literal, no bare block *)
-cond_expr    = or_expr ;
+(* An expression in an `if`/`while`/`for`/`match` head: a struct literal there would swallow the body's `{`,
+   so the head grammar excludes struct literals and block-like expressions (wrap them in parentheses). *)
+cond_expr    = [ "!" ] cond_atom { ( "==" | "!=" | "<" | ">=" | "&&" | "||" | "+" | "-" ) cond_atom } ;
+cond_atom    = ( IDENT | INT_LIT | FLOAT_LIT | STRING_LIT | "true" | "false" | call_expr | "(" expression ")" | TYPE_IDENT "::" IDENT )
+               { "." IDENT | "." IDENT "(" [ args ] ")" | "[" or_expr "]" | "?" } ;
 
 struct_lit   = TYPE_IDENT "{" [ field_init { "," field_init } [ "," ] ] "}" ;
 field_init   = IDENT [ ":" expression ] ;
 if_expr      = "if" cond block "else" block ;
-match_expr   = "match" cond_expr "{" { match_arm } "}" ;
+match_expr   = "match" cond_expr "{" match_arm { match_arm } "}" ;
 match_arm    = or_pattern [ "if" expression ] "=>" ( expression "," | block ) ;
 closure      = "|" [ IDENT { "," IDENT } ] "|" ( expression | block ) ;

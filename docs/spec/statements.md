@@ -32,7 +32,8 @@ Output:
 **SPEC-STMT-002** A binding is immutable unless declared `let mut` (ADR-0002, accepted); assigning to an immutable binding is a compile-time error. [OPEN Q-007] The compiler currently infers `mut` silently and the interpreter does not check, so the program below is accepted.
 
 <!-- example: tests/spec/statements/SPEC-STMT-002.wj -->
-```windjammer
+<!-- ignore: known divergence Q-007; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn main() {
     let x = 1
     x = 2
@@ -223,7 +224,8 @@ Output:
 **SPEC-STMT-011** [OPEN Q-026] A bare `return` (no value) ends the function even when the next line starts another statement. The parser currently treats a newline after `return` as nothing and parses the next line as the returned expression, so `return` newline `println(..)` runs the `println`.
 
 <!-- example: tests/spec/statements/SPEC-STMT-011.wj -->
-```windjammer
+<!-- ignore: known divergence Q-026; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn g() {
     return
     println("g after")

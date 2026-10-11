@@ -166,7 +166,8 @@ Then panics, exit status 101.
 **SPEC-STR-009** [OPEN Q-006] A type that defines `fn to_string(self) -> string` is printable and interpolatable (ADR-0015 section 3, accepted).
 
 <!-- example: tests/spec/strings/SPEC-STR-009.wj -->
-```windjammer
+<!-- ignore: known divergence Q-006; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 struct Pt { x: int, y: int }
 impl Pt {
     fn to_string(self) -> string { "(${self.x}, ${self.y})" }

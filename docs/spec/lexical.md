@@ -69,7 +69,8 @@ Output:
 **SPEC-LEX-004** The reserved words (`fn let mut const static struct enum trait impl match if else for in while loop return break continue use mod extern thread async await defer pub self unsafe as where type dyn true false`) cannot be used as identifiers.
 
 <!-- example: tests/spec/lexical/SPEC-LEX-004.wj -->
-```windjammer
+<!-- should_fail: the rule says this program is rejected -->
+```windjammer,should_fail
 fn main() {
     let loop = 1
 }
@@ -259,7 +260,8 @@ a\nb ${x}
 **SPEC-LEX-015** [OPEN Q-002] `/* ... */` is a block comment and nests (`/* a /* b */ c */` is one comment). The lexer has no block comments today: `/*` lexes as `/` `*` and is a parse error.
 
 <!-- example: tests/spec/lexical/SPEC-LEX-015.wj -->
-```windjammer
+<!-- ignore: known divergence Q-002; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn main() {
     /* outer /* inner */ still comment */
     println("ok")

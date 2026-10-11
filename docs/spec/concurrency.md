@@ -9,7 +9,8 @@ Part of the [Windjammer language specification](README.md). Rule IDs are checked
 **SPEC-CONC-001** [PLANNED ADR-0004] `spawn f(x)` and `spawn { ... }` run work in parallel and evaluate to a `Task<T>`; `t.wait()` returns the result (`.await` is accepted sugar). Not implemented: `spawn` is not parsed as a keyword today.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-001.wj -->
-```windjammer
+<!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn work(n: int) -> int { n * 2 }
 fn main() {
     let t = spawn work(4)
@@ -27,7 +28,8 @@ Output:
 **SPEC-CONC-002** [PLANNED ADR-0004] `async f(x)` and `async { ... }` overlap work on the current executor and evaluate to a `Task<T>`. Not implemented as an expression prefix.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-002.wj -->
-```windjammer
+<!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn work(n: int) -> int { n + 1 }
 fn main() {
     let t = async work(4)
@@ -45,7 +47,8 @@ Output:
 **SPEC-CONC-003** [PLANNED ADR-0004] A `spawn` must occur inside a `scope { }` or return a handle that is waited on; an un-waited task is a compile-time error; errors propagate to the enclosing scope. Not implemented: `scope` is not a construct.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-003.wj -->
-```windjammer
+<!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn work(n: int) -> int { n }
 fn main() {
     scope {
@@ -66,7 +69,8 @@ Output:
 **SPEC-CONC-004** [PLANNED ADR-0004] Channels are library values with methods `send(x)` and `recv()`; the `<-` operators are removed. `select { }` stays and is designed in the library first. Not implemented in the interpreter (`std::sync::channel` unsupported).
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-004.wj -->
-```windjammer
+<!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 use std::sync
 fn main() {
     let (tx, rx) = sync::channel()

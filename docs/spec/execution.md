@@ -121,7 +121,8 @@ abc
 **SPEC-EXEC-006** [OPEN Q-023] Programs may recurse at least 10,000 frames deep (plus `main`) on every backend without stack overflow. The interpreter caps the call stack at exactly 10,000 frames including `main`, so this example overflows it.
 
 <!-- example: tests/spec/execution/SPEC-EXEC-006.wj -->
-```windjammer
+<!-- ignore: known divergence Q-023; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn sum_to(n: int) -> int {
     if n == 0 { 0 } else { n + sum_to(n - 1) }
 }

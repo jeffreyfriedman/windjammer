@@ -97,7 +97,8 @@ Output:
 **SPEC-EXPR-005** [OPEN Q-004] `as` binds tighter than prefix `-`?  Recommended: prefix `-` binds tighter, so `-1 as u8` is `(-1) as u8` (Rust, C). Today `as` is a postfix operator, so `-1 as u8` is `-(1 as u8)` and panics.
 
 <!-- example: tests/spec/expressions/SPEC-EXPR-005.wj -->
-```windjammer
+<!-- ignore: known divergence Q-004; the example shows the specified behaviour, which the implementation does not have yet -->
+```windjammer,ignore
 fn main() {
     println("${-1 as u8}")
 }
@@ -332,7 +333,7 @@ Output:
 
 ## loop as expression
 
-**SPEC-EXPR-016** [OPEN Q-005] `loop { ... break v }` is an expression whose value is the `break` operand. Today `loop` is parsed only as a statement.
+**SPEC-EXPR-016** `loop { ... break v }` is an expression whose value is the `break` operand; `break v` takes its value only from an expression on the same line (docs/design/statement-boundaries.md).
 
 <!-- example: tests/spec/expressions/SPEC-EXPR-016.wj -->
 ```windjammer
@@ -349,14 +350,14 @@ Output:
 ```text
 40
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-005](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Assignment is a statement
 
 **SPEC-EXPR-017** Assignment (`=` and `op=`) is a statement, not an expression: it has no value and `a = b = c` is rejected.
 
 <!-- example: tests/spec/expressions/SPEC-EXPR-017.wj -->
-```windjammer
+<!-- should_fail: the rule says this program is rejected -->
+```windjammer,should_fail
 fn main() {
     let mut a = 1
     let mut b = 2

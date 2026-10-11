@@ -1,3 +1,4 @@
+// consumes: tests/spec/**/*.wj
 //! SPEC executable examples: every `tests/spec/**/*.wj` file is one example for one or more rules in
 //! `docs/spec/*.md`, run in-process through the real lexer, parser and interpreter.
 //!
@@ -208,8 +209,10 @@ fn rule_examples_in_chapters_match_the_test_files() {
             let rel = rest.trim_end_matches(" -->");
             let src = std::fs::read_to_string(root.join(rel)).unwrap_or_else(|_| panic!("{rel} missing"));
             let body: Vec<&str> = src.lines().skip_while(|l| l.starts_with("//") && l.contains(": ") && is_header(l)).collect();
+            // the fence follows the marker, optionally after one `<!-- ignore: .. -->` / `<!-- should_fail: .. -->` reason line
+            let start = lines.iter().skip(i + 1).position(|l| l.starts_with("```")).map(|k| i + 1 + k + 1).unwrap_or(lines.len());
             let mut block = Vec::new();
-            for l in lines.iter().skip(i + 2) {
+            for l in lines.iter().skip(start) {
                 if *l == "```" {
                     break;
                 }

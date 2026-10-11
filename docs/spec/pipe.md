@@ -122,7 +122,8 @@ bad 2
 **SPEC-PIPE-007** The right side of `|>` must be a function, call, method stage or closure; anything else (a literal, arithmetic, `if`) is a compile-time error.
 
 <!-- example: tests/spec/pipe/SPEC-PIPE-007.wj -->
-```windjammer
+<!-- should_fail: the rule says this program is rejected -->
+```windjammer,should_fail
 fn main() {
     let r = 1 |> 2
 }

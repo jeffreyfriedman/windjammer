@@ -47,13 +47,13 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EXPR-013 | expressions.md | `expressions/SPEC-EXPR-013.wj` |
 | SPEC-EXPR-014 | expressions.md | `expressions/SPEC-EXPR-014.wj` |
 | SPEC-EXPR-015 | expressions.md | `expressions/SPEC-EXPR-015.wj` |
-| SPEC-EXPR-016 | expressions.md | `expressions/SPEC-EXPR-016.wj` (xfail Q-005) |
+| SPEC-EXPR-016 | expressions.md | `expressions/SPEC-EXPR-016.wj` |
 | SPEC-EXPR-017 | expressions.md | `expressions/SPEC-EXPR-017.wj` |
 | SPEC-EXPR-018 | expressions.md | `expressions/SPEC-EXPR-018.wj` |
 | SPEC-GRAM-001 | grammar.md | untestable |
 | SPEC-GRAM-002 | grammar.md | `grammar/SPEC-GRAM-002.wj` |
 | SPEC-GRAM-003 | grammar.md | `grammar/SPEC-GRAM-003.wj` |
-| SPEC-GRAM-004 | grammar.md | `grammar/SPEC-GRAM-004.wj` |
+| SPEC-GRAM-004 | grammar.md | `grammar/SPEC-GRAM-004.wj` (xfail Q-019) |
 | SPEC-GRAM-005 | grammar.md | `grammar/SPEC-GRAM-005.wj` |
 | SPEC-GRAM-006 | grammar.md | `grammar/SPEC-GRAM-006.wj` |
 | SPEC-GRAM-007 | grammar.md | `grammar/SPEC-GRAM-007.wj` |
@@ -132,7 +132,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-PAT-005 | patterns.md | `patterns/SPEC-PAT-005.wj` |
 | SPEC-PAT-006 | patterns.md | `patterns/SPEC-PAT-006.wj` |
 | SPEC-PAT-007 | patterns.md | `patterns/SPEC-PAT-007.wj` |
-| SPEC-PAT-008 | patterns.md | `patterns/SPEC-PAT-008.wj` (xfail Q-008) |
+| SPEC-PAT-008 | patterns.md | `patterns/SPEC-PAT-008.wj` |
 | SPEC-PAT-009 | patterns.md | `patterns/SPEC-PAT-009.wj` |
 | SPEC-PAT-010 | patterns.md | `patterns/SPEC-PAT-010.wj` |
 | SPEC-PIPE-001 | pipe.md | `pipe/SPEC-PIPE-001.wj` |
