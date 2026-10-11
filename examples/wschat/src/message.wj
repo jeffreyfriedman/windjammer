@@ -3,7 +3,7 @@
 use std::time
 
 // Client → Server messages
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub enum ClientMessage {
     Auth { token: string }
     Join { room: string }
@@ -17,7 +17,7 @@ pub enum ClientMessage {
 }
 
 // Server → Client messages
-@derive(Debug, Serialize, Deserialize)
+@derive(Debug)
 pub enum ServerMessage {
     Welcome { user_id: string, username: string }
     Joined { room: string, users: Vec<UserInfo> }
@@ -55,21 +55,21 @@ pub enum ServerMessage {
     Pong,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)
+@derive(Debug, Clone)
 pub struct UserInfo {
     pub user_id: string,
     pub username: string,
     pub status: PresenceStatus,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)
+@derive(Debug, Clone)
 pub enum PresenceStatus {
     Online,
     Away,
     Offline,
 }
 
-@derive(Debug, Clone, Serialize, Deserialize)
+@derive(Debug, Clone)
 pub struct HistoryMessage {
     pub from: string,
     pub text: string,

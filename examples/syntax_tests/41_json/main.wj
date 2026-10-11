@@ -3,7 +3,7 @@
 
 use std::json
 
-@derive(Serialize, Deserialize, Debug, Clone)
+@derive(Debug, Clone)
 struct User {
     id: int,
     name: string,

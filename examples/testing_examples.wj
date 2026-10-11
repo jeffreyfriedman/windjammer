@@ -369,18 +369,18 @@ fn example_with_setup() {
     );
 }
 
+fn setup() -> TestDatabase {
+    TestDatabase::new()
+}
+
+fn teardown(db: TestDatabase) {
+    db.disconnect();
+}
+
 @test
 fn example_with_setup_teardown() {
-    fn setup() -> TestDatabase {
-        TestDatabase::new()
-    }
-    
-    fn teardown(mut db: TestDatabase) {
-        db.disconnect();
-    }
-    
     // Run test with automatic cleanup
-    with_setup_teardown(setup, teardown, |mut db| {
+    with_setup_teardown(setup, teardown, |db| {
         // Test code
         assert(db.connected);
         assert_eq(db.data.len(), 3);
@@ -473,13 +473,14 @@ fn apply_damage(health: int, damage: int) -> int {
 // 12. DESIGN-BY-CONTRACT - Formal verification
 // ============================================================================
 
+fn divide(a: int, b: int) -> int {
+    // Precondition: divisor must not be zero
+    requires(b != 0, "divisor must be non-zero");
+    a / b
+}
+
 @test
 fn example_preconditions() {
-    fn divide(a: int, b: int) -> int {
-        // Precondition: divisor must not be zero
-        requires(b != 0, "divisor must be non-zero");
-        a / b
-    }
     
     let result = divide(10, 2);
     assert_eq(result, 5);
@@ -488,16 +489,17 @@ fn example_preconditions() {
     // let bad = divide(10, 0);
 }
 
+fn abs(x: int) -> int {
+    let result = if x < 0 { -x } else { x };
+    
+    // Postcondition: result must be non-negative
+    ensures(result >= 0, "result must be non-negative");
+    
+    result
+}
+
 @test
 fn example_postconditions() {
-    fn abs(x: int) -> int {
-        let result = if x < 0 { -x } else { x };
-        
-        // Postcondition: result must be non-negative
-        ensures(result >= 0, "result must be non-negative");
-        
-        result
-    }
     
     assert_eq(abs(-5), 5);
     assert_eq(abs(5), 5);
@@ -527,20 +529,21 @@ fn example_invariants() {
     assert_eq(counter.count, 1);
 }
 
+fn safe_divide(a: int, b: int) -> int {
+    let contract = Contract::new()
+        .requires(b != 0, "divisor must be non-zero")
+        .requires(a >= 0, "dividend must be non-negative")
+        .ensures(true, "result is valid");
+    
+    contract.check_preconditions();
+    let result = a / b;
+    contract.check_postconditions();
+    
+    result
+}
+
 @test
 fn example_contract_builder() {
-    fn safe_divide(a: int, b: int) -> int {
-        let contract = Contract::new()
-            .requires(b != 0, "divisor must be non-zero")
-            .requires(a >= 0, "dividend must be non-negative")
-            .ensures(true, "result is valid");
-        
-        contract.check_preconditions();
-        let result = a / b;
-        contract.check_postconditions();
-        
-        result
-    }
     
     assert_eq(safe_divide(10, 2), 5);
 }

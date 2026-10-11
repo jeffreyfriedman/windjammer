@@ -1,3 +1,4 @@
+// expect: Double of 5 is 10
 fn double(x: int) -> int {
     x * 2
 }
