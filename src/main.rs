@@ -39,6 +39,7 @@ pub mod error_mapper;
 pub mod error_statistics; // Error statistics tracking and analysis
 pub mod error_tui; // Interactive TUI for error navigation
 pub mod formatter; // .wj source formatter (wj fmt)
+pub mod resolve; // identity-based name resolver (shadow mode)
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
