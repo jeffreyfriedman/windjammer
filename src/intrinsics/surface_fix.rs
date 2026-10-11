@@ -729,11 +729,34 @@ impl Rewriter {
     }
 }
 
+fn has_wj_interpolation(inner: &str) -> bool {
+    let b = inner.as_bytes();
+    let mut i = 0;
+    while i + 1 < b.len() {
+        match b[i] {
+            b'\\' => i += 2,
+            b'$' if b[i + 1] == b'$' => i += 2,
+            b'$' if b[i + 1] == b'{' => return true,
+            _ => i += 1,
+        }
+    }
+    false
+}
+
 fn inner_has_top_level_semicolon(inner: &str) -> bool {
     split_top_level(inner, b";").len() > 1
 }
 
 fn convert_template_args(tmpl_inner: &str, rest: &[String]) -> Result<String, String> {
+    // A literal that already uses Windjammer `${..}` interpolation is lexed as an interpolated
+    // string, not a Rust format template: keep it verbatim (the macro wrapper just goes away).
+    if has_wj_interpolation(tmpl_inner) {
+        return if rest.is_empty() {
+            Ok(tmpl_inner.to_string())
+        } else {
+            Err("mixes `${..}` interpolation with `{}` arguments".to_string())
+        };
+    }
     let mut positional = Vec::new();
     let mut named = Vec::new();
     for a in rest {
@@ -843,6 +866,14 @@ mod tests {
         assert_eq!(fx(r#"assert!(a, "m {}", b)"#), r#"assert(a, "m ${b}")"#);
         assert_eq!(fx(r#"assert_eq!(a, b, "m {}", c)"#), r#"assert_eq(a, b, "m ${c}")"#);
         assert_eq!(fx("assert_ne!(a, b)"), "assert_ne(a, b)");
+    }
+
+    #[test]
+    fn already_interpolated_strings_are_kept() {
+        assert_eq!(fx(r#"println!("Hello, ${name}!")"#), r#"println("Hello, ${name}!")"#);
+        let s = r#"println!("a ${x} {}", y)"#;
+        assert_eq!(fx(s), s);
+        assert_eq!(fx(r#"println("a ${x}")"#), r#"println("a ${x}")"#);
     }
 
     #[test]
