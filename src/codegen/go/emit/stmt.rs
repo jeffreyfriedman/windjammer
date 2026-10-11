@@ -183,6 +183,9 @@ impl<'m> Go<'m> {
             None => v,
             Some(op) => self.compound(op, target, &t, &v, value)?,
         };
+        if t == rhs {
+            return Ok(()); // `x = x` (go vet rejects self-assignment; it is a no-op)
+        }
         self.line(&format!("{t} = {rhs}"));
         Ok(())
     }

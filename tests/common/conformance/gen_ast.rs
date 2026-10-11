@@ -124,14 +124,14 @@ fn cmp_str(c: &CmpOp) -> &'static str {
     }
 }
 
-pub fn print_stmts(stmts: &[Stmt], depth: usize, n: &Names, out: &mut String) {
+pub fn print_stmts(stmts: &[Stmt], depth: usize, lp: usize, n: &Names, out: &mut String) {
     let pad = "    ".repeat(depth + 1);
     for s in stmts {
-        print_stmt(s, depth, &pad, n, out);
+        print_stmt(s, depth, lp, &pad, n, out);
     }
 }
 
-fn print_stmt(s: &Stmt, depth: usize, pad: &str, n: &Names, out: &mut String) {
+fn print_stmt(s: &Stmt, depth: usize, lp: usize, pad: &str, n: &Names, out: &mut String) {
     let p = &n.prefix;
     match s {
         Stmt::Assign(v, e) => writeln!(out, "{pad}{} = {}", n.var(*v), print_expr(e, n)).unwrap(),
@@ -145,21 +145,21 @@ fn print_stmt(s: &Stmt, depth: usize, pad: &str, n: &Names, out: &mut String) {
         Stmt::Check(e) => writeln!(out, "{pad}println(\"{{}}\", {})", print_expr(e, n)).unwrap(),
         Stmt::Block(b) => {
             writeln!(out, "{pad}if true {{").unwrap();
-            print_stmts(b, depth + 1, n, out);
+            print_stmts(b, depth + 1, lp, n, out);
             writeln!(out, "{pad}}}").unwrap();
         }
         Stmt::If(c, a, b, t, e) => {
             writeln!(out, "{pad}if {} {} {} {{", print_expr(a, n), cmp_str(c), print_expr(b, n)).unwrap();
-            print_stmts(t, depth + 1, n, out);
+            print_stmts(t, depth + 1, lp, n, out);
             writeln!(out, "{pad}}} else {{").unwrap();
-            print_stmts(e, depth + 1, n, out);
+            print_stmts(e, depth + 1, lp, n, out);
             writeln!(out, "{pad}}}").unwrap();
         }
         Stmt::Repeat(k, body) => {
-            writeln!(out, "{pad}let mut {p}c{depth} = 0i64").unwrap();
-            writeln!(out, "{pad}while {p}c{depth} < {k}i64 {{").unwrap();
-            print_stmts(body, depth + 1, n, out);
-            writeln!(out, "{pad}    {p}c{depth} += 1i64").unwrap();
+            writeln!(out, "{pad}let mut {p}c{lp} = 0i64").unwrap();
+            writeln!(out, "{pad}while {p}c{lp} < {k}i64 {{").unwrap();
+            print_stmts(body, depth + 1, lp + 1, n, out);
+            writeln!(out, "{pad}    {p}c{lp} += 1i64").unwrap();
             writeln!(out, "{pad}}}").unwrap();
         }
     }
@@ -177,7 +177,7 @@ pub fn print_case(id: usize, c: &Case, n: &Names) -> String {
     writeln!(out, "    let mut {p}s0 = S {{ a: 1i64, b: 2i64 }}").unwrap();
     writeln!(out, "    let mut {p}s1 = S {{ a: 3i64, b: 4i64 }}").unwrap();
     writeln!(out, "    let mut {p}m: HashMap<i64, i64> = HashMap::new()").unwrap();
-    print_stmts(&c.stmts, 0, n, &mut out);
+    print_stmts(&c.stmts, 0, 0, n, &mut out);
     out.push_str("}\n");
     out
 }
@@ -250,7 +250,7 @@ fn eval_expr(e: &Expr, st: &State) -> i64 {
     }
 }
 
-fn eval_stmts(stmts: &[Stmt], depth: usize, st: &mut State, trace: &mut Vec<String>) {
+fn eval_stmts(stmts: &[Stmt], lp: usize, st: &mut State, trace: &mut Vec<String>) {
     for s in stmts {
         match s {
             Stmt::Assign(v, e) => st.vars[*v] = eval_expr(e, st),
@@ -272,7 +272,7 @@ fn eval_stmts(stmts: &[Stmt], depth: usize, st: &mut State, trace: &mut Vec<Stri
                 st.tmp.insert(*t, v);
             }
             Stmt::Check(e) => trace.push(eval_expr(e, st).to_string()),
-            Stmt::Block(b) => eval_stmts(b, depth + 1, st, trace),
+            Stmt::Block(b) => eval_stmts(b, lp, st, trace),
             Stmt::If(c, a, b, t, e) => {
                 let (x, y) = (eval_expr(a, st), eval_expr(b, st));
                 let hit = match c {
@@ -282,15 +282,15 @@ fn eval_stmts(stmts: &[Stmt], depth: usize, st: &mut State, trace: &mut Vec<Stri
                     CmpOp::Ne => x != y,
                     CmpOp::Gt => x > y,
                 };
-                eval_stmts(if hit { t } else { e }, depth + 1, st, trace);
+                eval_stmts(if hit { t } else { e }, lp, st, trace);
             }
             Stmt::Repeat(k, body) => {
-                while st.ctr.len() <= depth {
+                while st.ctr.len() <= lp {
                     st.ctr.push(0);
                 }
                 for i in 0..*k as i64 {
-                    st.ctr[depth] = i;
-                    eval_stmts(body, depth + 1, st, trace);
+                    st.ctr[lp] = i;
+                    eval_stmts(body, lp + 1, st, trace);
                 }
             }
         }

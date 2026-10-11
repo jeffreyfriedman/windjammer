@@ -1,0 +1,13 @@
+// expect: 1 99
+// expect: 1 2 3
+struct Holder {
+    items: Vec<i64>,
+}
+
+fn main() {
+    let a = Holder { items: vec![1, 2, 3] }
+    let mut b = a.clone()
+    b.items[0] = 99
+    println("{} {}", a.items[0], b.items[0])
+    println("{} {} {}", a.items[0], a.items[1], a.items[2])
+}
