@@ -8,35 +8,53 @@
 //! detection and deduplication.
 
 mod ast;
+mod block_syntax;
 mod codegen;
 mod diagnostics;
 mod expression_type_checking;
+mod includes;
 mod lexer;
 pub mod parser;
 mod shader_type_rules;
 mod statement_type_checking;
 mod type_checker;
+pub mod wgsl_printer;
 
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub use ast::*;
 pub use parser::parse_wjsl;
 pub use parser::parse_wjsl_with_filename;
+pub use diagnostics::ShaderDiagnostics;
+pub use includes::resolve_includes;
 pub use type_checker::type_check_wjsl;
+pub use block_syntax::{
+    check_block_shader, check_uniform_match, compile_legacy_shader, emit_block_shader,
+    parse_block_shader, BlockShader,
+};
 
-/// Transpile WJSL source to WGSL
-pub fn transpile_wjsl(source: &str) -> Result<String, anyhow::Error> {
-    transpile_wjsl_inner(source)
+/// Parse WJSL source into an AST (stage 1 of the pipeline).
+pub fn parse(source: &str) -> anyhow::Result<ShaderModule> {
+    parse_wjsl(source).map_err(|e| ShaderDiagnostics::new(source).enrich(e))
 }
 
-fn transpile_wjsl_inner(source: &str) -> Result<String, anyhow::Error> {
-    let ast = parse_wjsl(source).map_err(|e| diagnostics::enrich_shader_error(e, source))?;
-    type_checker::check(&ast, source).map_err(|e| diagnostics::enrich_shader_error(e, source))?;
-    let wgsl = codegen::WjslCodegen::new(ast)
+/// Type-check a parsed module (stage 2). `source` is used for diagnostics only.
+pub fn check(module: &ShaderModule, source: &str) -> anyhow::Result<()> {
+    type_checker::check(module, source).map_err(|e| ShaderDiagnostics::new(source).enrich(e))
+}
+
+/// Print a checked module as WGSL (stage 3, the single WGSL emitter).
+pub fn emit_wgsl(module: ShaderModule, source: &str) -> anyhow::Result<String> {
+    codegen::WjslCodegen::new(module)
         .generate()
-        .map_err(|e| diagnostics::enrich_shader_error(e, source))?;
-    Ok(wgsl)
+        .map_err(|e| ShaderDiagnostics::new(source).enrich(e))
+}
+
+/// Transpile WJSL source to WGSL: `parse` -> `check` -> `emit_wgsl`.
+pub fn transpile_wjsl(source: &str) -> Result<String, anyhow::Error> {
+    let ast = parse(source)?;
+    check(&ast, source)?;
+    emit_wgsl(ast, source)
 }
 
 /// Transpile WJSL source to WGSL, resolving `#include` directives relative to `base_dir`.
@@ -45,105 +63,8 @@ pub fn transpile_wjsl_with_includes(
     base_dir: &Path,
 ) -> Result<String, anyhow::Error> {
     let resolved = resolve_includes(source, base_dir, &mut Vec::new())
-        .map_err(|e| diagnostics::enrich_shader_error(e, source))?;
+        .map_err(|e| ShaderDiagnostics::new(source).enrich(e))?;
     transpile_wjsl(&resolved)
-}
-
-/// Resolve all `#include "path"` directives by inlining file contents.
-///
-/// - `include_stack` tracks the chain of files being processed for circular dependency detection.
-/// - Files already included are skipped (deduplication via canonical path tracking).
-pub fn resolve_includes(
-    source: &str,
-    base_dir: &Path,
-    include_stack: &mut Vec<PathBuf>,
-) -> Result<String, anyhow::Error> {
-    let mut seen = HashSet::new();
-    resolve_includes_inner(source, base_dir, include_stack, &mut seen)
-}
-
-fn resolve_includes_inner(
-    source: &str,
-    base_dir: &Path,
-    include_stack: &mut Vec<PathBuf>,
-    seen: &mut HashSet<PathBuf>,
-) -> Result<String, anyhow::Error> {
-    let mut output = String::with_capacity(source.len());
-
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(path_str) = parse_include_directive(trimmed) {
-            let include_path = base_dir.join(path_str);
-            let canonical = include_path
-                .canonicalize()
-                .unwrap_or_else(|_| include_path.clone());
-
-            // Circular dependency detection
-            if include_stack.contains(&canonical) {
-                let chain: Vec<String> = include_stack
-                    .iter()
-                    .map(|p| p.display().to_string())
-                    .collect();
-                return Err(anyhow::anyhow!(
-                    "Circular #include detected: {} -> {} (chain: {})",
-                    include_stack
-                        .last()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default(),
-                    canonical.display(),
-                    chain.join(" -> ")
-                ));
-            }
-
-            // Deduplication: skip if already included
-            if seen.contains(&canonical) {
-                continue;
-            }
-
-            // Read the included file
-            let content = std::fs::read_to_string(&include_path).map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to read #include \"{}\": {} (resolved to: {})",
-                    path_str,
-                    e,
-                    include_path.display()
-                )
-            })?;
-
-            seen.insert(canonical.clone());
-            include_stack.push(canonical.clone());
-
-            // Determine base directory for nested includes
-            let nested_base = include_path.parent().unwrap_or(base_dir);
-            let resolved = resolve_includes_inner(&content, nested_base, include_stack, seen)?;
-
-            include_stack.pop();
-
-            output.push_str(&resolved);
-            output.push('\n');
-        } else {
-            output.push_str(line);
-            output.push('\n');
-        }
-    }
-
-    Ok(output)
-}
-
-/// Parse a `use "path"` or `#include "path"` directive, returning the path if matched.
-/// `use` is the preferred Windjammer-native syntax; `#include` is supported for compatibility.
-fn parse_include_directive(line: &str) -> Option<&str> {
-    let rest = if let Some(r) = line.strip_prefix("use ") {
-        r
-    } else {
-        line.strip_prefix("#include")?
-    };
-    let rest = rest.trim();
-    if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
-        Some(&rest[1..rest.len() - 1])
-    } else {
-        None
-    }
 }
 
 #[cfg(test)]
