@@ -358,6 +358,11 @@ fn normalize_stderr(s: &str) -> String {
         if line.trim().is_empty() {
             continue;
         }
+        // build-time lint diagnostics (`wj run --interpret` reports what `wj build` would) are not
+        // program output; the compiled binary's stderr never contains them
+        if line.starts_with("warning: ") || line.starts_with("  --> ") || line.starts_with("  = ") {
+            continue;
+        }
         if line.starts_with("thread 'main'") {
             out.push("PANIC".to_string());
         } else if line.starts_with('[') && line.contains("] ") {
