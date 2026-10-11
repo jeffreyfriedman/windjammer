@@ -25,7 +25,7 @@ fn main() {
     let p3 = "other"
     println("[strings] eq: ${p1 == p2}, ${p1 != p3}")
 
-    let mut parts = vec!["a", "b", "c"]
+    let mut parts = ["a", "b", "c"]
     let mut result = ""
     for part in parts {
         if result.len() > 0 {

@@ -124,7 +124,7 @@ fn test_result_err() {
 }
 
 fn test_result_match() {
-    let results = vec!["100", "xyz"]
+    let results = ["100", "xyz"]
     for s in results {
         match parse_int(s) {
             ParseResult::Ok(v) => println("[result_match] Ok(${v}) -> success: ${v}"),

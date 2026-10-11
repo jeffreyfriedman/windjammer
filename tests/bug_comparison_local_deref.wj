@@ -14,5 +14,5 @@ fn check_threshold(threshold: i32) -> bool {
 
 fn main() {
     let result = check_threshold(30);
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }

@@ -55,7 +55,7 @@ fn sum_items(items: Vec<int>) -> int {
 }
 
 fn test_fn_read() {
-    let items = vec![1, 2, 3]
+    let items = [1, 2, 3]
     println("[mut_fn_read] items before: len=${items.len()}")
     let total = sum_items(items)
     println("[mut_fn_read] total=${total}")
@@ -68,7 +68,7 @@ fn add_item(items: Vec<int>, item: int) {
 }
 
 fn test_fn_push() {
-    let mut items = vec![10, 20]
+    let mut items = [10, 20]
     println("[mut_fn_push] items before: len=${items.len()}")
     add_item(items, 30)
     println("[mut_fn_push] items after: len=${items.len()}")

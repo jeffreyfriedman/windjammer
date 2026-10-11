@@ -147,7 +147,7 @@ fn generate_implicit_imports(&self, target: &CompilationTarget) -> String {
 // main.wj
 @export
 fn greet(name: string) -> string {
-    format!("Hello, {}!", name)
+    "Hello, ${name}!"
 }
 ```
 

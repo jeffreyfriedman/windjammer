@@ -54,7 +54,7 @@ fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Matc
     let chunk_size = (files.len() + num_threads - 1) / num_threads
     
     // Split files into chunks
-    let mut chunks = vec![]
+    let mut chunks = []
     for i in 0..num_threads {
         let start = i * chunk_size
         let end = std::cmp::min(start + chunk_size, files.len())
@@ -66,7 +66,7 @@ fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Matc
     
     // Spawn threads
     let (tx, rx) = sync::channel()
-    let mut handles = vec![]
+    let mut handles = []
     
     for chunk in chunks {
         let tx = tx.clone();
@@ -94,7 +94,7 @@ fn search_files_parallel(files: Vec<string>, config: &Config) -> Result<Vec<Matc
     drop(tx)
     
     // Collect results
-    let mut all_matches = vec![]
+    let mut all_matches = []
     while let Ok(m) = rx.recv() {
         all_matches.push(m)
         
@@ -122,7 +122,7 @@ fn search_file(path: string, config: &Config) -> Result<Vec<Match>, string> {
     let all_lines: Vec<string> = contents.lines().map(|s| s.to_string()).collect()
     
     // Search line by line
-    let mut matches = vec![]
+    let mut matches = []
     
     for (line_num, line) in all_lines.iter().enumerate() {
         match matcher::find_match(line, (line_num + 1) as int, &path, config) {
@@ -168,7 +168,7 @@ fn add_context(
     
     let before_lines: Vec<string> = match all_lines.get(start_before..line_idx) {
         Some(slice) => slice.iter().map(|s| s.clone()).collect(),
-        None => vec![],
+        None => [],
     }
     match_obj.context_before = before_lines
     
@@ -178,7 +178,7 @@ fn add_context(
     
     let after_lines: Vec<string> = match all_lines.get(start_after..end_after) {
         Some(slice) => slice.iter().map(|s| s.clone()).collect(),
-        None => vec![],
+        None => [],
     }
     match_obj.context_after = after_lines
     

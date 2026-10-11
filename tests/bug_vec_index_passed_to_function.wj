@@ -29,20 +29,20 @@ fn recursive_process(nodes: Vec<Node>, idx: i32) -> i32 {
 }
 
 pub fn test_vec_index_then_call() {
-    let nodes = vec![
+    let nodes = [
         Node { value: 10 },
         Node { value: 20 },
         Node { value: 30 },
     ]
     
     let result = recursive_process(nodes, 0)
-    assert_eq!(result, 120)  // (10*2) + (20*2) + (30*2) = 120
+    assert_eq(result, 120)  // (10*2) + (20*2) + (30*2) = 120
 }
 
 // Simpler version
 pub fn test_vec_index_direct_call() {
-    let nodes = vec![Node { value: 5 }]
+    let nodes = [Node { value: 5 }]
     let node = nodes[0]
     let result = process_node(node)
-    assert_eq!(result, 10)
+    assert_eq(result, 10)
 }

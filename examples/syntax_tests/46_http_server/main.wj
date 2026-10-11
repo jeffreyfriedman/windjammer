@@ -10,7 +10,7 @@ fn handle_index(req: Request) -> ServerResponse {
 
 fn handle_hello(req: Request) -> ServerResponse {
     match req.query("name") {
-        Some(name) => ServerResponse::ok(format!("Hello, {}!\n", name)),
+        Some(name) => ServerResponse::ok("Hello, ${name}!\n"),
         None => ServerResponse::ok("Hello, World!\n")
     }
 }
@@ -19,11 +19,7 @@ fn handle_echo(req: Request) -> ServerResponse {
     let method = req.method()
     let path = req.path()
     
-    let response_body = format!(
-        "Echo:\n  Method: {}\n  Path: {}\n",
-        method,
-        path
-    )
+    let response_body = "Echo:\n  Method: ${method}\n  Path: ${path}\n"
     
     ServerResponse::ok(response_body)
 }
@@ -58,10 +54,10 @@ fn handle_not_found(req: Request) -> ServerResponse {
 
 @async
 fn main() {
-    println!("=== HTTP Server Demo ===")
-    println!()
+    println("=== HTTP Server Demo ===")
+    println()
     
-    println!("Setting up routes...")
+    println("Setting up routes...")
     
     let router = Router::new()
         .get("/", handle_index)
@@ -72,31 +68,31 @@ fn main() {
         .get("/status/:code", handle_status)
         .any("/*", handle_not_found)
     
-    println!("Server ready!")
-    println!()
-    println!("Try these endpoints:")
-    println!("  GET  http://localhost:3000/")
-    println!("  GET  http://localhost:3000/hello")
-    println!("  GET  http://localhost:3000/hello?name=Alice")
-    println!("  GET  http://localhost:3000/echo")
-    println!("  POST http://localhost:3000/echo")
-    println!("  GET  http://localhost:3000/json")
-    println!("  GET  http://localhost:3000/status/200")
-    println!("  GET  http://localhost:3000/status/404")
-    println!()
-    println!("Starting server on http://0.0.0.0:3000...")
-    println!()
+    println("Server ready!")
+    println()
+    println("Try these endpoints:")
+    println("  GET  http://localhost:3000/")
+    println("  GET  http://localhost:3000/hello")
+    println("  GET  http://localhost:3000/hello?name=Alice")
+    println("  GET  http://localhost:3000/echo")
+    println("  POST http://localhost:3000/echo")
+    println("  GET  http://localhost:3000/json")
+    println("  GET  http://localhost:3000/status/200")
+    println("  GET  http://localhost:3000/status/404")
+    println()
+    println("Starting server on http://0.0.0.0:3000...")
+    println()
     
     match http.serve("0.0.0.0:3000", router).await {
-        Ok(_) => println!("Server stopped"),
-        Err(e) => println!("Server error: {}", e)
+        Ok(_) => println("Server stopped"),
+        Err(e) => println("Server error: ${e}")
     }
     
-    println!()
-    println!("✨ HTTP Server with Windjammer!")
-    println!("   ✅ Using http abstraction (not axum directly)")
-    println!("   ✅ Dependencies added automatically")
-    println!("   ✅ Clean, Windjammer-native API")
-    println!("   ✅ Client + Server in one module!")
+    println()
+    println("✨ HTTP Server with Windjammer!")
+    println("   ✅ Using http abstraction (not axum directly)")
+    println("   ✅ Dependencies added automatically")
+    println("   ✅ Clean, Windjammer-native API")
+    println("   ✅ Client + Server in one module!")
 }
 

@@ -316,6 +316,8 @@ pub struct CodeGenerator<'ast> {
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
     pub(crate) in_struct_literal_field: bool,
+    /// ADR-0014: the array literal being generated is a growable list (`let x = [..]`).
+    pub(crate) array_literal_as_list: bool,
     pub(crate) in_owned_value_context: bool,
     pub(crate) in_unsafe_block: bool,
     // STRUCT LITERAL CONTEXT: Track which struct we're currently constructing
@@ -781,6 +783,7 @@ impl<'ast> CodeGenerator<'ast> {
             non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
             in_struct_literal_field: false,
+            array_literal_as_list: false,
             in_owned_value_context: false,
             in_unsafe_block: false,
             current_struct_literal_name: None,

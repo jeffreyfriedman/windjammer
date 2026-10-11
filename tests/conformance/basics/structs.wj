@@ -19,7 +19,7 @@ struct Point {
 
 impl Point {
     fn describe(self) {
-        println("[point] x={}, y={}", self.x, self.y)
+        println("[point] x=${self.x}, y=${self.y}")
     }
 }
 
@@ -42,11 +42,11 @@ fn main() {
     p.describe()
 
     let mut c = Counter { value: 0 }
-    println("[counter] {}", c.get())
+    println("[counter] ${c.get()}")
     c.increment()
-    println("[counter] {}", c.get())
+    println("[counter] ${c.get()}")
     c.increment()
-    println("[counter] {}", c.get())
+    println("[counter] ${c.get()}")
 
     println("PASSED")
 }

@@ -56,7 +56,7 @@ pub fn main() -> i32 {
         
         // Print status every 60 frames
         if frame_count % 60 == 0 {
-            println("Rendered {} frames", frame_count)
+            println("Rendered ${frame_count} frames")
         }
     }
     

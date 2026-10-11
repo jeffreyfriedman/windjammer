@@ -305,6 +305,7 @@ impl Parser {
             items.push(self.parse_item()?);
         }
 
+        self.emit_surface_syntax_warnings();
         Ok(Program { items })
     }
 

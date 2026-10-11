@@ -2,19 +2,19 @@
 use ./utils
 
 fn main() {
-    println!("Testing user-defined modules!")
+    println("Testing user-defined modules!")
     
     // Use functions from local module
     let x = 5
     let doubled = utils.double(x)
     let tripled = utils.triple(x)
     
-    println!("{} doubled is {}", x, doubled)
-    println!("{} tripled is {}", x, tripled)
+    println("${x} doubled is ${doubled}")
+    println("${x} tripled is ${tripled}")
     
     // Test string function
     let message = utils.greet("Windjammer")
-    println!("{}", message)
+    println("${message}")
     
-    println!("User modules work! ✓")
+    println("User modules work! ✓")
 }

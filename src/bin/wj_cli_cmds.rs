@@ -126,6 +126,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Fmt { check, rust, paths } => {
             windjammer::cli::fmt::execute(check, &paths, rust)?;
         }
+        Commands::Fix { path, check, docs } => {
+            windjammer::cli::fix::execute(&path, check, docs)?;
+        }
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }

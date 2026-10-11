@@ -17,27 +17,27 @@ impl DataSource {
 fn main() {
     test_method_call_auto_clone()
     test_chained_method_calls()
-    println!("✓ All method call auto-clone tests passed!")
+    println("✓ All method call auto-clone tests passed!")
 }
 
 fn test_method_call_auto_clone() {
     let source = DataSource {
-        items: vec!["apple", "banana"],
+        items: ["apple", "banana"],
     }
     
     // Move method result to function (should auto-clone)
     let processed = process_items(source.get_items())
     
     // source.get_items() should still be callable
-    assert!(source.get_items().len() == 2, "items should still have 2 elements")
-    assert!(processed == 2, "processed count should be 2")
+    assert(source.get_items().len() == 2, "items should still have 2 elements")
+    assert(processed == 2, "processed count should be 2")
     
-    println!("✓ Method call auto-clone works")
+    println("✓ Method call auto-clone works")
 }
 
 fn test_chained_method_calls() {
     let source = DataSource {
-        items: vec!["a", "b", "c"],
+        items: ["a", "b", "c"],
     }
     
     // Use method result multiple times
@@ -45,11 +45,11 @@ fn test_chained_method_calls() {
     let second = process_items(source.get_items())
     let third = process_items(source.get_items())
     
-    assert!(first == 3, "first should be 3")
-    assert!(second == 3, "second should be 3")
-    assert!(third == 3, "third should be 3")
+    assert(first == 3, "first should be 3")
+    assert(second == 3, "second should be 3")
+    assert(third == 3, "third should be 3")
     
-    println!("✓ Chained method calls auto-clone works")
+    println("✓ Chained method calls auto-clone works")
 }
 
 fn process_items(items: Vec<string>) -> int {
@@ -58,7 +58,7 @@ fn process_items(items: Vec<string>) -> int {
 
 fn assert(condition: bool, message: string) {
     if !condition {
-        panic!("{}", message)
+        panic("${message}")
     }
 }
 

@@ -19,12 +19,12 @@ fn main() {
         i = i + 1
     }
     
-    println!("Created Vec with {} elements", data.len())
+    println("Created Vec with ${data.len()} elements")
     
     // Transfer ownership to count_and_consume
     // The defer drop optimization should make this return almost instantly
     let count = count_and_consume(data)
     
-    println!("Count: {}", count)
-    println!("Function returned instantly! (drop happening in background)")
+    println("Count: ${count}")
+    println("Function returned instantly! (drop happening in background)")
 }

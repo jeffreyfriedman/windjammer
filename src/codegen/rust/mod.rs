@@ -61,6 +61,7 @@ pub mod items;
 pub mod let_statement_generation;
 pub mod literals;
 pub mod loop_statement_generation;
+pub mod intrinsic_lowering;
 pub mod macro_and_string_generation;
 pub mod macro_conversion;
 mod match_binding_type_inference;

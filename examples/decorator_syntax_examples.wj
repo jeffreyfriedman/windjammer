@@ -41,7 +41,7 @@ fn benchmark_fibonacci() {
 
 @bench
 fn benchmark_sorting() {
-    let mut data = vec![5, 2, 8, 1, 9];
+    let mut data = [5, 2, 8, 1, 9];
     data.sort();
 }
 
@@ -77,8 +77,8 @@ fn test_with_timeout_and_bench() {
 @timeout(10000)
 fn test_property_with_timeout(x: int, y: int) {
     // Property test with timeout protection
-    assert!(x + y >= x);
-    assert!(x + y >= y);
+    assert(x + y >= x);
+    assert(x + y >= y);
 }
 
 // ============================================================================
@@ -206,7 +206,7 @@ fn fibonacci(n: int) -> int {
 
 fn render_frame() {
     // Simulate rendering
-    let mut pixels = vec![0; 1920 * 1080];
+    let mut pixels = [0; 1920 * 1080];
     for i in 0..pixels.len() {
         pixels[i] = i % 256;
     }

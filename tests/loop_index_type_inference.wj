@@ -30,6 +30,6 @@ fn main() {
     frames.push(Keyframe { time: 2.0, value: 20.0 })
     
     let (before, after) = find_keyframe_range(frames, 1.5)
-    println("Range: {} to {}", before, after)
+    println("Range: ${before} to ${after}")
     println("✅ Loop index type inference works!")
 }

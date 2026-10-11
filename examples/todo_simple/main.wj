@@ -28,7 +28,7 @@ struct TodoState {
 
 impl TodoState {
     fn new() -> TodoState {
-        let initial_todos = vec![
+        let initial_todos = [
             Todo::new(1, "Learn Windjammer"),
             Todo::new(2, "Build amazing UIs"),
             Todo::new(3, "Deploy to production"),
@@ -108,7 +108,7 @@ fn render_todo_app(state: TodoState) -> Container {
                     .gap("20px")
                     .child(Text::new("Click checkboxes to toggle completion!"))
                     .child(list)
-                    .child(Text::new(format!("{} items left", active_count))
+                    .child(Text::new("${active_count} items left")
                         .size(TextSize::Small))
             )
         )
@@ -116,7 +116,7 @@ fn render_todo_app(state: TodoState) -> Container {
 
 @export
 fn start() {
-    println!("📝 Starting Simple Todo App")
+    println("📝 Starting Simple Todo App")
     
     let state = TodoState::new()
     

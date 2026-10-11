@@ -7,7 +7,7 @@ fn main() {
     
     // Test 2: Undefined field
     let point = Point { x: 1, y: 2 }
-    println!("{}", point.z)  // Error: no field `z`
+    println("${point.z}")  // Error: no field `z`
 }
 
 struct Point {

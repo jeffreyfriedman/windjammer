@@ -30,14 +30,14 @@ The compiler cannot find a variable, function, or constant with this name in the
 
 ```windjammer
 let count = 10
-println!("{}", cont)  // Typo: 'cont' instead of 'count'
+println("${cont}")  // Typo: 'cont' instead of 'count'
 ```
 
 ✅ Correct:
 
 ```windjammer
 let count = 10
-println!("{}", count)  // Fixed!
+println("${count}")  // Fixed!
 ```
 
 Fixed the typo in the variable name
@@ -47,14 +47,14 @@ Fixed the typo in the variable name
 ❌ Wrong:
 
 ```windjammer
-println!("{}", total)  // 'total' not declared
+println("${total}")  // 'total' not declared
 ```
 
 ✅ Correct:
 
 ```windjammer
 let total = 100
-println!("{}", total)  // Declared first!
+println("${total}")  // Declared first!
 ```
 
 Declared the variable before using it

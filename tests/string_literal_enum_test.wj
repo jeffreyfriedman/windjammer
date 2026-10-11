@@ -17,5 +17,5 @@ fn main() {
         text: "Hello world",
     }
     
-    println!("Message from NPC")
+    println("Message from NPC")
 }

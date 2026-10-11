@@ -48,13 +48,13 @@ pub fn main() {
     // Initialize graphics
     let result = wgpu_init()
     if result != 0 {
-        println("❌ Failed to initialize wgpu: {}", result)
+        println("❌ Failed to initialize wgpu: ${result}")
         return
     }
     
     let window = wgpu_create_window(800, 600, "Windjammer Rendering Test")
     if window != 0 {
-        println("❌ Failed to create window: {}", window)
+        println("❌ Failed to create window: ${window}")
         return
     }
     
@@ -81,13 +81,13 @@ pub fn main() {
         
         // Print status every 60 frames
         if frame % 60 == 0 {
-            println("Frame {} - Hue: {}", frame, hue)
+            println("Frame ${frame} - Hue: ${hue}")
         }
     }
     
     println("")
     println("✅ Render loop complete!")
-    println("   Frames rendered: {}", frame)
+    println("   Frames rendered: ${frame}")
     
     wgpu_shutdown()
     

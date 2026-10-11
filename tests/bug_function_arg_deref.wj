@@ -14,5 +14,5 @@ fn calculate(x: i32, y: i32) -> i32 {
 
 fn main() {
     let result = calculate(10, 20);
-    println!("Result: {}", result);
+    println("Result: ${result}");
 }

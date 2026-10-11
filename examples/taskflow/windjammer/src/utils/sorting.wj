@@ -13,7 +13,7 @@ pub struct SortField {
 
 impl SortParams {
     pub fn from_query(sort_param: Option<string>) -> SortParams {
-        let mut fields = vec![]
+        let mut fields = []
         
         if let Some(sort_str) = sort_param {
             // Parse sort parameter: "field1,-field2,field3"
@@ -47,18 +47,18 @@ impl SortParams {
     }
     
     pub fn to_sql_order_by(self) -> string {
-        let allowed_fields = vec![
+        let allowed_fields = [
             "id", "title", "status", "priority", 
             "created_at", "updated_at", "due_date"
         ]
         
-        let mut order_clauses = vec![]
+        let mut order_clauses = []
         
         for field in self.fields {
             // Validate field name to prevent SQL injection
             if allowed_fields.contains(&field.name.as_str()) {
                 let direction = if field.descending { "DESC" } else { "ASC" }
-                order_clauses.push(format!("{} {}", field.name, direction))
+                order_clauses.push("${field.name} ${direction}")
             }
         }
         
@@ -70,14 +70,14 @@ impl SortParams {
     }
     
     pub fn validate(self) -> Result<SortParams, Error> {
-        let allowed_fields = vec![
+        let allowed_fields = [
             "id", "title", "status", "priority", 
             "created_at", "updated_at", "due_date"
         ]
         
         for field in &self.fields {
             if !allowed_fields.contains(&field.name.as_str()) {
-                return Err(format!("Invalid sort field: {}", field.name))
+                return Err("Invalid sort field: ${field.name}")
             }
         }
         

@@ -6,6 +6,6 @@ fn increment(x: int) {
 fn main() {
     let mut counter = 0
     increment(counter)
-    println!("Counter: {}", counter)
+    println("Counter: ${counter}")
 }
 

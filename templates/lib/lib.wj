@@ -36,19 +36,19 @@ impl Point {
 @test
 fn test_hello() {
     let result = hello("World")
-    assert_eq!(result, "Hello, World!")
+    assert_eq(result, "Hello, World!")
 }
 
 @test
 fn test_add() {
-    assert_eq!(add(2, 3), 5)
-    assert_eq!(add(-1, 1), 0)
+    assert_eq(add(2, 3), 5)
+    assert_eq(add(-1, 1), 0)
 }
 
 @test
 fn test_multiply() {
-    assert_eq!(multiply(3, 4), 12)
-    assert_eq!(multiply(0, 100), 0)
+    assert_eq(multiply(3, 4), 12)
+    assert_eq(multiply(0, 100), 0)
 }
 
 @test
@@ -56,6 +56,6 @@ fn test_point_distance() {
     let p1 = Point::new(0.0, 0.0)
     let p2 = Point::new(3.0, 4.0)
     let dist = p1.distance(p2)
-    assert_eq!(dist, 5.0)
+    assert_eq(dist, 5.0)
 }
 

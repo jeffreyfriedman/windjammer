@@ -18,7 +18,7 @@ fn sum_nested_ids(stacks: Vec<Stack>) -> int {
 }
 
 pub fn test_fold_nested_ids_over_borrowed_stacks() {
-    let stacks = vec![
+    let stacks = [
         Stack {
             item: Item { id: 10 },
             quantity: 1,

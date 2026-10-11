@@ -18,42 +18,42 @@ fn main() {
     test_field_then_method()
     test_method_then_index()
     test_all_combined()
-    println!("✓ All combined pattern auto-clone tests passed!")
+    println("✓ All combined pattern auto-clone tests passed!")
 }
 
 fn test_field_then_method() {
     let repo = Repository {
-        files: vec!["a.txt", "b.txt"],
+        files: ["a.txt", "b.txt"],
     }
     
     // Access field, then call method on result (should auto-clone)
     let count = count_items(repo.get_files())
     
     // Should still be usable
-    assert!(repo.get_files().len() == 2, "files should still have 2 elements")
-    assert!(count == 2, "count should be 2")
+    assert(repo.get_files().len() == 2, "files should still have 2 elements")
+    assert(count == 2, "count should be 2")
     
-    println!("✓ Field then method auto-clone works")
+    println("✓ Field then method auto-clone works")
 }
 
 fn test_method_then_index() {
     let repo = Repository {
-        files: vec!["first.txt", "second.txt", "third.txt"],
+        files: ["first.txt", "second.txt", "third.txt"],
     }
     
     // Call method, then index result (should auto-clone)
     let file = process_file(repo.get_files()[0])
     
     // Should still be usable
-    assert!(repo.get_files()[0] == "first.txt", "first file should still be first.txt")
-    assert!(file == "FIRST.TXT", "processed file should be FIRST.TXT")
+    assert(repo.get_files()[0] == "first.txt", "first file should still be first.txt")
+    assert(file == "FIRST.TXT", "processed file should be FIRST.TXT")
     
-    println!("✓ Method then index auto-clone works")
+    println("✓ Method then index auto-clone works")
 }
 
 fn test_all_combined() {
     let repo = Repository {
-        files: vec!["x.txt", "y.txt"],
+        files: ["x.txt", "y.txt"],
     }
     
     // Complex combination: field.method()[index]
@@ -61,11 +61,11 @@ fn test_all_combined() {
     let first = process_file(files[0])
     
     // All should still be usable
-    assert!(files[0] == "x.txt", "first file should still be x.txt")
-    assert!(first == "X.TXT", "processed should be X.TXT")
-    assert!(repo.get_files().len() == 2, "repo files should still have 2 elements")
+    assert(files[0] == "x.txt", "first file should still be x.txt")
+    assert(first == "X.TXT", "processed should be X.TXT")
+    assert(repo.get_files().len() == 2, "repo files should still have 2 elements")
     
-    println!("✓ All combined patterns auto-clone works")
+    println("✓ All combined patterns auto-clone works")
 }
 
 fn count_items(items: Vec<string>) -> int {
@@ -78,7 +78,7 @@ fn process_file(file: string) -> string {
 
 fn assert(condition: bool, message: string) {
     if !condition {
-        panic!("{}", message)
+        panic("${message}")
     }
 }
 

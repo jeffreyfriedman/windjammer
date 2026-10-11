@@ -4,7 +4,7 @@
 use std::collections::HashMap
 
 fn demonstrate_hashmap() {
-    println!("=== HashMap ===")
+    println("=== HashMap ===")
     
     let mut map = HashMap::new()
     
@@ -13,26 +13,26 @@ fn demonstrate_hashmap() {
     map.insert("bob", 25)
     map.insert("charlie", 35)
     
-    println!("Map size: {}", map.len())
+    println("Map size: ${map.len()}")
     
     // Get values
     match map.get(&"alice") {
-        Some(age) => println!("Alice is {} years old", age),
-        None => println!("Alice not found")
+        Some(age) => println("Alice is ${age} years old"),
+        None => println("Alice not found")
     }
     
     // Check if key exists
     if map.contains_key(&"bob") {
-        println!("Bob is in the map")
+        println("Bob is in the map")
     }
     
     // Remove a key
     map.remove(&"charlie")
-    println!("After removal, size: {}", map.len())
+    println("After removal, size: ${map.len()}")
 }
 
 fn demonstrate_hashset() {
-    println!("\n=== HashSet ===")
+    println("\n=== HashSet ===")
     
     let mut set = HashSet::new()
     
@@ -42,21 +42,21 @@ fn demonstrate_hashset() {
     set.insert("orange")
     set.insert("apple")  // Duplicate, won't be added
     
-    println!("Set size: {}", set.len())
+    println("Set size: ${set.len()}")
     
     // Check if value exists
     if set.contains(&"banana") {
-        println!("Banana is in the set")
+        println("Banana is in the set")
     }
     
     // Remove a value
     let removed = set.remove(&"orange")
-    println!("Removed orange: {}", removed)
-    println!("After removal, size: {}", set.len())
+    println("Removed orange: ${removed}")
+    println("After removal, size: ${set.len()}")
 }
 
 fn demonstrate_btreemap() {
-    println!("\n=== BTreeMap (Sorted) ===")
+    println("\n=== BTreeMap (Sorted) ===")
     
     let mut map = BTreeMap::new()
     
@@ -67,12 +67,12 @@ fn demonstrate_btreemap() {
     map.insert(5, "five")
     map.insert(4, "four")
     
-    println!("BTreeMap size: {}", map.len())
-    println!("Keys are stored in sorted order")
+    println("BTreeMap size: ${map.len()}")
+    println("Keys are stored in sorted order")
 }
 
 fn demonstrate_vecdeque() {
-    println!("\n=== VecDeque (Double-ended queue) ===")
+    println("\n=== VecDeque (Double-ended queue) ===")
     
     let mut deque = VecDeque::new()
     
@@ -82,20 +82,20 @@ fn demonstrate_vecdeque() {
     deque.push_front(0)
     deque.push_front(-1)
     
-    println!("Deque size: {}", deque.len())
+    println("Deque size: ${deque.len()}")
     
     // Pop from both ends
     match deque.pop_front() {
-        Some(val) => println!("Popped from front: {}", val),
-        None => println!("Deque is empty")
+        Some(val) => println("Popped from front: ${val}"),
+        None => println("Deque is empty")
     }
     
     match deque.pop_back() {
-        Some(val) => println!("Popped from back: {}", val),
-        None => println!("Deque is empty")
+        Some(val) => println("Popped from back: ${val}"),
+        None => println("Deque is empty")
     }
     
-    println!("After pops, size: {}", deque.len())
+    println("After pops, size: ${deque.len()}")
 }
 
 fn main() {
@@ -104,6 +104,6 @@ fn main() {
     demonstrate_btreemap()
     demonstrate_vecdeque()
     
-    println!("\nAll collection examples completed!")
+    println("\nAll collection examples completed!")
 }
 

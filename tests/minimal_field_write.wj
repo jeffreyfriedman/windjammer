@@ -23,7 +23,7 @@ fn main() {
     let mut p = Point { x: 1.0, y: 2.0 }
     p.set_x(10.0)
     
-    println("x = {}", p.x)
+    println("x = ${p.x}")
     assert(p.x == 10.0, "set_x should modify x")
     
     println("✅ Test passed!")

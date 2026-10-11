@@ -28,92 +28,92 @@ struct Args {
 }
 
 fn process_file(args: Args) {
-    println!("=== Processing File ===")
-    println!()
-    println!("Configuration:")
-    println!("  Input: {}", args.input)
+    println("=== Processing File ===")
+    println()
+    println("Configuration:")
+    println("  Input: ${args.input}")
     
     match args.output {
-        Some(output) => println!("  Output: {}", output),
-        None => println!("  Output: <stdout>")
+        Some(output) => println("  Output: ${output}"),
+        None => println("  Output: <stdout>")
     }
     
-    println!("  Format: {}", args.format)
-    println!("  Count: {}", args.count)
-    println!("  Verbose: {}", args.verbose)
-    println!()
+    println("  Format: ${args.format}")
+    println("  Count: ${args.count}")
+    println("  Verbose: ${args.verbose}")
+    println()
     
     if args.verbose {
-        println!("VERBOSE: Starting file processing...")
-        println!("VERBOSE: Reading from '{}'", args.input)
+        println("VERBOSE: Starting file processing...")
+        println("VERBOSE: Reading from '${args.input}'")
     }
     
     // Simulate processing
-    println!("Processing {} items from '{}'", args.count, args.input)
+    println("Processing ${args.count} items from '${args.input}'")
     
     if args.verbose {
-        println!("VERBOSE: Processing complete")
+        println("VERBOSE: Processing complete")
     }
     
     match args.output {
-        Some(output) => println!("Results written to '{}'", output),
-        None => println!("Results printed to stdout")
+        Some(output) => println("Results written to '${output}'"),
+        None => println("Results printed to stdout")
     }
 }
 
 fn main() {
-    println!("=== CLI Argument Parsing Demo ===")
-    println!()
+    println("=== CLI Argument Parsing Demo ===")
+    println()
     
     // Get raw arguments for demo
     let raw_args = cli.args()
-    println!("Raw arguments ({}): {:?}", raw_args.len(), raw_args)
-    println!()
+    println("Raw arguments (${raw_args.len()}): ${raw_args:?}")
+    println()
     
     // Parse structured arguments
-    println!("Parsing arguments with std.cli...")
-    println!()
+    println("Parsing arguments with std.cli...")
+    println()
     
     match cli.try_parse::<Args>() {
         Ok(args) => {
-            println!("✓ Arguments parsed successfully!")
-            println!()
+            println("✓ Arguments parsed successfully!")
+            println()
             process_file(args)
         }
         Err(e) => {
-            println!("✗ Error parsing arguments: {}", e)
-            println!()
-            println!("Usage:")
-            println!("  {} <input> [OPTIONS]", raw_args.get(0).unwrap_or("program"))
-            println!()
-            println!("Arguments:")
-            println!("  <input>                 Input file to process")
-            println!()
-            println!("Options:")
-            println!("  -o, --output <FILE>     Output file (defaults to stdout)")
-            println!("  -v, --verbose           Enable verbose output")
-            println!("  -n, --count <N>         Number of items to process [default: 10]")
-            println!("  -f, --format <FORMAT>   Output format (json, csv, xml) [default: json]")
-            println!("  -h, --help             Print help information")
-            println!()
-            println!("Examples:")
-            println!("  {} data.txt", raw_args.get(0).unwrap_or("program"))
-            println!("  {} data.txt -o output.txt -v", raw_args.get(0).unwrap_or("program"))
-            println!("  {} data.txt --count 20 --format csv", raw_args.get(0).unwrap_or("program"))
+            println("✗ Error parsing arguments: ${e}")
+            println()
+            println("Usage:")
+            println("  ${raw_args.get(0).unwrap_or("program")} <input> [OPTIONS]")
+            println()
+            println("Arguments:")
+            println("  <input>                 Input file to process")
+            println()
+            println("Options:")
+            println("  -o, --output <FILE>     Output file (defaults to stdout)")
+            println("  -v, --verbose           Enable verbose output")
+            println("  -n, --count <N>         Number of items to process [default: 10]")
+            println("  -f, --format <FORMAT>   Output format (json, csv, xml) [default: json]")
+            println("  -h, --help             Print help information")
+            println()
+            println("Examples:")
+            println("  ${raw_args.get(0).unwrap_or("program")} data.txt")
+            println("  ${raw_args.get(0).unwrap_or("program")} data.txt -o output.txt -v")
+            println("  ${raw_args.get(0).unwrap_or("program")} data.txt --count 20 --format csv")
         }
     }
     
-    println!()
-    println!("✨ CLI parsing with Windjammer!")
-    println!("   ✅ Using std.cli abstraction (not clap:: directly)")
-    println!("   ✅ Clean, Windjammer-native API")
-    println!("   ✅ @derive(Cli) for automatic parsing")
-    println!("   ✅ @arg(...) decorator for argument configuration")
-    println!("   ✅ Automatic help generation")
-    println!()
-    println!("Try running with different arguments:")
-    println!("  cargo run -- data.txt")
-    println!("  cargo run -- data.txt -v")
-    println!("  cargo run -- data.txt -o output.txt --count 20")
-    println!("  cargo run -- --help")
+    println()
+    println("✨ CLI parsing with Windjammer!")
+    println("   ✅ Using std.cli abstraction (not clap:: directly)")
+    println("   ✅ Clean, Windjammer-native API")
+    println("   ✅ @derive(Cli) for automatic parsing")
+    println("   ✅ @arg(...) decorator for argument configuration")
+    println("   ✅ Automatic help generation")
+    println()
+    println("Try running with different arguments:")
+    println("  cargo run -- data.txt")
+    println("  cargo run -- data.txt -v")
+    println("  cargo run -- data.txt -o output.txt --count 20")
+    println("  cargo run -- --help")
 }

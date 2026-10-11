@@ -122,7 +122,7 @@ fn test_for_range() {
 
 // --- For loops with collections ---
 fn test_for_vec() {
-    let fruits = vec!["apple", "banana", "cherry"]
+    let fruits = ["apple", "banana", "cherry"]
     let mut result = ""
     for fruit in fruits {
         if result.len() > 0 {
@@ -135,7 +135,7 @@ fn test_for_vec() {
 
 // --- For loops with index ---
 fn test_for_index() {
-    let letters = vec!["a", "b", "c"]
+    let letters = ["a", "b", "c"]
     let mut result = ""
     let mut idx = 0
     for letter in letters {
