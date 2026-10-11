@@ -1,0 +1,83 @@
+use std::fs
+use std::collections::HashMap
+
+fn is_ident(c: char) -> bool {
+    (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+}
+
+fn render(tpl: string, defs: HashMap<string, string>) -> string {
+    let chars: Vec<char> = tpl.chars().collect()
+    let n = chars.len()
+    let mut out = ""
+    let mut i: usize = 0
+    while i < n {
+        if i + 1 < n && chars[i] == '{' && chars[i + 1] == '{' {
+            let mut j = i + 2
+            while j < n && chars[j] == ' ' { j += 1 }
+            let start = j
+            while j < n && is_ident(chars[j]) { j += 1 }
+            let end = j
+            while j < n && chars[j] == ' ' { j += 1 }
+            if end > start && j + 1 < n && chars[j] == '}' && chars[j + 1] == '}' {
+                let mut name = ""
+                let mut k = start
+                while k < end {
+                    name = name + chars[k].to_string()
+                    k += 1
+                }
+                match defs.get(name) {
+                    Some(v) => { out = out + v }
+                    None => { out = out + "<missing:" + name + ">" }
+                }
+                i = j + 2
+                continue
+            }
+        }
+        out = out + chars[i].to_string()
+        i += 1
+    }
+    out
+}
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
+fn line_at(v: Vec<string>, i: usize) -> string {
+    if i < v.len() { v[i].clone() } else { "" }
+}
+
+fn rest_lines(v: Vec<string>, from: usize) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut i = from
+    while i < v.len() {
+        out.push(v[i].clone())
+        i += 1
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let all: Vec<string> = text.split("
+").map(|s| s.to_string()).collect()
+    let mut cursor: usize = 0
+    let k = line_at(all.clone(), cursor).trim().parse::<usize>().unwrap_or(0)
+    cursor += 1
+    let mut defs: HashMap<string, string> = HashMap::new()
+    let mut i: usize = 0
+    while i < k {
+        let l = line_at(all.clone(), cursor)
+        cursor += 1
+        match l.find("=") {
+            Some(p) => { defs.insert(sub(l.clone(), 0, p).to_string(), sub(l.clone(), p + 1, l.len()).to_string()) }
+            None => {}
+        }
+        i += 1
+    }
+    let mut rest: Vec<string> = Vec::new()
+    for l in rest_lines(all.clone(), cursor) {
+        rest.push(l.to_string())
+    }
+    print(render(rest.join("\n"), defs))
+}

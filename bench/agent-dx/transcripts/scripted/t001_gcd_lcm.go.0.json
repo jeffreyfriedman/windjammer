@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 36,
+    "status": "pass",
+    "total": 36
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc gcd(a, b int64) int64 {\n\tfor b != 0 {\n\t\ta, b = b, a%b\n\t}\n\treturn a\n}\n\nfunc main() {\n\tr := bufio.NewReader(os.Stdin)\n\tvar t int\n\tfmt.Fscan(r, &t)\n\tfor i := 0; i < t; i++ {\n\t\tvar a, b int64\n\t\tfmt.Fscan(r, &a, &b)\n\t\tg := gcd(a, b)\n\t\tfmt.Println(g, a/g*b)\n\t}\n}\n",
+   "usage": null,
+   "wall_seconds": 0.04
+  }
+ ],
+ "lang": "go",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.04
+ },
+ "recorded_at": "2026-10-11T15:15:59",
+ "schema": 1,
+ "task": "t001_gcd_lcm",
+ "trial": 0
+}

@@ -1,0 +1,26 @@
+[
+ {
+  "args": [
+   "d.csv",
+   "qty",
+   "sum"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "42\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "price",
+   "max"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "12\n"
+ }
+]

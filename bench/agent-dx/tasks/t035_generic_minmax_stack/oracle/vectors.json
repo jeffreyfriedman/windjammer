@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npush 3\npush 1\npush 2\nmin\nmax\npop\npop\nmin\nsize\n",
+  "stdout": "1\n3\n2\n1\n3\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush pear\npush apple\nmin\nmax\npop\nmin\n",
+  "stdout": "apple\npear\napple\npear\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\nmin\npop\nsize\npush -9223372036854775808\npush 9223372036854775807\nmin\nmax\n",
+  "stdout": "empty\nempty\n0\n-9223372036854775808\n9223372036854775807\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush \npush a b\npush B\nmin\nmax\nsize\npop\npop\npop\npop\n",
+  "stdout": "\na b\n3\nB\na b\n\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\npush -12\nsize\npush -6\npop\nmax\npush -9\nmin\npush -17\n",
+  "stdout": "empty\n1\n-6\n-12\n-12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush z  \npush \npush az\npop\nmax\npush \npush AA\npop\npush aBzb\npush  zb\npush Abab\n",
+  "stdout": "az\nz  \nAA\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\nmax\nsize\npush -8\nsize\nmin\npush 0\n",
+  "stdout": "empty\n0\n1\n-8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nmin\npush \nmax\npush  b\npop\npush zab\nmin\npush A \nmin\npop\n",
+  "stdout": "empty\n\n b\n\n\nA \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\npush 15\npush 15\npop\npush 10\npush -18\nmax\npush -18\npop\npush 1\npush -2\npush -13\nsize\npop\n",
+  "stdout": "empty\n15\n15\n-18\n6\n-13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npush -4\nmax\npush -11\npush -15\npush 9\nsize\npush -3\npush -19\npush 3\nsize\npush -11\npush 1\npop\npush -9\npush -14\npush -1\npush 14\npush -2\npush 2\npop\npush 12\npop\npush 15\n",
+  "stdout": "-4\n4\n7\n1\n2\n12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nmin\npush Aa\npop\npop\nmin\nmax\npop\npop\nmax\nmin\npop\npush  AzA\nsize\npop\npop\nmin\npush Aab\nmax\nsize\npush  \npush zaba\nmax\npush B bA\npush a\npop\npush bBb\npush b\nmin\npush Aa\npush zbAz\npop\npop\npop\nmax\npush bAz\nmax\nsize\npop\npush BAba\n",
+  "stdout": "empty\nAa\nempty\nempty\nempty\nempty\nempty\nempty\nempty\nempty\n1\n AzA\nempty\nempty\nAab\n1\nzaba\na\n \nzbAz\nAa\nb\nzaba\nzaba\n6\nbAz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npop\npush aB\npush z\npop\nsize\npush z \npush bzaA\nsize\npop\npush \npush AaBB\n",
+  "stdout": "empty\nz\n1\n3\nbzaA\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\npush 18\nmin\nmax\nsize\npush -11\npush -7\npush 15\nmax\npush 3\npush 1\npop\nsize\npush -12\npush -19\npush -9\nmax\npush 4\npop\npop\npush 4\npop\npush -4\npush 18\npush -10\npush 14\npop\nmin\npush 9\nmin\n",
+  "stdout": "empty\n18\n18\n1\n18\n1\n5\n18\n4\n-9\n4\n14\n-19\n-19\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npush 10\npush -5\npush 10\npop\npop\n",
+  "stdout": "10\n-5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nmax\nmax\npop\nsize\nmin\npush  b b\npush bBbA\npop\nmax\npush  Ba\npush \npush A A\npop\npush  zA\npush  bz\nsize\nsize\npop\nmin\npush  zAb\npush a\npush \npush \npush A\nsize\nmax\npop\npush \npush b \npop\npop\npush abB\n",
+  "stdout": "empty\nempty\nempty\n0\nempty\nbBbA\n b b\nA A\n5\n5\n bz\n\n9\na\nA\nb \n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush abA\npush \npush z\npush z\npush AzBz\npush b\nmax\npop\nmax\npush aB \n",
+  "stdout": "z\nb\nz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\nsize\nmax\npop\npop\nsize\nmax\npush 4\npush -6\nmax\nsize\nmax\nmin\nsize\npush -1\npop\npush 14\nsize\npush -11\nmax\nmax\npush -19\npush -7\npop\n",
+  "stdout": "empty\n0\nempty\nempty\nempty\n0\nempty\n4\n2\n4\n-6\n2\n-1\n3\n14\n14\n-7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush B z\nsize\npush zB\nmin\npop\npush bbz\npop\npush a bz\npop\npush \npush Bab\npop\nmin\nmin\npop\nmax\npush  A \nmax\npush  \npush \npop\npop\npush \npush zaB\npush \npush ab a\nmin\npop\npush \npush b\npush \npush abb\npush a bA\n",
+  "stdout": "1\nB z\nzB\nbbz\na bz\nBab\n\n\n\nB z\nB z\n\n \n\nab a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\nmax\npush -1\npush -18\npush 5\nmax\nmin\npush -11\nmax\npop\npop\npush 15\npop\npush 20\npush -2\npop\nmin\npop\npush 9\npush 16\nmin\npush -10\npop\npush -9\npush 9\nsize\npop\npush -16\nmin\nsize\npop\npush 10\npush 18\npush -11\npush -6\nmin\npop\nsize\n",
+  "stdout": "empty\n5\n-18\n5\n-11\n5\n15\n-2\n-18\n20\n-18\n-10\n6\n9\n-18\n6\n-16\n-18\n-6\n8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nmax\npush zb B\nmax\nsize\npush b aa\nmin\npush \npop\npush AzbA\npush a\npush  b\nmax\npush z\n",
+  "stdout": "empty\nzb B\n1\nb aa\n\nzb B\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush zaA\npop\npush  AaA\npush AzBb\npop\npush zBzb\npop\nsize\npush z\nsize\nmax\nmin\nmax\npush bA\npop\nmax\npush ab\npop\npop\npop\npop\nmin\nsize\nmin\n",
+  "stdout": "zaA\nAzBb\nzBzb\n1\n2\nz\n AaA\nz\nbA\nz\nab\nz\n AaA\nempty\nempty\n0\nempty\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\nsize\nsize\npush 18\npush -20\nmax\npush -13\npush -19\nsize\npush 13\npush 9\npush 13\nmin\npop\npush -7\npush -20\npush -18\nsize\nmax\npop\npop\n",
+  "stdout": "empty\n0\n0\n18\n4\n-20\n13\n9\n18\n-18\n-20\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush \npop\npush \npush aab\npop\nmax\nsize\nsize\npush AbB \nmax\npush zBz\npush bzab\nmin\npush  aBz\npush    \npush  z\npush \npush \npop\npush  bz\nmax\npush B\npush \npush  a \npush B\npush aA\npush \nmin\nmin\n",
+  "stdout": "\naab\n\n1\n1\nAbB \n\n\nzBz\n\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npop\npop\npush  Az \nmax\nsize\npush ab a\npush aba\npush az \npush \nmin\npush aA\npush \nmax\npush \nsize\npop\nmax\npush  Bz\npush  \npush   Az\nmax\npop\nmin\nmax\npush \npush \nsize\nmax\nmax\nmin\npop\nsize\nsize\npop\npush z \n",
+  "stdout": "empty\nempty\n Az \n1\n\naz \n8\n\naz \naz \n  Az\n\naz \n11\naz \naz \n\n\n10\n10\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nsize\npop\npop\nsize\npush ABzA\nmin\npush bBAA\nsize\npush AA b\npush BBAb\npop\npush zb\nsize\npush \npop\npop\npush bAz\n",
+  "stdout": "0\nempty\nempty\n0\nABzA\n2\nBBAb\n4\n\nzb\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nmin\npop\nsize\npush B Bb\npush B\npush  ab\nmax\nmax\npush \nmin\nmin\npush bzba\npush ABza\npush \npush A\nmin\npush aba\npush bBa\npop\npush  AA\n",
+  "stdout": "empty\nempty\n0\nB Bb\nB Bb\n\n\n\nbBa\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\nmin\npush  b\nsize\npush aba\nsize\npush az \npush BBBB\npop\nmax\npush \npush \nmax\npop\npush bA\npop\n",
+  "stdout": "empty\n1\n2\nBBBB\naz \naz \n\nbA\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\npush -15\nsize\nmax\npop\npush 8\nmax\npush -20\npush 8\nmin\npop\npop\npush -13\npush 1\npush -3\npush -2\npush 10\npush 2\nmax\npush 11\npush 15\npush 10\npush 9\npush 5\npop\npush -2\nmin\npop\nmax\npush -12\npush 0\npush -5\npush 7\nsize\npush -6\npush -6\npop\n",
+  "stdout": "empty\n1\n-15\n-15\n8\n-20\n8\n-20\n10\n5\n-13\n-2\n15\n15\n-6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush  zBz\npop\nmin\npush abb\npush az\npush za\nmax\npop\nsize\n",
+  "stdout": " zBz\nempty\nza\nza\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\nmax\nmax\npush 14\npush 9\npush 12\nmin\npop\nmin\npop\npush 18\npush 7\nmax\npush 8\npush 16\nsize\nmax\npush 8\npop\npush 6\npush 3\n",
+  "stdout": "empty\nempty\n9\n12\n9\n9\n18\n5\n18\n8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush b z\npush zB B\nsize\npush azaA\npush \npush za\npush aBBA\nmax\npush bz \npush A\nsize\npop\nsize\nmax\npush  a b\npush AaA\nsize\npush A\npush B a\nmin\npush B aB\nmax\npop\nsize\npush aB \npush azBb\n",
+  "stdout": "2\nza\n8\nA\n7\nza\n9\n\nza\nB aB\n11\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npush -5\npop\npush -10\npush -5\nmin\npush -15\nsize\nsize\npush -8\npush 3\npush -19\nmin\npush 16\nmin\npush 10\nmin\npush 13\npop\nmax\npush -13\npush -1\npop\nsize\npush 4\npop\npop\npush -4\npush -5\npush 0\npush -1\nmin\nsize\nmin\n",
+  "stdout": "-5\n-10\n3\n3\n-19\n-19\n-19\n13\n16\n-1\n9\n4\n-13\n-19\n12\n-19\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "str\npush  z\npush zbB\npush A A\nsize\npop\npop\npop\n",
+  "stdout": "3\nA A\nzbB\n z\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "int\npop\npush -14\npop\npush 17\nsize\npush -20\npop\npop\npush 15\npush -5\npop\npush -10\npop\npush -16\nmin\nmin\npush -9\npush -10\n",
+  "stdout": "empty\n-14\n1\n-20\n17\n-5\n-10\n-16\n-16\n"
+ }
+]

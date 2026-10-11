@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 4 +\n5 1 2 + 4 * + 3 -\n",
+  "stdout": "7\n14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 0 /\n+\n1 2\n2 x +\n",
+  "stdout": "error: divzero\nerror: underflow\nerror: leftover\nerror: token\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-7 2 /\n7 -2 /\n-7 -2 /\n0 5 -\n1000000000 1000000000 *\n\n5\n-3\n",
+  "stdout": "-3\n-3\n3\n-5\n1000000000000000000\n5\n-3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 2 3\n1 +\n/\n4 0 0 / +\n1 2 + +\n",
+  "stdout": "error: leftover\nerror: underflow\nerror: underflow\nerror: divzero\nerror: underflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-7\n15 -10 + 9 / 2 - 8 -5\n17\n6 4 / -6\n-7 8 -19 * -17\n12 4 -7 * -18 * * -15\n",
+  "stdout": "-7\nerror: leftover\n17\nerror: leftover\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "11 -3 +\n-11 -4 - -7\n16 6 1 10\n",
+  "stdout": "8\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-7 19 0 -8 /\n5 -10 20\n-20 18 * -19 0\n",
+  "stdout": "error: leftover\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12 15 -4 -6 20 * -12 -19\n-16 12 - -16 / -19 * 18\n-4\n",
+  "stdout": "error: leftover\nerror: leftover\n-4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-14 13\n20 14 6\n-14 3 -18 + * 18 3 +\n0 6 - 9 / -20 -12 19 12\n2 12 7 * 17 1\n-16 +\n",
+  "stdout": "error: leftover\nerror: leftover\nerror: leftover\nerror: leftover\nerror: leftover\nerror: underflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4 12 - -6 20\n13 -5 *\n2 -18 -4\n17\n",
+  "stdout": "error: leftover\n-65\nerror: leftover\n17\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-11 -4 -18 + abc\n",
+  "stdout": "error: token\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7 6 / -3 -4 /\n",
+  "stdout": "error: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7 -15 * -16 -14\n-13 -18 * 6 + -7\n-20 -11 -12 * + -6 / -18 /\n-16 15 +\n",
+  "stdout": "error: leftover\nerror: leftover\n1\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "0 10 / 12 -18 +\n11 3 + -14 + -16\n-20 -12 -8 11 /\n13 -11 3 -8\n",
+  "stdout": "error: leftover\nerror: leftover\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-12\n-5\n-20 19 5 -6 - 6\n-10 -18 + 12 * -14\n",
+  "stdout": "-12\n-5\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "20 3 /\n8 -18 * 0\n3 16\n-8 12 12 - + -13 -12\n8 3 4 -6\n11 5 /\n",
+  "stdout": "6\nerror: leftover\nerror: leftover\nerror: leftover\nerror: leftover\n2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "18 2\n-14 -2 * -16 11 / * 7\n20 -11 -2 -19 11 15\n",
+  "stdout": "error: leftover\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "7 -3 11 -8\n-10 -13 / -5 - -16 12 3\n-2 -10\n14 -16\n-11 16 3 *\n-6 -12 17\n",
+  "stdout": "error: leftover\nerror: leftover\nerror: leftover\nerror: leftover\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\n",
+  "stdout": "2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 -6 -17 -5 0 * -5 +\n19 12 -10 19 + -3\n-9 4 19 abc\n-6 12 6 -8 -15 -20 -2 + +\n3 10 -17 15 / 1.5\n20 6 -\n",
+  "stdout": "error: leftover\nerror: leftover\nerror: token\nerror: leftover\nerror: token\n14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5 19 +\n19 -15 +\n-2 3 14 + 8 15 / + 11\n17 -6 -14 / -18 -13 -5\n15 9 abc\n",
+  "stdout": "24\n4\nerror: leftover\nerror: leftover\nerror: token\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "12 -14 + -16 +\n19 -17\n4 0 - 0 - -6 -16 +\n12 0 + 3 / 9 - 10\n-1 -6 + 18 + -18 -12\n-7 16 15 7\n",
+  "stdout": "-18\nerror: leftover\nerror: leftover\nerror: leftover\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "8 -15 * 19 18 abc\n12 -20 * -13 /\n-9 10 - -20 3 19 + -\n-8 -8 * 1 -\n",
+  "stdout": "error: token\n18\nerror: leftover\n63\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "16 19 14 / 14\n12 19 / -14 *\n1 18 / 5 * -2 + -5 /\n",
+  "stdout": "error: leftover\n0\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-13 14 1 -8 abc\n3 18 -4 / + -9 * -16 20\n9 -13 * 20\n",
+  "stdout": "error: token\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-15 -2 -14 6 -19 - 10 -15\n",
+  "stdout": "error: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "17 -5 15 *\n",
+  "stdout": "error: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "9 0 - 8 -14 + / -2\n6 9 * -16 3 7 13 *\n",
+  "stdout": "error: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-2 -2 * -19 + 8 + -8 5\n17 4 / 1 13 3 7 -20\n19 3 +\n",
+  "stdout": "error: leftover\nerror: leftover\n22\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 4 + -14 2\n-13 13 * 3 10 / * 9\n-17\n-1 8 -6 -20 -\n",
+  "stdout": "error: leftover\nerror: leftover\n-17\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "18\n7 -15 - +\n6 1.5\n13 5 10 - + 0 *\n",
+  "stdout": "18\nerror: underflow\nerror: token\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\n20\n8\n-6 -16 -9 -3 + -20 -12\n5 17 -11 -18 -10 + -4 - 16\n",
+  "stdout": "1\n20\n8\nerror: leftover\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "16 -4 * 19 - 0 -10 -11\n-5 -19 17 +\n-9 1 + -2 * 5 * 10 +\n10 -11\n12 -9 -12 * -5 * -2 18 -14 1.5\n12 -4\n",
+  "stdout": "error: leftover\nerror: leftover\n90\nerror: leftover\nerror: token\nerror: leftover\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "-3\n1 9 - 6 / 0 -14 * 2 abc\n-12 8 -15 -17 -5 10 - -\n",
+  "stdout": "-3\nerror: token\nerror: leftover\n"
+ }
+]

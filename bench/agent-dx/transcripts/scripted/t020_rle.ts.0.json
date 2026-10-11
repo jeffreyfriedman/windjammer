@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "import * as fs from \"node:fs\";\n\nfunction enc(s: string): string {\n  let out = \"\";\n  for (let i = 0; i < s.length;) {\n    let j = i;\n    while (j < s.length && s[j] === s[i]) j++;\n    out += `${j - i}${s[i]}`;\n    i = j;\n  }\n  return out;\n}\n\nfunction dec(s: string): string {\n  let out = \"\";\n  for (const m of s.matchAll(/(\\d+)([a-z])/g)) out += m[2].repeat(parseInt(m[1], 10));\n  return out;\n}\n\nconst lines = fs.readFileSync(0, \"utf8\").split(\"\\n\");\nif (lines[lines.length - 1] === \"\") lines.pop();\nconst out: string[] = [];\nfor (const raw of lines) {\n  const line = raw.replace(/\\r$/, \"\");\n  if (line === \"\") continue;\n  const text = line.slice(2);\n  out.push(line[0] === \"E\" ? enc(text) : dec(text));\n}\nif (out.length > 0) console.log(out.join(\"\\n\"));\n",
+   "usage": null,
+   "wall_seconds": 0.15
+  }
+ ],
+ "lang": "ts",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.15
+ },
+ "recorded_at": "2026-10-11T15:17:46",
+ "schema": 1,
+ "task": "t020_rle",
+ "trial": 0
+}

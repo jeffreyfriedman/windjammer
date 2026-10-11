@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "4\nXIV\n",
+  "stdout": "IV\n14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1994\nMMXXIV\n3999\n",
+  "stdout": "MCMXCIV\n2024\nMMMCMXCIX\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nI\n3999\nMMMCMXCIX\n3888\nMMMDCCCLXXXVIII\n",
+  "stdout": "I\n1\nMMMCMXCIX\n3999\nMMMDCCCLXXXVIII\n3888\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "49\n40\n90\n400\n900\n",
+  "stdout": "XLIX\nXL\nXC\nCD\nCM\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MMMCCXXVI\n2492\n3084\nMDCCLXXXII\n",
+  "stdout": "3226\nMMCDXCII\nMMMLXXXIV\n1782\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1135\n",
+  "stdout": "MCXXXV\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2265\n3780\nMCCCLXXIX\nCCCXLIV\nMMDCCLXXXV\nMMLXVIII\nCCXCVIII\nDXIX\nCCLXXXII\n2491\n",
+  "stdout": "MMCCLXV\nMMMDCCLXXX\n1379\n344\n2785\n2068\n298\n519\n282\nMMCDXCI\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "DCCCLXXIV\n1389\n1966\nDLVI\n3981\n603\n880\n",
+  "stdout": "874\nMCCCLXXXIX\nMCMLXVI\n556\nMMMCMLXXXI\nDCIII\nDCCCLXXX\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "623\n179\nMCCCLXII\n",
+  "stdout": "DCXXIII\nCLXXIX\n1362\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "969\n3717\n3912\nMMMCDLXXXVIII\n957\nMMCCCLXX\n1644\nMCCCXXIX\nDXXXIV\n",
+  "stdout": "CMLXIX\nMMMDCCXVII\nMMMCMXII\n3488\nCMLVII\n2370\nMDCXLIV\n1329\n534\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MMCDLVII\n885\n3526\n247\n",
+  "stdout": "2457\nDCCCLXXXV\nMMMDXXVI\nCCXLVII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1022\n700\nMMMDCCCLXXXVII\n3405\n149\n1219\n3637\n43\nMCCCLV\n",
+  "stdout": "MXXII\nDCC\n3887\nMMMCDV\nCXLIX\nMCCXIX\nMMMDCXXXVII\nXLIII\n1355\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MDXXV\n625\n3297\n1156\n333\n1566\nDCCLIV\n1658\n",
+  "stdout": "1525\nDCXXV\nMMMCCXCVII\nMCLVI\nCCCXXXIII\nMDLXVI\n754\nMDCLVIII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3183\nMMCXLIX\n2133\n3081\n2934\nCCCXVIII\nMMDCCCLIII\n674\n",
+  "stdout": "MMMCLXXXIII\n2149\nMMCXXXIII\nMMMLXXXI\nMMCMXXXIV\n318\n2853\nDCLXXIV\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "513\nMMMDCCLV\n292\n1664\n1308\n",
+  "stdout": "DXIII\n3755\nCCXCII\nMDCLXIV\nMCCCVIII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1554\n3845\n3683\nCCXCVIII\n",
+  "stdout": "MDLIV\nMMMDCCCXLV\nMMMDCLXXXIII\n298\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "750\n3032\n2905\n1762\n1487\nMMMCCXVII\nMCXXVIII\nDCCXC\n",
+  "stdout": "DCCL\nMMMXXXII\nMMCMV\nMDCCLXII\nMCDLXXXVII\n3217\n1128\n790\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MMMDCCLXXXII\nXLV\n",
+  "stdout": "3782\n45\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2842\n2940\n2777\nDCCCLXXXIV\nCMLXXV\n3743\n2486\nMCDLXXIII\n1283\n",
+  "stdout": "MMDCCCXLII\nMMCMXL\nMMDCCLXXVII\n884\n975\nMMMDCCXLIII\nMMCDLXXXVI\n1473\nMCCLXXXIII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "XIV\n2624\n3713\nDCLVII\n2795\nMDCXXXI\n790\nMDCCXLIII\n",
+  "stdout": "14\nMMDCXXIV\nMMMDCCXIII\n657\nMMDCCXCV\n1631\nDCCXC\n1743\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1805\nCDLXX\n2861\n2032\n",
+  "stdout": "MDCCCV\n470\nMMDCCCLXI\nMMXXXII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1036\nMII\n3935\n1809\nMDCCCXLI\nDCCXIV\nDCCLXXXIX\nMMDCCCLXXIII\n2515\nMMCCXXXI\n",
+  "stdout": "MXXXVI\n1002\nMMMCMXXXV\nMDCCCIX\n1841\n714\n789\n2873\nMMDXV\n2231\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3897\n2822\nCXCIX\n",
+  "stdout": "MMMDCCCXCVII\nMMDCCCXXII\n199\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "DI\nMMMCMXXXI\n",
+  "stdout": "501\n3931\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MMMDCXXXVII\n2085\nMDCCCXI\nMCCXCII\n3180\nMCDLXX\nMMCCCLXXXIII\nMMDCCXLVII\n750\nMMMDCCXXXI\n",
+  "stdout": "3637\nMMLXXXV\n1811\n1292\nMMMCLXXX\n1470\n2383\n2747\nDCCL\n3731\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1445\n1785\n3377\n1333\n2359\n2055\nXXIII\nMCXXI\nMMCCXCIII\n1817\n",
+  "stdout": "MCDXLV\nMDCCLXXXV\nMMMCCCLXXVII\nMCCCXXXIII\nMMCCCLIX\nMMLV\n23\n1121\n2293\nMDCCCXVII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1036\n224\n3640\n2613\n469\n3661\n3866\n",
+  "stdout": "MXXXVI\nCCXXIV\nMMMDCXL\nMMDCXIII\nCDLXIX\nMMMDCLXI\nMMMDCCCLXVI\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MXVII\nMXXI\nDXIV\nCXXVI\n2782\n437\nCCLXXXVIII\n1205\n551\nMDCCXXXVII\n",
+  "stdout": "1017\n1021\n514\n126\nMMDCCLXXXII\nCDXXXVII\n288\nMCCV\nDLI\n1737\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "CMLXVI\n505\n640\nCDVIII\n1066\nMCCLIII\nCCXCIV\nMMCMXLVI\nMMMCXXVI\nLXXXIII\n",
+  "stdout": "966\nDV\nDCXL\n408\nMLXVI\n1253\n294\n2946\n3126\n83\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3299\n3626\n137\nDCCLIV\nMMMCCLII\nCCCXXIV\n1233\n",
+  "stdout": "MMMCCXCIX\nMMMDCXXVI\nCXXXVII\n754\n3252\n324\nMCCXXXIII\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1835\n1830\nMMMCX\nCCXLVII\n",
+  "stdout": "MDCCCXXXV\nMDCCCXXX\n3110\n247\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "MCCXXX\n",
+  "stdout": "1230\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3546\n2437\nMMDCXLVI\nMMMDXLIX\nMMMCCCIX\n",
+  "stdout": "MMMDXLVI\nMMCDXXXVII\n2646\n3549\n3309\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "CLXXIV\nDCCCLXXXV\n1110\n",
+  "stdout": "174\n885\nMCX\n"
+ }
+]

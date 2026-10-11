@@ -1,0 +1,53 @@
+use std::fs
+use std::ops::{Add, Sub, Mul}
+
+struct Vec2 {
+    x: i64,
+    y: i64,
+}
+
+impl Add for Vec2 {
+    type Output = Vec2
+    fn add(self, o: Vec2) -> Vec2 { Vec2 { x: self.x + o.x, y: self.y + o.y } }
+}
+
+impl Sub for Vec2 {
+    type Output = Vec2
+    fn sub(self, o: Vec2) -> Vec2 { Vec2 { x: self.x - o.x, y: self.y - o.y } }
+}
+
+impl Mul<i64> for Vec2 {
+    type Output = Vec2
+    fn mul(self, k: i64) -> Vec2 { Vec2 { x: self.x * k, y: self.y * k } }
+}
+
+impl Vec2 {
+    fn dot(self, o: Vec2) -> i64 { self.x * o.x + self.y * o.y }
+    fn cross(self, o: Vec2) -> i64 { self.x * o.y - self.y * o.x }
+    fn show(self) -> string { "(${self.x}, ${self.y})" }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() < 5 { continue }
+        let n: Vec<i64> = vec![p[0].parse::<i64>().unwrap_or(0), p[1].parse::<i64>().unwrap_or(0), p[3].parse::<i64>().unwrap_or(0), p[4].parse::<i64>().unwrap_or(0)]
+        let a = Vec2 { x: n[0], y: n[1] }
+        let b = Vec2 { x: n[2], y: n[3] }
+        let op = p[2].clone()
+        if op == "+" {
+            println((a + b).show())
+        } else if op == "-" {
+            println((a - b).show())
+        } else if op == "*" {
+            println("${a.dot(b)}")
+        } else if op == "x" {
+            println("${a.cross(b)}")
+        } else if op == "s" {
+            println((a * n[2]).show())
+        } else {
+            if n[0] == n[2] && n[1] == n[3] { println("true") } else { println("false") }
+        }
+    }
+}

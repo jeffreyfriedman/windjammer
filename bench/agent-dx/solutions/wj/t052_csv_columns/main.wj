@@ -1,0 +1,84 @@
+use std::env
+use std::fs
+use std::process
+
+fn fail(msg: string, code: i32) {
+    println(msg)
+    process::exit(code)
+}
+
+fn main() {
+    let mut args: Vec<string> = Vec::new()
+    for a0 in env::args() {
+        args.push(a0)
+    }
+    let file = args[1].clone()
+    let col = args[2].clone()
+    let op = args[3].clone()
+    let text = match fs::read_to_string(file) {
+        Ok(t) => t,
+        Err(_) => {
+            fail("error: cannot read ${file}", 1)
+            ""
+        }
+    }
+    let lines: Vec<string> = text.lines().map(|s| s.to_string()).collect()
+    let header: Vec<string> = lines[0].split(",").map(|s| s.to_string()).collect()
+    let mut ci: i64 = -1
+    let mut i: usize = 0
+    while i < header.len() {
+        if header[i] == col && ci < 0 { ci = i as i64 }
+        i += 1
+    }
+    if ci < 0 { fail("error: no such column ${col}", 2) }
+    if op != "sum" && op != "min" && op != "max" && op != "count" && op != "mean" {
+        fail("error: unknown op ${op}", 2)
+    }
+    let mut vals: Vec<string> = Vec::new()
+    let mut line_nos: Vec<usize> = Vec::new()
+    let mut r: usize = 1
+    while r < lines.len() {
+        let p: Vec<string> = lines[r].split(",").map(|s| s.to_string()).collect()
+        let v = if ci < (p.len() as i64) { p[ci as usize].clone() } else { "" }
+        vals.push(v)
+        line_nos.push(r + 1)
+        r += 1
+    }
+    if op == "count" {
+        println("${vals.len()}")
+        return
+    }
+    let mut nums: Vec<i64> = Vec::new()
+    let mut k: usize = 0
+    while k < vals.len() {
+        let v = vals[k].clone()
+        let mut good = v.len() > 0
+        for c in v.chars() {
+            if c < '0' || c > '9' { good = false }
+        }
+        if !good { fail("error: bad value ${v} on line ${line_nos[k]}", 3) }
+        nums.push(v.parse::<i64>().unwrap_or(0))
+        k += 1
+    }
+    if nums.len() == 0 {
+        if op == "sum" { println("0") } else { println("n/a") }
+        return
+    }
+    let mut sum: i64 = 0
+    let mut mn = nums[0]
+    let mut mx = nums[0]
+    for x in nums {
+        sum += x
+        if x < mn { mn = x }
+        if x > mx { mx = x }
+    }
+    if op == "sum" {
+        println("${sum}")
+    } else if op == "min" {
+        println("${mn}")
+    } else if op == "max" {
+        println("${mx}")
+    } else {
+        println("${sum / (nums.len() as i64)}")
+    }
+}

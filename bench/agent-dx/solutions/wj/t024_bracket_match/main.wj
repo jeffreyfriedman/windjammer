@@ -1,0 +1,36 @@
+use std::fs
+
+fn opener_for(c: char) -> char {
+    if c == ')' { '(' } else if c == ']' { '[' } else { '{' }
+}
+
+fn check(line: string) -> i64 {
+    let mut stack: Vec<char> = Vec::new()
+    let mut idx: Vec<i64> = Vec::new()
+    let mut i: i64 = 0
+    for c in line.chars() {
+        i += 1
+        if c == '(' || c == '[' || c == '{' {
+            stack.push(c)
+            idx.push(i)
+        } else if c == ')' || c == ']' || c == '}' {
+            if stack.len() == 0 || stack[stack.len() - 1] != opener_for(c) {
+                return i
+            }
+            stack.pop()
+            idx.pop()
+        }
+    }
+    if idx.len() > 0 {
+        return idx[idx.len() - 1]
+    }
+    0
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    for line in text.lines() {
+        let r = check(line.to_string())
+        if r == 0 { println("ok") } else { println("error ${r}") }
+    }
+}

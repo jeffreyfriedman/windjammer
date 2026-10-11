@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2 3 2\n",
+  "stdout": "items: 6\nchars: 24\nfirst: p0-1\nfirst: p0-2\nfirst: p0-3\nconsumers_total: 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 0 1\n",
+  "stdout": "items: 0\nchars: 0\nconsumers_total: 0\n"
+ }
+]

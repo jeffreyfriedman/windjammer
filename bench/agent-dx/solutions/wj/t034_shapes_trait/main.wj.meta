@@ -1,0 +1,400 @@
+{
+  "module_path": "main",
+  "functions": {
+    "Rect::corners": {
+      "params": [
+        "Custom(\"Rect\")"
+      ],
+      "formal_params": [
+        "Custom(\"Rect\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Rect",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Trapezoid::double_area": {
+      "params": [
+        "Custom(\"Trapezoid\")"
+      ],
+      "formal_params": [
+        "Custom(\"Trapezoid\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Trapezoid",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Trapezoid::name": {
+      "params": [
+        "Custom(\"Trapezoid\")"
+      ],
+      "formal_params": [
+        "Custom(\"Trapezoid\")"
+      ],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "Trapezoid",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Square::double_area": {
+      "params": [
+        "Custom(\"Square\")"
+      ],
+      "formal_params": [
+        "Custom(\"Square\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Square",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Square::corners": {
+      "params": [
+        "Custom(\"Square\")"
+      ],
+      "formal_params": [
+        "Custom(\"Square\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Square",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Shape::double_area": {
+      "params": [
+        "Reference(Custom(\"Self\"))"
+      ],
+      "formal_params": [
+        "Custom(\"Self\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Shape",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": null,
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": null,
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": true
+    },
+    "Shape::corners": {
+      "params": [
+        "Reference(Custom(\"Self\"))"
+      ],
+      "formal_params": [
+        "Custom(\"Self\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Shape",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": null,
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": null,
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": true
+    },
+    "Rect::double_area": {
+      "params": [
+        "Custom(\"Rect\")"
+      ],
+      "formal_params": [
+        "Custom(\"Rect\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Rect",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Shape::name": {
+      "params": [
+        "Reference(Custom(\"Self\"))"
+      ],
+      "formal_params": [
+        "Custom(\"Self\")"
+      ],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "Shape",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": null,
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": null,
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": true
+    },
+    "RightTri::corners": {
+      "params": [
+        "Custom(\"RightTri\")"
+      ],
+      "formal_params": [
+        "Custom(\"RightTri\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "RightTri",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "RightTri::name": {
+      "params": [
+        "Custom(\"RightTri\")"
+      ],
+      "formal_params": [
+        "Custom(\"RightTri\")"
+      ],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "RightTri",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "RightTri::double_area": {
+      "params": [
+        "Custom(\"RightTri\")"
+      ],
+      "formal_params": [
+        "Custom(\"RightTri\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "RightTri",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "emitted_rust_ref_params": [],
+      "string_ref_string_formal_params": [],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Rect::name": {
+      "params": [
+        "Custom(\"Rect\")"
+      ],
+      "formal_params": [
+        "Custom(\"Rect\")"
+      ],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "Rect",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Square::name": {
+      "params": [
+        "Custom(\"Square\")"
+      ],
+      "formal_params": [
+        "Custom(\"Square\")"
+      ],
+      "return_type": "String",
+      "is_associated": true,
+      "parent_type": "Square",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "Trapezoid::corners": {
+      "params": [
+        "Custom(\"Trapezoid\")"
+      ],
+      "formal_params": [
+        "Custom(\"Trapezoid\")"
+      ],
+      "return_type": "Custom(\"i64\")",
+      "is_associated": true,
+      "parent_type": "Trapezoid",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    }
+  },
+  "structs": {
+    "Trapezoid": {
+      "a": "Custom(\"i64\")",
+      "h": "Custom(\"i64\")",
+      "b": "Custom(\"i64\")"
+    },
+    "Square": {
+      "s": "Custom(\"i64\")"
+    },
+    "Rect": {
+      "w": "Custom(\"i64\")",
+      "h": "Custom(\"i64\")"
+    },
+    "RightTri": {
+      "a": "Custom(\"i64\")",
+      "b": "Custom(\"i64\")"
+    }
+  },
+  "trait_impls": {},
+  "copy_structs": [
+    "Trapezoid",
+    "Square",
+    "RightTri",
+    "Rect"
+  ],
+  "non_copy_structs": [],
+  "version": "0.50.0",
+  "analysis_fingerprint": {
+    "content_hash": 9615389168850291523,
+    "compiler_version": "0.50.0:765a91302c4a0920",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 744152437981401522
+  }
+}

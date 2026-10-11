@@ -1,0 +1,3 @@
+Each input line is an arithmetic expression over non-negative integer literals with binary operators `+ - * / %`, unary minus, parentheses, and arbitrary spaces. `*`, `/`, `%` bind tighter than `+`, `-`; operators of equal precedence associate left to right; unary minus binds tighter than any binary operator. All arithmetic is signed 64-bit; `/` truncates toward zero and `%` takes the sign of the dividend (like C/Rust/Go).
+
+Print the value of each expression. Print `error` instead if the expression is malformed (unbalanced parentheses, missing operand, stray characters, empty line content other than spaces counts as malformed) or divides/mods by zero. Blank lines produce `error`. Results never overflow 64 bits for valid inputs.

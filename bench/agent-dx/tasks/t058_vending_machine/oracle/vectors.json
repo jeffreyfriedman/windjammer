@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\ncoin 100\nselect cola\nstatus\n",
+  "stdout": "credit 100\ncredit 200\ndispensed cola change: 25 25\ncredit=0 cola=2 chips=2 gum=5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 25\nselect gum\ncoin 10\nselect gum\nrefund\ncoin 3\n",
+  "stdout": "credit 25\nerror: need 10 more\ncredit 35\ndispensed gum change: none\nrefund: none\nrejected 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "status\nrefund\nselect pie\ncoin 100\nselect chips\ncoin 100\nselect chips\ncoin 100\nselect chips\ncoin 100\ncoin 100\nselect chips\nstatus\n",
+  "stdout": "credit=0 cola=3 chips=2 gum=5\nrefund: none\nerror: unknown item pie\ncredit 100\ndispensed chips change: none\ncredit 100\ndispensed chips change: none\ncredit 100\nerror: sold out chips\ncredit 200\ncredit 300\nerror: sold out chips\ncredit=300 cola=3 chips=0 gum=5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\ncoin 100\ncoin 100\ncoin 25\nselect cola\ncoin 100\ncoin 100\nselect cola\ncoin 100\ncoin 100\nselect cola\ncoin 100\ncoin 100\nselect cola\nstatus\ncoin 5\nrefund\n",
+  "stdout": "credit 100\ncredit 200\ncredit 300\ncredit 325\ndispensed cola change: 100 25 25 25\ncredit 100\ncredit 200\ndispensed cola change: 25 25\ncredit 100\ncredit 200\ndispensed cola change: 25 25\ncredit 100\ncredit 200\nerror: sold out cola\ncredit=200 cola=0 chips=2 gum=5\ncredit 205\nrefund: 100 100 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 10\nselect cola\nrefund\ncoin 5\ncoin 10\ncoin 100\ncoin 100\nrefund\nrefund\nselect gum\nstatus\ncoin 100\nselect gum\nselect chips\nselect cola\nselect cola\ncoin 2\ncoin 100\nselect gum\nselect gum\nselect gum\ncoin 10\ncoin 5\ncoin 25\ncoin 50\nstatus\ncoin 25\ncoin 100\ncoin 10\ncoin 25\ncoin 100\ncoin 100\nselect cola\nselect cola\nselect cola\nselect cola\ncoin 100\nstatus\n",
+  "stdout": "credit 10\nerror: need 140 more\nrefund: 10\ncredit 5\ncredit 15\ncredit 115\ncredit 215\nrefund: 100 100 10 5\nrefund: none\nerror: need 35 more\ncredit=0 cola=3 chips=2 gum=5\ncredit 100\ndispensed gum change: 25 25 10 5\nerror: need 100 more\nerror: need 150 more\nerror: need 150 more\nrejected 2\ncredit 100\ndispensed gum change: 25 25 10 5\nerror: need 35 more\nerror: need 35 more\ncredit 10\ncredit 15\ncredit 40\nrejected 50\ncredit=40 cola=3 chips=2 gum=3\ncredit 65\ncredit 165\ncredit 175\ncredit 200\ncredit 300\ncredit 400\ndispensed cola change: 100 100 25 25\nerror: need 150 more\nerror: need 150 more\nerror: need 150 more\ncredit 100\ncredit=100 cola=2 chips=2 gum=3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select chips\nselect chips\ncoin 100\nrefund\nrefund\nselect cola\ncoin 10\nselect cola\nselect gum\nselect cola\ncoin 2\ncoin 10\ncoin 2\nselect tea\ncoin 2\nstatus\ncoin 50\ncoin 25\ncoin 25\nselect chips\ncoin 100\nselect cola\nselect chips\ncoin 100\nstatus\nstatus\ncoin 100\nselect chips\ncoin 25\ncoin 100\nselect gum\nstatus\ncoin 10\nrefund\ncoin 10\nstatus\nselect chips\ncoin 5\ncoin 25\ncoin 10\ncoin 2\ncoin 5\ncoin 50\ncoin 25\nselect gum\n",
+  "stdout": "error: need 100 more\nerror: need 100 more\ncredit 100\nrefund: 100\nrefund: none\nerror: need 150 more\ncredit 10\nerror: need 140 more\nerror: need 25 more\nerror: need 140 more\nrejected 2\ncredit 20\nrejected 2\nerror: unknown item tea\nrejected 2\ncredit=20 cola=3 chips=2 gum=5\nrejected 50\ncredit 45\ncredit 70\nerror: need 30 more\ncredit 170\ndispensed cola change: 10 10\nerror: need 100 more\ncredit 100\ncredit=100 cola=2 chips=2 gum=5\ncredit=100 cola=2 chips=2 gum=5\ncredit 200\ndispensed chips change: 100\ncredit 25\ncredit 125\ndispensed gum change: 25 25 25 10 5\ncredit=0 cola=2 chips=1 gum=4\ncredit 10\nrefund: 10\ncredit 10\ncredit=10 cola=2 chips=1 gum=4\nerror: need 90 more\ncredit 15\ncredit 40\ncredit 50\nrejected 2\ncredit 55\nrejected 50\ncredit 80\ndispensed gum change: 25 10 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\nstatus\nstatus\ncoin 100\nselect gum\ncoin 100\ncoin 25\ncoin 100\nselect gum\ncoin 50\n",
+  "stdout": "credit 100\ncredit=100 cola=3 chips=2 gum=5\ncredit=100 cola=3 chips=2 gum=5\ncredit 200\ndispensed gum change: 100 25 25 10 5\ncredit 100\ncredit 125\ncredit 225\ndispensed gum change: 100 25 25 25 10 5\nrejected 50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select cola\ncoin 25\nrefund\nselect gum\nselect gum\nstatus\ncoin 25\ncoin 25\ncoin 50\ncoin 100\ncoin 10\ncoin 10\ncoin 5\ncoin 10\nstatus\ncoin 2\ncoin 100\nrefund\ncoin 100\nrefund\nrefund\ncoin 100\ncoin 50\ncoin 100\ncoin 25\nselect gum\ncoin 25\ncoin 2\n",
+  "stdout": "error: need 150 more\ncredit 25\nrefund: 25\nerror: need 35 more\nerror: need 35 more\ncredit=0 cola=3 chips=2 gum=5\ncredit 25\ncredit 50\nrejected 50\ncredit 150\ncredit 160\ncredit 170\ncredit 175\ncredit 185\ncredit=185 cola=3 chips=2 gum=5\nrejected 2\ncredit 285\nrefund: 100 100 25 25 25 10\ncredit 100\nrefund: 100\nrefund: none\ncredit 100\nrejected 50\ncredit 200\ncredit 225\ndispensed gum change: 100 25 25 25 10 5\ncredit 25\nrejected 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\nselect gum\nrefund\ncoin 50\ncoin 100\nstatus\nrefund\ncoin 50\ncoin 2\nselect gum\nselect tea\ncoin 100\nselect cola\ncoin 100\nstatus\nstatus\nrefund\ncoin 25\ncoin 100\ncoin 100\nselect cola\nselect cola\ncoin 100\nstatus\nselect gum\ncoin 100\nselect cola\nrefund\nselect gum\nselect cola\ncoin 10\ncoin 2\n",
+  "stdout": "credit 100\ndispensed gum change: 25 25 10 5\nrefund: none\nrejected 50\ncredit 100\ncredit=100 cola=3 chips=2 gum=4\nrefund: 100\nrejected 50\nrejected 2\nerror: need 35 more\nerror: unknown item tea\ncredit 100\nerror: need 50 more\ncredit 200\ncredit=200 cola=3 chips=2 gum=4\ncredit=200 cola=3 chips=2 gum=4\nrefund: 100 100\ncredit 25\ncredit 125\ncredit 225\ndispensed cola change: 25 25 25\nerror: need 150 more\ncredit 100\ncredit=100 cola=2 chips=2 gum=4\ndispensed gum change: 25 25 10 5\ncredit 100\nerror: need 50 more\nrefund: 100\nerror: need 35 more\nerror: need 150 more\ncredit 10\nrejected 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 25\nselect gum\nstatus\ncoin 100\ncoin 50\ncoin 25\ncoin 50\nselect gum\ncoin 2\nselect gum\n",
+  "stdout": "credit 25\nerror: need 10 more\ncredit=25 cola=3 chips=2 gum=5\ncredit 125\nrejected 50\ncredit 150\nrejected 50\ndispensed gum change: 100 10 5\nrejected 2\nerror: need 35 more\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 5\nselect tea\ncoin 2\nselect gum\ncoin 100\ncoin 100\nselect chips\ncoin 100\nselect tea\ncoin 100\nrefund\nselect cola\nrefund\nstatus\n",
+  "stdout": "credit 5\nerror: unknown item tea\nrejected 2\nerror: need 30 more\ncredit 105\ncredit 205\ndispensed chips change: 100 5\ncredit 100\nerror: unknown item tea\ncredit 200\nrefund: 100 100\nerror: need 150 more\nrefund: none\ncredit=0 cola=3 chips=1 gum=5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\ncoin 100\nstatus\nrefund\nselect tea\ncoin 50\ncoin 25\ncoin 100\ncoin 5\nselect gum\ncoin 5\ncoin 2\nrefund\ncoin 100\nselect gum\ncoin 50\nselect chips\nselect gum\ncoin 25\nselect tea\nrefund\ncoin 10\ncoin 50\nstatus\nselect cola\ncoin 50\ncoin 10\nselect chips\ncoin 5\nselect cola\nselect chips\ncoin 10\nselect tea\nrefund\ncoin 50\nstatus\ncoin 50\n",
+  "stdout": "credit 100\ncredit 200\ncredit=200 cola=3 chips=2 gum=5\nrefund: 100 100\nerror: unknown item tea\nrejected 50\ncredit 25\ncredit 125\ncredit 130\ndispensed gum change: 25 25 25 10 10\ncredit 5\nrejected 2\nrefund: 5\ncredit 100\ndispensed gum change: 25 25 10 5\nrejected 50\nerror: need 100 more\nerror: need 35 more\ncredit 25\nerror: unknown item tea\nrefund: 25\ncredit 10\nrejected 50\ncredit=10 cola=3 chips=2 gum=3\nerror: need 140 more\nrejected 50\ncredit 20\nerror: need 80 more\ncredit 25\nerror: need 125 more\nerror: need 75 more\ncredit 35\nerror: unknown item tea\nrefund: 25 10\nrejected 50\ncredit=0 cola=3 chips=2 gum=3\nrejected 50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "refund\nselect gum\nselect gum\ncoin 2\ncoin 10\nrefund\nselect chips\ncoin 50\ncoin 5\ncoin 25\ncoin 100\ncoin 100\ncoin 10\ncoin 50\nselect tea\ncoin 100\ncoin 2\nselect tea\ncoin 5\ncoin 25\ncoin 5\nselect chips\nselect gum\ncoin 50\ncoin 100\ncoin 100\nselect chips\ncoin 10\ncoin 25\n",
+  "stdout": "refund: none\nerror: need 35 more\nerror: need 35 more\nrejected 2\ncredit 10\nrefund: 10\nerror: need 100 more\nrejected 50\ncredit 5\ncredit 30\ncredit 130\ncredit 230\ncredit 240\nrejected 50\nerror: unknown item tea\ncredit 340\nrejected 2\nerror: unknown item tea\ncredit 345\ncredit 370\ncredit 375\ndispensed chips change: 100 100 25 25 25\nerror: need 35 more\nrejected 50\ncredit 100\ncredit 200\ndispensed chips change: 100\ncredit 10\ncredit 35\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 5\nselect tea\nrefund\nrefund\ncoin 100\ncoin 50\ncoin 100\nrefund\nselect gum\ncoin 50\nselect chips\nselect gum\nselect chips\ncoin 2\nselect gum\ncoin 5\nselect gum\ncoin 10\ncoin 100\nrefund\ncoin 50\nselect cola\nstatus\ncoin 50\nselect tea\ncoin 10\ncoin 50\nselect chips\ncoin 25\ncoin 10\ncoin 10\ncoin 100\ncoin 100\nstatus\n",
+  "stdout": "credit 5\nerror: unknown item tea\nrefund: 5\nrefund: none\ncredit 100\nrejected 50\ncredit 200\nrefund: 100 100\nerror: need 35 more\nrejected 50\nerror: need 100 more\nerror: need 35 more\nerror: need 100 more\nrejected 2\nerror: need 35 more\ncredit 5\nerror: need 30 more\ncredit 15\ncredit 115\nrefund: 100 10 5\nrejected 50\nerror: need 150 more\ncredit=0 cola=3 chips=2 gum=5\nrejected 50\nerror: unknown item tea\ncredit 10\nrejected 50\nerror: need 90 more\ncredit 35\ncredit 45\ncredit 55\ncredit 155\ncredit 255\ncredit=255 cola=3 chips=2 gum=5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "status\ncoin 100\ncoin 25\ncoin 100\ncoin 10\nstatus\nselect gum\nstatus\ncoin 5\n",
+  "stdout": "credit=0 cola=3 chips=2 gum=5\ncredit 100\ncredit 125\ncredit 225\ncredit 235\ncredit=235 cola=3 chips=2 gum=5\ndispensed gum change: 100 100\ncredit=0 cola=3 chips=2 gum=4\ncredit 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select gum\ncoin 50\nselect gum\ncoin 100\nselect gum\ncoin 10\ncoin 50\nrefund\nselect cola\nstatus\ncoin 25\ncoin 100\nselect gum\ncoin 50\ncoin 2\ncoin 100\nrefund\ncoin 10\n",
+  "stdout": "error: need 35 more\nrejected 50\nerror: need 35 more\ncredit 100\ndispensed gum change: 25 25 10 5\ncredit 10\nrejected 50\nrefund: 10\nerror: need 150 more\ncredit=0 cola=3 chips=2 gum=4\ncredit 25\ncredit 125\ndispensed gum change: 25 25 25 10 5\nrejected 50\nrejected 2\ncredit 100\nrefund: 100\ncredit 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select chips\ncoin 100\nrefund\ncoin 100\ncoin 2\nrefund\nrefund\ncoin 100\ncoin 100\nrefund\ncoin 100\ncoin 100\nselect chips\ncoin 5\nstatus\ncoin 5\nselect gum\ncoin 100\ncoin 10\nselect chips\nrefund\ncoin 50\ncoin 100\nselect tea\ncoin 10\n",
+  "stdout": "error: need 100 more\ncredit 100\nrefund: 100\ncredit 100\nrejected 2\nrefund: 100\nrefund: none\ncredit 100\ncredit 200\nrefund: 100 100\ncredit 100\ncredit 200\ndispensed chips change: 100\ncredit 5\ncredit=5 cola=3 chips=1 gum=5\ncredit 10\nerror: need 25 more\ncredit 110\ncredit 120\ndispensed chips change: 10 10\nrefund: none\nrejected 50\ncredit 100\nerror: unknown item tea\ncredit 110\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select tea\ncoin 100\ncoin 25\nselect tea\nstatus\ncoin 2\ncoin 10\ncoin 25\nselect tea\nstatus\ncoin 5\ncoin 50\ncoin 100\ncoin 10\nselect gum\ncoin 2\ncoin 100\ncoin 50\nselect gum\ncoin 10\nrefund\nstatus\ncoin 25\ncoin 100\nstatus\ncoin 10\nselect gum\nstatus\nstatus\nselect tea\nrefund\nrefund\ncoin 2\nselect tea\ncoin 25\nstatus\nselect gum\nstatus\ncoin 50\ncoin 100\nselect gum\nselect cola\nselect tea\nselect tea\nrefund\n",
+  "stdout": "error: unknown item tea\ncredit 100\ncredit 125\nerror: unknown item tea\ncredit=125 cola=3 chips=2 gum=5\nrejected 2\ncredit 135\ncredit 160\nerror: unknown item tea\ncredit=160 cola=3 chips=2 gum=5\ncredit 165\nrejected 50\ncredit 265\ncredit 275\ndispensed gum change: 100 100 25 10 5\nrejected 2\ncredit 100\nrejected 50\ndispensed gum change: 25 25 10 5\ncredit 10\nrefund: 10\ncredit=0 cola=3 chips=2 gum=3\ncredit 25\ncredit 125\ncredit=125 cola=3 chips=2 gum=3\ncredit 135\ndispensed gum change: 100\ncredit=0 cola=3 chips=2 gum=2\ncredit=0 cola=3 chips=2 gum=2\nerror: unknown item tea\nrefund: none\nrefund: none\nrejected 2\nerror: unknown item tea\ncredit 25\ncredit=25 cola=3 chips=2 gum=2\nerror: need 10 more\ncredit=25 cola=3 chips=2 gum=2\nrejected 50\ncredit 125\ndispensed gum change: 25 25 25 10 5\nerror: need 150 more\nerror: unknown item tea\nerror: unknown item tea\nrefund: none\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "refund\nselect gum\ncoin 25\nselect tea\nselect gum\nselect chips\ncoin 100\ncoin 5\nselect chips\nselect cola\nstatus\ncoin 100\ncoin 50\ncoin 100\ncoin 25\nselect gum\nselect tea\ncoin 100\nstatus\nrefund\ncoin 25\ncoin 100\nstatus\ncoin 5\ncoin 25\ncoin 50\nselect cola\nselect tea\ncoin 100\nselect gum\ncoin 25\ncoin 2\ncoin 5\ncoin 25\ncoin 100\ncoin 2\nstatus\ncoin 25\ncoin 25\ncoin 50\nselect chips\n",
+  "stdout": "refund: none\nerror: need 35 more\ncredit 25\nerror: unknown item tea\nerror: need 10 more\nerror: need 75 more\ncredit 125\ncredit 130\ndispensed chips change: 25 5\nerror: need 150 more\ncredit=0 cola=3 chips=1 gum=5\ncredit 100\nrejected 50\ncredit 200\ncredit 225\ndispensed gum change: 100 25 25 25 10 5\nerror: unknown item tea\ncredit 100\ncredit=100 cola=3 chips=1 gum=4\nrefund: 100\ncredit 25\ncredit 125\ncredit=125 cola=3 chips=1 gum=4\ncredit 130\ncredit 155\nrejected 50\ndispensed cola change: 5\nerror: unknown item tea\ncredit 100\ndispensed gum change: 25 25 10 5\ncredit 25\nrejected 2\ncredit 30\ncredit 55\ncredit 155\nrejected 2\ncredit=155 cola=2 chips=1 gum=3\ncredit 180\ncredit 205\nrejected 50\ndispensed chips change: 100 5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "status\ncoin 25\ncoin 25\nselect tea\nselect tea\nselect gum\ncoin 5\ncoin 50\ncoin 2\ncoin 5\ncoin 10\nselect tea\nselect gum\nrefund\nselect gum\nrefund\nselect gum\nselect gum\ncoin 100\ncoin 5\nselect chips\ncoin 25\ncoin 10\nstatus\ncoin 50\nselect gum\ncoin 10\nrefund\nselect chips\ncoin 2\ncoin 2\nselect chips\ncoin 100\ncoin 100\ncoin 50\ncoin 10\nselect cola\nselect cola\nselect gum\nselect gum\ncoin 2\nselect chips\ncoin 25\nrefund\nstatus\ncoin 2\nselect gum\n",
+  "stdout": "credit=0 cola=3 chips=2 gum=5\ncredit 25\ncredit 50\nerror: unknown item tea\nerror: unknown item tea\ndispensed gum change: 10 5\ncredit 5\nrejected 50\nrejected 2\ncredit 10\ncredit 20\nerror: unknown item tea\nerror: need 15 more\nrefund: 10 10\nerror: need 35 more\nrefund: none\nerror: need 35 more\nerror: need 35 more\ncredit 100\ncredit 105\ndispensed chips change: 5\ncredit 25\ncredit 35\ncredit=35 cola=3 chips=1 gum=4\nrejected 50\ndispensed gum change: none\ncredit 10\nrefund: 10\nerror: need 100 more\nrejected 2\nrejected 2\nerror: need 100 more\ncredit 100\ncredit 200\nrejected 50\ncredit 210\ndispensed cola change: 25 25 10\nerror: need 150 more\nerror: need 35 more\nerror: need 35 more\nrejected 2\nerror: need 100 more\ncredit 25\nrefund: 25\ncredit=0 cola=2 chips=1 gum=3\nrejected 2\nerror: need 35 more\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select tea\ncoin 5\ncoin 2\nselect cola\ncoin 100\nselect gum\nselect tea\nstatus\ncoin 25\ncoin 100\nrefund\nselect chips\n",
+  "stdout": "error: unknown item tea\ncredit 5\nrejected 2\nerror: need 145 more\ncredit 105\ndispensed gum change: 25 25 10 10\nerror: unknown item tea\ncredit=0 cola=3 chips=2 gum=4\ncredit 25\ncredit 125\nrefund: 100 25\nerror: need 100 more\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\nstatus\ncoin 25\ncoin 50\ncoin 2\ncoin 25\ncoin 2\nstatus\nrefund\ncoin 10\nrefund\nselect gum\ncoin 10\nselect chips\ncoin 100\ncoin 25\ncoin 25\ncoin 10\ncoin 10\ncoin 100\ncoin 100\nrefund\nselect gum\ncoin 25\ncoin 2\ncoin 50\nselect chips\ncoin 25\ncoin 5\ncoin 2\nstatus\nselect gum\ncoin 50\nselect gum\ncoin 5\nselect tea\nstatus\ncoin 10\nselect gum\n",
+  "stdout": "credit 100\ncredit=100 cola=3 chips=2 gum=5\ncredit 125\nrejected 50\nrejected 2\ncredit 150\nrejected 2\ncredit=150 cola=3 chips=2 gum=5\nrefund: 100 25 25\ncredit 10\nrefund: 10\nerror: need 35 more\ncredit 10\nerror: need 90 more\ncredit 110\ncredit 135\ncredit 160\ncredit 170\ncredit 180\ncredit 280\ncredit 380\nrefund: 100 100 100 25 25 25 5\nerror: need 35 more\ncredit 25\nrejected 2\nrejected 50\nerror: need 75 more\ncredit 50\ncredit 55\nrejected 2\ncredit=55 cola=3 chips=2 gum=5\ndispensed gum change: 10 10\nrejected 50\nerror: need 35 more\ncredit 5\nerror: unknown item tea\ncredit=5 cola=3 chips=2 gum=4\ncredit 15\nerror: need 20 more\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 2\nstatus\nselect gum\ncoin 5\nselect cola\nselect gum\nrefund\ncoin 2\nselect chips\nselect chips\ncoin 10\ncoin 100\nstatus\nselect gum\nrefund\ncoin 100\nstatus\nstatus\ncoin 25\nselect tea\nselect gum\ncoin 100\ncoin 50\ncoin 5\ncoin 25\ncoin 2\nselect tea\nselect gum\nrefund\ncoin 100\ncoin 25\nstatus\nrefund\ncoin 100\nselect tea\ncoin 25\nselect chips\nrefund\ncoin 5\nselect gum\ncoin 100\ncoin 10\nrefund\ncoin 100\ncoin 100\ncoin 10\ncoin 2\n",
+  "stdout": "rejected 2\ncredit=0 cola=3 chips=2 gum=5\nerror: need 35 more\ncredit 5\nerror: need 145 more\nerror: need 30 more\nrefund: 5\nrejected 2\nerror: need 100 more\nerror: need 100 more\ncredit 10\ncredit 110\ncredit=110 cola=3 chips=2 gum=5\ndispensed gum change: 25 25 25\nrefund: none\ncredit 100\ncredit=100 cola=3 chips=2 gum=4\ncredit=100 cola=3 chips=2 gum=4\ncredit 125\nerror: unknown item tea\ndispensed gum change: 25 25 25 10 5\ncredit 100\nrejected 50\ncredit 105\ncredit 130\nrejected 2\nerror: unknown item tea\ndispensed gum change: 25 25 25 10 10\nrefund: none\ncredit 100\ncredit 125\ncredit=125 cola=3 chips=2 gum=2\nrefund: 100 25\ncredit 100\nerror: unknown item tea\ncredit 125\ndispensed chips change: 25\nrefund: none\ncredit 5\nerror: need 30 more\ncredit 105\ncredit 115\nrefund: 100 10 5\ncredit 100\ncredit 200\ncredit 210\nrejected 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "status\nselect tea\ncoin 50\nselect gum\ncoin 50\ncoin 50\ncoin 2\nselect chips\nstatus\ncoin 2\nrefund\ncoin 50\nselect gum\nstatus\ncoin 10\n",
+  "stdout": "credit=0 cola=3 chips=2 gum=5\nerror: unknown item tea\nrejected 50\nerror: need 35 more\nrejected 50\nrejected 50\nrejected 2\nerror: need 100 more\ncredit=0 cola=3 chips=2 gum=5\nrejected 2\nrefund: none\nrejected 50\nerror: need 35 more\ncredit=0 cola=3 chips=2 gum=5\ncredit 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select gum\ncoin 10\ncoin 100\nselect chips\nselect gum\ncoin 2\ncoin 50\ncoin 100\ncoin 2\ncoin 25\nselect tea\nrefund\nselect gum\ncoin 5\ncoin 100\nselect chips\nselect gum\ncoin 100\nselect gum\ncoin 25\ncoin 5\ncoin 2\ncoin 25\nselect cola\nselect gum\nstatus\nselect tea\ncoin 50\ncoin 2\ncoin 5\nrefund\ncoin 25\ncoin 50\nselect chips\nselect gum\ncoin 5\ncoin 100\ncoin 2\nselect gum\nselect cola\ncoin 100\nselect cola\nselect chips\ncoin 100\ncoin 25\ncoin 2\ncoin 100\nselect chips\nselect gum\ncoin 50\n",
+  "stdout": "error: need 35 more\ncredit 10\ncredit 110\ndispensed chips change: 10\nerror: need 35 more\nrejected 2\nrejected 50\ncredit 100\nrejected 2\ncredit 125\nerror: unknown item tea\nrefund: 100 25\nerror: need 35 more\ncredit 5\ncredit 105\ndispensed chips change: 5\nerror: need 35 more\ncredit 100\ndispensed gum change: 25 25 10 5\ncredit 25\ncredit 30\nrejected 2\ncredit 55\nerror: need 95 more\ndispensed gum change: 10 10\ncredit=0 cola=3 chips=0 gum=3\nerror: unknown item tea\nrejected 50\nrejected 2\ncredit 5\nrefund: 5\ncredit 25\nrejected 50\nerror: sold out chips\nerror: need 10 more\ncredit 30\ncredit 130\nrejected 2\ndispensed gum change: 25 25 25 10 10\nerror: need 150 more\ncredit 100\nerror: need 50 more\nerror: sold out chips\ncredit 200\ncredit 225\nrejected 2\ncredit 325\nerror: sold out chips\ndispensed gum change: 100 100 25 25 25 10 5\nrejected 50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 5\ncoin 5\ncoin 10\ncoin 50\nselect gum\nselect chips\ncoin 100\ncoin 10\ncoin 50\ncoin 25\nselect chips\ncoin 10\n",
+  "stdout": "credit 5\ncredit 10\ncredit 20\nrejected 50\nerror: need 15 more\nerror: need 80 more\ncredit 120\ncredit 130\nrejected 50\ncredit 155\ndispensed chips change: 25 25 5\ncredit 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select cola\ncoin 2\ncoin 2\nselect tea\ncoin 50\nselect gum\nselect cola\nselect tea\ncoin 25\nstatus\ncoin 25\ncoin 25\nselect tea\ncoin 100\ncoin 100\ncoin 50\nstatus\nselect gum\nstatus\nstatus\ncoin 2\ncoin 2\nstatus\ncoin 2\nstatus\nselect gum\ncoin 100\nselect chips\nstatus\ncoin 10\nrefund\ncoin 5\ncoin 10\nstatus\n",
+  "stdout": "error: need 150 more\nrejected 2\nrejected 2\nerror: unknown item tea\nrejected 50\nerror: need 35 more\nerror: need 150 more\nerror: unknown item tea\ncredit 25\ncredit=25 cola=3 chips=2 gum=5\ncredit 50\ncredit 75\nerror: unknown item tea\ncredit 175\ncredit 275\nrejected 50\ncredit=275 cola=3 chips=2 gum=5\ndispensed gum change: 100 100 25 10 5\ncredit=0 cola=3 chips=2 gum=4\ncredit=0 cola=3 chips=2 gum=4\nrejected 2\nrejected 2\ncredit=0 cola=3 chips=2 gum=4\nrejected 2\ncredit=0 cola=3 chips=2 gum=4\nerror: need 35 more\ncredit 100\ndispensed chips change: none\ncredit=0 cola=3 chips=1 gum=4\ncredit 10\nrefund: 10\ncredit 5\ncredit 15\ncredit=15 cola=3 chips=1 gum=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 5\nstatus\nselect chips\ncoin 25\ncoin 2\nselect gum\nstatus\nrefund\nselect chips\nselect tea\nselect tea\ncoin 100\ncoin 50\nrefund\ncoin 10\ncoin 50\ncoin 50\ncoin 100\nselect gum\nselect gum\nstatus\n",
+  "stdout": "credit 5\ncredit=5 cola=3 chips=2 gum=5\nerror: need 95 more\ncredit 30\nrejected 2\nerror: need 5 more\ncredit=30 cola=3 chips=2 gum=5\nrefund: 25 5\nerror: need 100 more\nerror: unknown item tea\nerror: unknown item tea\ncredit 100\nrejected 50\nrefund: 100\ncredit 10\nrejected 50\nrejected 50\ncredit 110\ndispensed gum change: 25 25 25\nerror: need 35 more\ncredit=0 cola=3 chips=2 gum=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select gum\nselect gum\nselect gum\ncoin 100\nselect tea\nselect tea\nselect tea\ncoin 50\nselect chips\ncoin 50\nstatus\ncoin 10\ncoin 10\ncoin 100\ncoin 10\nstatus\nselect gum\ncoin 50\nselect gum\ncoin 100\ncoin 2\ncoin 100\ncoin 50\ncoin 10\ncoin 5\ncoin 100\nselect cola\nselect gum\ncoin 25\nselect tea\ncoin 5\ncoin 100\nselect gum\nselect cola\nselect gum\ncoin 100\nrefund\nselect gum\ncoin 5\nrefund\nselect tea\nselect gum\n",
+  "stdout": "error: need 35 more\nerror: need 35 more\nerror: need 35 more\ncredit 100\nerror: unknown item tea\nerror: unknown item tea\nerror: unknown item tea\nrejected 50\ndispensed chips change: none\nrejected 50\ncredit=0 cola=3 chips=1 gum=5\ncredit 10\ncredit 20\ncredit 120\ncredit 130\ncredit=130 cola=3 chips=1 gum=5\ndispensed gum change: 25 25 25 10 10\nrejected 50\nerror: need 35 more\ncredit 100\nrejected 2\ncredit 200\nrejected 50\ncredit 210\ncredit 215\ncredit 315\ndispensed cola change: 100 25 25 10 5\nerror: need 35 more\ncredit 25\nerror: unknown item tea\ncredit 30\ncredit 130\ndispensed gum change: 25 25 25 10 10\nerror: need 150 more\nerror: need 35 more\ncredit 100\nrefund: 100\nerror: need 35 more\ncredit 5\nrefund: 5\nerror: unknown item tea\nerror: need 35 more\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 2\ncoin 5\nselect gum\ncoin 2\nselect chips\ncoin 50\nselect gum\nselect gum\ncoin 100\ncoin 100\nrefund\ncoin 25\ncoin 50\nstatus\ncoin 10\ncoin 10\nselect gum\nstatus\ncoin 50\nrefund\ncoin 25\nselect cola\nselect cola\ncoin 25\nstatus\nselect chips\ncoin 2\nstatus\ncoin 100\ncoin 100\nstatus\nstatus\ncoin 10\nselect gum\nselect tea\nstatus\nrefund\ncoin 25\nselect gum\nstatus\ncoin 2\ncoin 2\ncoin 25\ncoin 100\nstatus\nselect gum\nstatus\nselect tea\n",
+  "stdout": "rejected 2\ncredit 5\nerror: need 30 more\nrejected 2\nerror: need 95 more\nrejected 50\nerror: need 30 more\nerror: need 30 more\ncredit 105\ncredit 205\nrefund: 100 100 5\ncredit 25\nrejected 50\ncredit=25 cola=3 chips=2 gum=5\ncredit 35\ncredit 45\ndispensed gum change: 10\ncredit=0 cola=3 chips=2 gum=4\nrejected 50\nrefund: none\ncredit 25\nerror: need 125 more\nerror: need 125 more\ncredit 50\ncredit=50 cola=3 chips=2 gum=4\nerror: need 50 more\nrejected 2\ncredit=50 cola=3 chips=2 gum=4\ncredit 150\ncredit 250\ncredit=250 cola=3 chips=2 gum=4\ncredit=250 cola=3 chips=2 gum=4\ncredit 260\ndispensed gum change: 100 100 25\nerror: unknown item tea\ncredit=0 cola=3 chips=2 gum=3\nrefund: none\ncredit 25\nerror: need 10 more\ncredit=25 cola=3 chips=2 gum=3\nrejected 2\nrejected 2\ncredit 50\ncredit 150\ncredit=150 cola=3 chips=2 gum=3\ndispensed gum change: 100 10 5\ncredit=0 cola=3 chips=2 gum=2\nerror: unknown item tea\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\nselect gum\nselect tea\nselect cola\ncoin 100\nrefund\nrefund\ncoin 100\ncoin 100\ncoin 100\nrefund\nselect cola\ncoin 100\ncoin 5\nstatus\nrefund\nselect cola\ncoin 50\ncoin 100\nrefund\ncoin 5\nselect tea\ncoin 50\nselect cola\nselect chips\nstatus\ncoin 2\nstatus\nstatus\ncoin 10\nrefund\nselect chips\ncoin 100\ncoin 2\ncoin 5\ncoin 100\nstatus\nselect gum\n",
+  "stdout": "credit 100\ndispensed gum change: 25 25 10 5\nerror: unknown item tea\nerror: need 150 more\ncredit 100\nrefund: 100\nrefund: none\ncredit 100\ncredit 200\ncredit 300\nrefund: 100 100 100\nerror: need 150 more\ncredit 100\ncredit 105\ncredit=105 cola=3 chips=2 gum=4\nrefund: 100 5\nerror: need 150 more\nrejected 50\ncredit 100\nrefund: 100\ncredit 5\nerror: unknown item tea\nrejected 50\nerror: need 145 more\nerror: need 95 more\ncredit=5 cola=3 chips=2 gum=4\nrejected 2\ncredit=5 cola=3 chips=2 gum=4\ncredit=5 cola=3 chips=2 gum=4\ncredit 15\nrefund: 10 5\nerror: need 100 more\ncredit 100\nrejected 2\ncredit 105\ncredit 205\ncredit=205 cola=3 chips=2 gum=4\ndispensed gum change: 100 25 25 10 10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 2\ncoin 10\ncoin 50\ncoin 100\ncoin 100\nselect tea\ncoin 100\nstatus\ncoin 100\nselect chips\ncoin 50\nselect cola\nselect tea\nselect cola\nstatus\nrefund\nselect gum\nrefund\nstatus\nselect cola\nselect gum\nselect cola\nselect tea\ncoin 100\nselect gum\nselect cola\nrefund\nselect tea\nstatus\ncoin 50\nselect cola\ncoin 100\nrefund\ncoin 100\ncoin 5\n",
+  "stdout": "rejected 2\ncredit 10\nrejected 50\ncredit 110\ncredit 210\nerror: unknown item tea\ncredit 310\ncredit=310 cola=3 chips=2 gum=5\ncredit 410\ndispensed chips change: 100 100 100 10\nrejected 50\nerror: need 150 more\nerror: unknown item tea\nerror: need 150 more\ncredit=0 cola=3 chips=1 gum=5\nrefund: none\nerror: need 35 more\nrefund: none\ncredit=0 cola=3 chips=1 gum=5\nerror: need 150 more\nerror: need 35 more\nerror: need 150 more\nerror: unknown item tea\ncredit 100\ndispensed gum change: 25 25 10 5\nerror: need 150 more\nrefund: none\nerror: unknown item tea\ncredit=0 cola=3 chips=1 gum=4\nrejected 50\nerror: need 150 more\ncredit 100\nrefund: 100\ncredit 100\ncredit 105\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select tea\ncoin 100\ncoin 50\nselect gum\nselect chips\ncoin 100\ncoin 10\nselect chips\nstatus\nselect gum\ncoin 100\ncoin 10\ncoin 50\n",
+  "stdout": "error: unknown item tea\ncredit 100\nrejected 50\ndispensed gum change: 25 25 10 5\nerror: need 100 more\ncredit 100\ncredit 110\ndispensed chips change: 10\ncredit=0 cola=3 chips=1 gum=4\nerror: need 35 more\ncredit 100\ncredit 110\nrejected 50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "select gum\ncoin 100\nstatus\ncoin 25\ncoin 100\nselect chips\nstatus\ncoin 50\ncoin 100\ncoin 50\nstatus\nselect gum\nselect chips\ncoin 25\ncoin 100\nstatus\n",
+  "stdout": "error: need 35 more\ncredit 100\ncredit=100 cola=3 chips=2 gum=5\ncredit 125\ncredit 225\ndispensed chips change: 100 25\ncredit=0 cola=3 chips=1 gum=5\nrejected 50\ncredit 100\nrejected 50\ncredit=100 cola=3 chips=1 gum=5\ndispensed gum change: 25 25 10 5\nerror: need 100 more\ncredit 25\ncredit 125\ncredit=125 cola=3 chips=1 gum=4\n"
+ }
+]
