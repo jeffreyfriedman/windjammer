@@ -1,5 +1,10 @@
 //! Multi-target safety encodings.
 //!
+//! NOTE (backends audit): only the Rust arms are used by emitters. The Go/JS/TS/WASM arms are descriptive:
+//! the Go and JS/TS backends take parameter modes (`ParamMode`) from the analyzer registry in
+//! `codegen::portable::env` and insert value-semantics copies in `codegen::portable::lower`, so the old
+//! `encode_go_call_argument`/`encode_js_call_argument` wrappers (never called) were removed.
+//!
 //! Defines how the Safety-Typed IR maps to idiomatic safety constructs in
 //! each target language. The IR guarantees safety; each backend encodes it.
 //!
