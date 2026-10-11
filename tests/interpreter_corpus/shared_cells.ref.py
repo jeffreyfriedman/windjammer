@@ -1,0 +1,12 @@
+import sys
+s = int(sys.argv[1])
+print("count 2")
+print(s + 10)
+print("count 3")
+print("count 2 val %d" % ((s + 10) * 2))
+print(s * 3 + 1)
+print(s + 7)
+print("orphan true")
+print("parent %d" % (s + 1))
+print("1 1")
+print("orphan true")

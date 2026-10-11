@@ -134,6 +134,7 @@ impl Interpreter {
 
     /// `expr as ty`
     pub(crate) fn cast(&self, v: Value, ty: &Type) -> R {
+        let v = super::place::deref_value(v)?;
         let ty = self.resolve_alias(ty);
         if let Some(target) = IntTy::from_type(ty) {
             let n: i128 = match &v {

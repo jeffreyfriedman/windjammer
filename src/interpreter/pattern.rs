@@ -73,10 +73,12 @@ impl Interpreter {
             Pattern::Wildcard => true,
             Pattern::Identifier(name) | Pattern::MutBinding(name) | Pattern::Ref(name) => {
                 // A bare identifier that names a unit enum variant / const is a value pattern.
-                if let Value::Enum(e) = v {
-                    if matches!(e.payload, Payload::Unit) && &*e.variant == name.as_str() && self.is_known_variant_name(name) {
-                        return true;
-                    }
+                // (a variant name never binds: a non-matching value must fail the pattern)
+                if name == "None" || self.is_known_variant_name(name) {
+                    return match v {
+                        Value::Enum(e) => matches!(e.payload, Payload::Unit) && &*e.variant == name.as_str(),
+                        _ => false,
+                    };
                 }
                 bind_val(name.as_str(), binds, v, place, by_ref);
                 true

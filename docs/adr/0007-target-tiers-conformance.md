@@ -39,3 +39,12 @@ each target.
 
 ## Decision needed from: project owner
 Approve the tier assignment (especially JS and Go) and the rule that conformance gates promotion.
+
+## Amendment: interpreter tier (applied)
+*Interpreter tier.* The interpreter (`wj run --interpret`, `wj test --interpret`, `wj repl`) is a Tier-2 development
+target with a narrower contract than the compiled targets: it implements the language subset listed in
+`docs/INTERPRETER.md` with Rust-identical stdout, panic behaviour and exit codes (debug-build integer semantics), and reports any
+other construct as `unsupported in the interpreter` (exit 2). It is gated by `tests/interpreter_differential_test.rs`
+(independent Python oracles plus compiled Rust) and `tests/interpreter_semantics_test.rs`; a regression in either blocks a
+release. It is not a release path; `wj build` remains the production route. (This supersedes the "Tier 3" placement of the
+interpreter in Option A above.)

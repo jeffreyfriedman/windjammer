@@ -18,6 +18,13 @@ module_md = "src/analyzer/MODULE.md"
 allowed_imports = ["auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "parser_recovery", "project_paths", "source_map", "source_map_cache", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry"]
 known_violations = ["codegen", "ir", "metadata"]
 
+[modules.auto_clone_tests]
+layer = "ownership"
+owner_stage = "unit tests for auto_clone (included via #[path])"
+module_md = ""
+allowed_imports = ["auto_clone", "analyzer", "parser", "lexer"]
+known_violations = []
+
 [modules.auto_clone]
 layer = "ownership"
 owner_stage = "clone-insertion analysis"

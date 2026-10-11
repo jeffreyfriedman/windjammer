@@ -16,6 +16,8 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `engine.rs`            `Interpreter` state, public entry points (`run`, `run_checked`, `call_main`)
 - `register.rs`, `loader.rs`  definitions, `use`/`mod` resolution, multi-file loading
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
+- `generics.rs`          type-parameter bindings (`T::new()`), expected-type hints
+- `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`

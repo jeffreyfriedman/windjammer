@@ -175,10 +175,29 @@ impl Interpreter {
                 if self.builtins.has_function(name) {
                     return Ok(Value::Func(Rc::new(Callable::Path(Rc::from(name)))));
                 }
+                if let Some(p) = self.std_import_member(name, false) {
+                    if let Some(v) = self.builtins.constant(&p) {
+                        return Ok(v);
+                    }
+                    return Ok(Value::Func(Rc::new(Callable::Path(Rc::from(p.as_str())))));
+                }
                 // method path used as a function value: Type::method for builtin types
                 Err(semantic(format!("cannot find value `{}` in this scope", name)))
             }
         }
+    }
+
+    /// A bare name that a glob-style `use std::module` makes visible (`sqrt` after `use std::math`).
+    fn std_import_member(&self, name: &str, function: bool) -> Option<String> {
+        let module = self.scope.module;
+        self.modules[module].imports.values().find_map(|imp| match imp {
+            Import::Std(p) => {
+                let path = format!("{}::{}", p, name);
+                let hit = if function { self.builtins.has_function(&path) } else { self.builtins.constant(&path).is_some() || self.builtins.has_function(&path) };
+                hit.then_some(path)
+            }
+            _ => None,
+        })
     }
 
     pub(crate) fn global_value(&mut self, module: usize, name: &str) -> R {
@@ -207,13 +226,14 @@ impl Interpreter {
         &mut self,
         function: &'static Expression<'static>,
         arguments: &'static [(Option<String>, &'static Expression<'static>)],
+        expected: Option<Type>,
     ) -> R {
         if let Expression::Identifier { name, .. } = function {
             if self.lookup_var(name).is_none() {
                 if let Some(intr) = self.intrinsic_for_call(name) {
                     return self.eval_intrinsic_call(intr, function, arguments);
                 }
-                return self.call_named(name, arguments);
+                return self.call_named(name, arguments, &[], expected);
             }
         }
         if let Expression::FieldAccess { object, field, location } = function {
@@ -221,7 +241,7 @@ impl Interpreter {
             if let Expression::Identifier { name, .. } = object {
                 if self.lookup_var(name).is_none() && (self.structs.contains_key(name.as_str()) || self.enums.contains_key(name.as_str())) {
                     let path: &'static str = Box::leak(format!("{}::{}", name, field).into_boxed_str());
-                    return self.call_named(path, arguments);
+                    return self.call_named(path, arguments, &[], expected);
                 }
             }
             return self.eval_method_call(function, object, field.as_str(), None, arguments, location.as_ref());
@@ -278,22 +298,53 @@ impl Interpreter {
         self.eval(a)
     }
 
-    fn call_named(
+    pub(crate) fn call_named(
         &mut self,
-        name: &'static str,
+        name: &str,
         arguments: &'static [(Option<String>, &'static Expression<'static>)],
+        targs: &[Type],
+        expected: Option<Type>,
     ) -> R {
         let module = self.scope.module;
         // fast path: plain function in the current module (hot in recursion)
         if let Some(f) = self.modules[module].funcs.get(name).cloned() {
             let args = self.eval_args(arguments, Some(&f), false)?;
-            return self.call_func(&f, args, None);
+            return self.call_func_g(&f, args, None, targs, expected);
         }
+        if matches!(name, "drop" | "mem::drop" | "std::mem::drop") && arguments.len() == 1 && self.lookup_var(name).is_none() {
+            return self.explicit_drop(arguments[0].1);
+        }
+        let mut name = name.to_string();
+        // `T::new()` / `T::default()` through a type parameter of the running function
+        let mut via_param: Option<Type> = None;
+        if let Some((first, rest)) = name.split_once("::") {
+            match self.tparam(first) {
+                Some(Ok(t)) => {
+                    let t = t.clone();
+                    name = format!("{}::{}", super::generics::concrete_base(&t), rest);
+                    via_param = Some(t);
+                }
+                Some(Err(())) => {
+                    return Err(unsupported(format!(
+                        "cannot infer type parameter `{}` for `{}`: pass it explicitly (`f::<Type>(..)`), annotate the binding, or take a value of that type",
+                        first, name
+                    )))
+                }
+                None => {}
+            }
+        }
+        if let (Some(t), Some(m)) = (&via_param, name.rsplit("::").next()) {
+            if m == "default" && arguments.is_empty() && !name.contains("::default::") {
+                let t = t.clone();
+                return self.default_for(&t);
+            }
+        }
+        let name = name.as_str();
         let segs: Vec<&str> = name.split("::").collect();
         match self.resolve_in(module, &segs)? {
             Some(Resolved::Func(f)) => {
                 let args = self.eval_args(arguments, Some(&f), false)?;
-                self.call_func(&f, args, None)
+                self.call_func_g(&f, args, None, targs, expected)
             }
             Some(Resolved::Variant(en, idx)) => {
                 let args = self.eval_args(arguments, None, false)?;
@@ -327,16 +378,31 @@ impl Interpreter {
                         return self.call_method_value(recv, method, args, None);
                     }
                     return Err(unsupported(format!(
-                        "cannot resolve `{}`: calls through type parameters (`T::new()`), unknown types or unimplemented std items",
+                        "cannot resolve `{}`: unknown type or unimplemented std item",
                         name
                     )));
                 }
                 if self.builtins.has_function(name) {
                     return self.call_builtin_fn(name, args);
                 }
+                if let Some(p) = self.std_import_member(name, true) {
+                    return self.call_builtin_fn(&p, args);
+                }
                 Err(semantic(format!("cannot find function `{}` in this scope", name)))
             }
         }
+    }
+
+    /// `drop(x)`: a local argument is moved out (its slot emptied) and destructors run.
+    fn explicit_drop(&mut self, arg: &'static Expression<'static>) -> R {
+        let v = self.eval(arg)?;
+        if let Expression::Identifier { name, .. } = arg {
+            if let Some(slot) = self.lookup_var(name) {
+                *slot.borrow_mut() = Value::Unit;
+            }
+        }
+        self.drop_unreachable(&[v], &[])?;
+        Ok(Value::Unit)
     }
 
     fn make_tuple_struct(&mut self, name: &str, args: Vec<Value>) -> R {
@@ -351,7 +417,7 @@ impl Interpreter {
         for ((n, t), a) in fields.iter().zip(args) {
             out.push((Rc::from(*n), self.coerce(a, t)?));
         }
-        Ok(Value::Struct(Rc::new(StructVal { name: Rc::from(name), fields: out, copy })))
+        Ok(self.make_struct(name, out, copy))
     }
 
     pub(crate) fn call_builtin_fn(&mut self, path: &str, args: Vec<Value>) -> R {
@@ -375,13 +441,16 @@ impl Interpreter {
 
     pub(crate) fn call_callable(&mut self, c: &Rc<Callable>, mut args: Vec<Value>) -> R {
         match &**c {
-            Callable::Closure { params, body, env, module, self_ty } => {
+            Callable::Closure { params, body, env, module, self_ty, tparams } => {
                 self.depth_check()?;
                 let mut scope = Scope::new(*module);
                 scope.vars = env.clone();
                 scope.self_ty = self_ty.clone();
+                scope.tparams = tparams.clone();
                 scope.ret_ty = None;
+                let nenv = scope.vars.len();
                 let saved = std::mem::replace(&mut self.scope, scope);
+                self.frames.push(saved);
                 self.depth += 1;
                 // closures called with a single tuple for multiple params (e.g. fold on pairs) are not auto-splatted
                 for (i, p) in params.iter().enumerate() {
@@ -389,12 +458,14 @@ impl Interpreter {
                     self.bind_closure_param(p.as_str(), a);
                 }
                 let r = self.eval(body);
-                self.depth -= 1;
-                self.scope = saved;
-                match r {
+                let r = match r {
                     Err(Ctl::Return(v)) => Ok(v),
                     other => other,
-                }
+                };
+                let r = self.exit_scope_vars(nenv, r);
+                self.depth -= 1;
+                self.scope = self.frames.pop().expect("frame stack");
+                r
             }
             Callable::Named { module, name } => {
                 let segs: Vec<&str> = name.split("::").collect();
@@ -411,6 +482,7 @@ impl Interpreter {
                     }
                 }
             }
+            Callable::Deferred { .. } => Err(semantic("a future is not callable; `.await` it")),
             Callable::Path(p) => {
                 let p = p.to_string();
                 if let Some((en, var)) = p.rsplit_once("::") {
@@ -453,16 +525,61 @@ impl Interpreter {
     }
 
     fn depth_check(&mut self) -> R<()> {
-        if self.depth > self.max_depth {
-            return Err(super::error::panic_ctl(format!(
-                "stack overflow: recursion depth exceeded {} frames",
-                self.max_depth
-            )));
+        let over_stack = match self.stack_guard {
+            Some((base, budget)) => {
+                let here = 0u8;
+                base.saturating_sub(&here as *const u8 as usize) > budget
+            }
+            None => self.depth > self.max_depth,
+        };
+        if over_stack {
+            return Err(super::error::panic_ctl("stack overflow: recursion too deep for the interpreter stack"));
         }
         Ok(())
     }
 
-    pub(crate) fn call_func(&mut self, f: &Rc<FuncDef>, mut args: Vec<Value>, self_val: Option<Value>) -> R {
+    pub(crate) fn call_func(&mut self, f: &Rc<FuncDef>, args: Vec<Value>, self_val: Option<Value>) -> R {
+        self.call_func_g(f, args, self_val, &[], None)
+    }
+
+    /// `call_func` with explicit type arguments and the expected result type (generic dispatch).
+    pub(crate) fn call_func_g(
+        &mut self,
+        f: &Rc<FuncDef>,
+        args: Vec<Value>,
+        self_val: Option<Value>,
+        targs: &[Type],
+        expected: Option<Type>,
+    ) -> R {
+        if f.is_async {
+            // Rust semantics: calling an async fn does nothing until the future is awaited
+            return Ok(Value::Func(Rc::new(Callable::Deferred { func: f.clone(), args, self_val, targs: targs.to_vec(), expected })));
+        }
+        self.call_func_run(f, args, self_val, targs, expected)
+    }
+
+    /// `.await`: run a deferred async call to completion; any other value is already a result.
+    pub(crate) fn await_value(&mut self, v: Value) -> R {
+        match &v {
+            Value::Func(c) => match &**c {
+                Callable::Deferred { func, args, self_val, targs, expected } => {
+                    let r = self.call_func_run(func, args.clone(), self_val.clone(), targs, expected.clone())?;
+                    self.await_value(r)
+                }
+                _ => Ok(v),
+            },
+            _ => Ok(v),
+        }
+    }
+
+    fn call_func_run(
+        &mut self,
+        f: &Rc<FuncDef>,
+        mut args: Vec<Value>,
+        self_val: Option<Value>,
+        targs: &[Type],
+        expected: Option<Type>,
+    ) -> R {
         if f.is_extern {
             return Err(unsupported(format!("extern function `{}`", f.name)));
         }
@@ -471,12 +588,24 @@ impl Interpreter {
         let mut scope = Scope::new(f.module);
         scope.self_ty = f.self_ty.clone();
         scope.ret_ty = f.ret;
+        if !f.type_params.is_empty() {
+            let exp = match (f.ret, &expected) {
+                (Some(r), Some(e)) => Some((r, e)),
+                _ => None,
+            };
+            scope.tparams = self.initial_bindings(&f.type_params, targs, exp);
+        }
         let saved = std::mem::replace(&mut self.scope, scope);
+        self.frames.push(saved);
         self.depth += 1;
 
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         let mut it = args.drain(..);
-        if has_self {
+        if !has_self {
+            if let Some(v) = self_val {
+                self.define("self", v);
+            }
+        } else {
             let sv = match self_val {
                 Some(v) => Some(v),
                 None => it.next(),
@@ -488,6 +617,7 @@ impl Interpreter {
         let mut bind_err: Option<Ctl> = None;
         for p in f.params.iter().filter(|p| p.name != "self") {
             let a = it.next().unwrap_or(Value::Unit);
+            self.bind_from_arg(&p.type_, &a);
             let a = match &a {
                 Value::Ref(_) => a,
                 _ => match self.coerce(a, &p.type_) {
@@ -514,7 +644,10 @@ impl Interpreter {
 
         let r = match bind_err {
             Some(e) => Err(e),
-            None => self.exec_stmts(f.body),
+            None => {
+                self.expect_tail_type(f);
+                self.exec_stmts(f.body)
+            }
         };
         let r = self.run_defers(r);
         let r = match r {
@@ -530,8 +663,9 @@ impl Interpreter {
             Err(Ctl::Err(e)) => Err(Ctl::Err(Box::new(self.annotate(*e)))),
             other => other,
         };
+        let r = self.exit_scope_vars(0, r);
         self.depth -= 1;
-        self.scope = saved;
+        self.scope = self.frames.pop().expect("frame stack");
         self.backtrace.pop();
         r
     }
@@ -560,9 +694,33 @@ impl Interpreter {
                     // `f::<T>(args)` is a plain call with a turbofish
                     self.mark(loc);
                     self.type_hint = type_args.and_then(|t| t.first().cloned());
-                    return self.call_named(name.as_str(), arguments);
+                    let targs: &[Type] = type_args.map(|v| v.as_slice()).unwrap_or(&[]);
+                    let expected = self.take_expected(whole);
+                    return self.call_named(name.as_str(), arguments, targs, expected);
                 }
                 _ => {}
+            }
+        }
+        // legacy `Enum.Variant(args)` / `Type.assoc(args)` spelling
+        if let Expression::Identifier { name, .. } = object {
+            if self.lookup_var(name).is_none() && (self.enums.contains_key(name.as_str()) || self.structs.contains_key(name.as_str())) {
+                let path = format!("{}::{}", name, method);
+                self.mark(loc);
+                return self.call_named(&path, arguments, &[], None);
+            }
+        }
+        // legacy `module.func(args)` on an imported std module (`fs.exists(p)`, `time.now_millis()`)
+        if let Expression::Identifier { name, .. } = object {
+            if self.lookup_var(name).is_none() {
+                let module = self.scope.module;
+                if let Some(Import::Std(p)) = self.modules[module].imports.get(name.as_str()).cloned() {
+                    let path = format!("{}::{}", p, method);
+                    if self.builtins.has_function(&path) {
+                        let args = self.eval_args(arguments, None, false)?;
+                        self.mark(loc);
+                        return self.call_builtin_fn(&path, args);
+                    }
+                }
             }
         }
         // `Type.method` on a type name used like a path (e.g. `Self.new()`) is not valid; ignore.
@@ -575,6 +733,9 @@ impl Interpreter {
             (None, Value::Ref(p)) => Some(self.chase(p.clone())?),
             _ => place,
         };
+        if method == "clone" && matches!(recv, Value::Rc(_)) {
+            return Ok(recv); // Rc::clone: another handle to the same allocation
+        }
         let recv = deref_value(recv)?;
         // which user method (if any) will run? decides argument ref-ness
         let user = self.find_user_method(&recv, method);
@@ -599,8 +760,9 @@ impl Interpreter {
     fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         if !has_self {
-            // associated function called through an instance: not valid Rust
-            return self.call_func(f, args, None);
+            // `fn render() -> T` written without `self` but called on an instance: the body may
+            // still mention `self` (implicit receiver), so bind it
+            return self.call_func(f, args, Some(recv));
         }
         let self_val = if place.is_some() && self.self_mutation(f) {
             // release our clone of the receiver so in-place mutation stays copy-free
