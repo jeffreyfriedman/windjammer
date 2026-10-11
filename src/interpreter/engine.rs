@@ -27,6 +27,8 @@ pub struct FuncDef {
     pub self_ty: Option<Rc<str>>,
     pub decorators: &'static [Decorator<'static>],
     pub is_extern: bool,
+    /// Generic parameters in scope for the body: impl-level first, then the function's own.
+    pub type_params: Vec<String>,
     /// Per-parameter (self excluded): does the body mutate it? Computed lazily.
     pub mutated: OnceCell<Rc<Vec<bool>>>,
     pub self_mutated: OnceCell<bool>,
@@ -85,6 +87,8 @@ pub struct Scope {
     pub self_ty: Option<Rc<str>>,
     pub ret_ty: Option<&'static Type>,
     pub defers: Vec<&'static Statement<'static>>,
+    /// Generic parameters of the running function and what they were bound to (`None` = not inferable).
+    pub tparams: Vec<(Rc<str>, Option<Type>)>,
 }
 
 impl Scope {
@@ -96,6 +100,7 @@ impl Scope {
             self_ty: None,
             ret_ty: None,
             defers: Vec::new(),
+            tparams: Vec::new(),
         }
     }
 }
@@ -112,6 +117,12 @@ pub struct Interpreter {
     pub(crate) type_aliases: HashMap<String, Type>,
     pub(crate) globals: HashMap<(usize, String), Slot>,
     pub(crate) scope: Scope,
+    /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
+    pub(crate) frames: Vec<Scope>,
+    /// Types with `impl Drop` and the bookkeeping for their instances.
+    pub(crate) drop_types: HashSet<String>,
+    pub(crate) next_uid: u32,
+    pub(crate) dropped: HashSet<u32>,
     /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
     pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
     pub(crate) cur: Option<&'static Location>,
@@ -126,6 +137,8 @@ pub struct Interpreter {
     pub(crate) mutating_analysis: HashSet<usize>,
     /// Turbofish / expected type for the next builtin call (`parse::<i32>()`, `collect::<Vec<_>>()`).
     pub(crate) type_hint: Option<Type>,
+    /// Expected type of one specific call expression (address, type); see `generics.rs`.
+    pub(crate) expected: Option<(usize, Type)>,
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
 }
@@ -150,6 +163,10 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             globals: HashMap::new(),
             scope: Scope::new(0),
+            frames: Vec::new(),
+            drop_types: HashSet::new(),
+            next_uid: 0,
+            dropped: HashSet::new(),
             backtrace: Vec::new(),
             cur: None,
             output: Vec::new(),
@@ -162,6 +179,7 @@ impl Interpreter {
             closure_counter: 0,
             mutating_analysis: HashSet::new(),
             type_hint: None,
+            expected: None,
             missing_modules: HashSet::new(),
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
