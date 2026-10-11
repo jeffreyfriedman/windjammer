@@ -102,6 +102,7 @@ pub fn interpret_file(file: &Path) -> Result<()> {
 }
 
 pub fn interpret_with_args(file: &Path, args: Vec<String>) -> Result<()> {
+    report_build_lints(file);
     let code = interpreter::runner::run_path(file, args);
     if code != 0 {
         std::process::exit(code);
@@ -113,4 +114,18 @@ pub fn interpret_with_args(file: &Path, args: Vec<String>) -> Result<()> {
 pub fn run_repl() -> Result<()> {
     interpreter::repl::run_repl_stdio();
     Ok(())
+}
+
+/// Print the lints `wj build` would apply (same `linter::lint_text` source of truth) before interpreting.
+/// Interpretation still runs; `WJ_NO_LINT=1` silences it.
+pub fn report_build_lints(file: &Path) {
+    if file.is_file() && std::env::var_os("WJ_NO_LINT").is_none() {
+        if let Ok(src) = std::fs::read_to_string(file) {
+            let name = file.to_string_lossy().to_string();
+            for d in crate::linter::lint_text(&name, &src).unwrap_or_default() {
+                let would_fail = d.level == crate::linter::LintLevel::Error;
+                eprintln!("{}{}", d, if would_fail { "  (error in `wj build`)" } else { "" });
+            }
+        }
+    }
 }

@@ -1,4 +1,4 @@
-//! W0010 (ADR-0015 #4): a function that declares a return type must end in a value on every path.
+//! W0011 (ADR-0015 #4): a function that declares a return type must end in a value on every path.
 //!
 //! Windjammer uses an implicit final expression, so the classic mistakes are a body whose last
 //! statement is not a value (`let`, assignment, loop, `if` without `else`, a `println(..)` call) or

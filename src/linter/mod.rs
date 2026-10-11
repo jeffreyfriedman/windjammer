@@ -12,6 +12,23 @@ pub mod surface_syntax;
 pub mod missing_value;
 pub mod trailing_return;
 
+/// The single lint entry point shared by `wj lint`, `wj build` diagnostics and `wj run --interpret`:
+/// parse `source` and run every Rust-leakage / surface-syntax / diagnostics lint. `None` when it does not parse.
+pub fn lint_text(file_name: &str, source: &str) -> Option<Vec<LintDiagnostic>> {
+    let (n, t) = (file_name.to_string(), source.to_string());
+    std::panic::catch_unwind(move || {
+        let tokens = crate::lexer::Lexer::new(&t).tokenize_with_locations();
+        let mut parser = crate::parser::Parser::new_with_source(tokens, n.clone(), t.clone());
+        let program = parser.parse().ok()?;
+        let mut linter = rust_leakage::RustLeakageLinter::new(&n);
+        linter.lint_program(&program);
+        linter.lint_source(&t);
+        Some(linter.into_diagnostics())
+    })
+    .ok()
+    .flatten()
+}
+
 use crate::analyzer::AnalyzedFunction;
 use crate::error::SourceLocation;
 use crate::parser::{Expression, Statement};
