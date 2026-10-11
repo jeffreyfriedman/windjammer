@@ -6,9 +6,9 @@
 //! positions); and the first word of the mapped statement (`let x`, `for`, `foo(`) occurs on the
 //! mapped Rust line.
 
-use crate::span_oracle::corpus::*;
-use crate::span_oracle::lexer_oracle::lex_all;
-use crate::span_oracle::ratchet;
+use super::span_oracle::corpus::*;
+use super::span_oracle::lexer_oracle::lex_all;
+use super::span_oracle::ratchet;
 use std::collections::BTreeSet;
 use windjammer::{build_project_with_config, CompilationTarget};
 

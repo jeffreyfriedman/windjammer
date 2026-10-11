@@ -1,8 +1,8 @@
 //! Gate 2: AST location invariants (corpus + hand-written + mutation self-tests).
 
-use crate::span_oracle::ast_oracle::*;
-use crate::span_oracle::corpus::*;
-use crate::span_oracle::ratchet;
+use super::span_oracle::ast_oracle::*;
+use super::span_oracle::corpus::*;
+use super::span_oracle::ratchet;
 use std::collections::BTreeMap;
 use windjammer::parser::ast::*;
 use windjammer::parser::NodeSpan;
@@ -92,8 +92,8 @@ fn span_of(text: &str, nth: usize) -> NodeSpan {
     span_bytes(start, start + text.len())
 }
 fn span_bytes(bs: usize, be: usize) -> NodeSpan {
-    let (line, column) = crate::span_oracle::naive::line_col(SRC, bs);
-    let (end_line, end_column) = crate::span_oracle::naive::line_col(SRC, be.min(SRC.len()));
+    let (line, column) = super::span_oracle::naive::line_col(SRC, bs);
+    let (end_line, end_column) = super::span_oracle::naive::line_col(SRC, be.min(SRC.len()));
     NodeSpan { byte_start: bs, byte_end: be, line, column, end_line, end_column }
 }
 

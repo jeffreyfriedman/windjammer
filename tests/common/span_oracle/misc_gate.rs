@@ -1,11 +1,11 @@
 //! Gates 5-6: parse errors are always located; LSP/UTF-16 conversions; formatter edits;
 //! `--json` span validation; multi-line constructs.
 
-use crate::span_oracle::corpus::*;
-use crate::span_oracle::diag_oracle::location_in_message;
-use crate::span_oracle::lexer_oracle::lex_all;
-use crate::span_oracle::naive::{offset_of, utf16_len};
-use crate::span_oracle::ratchet;
+use super::span_oracle::corpus::*;
+use super::span_oracle::diag_oracle::location_in_message;
+use super::span_oracle::lexer_oracle::lex_all;
+use super::span_oracle::naive::{offset_of, utf16_len};
+use super::span_oracle::ratchet;
 use std::collections::BTreeSet;
 use windjammer::error::span_check::*;
 use windjammer::lexer::{Lexer, Token};
