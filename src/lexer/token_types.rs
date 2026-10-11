@@ -126,6 +126,7 @@ pub enum Token {
     Ampersand,  // &
     Pipe,       // |
     PipeOp,     // |> (pipe operator)
+    PipeTry,    // |>? (short-circuiting pipe: `x |>? f` is `f(x?)`)
     Underscore, // _
     Bang,       // ! (for macro invocations)
 
