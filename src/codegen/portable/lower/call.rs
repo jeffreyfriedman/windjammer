@@ -74,6 +74,11 @@ impl<'e> Lowerer<'e> {
     }
 
     fn named_call(&mut self, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        // `self::f()` is the module-relative path to the free function `f` (never a method call;
+        // the parser keeps it distinct from `self.f()`). Portable modules are flat.
+        if let Some(rest) = name.strip_prefix("self::") {
+            return self.named_call(rest, args, want);
+        }
         let plain: Vec<&Expression> = args.iter().map(|(_, e)| *e).collect();
         if let Some(intr) = Intrinsic::from_call_name(name).filter(|_| !self.shadows_intrinsic(name)) {
             return self.intrinsic(intr, &plain, false, want);

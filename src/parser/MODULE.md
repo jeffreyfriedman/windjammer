@@ -31,3 +31,14 @@ Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test
 `pipe_parser.rs` is the single desugaring site for `|>` and `|>?` (spec:
 `docs/design/pipe-operator.md`). Backends see plain calls. Misuse diagnostics carry the
 1-based `file:line:col` of the offending token (`pipe_error`); tests: `tests/pipe_*_test.rs`.
+
+## Diagnostics and recovery
+- `Parser::parse` first reports every `Token::Invalid` (lexical error) as `Lexical error: ... (at line L, column C)`,
+  then parses. Parse errors always carry `line L, column C` (`with_position` adds it when a call site forgot).
+- Recovery: a failed statement is recorded and the parser resynchronises (`recover_to_statement_boundary`),
+  a failed item resynchronises at the next item keyword; up to 25 errors per file are reported, one per line.
+  Recovery is only on inside `parse()`; `rewind(mark)` also drops errors recorded inside a speculative parse.
+- Statement-boundary (newline) rules: `docs/design/statement-boundaries.md`.
+- Match/`if` scrutinees reuse `parse_postfix_expression`: only the primary differs (no struct literal).
+- `self::f()` is `Call` on identifier `self::f`; `self.f()` is `MethodCall`. Keep them distinct.
+- Tests: `tests/parser_gaps_test.rs`, `tests/lexer_parser_never_panic_test.rs`, `tests/parser_grammar_roundtrip_test.rs`.
