@@ -64,7 +64,7 @@
 //   - parser/items.rs - Top-level item parsing
 
 use crate::lexer::Token;
-use typed_arena::Arena;
+use typed_arena::Arena as RawArena;
 
 // Import all AST types from the new parser::ast module
 pub use crate::parser::ast::*;
@@ -101,14 +101,14 @@ pub struct Parser {
     // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
     // SOUNDNESS: `parse()` returns `Program<'static>`, so nothing ties the AST to this Parser. The
-    // arenas therefore must outlive every Program, and `ArenaSlot` never frees them (see its docs).
+    // arenas therefore must outlive every Program, and the wrapper `Arena` never frees them (see its docs).
     // Dropping the Parser after `parse()` used to free the nodes under a live `Program` (use after free).
-    pub(crate) expr_arena: ArenaSlot<Expression<'static>>,
-    pub(crate) stmt_arena: ArenaSlot<Statement<'static>>,
-    pub(crate) pattern_arena: ArenaSlot<Pattern<'static>>,
+    pub(crate) expr_arena: Arena<Expression<'static>>,
+    pub(crate) stmt_arena: Arena<Statement<'static>>,
+    pub(crate) pattern_arena: Arena<Pattern<'static>>,
 }
 
-/// An AST arena that is **never freed**.
+/// An AST arena that is **never freed** (same API as `typed_arena::Arena` for the calls the parser makes).
 ///
 /// `Program<'static>` borrows from the arenas owned by the `Parser` that produced it, but the type system
 /// does not know that: the `'static` lifetime lets the program outlive the parser. Freeing the arenas when
@@ -116,53 +116,88 @@ pub struct Parser {
 /// common pattern). Until `Program` owns a reference-counted handle to its arenas (design in
 /// `docs/design/parser-arena-ownership.md`), the sound choice is to retire the arena: leak it and count it.
 /// Cost: AST memory of each parse lives until process exit (short-lived `wj` runs; the LSP should re-use
-/// parses). `retired_arenas()` / `freed_arenas()` back the drop-order test in `tests/parser_arena_soundness_test.rs`.
-pub struct ArenaSlot<T> {
-    arena: std::mem::ManuallyDrop<Arena<T>>,
+/// parses). `ArenaLedger` backs the drop-order test in `tests/parser_arena_soundness_test.rs`.
+pub struct Arena<T> {
+    raw: std::mem::ManuallyDrop<RawArena<T>>,
+    ledger: ArenaLedger,
     free_on_drop: bool,
 }
 
-static ARENAS_RETIRED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-static ARENAS_FREED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// Counts whether one arena was retired (leaked on purpose) or actually freed. A clone outlives the arena,
+/// so a test can drop the parser and then assert `freed() == 0`. (Per arena, not process-global: the
+/// architecture ratchet forbids new global state.)
+#[derive(Clone, Default, Debug)]
+pub struct ArenaLedger(std::sync::Arc<LedgerCounts>);
 
-/// Arenas intentionally leaked because their parser was dropped (diagnostics).
-pub fn retired_arenas() -> usize {
-    ARENAS_RETIRED.load(std::sync::atomic::Ordering::SeqCst)
+#[derive(Default, Debug)]
+struct LedgerCounts {
+    retired: std::sync::atomic::AtomicUsize,
+    freed: std::sync::atomic::AtomicUsize,
 }
 
-/// Arenas actually freed. Must stay 0 for every arena a `Parser` creates; a non-zero value means some
-/// code path can invalidate a live `Program<'static>`.
-pub fn freed_arenas() -> usize {
-    ARENAS_FREED.load(std::sync::atomic::Ordering::SeqCst)
-}
-
-impl<T> ArenaSlot<T> {
-    pub(crate) fn new() -> Self {
-        ArenaSlot { arena: std::mem::ManuallyDrop::new(Arena::new()), free_on_drop: false }
+impl ArenaLedger {
+    /// Arenas intentionally leaked because their owner was dropped.
+    pub fn retired(&self) -> usize {
+        self.0.retired.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// The unsound behavior, kept only so a test can prove `freed_arenas()` detects it.
+    /// Arenas actually freed. Must stay 0 for every arena a `Parser` creates; a non-zero value means some
+    /// code path can invalidate a live `Program<'static>`.
+    pub fn freed(&self) -> usize {
+        self.0.freed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// The ledgers of a parser's three arenas (expression, statement, pattern), summed.
+#[derive(Clone, Debug)]
+pub struct ParserArenaLedger(Vec<ArenaLedger>);
+
+impl ParserArenaLedger {
+    pub fn retired(&self) -> usize {
+        self.0.iter().map(ArenaLedger::retired).sum()
+    }
+    pub fn freed(&self) -> usize {
+        self.0.iter().map(ArenaLedger::freed).sum()
+    }
+}
+
+impl<T> Default for Arena<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Arena<T> {
+    pub fn new() -> Self {
+        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: false }
+    }
+
+    /// The unsound behavior, kept only so a test can prove `ArenaLedger::freed()` detects it.
     #[doc(hidden)]
     pub fn new_freeing_for_mutation_test() -> Self {
-        ArenaSlot { arena: std::mem::ManuallyDrop::new(Arena::new()), free_on_drop: true }
+        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: true }
+    }
+
+    pub fn ledger(&self) -> ArenaLedger {
+        self.ledger.clone()
     }
 }
 
-impl<T> std::ops::Deref for ArenaSlot<T> {
-    type Target = Arena<T>;
-    fn deref(&self) -> &Arena<T> {
-        &self.arena
+impl<T> std::ops::Deref for Arena<T> {
+    type Target = RawArena<T>;
+    fn deref(&self) -> &RawArena<T> {
+        &self.raw
     }
 }
 
-impl<T> Drop for ArenaSlot<T> {
+impl<T> Drop for Arena<T> {
     fn drop(&mut self) {
         if self.free_on_drop {
-            // SAFETY: only reachable from `new_freeing_for_mutation_test`, whose arena nothing borrows.
-            unsafe { std::mem::ManuallyDrop::drop(&mut self.arena) };
-            ARENAS_FREED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            // SAFETY: only reachable from `Arena::new_freeing_for_mutation_test`, whose arena nothing borrows.
+            unsafe { std::mem::ManuallyDrop::drop(&mut self.raw) };
+            self.ledger.0.freed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         } else {
-            ARENAS_RETIRED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.ledger.0.retired.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
     }
 }
@@ -195,9 +230,9 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
-            expr_arena: ArenaSlot::new(),
-            stmt_arena: ArenaSlot::new(),
-            pattern_arena: ArenaSlot::new(),
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
         }
     }
 
@@ -215,10 +250,15 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
-            expr_arena: ArenaSlot::new(),
-            stmt_arena: ArenaSlot::new(),
-            pattern_arena: ArenaSlot::new(),
+            expr_arena: Arena::new(),
+            stmt_arena: Arena::new(),
+            pattern_arena: Arena::new(),
         }
+    }
+
+    /// Handle that outlives this parser and reports whether its AST arenas were ever freed.
+    pub fn arena_ledger(&self) -> ParserArenaLedger {
+        ParserArenaLedger(vec![self.expr_arena.ledger(), self.stmt_arena.ledger(), self.pattern_arena.ledger()])
     }
 
     pub fn warnings(&self) -> &[ParseWarning] {
@@ -260,7 +300,7 @@ impl Parser {
     /// Allocate an expression in the arena
     /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'ast (result lifetime)
     /// This is safe because:
-    /// 1. The arena is never freed (`ArenaSlot`), so references outlive the Parser and any Program
+    /// 1. The arena is never freed (`Arena` wrapper), so references outlive the Parser and any Program
     /// 2. We use a separate 'ast lifetime (not tied to &self borrow) to allow multiple allocations
     /// 3. The arena uses interior mutability (Cell), so &self is sufficient
     pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {
