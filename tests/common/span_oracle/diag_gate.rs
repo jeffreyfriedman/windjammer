@@ -1,8 +1,8 @@
 //! Gate 3: diagnostics must be where the markers say, and every diagnostic must have a marker.
 
-use crate::span_oracle::corpus::*;
-use crate::span_oracle::diag_oracle::*;
-use crate::span_oracle::ratchet;
+use super::span_oracle::corpus::*;
+use super::span_oracle::diag_oracle::*;
+use super::span_oracle::ratchet;
 use std::collections::BTreeSet;
 
 fn oracle_dir() -> std::path::PathBuf {

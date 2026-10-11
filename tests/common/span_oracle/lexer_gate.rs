@@ -1,8 +1,8 @@
 //! Gate 1: lexer span invariants (corpus + generated + mutation self-tests).
 
-use crate::span_oracle::corpus::*;
-use crate::span_oracle::lexer_oracle::*;
-use crate::span_oracle::ratchet;
+use super::span_oracle::corpus::*;
+use super::span_oracle::lexer_oracle::*;
+use super::span_oracle::ratchet;
 use std::collections::BTreeSet;
 
 #[test]
