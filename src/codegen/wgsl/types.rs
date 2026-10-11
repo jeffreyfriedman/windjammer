@@ -9,6 +9,8 @@
 //! The compiler must automatically insert padding to match GPU requirements.
 
 use crate::parser::Type;
+use crate::wjsl::{ScalarType as WjslScalar, Type as WjslType};
+use crate::wjsl::wgsl_printer::type_to_wgsl;
 use anyhow::{bail, Result};
 
 /// WGSL type representation
@@ -68,41 +70,48 @@ impl WgslType {
         }
     }
 
-    /// Get the WGSL type string
-    pub fn to_wgsl_string(&self) -> String {
+    /// Convert to the shared WJSL type model (the single WGSL printer's input).
+    pub fn to_wjsl_type(&self) -> WjslType {
+        use crate::wjsl::ScalarType::{Bool, F32, I32, U32};
         match self {
-            WgslType::U32 => "u32".to_string(),
-            WgslType::I32 => "i32".to_string(),
-            WgslType::F32 => "f32".to_string(),
-            WgslType::Bool => "bool".to_string(),
-
-            WgslType::Vec2F32 => "vec2<f32>".to_string(),
-            WgslType::Vec3F32 => "vec3<f32>".to_string(),
-            WgslType::Vec4F32 => "vec4<f32>".to_string(),
-            WgslType::Vec2U32 => "vec2<u32>".to_string(),
-            WgslType::Vec3U32 => "vec3<u32>".to_string(),
-            WgslType::Vec4U32 => "vec4<u32>".to_string(),
-            WgslType::Vec2I32 => "vec2<i32>".to_string(),
-            WgslType::Vec3I32 => "vec3<i32>".to_string(),
-            WgslType::Vec4I32 => "vec4<i32>".to_string(),
-
-            WgslType::Mat2x2F32 => "mat2x2<f32>".to_string(),
-            WgslType::Mat3x3F32 => "mat3x3<f32>".to_string(),
-            WgslType::Mat4x4F32 => "mat4x4<f32>".to_string(),
-
-            WgslType::Array(elem_type, Some(size)) => {
-                format!("array<{}, {}>", elem_type.to_wgsl_string(), size)
+            WgslType::U32 => WjslType::Scalar(U32),
+            WgslType::I32 => WjslType::Scalar(I32),
+            WgslType::F32 => WjslType::Scalar(F32),
+            WgslType::Bool => WjslType::Scalar(Bool),
+            WgslType::Vec2F32 => WjslType::Vec2(Some(F32)),
+            WgslType::Vec3F32 => WjslType::Vec3(Some(F32)),
+            WgslType::Vec4F32 => WjslType::Vec4(Some(F32)),
+            WgslType::Vec2U32 => WjslType::Vec2(Some(U32)),
+            WgslType::Vec3U32 => WjslType::Vec3(Some(U32)),
+            WgslType::Vec4U32 => WjslType::Vec4(Some(U32)),
+            WgslType::Vec2I32 => WjslType::Vec2(Some(I32)),
+            WgslType::Vec3I32 => WjslType::Vec3(Some(I32)),
+            WgslType::Vec4I32 => WjslType::Vec4(Some(I32)),
+            WgslType::Mat2x2F32 => WjslType::Mat2x2(Some(F32)),
+            WgslType::Mat3x3F32 => WjslType::Mat3x3(Some(F32)),
+            WgslType::Mat4x4F32 => WjslType::Mat4x4(Some(F32)),
+            WgslType::Array(elem, size) => {
+                WjslType::Array(Box::new(elem.to_wjsl_type()), size.map(|n| n as u32))
             }
-            WgslType::Array(elem_type, None) => {
-                format!("array<{}>", elem_type.to_wgsl_string())
-            }
-            WgslType::Struct(name) => name.clone(),
-
-            WgslType::Texture2D(elem) => format!("texture_2d<{}>", elem.to_wgsl_string()),
-            WgslType::Texture3D(elem) => format!("texture_3d<{}>", elem.to_wgsl_string()),
-            WgslType::TextureCube(elem) => format!("texture_cube<{}>", elem.to_wgsl_string()),
-            WgslType::Sampler => "sampler".to_string(),
+            WgslType::Struct(name) => WjslType::Struct(name.clone()),
+            WgslType::Texture2D(e) => WjslType::Texture2D(e.texel_scalar()),
+            WgslType::Texture3D(e) => WjslType::Texture3D(e.texel_scalar()),
+            WgslType::TextureCube(e) => WjslType::TextureCube(e.texel_scalar()),
+            WgslType::Sampler => WjslType::Sampler,
         }
+    }
+
+    /// Scalar element type of a texture's texel (defaults to f32).
+    fn texel_scalar(&self) -> WjslScalar {
+        match self.to_wjsl_type() {
+            WjslType::Scalar(s) => s,
+            _ => WjslScalar::F32,
+        }
+    }
+
+    /// Get the WGSL type string (printed by the shared WJSL printer)
+    pub fn to_wgsl_string(&self) -> String {
+        type_to_wgsl(&self.to_wjsl_type())
     }
 
     /// Get the size in bytes

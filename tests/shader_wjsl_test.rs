@@ -12,7 +12,10 @@
 
 //! TDD tests for .wjsl (Windjammer Shader Language)
 
-use windjammer::shader::{compile_shader, parse_shader, ScalarType, Type, TypeChecker};
+use windjammer::wjsl::{
+    check_uniform_match, compile_legacy_shader as compile_shader, parse_block_shader as parse_shader,
+    ScalarType, Type,
+};
 
 #[test]
 fn test_parse_and_compile_simple_shader() {
@@ -25,7 +28,7 @@ fn test_parse_and_compile_simple_shader() {
     let module = parse_shader(source).unwrap();
     assert_eq!(module.name, "MyShader");
     assert_eq!(module.uniforms.len(), 1);
-    assert_eq!(module.uniforms[0].name, "screen_size");
+    assert_eq!(module.uniforms[0].0, "screen_size");
 
     let wgsl = compile_shader(source).unwrap();
     assert!(wgsl.contains("struct Uniforms"));
@@ -78,12 +81,7 @@ fn test_wj_shader_compile_cli() {
 fn test_type_checker_integration() {
     let source = "shader S { uniform x: Vec2<f32> }";
     let module = parse_shader(source).unwrap();
-    let checker = TypeChecker::new();
 
-    assert!(checker
-        .check_uniform_match(&module, "x", &Type::Vec2(ScalarType::F32))
-        .is_ok());
-    assert!(checker
-        .check_uniform_match(&module, "x", &Type::Vec2(ScalarType::F64))
-        .is_err());
+    assert!(check_uniform_match(&module, "x", &Type::Vec2(Some(ScalarType::F32))).is_ok());
+    assert!(check_uniform_match(&module, "x", &Type::Vec2(Some(ScalarType::F64))).is_err());
 }

@@ -88,7 +88,7 @@ const LEGACY_CORPUS: &[(&str, &str)] = &[
 #[test]
 fn golden_legacy_block_shaders() {
     for (name, source) in LEGACY_CORPUS {
-        let actual = windjammer::shader::compile_shader(source)
+        let actual = windjammer::wjsl::compile_legacy_shader(source)
             .unwrap_or_else(|e| format!("ERROR: {e}"));
         assert_golden(&format!("legacy_{name}"), &actual);
     }
@@ -96,7 +96,7 @@ fn golden_legacy_block_shaders() {
 
 #[test]
 fn golden_legacy_block_shader_rejects_f64() {
-    assert!(windjammer::shader::compile_shader("shader S { uniform x: Vec2<f64> }").is_err());
+    assert!(windjammer::wjsl::compile_legacy_shader("shader S { uniform x: Vec2<f64> }").is_err());
 }
 
 // ---------------------------------------------------------------------------
