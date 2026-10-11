@@ -1,0 +1,49 @@
+struct Body {
+    x: f64,
+    y: f64,
+    vx: f64,
+    vy: f64,
+    m: f64,
+}
+
+fn step(bodies: Vec<Body>, dt: f64) -> Vec<Body> {
+    let mut b = bodies
+    let n = b.len()
+    for i in 0..n {
+        let mut ax = 0.0
+        let mut ay = 0.0
+        for j in 0..n {
+            if i != j {
+                let dx = b[j].x - b[i].x
+                let dy = b[j].y - b[i].y
+                let d2 = dx * dx + dy * dy + 0.01
+                let inv = 1.0 / (d2 * d2.sqrt())
+                ax += dx * b[j].m * inv
+                ay += dy * b[j].m * inv
+            }
+        }
+        b[i].vx += ax * dt
+        b[i].vy += ay * dt
+    }
+    for i in 0..n {
+        b[i].x += b[i].vx * dt
+        b[i].y += b[i].vy * dt
+    }
+    b
+}
+
+fn main() {
+    let mut bodies = Vec::new()
+    for i in 0..40 {
+        let f = i as f64
+        bodies.push(Body { x: f * 1.5, y: (f * 0.7) - 10.0, vx: 0.0, vy: 0.0, m: 1.0 + (i % 3) as f64 })
+    }
+    for s in 0..2000 {
+        bodies = step(bodies, 0.001)
+    }
+    let mut e: f64 = 0.0
+    for i in 0..bodies.len() {
+        e += bodies[i].x + bodies[i].y
+    }
+    println!("{}", e)
+}

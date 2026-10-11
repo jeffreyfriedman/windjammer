@@ -1,0 +1,26 @@
+fn steps(start: u64) -> u64 {
+    let mut n = start
+    let mut s: u64 = 0
+    while n != 1 {
+        if n % 2 == 0 {
+            n = n / 2
+        } else {
+            n = 3 * n + 1
+        }
+        s += 1
+    }
+    s
+}
+
+fn main() {
+    let mut best: u64 = 0
+    let mut arg: u64 = 0
+    for n in 1_u64..3000000_u64 {
+        let s = steps(n)
+        if s > best {
+            best = s
+            arg = n
+        }
+    }
+    println!("{} {}", arg, best)
+}
