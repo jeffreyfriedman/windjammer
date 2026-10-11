@@ -171,6 +171,20 @@ impl Default for SignatureRegistry {
     }
 }
 
+/// Parameter types compared without the receiver slot: `self` is registered as `&Self`,
+/// `Self` or the concrete type depending on the pass, which is never a real collision.
+fn param_types_differ_ignoring_receiver(a: &FunctionSignature, b: &FunctionSignature) -> bool {
+    if a.has_self_receiver
+        && b.has_self_receiver
+        && !a.param_types.is_empty()
+        && !b.param_types.is_empty()
+    {
+        return a.param_types[1..] != b.param_types[1..]
+            || a.param_types.len() != b.param_types.len();
+    }
+    a.param_types != b.param_types
+}
+
 impl SignatureRegistry {
     /// Shared stdlib baseline (loaded once). Prefer this over `new()` when only
     /// reading stdlib / meta signatures — avoids cloning the full HashMap.
@@ -739,7 +753,7 @@ impl SignatureRegistry {
             if !name.contains("::") && !existing.has_self_receiver && sig.has_self_receiver {
                 return;
             }
-            if existing.param_types != sig.param_types {
+            if param_types_differ_ignoring_receiver(existing, &sig) {
                 // Empty-param runtime/stdlib stubs (e.g. `Config::new()`) are
                 // intentionally shadowed by user-defined constructors — not
                 // ambiguous collisions.
@@ -1781,7 +1795,7 @@ impl SignatureRegistry {
                     continue;
                 }
                 let codegen_refreshed = sig.emitted_rust_ref_params.is_some();
-                if existing.param_types != sig.param_types {
+                if param_types_differ_ignoring_receiver(existing, sig) {
                     let stub_like = existing.param_types.is_empty() || sig.param_types.is_empty();
                     // String ↔ `&str` / `Reference(string)` is a codegen text-formal
                     // refinement (regression-049), not a cross-module type collision.

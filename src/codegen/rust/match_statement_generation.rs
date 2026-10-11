@@ -364,6 +364,13 @@ impl<'ast> CodeGenerator<'ast> {
                     } else {
                         self.option_scrutinee_ref_prefix(value)
                     }
+                } else if matches!(
+                    value,
+                    Expression::FieldAccess { .. } | Expression::Index { .. }
+                ) && self.destructuring_match_moves_out_of_place(value, arms)
+                {
+                    // Destructuring a non-Copy place by value would move out of it (E0507).
+                    "&"
                 } else {
                     ""
                 };
@@ -863,6 +870,22 @@ impl<'ast> CodeGenerator<'ast> {
             } else {
                 value_str
             }
+        } else {
+            value_str
+        };
+
+        // Destructuring a non-Copy place (`items[0]`, `self.pair`) by value would move out of
+        // it (E0507): match the place by reference instead.
+        let value_str = if matches!(
+            value,
+            Expression::FieldAccess { .. } | Expression::Index { .. }
+        ) && !value_str.starts_with('&')
+            && self.destructuring_match_moves_out_of_place(value, arms)
+        {
+            let base = value_str
+                .strip_suffix(".clone()")
+                .unwrap_or(value_str.as_str());
+            format!("&{base}")
         } else {
             value_str
         };

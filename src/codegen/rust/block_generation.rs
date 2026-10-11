@@ -476,6 +476,10 @@ impl<'ast> CodeGenerator<'ast> {
                                 || self.inferred_mut_borrowed_params.contains(root_name)
                         });
                     behind_borrow || field_path_reused
+                } else if is_place && self.destructuring_match_moves_out_of_place(value, arms) {
+                    // `match items[0] { (id, name) => .. }` on a non-Copy element would move out
+                    // of the place (E0507); match the place by reference instead.
+                    true
                 } else {
                     false
                 };

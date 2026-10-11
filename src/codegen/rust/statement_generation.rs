@@ -1993,6 +1993,29 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// True when a tuple pattern binds parts of a place scrutinee
+    /// (`items[0]`, `self.pair`) whose type is known and not `Copy`: matching by value would
+    /// move out of the place, so the scrutinee must be matched by reference.
+    pub(in crate::codegen::rust) fn destructuring_match_moves_out_of_place(
+        &self,
+        scrutinee: &Expression<'ast>,
+        arms: &[MatchArm<'ast>],
+    ) -> bool {
+        let destructures = arms.iter().any(|arm| {
+            matches!(&arm.pattern, Pattern::Tuple(_)) && {
+                let mut bound = std::collections::HashSet::new();
+                self.extract_pattern_bindings(&arm.pattern, &mut bound);
+                !bound.is_empty()
+            }
+        });
+        if !destructures {
+            return false;
+        }
+        self.infer_expression_type(scrutinee).is_some_and(|ty| {
+            !matches!(ty, Type::Reference(_) | Type::MutableReference(_)) && !self.is_type_copy(&ty)
+        })
+    }
+
     pub(in crate::codegen::rust) fn match_scrutinee_option_yields_copy(
         &self,
         expr: &Expression<'ast>,
