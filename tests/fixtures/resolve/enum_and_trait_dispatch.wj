@@ -1,0 +1,29 @@
+enum Token {
+    Number(int),
+    Plus,
+}
+
+impl Token {
+    fn number(v: int) -> Token { Token::Number(v) }
+    fn is_plus(self) -> bool { false }
+}
+
+trait Visitor {
+    fn visit(self, t: Token) -> int
+}
+
+struct Counter { seen: int }
+
+impl Visitor for Counter {
+    fn visit(self, t: Token) -> int { self.seen }
+}
+
+extern fn host_log(code: int) -> int
+
+fn visit(t: Token) -> int { host_log(1) }
+
+pub fn run(c: Counter) -> int {
+    let a = Token::number(3)
+    let b = Token::Number(4)
+    c.visit(a) + visit(b)
+}
