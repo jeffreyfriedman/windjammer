@@ -228,7 +228,10 @@ impl<'ast> CodeGenerator<'ast> {
                         // `actual` is Owned+Inferred / misclassified Owned.
                         let mut kind = compute_coercion(&actual, &expected);
                         if matches!(kind, CoercionKind::Identity) {
-                            kind = CoercionKind::Clone;
+                            // `to_string`, not `clone`: this copy is semantic (a fresh value), so the
+                            // call-site "owned arg, last use" peel of a trailing `.clone()` must not
+                            // turn it into a move of the operand.
+                            kind = CoercionKind::ToOwnedString;
                         }
                         return apply_coercion(&kind, &arg_strs[1], Target::Rust);
                     }

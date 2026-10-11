@@ -2,11 +2,10 @@
 #
 # Real, open compiler bugs (each one is a minimal repro of an ownership / integer-width
 # inference gap). Remove a line as soon as its test passes; never add a line for a test that
-# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail (13 after the correctness stream's map-key gating fix).
+# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail (12 after the correctness stream's fixes).
 #
 # Classes: multi-file ownership demotion (call-site vs defining module), String move-vs-clone
 # at last use, enum payload literal width without return-type context, while-counter width.
-bug_p3791_cross_module_json_move_then_clone_test::p3791_cross_module_json_interp_must_clone_before_later_use
 bug_while_literal_bound_index_must_not_be_i32_test::while_literal_bound_index_must_not_be_i32
 cross_crate_dogfooding_ownership_test::dogfood_lsm_store_apply_patch_asymmetric_coercion
 cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
