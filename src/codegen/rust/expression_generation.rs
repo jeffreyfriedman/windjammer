@@ -76,6 +76,22 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Inside `S { field: [...] }`, returns element type `T` when `field` is `[T; N]`.
+    /// Struct-literal field whose declared type is a `Vec`/list (ADR-0014 list literal).
+    pub(in crate::codegen::rust) fn struct_field_expects_vec(&self) -> bool {
+        if !self.in_struct_literal_field {
+            return false;
+        }
+        let (Some(sn), Some(fnm)) = (
+            self.current_struct_literal_name.as_deref(),
+            self.current_struct_field_name.as_deref(),
+        ) else {
+            return false;
+        };
+        self.lookup_struct_field_types(sn)
+            .and_then(|fields| fields.get(fnm))
+            .is_some_and(crate::type_classification::type_is_vec_container)
+    }
+
     pub(in crate::codegen::rust) fn struct_array_field_element_type(&self) -> Option<Type> {
         if !self.in_struct_literal_field {
             return None;

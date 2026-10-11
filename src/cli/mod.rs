@@ -7,6 +7,7 @@ pub mod build;
 pub mod cache;
 pub mod check;
 pub mod clean;
+pub mod fix;
 pub mod fmt;
 pub mod json_diagnostics;
 pub mod lint;

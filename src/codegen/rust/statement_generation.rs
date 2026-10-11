@@ -696,7 +696,17 @@ impl<'ast> CodeGenerator<'ast> {
                 value,
                 location,
                 ..
-            } => self.generate_let_statement(pattern, *mutable, type_, value, location),
+            } => {
+                // ADR-0014: `let x = [a, b]` is a growable list unless annotated as a fixed array.
+                let prev_list = self.array_literal_as_list;
+                self.array_literal_as_list = matches!(value, Expression::Array { .. })
+                    && type_
+                        .as_ref()
+                        .is_none_or(crate::type_classification::type_is_vec_container);
+                let generated = self.generate_let_statement(pattern, *mutable, type_, value, location);
+                self.array_literal_as_list = prev_list;
+                generated
+            }
             Statement::Const {
                 name, type_, value, ..
             } => self.generate_const_statement(name.as_str(), type_, value),

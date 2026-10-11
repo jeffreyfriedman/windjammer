@@ -77,6 +77,10 @@ impl<'a> Interpreter<'a> {
                         .map(|(_, arg)| self.eval_expression(arg))
                         .collect();
 
+                    if let Some(result) = self.eval_intrinsic_call(name, &args) {
+                        return result;
+                    }
+
                     match name.as_str() {
                         "println" => {
                             self.builtin_println(&args);
@@ -321,15 +325,8 @@ impl<'a> Interpreter<'a> {
         }
 
         if let Value::String(fmt_str) = &args[0] {
-            if fmt_str.contains("{}") {
-                let mut result = fmt_str.clone();
-                for arg in &args[1..] {
-                    if let Some(pos) = result.find("{}") {
-                        let replacement = arg.to_display_string();
-                        result = format!("{}{}{}", &result[..pos], replacement, &result[pos + 2..]);
-                    }
-                }
-                return result;
+            if args.len() > 1 && fmt_str.contains('{') {
+                return Self::format_template(fmt_str, &args[1..]);
             }
         }
 

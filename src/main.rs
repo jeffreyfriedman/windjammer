@@ -43,6 +43,7 @@ pub mod resolve; // identity-based name resolver (shadow mode)
 pub mod fuzzy_matcher; // Fuzzy string matching for typo suggestions
 pub mod inference;
 pub mod interpreter; // Windjammerscript: tree-walking interpreter for fast iteration
+pub mod intrinsics; // ADR-0014 language intrinsics registry and surface-syntax fix
 pub mod ir;
 pub mod lexer;
 pub mod linter; // Windjammer-specific lints (performance, style, correctness)

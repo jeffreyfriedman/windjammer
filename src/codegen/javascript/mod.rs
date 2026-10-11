@@ -11,6 +11,7 @@ pub mod differential_loading;
 mod expression_generation;
 mod generator;
 mod ir_lowering;
+mod intrinsics;
 pub mod minifier;
 pub mod module_federation;
 pub mod polyfills;

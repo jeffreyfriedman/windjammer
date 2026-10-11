@@ -18,8 +18,14 @@ impl Parser {
                     format_string.push_str(&escaped);
                 }
                 crate::lexer::StringPart::Expression(expr_str) => {
-                    format_string.push_str("{}");
-                    let trimmed = expr_str.trim();
+                    // `${x:.2}` / `${x:?}`: split a trailing format specifier (ADR-0014).
+                    let (body, spec) =
+                        crate::intrinsics::split_interp_spec(expr_str.trim());
+                    match spec {
+                        Some(spec) => format_string.push_str(&format!("{{:{spec}}}")),
+                        None => format_string.push_str("{}"),
+                    }
+                    let trimmed = body.trim();
                     let mut expr_lexer = crate::lexer::Lexer::new(trimmed);
                     let mut expr_tokens = Vec::new();
                     loop {

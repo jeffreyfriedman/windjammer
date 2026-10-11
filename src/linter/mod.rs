@@ -8,6 +8,7 @@
 //! This follows the Rust/Clippy model: code compiles, but warnings guide toward better patterns.
 
 pub mod rust_leakage;
+pub mod surface_syntax;
 
 use crate::analyzer::AnalyzedFunction;
 use crate::error::SourceLocation;

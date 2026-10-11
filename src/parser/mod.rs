@@ -25,6 +25,7 @@ mod call_expression_parser;
 mod compound_primary_expression_parser;
 pub mod expression_parser;
 mod interpolated_string_expression_parser;
+mod intrinsic_lowering;
 mod match_value_expression_parser;
 mod primary_expression_parser;
 
