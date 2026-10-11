@@ -49,6 +49,23 @@ impl<'e> Lowerer<'e> {
                 }
                 self.method_call(object, field, None, args, want)
             }
+            // `(|v| body)(x)` (what `x |> |v| body` desugars to): type the closure
+            // parameters from the argument types, otherwise they default to the
+            // wrong integer width on typed backends.
+            Expression::Closure { .. } => {
+                let mut lowered = Vec::new();
+                for (_, a) in args.iter() {
+                    lowered.push(self.expr(a, None)?);
+                }
+                let want_fn = Ty::Fn(lowered.iter().map(|v| v.ty.clone()).collect(), Box::new(Ty::Unknown));
+                let f = self.expr(function, Some(&want_fn))?;
+                let ret = match &f.ty {
+                    Ty::Fn(_, r) => (**r).clone(),
+                    _ => Ty::Unknown,
+                };
+                let out = lowered.into_iter().map(|v| self.own(v)).collect();
+                Ok(PExpr::new(ret, PK::CallValue { f, args: out }))
+            }
             other => {
                 let f = self.expr(other, None)?;
                 self.call_value(f, args)
