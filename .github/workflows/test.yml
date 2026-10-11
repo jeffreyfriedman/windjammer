@@ -82,8 +82,30 @@ jobs:
       - name: Build wj and wj-docs
         run: cargo build --release --bin wj --bin wj-docs
 
-      - name: Verify generated docs, doc examples, links, claims, freshness
-        run: WJ_BIN=$PWD/target/release/wj scripts/docs_gen.sh --verify
+      - name: Verify generated docs, doc examples, links, claims, freshness, EBNF, README quickstart (sh,verify fences run with this wj)
+        run: WJ_DOCS_REQUIRE_EXEC=1 WJ_BIN=$PWD/target/release/wj scripts/docs_gen.sh --verify
+
+      - name: Docs-truth mutation self-tests
+        run: cargo test --release --features cli --test docs_truth
+
+      - name: Interpreter feature registry, parser arena soundness, error-catalog determinism
+        run: cargo test --release --test interpreter_features --test parser_arena_soundness && cargo test --release --lib error_catalog
+
+  examples-gate:
+    name: Examples (every example runs or checks, or does not exist)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Run examples/EXAMPLES.toml (interpreter runs with expect, in-process checks)
+        run: cargo test --release --features cli --test examples_gate
 
   version-check:
     name: Version Alignment

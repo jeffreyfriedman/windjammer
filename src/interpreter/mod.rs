@@ -11,6 +11,7 @@ pub mod engine;
 pub mod error;
 mod eval_expr;
 mod eval_stmt;
+pub mod features;
 mod format;
 mod generics;
 mod heap;

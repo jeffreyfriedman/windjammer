@@ -64,7 +64,7 @@
 //   - parser/items.rs - Top-level item parsing
 
 use crate::lexer::Token;
-use typed_arena::Arena;
+use typed_arena::Arena as RawArena;
 
 // Import all AST types from the new parser::ast module
 pub use crate::parser::ast::*;
@@ -98,13 +98,11 @@ pub struct Parser {
     pub(crate) in_pipe_stage: bool,
     /// Number of `_` placeholders produced in the current pipe stage.
     pub(crate) pipe_placeholders: Vec<usize>,
-    // Arena allocators for AST nodes (eliminates recursive Drop)
-    // When Parser is dropped, these arenas drop all allocated AST nodes at once
-    // without recursive calls to Drop, solving the Windows stack overflow issue
+    // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
-    // SAFETY: We use 'static here because the arena owns the memory. The actual
-    // lifetime is tied to Parser through the parse() method signature. References
-    // returned from parse() will have lifetime 'parser tied to &'parser self.
+    // SOUNDNESS: `parse()` returns `Program<'static>`, so nothing ties the AST to this Parser. The
+    // arenas therefore must outlive every Program, and the wrapper `Arena` never frees them (see its docs).
+    // Dropping the Parser after `parse()` used to free the nodes under a live `Program` (use after free).
     pub(crate) expr_arena: Arena<Expression<'static>>,
     pub(crate) stmt_arena: Arena<Statement<'static>>,
     pub(crate) pattern_arena: Arena<Pattern<'static>>,
@@ -113,6 +111,100 @@ pub struct Parser {
     pub(crate) recovered_errors: Vec<String>,
     /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
     pub(crate) recovering: bool,
+}
+
+/// An AST arena that is **never freed** (same API as `typed_arena::Arena` for the calls the parser makes).
+///
+/// `Program<'static>` borrows from the arenas owned by the `Parser` that produced it, but the type system
+/// does not know that: the `'static` lifetime lets the program outlive the parser. Freeing the arenas when
+/// the parser is dropped is therefore a use-after-free for every caller that drops the parser first (the
+/// common pattern). Until `Program` owns a reference-counted handle to its arenas (design in
+/// `docs/design/parser-arena-ownership.md`), the sound choice is to retire the arena: leak it and count it.
+/// Cost: AST memory of each parse lives until process exit (short-lived `wj` runs; the LSP should re-use
+/// parses). `ArenaLedger` backs the drop-order test in `tests/parser_arena_soundness_test.rs`.
+pub struct Arena<T> {
+    raw: std::mem::ManuallyDrop<RawArena<T>>,
+    ledger: ArenaLedger,
+    free_on_drop: bool,
+}
+
+/// Counts whether one arena was retired (leaked on purpose) or actually freed. A clone outlives the arena,
+/// so a test can drop the parser and then assert `freed() == 0`. (Per arena, not process-global: the
+/// architecture ratchet forbids new global state.)
+#[derive(Clone, Default, Debug)]
+pub struct ArenaLedger(std::sync::Arc<LedgerCounts>);
+
+#[derive(Default, Debug)]
+struct LedgerCounts {
+    retired: std::sync::atomic::AtomicUsize,
+    freed: std::sync::atomic::AtomicUsize,
+}
+
+impl ArenaLedger {
+    /// Arenas intentionally leaked because their owner was dropped.
+    pub fn retired(&self) -> usize {
+        self.0.retired.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Arenas actually freed. Must stay 0 for every arena a `Parser` creates; a non-zero value means some
+    /// code path can invalidate a live `Program<'static>`.
+    pub fn freed(&self) -> usize {
+        self.0.freed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// The ledgers of a parser's three arenas (expression, statement, pattern), summed.
+#[derive(Clone, Debug)]
+pub struct ParserArenaLedger(Vec<ArenaLedger>);
+
+impl ParserArenaLedger {
+    pub fn retired(&self) -> usize {
+        self.0.iter().map(ArenaLedger::retired).sum()
+    }
+    pub fn freed(&self) -> usize {
+        self.0.iter().map(ArenaLedger::freed).sum()
+    }
+}
+
+impl<T> Default for Arena<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Arena<T> {
+    pub fn new() -> Self {
+        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: false }
+    }
+
+    /// The unsound behavior, kept only so a test can prove `ArenaLedger::freed()` detects it.
+    #[doc(hidden)]
+    pub fn new_freeing_for_mutation_test() -> Self {
+        Arena { raw: std::mem::ManuallyDrop::new(RawArena::new()), ledger: ArenaLedger::default(), free_on_drop: true }
+    }
+
+    pub fn ledger(&self) -> ArenaLedger {
+        self.ledger.clone()
+    }
+}
+
+impl<T> std::ops::Deref for Arena<T> {
+    type Target = RawArena<T>;
+    fn deref(&self) -> &RawArena<T> {
+        &self.raw
+    }
+}
+
+impl<T> Drop for Arena<T> {
+    fn drop(&mut self) {
+        if self.free_on_drop {
+            // SAFETY: only reachable from `Arena::new_freeing_for_mutation_test`, whose arena nothing borrows.
+            unsafe { std::mem::ManuallyDrop::drop(&mut self.raw) };
+            self.ledger.0.freed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        } else {
+            self.ledger.0.retired.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
 }
 
 impl Parser {
@@ -332,10 +424,15 @@ impl Parser {
         });
     }
 
+    /// Handle that outlives this parser and reports whether its AST arenas were ever freed.
+    pub fn arena_ledger(&self) -> ParserArenaLedger {
+        ParserArenaLedger(vec![self.expr_arena.ledger(), self.stmt_arena.ledger(), self.pattern_arena.ledger()])
+    }
+
     /// Allocate an expression in the arena
     /// SAFETY: We transmute the lifetime from 'static (arena storage) to 'ast (result lifetime)
     /// This is safe because:
-    /// 1. Parser owns the arena, so references live as long as Parser does
+    /// 1. The arena is never freed (`Arena` wrapper), so references outlive the Parser and any Program
     /// 2. We use a separate 'ast lifetime (not tied to &self borrow) to allow multiple allocations
     /// 3. The arena uses interior mutability (Cell), so &self is sufficient
     pub(crate) fn alloc_expr<'ast>(&self, expr: Expression<'static>) -> &'ast Expression<'ast> {

@@ -22,7 +22,8 @@ fn main() {
 
 ### ❌ Option 1: Add `var` keyword
 
-```windjammer
+<!-- ignore: rejected alternative (`var` declarations); not valid Windjammer -->
+```windjammer,ignore
 @group(0) @binding(0) @uniform
 pub var camera: CameraUniforms;
 ```
@@ -35,7 +36,8 @@ pub var camera: CameraUniforms;
 
 ### ❌ Option 2: Allow top-level `let`
 
-```windjammer
+<!-- ignore: rejected alternative (global `let`); not valid Windjammer -->
+```windjammer,ignore
 @group(0) @binding(0) @uniform
 pub let camera: CameraUniforms;
 ```
@@ -74,7 +76,8 @@ extern let camera: CameraUniforms;
 
 ### Not a Global Variable
 
-```windjammer
+<!-- ignore: contrast of a global `let mut` (bad) with `extern let`; the first line is the anti-example -->
+```windjammer,ignore
 // ❌ This is global state (bad):
 let mut counter: int = 0;  // Shared, mutable, spooky action
 
@@ -87,7 +90,8 @@ extern let camera: CameraUniforms;  // Injected, immutable, explicit
 
 `extern let` is **dependency injection** at compile time:
 
-```windjammer
+<!-- ignore: host Rust code mixed with a shader sketch -->
+```windjammer,ignore
 // Host code (Rust):
 device.set_bind_group(0, &camera_bind_group, &[]);
 
@@ -224,7 +228,8 @@ extern let camera: CameraUniforms;
 
 `extern let` could extend beyond GPU:
 
-```windjammer
+<!-- ignore: open question: candidate attribute spellings, none implemented -->
+```windjammer,ignore
 // WebAssembly imports
 @wasm_import("env", "console_log")
 extern let console_log: fn(message: string);
@@ -260,14 +265,8 @@ We chose the proper solution:
 
 ## Testing
 
-**48 tests validate this design:**
-- Basic functions/types (5 tests)
-- Struct alignment (22 tests)
-- Entry points (@compute, @builtin) (8 tests)
-- Resource bindings (extern let, @group, @binding) (8 tests)
-- Dogfooding (real shader code) (5 tests)
-
-All passing ✅
+The design is exercised by `tests/shader_wjsl_test.rs` (basic functions and types, struct alignment, entry points, resource bindings
+with `extern let`, and real shader code).
 
 ---
 

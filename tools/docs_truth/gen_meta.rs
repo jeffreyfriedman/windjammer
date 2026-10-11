@@ -1,6 +1,6 @@
 //! Computed metrics (`docs/generated/metrics.json`) and the ADR index.
 
-use super::{gen_cli, gen_errors, gen_targets, util, Ctx};
+use super::{gen_cli, gen_errors, gen_interp, gen_targets, util, Ctx};
 use std::collections::BTreeMap;
 use windjammer::intrinsics::Intrinsic;
 use windjammer::lexer::keywords::KEYWORDS;
@@ -22,6 +22,8 @@ pub fn computed(ctx: &Ctx) -> BTreeMap<String, u64> {
     m.insert("cli.subcommands".into(), gen_cli::commands(&ctx.cli).len() as u64);
     m.insert("adr.count".into(), adrs(ctx).len() as u64);
     let std_files = util::walk(&ctx.root.join("std")).iter().filter(|f| f.ends_with(".wj") && !f.ends_with("_test.wj")).count();
+    m.insert("interpreter.features_supported".into(), gen_interp::count(windjammer::interpreter::features::Status::Supported));
+    m.insert("interpreter.features_unsupported".into(), gen_interp::count(windjammer::interpreter::features::Status::Unsupported));
     m.insert("stdlib.files".into(), std_files as u64);
     m
 }
@@ -57,7 +59,7 @@ pub fn adrs(ctx: &Ctx) -> Vec<(String, String, String)> {
             continue;
         }
         let text = ctx.read(&format!("docs/adr/{f}"));
-        let title = text.lines().next().unwrap_or("").trim_start_matches('#').trim();
+        let title = text.lines().find(|l| l.starts_with("# ")).unwrap_or("").trim_start_matches('#').trim();
         let title = title.split_once(": ").map(|x| x.1).unwrap_or(title).to_string();
         let status = text.lines().find_map(|l| l.strip_prefix("- **Status:**")).unwrap_or("(missing)").trim();
         let status = status.split(['(', '.', ';']).next().unwrap_or(status).trim().to_string();
@@ -72,4 +74,15 @@ pub fn adr_index(ctx: &Ctx) -> String {
         .map(|(f, t, s)| vec![format!("[{}]({f})", &f[..4]), t, s])
         .collect();
     util::table(&["ADR", "Title", "Status"], &rows)
+}
+
+/// Commands and settings the VS Code extension declares, read from `vscode-extension/package.json`.
+pub fn vscode_package(ctx: &Ctx) -> String {
+    let v: serde_json::Value = serde_json::from_str(&ctx.read("vscode-extension/package.json")).unwrap_or_default();
+    let c = &v["contributes"];
+    let cmds: Vec<Vec<String>> = c["commands"].as_array().into_iter().flatten().map(|x| vec![format!("`{}`", x["command"].as_str().unwrap_or("")), x["title"].as_str().unwrap_or("").to_string()]).collect();
+    let mut keys: Vec<(&String, &serde_json::Value)> = c["configuration"]["properties"].as_object().into_iter().flatten().collect();
+    keys.sort_by(|a, b| a.0.cmp(b.0));
+    let settings: Vec<Vec<String>> = keys.into_iter().map(|(k, x)| vec![format!("`{k}`"), format!("`{}`", x["default"]), x["description"].as_str().unwrap_or("").to_string()]).collect();
+    format!("{}\n{}", util::table(&["Command", "Title"], &cmds), util::table(&["Setting", "Default", "Description"], &settings))
 }
