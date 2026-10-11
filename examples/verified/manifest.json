@@ -1,5 +1,5 @@
 {
-  "count": 165,
+  "count": 167,
   "examples": [
     {
       "expect_lines": 2,
@@ -588,11 +588,34 @@
       "expect_lines": 3,
       "file": "defer_cleanup.wj",
       "kind": "program",
-      "rust": "gap",
-      "rust_gap": "output differs from interpreter/oracle",
+      "rust": "ok",
       "tags": [
         "control-flow",
         "defer"
+      ]
+    },
+    {
+      "exit": 101,
+      "expect_lines": 3,
+      "file": "defer_panic_lifo.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "control-flow",
+        "defer",
+        "panic"
+      ]
+    },
+    {
+      "expect_lines": 3,
+      "file": "display_to_string.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "traits",
+        "display",
+        "to_string",
+        "interpolation"
       ]
     },
     {
