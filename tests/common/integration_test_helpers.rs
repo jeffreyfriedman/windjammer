@@ -170,6 +170,8 @@ impl MultiFileTest {
         let mut child = Command::new("cargo")
             .current_dir(&self.build_dir)
             .env("CARGO_TARGET_DIR", &shared_target)
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
             .args(["check", "--quiet"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

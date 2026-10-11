@@ -139,11 +139,22 @@ fn ensure_writable_dir(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Verification builds only need to type-check: no debuginfo and no incremental state, which
+/// otherwise dominate the size of the cache.
+pub fn apply_lean_build_env(cmd: &mut Command) {
+    cmd.env("CARGO_PROFILE_DEV_DEBUG", "0")
+        .env("CARGO_PROFILE_TEST_DEBUG", "0")
+        .env("CARGO_INCREMENTAL", "0");
+}
+
 /// Apply shared/verify target dir to a cargo `Command` (overrides sandbox env).
 pub fn configure_cargo_command(cmd: &mut Command, kind: TargetKind) {
     let dir = target_dir(kind);
     let _ = fs::create_dir_all(&dir);
     cmd.env("CARGO_TARGET_DIR", &dir);
+    if kind == TargetKind::Verify {
+        apply_lean_build_env(cmd);
+    }
 }
 
 /// Convenience: shared target path (creates dir when possible).
@@ -158,7 +169,7 @@ pub fn shared_target_dir() -> PathBuf {
 pub fn verify_target_dir() -> PathBuf {
     static GUARD: std::sync::Once = std::sync::Once::new();
     GUARD.call_once(|| {
-        let _ = prune_if_low_disk();
+        let _ = reclaim();
     });
     target_dir(TargetKind::Verify)
 }
@@ -367,6 +378,108 @@ pub fn prune_if_low_disk() -> PruneReport {
     }
 }
 
+const ENV_CACHE_MAX_GIB: &str = "WJ_CACHE_MAX_GIB";
+/// Default ceiling for the whole shared cargo-target tree.
+pub const DEFAULT_CACHE_MAX_GIB: u64 = 8;
+/// Budget checks walk the cache, so they run at most this often.
+const RECLAIM_MIN_INTERVAL: Duration = Duration::from_secs(10 * 60);
+
+fn cache_max_bytes() -> u64 {
+    std::env::var(ENV_CACHE_MAX_GIB)
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(DEFAULT_CACHE_MAX_GIB)
+        .saturating_mul(1_073_741_824)
+}
+
+/// Keep disk use bounded without anyone having to remember: called automatically by `wj`
+/// build/run/test and by the test harness. Cheap when nothing needs doing.
+///
+/// 1. Always drops stale `wj_*` scratch dirs and an oversized verify tree.
+/// 2. Reclaims aggressively when the volume is low on free space.
+/// 3. Enforces a size budget (`WJ_CACHE_MAX_GIB`, default 8) on the shared cargo-target tree by
+///    deleting the oldest compiled artifacts first (cargo rebuilds whatever is missing).
+pub fn reclaim() -> PruneReport {
+    let root = cache_root();
+    let stamp = root.join(".last_reclaim");
+    let recent = fs::metadata(&stamp)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| SystemTime::now().duration_since(t).ok())
+        .is_some_and(|age| age < RECLAIM_MIN_INTERVAL);
+    let shared = target_dir(TargetKind::Shared);
+    let low_disk = free_disk_bytes(&shared)
+        .map(|b| b < min_free_bytes())
+        .unwrap_or(false);
+    if recent && !low_disk {
+        return PruneReport::default();
+    }
+    let _ = fs::create_dir_all(&root);
+    let _ = fs::write(&stamp, b"");
+
+    let mut report = prune(PruneOptions {
+        aggressive: false,
+        auto_low_disk: true,
+        ..PruneOptions::default()
+    });
+    let tree = root.join("cargo-target");
+    report.freed_bytes += enforce_size_budget(&tree, cache_max_bytes(), &mut report);
+    report
+}
+
+/// Delete oldest artifacts under `<tree>/<profile>/{deps,build,incremental}` until `tree` fits
+/// in `budget` bytes. Returns bytes freed.
+fn enforce_size_budget(tree: &Path, budget: u64, report: &mut PruneReport) -> u64 {
+    let size = dir_size(tree);
+    if size <= budget {
+        return 0;
+    }
+    let mut excess = size - budget;
+    let mut files: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
+    for profile in ["debug", "release"] {
+        for sub in ["deps", "build", "incremental"] {
+            collect_files(&tree.join(profile).join(sub), &mut files);
+        }
+    }
+    files.sort_by_key(|(mtime, _, _)| *mtime);
+    let mut freed = 0u64;
+    for (_, len, path) in files {
+        if excess == 0 {
+            break;
+        }
+        if fs::remove_file(&path).is_ok() {
+            freed += len;
+            excess = excess.saturating_sub(len);
+        }
+    }
+    if freed > 0 {
+        report.messages.push(format!(
+            "Cache over budget ({}): removed oldest artifacts, freed {}",
+            format_size(budget),
+            format_size(freed)
+        ));
+    }
+    freed
+}
+
+fn collect_files(dir: &Path, out: &mut Vec<(SystemTime, u64, PathBuf)>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(&path, out);
+        } else if let Ok(meta) = entry.metadata() {
+            out.push((
+                meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+                meta.len(),
+                path,
+            ));
+        }
+    }
+}
+
 /// Scratch dirs that tests/tools create under the OS temp dir (`wj_*`, `.wj_*`).
 const TEMP_SCRATCH_PREFIXES: [&str; 2] = ["wj_", ".wj_"];
 const TEMP_SCRATCH_MAX_AGE: Duration = Duration::from_secs(6 * 60 * 60);
@@ -533,6 +646,27 @@ mod tests {
     use std::sync::Mutex;
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn size_budget_removes_oldest_artifacts_first() {
+        let tmp = tempfile::tempdir().unwrap();
+        let deps = tmp.path().join("release").join("deps");
+        fs::create_dir_all(&deps).unwrap();
+        let old = deps.join("old.rlib");
+        let new = deps.join("new.rlib");
+        fs::write(&old, vec![0u8; 4096]).unwrap();
+        std::thread::sleep(Duration::from_millis(30));
+        fs::write(&new, vec![0u8; 4096]).unwrap();
+
+        let mut report = PruneReport::default();
+        // Budget leaves room for exactly one of the two files.
+        let freed = enforce_size_budget(tmp.path(), 4096, &mut report);
+        assert_eq!(freed, 4096);
+        assert!(!old.exists(), "oldest artifact goes first");
+        assert!(new.exists());
+        // Already within budget: nothing more is removed.
+        assert_eq!(enforce_size_budget(tmp.path(), 4096, &mut report), 0);
+    }
 
     #[test]
     fn temp_scratch_sweep_removes_only_stale_prefixed_dirs() {

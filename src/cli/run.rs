@@ -79,7 +79,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
     crate::build_project(path, output_dir, target, true)?;
 
     // Run with cargo (shared target dir outside the temp project)
-    let _ = crate::cargo_cache::prune_if_low_disk();
+    let _ = crate::cargo_cache::reclaim();
     let mut cmd = Command::new("cargo");
     cmd.arg("run").current_dir(output_dir);
     crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared);

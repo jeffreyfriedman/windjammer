@@ -725,7 +725,7 @@ pub fn check_with_cargo(output_dir: &Path, show_raw_errors: bool) -> Result<()> 
     println!("\n{} Rust compilation...", "Checking".cyan().bold());
 
     // Shared cache: reuse compiled deps across projects; avoid polluting output_dir/target.
-    let _ = crate::cargo_cache::prune_if_low_disk();
+    let _ = crate::cargo_cache::reclaim();
     let target_dir = crate::cargo_cache::shared_target_dir();
     let output = Command::new("cargo")
         .arg("build")
