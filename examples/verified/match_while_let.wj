@@ -1,0 +1,11 @@
+// tags: match, while-let, stack
+// rust: ok
+// expect: 3
+// expect: 2
+// expect: 1
+fn main() {
+    let mut stack = [1, 2, 3]
+    while let Some(top) = stack.pop() {
+        println("${top}")
+    }
+}

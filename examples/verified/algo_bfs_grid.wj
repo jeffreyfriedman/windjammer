@@ -1,0 +1,37 @@
+// tags: algorithm, bfs, queue, grid, vecdeque
+// rust: gap error[E0308]: mismatched types
+// expect: shortest path: 12
+use std::collections::VecDeque
+
+fn bfs(grid: Vec<Vec<int>>, n: int) -> int {
+    let mut dist = [[-1; 5]; 5]
+    let mut q: VecDeque<(int, int)> = VecDeque::new()
+    dist[0][0] = 0
+    q.push_back((0, 0))
+    while let Some((r, c)) = q.pop_front() {
+        if r == n - 1 && c == n - 1 { return dist[r][c] }
+        let moves = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        for (dr, dc) in moves {
+            let nr = r + dr
+            let nc = c + dc
+            if nr >= 0 && nr < n && nc >= 0 && nc < n {
+                if grid[nr][nc] == 0 && dist[nr][nc] == -1 {
+                    dist[nr][nc] = dist[r][c] + 1
+                    q.push_back((nr, nc))
+                }
+            }
+        }
+    }
+    -1
+}
+
+fn main() {
+    let grid = [
+        [0, 0, 0, 1, 0],
+        [1, 1, 0, 1, 0],
+        [0, 0, 0, 0, 0],
+        [0, 1, 1, 1, 1],
+        [0, 0, 0, 0, 0],
+    ]
+    println("shortest path: ${bfs(grid, 5)}")
+}

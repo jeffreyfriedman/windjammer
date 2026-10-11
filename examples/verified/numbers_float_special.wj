@@ -1,0 +1,13 @@
+// tags: numbers, float, nan
+// rust: gap output differs from interpreter/oracle
+// expect: true
+// expect: false
+// expect: true
+// expect: 0.30000000000000004
+fn main() {
+    let nan = 0.0 / 0.0
+    println("${nan.is_nan()}")
+    println("${nan == nan}")
+    println("${(1.0 / 0.0).is_infinite()}")
+    println("${0.1 + 0.2}")
+}

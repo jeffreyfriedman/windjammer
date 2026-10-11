@@ -1,0 +1,20 @@
+// tags: basics, loops, for, range
+// rust: ok
+// expect: 0 1 2 3 4
+// expect: 5 6 7
+// expect: 10 8 6 4 2
+// expect: sum 1..=100 = 5050
+fn main() {
+    let mut a = ""
+    for i in 0..5 { a = a + "${i} " }
+    println(a.trim())
+    let mut b = ""
+    for i in 5..=7 { b = b + "${i} " }
+    println(b.trim())
+    let mut c = ""
+    for i in (1..=5).rev() { c = c + "${i * 2} " }
+    println(c.trim())
+    let mut total = 0
+    for i in 1..=100 { total += i }
+    println("sum 1..=100 = ${total}")
+}

@@ -1,0 +1,20 @@
+// tags: enum, match
+// rust: ok
+// expect: stop
+// expect: go
+// expect: caution
+enum Light { Red, Green, Yellow }
+
+fn action(l: Light) -> string {
+    match l {
+        Light::Red => "stop",
+        Light::Green => "go",
+        Light::Yellow => "caution",
+    }
+}
+
+fn main() {
+    println(action(Light::Red))
+    println(action(Light::Green))
+    println(action(Light::Yellow))
+}

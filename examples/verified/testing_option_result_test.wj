@@ -1,0 +1,29 @@
+// tags: testing, test, option, result
+// tests-passed: 3
+fn parse_age(s: string) -> Result<int, string> {
+    match s.parse::<int>() {
+        Ok(n) => if n < 0 { Err("negative") } else { Ok(n) },
+        Err(_) => Err("not a number"),
+    }
+}
+
+fn first_word(s: string) -> Option<string> {
+    s.split_whitespace().next().map(|w| w.to_string())
+}
+
+@test
+fn parses_valid() {
+    assert_eq(parse_age("42"), Ok(42))
+}
+
+@test
+fn rejects_bad_input() {
+    assert_eq(parse_age("abc"), Err("not a number"))
+    assert_eq(parse_age("-1"), Err("negative"))
+}
+
+@test
+fn first_word_works() {
+    assert_eq(first_word("hello world"), Some("hello"))
+    assert_eq(first_word("   "), None)
+}

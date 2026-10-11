@@ -1,0 +1,19 @@
+// tags: option, map, and_then, combinators
+// rust: ok
+// expect: Some(10)
+// expect: None
+// expect: Some(6)
+// expect: 11
+// expect: -1
+fn half(n: int) -> Option<int> {
+    if n % 2 == 0 { Some(n / 2) } else { None }
+}
+
+fn main() {
+    println("${Some(5).map(|x| x * 2):?}")
+    let n: Option<int> = None
+    println("${n.map(|x| x * 2):?}")
+    println("${Some(12).and_then(half):?}")
+    println("${Some(10).map_or(0, |x| x + 1)}")
+    println("${n.map_or(-1, |x| x + 1)}")
+}

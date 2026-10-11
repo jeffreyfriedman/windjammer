@@ -1,0 +1,28 @@
+// tags: modules, mod, use, pub
+// rust: gap error[E0255]: the name 'rect_area' is defined multiple times
+// expect: 12
+// expect: 7
+// expect: 3
+mod geometry {
+    pub fn rect_area(w: int, h: int) -> int {
+        w * h
+    }
+
+    pub fn perimeter(w: int, h: int) -> int {
+        2 * (w + h)
+    }
+
+    pub mod circle {
+        pub fn half(r: float) -> float {
+            r / 2.0
+        }
+    }
+}
+
+use geometry::rect_area
+
+fn main() {
+    println("${rect_area(3, 4)}")
+    println("${geometry::perimeter(2, 1) + 1}")
+    println("${geometry::circle::half(6.0)}")
+}

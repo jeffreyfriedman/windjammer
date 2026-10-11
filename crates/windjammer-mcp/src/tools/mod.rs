@@ -1,7 +1,13 @@
 //! MCP tools for Windjammer code understanding, generation, and refactoring
 
 pub mod analyze_ssr_routing;
+pub mod agent_loop;
 pub mod analyze_types;
+pub mod check_code;
+pub mod docs_search;
+pub mod format_code;
+pub mod run_code;
+pub mod test_code;
 pub mod catalog;
 pub mod explain_error;
 pub mod generate_code;
@@ -128,6 +134,11 @@ impl ToolRegistry {
                     })
                 })
             }),
+            "check_code" => Box::new(move |d, args| Box::pin(check_code::handle(d, args))),
+            "run_code" => Box::new(move |d, args| Box::pin(run_code::handle(d, args))),
+            "test_code" => Box::new(move |d, args| Box::pin(test_code::handle(d, args))),
+            "format_code" => Box::new(move |d, args| Box::pin(format_code::handle(d, args))),
+            "docs_search" => Box::new(move |d, args| Box::pin(docs_search::handle(d, args))),
             "get_language_info" => {
                 Box::new(move |d, args| Box::pin(get_language_info::handle(d, args)))
             }

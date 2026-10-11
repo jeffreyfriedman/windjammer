@@ -1,0 +1,17 @@
+// tags: numbers, conversion, casts
+// rust: ok
+// expect: 3
+// expect: 3.0
+// expect: 255
+// expect: 65
+// expect: A
+fn main() {
+    let f = 3.99
+    println("${f as int}")
+    let i = 3
+    println("${i as float:.1}")
+    println("${255 as u8}")
+    println("${'A' as int}")
+    let c = 65 as u8 as char
+    println("${c}")
+}

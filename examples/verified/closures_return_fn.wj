@@ -1,0 +1,17 @@
+// tags: closures, higher-order, functions
+// rust: gap error[E0308]: mismatched types
+// expect: 15
+// expect: 8
+fn make_adder(n: int) -> fn(int) -> int {
+    |x| x + n
+}
+
+fn compose(f: fn(int) -> int, g: fn(int) -> int, x: int) -> int {
+    g(f(x))
+}
+
+fn main() {
+    let add5 = make_adder(5)
+    println("${add5(10)}")
+    println("${compose(|x| x + 1, |x| x * 2, 3)}")
+}

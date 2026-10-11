@@ -1,0 +1,15 @@
+// tags: testing, test, naming, discovery
+// tests-passed: 2
+// A function named test_* is discovered without the @test attribute.
+fn clamp01(x: float) -> float {
+    if x < 0.0 { 0.0 } else if x > 1.0 { 1.0 } else { x }
+}
+
+fn test_clamp_low() {
+    assert_eq(clamp01(-2.0), 0.0)
+}
+
+@test
+fn upper_bound() {
+    assert_eq(clamp01(5.5), 1.0)
+}

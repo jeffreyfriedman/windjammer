@@ -1,0 +1,9 @@
+// tags: basics, exit, process
+// rust: gap error[E0433]: cannot find module or crate 'windjammer_runtime' in this scope
+// exit: 3
+// expect: before exit
+use std::process
+fn main() {
+    println("before exit")
+    process::exit(3)
+}

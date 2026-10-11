@@ -1,0 +1,16 @@
+// tags: strings, chars
+// rust: gap error[E0308]: mismatched types
+// expect: 5
+// expect: olleh
+// expect: 2
+// expect: H e l l o
+fn main() {
+    let s = "hello"
+    println("${s.chars().count()}")
+    let rev: string = s.chars().rev().collect()
+    println(rev)
+    let vowels = s.chars().filter(|c| *c == 'e' || *c == 'o').count()
+    println("${vowels}")
+    let spaced: Vec<string> = "Hello".chars().map(|c| c.to_string()).collect()
+    println(spaced.join(" "))
+}

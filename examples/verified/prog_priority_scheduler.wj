@@ -1,0 +1,20 @@
+// tags: program, sort, struct, tuples
+// rust: gap error[E0308]: mismatched types
+// expect: 1. deploy (p1)
+// expect: 2. review (p2)
+// expect: 3. lint (p2)
+// expect: 4. docs (p3)
+struct Task { name: string, pri: int }
+
+fn main() {
+    let mut tasks = [
+        Task { name: "docs", pri: 3 },
+        Task { name: "lint", pri: 2 },
+        Task { name: "deploy", pri: 1 },
+        Task { name: "review", pri: 2 },
+    ]
+    tasks.sort_by(|a, b| a.pri.cmp(&b.pri).then(b.name.cmp(&a.name)))
+    for (i, t) in tasks.enumerate() {
+        println("${i + 1}. ${t.name} (p${t.pri})")
+    }
+}

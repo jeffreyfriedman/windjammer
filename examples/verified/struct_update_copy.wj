@@ -1,0 +1,15 @@
+// tags: struct, clone, copy
+// rust: ok
+// expect: 1 2
+// expect: 9 2
+// expect: 1 2
+struct Pair { a: int, b: int }
+
+fn main() {
+    let orig = Pair { a: 1, b: 2 }
+    let mut copy = orig
+    println("${orig.a} ${orig.b}")
+    copy.a = 9
+    println("${copy.a} ${copy.b}")
+    println("${orig.a} ${orig.b}")
+}

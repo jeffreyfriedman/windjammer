@@ -1,0 +1,14 @@
+// tags: std, math, float
+// rust: ok
+// expect: 8
+// expect: 3
+// expect: 1.00
+// expect: 0.50
+// expect: 2.718
+fn main() {
+    println("${2.0.powi(3):.0}")
+    println("${27.0.cbrt():.0}")
+    println("${(3.14159 / 2.0).sin():.2}")
+    println("${(60.0 * 3.14159265 / 180.0).cos():.2}")
+    println("${1.0.exp():.3}")
+}
