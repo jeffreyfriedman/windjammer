@@ -12,7 +12,7 @@
 
 // TDD Test: Test framework should compile libraries that tests can import from
 //
-// Problem: Tests that import from the library (e.g., `use game_host_core::GameLoop`)
+// Problem: Tests that import from the library (e.g., `use a game engine project::GameLoop`)
 // fail because the library isn't being compiled as a proper Rust crate.
 //
 // This test validates that:

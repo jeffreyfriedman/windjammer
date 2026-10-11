@@ -79,7 +79,7 @@ impl<'ast> Analyzer<'ast> {
                 // comparison helpers (`pattern == path`) demote to `&str` so loop
                 // reuse can borrow (bug_loop_reuse_readonly_string_param / wj-glob).
                 // Stored/Into builders are blocked later via is_stored / consumed checks.
-                // Unused formals stay Owned (DB-152) — no body evidence for `&str`.
+                // Unused formals stay Owned — no body evidence for `&str`.
                 if func.parent_type.is_none() && func.is_pub {
                     if self
                         .param_used_in_consuming_string_concat_expression(&param.name, &func.body)

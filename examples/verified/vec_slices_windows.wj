@@ -1,0 +1,17 @@
+// tags: vec, slices, windows, chunks
+// rust: gap error[E0277]: a value of type 'Vec<i64>' cannot be built from an iterator over e
+// expect: [2, 3, 4]
+// expect: 3 5 7 9
+// expect: [1, 2] [3, 4] [5]
+fn main() {
+    let v = [1, 2, 3, 4, 5]
+    println("${&v[1..4]:?}")
+    let sums: Vec<int> = v.windows(2).map(|w| w[0] + w[1]).collect()
+    let strs: Vec<string> = sums.map(|s| s.to_string()).collect()
+    println(strs.join(" "))
+    let mut parts = ""
+    for c in v.chunks(2) {
+        parts = parts + "${c:?} "
+    }
+    println(parts.trim())
+}

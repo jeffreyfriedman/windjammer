@@ -12,7 +12,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// - The `for` is nested inside another `for` / `while` / `loop` **and** the iterable
     ///   binding lives across outer iterations (declared outside that outer loop). Locals
     ///   re-bound each outer iteration (`let children_copy = …` inside `while`) may be
-    ///   consumed (DB-463).
+    // consumed.
     /// - The same identifier appears as a `for` iterable two or more times anywhere in the
     ///   function (sequential loops), so the first loop must not move it (E0382).
     ///
@@ -573,7 +573,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // DB-361 / P3.335: `best_idx = i` when `i` is a `.len()` while-counter
+                // P3.335: `best_idx = i` when `i` is a `.len()` while-counter
                 // must keep `best_idx` as usize (cast at `return best_idx as i32`).
                 // P3.577: `start = i + 1` (usize counter ± non-neg lit) must mark `start`
                 // even when `start` is declared before `i` (`wj-toml` split_on_commas).
@@ -851,7 +851,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return;
         }
-        // DB-361: `-> i32` + `while i < …len()` must still mark `i` as usize (cast at
+        // `-> i32` + `while i < …len()` must still mark `i` as usize (cast at
         // `return i`). Blocking usize here forced `let mut i: i32` + `(i as usize)`.
         if self.expression_is_usize_loop_bound(bound) {
             self.usize_variables.insert(name.clone());

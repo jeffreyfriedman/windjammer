@@ -1,7 +1,6 @@
 # Versioning and Releases
 
-This is the single versioning document; it replaces `VERSIONING_POLICY.md` and `VERSIONING_STRATEGY.md` (both archived in
-[archive/](archive/README.md)). The cross-repository policy is a proposal: [ADR-0011](adr/0011-release-version-policy.md).
+This is the single versioning document. The cross-repository policy is a proposal: [ADR-0011](adr/0011-release-version-policy.md).
 
 ## Current state (verified 2026-10-10)
 - The workspace version is `0.50.0` (`[workspace.package] version` in `Cargo.toml`). The compiler (`windjammer`), `windjammer-runtime`,
@@ -10,7 +9,7 @@ This is the single versioning document; it replaces `VERSIONING_POLICY.md` and `
 - Binaries: `wj` (unified CLI), `windjammer` (older CLI, includes `eject`), `wj-lint`.
 - The standard library in `std/` is versioned with the compiler; it is not published separately.
 - Related projects (`windjammer-ui`, the game engine, the database, example applications) live in other repositories with their own
-  versions and pin the compiler themselves (example: [DOWNSTREAMAPP_WJ_PIN.md](DOWNSTREAMAPP_WJ_PIN.md)).
+  versions and pin the compiler themselves.
 
 ## Rules in force
 - Semantic versioning in spirit, pre-1.0: `0.MINOR.PATCH`. A minor bump may break the language or generated-code expectations;

@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! Gate — DB-090: take Vec field behind `&mut` param, clear with `Vec::new()`.
+//! Gate — take Vec field behind `&mut` param, clear with `Vec::new()`.
 //!
 //! Pattern (PageRank in-edge bind):
 //! ```text

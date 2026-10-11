@@ -11,12 +11,12 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-219: demoted `&mut DenseCsr` into owned `DenseCsr` formal must clone/move.
+//! demoted `&mut DenseCsr` into owned `DenseCsr` formal must clone/move.
 //!
 //! Product residual after tip regen of graph_sql_query_port:
 //!   `execute(..., csr: DenseCsr)` called with `&mut csr` / `&mut filtered`
 //!   → expected `DenseCsr`, found `&mut DenseCsr`.
-//! Inverse of DB-217. Signature-driven.
+//! Inverse of . Signature-driven.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

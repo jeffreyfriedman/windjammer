@@ -10,7 +10,8 @@ A concurrent file processor built with Windjammer, demonstrating:
 
 ## Running
 
-```bash
+<!-- ignore: builds a Rust project and runs it with cargo (needs a toolchain and network); checked by the examples gate instead -->
+```bash,ignore
 wj build
 cd output
 cargo run -- --help

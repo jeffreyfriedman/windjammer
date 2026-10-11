@@ -13,7 +13,9 @@ pub fn wrap_once(toks: &mut [Tok], lines: &[Line], rendered: &[String], max_widt
         if text.chars().count() <= max_width || toks[line.start..line.end].iter().any(|t| t.text.contains('\n')) {
             continue;
         }
-        if let Some((open, close)) = find_group(toks, &matches, line) {
+        if break_pipes(toks, line) {
+            changed = true;
+        } else if let Some((open, close)) = find_group(toks, &matches, line) {
             break_group(toks, open, close);
             changed = true;
         }
@@ -36,4 +38,26 @@ fn break_group(toks: &mut [Tok], open: usize, close: usize) {
     }
     toks[open + 1].nl = 1;
     toks[close].nl = 1;
+}
+
+/// A long line holding two or more top-level `|>` stages gets one stage per line.
+fn break_pipes(toks: &mut [Tok], line: &Line) -> bool {
+    let mut depth = 0i32;
+    let mut pipes = Vec::new();
+    for i in line.start..line.end {
+        if toks[i].is_opener() {
+            depth += 1;
+        } else if toks[i].is_closer() {
+            depth -= 1;
+        } else if depth == 0 && i > line.start && (toks[i].is("|>") || toks[i].is("|>?")) {
+            pipes.push(i);
+        }
+    }
+    if pipes.len() < 2 {
+        return false;
+    }
+    for i in pipes {
+        toks[i].nl = 1;
+    }
+    true
 }

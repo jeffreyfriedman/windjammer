@@ -1,0 +1,13 @@
+// tags: basics, const
+// rust: gap error[E0308]: mismatched types
+// expect: 3.14159
+// expect: 100
+// expect: area 78.53975
+const PI: float = 3.14159
+const MAX_USERS: int = 100
+
+fn main() {
+    println("${PI}")
+    println("${MAX_USERS}")
+    println("area ${PI * 5.0 * 5.0}")
+}

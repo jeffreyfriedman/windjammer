@@ -1,12 +1,4 @@
-# Generated Shaders - DO NOT EDIT
+# Shader fixtures
 
-These `.wjsl` files are **auto-generated** by `wj game build`.
-
-**To modify a shader**, edit the source file in:
-```
-src/shaders/
-```
-
-Then run `wj game build` to regenerate these files.
-
-Any changes made directly here will be **overwritten** on the next build.
+Checked-in `.wjsl` sample files used as inputs by the shader tests (`tests/shader_wjsl_test.rs`). They were produced by a shader
+build step outside this repository, so edit the originals there, not these copies; this repository only compiles them.

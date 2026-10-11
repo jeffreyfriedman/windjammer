@@ -1,0 +1,15 @@
+// tags: basics, float, math
+// rust: ok
+// expect: 5.0000
+// expect: 3
+// expect: 4
+// expect: 3.5
+// expect: 2.500
+fn main() {
+    let h = (3.0 * 3.0 + 4.0 * 4.0).sqrt()
+    println("${h:.4}")
+    println("${3.7.floor()}")
+    println("${3.2.ceil()}")
+    println("${7.0 / 2.0}")
+    println("${10.0 / 4.0:.3}")
+}

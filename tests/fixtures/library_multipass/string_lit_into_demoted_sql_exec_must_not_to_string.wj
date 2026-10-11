@@ -1,4 +1,4 @@
-// DB-244 isolate: demoted &str method formals must not get `.to_string()` on lits.
+// isolate: demoted &str method formals must not get `.to_string()` on lits.
 pub struct Batch {
     pub n: int,
 }

@@ -1,0 +1,173 @@
+use std::fs
+
+// Arena-based BST: nodes stored in a Vec, children are indices (-1 = none)
+struct Tree {
+    keys: Vec<i64>,
+    left: Vec<i64>,
+    right: Vec<i64>,
+    root: i64,
+}
+
+impl Tree {
+    fn new() -> Tree {
+        Tree { keys: Vec::new(), left: Vec::new(), right: Vec::new(), root: -1 }
+    }
+
+    fn contains(self, k: i64) -> bool {
+        let mut cur = self.root
+        while cur >= 0 {
+            let key = self.keys[cur as usize]
+            if k == key { return true }
+            if k < key { cur = self.left[cur as usize] } else { cur = self.right[cur as usize] }
+        }
+        false
+    }
+
+    fn insert(self, k: i64) -> bool {
+        if self.contains(k) { return false }
+        let id = self.keys.len() as i64
+        self.keys.push(k)
+        self.left.push(-1)
+        self.right.push(-1)
+        if self.root < 0 {
+            self.root = id
+            return true
+        }
+        let mut cur = self.root
+        loop {
+            let key = self.keys[cur as usize]
+            if k < key {
+                if self.left[cur as usize] < 0 {
+                    self.left[cur as usize] = id
+                    break
+                }
+                cur = self.left[cur as usize]
+            } else {
+                if self.right[cur as usize] < 0 {
+                    self.right[cur as usize] = id
+                    break
+                }
+                cur = self.right[cur as usize]
+            }
+        }
+        true
+    }
+
+    fn min_node(self, start: i64) -> i64 {
+        let mut cur = start
+        while self.left[cur as usize] >= 0 {
+            cur = self.left[cur as usize]
+        }
+        cur
+    }
+
+    fn replace_link(self, parent: i64, was_left: bool, child: i64) {
+        if parent < 0 {
+            self.root = child
+        } else if was_left {
+            self.left[parent as usize] = child
+        } else {
+            self.right[parent as usize] = child
+        }
+    }
+
+    fn delete(self, k: i64) -> bool {
+        if !self.contains(k) { return false }
+        let mut cur = self.root
+        let mut parent: i64 = -1
+        let mut was_left = false
+        while self.keys[cur as usize] != k {
+            parent = cur
+            if k < self.keys[cur as usize] {
+                was_left = true
+                cur = self.left[cur as usize]
+            } else {
+                was_left = false
+                cur = self.right[cur as usize]
+            }
+        }
+        let l = self.left[cur as usize]
+        let r = self.right[cur as usize]
+        if l >= 0 && r >= 0 {
+            // two children: take the in-order successor (leftmost node of the right subtree)
+            let mut sp = cur
+            let mut s = r
+            while self.left[s as usize] >= 0 {
+                sp = s
+                s = self.left[s as usize]
+            }
+            self.keys[cur as usize] = self.keys[s as usize]
+            let sr = self.right[s as usize]
+            self.replace_link(sp, sp != cur, sr)
+        } else if l >= 0 {
+            self.replace_link(parent, was_left, l)
+        } else {
+            self.replace_link(parent, was_left, r)
+        }
+        true
+    }
+
+    fn gather(self, node: i64, out: Vec<i64>) {
+        if node < 0 { return }
+        self.gather(self.left[node as usize], out)
+        out.push(self.keys[node as usize])
+        self.gather(self.right[node as usize], out)
+    }
+
+    fn height_of(self, node: i64) -> i64 {
+        if node < 0 { return 0 }
+        let a = self.height_of(self.left[node as usize])
+        let b = self.height_of(self.right[node as usize])
+        if a > b { 1 + a } else { 1 + b }
+    }
+}
+
+fn join_ints(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let mut t = Tree::new()
+    for line in text.lines() {
+        let p: Vec<string> = line.split_whitespace().map(|s| s.to_string()).collect()
+        if p.len() == 0 { continue }
+        let cmd = p[0].clone()
+        if cmd == "insert" {
+            let k = p[1].parse::<i64>().unwrap_or(0)
+            if t.insert(k) { println("ok") } else { println("dup") }
+        } else if cmd == "contains" {
+            let k = p[1].parse::<i64>().unwrap_or(0)
+            if t.contains(k) { println("yes") } else { println("no") }
+        } else if cmd == "delete" {
+            let k = p[1].parse::<i64>().unwrap_or(0)
+            if t.delete(k) { println("ok") } else { println("missing") }
+        } else if cmd == "height" {
+            println("${t.height_of(t.root)}")
+        } else {
+            let mut items: Vec<i64> = Vec::new()
+            t.gather(t.root, items)
+            if cmd == "inorder" {
+                if items.len() == 0 {
+                    println("<empty>")
+                } else {
+                    let strs = join_ints(items.clone())
+                    println(strs)
+                }
+            } else if items.len() == 0 {
+                println("empty")
+            } else if cmd == "min" {
+                println("${items[0]}")
+            } else {
+                println("${items[items.len() - 1]}")
+            }
+        }
+    }
+}

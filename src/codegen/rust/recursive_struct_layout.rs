@@ -1,4 +1,4 @@
-//! Break infinite-size recursive struct layouts by inserting `Box<T>` (DB-116).
+//! Break infinite-size recursive struct layouts by inserting `Box<T>`.
 //!
 //! Rust requires every recursive owned field cycle to go through a pointer-sized
 //! indirection. Windjammer source writes idiomatic owned embeds; the compiler

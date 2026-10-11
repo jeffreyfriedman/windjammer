@@ -14,7 +14,7 @@
 //! P3.773: `replace` demotes a `string` formal to `&str`. A later call that
 //! also moves a `Vec` must borrow only those strings.
 //!
-//! downstream-screens `escape_html` is `&str` via `replace`, and
+//! a large downstream application `escape_html` is `&str` via `replace`, and
 //! `general_ledger_table_html` is `(&str, &str, i64, Vec<...>)`, but the call
 //! still passes owned strings and `&lines`.
 

@@ -16,9 +16,9 @@
 //! - **Read-only concat** (`json + ""`): callee demotes to `&str`; call site auto-borrows.
 //! - **True ownership** (identity move / explicit clone): callee keeps `String`; call site moves.
 //!
-//! Both must reject the DB-110 class bug: `&arg.clone()` into an owned `String` formal.
+//! Both must reject the class bug: `&arg.clone()` into an owned `String` formal.
 //!
-//! Dogfood (`downstream-screens`): public ports pass bare `json`; helpers that only read demote.
+//! Dogfood (a large downstream application): public ports pass bare `json`; helpers that only read demote.
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

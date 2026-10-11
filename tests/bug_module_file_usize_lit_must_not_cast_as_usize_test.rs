@@ -11,11 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-364: `usize` literals must not emit redundant `N_usize as usize`.
+//! `usize` literals must not emit redundant `N_usize as usize`.
 //!
 //! Tip output for a game project cluster:
 //!   `0_usize as usize`, `1_usize as usize`, `20_usize as usize`
-//! Prefer bare `0_usize` / `1`. Twin of DB-361 (`i as usize`) / DB-352 (`_i32 as i32`).
+//! Prefer bare `0_usize` / `1`. Twin of (`i as usize`) / (`_i32 as i32`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

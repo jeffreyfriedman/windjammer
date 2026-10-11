@@ -186,7 +186,7 @@ impl<'ast> Analyzer<'ast> {
         calls_owned_on_self: bool,
     ) -> OwnershipMode {
         // In-place mutation → &mut self, not owned self — including `returns self` builders
-        // (DB-104 `append_edge`: mutates `self.buffer` then returns `self`).
+        // (`append_edge`: mutates `self.buffer` then returns `self`).
         // Skip when the method calls another method with owned `self` (evaluate → evaluate_node)
         // or moves non-Copy fields out of `self`.
         if (modifies_fields || calls_mutating) && !body_moves_fields && !calls_owned_on_self {
@@ -1100,7 +1100,7 @@ impl<'ast> Analyzer<'ast> {
                 continue;
             }
             if mutated_parameters.contains(&param.name) {
-                // Infer already chose Owned (DB-414: move `self.scene` into a ctor
+                // Infer already chose Owned (move `self.scene` into a ctor
                 // then write a remaining field). Do not demote back to MutBorrowed.
                 if inferred_ownership.get(&param.name) == Some(&OwnershipMode::Owned) {
                     continue;

@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-136: demoted caller `&Vec<T>` into owned `Vec<T>` formal (over-borrow) → E0308
+//! demoted caller `&Vec<T>` into owned `Vec<T>` formal (over-borrow) → E0308
 //! (`expected Vec<DremelEncodedField>, found &Vec<DremelEncodedField>`).
 //!
 //! a downstream database project CQ-C5 product shape (`document_dremel_*`):
@@ -52,7 +52,7 @@ use crate::query::query_fields_by_ordinal
 
 pub struct OrdinalIndex {
     pub ordinal: u32,
-    /// Vec<i64> (not usize) so this gate stays isolated from DB-119 i64→usize.
+    // Vec<i64> (not usize) so this gate stays isolated from i64→usize.
     pub field_indices: Vec<i64>,
 }
 

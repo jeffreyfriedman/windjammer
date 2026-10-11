@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-235 multipass codegen: demoted `&mut DenseCsr` into owned `distances_to_map` must clone.
+//! multipass codegen: demoted `&mut DenseCsr` into owned `distances_to_map` must clone.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;

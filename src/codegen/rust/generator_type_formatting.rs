@@ -60,7 +60,7 @@ impl<'ast> CodeGenerator<'ast> {
             // `type_analysis::is_copy_type` first; registry Copy structs need this arm.
             Type::Array(inner, _) => self.is_type_copy(inner),
             Type::Custom(name) => {
-                // DB-444: `WeatherType::Clear` is a variant path — Copy lives on the enum.
+                // `WeatherType::Clear` is a variant path — Copy lives on the enum.
                 let enum_name =
                     if crate::type_classification::is_enum_variant_constructor_path(name) {
                         name.rsplit_once("::")
@@ -76,12 +76,12 @@ impl<'ast> CodeGenerator<'ast> {
                 {
                     return true;
                 }
-                // DB-444: unit-only enums are Copy even when analyzer `copy_structs`
+                // unit-only enums are Copy even when analyzer `copy_structs`
                 // was empty (single-file) or registry lag before pre-pass insert.
                 if self.enum_is_unit_copy(name) || self.enum_is_unit_copy(enum_name) {
                     return true;
                 }
-                // Fall back: all-Copy fields of a known struct (DB-356 Mat4 before
+                // Fall back: all-Copy fields of a known struct (Mat4 before
                 // registry convergence, or mid-impl emission order).
                 if let Some(fields) = self
                     .lookup_struct_field_types(name)

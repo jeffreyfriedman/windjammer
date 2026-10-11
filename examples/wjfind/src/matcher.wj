@@ -11,7 +11,7 @@ pub fn find_match(line: &string, line_num: int, file: &string, config: &Config) 
     
     // Get the match
     let match_obj = captures.get(0)?
-    let match_text = match_obj.as_str()
+    let match_text = match_obj
     let column = (match_obj.start() + 1) as int  // 1-indexed
     
     Some(Match {
@@ -31,7 +31,7 @@ pub fn find_all_matches(line: &string, line_num: int, file: &string, config: &Co
     for capture in config.pattern.captures_iter(line) {
         match capture.get(0) {
             Some(match_obj) => {
-                let match_text = match_obj.as_str()
+                let match_text = match_obj
                 let column = (match_obj.start() + 1) as int
                 
                 matches.push(Match {

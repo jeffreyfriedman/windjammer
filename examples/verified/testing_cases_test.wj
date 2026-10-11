@@ -1,0 +1,8 @@
+// tags: testing, test, test_cases, parameterized
+// tests-passed: 1
+fn square(x: int) -> int { x * x }
+
+@test_cases([(0, 0), (3, 9), (-4, 16), (10, 100)])
+fn test_square(input: int, expected: int) {
+    assert_eq(square(input), expected)
+}

@@ -1,0 +1,19 @@
+[
+ {
+  "args": [],
+  "files": {
+   "a.txt": "hello",
+   "src/main.rs": "fn main() {}\n"
+  },
+  "stdin": "",
+  "stdout": "a.txt (5 bytes)\nsrc/\n  main.rs (13 bytes)\n1 directories, 2 files\n"
+ },
+ {
+  "args": [],
+  "files": {
+   "x": ""
+  },
+  "stdin": "",
+  "stdout": "x (0 bytes)\n0 directories, 1 files\n"
+ }
+]

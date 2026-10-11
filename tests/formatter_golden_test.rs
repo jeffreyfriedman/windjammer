@@ -50,6 +50,7 @@ golden!(
     wrapping,
     trailing_commas,
     generics_impl,
+    pipe_chain,
 );
 
 #[test]

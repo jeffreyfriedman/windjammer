@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-152: string literal into owned `string` formal across modules must emit
+//! string literal into owned `string` formal across modules must emit
 //! `.to_string()` (or equivalent owned String), not bare `&str`.
 //!
 //! a downstream database project CQ-C5: tip-sync of `job_store_release_cap_after_heartbeat`

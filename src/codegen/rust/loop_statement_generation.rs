@@ -96,7 +96,7 @@ impl<'ast> CodeGenerator<'ast> {
                             matches!(t, Type::Int)
                                 || matches!(t, Type::Custom(n) if n == "int" || n == "i64")
                         });
-                        // DB-361: explicit / inferred usize counters must not get
+                        // explicit / inferred usize counters must not get
                         // `(i as usize)` vs `.len()` — both sides are already usize.
                         let local_is_usize = self.expression_produces_usize(left)
                             || self.usize_variables.contains(name)
@@ -147,15 +147,46 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
-    pub(in crate::codegen::rust) fn generate_break_statement(&mut self) -> String {
+    pub(in crate::codegen::rust) fn generate_break_statement(
+        &mut self,
+        label: Option<&str>,
+        value: Option<&'ast Expression<'ast>>,
+    ) -> String {
         let mut output = self.indent();
-        output.push_str("break;\n");
+        output.push_str("break");
+        if let Some(l) = label {
+            output.push_str(&format!(" '{l}"));
+        }
+        if let Some(v) = value {
+            let v = self.generate_expression(v);
+            output.push(' ');
+            output.push_str(&v);
+        }
+        output.push_str(";\n");
         output
     }
 
-    pub(in crate::codegen::rust) fn generate_continue_statement(&mut self) -> String {
+    pub(in crate::codegen::rust) fn generate_continue_statement(
+        &mut self,
+        label: Option<&str>,
+    ) -> String {
         let mut output = self.indent();
-        output.push_str("continue;\n");
+        output.push_str("continue");
+        if let Some(l) = label {
+            output.push_str(&format!(" '{l}"));
+        }
+        output.push_str(";\n");
         output
+    }
+}
+
+/// Put `'label: ` in front of an emitted `loop`/`while`/`for` (after its indentation).
+pub(in crate::codegen::rust) fn with_loop_label(out: String, label: Option<&str>) -> String {
+    match label {
+        None => out,
+        Some(l) => {
+            let at = out.len() - out.trim_start().len();
+            format!("{}'{}: {}", &out[..at], l, &out[at..])
+        }
     }
 }

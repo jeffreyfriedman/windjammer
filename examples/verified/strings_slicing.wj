@@ -1,0 +1,15 @@
+// tags: strings, slicing
+// rust: gap error[E0277]: the size for values of type 'str' cannot be known at compilation t
+// expect: ell
+// expect: hel
+// expect: llo
+// expect: Some(1)
+// expect: None
+fn main() {
+    let s = "hello"
+    println(s[1..4])
+    println(s[..3])
+    println(s[2..])
+    println("${s.find("e"):?}")
+    println("${s.find("z"):?}")
+}

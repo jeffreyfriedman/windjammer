@@ -1,0 +1,15 @@
+// tags: iterators, flat_map, chain, flatten
+// rust: gap error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' in the curr
+// expect: [1, 1, 2, 2, 3, 3]
+// expect: [1, 2, 3, 4]
+// expect: [1, 2, 3, 4]
+fn main() {
+    let v = [1, 2, 3]
+    let dup: Vec<int> = v.flat_map(|x| [*x, *x]).collect()
+    println("${dup:?}")
+    let joined: Vec<int> = [1, 2].chain([3, 4]).cloned().collect()
+    println("${joined:?}")
+    let nested = [[1, 2], [3, 4]]
+    let flat: Vec<int> = nested.flatten().cloned().collect()
+    println("${flat:?}")
+}

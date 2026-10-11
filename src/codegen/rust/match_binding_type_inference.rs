@@ -23,7 +23,7 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 !self.is_type_copy(elem)
             }
-            // DB-429: `HashMap`/`Map::get` → `Option<&V>`; nested enum payloads bind as refs.
+            // `HashMap`/`Map::get` → `Option<&V>`; nested enum payloads bind as refs.
             Expression::MethodCall { .. } => self.match_expression_binds_refs(scrutinee),
             _ => false,
         }
@@ -93,7 +93,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Bind match-arm variables given the (peeled) container type of the scrutinee.
     ///
-    /// DB-429: also used to recurse into nested `Some(Enum::Variant(payload))`.
+    // also used to recurse into nested `Some(Enum::Variant(payload))`.
     fn infer_match_bound_types_for_container(
         &self,
         container: &Type,
@@ -147,7 +147,7 @@ impl<'ast> CodeGenerator<'ast> {
                     return out;
                 }
             }
-            // DB-429: nested `Some(StateDataValue::Int(value))` on `Map.get` —
+            // nested `Some(StateDataValue::Int(value))` on `Map.get` —
             // recurse into the inner enum pattern with the Option payload type.
             if (variant == "Some" || variant.ends_with("::Some"))
                 || (variant == "Ok" || variant.ends_with("::Ok"))
@@ -262,7 +262,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// `Option<&V>` is already a shared payload. Wrapping again yields `&&V`,
     /// which `is_type_copy` treats as Copy (references are Copy) and skips the
-    /// owned clone a `let mut` needs (DB-236).
+    // owned clone a `let mut` needs.
     fn shared_ref_binding_type(ty: Type) -> Type {
         match ty {
             Type::Reference(_) | Type::MutableReference(_) => ty,

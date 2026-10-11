@@ -27,14 +27,14 @@ use tempfile::TempDir;
 const CHIP: &str = include_str!("fixtures/library_multipass/ui_builder_into_string.wj");
 
 fn assert_into_string_formals(rs: &str) {
-    // DB-357: associated `new` (no self) is concrete String, not Into.
+    // associated `new` (no self) is concrete String, not Into.
     assert!(
         rs.contains("fn new")
             && (rs.contains("status: String") || rs.contains("status: string"))
             && !rs.contains("status: impl Into<String>"),
         "RED: StatusChip::new must take concrete String (). Got:\n{rs}"
     );
-    // Self-receiver withers still accept Rust `&str` via Into (P3.598 / DB-157).
+    // Self-receiver withers still accept Rust `&str` via Into (P3.598).
     assert!(
         rs.contains("fn label") && rs.contains("label: impl Into<String>"),
         "RED: StatusChip::label must take impl Into<String>. Got:\n{rs}"
@@ -95,7 +95,7 @@ fn ui_builder_string_formal_rust_str_call_site_must_cargo_check() {
         r#"
 use into_string_repro::StatusChip;
 fn main() {
-    // Associated `new` is concrete String (DB-357); self-wither `.label` is Into.
+    // Associated `new` is concrete String; self-wither `.label` is Into.
     let _ = StatusChip::new("paid".to_string()).label("Paid");
 }
 "#,

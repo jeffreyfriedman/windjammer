@@ -10,7 +10,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-103: inverse of DB-099 — **owned** struct formals must not receive `&arg`
+//! inverse of — **owned** struct formals must not receive `&arg`
 //! at call sites (Phase 148 `graph_sql_physical_exec_with_batch(&host2, …)` downstream).
 
 #[path = "common/test_utils.rs"]

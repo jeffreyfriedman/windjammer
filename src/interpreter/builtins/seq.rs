@@ -1,7 +1,6 @@
 //! `Vec` / slice / `VecDeque` methods and the iterator adaptor protocol.
 //!
-//! Iterators are eager: adaptors materialise their items. That keeps closures free to call
-//! back into the interpreter while preserving Rust's observable results for finite sources.
+//! The iterator protocol itself (lazy adaptors) lives in `builtins/iter.rs` and `interpreter/iter.rs`.
 
 use super::*;
 use crate::parser::Type;
@@ -24,11 +23,11 @@ fn vec_mut(v: &mut Value) -> &mut Vec<Value> {
     }
 }
 
-fn truthy(v: &Value) -> bool {
+pub(super) fn truthy(v: &Value) -> bool {
     matches!(v, Value::Bool(true))
 }
 
-fn call(it: &mut Interpreter, f: &Value, args: Vec<Value>) -> R {
+pub(super) fn call(it: &mut Interpreter, f: &Value, args: Vec<Value>) -> R {
     it.call_value(f, args)
 }
 
@@ -54,7 +53,7 @@ fn sort_items(items: &mut [Value], mut cmp: impl FnMut(&Value, &Value) -> R<Orde
     }
 }
 
-fn ord_from_closure(it: &mut Interpreter, f: &Value, a: &Value, b: &Value) -> R<Ordering> {
+pub(super) fn ord_from_closure(it: &mut Interpreter, f: &Value, a: &Value, b: &Value) -> R<Ordering> {
     let r = it.call_value(f, vec![a.clone(), b.clone()])?;
     if let Some(o) = ordering_of(&r) {
         return Ok(o);
@@ -71,7 +70,7 @@ fn ord_from_closure(it: &mut Interpreter, f: &Value, a: &Value, b: &Value) -> R<
     Err(semantic("comparator must return an Ordering"))
 }
 
-fn add_ints(a: &Value, b: &Value) -> R {
+pub(super) fn add_ints(a: &Value, b: &Value) -> R {
     match (a, b) {
         (Value::Int(x, xt), Value::Int(y, yt)) => crate::interpreter::ops::int_binary(crate::parser::BinaryOp::Add, *x, *xt, *y, *yt),
         (Value::Float(x, xt), Value::Float(y, _)) => Ok(Value::Float(x + y, *xt)),
@@ -81,7 +80,7 @@ fn add_ints(a: &Value, b: &Value) -> R {
     }
 }
 
-fn mul_ints(a: &Value, b: &Value) -> R {
+pub(super) fn mul_ints(a: &Value, b: &Value) -> R {
     match (a, b) {
         (Value::Int(x, xt), Value::Int(y, yt)) => crate::interpreter::ops::int_binary(crate::parser::BinaryOp::Mul, *x, *xt, *y, *yt),
         (Value::Float(x, xt), Value::Float(y, _)) => Ok(Value::Float(x * y, *xt)),
@@ -172,7 +171,7 @@ pub fn collect_into(items: Vec<Value>, hint: Option<&Type>) -> R {
 
 pub fn register(r: &mut Registry) {
     register_vec(r);
-    register_iter(r);
+    super::iter::register(r);
 }
 
 fn register_vec(r: &mut Registry) {
@@ -183,8 +182,8 @@ fn register_vec(r: &mut Registry) {
         let (x, y) = (arg_int(&a, 0, "slice")?, arg_int(&a, 1, "slice")?);
         it.index_value(v, &Value::Range(x, y, IntTy::Usize))
     });
-    r.pure(Kind::Vec, "iter", |_, v, _| Ok(new_iter(vec_of(v).to_vec())));
-    r.pure(Kind::Vec, "into_iter", |_, v, _| Ok(new_iter(vec_of(v).to_vec())));
+    r.pure(Kind::Vec, "iter", |_, v, _| Ok(Value::Iter(IterState::from_rc(vec_of(v)))));
+    r.pure(Kind::Vec, "into_iter", |_, v, _| Ok(Value::Iter(IterState::from_rc(vec_of(v)))));
     r.pure(Kind::Vec, "to_vec", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Vec, "as_slice", |_, v, _| Ok(v.clone()));
     r.pure(Kind::Vec, "into_boxed_slice", |_, v, _| Ok(v.clone()));
@@ -534,449 +533,4 @@ fn register_vec(r: &mut Registry) {
         let n = vec_of(&p.read()?).len();
         Ok(if n > 0 { Value::some(Value::Ref(p.proj(Proj::Index(n - 1)))) } else { Value::none() })
     });
-}
-
-fn register_iter(r: &mut Registry) {
-    r.pure(Kind::Iter, "iter", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Iter, "into_iter", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Iter, "peekable", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Iter, "by_ref", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Iter, "cloned", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Iter, "copied", |_, v, _| Ok(v.clone()));
-    r.pure(Kind::Iter, "len", |it, v, _| match v {
-        Value::Range(a, b, _) => Ok(Value::usize((*b - *a).max(0) as usize)),
-        Value::Iter(s) => {
-            let st = s.borrow();
-            Ok(Value::usize(st.items.len() - st.pos))
-        }
-        other => Ok(Value::usize(items(it, other)?.len())),
-    });
-    r.pure(Kind::Iter, "is_empty", |it, v, _| match v {
-        Value::Range(a, b, _) => Ok(Value::Bool(*b <= *a)),
-        Value::Iter(s) => {
-            let st = s.borrow();
-            Ok(Value::Bool(st.items.len() == st.pos))
-        }
-        other => Ok(Value::Bool(items(it, other)?.is_empty())),
-    });
-    r.pure(Kind::Iter, "next", |_, v, _| match v {
-        Value::Iter(s) => {
-            let mut st = s.borrow_mut();
-            if st.pos < st.items.len() {
-                let x = st.items[st.pos].clone();
-                st.pos += 1;
-                Ok(Value::some(x))
-            } else {
-                Ok(Value::none())
-            }
-        }
-        _ => Err(semantic("`next` needs an iterator; call `.iter()` first")),
-    });
-    r.pure(Kind::Iter, "next_back", |_, v, _| match v {
-        Value::Iter(s) => {
-            let mut st = s.borrow_mut();
-            if st.pos < st.items.len() {
-                Ok(Value::some(st.items.pop().unwrap()))
-            } else {
-                Ok(Value::none())
-            }
-        }
-        _ => Err(semantic("`next_back` needs an iterator")),
-    });
-    r.pure(Kind::Iter, "peek", |_, v, _| match v {
-        Value::Iter(s) => {
-            let st = s.borrow();
-            Ok(Value::option(st.items.get(st.pos).cloned()))
-        }
-        _ => Err(semantic("`peek` needs an iterator")),
-    });
-    r.pure(Kind::Iter, "next_if", |it, v, a| match v {
-        Value::Iter(s) => {
-            let f = arg(&a, 0, "next_if")?;
-            let cand = {
-                let st = s.borrow();
-                st.items.get(st.pos).cloned()
-            };
-            match cand {
-                Some(x) if truthy(&call(it, &f, vec![x.clone()])?) => {
-                    s.borrow_mut().pos += 1;
-                    Ok(Value::some(x))
-                }
-                _ => Ok(Value::none()),
-            }
-        }
-        _ => Err(semantic("`next_if` needs an iterator")),
-    });
-    r.pure(Kind::Iter, "map", |it, v, a| {
-        let f = arg(&a, 0, "map")?;
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            out.push(call(it, &f, vec![x])?);
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "filter", |it, v, a| {
-        let f = arg(&a, 0, "filter")?;
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            if truthy(&call(it, &f, vec![x.clone()])?) {
-                out.push(x);
-            }
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "filter_map", |it, v, a| {
-        let f = arg(&a, 0, "filter_map")?;
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            let r = call(it, &f, vec![x])?;
-            if let Some(Some(y)) = r.as_option() {
-                out.push(y.clone());
-            }
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "flat_map", |it, v, a| {
-        let f = arg(&a, 0, "flat_map")?;
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            let r = call(it, &f, vec![x])?;
-            out.extend(items(it, &r)?);
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "flatten", |it, v, _| {
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            out.extend(items(it, &x)?);
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "enumerate", |it, v, _| {
-        Ok(new_iter(items(it, v)?.into_iter().enumerate().map(|(i, x)| Value::tuple(vec![Value::usize(i), x])).collect()))
-    });
-    r.pure(Kind::Iter, "zip", |it, v, a| {
-        let other = arg(&a, 0, "zip")?;
-        let o = items(it, &other)?;
-        Ok(new_iter(items(it, v)?.into_iter().zip(o).map(|(x, y)| Value::tuple(vec![x, y])).collect()))
-    });
-    r.pure(Kind::Iter, "chain", |it, v, a| {
-        let other = arg(&a, 0, "chain")?;
-        let mut x = items(it, v)?;
-        x.extend(items(it, &other)?);
-        Ok(new_iter(x))
-    });
-    r.pure(Kind::Iter, "rev", |it, v, _| {
-        let mut x = items(it, v)?;
-        x.reverse();
-        Ok(new_iter(x))
-    });
-    r.pure(Kind::Iter, "take", |it, v, a| {
-        let n = arg_usize(&a, 0, "take")?;
-        Ok(new_iter(items(it, v)?.into_iter().take(n).collect()))
-    });
-    r.pure(Kind::Iter, "skip", |it, v, a| {
-        let n = arg_usize(&a, 0, "skip")?;
-        Ok(new_iter(items(it, v)?.into_iter().skip(n).collect()))
-    });
-    r.pure(Kind::Iter, "step_by", |it, v, a| {
-        let n = arg_usize(&a, 0, "step_by")?;
-        if n == 0 {
-            return Err(panic_ctl("assertion failed: step != 0"));
-        }
-        Ok(new_iter(items(it, v)?.into_iter().step_by(n).collect()))
-    });
-    r.pure(Kind::Iter, "take_while", |it, v, a| {
-        let f = arg(&a, 0, "take_while")?;
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            if !truthy(&call(it, &f, vec![x.clone()])?) {
-                break;
-            }
-            out.push(x);
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "skip_while", |it, v, a| {
-        let f = arg(&a, 0, "skip_while")?;
-        let mut out = Vec::new();
-        let mut skipping = true;
-        for x in items(it, v)? {
-            if skipping && truthy(&call(it, &f, vec![x.clone()])?) {
-                continue;
-            }
-            skipping = false;
-            out.push(x);
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "inspect", |it, v, a| {
-        let f = arg(&a, 0, "inspect")?;
-        let xs = items(it, v)?;
-        for x in &xs {
-            call(it, &f, vec![x.clone()])?;
-        }
-        Ok(new_iter(xs))
-    });
-    r.pure(Kind::Iter, "scan", |it, v, a| {
-        let mut state = arg(&a, 0, "scan")?;
-        let f = arg(&a, 1, "scan")?;
-        let mut out = Vec::new();
-        for x in items(it, v)? {
-            let cell = Place::temp(state.clone());
-            let res = call(it, &f, vec![Value::Ref(cell.clone()), x])?;
-            state = cell.read()?;
-            match res.as_option() {
-                Some(Some(y)) => out.push(y.clone()),
-                _ => break,
-            }
-        }
-        Ok(new_iter(out))
-    });
-    r.pure(Kind::Iter, "for_each", |it, v, a| {
-        let f = arg(&a, 0, "for_each")?;
-        for x in items(it, v)? {
-            call(it, &f, vec![x])?;
-        }
-        Ok(Value::Unit)
-    });
-    r.pure(Kind::Iter, "fold", |it, v, a| {
-        let mut acc = arg(&a, 0, "fold")?;
-        let f = arg(&a, 1, "fold")?;
-        for x in items(it, v)? {
-            acc = call(it, &f, vec![acc, x])?;
-        }
-        Ok(acc)
-    });
-    r.pure(Kind::Iter, "reduce", |it, v, a| {
-        let f = arg(&a, 0, "reduce")?;
-        let mut xs = items(it, v)?.into_iter();
-        let Some(mut acc) = xs.next() else { return Ok(Value::none()) };
-        for x in xs {
-            acc = call(it, &f, vec![acc, x])?;
-        }
-        Ok(Value::some(acc))
-    });
-    r.pure(Kind::Iter, "sum", |it, v, _| {
-        let hint = it.type_hint.take();
-        let xs = items(it, v)?;
-        let mut acc = match (&hint, xs.first()) {
-            (Some(h), _) if super::super::value::type_is_float(h).is_some() => {
-                Value::Float(0.0, super::super::value::type_is_float(h).unwrap())
-            }
-            (Some(h), _) if IntTy::from_type(h).is_some() => Value::Int(0, IntTy::from_type(h).unwrap()),
-            (_, Some(Value::Float(_, t))) => Value::Float(0.0, *t),
-            (_, Some(Value::Int(_, t))) => Value::Int(0, *t),
-            _ => Value::int(0),
-        };
-        for x in xs {
-            acc = add_ints(&acc, &x)?;
-        }
-        Ok(acc)
-    });
-    r.pure(Kind::Iter, "product", |it, v, _| {
-        let hint = it.type_hint.take();
-        let xs = items(it, v)?;
-        let mut acc = match (&hint, xs.first()) {
-            (Some(h), _) if IntTy::from_type(h).is_some() => Value::Int(1, IntTy::from_type(h).unwrap()),
-            (_, Some(Value::Float(_, t))) => Value::Float(1.0, *t),
-            (_, Some(Value::Int(_, t))) => Value::Int(1, *t),
-            _ => Value::int(1),
-        };
-        for x in xs {
-            acc = mul_ints(&acc, &x)?;
-        }
-        Ok(acc)
-    });
-    r.pure(Kind::Iter, "count", |it, v, _| Ok(Value::usize(items(it, v)?.len())));
-    r.pure(Kind::Iter, "last", |it, v, _| Ok(Value::option(items(it, v)?.pop())));
-    r.pure(Kind::Iter, "nth", |it, v, a| {
-        let n = arg_usize(&a, 0, "nth")?;
-        match v {
-            Value::Iter(s) => {
-                let mut st = s.borrow_mut();
-                st.pos = (st.pos + n).min(st.items.len());
-                if st.pos < st.items.len() {
-                    let x = st.items[st.pos].clone();
-                    st.pos += 1;
-                    Ok(Value::some(x))
-                } else {
-                    Ok(Value::none())
-                }
-            }
-            other => Ok(Value::option(items(it, other)?.into_iter().nth(n))),
-        }
-    });
-    r.pure(Kind::Iter, "min", |it, v, _| {
-        let xs = items(it, v)?;
-        let mut best: Option<Value> = None;
-        for x in xs {
-            if best.as_ref().map(|b| x.structural_cmp(b) == Ordering::Less).unwrap_or(true) {
-                best = Some(x);
-            }
-        }
-        Ok(Value::option(best))
-    });
-    r.pure(Kind::Iter, "max", |it, v, _| {
-        let xs = items(it, v)?;
-        let mut best: Option<Value> = None;
-        for x in xs {
-            if best.as_ref().map(|b| x.structural_cmp(b) != Ordering::Less).unwrap_or(true) {
-                best = Some(x);
-            }
-        }
-        Ok(Value::option(best))
-    });
-    r.pure(Kind::Iter, "min_by_key", |it, v, a| {
-        let f = arg(&a, 0, "min_by_key")?;
-        let mut best: Option<(Value, Value)> = None;
-        for x in items(it, v)? {
-            let k = call(it, &f, vec![x.clone()])?;
-            if best.as_ref().map(|(bk, _)| k.structural_cmp(bk) == Ordering::Less).unwrap_or(true) {
-                best = Some((k, x));
-            }
-        }
-        Ok(Value::option(best.map(|(_, x)| x)))
-    });
-    r.pure(Kind::Iter, "max_by_key", |it, v, a| {
-        let f = arg(&a, 0, "max_by_key")?;
-        let mut best: Option<(Value, Value)> = None;
-        for x in items(it, v)? {
-            let k = call(it, &f, vec![x.clone()])?;
-            if best.as_ref().map(|(bk, _)| k.structural_cmp(bk) != Ordering::Less).unwrap_or(true) {
-                best = Some((k, x));
-            }
-        }
-        Ok(Value::option(best.map(|(_, x)| x)))
-    });
-    r.pure(Kind::Iter, "min_by", |it, v, a| {
-        let f = arg(&a, 0, "min_by")?;
-        let mut best: Option<Value> = None;
-        for x in items(it, v)? {
-            let better = match &best {
-                None => true,
-                Some(b) => ord_from_closure(it, &f, &x, b)? == Ordering::Less,
-            };
-            if better {
-                best = Some(x);
-            }
-        }
-        Ok(Value::option(best))
-    });
-    r.pure(Kind::Iter, "max_by", |it, v, a| {
-        let f = arg(&a, 0, "max_by")?;
-        let mut best: Option<Value> = None;
-        for x in items(it, v)? {
-            let better = match &best {
-                None => true,
-                Some(b) => ord_from_closure(it, &f, &x, b)? != Ordering::Less,
-            };
-            if better {
-                best = Some(x);
-            }
-        }
-        Ok(Value::option(best))
-    });
-    r.pure(Kind::Iter, "any", |it, v, a| {
-        let f = arg(&a, 0, "any")?;
-        for x in items(it, v)? {
-            if truthy(&call(it, &f, vec![x])?) {
-                return Ok(Value::Bool(true));
-            }
-        }
-        Ok(Value::Bool(false))
-    });
-    r.pure(Kind::Iter, "all", |it, v, a| {
-        let f = arg(&a, 0, "all")?;
-        for x in items(it, v)? {
-            if !truthy(&call(it, &f, vec![x])?) {
-                return Ok(Value::Bool(false));
-            }
-        }
-        Ok(Value::Bool(true))
-    });
-    r.pure(Kind::Iter, "find", |it, v, a| {
-        let f = arg(&a, 0, "find")?;
-        for x in items(it, v)? {
-            if truthy(&call(it, &f, vec![x.clone()])?) {
-                return Ok(Value::some(x));
-            }
-        }
-        Ok(Value::none())
-    });
-    r.pure(Kind::Iter, "find_map", |it, v, a| {
-        let f = arg(&a, 0, "find_map")?;
-        for x in items(it, v)? {
-            let r = call(it, &f, vec![x])?;
-            if let Some(Some(_)) = r.as_option() {
-                return Ok(r);
-            }
-        }
-        Ok(Value::none())
-    });
-    r.pure(Kind::Iter, "position", |it, v, a| {
-        let f = arg(&a, 0, "position")?;
-        for (i, x) in items(it, v)?.into_iter().enumerate() {
-            if truthy(&call(it, &f, vec![x])?) {
-                return Ok(Value::some(Value::usize(i)));
-            }
-        }
-        Ok(Value::none())
-    });
-    r.pure(Kind::Iter, "rposition", |it, v, a| {
-        let f = arg(&a, 0, "rposition")?;
-        let xs = items(it, v)?;
-        for (i, x) in xs.into_iter().enumerate().rev() {
-            if truthy(&call(it, &f, vec![x])?) {
-                return Ok(Value::some(Value::usize(i)));
-            }
-        }
-        Ok(Value::none())
-    });
-    r.pure(Kind::Iter, "unzip", |it, v, _| {
-        let mut a = Vec::new();
-        let mut b = Vec::new();
-        for x in items(it, v)? {
-            if let Value::Tuple(t) = x {
-                a.push(t[0].clone());
-                b.push(t[1].clone());
-            }
-        }
-        Ok(Value::tuple(vec![Value::vec(a), Value::vec(b)]))
-    });
-    r.pure(Kind::Iter, "partition", |it, v, a| {
-        let f = arg(&a, 0, "partition")?;
-        let (mut yes, mut no) = (Vec::new(), Vec::new());
-        for x in items(it, v)? {
-            if truthy(&call(it, &f, vec![x.clone()])?) {
-                yes.push(x);
-            } else {
-                no.push(x);
-            }
-        }
-        Ok(Value::tuple(vec![Value::vec(yes), Value::vec(no)]))
-    });
-    r.pure(Kind::Iter, "collect", |it, v, _| {
-        let hint = it.type_hint.take();
-        let xs = items(it, v)?;
-        collect_into(xs, hint.as_ref())
-    });
-    r.pure(Kind::Iter, "cmp", |it, v, a| {
-        let other = arg(&a, 0, "cmp")?;
-        let (x, y) = (items(it, v)?, items(it, &other)?);
-        Ok(ordering(Value::vec(x).structural_cmp(&Value::vec(y))))
-    });
-    r.pure(Kind::Iter, "eq", |it, v, a| {
-        let other = arg(&a, 0, "eq")?;
-        let (x, y) = (items(it, v)?, items(it, &other)?);
-        Ok(Value::Bool(Value::vec(x).structural_eq(&Value::vec(y))))
-    });
-    r.pure(Kind::Iter, "contains", |_, v, a| {
-        let x = arg(&a, 0, "contains")?;
-        match v {
-            Value::Range(lo, hi, _) => Ok(Value::Bool(matches!(x, Value::Int(n, _) if n >= *lo && n < *hi))),
-            _ => Err(semantic("`contains` on an iterator")),
-        }
-    });
-    r.pure(Kind::Iter, "cycle", |_, _, _| Err(unsupported("`cycle()` (infinite iterators)")));
 }

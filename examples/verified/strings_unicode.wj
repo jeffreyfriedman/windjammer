@@ -1,0 +1,12 @@
+// tags: strings, unicode, chars, bytes
+// rust: ok
+// expect: 5 6
+// expect: 3
+// expect: h
+fn main() {
+    let a = "héllo"
+    println("${a.chars().count()} ${a.len()}")
+    let abc = "abc"
+    println("${abc.bytes().count()}")
+    println("${a.chars().next().unwrap_or('?')}")
+}

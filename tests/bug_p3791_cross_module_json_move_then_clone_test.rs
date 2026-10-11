@@ -14,7 +14,7 @@
 //! P3.791: a cross-module `"${json}"` passed into an owned `String` parser must
 //! clone when a later call still uses `json`.
 //!
-//! Oct 10 10:16 `wj` downstream-screens regen is one E0382:
+//! Oct 10 10:16 `wj` a large downstream application regen is one E0382:
 //! `parse_aging_bucket_fields(json)` then `parse_aging_party_line_fields(json.clone())`.
 
 #[path = "common/integration_test_helpers.rs"]

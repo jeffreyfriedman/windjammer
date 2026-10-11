@@ -152,7 +152,7 @@ For every coercion rule or constraint change:
 | 1 | Expression IR, call-site constraints, solver write-back, analyzer on all backends |
 | 2 | Shared `coercion.rs` + `target_encodings` emit |
 | 3 | Parallel backend cutover (Rust, Go, JS, WASM). **Status: Rust only.** Go/JS discard the IR; WASM goes through the Rust generator. |
-| 4 | Multipass IR merge, dogfood + sample-game dogfooding |
+| 4 | Multipass IR merge, dogfood + a game project dogfooding |
 | 5 | Delete legacy heuristics (`call_site_borrow`, `correct_legacy_output`) — **in progress** |
 
 ### Phase 5 progress (2026-08-11)
@@ -174,13 +174,13 @@ For every coercion rule or constraint change:
 - **Mixed-forwarder / owned-outer in reconcile:** `apply_post_ir_forwarder_owned_outer_and_reuse` uses IR `compute_coercion` plus shared forwarder helpers; method IR path no longer duplicates wants_ref clusters. `should_borrow_at_call_site` no longer takes a live method-name for ownership (unused `_method_name`).
 - **Retired `!call_sites` opt-out (2026-08-11):** `from_env()` always sets `call_sites: true`. Deleted ~4k LOC of pre-IR ownership tails in method / regular-call / field-access argument generation. Numeric `usize` / int→float casts live in `apply_post_ir_numeric_formal_casts` (reconcile). Iterator predicate `&T` classification lives in `method_predicate_closure_receives_ref` (protocol, not ownership).
 - **Gates:** `tests/ir_call_site_total_coercion_test.rs`, `tests/ir_formal_param_emission_test.rs`, `tests/phase5_no_legacy_bridge_test.rs`, `tests/codegen_env_get_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_starts_with_str_literal_must_not_auto_own_gate_test.rs`, `tests/codegen_cross_crate_associated_new_bare_literal_must_auto_own_gate_test.rs`.
-- **Signature-driven runtime borrow (2026-08-14):** `runtime_std_module_arg_needs_rust_borrow` no longer gates on `is_runtime_std_module` — Borrowed WJ-owned formals auto-borrow from scanned signatures even for crate-prefixed paths (`db_circuit::exists`). Unit gate: `runtime_borrow_is_signature_driven_not_module_name`.
+- **Signature-driven runtime borrow (2026-08-14):** `runtime_std_module_arg_needs_rust_borrow` no longer gates on `is_runtime_std_module` — Borrowed WJ-owned formals auto-borrow from scanned signatures even for crate-prefixed paths (`graph_circuit::exists`). Unit gate: `runtime_borrow_is_signature_driven_not_module_name`.
 - **DRY formal false-mut:** `param_false_mut_from_readonly_field_methods` consolidates the duplicated Custom-aggregate readonly field-method demotion used by AppDeps / post_journal_entry formals.
 - **Method finalize ownership skip (2026-08-24):** when `call_sites` is on, `mc_finalize_method_call_expression` keeps args from IR coerce + terminal reconcile and does not re-run the ~800-line ownership map (third-layer ping-pong). Legacy map remains only for unit tests with `call_sites: false`. Gate: `method_call_sites_owned_by_ir_not_finalize_rewrite`.
 - **Apply-IR `should_borrow` retired (2026-08-24):** `apply_ir_call_site_coercion` uses `enforce_ownership_contract_on_coerced_arg` plus peel/suppress guards instead of `should_borrow_at_call_site_with_copy_check`. Collection-key lookups always set `expected=Ref` (even for already-`&str` bindings) so Identity wins over spurious Owned→`.to_string()`.
-- **Reconcile shared-borrow reapply is IR-only (2026-08-24):** fresher-sig / DB-101 path uses `enforce_ownership_contract_on_coerced_arg` (with collection-key `expected=Ref`). `should_borrow_at_call_site*` deleted; IR coercion gates live in `tests/ir_call_site_coercion_oracle_test.rs`.
+- **Reconcile shared-borrow reapply is IR-only (2026-08-24):** fresher-sig / path uses `enforce_ownership_contract_on_coerced_arg` (with collection-key `expected=Ref`). `should_borrow_at_call_site*` deleted; IR coercion gates live in `tests/ir_call_site_coercion_oracle_test.rs`.
 - **Solver actual-type merge (2026-08-24):** `set_ir_module` retains the full `IrModule`; `infer_actual_safety_type` merges AST/emit actuals with current-function / module IR binding types via `merge_call_arg_actual_with_ir`. Added `call_site_expects_mut_borrow`.
-- **DB dogfood gates (IR-only, 2026-08-29):** DB-099/101/107 ownership gates run against tip `call_sites` IR only. PRE snapshot worktree retired — see `codegen_owned_reuse_after_helper_test` for DB-100.
+- **Downstream dogfood gates (IR-only, 2026-08-29):** ownership gates run against tip `call_sites` IR only. PRE snapshot worktree retired — see `codegen_owned_reuse_after_helper_test` for .
 - **`ir/emission_contract.rs` (2026-08-24):** `callee_emits_shared_rust_ref_param` + `plain_string_formal_passes_owned_at_call_site` live in IR; `signature_bridge` imports them directly (no `call_site_borrow` edge). `call_site_borrow` re-exports for codegen stability. Temporary codegen helper deps to be purified next.
 - **`ir/formal_predicates.rs` (2026-08-24):** IR-neutral text/ref formal predicates; codegen delegates (`types`, `string_utilities`, `call_signature_resolution`). `emission_contract` uses predicates + `type_analysis_pure` (only `emitted_owned_arg_contract` remains codegen-linked).
 - **Unified shared-ref helpers (2026-08-24):** `call_site_needs_shared_ref_at_emit` / `call_site_wants_shared_text_ref` in `signature_bridge`; dual-oracle `A || callee_emits` collapsed in `ir_call_site`. Parity gates: `tests/emission_contract_parity_gate_test.rs`.
@@ -191,7 +191,6 @@ For every coercion rule or constraint change:
 ## Related Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — compiler crate structure
-- [archive/design/auto-reference.md](archive/design/auto-reference.md) — historical auto-borrow design (archived, superseded by this document)
 - [design/multi-target-codegen.md](design/multi-target-codegen.md) — multi-target vision
 - [proposals/rfcs/WJ-SEC-01-effect-capabilities.md](proposals/rfcs/WJ-SEC-01-effect-capabilities.md) — effect system
 - [proposals/rfcs/WJ-SEC-02-taint-tracking.md](proposals/rfcs/WJ-SEC-02-taint-tracking.md) — taint tracking
@@ -202,5 +201,5 @@ For every coercion rule or constraint change:
 - Zero heuristic method-name lists for ownership/coercion
 - All backends run `IrPipeline` and use `encode_call_argument`
 - `cargo test --release --test all` green; conformance 26/26 green
-- dogfood + sample-game ownership E0308 errors eliminated
+- dogfood + a game project ownership E0308 errors eliminated
 - Legacy `call_site_borrow` / `correct_legacy_output` deleted

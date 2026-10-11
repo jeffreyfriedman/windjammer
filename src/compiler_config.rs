@@ -29,7 +29,7 @@ pub struct CompilerConfig {
     pub stdlib_path: Option<PathBuf>,
     /// Override the `windjammer-runtime` crate path used in generated Cargo.toml.
     pub runtime_path: Option<PathBuf>,
-    /// Override the `game-host` workspace path for generated Cargo.toml.
+    /// Override the a game engine project workspace path for generated Cargo.toml.
     pub game_path: Option<PathBuf>,
 }
 

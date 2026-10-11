@@ -1,0 +1,23 @@
+// tags: algorithm, matrix, nested-vec
+// rust: gap error[E0308]: arguments to this function are incorrect
+// expect: [19, 22]
+// expect: [43, 50]
+fn matmul(a: Vec<Vec<int>>, b: Vec<Vec<int>>) -> Vec<Vec<int>> {
+    let n = a.len()
+    let mut out: Vec<Vec<int>> = []
+    for i in 0..n {
+        let mut row: Vec<int> = []
+        for j in 0..n {
+            let mut s = 0
+            for k in 0..n { s += a[i][k] * b[k][j] }
+            row.push(s)
+        }
+        out.push(row)
+    }
+    out
+}
+
+fn main() {
+    let c = matmul([[1, 2], [3, 4]], [[5, 6], [7, 8]])
+    for row in c { println("${row:?}") }
+}

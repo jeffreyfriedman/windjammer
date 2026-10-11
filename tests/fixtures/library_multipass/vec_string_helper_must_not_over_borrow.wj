@@ -1,5 +1,5 @@
 // FAILING REPRO — owned `Vec<string>` helper must not receive `&Vec` at call site.
-// Product tip api-check (DownstreamApp http_json): `string_list_json(&controls)`.
+// Product tip api-check (a downstream application http_json): `string_list_json(&controls)`.
 
 fn list_json(values: Vec<string>) -> string {
     let mut body = "[" + ""

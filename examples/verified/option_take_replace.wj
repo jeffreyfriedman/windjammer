@@ -1,0 +1,11 @@
+// tags: option, mutation, take, replace
+// rust: ok
+// expect: Some(5) None
+// expect: Some(7)
+fn main() {
+    let mut slot: Option<int> = Some(5)
+    let taken = slot.take()
+    println("${taken:?} ${slot:?}")
+    slot = Some(7)
+    println("${slot:?}")
+}

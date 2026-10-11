@@ -1,6 +1,6 @@
 /// Chain helper: return `(Row, T)` so hexagonal postgres adapters can read
 /// multiple columns without `&Row` (W0001) or a move-WJ0007 on each call.
-/// DownstreamApp `postgres_row_mapping.wj` still uses `"col" + ""` until this greens.
+/// a downstream application `postgres_row_mapping.wj` still uses `"col" + ""` until this greens.
 pub struct Row {
     leftover: string,
 }

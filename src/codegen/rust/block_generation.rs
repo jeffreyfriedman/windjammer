@@ -40,7 +40,7 @@ impl<'ast> CodeGenerator<'ast> {
                 continue;
             }
 
-            // DB-088: `let tmp = self.a; self.a = self.b; self.b = tmp` → mem::swap
+            // `let tmp = self.a; self.a = self.b; self.b = tmp` → mem::swap
             if let Some((folded, skip_b, skip_c)) = self.try_fold_self_field_swap(stmts, i) {
                 output.push_str(&folded);
                 self.skip_block_indices.insert(skip_b);
@@ -430,7 +430,7 @@ impl<'ast> CodeGenerator<'ast> {
                 // CRITICAL: Check if matching on self.field to avoid partial move
                 let needs_clone_for_match = self.match_needs_clone_for_self_field(value, arms);
 
-                // DB-372 / DB-424: match/if-let scrutinees must not auto-clone field
+                // match/if-let scrutinees must not auto-clone field
                 // places (`body.shape.clone()`). Prefer `match &place` (same as
                 // `generate_match_statement`).
                 let prev_suppress_scrutinee = self.suppress_borrowed_clone;
@@ -445,13 +445,13 @@ impl<'ast> CodeGenerator<'ast> {
                 };
                 self.suppress_borrowed_clone = prev_suppress_scrutinee;
 
-                // `Option<&T>` with Copy `T` (HashMap::get) → `.copied()` so arms agree (DB-134).
+                // `Option<&T>` with Copy `T` (HashMap::get) → `.copied()` so arms agree.
                 let use_copied_option = self.match_scrutinee_option_yields_copy(value);
                 if use_copied_option && !value_str.ends_with(".copied()") {
                     value_str = format!("{value_str}.copied()");
                 }
 
-                // E0507 / DB-424: matching a non-Copy field place must use `match &field`
+                // E0507 / matching a non-Copy field place must use `match &field`
                 // (including wildcard-only arms), never `.clone()` — whether the root is
                 // already borrowed or auto_clone would clone for a later reuse of the place.
                 let is_enum_match = arms
@@ -559,7 +559,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                     for var in &bound_vars {
                         if !added_borrowed.iter().any(|b| b == var) {
-                            // DB-347: owned arm payloads must not auto-clone (Copy f32).
+                            // owned arm payloads must not auto-clone (Copy f32).
                             self.match_arm_bindings.insert(var.clone());
                         }
                     }
@@ -642,7 +642,7 @@ impl<'ast> CodeGenerator<'ast> {
                     // (e.g., match &self.field, or method returning Option<&T>),
                     // simple binding returns (Some(x) => x) produce &T, but other arms
                     // may produce owned T. Clone/deref the binding to fix the mismatch.
-                    // DB-326: skip when `.copied()` already owns Copy payloads (`Some(v) => v`).
+                    // skip when `.copied()` already owns Copy payloads (`Some(v) => v`).
                     let scrutinee_type_has_ref = self.expression_type_contains_reference(value);
                     let match_binds_refs = !use_copied_option
                         && !scrutinee_owned_via_clone
@@ -888,7 +888,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `let tmp = self.a; self.a = self.b; self.b = tmp` → `std::mem::swap(&mut self.a, &mut self.b)`
-    /// (DB-088 — PageRank double-buffer must not clone Vec fields).
+    // (PageRank double-buffer must not clone Vec fields).
     fn try_fold_self_field_swap(
         &self,
         stmts: &[&'ast Statement<'ast>],

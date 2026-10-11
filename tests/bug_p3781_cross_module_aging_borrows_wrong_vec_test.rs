@@ -18,7 +18,7 @@
 //! `aging(buckets, &parties, fallback, title, kind.clone())` against
 //! `(Vec<Bucket>, Vec<Line>, &str, &str, &str)`.
 //! The sibling ledger call in the same render borrows its strings and moves
-//! the `Vec`. downstream-screens `aging_report_html(&buckets, parties, fallback, title, kind)`
+//! the `Vec`. a large downstream application `aging_report_html(&buckets, parties, fallback, title, kind)`
 //! is the same class (P3.771).
 
 #[path = "common/integration_test_helpers.rs"]

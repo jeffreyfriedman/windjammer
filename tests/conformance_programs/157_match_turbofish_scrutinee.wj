@@ -1,0 +1,19 @@
+// expect: 42
+// expect: bad
+// expect: 3
+fn main() {
+    let s = "42"
+    match s.parse::<int>() {
+        Ok(v) => println("${v}"),
+        Err(_) => println("bad"),
+    }
+    match "x1".parse::<int>() {
+        Ok(v) => println("${v}"),
+        Err(_) => println("bad"),
+    }
+    let xs: Vec<int> = [1, 2, 3]
+    match xs.iter().cloned().collect::<Vec<int>>().len() {
+        3 => println("3"),
+        _ => println("other"),
+    }
+}

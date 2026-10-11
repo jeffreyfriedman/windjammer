@@ -1,0 +1,14 @@
+// tags: numbers, overflow, checked
+// rust: ok
+// expect: Some(200)
+// expect: None
+// expect: 255
+// expect: 4
+fn main() {
+    let a: u8 = 100
+    println("${a.checked_add(100):?}")
+    println("${a.checked_add(200):?}")
+    println("${a.saturating_add(200)}")
+    let b: u8 = 250
+    println("${b.wrapping_add(10)}")
+}

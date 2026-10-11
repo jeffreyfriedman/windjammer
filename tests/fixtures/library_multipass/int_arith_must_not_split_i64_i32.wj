@@ -1,5 +1,5 @@
 // FAILING REPRO — int literal / loop locals must stay one width with int arith (no i64 vs i32).
-// Product tip api-check (DownstreamApp domain/recurring.wj):
+// Product tip api-check (a downstream application domain/recurring.wj):
 //   `year % 4 == 0`, `while remaining > 0`, `m > 12` → E0277 i64 Rem/PartialEq i32
 // after tip int_inference churn (HEAD tip binary). Pin/dogfood tip may still GREEN.
 

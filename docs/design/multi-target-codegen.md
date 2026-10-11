@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 3406ef05bb35
+---
 # Multi-Target Code Generation Architecture
 
 **Version:** 0.32.0  
@@ -195,7 +199,7 @@ let output = match target {
 **Goal:** Prepare for multi-target without breaking anything
 
 **Tasks:**
-1. Move `src/codegen.rs` → `src/codegen/rust.rs`
+1. Move the single-file Rust generator into `src/codegen/rust/` (done)
 2. Create `src/codegen/backend.rs` with trait
 3. Implement `CodegenBackend` for `RustBackend`
 4. Keep `src/codegen/mod.rs` with existing public API

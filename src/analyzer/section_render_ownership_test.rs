@@ -91,7 +91,7 @@ fn sort_and_return(items: Vec<i32>) -> Vec<i32> {
 
     #[test]
     #[test]
-    fn wdb416_evaluate_method_keeps_owned_val_formals() {
+    fn evaluate_method_keeps_owned_val_formals() {
         let src = r#"
 pub enum Val {
     F(f32),
@@ -154,7 +154,7 @@ impl Eval {
         let _ = a_b;
     }
 
-    fn wdb416_owned_enum_consumed_by_as_float_stays_owned() {
+    fn owned_enum_consumed_by_as_float_stays_owned() {
         let src = r#"
 pub enum Val {
     F(f32),

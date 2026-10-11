@@ -1,5 +1,5 @@
 // FAILING REPRO — trait-impl owned string formal must not receive `&String` after format/+ "".
-// Product tip api-check (DownstreamApp env_* / postgres self.get / routes period_lock):
+// Product tip api-check (a downstream application env_* / postgres self.get / routes period_lock):
 //   `self.get(&_temp0, _temp1)` while formal is String.
 // Isolate must mirror multipass: interpolation temps + self.get inside impl.
 

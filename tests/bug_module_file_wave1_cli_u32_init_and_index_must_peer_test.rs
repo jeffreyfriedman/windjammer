@@ -11,9 +11,9 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-308: wave1 CLI residual — `u32 = 0_usize` and `args[i + 1]` index by u32.
+//! wave1 CLI residual — `u32 = 0_usize` and `args[i + 1]` index by u32.
 //!
-//! Twin of DB-298/303 for remaining tip-out/gen sites (artifact/bench/publish CLI):
+//! Twin of for remaining tip-out/gen sites (artifact/bench/publish CLI):
 //!   `let mut i: u32 = 0_usize;` + `args[i + 1]` → E0308 / E0277.
 //! Product WJ is untyped `let mut i = 0` with `-> u32` and `args.len()` / `args[i+1]`.
 //! Adjacency/CDLP/LCC were synced (P3.390); wave1 CLI MultiFile+tip GREEN (P3.400).

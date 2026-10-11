@@ -1,6 +1,6 @@
 use std::strings
 
-/// DownstreamApp `domain/string_contains.wj` class without empty-concat workarounds.
+/// a downstream application `domain/string_contains.wj` class without empty-concat workarounds.
 /// Substring start/end with `int` counters must unify to usize without mixing
 /// i64 operands and a usize-suffixed literal in the same binary expression.
 pub fn haystack_contains(haystack: string, needle: string) -> bool {

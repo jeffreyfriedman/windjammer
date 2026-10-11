@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 100\ncoin 100\nselect cola\nstatus\n",
+  "stdout": "credit 100\ncredit 200\ndispensed cola change: 25 25\ncredit=0 cola=2 chips=2 gum=5\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "coin 25\nselect gum\ncoin 10\nselect gum\nrefund\ncoin 3\n",
+  "stdout": "credit 25\nerror: need 10 more\ncredit 35\ndispensed gum change: none\nrefund: none\nrejected 3\n"
+ }
+]

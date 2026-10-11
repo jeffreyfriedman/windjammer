@@ -1,0 +1,34 @@
+// tags: enum, impl, methods
+// rust: gap error[E0308]: arguments to this enum variant are incorrect
+// expect: Quit -> exit
+// expect: Move(2, 3) -> moved to 2,3
+// expect: Say(hi) -> says hi
+enum Command {
+    Quit,
+    Move(int, int),
+    Say(string),
+}
+
+impl Command {
+    fn describe(self) -> string {
+        match self {
+            Command::Quit => "exit",
+            Command::Move(x, y) => "moved to ${x},${y}",
+            Command::Say(s) => "says ${s}",
+        }
+    }
+    fn name(self) -> string {
+        match self {
+            Command::Quit => "Quit",
+            Command::Move(x, y) => "Move(${x}, ${y})",
+            Command::Say(s) => "Say(${s})",
+        }
+    }
+}
+
+fn main() {
+    let cmds = [Command::Quit, Command::Move(2, 3), Command::Say("hi")]
+    for c in cmds {
+        println("${c.name()} -> ${c.describe()}")
+    }
+}

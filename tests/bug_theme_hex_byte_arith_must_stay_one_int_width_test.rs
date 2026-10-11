@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.371: downstream-screens theme hex — `hi * 16 + lo` after i64 digit helpers must not
+//! P3.371: a large downstream application theme hex — `hi * 16 + lo` after i64 digit helpers must not
 //! mix `i64 + (lo as i32)`.
 
 #[path = "common/integration_test_helpers.rs"]

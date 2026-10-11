@@ -66,7 +66,6 @@ fn format_user(user: User) -> string {
 }
 
 // JSON serialization test
-@derive(Serialize, Deserialize)
 struct BenchData {
     count: int,
     timestamp: int,

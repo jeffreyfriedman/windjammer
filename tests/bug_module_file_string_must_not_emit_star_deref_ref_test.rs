@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-368: borrowed `string` into `&str` formal must not emit `&*ident`.
+//! borrowed `string` into `&str` formal must not emit `&*ident`.
 //!
 //! Tip output for a game project `dialogue_tree.rs`:
 //!   `world.get_flag(&*flag)` / `world.get_variable(&*key)`

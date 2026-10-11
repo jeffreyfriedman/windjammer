@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nann - 300\nbob ann 200\ncat bob 100\ndan cat 90\neve zed 50\ncat\ndan\n",
+  "stdout": "300\n200\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nann - 300\nbob ann 200\ncat bob 100\ndan cat 90\neve zed 50\nann\nbob\nnobody\n",
+  "stdout": "none: no manager ann\nnone: no skip-level ann\nnone: unknown nobody\n"
+ }
+]

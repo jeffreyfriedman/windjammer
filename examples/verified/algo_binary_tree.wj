@@ -1,0 +1,64 @@
+// tags: enum, recursion, box, tree, data-structure
+// rust: gap error[E0308]: mismatched types
+// expect: in-order: 1 3 5 8 9
+// expect: height: 3
+// expect: contains 8: true
+// expect: contains 4: false
+enum Tree {
+    Node(Box<Tree>, int, Box<Tree>),
+    Leaf,
+}
+
+fn insert(t: Tree, v: int) -> Tree {
+    match t {
+        Tree::Leaf => Tree::Node(Box::new(Tree::Leaf), v, Box::new(Tree::Leaf)),
+        Tree::Node(l, x, r) => {
+            if v < x {
+                Tree::Node(Box::new(insert(*l, v)), x, r)
+            } else {
+                Tree::Node(l, x, Box::new(insert(*r, v)))
+            }
+        }
+    }
+}
+
+fn walk(t: Tree, out: Vec<int>) -> Vec<int> {
+    match t {
+        Tree::Leaf => out,
+        Tree::Node(l, x, r) => {
+            let mut acc = walk(*l, out)
+            acc.push(x)
+            walk(*r, acc)
+        }
+    }
+}
+
+fn height(t: Tree) -> int {
+    match t {
+        Tree::Leaf => 0,
+        Tree::Node(l, _, r) => 1 + height(*l).max(height(*r)),
+    }
+}
+
+fn contains(t: Tree, v: int) -> bool {
+    match t {
+        Tree::Leaf => false,
+        Tree::Node(l, x, r) => {
+            if v == x { true } else if v < x { contains(*l, v) } else { contains(*r, v) }
+        }
+    }
+}
+
+fn build() -> Tree {
+    let mut t = Tree::Leaf
+    for v in [5, 3, 8, 1, 9] { t = insert(t, v) }
+    t
+}
+
+fn main() {
+    let strs: Vec<string> = walk(build(), []).map(|x| x.to_string()).collect()
+    println("in-order: ${strs.join(" ")}")
+    println("height: ${height(build())}")
+    println("contains 8: ${contains(build(), 8)}")
+    println("contains 4: ${contains(build(), 4)}")
+}

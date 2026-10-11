@@ -1,4 +1,4 @@
-// DownstreamApp seed_bank_recon*_overlay int_to_string / parse_int_string class —
+// a downstream application seed_bank_recon*_overlay int_to_string / parse_int_string class —
 // no empty-concat. Tip must cargo-check owned string formals + substring reuse
 // (same shape as request_context.generate_request_id int helper).
 

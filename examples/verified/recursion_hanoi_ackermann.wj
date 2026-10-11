@@ -1,0 +1,22 @@
+// tags: recursion, algorithm
+// rust: ok
+// expect: hanoi(10) = 1023 moves
+// expect: ackermann(2, 3) = 9
+fn hanoi(n: int) -> int {
+    if n == 0 { 0 } else { 2 * hanoi(n - 1) + 1 }
+}
+
+fn ackermann(m: int, n: int) -> int {
+    if m == 0 {
+        n + 1
+    } else if n == 0 {
+        ackermann(m - 1, 1)
+    } else {
+        ackermann(m - 1, ackermann(m, n - 1))
+    }
+}
+
+fn main() {
+    println("hanoi(10) = ${hanoi(10)} moves")
+    println("ackermann(2, 3) = ${ackermann(2, 3)}")
+}

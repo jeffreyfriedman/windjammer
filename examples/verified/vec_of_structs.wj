@@ -1,0 +1,23 @@
+// tags: vec, structs, sort_by_key
+// rust: gap error[E0599]: no method named 'max_by_key' found for struct 'Vec<Person>' in the
+// expect: Bo 25
+// expect: Al 30
+// expect: Cy 41
+// expect: oldest: Cy
+struct Person { name: string, age: int }
+
+fn main() {
+    let mut people = [
+        Person { name: "Al", age: 30 },
+        Person { name: "Cy", age: 41 },
+        Person { name: "Bo", age: 25 },
+    ]
+    people.sort_by_key(|p| p.age)
+    for p in people {
+        println("${p.name} ${p.age}")
+    }
+    match people.max_by_key(|p| p.age) {
+        Some(oldest) => println("oldest: ${oldest.name}"),
+        None => println("nobody"),
+    }
+}

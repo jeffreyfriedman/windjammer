@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add 1 2\nmul 65536 65536\npow 2 10\ndiv 7 0\n",
+  "stdout": "3\noverflow\n1024\ndivzero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sub -2147483648 1\nrem -7 3\npow 2 -1\n",
+  "stdout": "overflow\n-1\ninvalid\n"
+ }
+]

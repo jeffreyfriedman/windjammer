@@ -1,0 +1,34 @@
+// tags: program, strings, chars, encoding
+// rust: ok
+// expect: a3b2c1
+// expect: aaabbc
+fn encode(s: string) -> string {
+    let cs: Vec<char> = s.chars().collect()
+    let mut out = ""
+    let mut i = 0
+    while i < cs.len() {
+        let mut j = i
+        while j < cs.len() && cs[j] == cs[i] { j += 1 }
+        out = out + cs[i].to_string() + (j - i).to_string()
+        i = j
+    }
+    out
+}
+
+fn decode(s: string) -> string {
+    let cs: Vec<char> = s.chars().collect()
+    let mut out = ""
+    let mut i = 0
+    while i < cs.len() {
+        let n = cs[i + 1].to_digit(10).unwrap_or(0) as int
+        out = out + cs[i].to_string().repeat(n)
+        i += 2
+    }
+    out
+}
+
+fn main() {
+    let e = encode("aaabbc")
+    println(e)
+    println(decode(e))
+}

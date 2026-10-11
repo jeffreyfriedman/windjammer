@@ -11,14 +11,14 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-446: Copy `i32` **local** into typed `let` must not `.clone()`.
+//! Copy `i32` **local** into typed `let` must not `.clone()`.
 //!
 //! Product `voxel/meshing.rs`:
 //!   `let mut slice_count: i32 = gd.clone()`
 //!   `let mut x: i32 = u.clone()`
 //! WJ uses bare `gd` / `u`.
-//! Distinct from DB-437 (i32 **formal** into let), DB-442 (u32 **local** into let),
-//! and DB-445 (f32 **formal** into let).
+//! Distinct from (i32 **formal** into let), (u32 **local** into let),
+//! and (f32 **formal** into let).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

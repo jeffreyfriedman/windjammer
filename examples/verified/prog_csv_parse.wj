@@ -1,0 +1,30 @@
+// tags: program, strings, parsing, struct, result
+// rust: gap error[E0599]: no method named 'map' found for struct 'Vec<Row>' in the current s
+// expect: skipped bad line: carol,x,oslo
+// expect: alice (30) from paris
+// expect: bob (25) from rome
+// expect: average age: 27.5
+struct Row { name: string, age: int, city: string }
+
+fn parse_line(line: string) -> Result<Row, string> {
+    let f: Vec<string> = line.split(",").map(|s| s.to_string()).collect()
+    if f.len() != 3 { return Err("wrong field count") }
+    let age = f[1].parse::<int>().map_err(|_| "bad age")?
+    Ok(Row { name: f[0], age: age, city: f[2] })
+}
+
+fn main() {
+    let data = "alice,30,paris\nbob,25,rome\ncarol,x,oslo"
+    let mut rows: Vec<Row> = []
+    for line in data.lines() {
+        match parse_line(line) {
+            Ok(r) => rows.push(r),
+            Err(_) => println("skipped bad line: ${line}"),
+        }
+    }
+    for r in rows {
+        println("${r.name} (${r.age}) from ${r.city}")
+    }
+    let total: int = rows.map(|r| r.age).sum()
+    println("average age: ${total as float / rows.len() as float}")
+}

@@ -28,7 +28,7 @@ impl<'ast> CodeGenerator<'ast> {
                 Some(n.as_str())
             }
             Type::Vec(inner) => {
-                // `vec![10, 20]` infers `Vec<int>`/`Vec<i32>`; callee `Vec<u64>` must win (DB-127).
+                // `vec![10, 20]` infers `Vec<int>`/`Vec<i32>`; callee `Vec<u64>` must win.
                 let default_elem = matches!(
                     inner.as_ref(),
                     Type::Int | Type::Int32 | Type::Float | Type::Uint
@@ -187,7 +187,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } => Some(Type::Custom(struct_name.to_string())),
                     // Unit-struct / type-path values: `let r = Renderer` (no braces).
                     // CamelCase identifiers are type constructors, not locals.
-                    // DB-444: `WeatherType::Clear` is an enum variant — bind the enum type,
+                    // `WeatherType::Clear` is an enum variant — bind the enum type,
                     // not the variant path (variant paths break Copy registry lookups).
                     Expression::Identifier { name, .. }
                         if name.starts_with(|c: char| c.is_ascii_uppercase()) =>
@@ -233,7 +233,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // Literal types: untyped `let x = 25` follows enclosing return width
-                    // (DB-081 / P3.280). Bool/string returns keep WJ `int` so loop counters
+                    // (P3.280). Bool/string returns keep WJ `int` so loop counters
                     // `i = i + 1` stay i64 (not `+= 1 as i32`). Custom/struct returns still
                     // prefer i32 for coordinate locals (`let cy = 10` in builders).
                     Expression::Literal {
@@ -286,7 +286,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } => self.infer_expression_type(operand),
                     Expression::Call { .. } | Expression::MethodCall { .. } => {
                         // Signature-driven via infer_expression_type (associated Type::assoc,
-                        // DB-091). Refine empty Vec/HashSet element types from usage.
+                        // Refine empty Vec/HashSet element types from usage.
                         self.infer_let_value_type(value, var_name)
                     }
                     // P3.280: `let cx = VIEWER_GRID / 2` — Binary must prefer module-const /
@@ -405,7 +405,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     Some(Type::Int32)
                                 } else if self.if_else_binding_should_be_float(then_expr, else_expr)
                                 {
-                                    // DB-440: float if/else block → f32 local (no .clone()).
+                                    // float if/else block → f32 local (no .clone()).
                                     Some(Type::Float)
                                 } else {
                                     None
@@ -562,7 +562,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !value_str.ends_with(".clone()")
                                 && !value_str.ends_with(".to_string()")
                             {
-                                // DB-343: `maybe_auto_clone` skips Copy scalars — do not
+                                // `maybe_auto_clone` skips Copy scalars — do not
                                 // force-append `.clone()` after it (that undoes Copy skips).
                                 value_str = self.maybe_auto_clone(name, &value_str);
                             }
@@ -609,16 +609,16 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
                 } else if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
-                    // DB-305: later `x = u32` assign beats return-width i64 for untyped counters.
+                    // later `x = u32` assign beats return-width i64 for untyped counters.
                     let later_peer = var_name
                         .and_then(|vn| self.mut_int_local_peer_width_from_later_assigns(vn));
-                    // DB-308: `-> u32` / later u32 peer wins over `.len()` usize marking.
-                    // DB-361: `.len()` while-counters win over `-> i32` / later i32 peer.
+                    // `-> u32` / later u32 peer wins over `.len()` usize marking.
+                    // `.len()` while-counters win over `-> i32` / later i32 peer.
                     let prefer_usize_over_i32 = var_name
                         .is_some_and(|vn| self.usize_variables.contains(vn))
                         && !matches!(later_peer.as_ref(), Some(Type::Uint))
                         && !self.function_returns_u32_for_loop_scan();
-                    // DB-411: `while i < count` (u32) must win over later `i = i + 1`
+                    // `while i < count` (u32) must win over later `i = i + 1`
                     // inferred as i32 and over `-> Histogram` / `-> f32` i32-coord ascription
                     // (`let mut i: i32 = 0_u32`).
                     let while_u32_peer = var_name.is_some_and(|n| {
@@ -671,7 +671,7 @@ impl<'ast> CodeGenerator<'ast> {
                     } else if let Some(ret_ty) = &self.current_function_return_type {
                         match Self::peel_option_result_payload(ret_ty) {
                             Type::Int32 => {
-                                // DB-361: `.len()` while-counters already in `usize_variables`
+                                // `.len()` while-counters already in `usize_variables`
                                 // must stay usize — do not stamp `: i32` from `-> i32` return.
                                 if var_name.is_some_and(|vn| self.usize_variables.contains(vn)) {
                                     output.push_str(": usize");
@@ -694,8 +694,8 @@ impl<'ast> CodeGenerator<'ast> {
                                 }
                             }
                             Type::Custom(n) if matches!(n.as_str(), "u32" | "i32") => {
-                                // DB-361: `-> i32` often arrives as Custom("i32"); prefer
-                                // usize for `.len()` while-counters. DB-308: `-> u32` stays u32.
+                                // `-> i32` often arrives as Custom("i32"); prefer
+                                // usize for `.len()` while-counters. `-> u32` stays u32.
                                 if n == "i32"
                                     && var_name.is_some_and(|vn| self.usize_variables.contains(vn))
                                 {
@@ -753,7 +753,7 @@ impl<'ast> CodeGenerator<'ast> {
                     if !rhs_is_ref {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
                             // `Vec<u64>` / `&Vec<u64>` is a collection formal. The integer
-                            // suffix peer is the element; the binding stays `Vec<…>` (DB-127).
+                            // suffix peer is the element; the binding stays `Vec<…>`.
                             let int_slot = Self::peeled_collection_element_type(&peer)
                                 .cloned()
                                 .unwrap_or_else(|| peer.clone());
@@ -770,7 +770,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
                 if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
-                    // DB-305: later u32 assign peer beats return i64 for `let mut x = 0`.
+                    // later u32 assign peer beats return i64 for `let mut x = 0`.
                     // P3.538: later `prev = m.version` (WJ int) beats i32 coord sentinel.
                     if let Some(vn) = var_name {
                         if let Some(peer) = self.mut_int_local_peer_width_from_later_assigns(vn) {
@@ -816,9 +816,9 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // DB-361: `.len()` while-counters already in `usize_variables` must not be
+                // `.len()` while-counters already in `usize_variables` must not be
                 // demoted by `-> i32` return-width scan (cast at `return i` instead).
-                // DB-308: `-> u32` still wins over usize for CLI/index loops.
+                // `-> u32` still wins over usize for CLI/index loops.
                 let len_while_usize_counter =
                     var_name.is_some_and(|n| self.usize_variables.contains(n));
                 let u32_while_peer_counter = mutable
@@ -841,7 +841,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.assignment_int_target_type = Some(Type::Custom("usize".into()));
                 }
                 if u32_return_scan_counter {
-                    // DB-308: return/later u32 peer wins over index-driven usize for `let mut i = 0`.
+                    // return/later u32 peer wins over index-driven usize for `let mut i = 0`.
                     self.assignment_int_target_type = Some(Type::Uint);
                     if let Some(vn) = var_name {
                         self.usize_variables.remove(vn);
@@ -871,7 +871,7 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
                 {
-                    // DB-328: negative int literal inits stay WJ `int` (i64), even in i32 builders.
+                    // negative int literal inits stay WJ `int` (i64), even in i32 builders.
                     if crate::codegen::rust::type_casting::expression_is_negative_int_init(value) {
                         self.assignment_int_target_type = Some(Type::Int);
                     } else {
@@ -1020,7 +1020,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !value_str.ends_with(".clone()")
                                 && !value_str.ends_with(".to_string()")
                             {
-                                // DB-343: trust maybe_auto_clone (skips Copy; no force-append).
+                                // trust maybe_auto_clone (skips Copy; no force-append).
                                 value_str = self.maybe_auto_clone(name, &value_str);
                             }
                         }
@@ -1210,7 +1210,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 && !value_str.ends_with(".clone()")
                                 && !value_str.ends_with(".to_string()")
                             {
-                                // DB-343: trust maybe_auto_clone (skips Copy; no force-append).
+                                // trust maybe_auto_clone (skips Copy; no force-append).
                                 value_str = self.maybe_auto_clone(name, &value_str);
                             }
                         }

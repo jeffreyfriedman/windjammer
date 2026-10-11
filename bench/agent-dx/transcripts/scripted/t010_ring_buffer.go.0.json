@@ -1,0 +1,46 @@
+{
+ "iterations": [
+  {
+   "agent_checks": [],
+   "agent_exit": 0,
+   "agent_log_tail": "",
+   "build": {
+    "categories": [],
+    "diagnostics": [],
+    "ok": true
+   },
+   "hidden": {
+    "categories": [],
+    "passed": 34,
+    "status": "pass",
+    "total": 34
+   },
+   "index": 1,
+   "samples": {
+    "passed": 2,
+    "status": "pass",
+    "total": 2
+   },
+   "source": "package main\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n)\n\nfunc main() {\n\tsc := bufio.NewScanner(os.Stdin)\n\tsc.Scan()\n\tcapacity, _ := strconv.Atoi(strings.TrimSpace(sc.Text()))\n\tvar q []string\n\tfor sc.Scan() {\n\t\tf := strings.Fields(sc.Text())\n\t\tif len(f) == 0 {\n\t\t\tcontinue\n\t\t}\n\t\tswitch f[0] {\n\t\tcase \"push\":\n\t\t\tif len(q) >= capacity {\n\t\t\t\tfmt.Println(\"full\")\n\t\t\t} else {\n\t\t\t\tq = append(q, f[1])\n\t\t\t\tfmt.Println(\"ok\")\n\t\t\t}\n\t\tcase \"pop\":\n\t\t\tif len(q) == 0 {\n\t\t\t\tfmt.Println(\"empty\")\n\t\t\t} else {\n\t\t\t\tfmt.Println(q[0])\n\t\t\t\tq = q[1:]\n\t\t\t}\n\t\tcase \"peek\":\n\t\t\tif len(q) == 0 {\n\t\t\t\tfmt.Println(\"empty\")\n\t\t\t} else {\n\t\t\t\tfmt.Println(q[0])\n\t\t\t}\n\t\tcase \"size\":\n\t\t\tfmt.Println(len(q))\n\t\tcase \"dump\":\n\t\t\tif len(q) == 0 {\n\t\t\t\tfmt.Println(\"<empty>\")\n\t\t\t} else {\n\t\t\t\tfmt.Println(strings.Join(q, \" \"))\n\t\t\t}\n\t\t}\n\t}\n}\n",
+   "usage": null,
+   "wall_seconds": 0.06
+  }
+ ],
+ "lang": "go",
+ "max_iters": 2,
+ "metrics": {
+  "diagnostic_categories": {},
+  "first_error_to_fix": null,
+  "green": true,
+  "iterations_to_green": 1,
+  "iterations_used": 1,
+  "pass_at_1": true,
+  "tokens_in": null,
+  "tokens_out": null,
+  "wall_seconds": 0.06
+ },
+ "recorded_at": "2026-10-11T15:16:00",
+ "schema": 1,
+ "task": "t010_ring_buffer",
+ "trial": 0
+}

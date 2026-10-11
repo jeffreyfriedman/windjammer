@@ -10,14 +10,14 @@
     feature = "integration_tests",
 ))]
 
-//! DB-196: tip-out feed_unified string lit / demoted `&str` into owned String.
+//! tip-out feed_unified string lit / demoted `&str` into owned String.
 //!
 //! Product residual (~22× String←&str). After tip-out→gen sync of feed_unified:
 //!   A) `pg_wire_encode_startup_user_database("user", "user")` while formals are
 //!      owned `String` → E0308 (bare `&str` lits).
 //!   B) demoted `sql: &str` into `pg_wire_serve_unified_on_simple_query(…, sql: String)`
 //!      with bare `sql` → E0308.
-//! Signature-driven. Distinct from DB-191 (pg_wire_parse path).
+//! Signature-driven. Distinct from (pg_wire_parse path).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

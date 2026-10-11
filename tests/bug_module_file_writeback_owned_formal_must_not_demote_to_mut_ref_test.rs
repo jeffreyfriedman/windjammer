@@ -10,12 +10,12 @@
     feature = "integration_tests",
 ))]
 
-//! DB-156: writeback helper `fn put(store: T, …) -> T` must not demote to `&mut T`.
+//! writeback helper `fn put(store: T, …) -> T` must not demote to `&mut T`.
 //!
-//! DB-151 covers demotion to shared `&T`. Product cold relational gen (2026-09-11)
+//! covers demotion to shared `&T`. Product cold relational gen (2026-09-11)
 //! still emits `relational_mvcc_put_version(store: &mut RelationalMvccStore, …, value: &mut Value)
 //! -> RelationalMvccStore` and then fails with E0308 (expected owned / found &mut, and
-//! `value` field type mismatches). Distinct tip bug class from DB-151.
+//! `value` field type mismatches). Distinct tip bug class from .
 //!
 //! Expected: owned formals + owned call sites for writeback `T → T`.
 

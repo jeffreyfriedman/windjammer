@@ -69,7 +69,7 @@ impl IntInference {
                 }
 
                 self.propagate_typed_operand_to_literal(left, right, left_id, right_id, left_is_literal, right_is_literal, "comparison");
-                // DB-408: f32 slab compares (`tmax >= tmin`, `tmax >= 0.0`) are not
+                // f32 slab compares (`tmax >= tmin`, `tmax >= 0.0`) are not
                 // integer-width constraints. MustMatch here reported Isize vs I64 and
                 // aborted engine library transpile.
                 if !self.expression_is_float_compare_operand(left)
@@ -129,7 +129,7 @@ impl IntInference {
         self.extract_nested_int_type(&ty)
     }
 
-    /// DB-408: float compares must not enter integer MustMatch.
+    // float compares must not enter integer MustMatch.
     fn expression_is_float_compare_operand<'ast>(&self, expr: &Expression<'ast>) -> bool {
         use crate::parser::Literal;
         if matches!(

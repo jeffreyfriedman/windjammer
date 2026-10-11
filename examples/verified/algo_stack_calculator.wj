@@ -1,0 +1,34 @@
+// tags: algorithm, stack, parsing, rpn
+// rust: gap error[E0277]: can't compare 'str' with '&str'
+// expect: 14
+// expect: 3
+// expect: error: stack underflow
+fn eval_rpn(expr: string) -> Result<int, string> {
+    let mut stack: Vec<int> = []
+    for tok in expr.split_whitespace() {
+        if tok == "+" || tok == "-" || tok == "*" || tok == "/" {
+            if stack.len() < 2 { return Err("stack underflow") }
+            let b = stack.pop().unwrap_or(0)
+            let a = stack.pop().unwrap_or(0)
+            let r = match tok {
+                "+" => a + b,
+                "-" => a - b,
+                "*" => a * b,
+                _ => a / b,
+            }
+            stack.push(r)
+        } else {
+            stack.push(tok.parse::<int>().unwrap_or(0))
+        }
+    }
+    Ok(stack[0])
+}
+
+fn main() {
+    for e in ["2 3 4 * +", "15 7 1 1 + - /", "1 +"] {
+        match eval_rpn(e) {
+            Ok(v) => println("${v}"),
+            Err(m) => println("error: ${m}"),
+        }
+    }
+}

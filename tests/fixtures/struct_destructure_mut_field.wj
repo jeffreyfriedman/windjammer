@@ -7,7 +7,7 @@
 // Windjammer today parses `Point { x, y }` but rejects `{ mut inner }` with:
 //   "Expected field name in struct pattern"
 //
-// Dogfooding: db-project graph_vertex_map.wj needs move-not-clone HashMap updates.
+// Dogfooding: a database project graph_vertex_map.wj needs move-not-clone HashMap updates.
 // Workaround until fixed: `let mut result = map; result.inner.insert(...)`.
 
 use std::collections::HashMap

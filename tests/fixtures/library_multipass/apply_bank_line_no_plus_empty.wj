@@ -1,4 +1,4 @@
-// DownstreamApp seed_bank_*_overlay `apply_*` class — BankLineView rebuild without
+// a downstream application seed_bank_*_overlay `apply_*` class — BankLineView rebuild without
 // empty-concat. Module `const string` into owned struct field must own
 // (`.to_string()`), not `.clone()` on `&str`.
 

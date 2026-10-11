@@ -381,7 +381,7 @@ impl<'ast> CodeGenerator<'ast> {
             if let Item::Struct { decl: s, .. } = item {
                 let mut field_types = std::collections::HashMap::new();
                 for field in &s.fields {
-                    // Preserve Box layouts already applied via multipass global fields (DB-116).
+                    // Preserve Box layouts already applied via multipass global fields.
                     let ty = self
                         .struct_field_types
                         .get(&s.name)
@@ -755,7 +755,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // WJ AST formals for free functions (never overwritten by codegen refresh).
         // Include `extern fn` so wrappers that forward into owned FFI (`Vec` / Custom)
-        // see AST-owned targets (DB-216/275/276) — previously externs were skipped and
+        // see AST-owned targets — previously externs were skipped and
         // `wj_ast_bare_owned_non_text_type` never matched FFI `Vec` formals.
         for analyzed_func in analyzed
             .iter()
@@ -780,7 +780,7 @@ impl<'ast> CodeGenerator<'ast> {
         // later free fns (e.g. WalWriter::replay_all_records → replay_all) see converged
         // `&str` / borrowed contracts instead of stale owned stubs (regression-057/058/060).
         // Include `extern fn` so wrappers that forward into owned FFI see Owned registry
-        // slots during the same generate_program pass (DB-216/275/276).
+        // slots during the same generate_program pass.
         //
         // Multipass (like impl siblings): `resolve_token` → `bearer_token` demotion chains
         // need a second (and further) pass so callers see `&str` before any body emits
@@ -1380,12 +1380,8 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
         use std::path::Path;
 
         let mut names = HashSet::new();
-        let std_dir = [
-            Path::new("std").to_path_buf(),
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        ]
-        .into_iter()
-        .find(|p| p.is_dir());
+        let std_dir =
+            crate::embedded_assets::materialize_or_warn(crate::embedded_assets::Asset::StdWj);
         let Some(std_dir) = std_dir else {
             return names;
         };

@@ -195,7 +195,7 @@ pub fn build_project_with_config(
             &mut global_signatures,
             &mut analyzer,
         );
-        // External deps: also register `crate_key::fn` aliases for qualified calls (DB-094).
+        // External deps: also register `crate_key::fn` aliases for qualified calls.
         if !external_paths.is_empty() {
             crate::metadata::merge_external_crate_metadata_with_aliases(
                 &external_paths,

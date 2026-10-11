@@ -150,7 +150,7 @@ impl<'ast> CodeGenerator<'ast> {
                 start,
                 Expression::Identifier { .. } | Expression::Binary { .. }
             ) && !start_str.contains(" as usize")
-                // DB-364: peer-driven `1_usize` / usize-typed `(i + 1)` must not
+                // peer-driven `1_usize` / usize-typed `(i + 1)` must not
                 // become `1_usize as usize` / `(i + 1_usize as usize)`.
                 && !start_str.contains("_usize")
                 && !self.expression_produces_usize(start)

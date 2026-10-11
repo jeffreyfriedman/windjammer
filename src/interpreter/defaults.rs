@@ -50,7 +50,7 @@ impl Interpreter {
                     for (fname, ft) in fields {
                         out.push((Rc::from(fname), self.default_for(&ft)?));
                     }
-                    return Ok(Value::Struct(Rc::new(StructVal { name: Rc::from(base.as_str()), fields: out, copy })));
+                    return Ok(self.make_struct(base.as_str(), out, copy));
                 }
                 Err(semantic(format!("no default value for type `{}`", base)))
             }

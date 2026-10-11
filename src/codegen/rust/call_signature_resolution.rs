@@ -297,7 +297,7 @@ fn best_module_qualified_suffix_match(
         .next()
         .unwrap_or(suffix.trim_start_matches(':'));
     // Indexed by bare method leaf — never fall back to a full registry scan
-    // (downstream-screens / large multipass hangs).
+    // (a large downstream application / large multipass hangs).
     for (key, sig) in registry.signatures_matching_suffix(suffix) {
         consider(key, sig);
     }
@@ -614,7 +614,7 @@ pub fn resolve_method_for_call_site(
 }
 
 /// Like [`resolve_method_for_call_site`], but prefers signatures whose module path
-/// matches the caller (DB-332: `audio::audio_mixer::AudioChannel::new` vs
+// matches the caller (`audio::audio_mixer::AudioChannel::new` vs
 /// `audio::mixer::AudioChannel::new(name: string)`).
 pub fn resolve_method_for_call_site_in_module(
     local: &SignatureRegistry,
@@ -658,7 +658,7 @@ pub fn resolve_method_for_call_site_in_module(
             if body_borrow_must_not_replace_owned_formal_stub(&l.sig, &g.sig) {
                 g_out = None;
             }
-            // DB-332: pick_best prefers local by default; when sibling leaf-name
+            // pick_best prefers local by default; when sibling leaf-name
             // homonyms exist, higher caller-module affinity must win (bare
             // `AudioChannel::new` affinity 0 vs `audio::audio_mixer::…` affinity 200).
             if let Some(caller) = caller_module {
@@ -783,7 +783,7 @@ fn trait_definition_sigs_for_method(
 ) -> Vec<(String, FunctionSignature)> {
     // P3.622: only walk `trait_method_keys` (typically tens of keys). Scanning every
     // registry signature + `is_trait_method_key` per method call is O(|sigs|) and
-    // hung db-layers multipass (~12GB / 45m in `memcmp` on trait-key checks).
+    // hung a large multi-crate project multipass (~12GB / 45m in `memcmp` on trait-key checks).
     let suffix = format!("::{method}");
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -1494,7 +1494,7 @@ pub(crate) fn plain_string_owned_consumer_at_call_site(
         return false;
     }
     // Codegen-confirmed `&str` / shared-ref emission beats bare WJ `string` formals
-    // (DB-244 `ArrowColumnarBatch::sql_exec` / `Batch::sql_exec` demotion).
+    // (`ArrowColumnarBatch::sql_exec` / `Batch::sql_exec` demotion).
     if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx) {
         return false;
     }
@@ -1670,7 +1670,7 @@ fn align_sig_with_emitted_rust_ref_params(sig: &mut FunctionSignature) {
         }
         // Bare-pass multipass demotion records MutBorrowed + `MutableReference(T)` with
         // `emitted_rust_ref_params[idx] == false` (false = not shared `&T`). Do not peel
-        // back to owned Custom (DB-113).
+        // back to owned Custom.
         if sig
             .param_types
             .get(idx)
@@ -1855,7 +1855,7 @@ mod tests {
     }
 
     #[test]
-    fn wdb332_caller_module_affinity_picks_local_audiochannel_new() {
+    fn caller_module_affinity_picks_local_audiochannel_new() {
         let mut reg = SignatureRegistry::empty();
         // Sibling mixer: string second formal (wrong for audio_mixer callers).
         reg.add_function(
@@ -1931,7 +1931,7 @@ mod tests {
         );
 
         // Local bare leaf key (String) must not beat global module-qualified i32 via
-        // pick_best's local-first default (DB-332 IR / resolve_method path).
+        // pick_best's local-first default (IR / resolve_method path).
         let mut local = SignatureRegistry::empty();
         local.add_function(
             "AudioChannel::new".into(),
