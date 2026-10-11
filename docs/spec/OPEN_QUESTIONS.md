@@ -70,3 +70,27 @@ Examples run in-process via the interpreter. The Rust/Go/JS backends are not run
 
 ## Q-023 Interpreter recursion cap
 The interpreter reports `stack overflow: recursion depth exceeded 10000 frames` for `sum_to(10000)` (10,001 frames with `main`). Compiled targets handle this depth (corpus program 81). Rec.: raise the interpreter cap (it already runs on a 4 GiB thread) to at least 100,000 frames, or specify the guarantee as 5,000. Repro: SPEC-EXEC-006 (xfail).
+
+## Q-024 Trait bounds cannot take type arguments
+`fn f<T: Into<string>>(x: T)`, `where T: Clone + Into<string>`, `trait A: B<int>` and `trait V<T: Bound>` are parse errors; only plain trait names are bounds (`struct S<T: Clone>` and `fn f<T: A + B>` work). This blocks idiomatic `Into`, `From`, `Iterator`, `Add<Output=..>` bounds. Rec.: parse `Name<types>` in bounds everywhere (the parser already parses type arguments in types). Repro: SPEC-TRT-008 (xfail); grammar.ebnf `bound`.
+
+## Q-025 Generic methods in traits
+`trait T { fn m<U>(self, x: U) }` fails at the `<` (impls may have generic methods). Rec.: share the function-signature parser. Repro: SPEC-TRT-007 (xfail).
+
+## Q-026 `return` followed by a newline swallows the next statement (semantic bug)
+`return` NEWLINE `println("x")` parses as `return println("x")`: the call runs, then the function returns. Silent wrong behaviour for any "early return" without value followed by more code in the same block. Rec.: a bare `return` ends at a newline when the next line cannot continue an expression (or always require the operand on the same line). Repro: SPEC-STMT-011 (xfail). The grammar models it by allowing bare `return` only before `;`/`}`.
+
+## Q-027 Rust backend: unannotated integer literals are `i32`, not `int` (i64)
+`let big = 9223372036854775807` becomes `9223372036854775807_i32` (does not compile) and `let a = 2147483647; a + 1` is `i32` arithmetic. ADR-0015 section 1 (Accepted) and SPEC-NUM-001/TYP-008 say `int` = i64. This is the root of the `rust-int-literal-width-inference` known issue (27 `SUPPORT.toml` entries). The interpreter and JS agree with the spec. Rec.: make the numeric solver default unconstrained literals to i64 (ADR-0015 WP8). Evidence: `scripts/spec_backends.sh` rows NUM-001..004, 006; BACKEND_STATUS.md.
+
+## Q-028 Rust backend: unannotated float literals are `f32`
+`let x = 0.1 + 0.2` generates `0.30000000000000004_f32`, so `x == 0.3` is `true`; SPEC-NUM-007 and ADR-0015 say `float` = f64 (`false`). Also affects printed precision. Rec.: default to f64. Evidence: SPEC-NUM-007 FAIL on Rust.
+
+## Q-029 `defer` is not implemented on the Rust backend
+The generator emits `// TODO: defer not yet implemented` (once per deferred statement, repeated) and runs nothing. Parsed, interpreted, and documented by SPEC-STMT-007, but silently dropped by the Rust target. Rec.: implement with a drop guard, or make the Rust backend reject `defer` with an explicit error until then (silent drop is the worst option). Evidence: SPEC-STMT-007 FAIL on Rust; JS BUILD.
+
+## Q-030 User functions that share an intrinsic's name are ignored on Rust
+`fn println(s: string)` is shadowed by the intrinsic on the Rust target although docs/design/surface-syntax.md says a user function shadows it on every backend. Evidence: SPEC-INTR-009 FAIL on Rust (passes interpreter, JS).
+
+## Q-031 Rust backend: function in a nested `pub mod` is not found
+`mod geo { pub mod inner { pub fn one() } }` called as `geo::inner::one()` fails with E0425 (`cannot find function one in module geo::inner`). Evidence: SPEC-MOD-001 BUILD on Rust.

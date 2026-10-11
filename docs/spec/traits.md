@@ -141,3 +141,60 @@ Output:
 7
 ```
 
+## Generic trait methods
+
+**SPEC-TRT-007** [OPEN Q-025] A trait method may declare its own type parameters (`fn map<U>(self, f: fn(T) -> U)`). The trait parser rejects `<` after a method name in a trait body.
+
+<!-- example: tests/spec/traits/SPEC-TRT-007.wj -->
+```windjammer
+trait Conv { fn conv<T>(self, x: T) -> T }
+struct S {}
+impl Conv for S { fn conv<T>(self, x: T) -> T { x } }
+fn main() {
+    let s = S {}
+    println("${s.conv(4)}")
+}
+```
+Output:
+```text
+4
+```
+> **Known divergence:** the implementation does not do this yet; see [Q-025](OPEN_QUESTIONS.md). The example is marked `xfail`.
+
+## Bounds with type arguments
+
+**SPEC-TRT-008** [OPEN Q-024] A bound may carry type arguments (`T: Into<string>`, `trait A: B<int>`) and a generic trait parameter may be bounded. Today bounds are plain trait names only.
+
+<!-- example: tests/spec/traits/SPEC-TRT-008.wj -->
+```windjammer
+fn show<T: Into<string>>(x: T) -> string { x.into() }
+fn main() {
+    println(show("hi"))
+}
+```
+Output:
+```text
+hi
+```
+> **Known divergence:** the implementation does not do this yet; see [Q-024](OPEN_QUESTIONS.md). The example is marked `xfail`.
+
+## Supertraits
+
+**SPEC-TRT-009** `trait B: A { .. }` requires every implementor of `B` to implement `A`; `A`'s methods are callable on values bounded by `B`.
+
+<!-- example: tests/spec/traits/SPEC-TRT-009.wj -->
+```windjammer
+trait Named { fn name(self) -> string }
+trait Greeter: Named { fn greet(self) -> string { "hello ${self.name()}" } }
+struct P {}
+impl Named for P { fn name(self) -> string { "p" } }
+impl Greeter for P {}
+fn main() {
+    println(P {}.greet())
+}
+```
+Output:
+```text
+hello p
+```
+

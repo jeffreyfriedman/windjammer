@@ -17,7 +17,8 @@ marked "background" or "vision".
 ## Language
 | Document | Purpose |
 |----------|---------|
-| [windjammer.ebnf](windjammer.ebnf) | Grammar reference (reconciled with the parser) |
+| [spec/README.md](spec/README.md) | Language specification: rules with IDs, executable examples, machine-checked grammar, open questions, one-page [compact spec](spec/SPEC_COMPACT.md) |
+| [windjammer.ebnf](windjammer.ebnf) | Superseded grammar (use spec/grammar.ebnf) |
 | [MODULE_SYSTEM.md](MODULE_SYSTEM.md) | `use`, `mod`, `crate::`, source roots, `--module-file` |
 | [language-design/ownership-inference.md](language-design/ownership-inference.md) | What ownership inference decides |
 | [language-guide/self-parameter.md](language-guide/self-parameter.md) | `self` receiver inference |

@@ -158,6 +158,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-STMT-008 | statements.md | `statements/SPEC-STMT-008.wj` |
 | SPEC-STMT-009 | statements.md | `statements/SPEC-STMT-009.wj` |
 | SPEC-STMT-010 | statements.md | `statements/SPEC-STMT-010.wj` |
+| SPEC-STMT-011 | statements.md | `statements/SPEC-STMT-011.wj` (xfail Q-026) |
 | SPEC-STR-001 | strings.md | `strings/SPEC-STR-001.wj` |
 | SPEC-STR-002 | strings.md | `strings/SPEC-STR-002.wj` |
 | SPEC-STR-003 | strings.md | `strings/SPEC-STR-003.wj` |
@@ -175,6 +176,9 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-TRT-004 | traits.md | `traits/SPEC-TRT-004.wj` |
 | SPEC-TRT-005 | traits.md | `traits/SPEC-TRT-005.wj` |
 | SPEC-TRT-006 | traits.md | `traits/SPEC-TRT-006.wj` |
+| SPEC-TRT-007 | traits.md | `traits/SPEC-TRT-007.wj` (xfail Q-025) |
+| SPEC-TRT-008 | traits.md | `traits/SPEC-TRT-008.wj` (xfail Q-024) |
+| SPEC-TRT-009 | traits.md | `traits/SPEC-TRT-009.wj` |
 | SPEC-TYP-001 | types.md | `types/SPEC-TYP-001.wj` |
 | SPEC-TYP-002 | types.md | `types/SPEC-TYP-002.wj` |
 | SPEC-TYP-003 | types.md | `types/SPEC-TYP-003.wj` (xfail Q-017) |
