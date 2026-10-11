@@ -20,6 +20,7 @@ mod seq;
 mod shared;
 mod std_data;
 mod std_fns;
+pub mod std_http;
 mod std_sys;
 pub(crate) mod sync;
 mod thread;
@@ -144,6 +145,7 @@ impl Registry {
         shared::register(&mut r);
         std_sys::register(&mut r);
         std_data::register(&mut r);
+        std_http::register(&mut r);
         channel::register(&mut r);
         sync::register(&mut r);
         thread::register(&mut r);
