@@ -237,7 +237,7 @@ fn option_and_result_combinators() {
 #[test]
 fn question_mark_propagates_errors() {
     expect(
-        "fn parse(s: string) -> Result<int, string> {\n    match s.parse::<int>() {\n        Ok(n) => Ok(n),\n        Err(_) => Err(\"bad number: \" + s),\n    }\n}\nfn sum(a: string, b: string) -> Result<int, string> {\n    let x = parse(a)?\n    let y = parse(b)?\n    Ok(x + y)\n}\nfn main() {\n    println(\"{:?}\", sum(\"1\", \"2\"))\n    println(\"{:?}\", sum(\"1\", \"zz\"))\n}\n",
+        "fn parse(s: string) -> Result<int, string> {\n    let r = s.parse::<int>()\n    match r {\n        Ok(n) => Ok(n),\n        Err(_) => Err(\"bad number: \" + s),\n    }\n}\nfn sum(a: string, b: string) -> Result<int, string> {\n    let x = parse(a)?\n    let y = parse(b)?\n    Ok(x + y)\n}\nfn main() {\n    println(\"{:?}\", sum(\"1\", \"2\"))\n    println(\"{:?}\", sum(\"1\", \"zz\"))\n}\n",
         "Ok(3)\nErr(\"bad number: zz\")\n",
     );
 }

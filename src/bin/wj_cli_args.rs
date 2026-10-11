@@ -147,8 +147,8 @@ pub enum Commands {
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
-        /// Interpret directly (Windjammerscript mode) — no compilation, instant execution.
-        /// Same .wj source can later be compiled with `wj build` for production.
+        /// Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start.
+        /// Accepts a file or a project directory. Same source compiles with `wj build` for release.
         #[arg(long)]
         interpret: bool,
 
@@ -222,6 +222,10 @@ pub enum Commands {
         /// Skip auto-generated Cargo.toml for library compile
         #[arg(long)]
         no_generate_cargo_toml: bool,
+
+        /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
+        #[arg(long)]
+        interpret: bool,
     },
 
     /// Format Windjammer code
