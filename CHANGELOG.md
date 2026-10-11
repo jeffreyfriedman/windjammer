@@ -12,6 +12,15 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
   (`tests/architecture.rs`), orphan-test checker, per-module `MODULE.md` files, ADR-0001 to ADR-0015.
 - Interpreter (`wj run --interpret`, `wj test --interpret`, `wj repl`): experimental subset.
 
+### Fixed
+- `wj test` inside the compiler checkout no longer treats the hand-written `src/lib.rs` as a pre-built library.
+- `wj new` templates, `std/`, `stdlib_meta/` and the `windjammer-runtime` crate are embedded in the binary; an installed
+  `wj` no longer reads them from the cwd or the checkout it was built from (`src/embedded_assets.rs`). Runtime
+  discovery order: explicit flag/`WINDJAMMER_RUNTIME_PATH`, `wj.toml` path dependency, embedded copy.
+- `.wj-cache/*.wj.meta` is now byte-deterministic (map fields were serialized in random order).
+- `wj new --template web` produced a project that failed `wj check` (forbidden `@derive(Serialize)`); `cli` template
+  now runs under `wj run --interpret`; all templates are `wj fmt`-clean.
+
 ### Removed
 - Stale documentation, SDK/docker leftovers, committed binaries, game/UI-era examples and the per-ticket repro queue
   (2026-10-11 cleanup; history is in git).
