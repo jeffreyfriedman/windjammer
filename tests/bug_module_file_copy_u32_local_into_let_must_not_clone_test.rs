@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-442: Copy `u32` local into `let` must not `.clone()`.
+//! Copy `u32` local into `let` must not `.clone()`.
 //!
 //! Product `world/async_loader.rs`:
 //!   `let mut step = budget.clone()`
 //! WJ is `let mut step = budget`.
-//! Distinct from DB-437 (i32 **formal** into let), DB-441 (i64 into **index assign**),
-//! and DB-440 (f32 into **struct lit**).
+//! Distinct from (i32 **formal** into let), (i64 into **index assign**),
+//! and (f32 into **struct lit**).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

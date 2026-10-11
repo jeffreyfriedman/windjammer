@@ -2,10 +2,11 @@
 # CLI emit gate for P3.238 — owned Row chain call sites must move, not clone.
 # Exit 0 = GREEN. Exit 1 = RED (expected while tip emits col_string(row.clone(), …)).
 set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -z "${WJ:-}" ]]; then
-  if [[ -x "/home/user/src/wj/windjammer/target/release/wj" ]]; then
-    WJ="/home/user/src/wj/windjammer/target/release/wj"
+  if [[ -x "$REPO_ROOT/target/release/wj" ]]; then
+    WJ="$REPO_ROOT/target/release/wj"
   else
     WJ="$HOME/.cargo/bin/wj"
   fi

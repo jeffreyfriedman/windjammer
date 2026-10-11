@@ -2,11 +2,12 @@
 # CLI emit gate for P3.237 — tip `wj` when cargo test is blocked on tip bin WIP.
 # Exit 0 = GREEN (no row.clone around get_string). Exit 1 = RED (expected today).
 set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Prefer in-tree tip release over older `~/.cargo/bin/wj`.
 if [[ -z "${WJ:-}" ]]; then
-  if [[ -x "/home/user/src/wj/windjammer/target/release/wj" ]]; then
-    WJ="/home/user/src/wj/windjammer/target/release/wj"
+  if [[ -x "$REPO_ROOT/target/release/wj" ]]; then
+    WJ="$REPO_ROOT/target/release/wj"
   else
     WJ="$HOME/.cargo/bin/wj"
   fi

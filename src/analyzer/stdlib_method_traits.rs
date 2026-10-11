@@ -360,7 +360,7 @@ fn sig_mutates_receiver(sig: &FunctionSignature) -> bool {
         )
 }
 
-/// Shared `&self` only. Owned `self` consumes the receiver (DB-416 `as_float(self)`)
+// Shared `&self` only. Owned `self` consumes the receiver (`as_float(self)`)
 /// and must not classify as readonly — that blocked owning-method formal retention.
 /// Used by [`is_known_readonly_qualified`] (typed receiver).
 fn sig_readonly_receiver(sig: &FunctionSignature) -> bool {
@@ -1088,7 +1088,7 @@ mod tests {
 
     #[test]
     fn owned_self_is_not_readonly_receiver() {
-        // DB-416: Val::as_float(self) must not classify as readonly — that blocked
+        // Val::as_float(self) must not classify as readonly — that blocked
         // owning-method formal retention and forced `&Val` + `.clone().as_float()`.
         let mut reg = SignatureRegistry::empty();
         let mut sig = FunctionSignature::default();

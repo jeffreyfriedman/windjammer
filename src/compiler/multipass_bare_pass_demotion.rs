@@ -1,13 +1,13 @@
 //! Multipass library builds: sibling modules that pass bare bindings (`f(path)` not
 //! `f(path.clone())`) signal that callee formals should demote to shared/mut borrow
-//! (DB-112 / cross-crate Vec / DB-113).
+//! (cross-crate Vec).
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::{Expression, FunctionDecl, Item, Pattern, Program, Statement, Type};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-/// Memoizes `callee_arg_is_hard_owned` during a promote/restore pass (db-layers has
+/// Memoizes `callee_arg_is_hard_owned` during a promote/restore pass (a large multi-crate project has
 /// ~16k sigs; uncached body walks are pathological). Owned by the pass entry point.
 pub(crate) struct HardOwnedCache {
     enabled: bool,
@@ -46,7 +46,7 @@ impl HardOwnedCache {
 ///
 /// Without this, `restore_pub_owned_non_copy_api_formals` rescans every program
 /// body for each of ~O(registry × params) slots — minutes/CPU-bound on
-/// db-project `db-layers` (~1k files, ~16k sigs).
+/// a database project `a large multi-crate project` (~1k files, ~16k sigs).
 struct ProgramLookup<'a> {
     /// Free-function simple name → decl (last wins; used for body + pub checks).
     free_fns: HashMap<String, &'a FunctionDecl<'a>>,
@@ -201,12 +201,12 @@ fn promote_callees_from_bare_pass_callers_inner(
     restore_owned_returned_formals(registry, programs);
     restore_pub_owned_non_copy_api_formals_with_cache(registry, programs, &cache);
     restore_owned_formals_for_producer_only_call_sites(registry, programs);
-    // DB-216/275/276: wrappers that forward bare into owned FFI/`Vec` formals must
+    // wrappers that forward bare into owned FFI/`Vec` formals must
     // stay owned — demoting to `&Vec` then bare-passing into `*_ffi(Vec)` is E0308.
     restore_owned_formals_forwarded_to_owned_callees_with_cache(registry, programs, &cache);
 }
 
-/// DB-190: when every call site passes an owned producer (`encode_startup(…)`), keep
+// when every call site passes an owned producer (`encode_startup(…)`), keep
 /// owned `Vec` formals even if the callee body only probes `.len()` — unlike bare-binding
 /// forwards (`finish_execute(response)`) which stay demotable via bare-pass hints.
 pub fn restore_owned_formals_for_producer_only_call_sites(
@@ -265,7 +265,7 @@ pub fn restore_owned_formals_for_producer_only_call_sites(
     }
 }
 
-/// DB-216/275/276: if a formal is already demoted but its body still forwards the
+// if a formal is already demoted but its body still forwards the
 /// binding bare into an owned callee (typically `extern` FFI), restore Owned.
 pub fn restore_owned_formals_forwarded_to_owned_callees(
     registry: &mut SignatureRegistry,
@@ -304,7 +304,7 @@ fn restore_owned_formals_forwarded_to_owned_callees_with_cache(
             else {
                 continue;
             };
-            // DB-366: soft AST-Custom "owned" peers (mutual BT ticks) must not undo
+            // soft AST-Custom "owned" peers (mutual BT ticks) must not undo
             // analyzer Borrowed — only extern / Vec / consuming-body Custom are hard.
             if !param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs, cache) {
                 continue;
@@ -490,7 +490,7 @@ fn visit_expr_for_producer_only_kinds(
 ///
 /// Never use `registry_key.ends_with("::{simple}")` alone: for `Batch::sql_exec` that
 /// predicate is always true, so the first pub `fn` in the crate falsely matches and
-/// bare-pass restores wipe cross-crate demotion (DB-244).
+// bare-pass restores wipe cross-crate demotion.
 fn registry_key_simple_name_is(registry_key: &str, name: &str) -> bool {
     registry_key == name
         || registry_key
@@ -508,7 +508,7 @@ fn registry_key_is_type_qualified_method(registry_key: &str) -> bool {
     })
 }
 
-/// DB-398/407: associated `Type::new(…)` (no `self`) must restore Owned for
+// associated `Type::new(…)` (no `self`) must restore Owned for
 /// owned Custom / payload-stored Vec formals. Instance methods stay demotable.
 fn associated_pub_owned_custom_formal_should_restore(
     sig: &FunctionSignature,
@@ -567,7 +567,7 @@ fn associated_pub_owned_custom_formal_should_restore(
     if matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_)) {
         return false;
     }
-    // DB-398: pub associated Custom. DB-407: Vec stored into a field may be
+    // pub associated Custom. Vec stored into a field may be
     // private in WJ (`fn new(data: Vec<u8>)`) while codegen emits `pub`.
     if is_owned_custom {
         return decl.is_pub
@@ -674,7 +674,7 @@ fn record_producer_only_call_kinds_from_name(
     }
 }
 
-/// DB-175/178: `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay
+// `pub fn` module APIs with owned `Vec` / non-Copy `Custom` formals stay
 /// owned in the global registry (product decode_startup / live_publishable).
 pub fn restore_pub_owned_non_copy_api_formals(
     registry: &mut SignatureRegistry,
@@ -703,8 +703,8 @@ fn restore_pub_owned_non_copy_api_formals_with_cache(
         let mut new_sig = sig.clone();
         for idx in 0..n {
             // Defining-module / dependency demotion (`emitted_rust_ref_params[idx]=true`)
-            // must not be undone by importer-crate bare-pass restores (DB-244).
-            // DB-398: pub associated owned Custom formals may clear a stale true when
+            // must not be undone by importer-crate bare-pass restores.
+            // pub associated owned Custom formals may clear a stale true when
             // codegen will emit owned `T` (VoxelMaterialEditor::new).
             let emitted_shared = new_sig
                 .emitted_rust_ref_params
@@ -911,7 +911,7 @@ pub fn restore_owned_field_forward_formals(
             };
             // Do not restore from Let field moves alone (`let name = tree.nodes[i].name`).
             // Analyzer already keeps Owned for consuming field moves; text field lets are
-            // cloned from `&T` (DB-366). Using Let moves here undid Borrowed BT ticks.
+            // cloned from `&T`. Using Let moves here undid Borrowed BT ticks.
             if !(param_forwards_fields_in_call_args_only(body, param_name)
                 || param_stored_in_struct_literal(body, param_name)
                 || param_whole_binding_returned(body, param_name)
@@ -1208,7 +1208,7 @@ fn pg_wire_serve_on_simple_query(session: Session, sql: string) -> Session {
 
     #[test]
     fn bare_pass_skips_match_scrutinee_owned_forwarder() {
-        // DB-155 strengthened: emit_sql(ast) { match bind_ast(ast) { … } }
+        // strengthened: emit_sql(ast) { match bind_ast(ast) { … } }
         let caller = parse_program(
             r#"
 struct SqlAst { table: string }
@@ -1250,14 +1250,14 @@ fn emit_sql(ast: SqlAst) -> Option<SqlEmit> {
         assert_eq!(
             emit.param_ownership[0],
             OwnershipMode::Owned,
-            "DB-155: match-scrutinee forwarder must stay owned, got {:?}",
+            "match-scrutinee forwarder must stay owned, got {:?}",
             emit.param_ownership
         );
     }
 
     #[test]
     fn bare_pass_skips_option_struct_literal_field_forward_custom() {
-        // DB-155 class: `emit_sql(ast) { Some(SqlEmit { table: ast.table }) }`
+        // class: `emit_sql(ast) { Some(SqlEmit { table: ast.table }) }`
         let caller = parse_program(
             r#"
 struct SqlAst { table: string }
@@ -1296,7 +1296,7 @@ fn emit_sql(ast: SqlAst) -> Option<SqlEmit> {
         assert_eq!(
             sig.param_ownership[0],
             OwnershipMode::Owned,
-            "DB-155: Option+struct-literal field forward must stay owned, got {:?}",
+            "Option+struct-literal field forward must stay owned, got {:?}",
             sig.param_ownership
         );
     }
@@ -1353,7 +1353,7 @@ fn char_to_digit(ch: char) -> Option<int> {
 
     #[test]
     fn bare_pass_keeps_owned_vec_forwarded_into_owned_extern_ffi() {
-        // DB-216/275/276: `return_f64(buf) { return_f64_ffi(buf) }` must not demote
+        // `return_f64(buf) { return_f64_ffi(buf) }` must not demote
         // to `&Vec` while FFI still takes owned `Vec`.
         let wrapper = parse_program(
             r#"
@@ -1413,7 +1413,7 @@ fn consume(scores: Vec<f64>) {
 
     #[test]
     fn bare_pass_skips_store_consumed_via_let_mut_rebind() {
-        // DB-164: `put_version(store) { let mut out = store; …; out }` must stay owned.
+        // `put_version(store) { let mut out = store; …; out }` must stay owned.
         // Call sites use assignment `store = put_version(store, …)` (was invisible to hint walk).
         let program = parse_program(
             r#"
@@ -1442,12 +1442,12 @@ fn put_version(store: Store) -> Store {
         assert_eq!(
             sig.param_ownership[0],
             OwnershipMode::Owned,
-            "DB-164: consume-via-let-mut-rebind Store must stay owned, got {:?}",
+            "consume-via-let-mut-rebind Store must stay owned, got {:?}",
             sig.param_ownership
         );
         assert!(
             !matches!(sig.param_types[0], Type::MutableReference(_)),
-            "DB-164: param type must not wrap MutableReference, got {:?}",
+            "param type must not wrap MutableReference, got {:?}",
             sig.param_types[0]
         );
     }
@@ -1476,7 +1476,7 @@ fn put_version(store: Store) -> Store {
         assert_eq!(
             out.param_ownership[0],
             OwnershipMode::Owned,
-            "DB-164 restore must undo MutBorrowed let-mut-rebind consume; got {:?}",
+            "restore must undo MutBorrowed let-mut-rebind consume; got {:?}",
             out.param_ownership
         );
     }
@@ -1654,7 +1654,7 @@ fn base_response(status: u16, body: string) -> int {
     }
 
     #[test]
-    fn bare_pass_skips_pub_vec_u8_owned_api_wdb175() {
+    fn bare_pass_skips_pub_vec_u8_owned_api() {
         let wire = parse_program(
             r#"
 pub fn decode_startup(buf: Vec<u8>) -> int {
@@ -1686,7 +1686,7 @@ pub fn on_startup(buf: Vec<u8>) -> int {
         assert_eq!(
             sig.param_ownership[0],
             OwnershipMode::Owned,
-            "DB-175: pub Vec<u8> decode_startup must skip bare-pass demotion, got {:?}",
+            "pub Vec<u8> decode_startup must skip bare-pass demotion, got {:?}",
             sig.param_ownership
         );
     }
@@ -1830,7 +1830,7 @@ fn on_startup(buf: Vec<u8>) -> int {
     }
 
     /// P3.622 follow-up: Custom-formal restore must use ProgramLookup O(1), not
-    /// rescan every program per registry×param (db-layers hang after trait-sig fix).
+    /// rescan every program per registry×param (a large multi-crate project hang after trait-sig fix).
     #[test]
     fn restore_pub_owned_custom_formals_uses_program_lookup() {
         use std::time::{Duration, Instant};
@@ -1984,7 +1984,7 @@ fn walk_statements_for_calls<'ast>(
                 visit_expr_for_calls(iterable, programs, registry, copy_types, hints);
                 walk_statements_for_calls(body, programs, registry, copy_types, hints);
             }
-            // DB-164: `store = put_version(store, …)` assignment call sites must participate
+            // `store = put_version(store, …)` assignment call sites must participate
             // in bare-pass hints (otherwise consume-rebinding callees are missed).
             Statement::Assignment { value, .. } => {
                 visit_expr_for_calls(value, programs, registry, copy_types, hints);
@@ -2235,7 +2235,7 @@ fn bare_pass_hint_should_skip(
         .formal_param_types
         .get(param_idx)
         .or_else(|| sig.param_types.get(param_idx));
-    // DB-216/275/276: `extern fn` formals are the C/FFI boundary — bare-pass must never
+    // `extern fn` formals are the C/FFI boundary — bare-pass must never
     // demote them to Borrowed/`&Vec`. Doing so makes wrappers that forward bare into FFI
     // look like borrow-passthrough delegates and emit `&Vec` + bare into `Vec` (E0308).
     if sig.is_extern {
@@ -2277,7 +2277,7 @@ fn bare_pass_hint_should_skip(
         return false;
     };
     let skip = match mode {
-        // DB-155: non-Copy Custom bare-pass targets MutBorrowed, but read-only
+        // non-Copy Custom bare-pass targets MutBorrowed, but read-only
         // `Some(Emit { table: ast.table })` field projection must stay owned (same
         // skip as Borrowed). Asymmetric skip caused `&mut SqlAst` + E0596.
         OwnershipMode::MutBorrowed | OwnershipMode::Borrowed => {
@@ -2297,7 +2297,7 @@ fn bare_pass_hint_should_skip(
     skip
 }
 
-/// DB-158: formals used only as `match` scrutinees (equality/discriminant compare)
+// formals used only as `match` scrutinees (equality/discriminant compare)
 /// must not demote to `&mut T`. Nested match on the same binding still counts.
 pub fn param_used_only_as_match_scrutinee(body: &[&Statement], param_name: &str) -> bool {
     let mut saw_scrutinee = false;
@@ -2427,7 +2427,7 @@ fn expr_is_field_or_index_of_param(expr: &Expression, param_name: &str) -> bool 
 }
 
 /// True when `param` is passed bare into a callee formal that is Owned in the registry
-/// (DB-216/275/276: `return_f64(buf) { return_f64_ffi(buf) }` with FFI `buf: Vec`).
+// (`return_f64(buf) { return_f64_ffi(buf) }` with FFI `buf: Vec`).
 fn param_forwarded_bare_into_owned_callee(
     body: &[&Statement],
     param_name: &str,
@@ -2518,7 +2518,7 @@ fn expr_forwards_bare_into_owned_callee(
                 for (arg_i, (_, arg)) in arguments.iter().enumerate() {
                     if expr_is_bare_param(arg, param_name) {
                         // Registry Borrowed/shared-ref beats AST Custom-as-owned fallback
-                        // (`out_degree` → demoted `vertex_index(&view)`; DB-366 BT peers).
+                        // (`out_degree` → demoted `vertex_index(&view)`; BT peers).
                         if callee_arg_expects_shared_ref(registry, &name, arg_i)
                             || callee_arg_registry_is_borrowed(registry, &name, arg_i)
                         {
@@ -2620,7 +2620,7 @@ fn callee_arg_expects_owned(
 }
 
 /// Registry already converged this arg to Borrowed (even if types are still bare Custom).
-/// Beats AST `Custom` ⇒ Owned fallback so mutual read-only peers stay demoted (DB-366).
+// Beats AST `Custom` ⇒ Owned fallback so mutual read-only peers stay demoted.
 fn callee_arg_registry_is_borrowed(
     registry: &SignatureRegistry,
     callee_name: &str,
@@ -2639,7 +2639,7 @@ fn callee_arg_registry_is_borrowed(
 }
 
 /// Registry already converged this arg to shared `&T` — do not treat bare forwards as
-/// owned consumption (DB-081 CSR `vertex_index` after field-projection demotion).
+// owned consumption (CSR `vertex_index` after field-projection demotion).
 fn callee_arg_expects_shared_ref(
     registry: &SignatureRegistry,
     callee_name: &str,
@@ -2912,7 +2912,7 @@ fn callee_owned_text_builder_stores_payload(sig: &FunctionSignature, param_idx: 
 }
 
 /// Public module APIs keep owned `Vec` / selected non-Copy `Custom` formals even when
-/// cross-module callers pass bare bindings (DB-175/178 product decode_startup / live_publishable).
+// cross-module callers pass bare bindings (product decode_startup / live_publishable).
 fn callee_pub_owned_formal_skip_bare_pass(
     sig: &FunctionSignature,
     programs: &[&Program],
@@ -2934,7 +2934,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
     }
     let simple = callee_key.rsplit("::").next().unwrap_or(callee_key);
     // Type::method keys are not free functions. Pub associated functions (no `self`)
-    // with owned non-Copy Custom formals still restore Owned (DB-398
+    // with owned non-Copy Custom formals still restore Owned (
     // `VoxelMaterialEditor::new(palette: MaterialPalette)`).
     if registry_key_is_type_qualified_method(callee_key) {
         return associated_pub_owned_custom_formal_should_restore(
@@ -2968,15 +2968,15 @@ fn callee_pub_owned_formal_skip_bare_pass(
         find_function_body_for_registry_key(programs, callee_key, param_idx)
     };
     if let Some((param_name, body)) = body_info {
-        // DB-216/275/276: bare forward into hard Owned (extern / Vec / consuming
+        // bare forward into hard Owned (extern / Vec / consuming
         // Custom). Soft Owned AST peers that are themselves readonly walks must not
-        // lock the formal — DB-366 mutual BT ticks converge to Borrowed.
+        // lock the formal — mutual BT ticks converge to Borrowed.
         if param_forwarded_bare_into_hard_owned_callee(body, param_name, registry, programs, cache) {
             return true;
         }
     }
     if is_vec_container_type(formal_ty) {
-        // DB-175/190: lock owned pub `Vec` only when callers bare-pass the same binding
+        // lock owned pub `Vec` only when callers bare-pass the same binding
         // into this callee and at least one other (product `buf_len` + `decode_startup`).
         // Readonly pub helpers (`vertex_lookup_len`) stay demotable for for-in reuse.
         return if let Some(lookup) = lookup {
@@ -2998,13 +2998,13 @@ fn callee_pub_owned_formal_skip_bare_pass(
             if param_readonly_field_projection_only(body, param_name) {
                 return false;
             }
-            // DB-081: field/index reads + bare forward only into demoted shared-ref
+            // field/index reads + bare forward only into demoted shared-ref
             // siblings (`out_degree` → `vertex_index(&view)`). Positive allowlist —
             // mutating method receivers / owned peers stay locked Owned.
             if param_readonly_custom_borrow_passthrough(body, param_name, registry, programs) {
                 return false;
             }
-            // DB-366: pub BT `tick_node` ↔ `tick_decorator_*` — mutual recursion keeps
+            // pub BT `tick_node` ↔ `tick_decorator_*` — mutual recursion keeps
             // AST peers looking Owned, so the passthrough check above fails on
             // `param_forwarded_bare_into_owned_callee`. Allow demotion when this body
             // is a read-only walk and bare forwards do not target hard Owned formals
@@ -3018,7 +3018,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
                 return false;
             }
         }
-        // DB-192/174: pub APIs declare owned Custom formals in source — keep owned
+        // pub APIs declare owned Custom formals in source — keep owned
         // even when a single caller bare-passes (`job_store_load_jobs(store, …)`).
         // Prefer ProgramLookup (O(1)); never rescan all programs per slot.
         let owned_custom = if let Some(lookup) = lookup {
@@ -3047,7 +3047,7 @@ fn callee_pub_owned_formal_skip_bare_pass(
     false
 }
 
-/// DB-175/178: caller passes the same binding bare into this callee and at least one other
+// caller passes the same binding bare into this callee and at least one other
 /// (`on_startup`: `buf_len(buf)` + `decode_startup(buf)`; `claim_live`: probe + consumer).
 fn programs_have_multi_callee_bare_probe_for_target(
     programs: &[&Program],
@@ -3251,7 +3251,7 @@ fn param_readonly_field_projection_only(body: &[&Statement], param_name: &str) -
         && !param_has_field_or_index_move_binding(body, param_name)
 }
 
-/// DB-081: pub Custom formal used only via field/index projection and/or bare
+// pub Custom formal used only via field/index projection and/or bare
 /// forwards into callees that already emit shared `&T` (CSR out_degree → vertex_index).
 /// True when `param` is only read via field/index projection, text field lets, or
 /// bare-forwarded — no store / whole-binding return / non-let field move.
@@ -3266,7 +3266,7 @@ fn param_is_readonly_custom_walk_body(body: &[&Statement], param_name: &str) -> 
 }
 
 /// Bare forward into extern / Vec / consuming-body Custom — real Owned contracts.
-/// Peer free-fns that are themselves readonly walks are excluded (DB-366).
+// Peer free-fns that are themselves readonly walks are excluded.
 fn param_forwarded_bare_into_hard_owned_callee(
     body: &[&Statement],
     param_name: &str,
@@ -3477,8 +3477,8 @@ fn callee_arg_is_hard_owned_uncached(
             }
         }
     }
-    // Registry may omit extern stubs during bare-pass (DB-216/275/276) — AST
-    // fallback for extern / Vec only (not all Custom — that re-broke DB-366).
+    // Registry may omit extern stubs during bare-pass — AST
+    // fallback for extern / Vec only (not all Custom — that re-broke ).
     callee_arg_is_hard_owned_in_programs(programs, callee_name, arg_index)
 }
 
@@ -3581,7 +3581,7 @@ fn param_readonly_custom_borrow_passthrough(
     programs: &[&Program],
 ) -> bool {
     // Text/Copy field lets (`let name = tree.nodes[i].name`) are readable from `&T`
-    // and must not block pub Custom demotion (DB-366 product BT `tick_node`).
+    // and must not block pub Custom demotion (product BT `tick_node`).
     // Consuming non-let field moves still disqualify.
     if param_has_non_let_field_or_index_move(body, param_name)
         || param_stored_in_struct_literal(body, param_name)
@@ -3949,7 +3949,6 @@ fn expr_mentions_param(expr: &Expression, param_name: &str) -> bool {
 /// P3.614: `for pair in headers { let key = pair.0 }` / `return pair.1` moves
 /// non-Copy fields out of the loop element. Bare-pass must not demote that `Vec`
 /// to `&Vec` (E0507 under borrowed for-in). Compare-only loops stay demotable
-/// (DB-412).
 fn param_for_in_moves_element_fields(body: &[&Statement], param_name: &str) -> bool {
     for stmt in body {
         match stmt {
@@ -4026,7 +4025,7 @@ fn param_has_field_or_index_move_binding(body: &[&Statement], param_name: &str) 
 
 /// Field/index moves that must keep Owned: non-let projections, or Let bindings of
 /// non-Copy / non-text fields. Text/Copy Lets alone do not block bare-pass demotion
-/// (DB-366 BT `let name = tree.nodes[i].name`).
+// (BT `let name = tree.nodes[i].name`).
 fn param_has_consuming_field_or_index_move(
     body: &[&Statement],
     param_name: &str,
@@ -4364,7 +4363,7 @@ fn param_stored_in_struct_literal(body: &[&Statement], param_name: &str) -> bool
         .any(|stmt| statement_stores_param_in_struct_literal(stmt, param_name))
 }
 
-/// DB-164: callee moves the formal into a local (`let mut out = store`) then mutates /
+// callee moves the formal into a local (`let mut out = store`) then mutates /
 /// returns that local. The formal must stay owned — `&mut Store` cannot move into `out`.
 fn param_moved_into_let_binding(body: &[&Statement], param_name: &str) -> bool {
     body.iter()
@@ -4474,7 +4473,7 @@ fn stmt_param_usage(stmt: &Statement, param_name: &str) -> ParamUsage {
             usage
         }
         Statement::Match { value, arms, .. } => {
-            // DB-155: `match bind_ast(ast) { … }` — the bare/field forward is in the
+            // `match bind_ast(ast) { … }` — the bare/field forward is in the
             // scrutinee call; arm bodies often never mention `ast` again.
             let mut usage = expr_param_usage(value, param_name);
             for arm in arms {
@@ -4583,7 +4582,7 @@ fn call_arg_param_usage(expr: &Expression, param_name: &str) -> ParamUsage {
         }
         // Bare `f(param)` is a whole-binding forward — not a field projection
         // (`f(param.field)`). Misclassifying bare as FieldInCallArg made every
-        // BT tick helper look field-forward-only and re-Owned Borrowed formals (DB-366).
+        // BT tick helper look field-forward-only and re-Owned Borrowed formals.
         Expression::Identifier { name, .. } if name == param_name => ParamUsage::Other,
         _ => expr_param_usage(expr, param_name),
     }
@@ -4620,7 +4619,7 @@ fn statement_stores_param_in_struct_literal(stmt: &Statement, param_name: &str) 
                         .any(|s| statement_stores_param_in_struct_literal(s, param_name))
                 })
         }
-        // DB-162: `while { out.versions[i] = Version { value: value } }` / push in loop
+        // `while { out.versions[i] = Version { value: value } }` / push in loop
         // body must keep owned Value formals (not `&mut Value` at call sites).
         Statement::While { body, .. }
         | Statement::For { body, .. }
@@ -4643,7 +4642,7 @@ fn expr_stores_param_in_struct_literal(expr: &Expression, param_name: &str) -> b
             .iter()
             .any(|(_, v)| expr_mentions_param(v, param_name)),
         // Recurse for nested `Foo { x: param }` inside call args — do NOT treat bare
-        // `callee(param)` as a struct-literal store (DB-366 BT ticks).
+        // `callee(param)` as a struct-literal store (BT ticks).
         Expression::Call { arguments, .. } => arguments
             .iter()
             .any(|(_, arg)| expr_stores_param_in_struct_literal(arg, param_name)),

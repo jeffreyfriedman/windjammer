@@ -87,7 +87,7 @@ impl Coercion {
         match self {
             Coercion::None => {}
             Coercion::Deref => {
-                // Deref is Copy-only — never keep a stale `.clone()` (`*w1.clone()`, DB-344).
+                // Deref is Copy-only — never keep a stale `.clone()` (`*w1.clone()`).
                 super::expression_utilities::strip_trailing_clone(expr_str);
                 if expr_str.starts_with('*') {
                     let mut inner = expr_str.trim_start_matches('*').to_string();
@@ -112,7 +112,7 @@ impl Coercion {
             }
             Coercion::BorrowMut => {
                 if !expr_str.starts_with("&mut ") {
-                    // Mut borrow needs an lvalue — strip stale auto-clone temps (DB-336/337).
+                    // Mut borrow needs an lvalue — strip stale auto-clone temps.
                     super::expression_utilities::strip_trailing_clone(expr_str);
                     let base = super::expression_utilities::borrow_base_expr(expr_str);
                     *expr_str = format!("&mut {base}");

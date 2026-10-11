@@ -1,6 +1,6 @@
-.PHONY: help test test-all test-stdlib test-ui test-game test-integration \
+.PHONY: help test test-all test-stdlib test-ui test-integration \
         test-quick test-orphans test-verbose clippy fmt check build build-all install \
-        example-ui example-game example-http example-physics example-audio \
+        example-ui example-http \
         test-examples clean doc setup-hooks check-versions
 
 # Default target
@@ -16,7 +16,7 @@ help:
 	@echo "  make test-quick        - Quick test (stdlib smoke test only)"
 	@echo "  make test-stdlib       - Test standard library"
 	@echo "  make test-ui           - Test UI framework"
-	@echo "  make test-game         - Test game engine"
+	@echo "  make         - Test game engine"
 	@echo "  make test-integration  - Integration tests only"
 	@echo "  make test-verbose      - Run tests with output"
 	@echo "  make test-examples     - Run all example tests"
@@ -33,10 +33,8 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make example-ui        - Run UI counter demo"
-	@echo "  make example-game      - Run game app test"
+	@echo "  make      - Run game app test"
 	@echo "  make example-http      - Run HTTP server test"
-	@echo "  make example-physics   - Run physics test"
-	@echo "  make example-audio     - Run audio test"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean             - Clean build artifacts"
@@ -114,28 +112,6 @@ test-ui-renderer:
 	@echo "🧪 Testing UI renderer..."
 	cargo test -p windjammer-ui simple_renderer
 
-# Test game engine
-test-game:
-	@echo "🧪 Testing game engine..."
-	cargo test -p game-host --all-features
-
-# Test game components
-test-game-ecs:
-	@echo "🧪 Testing game ECS..."
-	cargo test -p game-host ecs
-
-test-game-physics:
-	@echo "🧪 Testing game physics..."
-	cargo test -p game-host physics --features 3d
-
-test-game-rendering:
-	@echo "🧪 Testing game rendering..."
-	cargo test -p game-host rendering
-
-test-game-audio:
-	@echo "🧪 Testing game audio..."
-	cargo test -p game-host audio --features audio
-
 # Test compiler
 test-compiler:
 	@echo "🧪 Testing compiler..."
@@ -196,10 +172,6 @@ clippy-ui:
 	@echo "📎 Clippy: windjammer-ui..."
 	cargo clippy -p windjammer-ui --all-features -- -D warnings
 
-clippy-game:
-	@echo "📎 Clippy: game-host..."
-	cargo clippy -p game-host --all-features -- -D warnings
-
 # =============================================================================
 # Building
 # =============================================================================
@@ -244,35 +216,13 @@ doc-quiet:
 # =============================================================================
 
 # Run all example tests
-test-examples: example-ui example-physics example-audio example-game
+test-examples: example-ui
 	@echo "✅ All examples completed!"
 
 # UI counter demo
 example-ui:
 	@echo "🎨 Running UI counter demo..."
 	cargo run --example counter_test -p windjammer-ui
-
-# Game app test
-example-game:
-	@echo "🎮 Running game app test..."
-	cargo run --example game_app_test -p game-host --features "3d,audio" 2>/dev/null || \
-	cargo run --example game_app_test -p game-host --features "3d"
-
-# Physics test
-example-physics:
-	@echo "⚙️  Running physics test..."
-	cargo run --example physics_test -p game-host --features 3d
-
-# Audio test  
-example-audio:
-	@echo "🔊 Running audio test..."
-	cargo run --example audio_test -p game-host --features audio 2>/dev/null || \
-	echo "⚠️  Audio feature requires audio hardware"
-
-# Rendering test
-example-rendering:
-	@echo "🎨 Running rendering test..."
-	cargo run --example rendering_test -p game-host
 
 # Window test (desktop)
 example-window:
@@ -338,9 +288,6 @@ watch-stdlib:
 watch-ui:
 	cargo watch -x "test -p windjammer-ui"
 
-watch-game:
-	cargo watch -x "test -p game-host"
-
 # =============================================================================
 # Release
 # =============================================================================
@@ -379,7 +326,7 @@ version:
 	@grep '^version' Cargo.toml | head -1
 	@echo ""
 	@echo "Crate versions:"
-	@for crate in windjammer-lsp windjammer-mcp windjammer-ui game-host windjammer-runtime; do \
+	@for crate in windjammer-lsp windjammer-mcp windjammer-ui windjammer-runtime; do \
 		echo -n "  $$crate: "; \
 		grep '^version' crates/$$crate/Cargo.toml | head -1 | cut -d'"' -f2; \
 	done

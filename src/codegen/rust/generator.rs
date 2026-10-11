@@ -186,7 +186,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) module_string_consts: std::collections::HashSet<String>,
     /// Module-level `const` / `static` name → type (for identifier inference in expressions).
     pub(crate) module_const_types: std::collections::HashMap<String, Type>,
-    /// Nesting depth of loop bodies — explicit `.clone()` in loops must be preserved (DB-105).
+    // Nesting depth of loop bodies — explicit `.clone()` in loops must be preserved.
     pub(crate) loop_body_depth: u32,
     // UNUSED LET BINDINGS: Track let bindings whose variable is never used after declaration.
     // Keyed by (line, column) of the let statement's source location.
@@ -985,7 +985,7 @@ impl<'ast> CodeGenerator<'ast> {
         let finalize =
             crate::codegen::rust::call_signature_resolution::finalize_call_site_signature;
 
-        // DB-332: leaf-name collision keys (`AudioChannel::new`) are last-writer-wins across
+        // leaf-name collision keys (`AudioChannel::new`) are last-writer-wins across
         // sibling modules. Prefer caller-module affinity before trusting the bare exact key.
         if let Some(affinity_sig) =
             self.lookup_method_signature_on_receiver_type(receiver_type, method, arg_count)
@@ -1664,7 +1664,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return true;
         }
-        // DB-113: bare-pass sibling demotion for non-Copy custom structs records
+        // bare-pass sibling demotion for non-Copy custom structs records
         // MutBorrowed + `MutableReference(T)` without setting shared-ref emission flags.
         matches!(
             sig.param_ownership.get(param_idx),
@@ -2075,7 +2075,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let caller_module = self.current_caller_module_path();
 
-        // DB-332: module-qualified registry keys + caller affinity BEFORE the leaf-name
+        // module-qualified registry keys + caller affinity BEFORE the leaf-name
         // `method_signatures_by_type` map. That map collapses sibling types that share a
         // leaf (`audio::mixer::AudioChannel` vs `audio::audio_mixer::AudioChannel`) into
         // one entry — last writer wins and poisons `Type::new` formals.
@@ -2128,7 +2128,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         // Module-path qualified keys from library multipass (e.g. `foo::Type::method`).
-        // Prefer caller-module affinity over first-match (DB-332 dual AudioChannel).
+        // Prefer caller-module affinity over first-match (dual AudioChannel).
         let suffix = format!("::{receiver_type}::{method}");
         if let Some((_key, sig)) =
             crate::codegen::rust::call_signature_resolution::best_suffix_match_for_caller(
@@ -2198,7 +2198,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Module path (`audio::audio_mixer`) for the `.wj` file currently being emitted.
-    /// Used to disambiguate leaf-name type homonyms across sibling modules (DB-332).
+    // Used to disambiguate leaf-name type homonyms across sibling modules.
     pub(in crate::codegen::rust) fn current_caller_module_path(&self) -> Option<String> {
         let from_root = self.library_source_root.as_ref().and_then(|root| {
             if self.current_wj_file.as_os_str().is_empty() {
@@ -2213,7 +2213,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Fallback when multipass has not set `library_source_root` yet: use the
         // file stem so `audio_mixer.wj` still beats sibling `mixer.wj` for
-        // `AudioChannel::new` (DB-332).
+        // `AudioChannel::new`.
         self.current_wj_file
             .file_stem()
             .and_then(|s| s.to_str())
@@ -2709,7 +2709,7 @@ impl<'ast> CodeGenerator<'ast> {
         // Analyzer `Type::Reference` / `OwnershipHint::Ref` is not emit-truth for
         // formals. Source `&T` formals are already covered above. Emitted-owned
         // Custom (`col: CatalogColumnBinding`) must stay owned at call sites —
-        // last-use into `Vec::push` is a move, not `.clone()` (DB-209).
+        // last-use into `Vec::push` is a move, not `.clone()`.
         false
     }
 
@@ -3331,7 +3331,7 @@ impl<'ast> CodeGenerator<'ast> {
         &self,
         name: &str,
     ) -> bool {
-        // DB-084/087: `map = f(map)` / tuple writeback moves then rebinds — not multi-use.
+        // `map = f(map)` / tuple writeback moves then rebinds — not multi-use.
         if self.current_stmt_restores_binding_after_move(name) {
             return false;
         }
@@ -3369,14 +3369,14 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Current statement restores `binding` after moving it into a call
-    /// (`let (binding, …) = f(binding, …)` / DB-084/087). Later same-name uses are a
+    // (`let (binding, …) = f(binding, …)`). Later same-name uses are a
     /// new generation — not multi-use of this move.
     pub(in crate::codegen::rust) fn current_stmt_restores_binding_after_move(
         &self,
         binding: &str,
     ) -> bool {
         // Nested blocks swap `current_function_body` to a slice; auto-clone indices stay
-        // function-wide (`auto_clone_counter`). DB-087 tuple writeback must scan the full body.
+        // function-wide (`auto_clone_counter`). tuple writeback must scan the full body.
         let body: Vec<&crate::parser::Statement> = if !self.full_function_body_snapshot.is_empty()
             && self.current_function_body.len() != self.full_function_body_snapshot.len()
         {
@@ -3582,7 +3582,7 @@ impl<'ast> CodeGenerator<'ast> {
         let Expression::Identifier { name, .. } = arg_expr else {
             return;
         };
-        // DB-444: Copy formals/locals auto-copy — peel stale `&x` into owned slots,
+        // Copy formals/locals auto-copy — peel stale `&x` into owned slots,
         // never invent `.clone()` from owned-outer / reuse finalize.
         if self.binding_name_is_copy(name)
             || self.call_arg_is_copy_identity(arg_expr, None)
@@ -4422,7 +4422,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     pub(crate) fn maybe_auto_clone(&self, name: &str, arg_str: &str) -> String {
-        // DB-367: unit keywords / `Type::Variant` paths are constructors, not bindings.
+        // unit keywords / `Type::Variant` paths are constructors, not bindings.
         if name == "None"
             || name == "true"
             || name == "false"
@@ -4431,7 +4431,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return arg_str.to_string();
         }
-        // DB-444: Copy unit-enum formals/locals never need reuse `.clone()`.
+        // Copy unit-enum formals/locals never need reuse `.clone()`.
         if self.binding_name_is_copy(name)
             || self.current_function_params.iter().any(|p| {
                 p.name == name && matches!(&p.type_, Type::Custom(n) if self.enum_is_unit_copy(n))
@@ -4443,7 +4443,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return arg_str.to_string();
         }
-        // P3.574 / DB-347: owned non-Copy match payloads (`Ok(expr)`) still move at
+        // P3.574 / owned non-Copy match payloads (`Ok(expr)`) still move at
         // owned formals and need analysis-driven `.clone()` on reuse. Skip only Copy
         // payloads (`r: f32`) — blanket skip caused E0382 in wj-cron.
         if self.copy_match_payload_binding(name) {
@@ -4521,7 +4521,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Only scalar Copy formals (i64/bool/…) skip clone. Copy aggregates/enums
         // (Value, Lsn, …) still need `.clone()` for multi-use owned moves (regression-063).
-        // DB-343: module `pub const` of Copy type (u32 MAT_TRIM / VIEWER_GRID) auto-copies —
+        // module `pub const` of Copy type (u32 MAT_TRIM / VIEWER_GRID) auto-copies —
         // never `G.clone()` / `(G as i32).clone()` / `(mats::MAT_TRIM as i32).clone()`.
         if self
             .current_function_params
@@ -4545,7 +4545,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.binding_is_copy_pass_by_value_scalar(name) {
             return arg_str.to_string();
         }
-        // DB-343: `(x as i32)` / `(max_size as i32)` already yields a Copy scalar —
+        // `(x as i32)` / `(max_size as i32)` already yields a Copy scalar —
         // array-for bindings and untyped `max()` locals must not grow `.clone()`.
         if Self::arg_str_is_copy_scalar_numeric_cast(arg_str) {
             return arg_str.to_string();
@@ -4601,7 +4601,7 @@ impl<'ast> CodeGenerator<'ast> {
             if self.binding_name_is_copy(name) || self.copy_match_payload_binding(name) {
                 return true;
             }
-            // DB-444: unit-enum formals may miss registry during early call emit;
+            // unit-enum formals may miss registry during early call emit;
             // empty-payload enums in the variant registry are still Copy.
             if self.current_function_params.iter().any(|p| p.name == *name) {
                 if let Some(Type::Custom(ty_name)) = self
@@ -4676,7 +4676,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// True when binding `name` is a Copy type (scalar or aggregate/newtype).
-    /// DB-457/458: auto-clone must not emit `id.clone()` for Copy `LightId` /
+    // auto-clone must not emit `id.clone()` for Copy `LightId` /
     /// `ComponentId` into owned slots — Rust copies implicitly.
     pub(crate) fn binding_is_copy_type(&self, name: &str) -> bool {
         if self.binding_is_copy_pass_by_value_scalar(name) {
@@ -4749,7 +4749,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// (e.g. `HashMap::get`), append `.copied()` / `.cloned()` from inferred types —
     /// not method-name lists.
     ///
-    /// DB-304: never append `.cloned()` onto language-level `Some`/`Ok`/`Err`
+    // never append `.cloned()` onto language-level `Some`/`Ok`/`Err`
     /// (`Some(m.clone()).cloned()` is E0599). Only coerce when Option payload is a ref.
     pub(crate) fn coerce_option_ref_return_to_owned(
         &self,
@@ -4934,7 +4934,7 @@ impl<'ast> CodeGenerator<'ast> {
         arg: &crate::parser::Expression,
         arg_str: &mut String,
     ) -> bool {
-        // DB-367: `Value::None` is a unit constructor, not a field move.
+        // `Value::None` is a unit constructor, not a field move.
         if arg_str.ends_with("::None") || arg_str == "None" {
             return false;
         }
@@ -4954,7 +4954,7 @@ impl<'ast> CodeGenerator<'ast> {
                     || self.inferred_mut_borrowed_params.contains(name)
                     || self.emitted_rust_ref_formals.contains(name);
                 let root_behind_ref = self.field_access_root_is_behind_reference(arg);
-                // DB-414: owned/`mut self` can move a non-Copy field into a ctor.
+                // owned/`mut self` can move a non-Copy field into a ctor.
                 // Prefer emit truth: only treat `self.field` as behind a ref when self
                 // actually emits `&self` / `&mut self` — not owned `mut self` (OwnershipHint::Mut
                 // is `&mut`, but inferred mut-borrow flags can also stale-fire).

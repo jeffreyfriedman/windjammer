@@ -265,7 +265,7 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    /// DB-308: `-> u32` CLI/parse loops keep `u32` counters vs `.len()` / `args[i]`.
+    // `-> u32` CLI/parse loops keep `u32` counters vs `.len()` / `args[i]`.
     /// Without this, index analysis marks the counter as usize → `let mut i: u32 = 0_usize`.
     pub(in crate::codegen::rust) fn function_returns_u32_for_loop_scan(&self) -> bool {
         self.current_function_return_type
@@ -325,7 +325,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    /// DB-330: annotated/`let bits: u32 = …` (or i32/usize) assign slots must not be
+    // annotated/`let bits: u32 = …` (or i32/usize) assign slots must not be
     /// overwritten by a weak WJ-`int`/i64 peer before nested bitwise/arith literals emit.
     pub(in crate::codegen::rust) fn narrow_assign_int_slot_beats_weak_peer(
         slot: &Option<Type>,
@@ -978,7 +978,7 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// E0507 / E0382: field extract from a parameter.
     ///
-    /// Owned params may partially move distinct non-Copy fields (DB-096). Only clone
+    // Owned params may partially move distinct non-Copy fields. Only clone
     /// when auto-clone reuse analysis says the field path is used again — never blind
     /// `.clone()` on every owned-param field extract.
     pub(in crate::codegen::rust) fn apply_owned_param_field_extract_clone(
@@ -1036,7 +1036,7 @@ impl<'ast> CodeGenerator<'ast> {
         };
         let root_is_mut = self.inferred_mut_borrowed_params.contains(root);
         let root_is_shared = self.inferred_borrowed_params.contains(root);
-        // DB-090: mut-borrowed params (not only `self`) need take/clear / writeback rewriting.
+        // mut-borrowed params (not only `self`) need take/clear / writeback rewriting.
         // Shared `&T` still clones non-Copy fields below via the final branch when root is self.
         let is_self_shared_or_mut = root == "self" && (root_is_shared || root_is_mut);
         if !root_is_mut && !is_self_shared_or_mut {
@@ -1077,7 +1077,7 @@ impl<'ast> CodeGenerator<'ast> {
 
         let field_path = self.extract_field_access_path_string(value);
 
-        // DB-090: `let v = csr.field; csr.field = Vec::new()` → `std::mem::take(&mut csr.field)`.
+        // `let v = csr.field; csr.field = Vec::new()` → `std::mem::take(&mut csr.field)`.
         if root_is_mut && self.type_supports_mem_take(&ty) {
             if let Some(next_idx) = self.next_statement_clears_field_to_default(&field_path) {
                 if value_str.ends_with(".clone()") {
@@ -1540,7 +1540,7 @@ impl<'ast> CodeGenerator<'ast> {
         } else if root == "self" {
             // Prefer analyzer/codegen borrow tracking over OwnershipHint alone —
             // inferred `&self` may still be OwnershipHint::Inferred while
-            // `inferred_borrowed_params` already knows (DB-349).
+            // `inferred_borrowed_params` already knows.
             if self.inferred_mut_borrowed_params.contains("self") {
                 return "&mut ";
             }
@@ -1973,7 +1973,7 @@ impl<'ast> CodeGenerator<'ast> {
         true
     }
 
-    /// DB-374: Copy self-field / indexed field (`chunks[i].state`) — bind by value,
+    // Copy self-field / indexed field (`chunks[i].state`) — bind by value,
     /// never `.clone().clone()` via owned-clone borrow-break.
     pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_copy(
         &self,
@@ -2285,7 +2285,7 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
-    /// DB-354: `self.load(...) -> Result<T, E>` already owns the Ok payload —
+    // `self.load(...) -> Result<T, E>` already owns the Ok payload —
     /// bind by value; never `.map(|v| v.to_owned()).as_ref()`.
     pub(in crate::codegen::rust) fn match_borrow_break_yields_owned_result(
         &self,

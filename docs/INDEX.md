@@ -41,7 +41,7 @@ marked "background" or "vision".
 | [TOOLING_VISION.md](TOOLING_VISION.md) | Tooling vision (not status) |
 
 ## Release and operations
-[VERSIONING.md](VERSIONING.md), [PUBLISHING.md](PUBLISHING.md), [DOWNSTREAMAPP_WJ_PIN.md](DOWNSTREAMAPP_WJ_PIN.md).
+[VERSIONING.md](VERSIONING.md), [PUBLISHING.md](PUBLISHING.md).
 
 ## Specs and plans
 [superpowers/specs/](superpowers/specs/) and [superpowers/plans/](superpowers/plans/) hold dated design specs and implementation plans

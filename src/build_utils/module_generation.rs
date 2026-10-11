@@ -697,7 +697,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
         }
     }
 
-    // DB-093: When `_mod_items.rs` is absent (incremental regen), fall back to source `mod.wj`
+    // When `_mod_items.rs` is absent (incremental regen), fall back to source `mod.wj`
     // so cross-crate `pub use other_crate::Item` survives into auto-generated mod.rs.
     if user_reexports.is_empty() {
         if let Some(ref src_dir) = sibling_src {
@@ -718,7 +718,7 @@ fn generate_mod_file_recursive(output_dir: &Path, layout: Option<(&Path, &Path)>
                         if local_modules.contains(first) {
                             user_reexports.push(format!("pub use self::{};", path));
                         } else {
-                            // External crate (e.g. db_index::Bm25Index) — keep absolute path.
+                            // External crate (e.g. search_index::Bm25Index) — keep absolute path.
                             user_reexports.push(format!("pub use {};", path));
                         }
                     }
@@ -966,7 +966,7 @@ pub struct Host {
 }
 
 #[cfg(test)]
-mod wdb093_cross_crate_pub_use_tests {
+mod cross_crate_pub_use_tests {
     use super::*;
     use std::fs;
 
@@ -979,7 +979,7 @@ mod wdb093_cross_crate_pub_use_tests {
         fs::create_dir_all(&src).unwrap();
         fs::write(
             src.join("mod.wj"),
-            "pub mod observability_layer\npub use observability_layer::ObservabilityLayer\npub use db_index::Bm25Index\npub use db_index::PartTextStats\n",
+            "pub mod observability_layer\npub use observability_layer::ObservabilityLayer\npub use search_index::Bm25Index\npub use search_index::PartTextStats\n",
         )
         .unwrap();
         fs::write(
@@ -1000,11 +1000,11 @@ mod wdb093_cross_crate_pub_use_tests {
 
         let regenerated = fs::read_to_string(out.join("mod.rs")).unwrap();
         assert!(
-            regenerated.contains("pub use db_index::Bm25Index"),
+            regenerated.contains("pub use search_index::Bm25Index"),
             "expected cross-crate Bm25Index re-export, got:\n{regenerated}"
         );
         assert!(
-            regenerated.contains("pub use db_index::PartTextStats"),
+            regenerated.contains("pub use search_index::PartTextStats"),
             "expected cross-crate PartTextStats re-export, got:\n{regenerated}"
         );
     }

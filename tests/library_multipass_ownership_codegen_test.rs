@@ -4149,7 +4149,7 @@ pub fn test_load_via_defaults() {
     );
 }
 
-/// DB-091 large-crate shape: `pub use loader::BenchGraphLoader` + `use crate::graph::BenchGraphLoader`
+// large-crate shape: `pub use loader::BenchGraphLoader` + `use crate::graph::BenchGraphLoader`
 /// (re-export), not `use crate::graph::loader::…`. Must keep Borrowed path after datagen_defaults.
 #[test]
 fn test_library_multipass_reexport_associated_ctor_str_method() {
@@ -4248,7 +4248,7 @@ pub fn test_load_via_defaults() {
     );
 }
 
-/// DB-091: associated ctor + method that forwards `string` into an extern fn.
+// associated ctor + method that forwards `string` into an extern fn.
 /// Ownership convergence on the method must still keep call-site path literals bare
 /// (`emitted_rust_ref_params` / Borrowed), matching bench_graph_loader downstream.
 #[test]

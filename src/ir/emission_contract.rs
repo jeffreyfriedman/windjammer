@@ -33,7 +33,7 @@ pub fn plain_string_formal_passes_owned_at_call_site(
     }
     // Plain WJ `string` without codegen-confirmed `&str` → pass owned.
     // Stale analyzer `Borrowed` / `Reference(str)` multipass metadata must not force
-    // call-site `&` (circular-dep owned formals, DB-099).
+    // call-site `&` (circular-dep owned formals).
     true
 }
 

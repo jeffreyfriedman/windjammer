@@ -12,7 +12,7 @@
 
 //! Demoted `&str` callee formals must not receive `String.clone()` at call sites.
 //!
-//! Dogfood (downstream-screens): `render_memorized_handoff_from_json(json)` demotes
+//! Dogfood (a large downstream application): `render_memorized_handoff_from_json(json)` demotes
 //! formal to `&str` but call sites must not emit `json.clone()` (E0308 / wasteful).
 //! Read-only helper demotion uses comparison/`strings.len` (same as loop-reuse repros).
 

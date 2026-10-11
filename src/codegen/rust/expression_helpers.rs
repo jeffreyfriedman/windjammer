@@ -45,7 +45,7 @@ pub fn expression_directly_uses_binding(expr: &Expression, name: &str) -> bool {
 }
 
 /// WJ source wrote `expr.clone()` (Rust leakage W0005). Used to preserve explicit clones
-/// at codegen when reuse / call-arg context needs them (DB-105/106/108).
+// at codegen when reuse / call-arg context needs them.
 pub fn is_explicit_user_clone_call(expr: &Expression) -> bool {
     matches!(
         expr,

@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-112: full-library `--module-file` demotes owned `string` formals to `&str` but leaves
+//! full-library `--module-file` demotes owned `string` formals to `&str` but leaves
 //! owned `.clone()` call sites (E0308: expected `&str`, found `String`).
 //!
 //! a downstream database project Phase 193 observed after `./scripts/build_gen.sh` (full `src` multipass):
@@ -18,7 +18,7 @@
 //! while CLI tests still emit:
 //!   `run_parquet_load(li_path.clone(), ord_path.clone(), …)` → `String` args.
 //!
-//! Relational-only module-file (`src/relational`) keeps owned `String` formals (DB-111 GREEN).
+//! Relational-only module-file (`src/relational`) keeps owned `String` formals (GREEN).
 //! Full `src` module-file incorrectly demotes when sibling modules also call the callee with
 //! borrowed locals — call sites with explicit `.clone()` must auto-borrow or callee must stay owned.
 //!

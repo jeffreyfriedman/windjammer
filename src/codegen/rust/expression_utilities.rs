@@ -142,7 +142,7 @@ pub fn borrow_base_expr(expr_str: &str) -> &str {
 }
 
 /// Prefix `&mut` for a call-site lvalue. Strips trailing `.clone()` first so we never
-/// emit `&mut binding.clone()` temps (DB-336/337/342).
+// emit `&mut binding.clone()` temps.
 pub fn apply_mut_borrow_prefix(expr_str: &mut String) {
     if expr_str.starts_with("&mut ") {
         sanitize_mut_borrow_clone_temp(expr_str);
@@ -153,7 +153,7 @@ pub fn apply_mut_borrow_prefix(expr_str: &mut String) {
     *expr_str = format!("&mut {base}");
 }
 
-/// Rewrite illegal `&mut place.clone()` → `&mut place` (DB-336/337/342).
+// Rewrite illegal `&mut place.clone()` → `&mut place`.
 pub fn sanitize_mut_borrow_clone_temp(expr_str: &mut String) {
     if let Some(place) = expr_str.strip_prefix("&mut ") {
         if place.ends_with(".clone()") {
@@ -164,12 +164,12 @@ pub fn sanitize_mut_borrow_clone_temp(expr_str: &mut String) {
     }
 }
 
-/// Rewrite illegal `expr as T.clone()` → `(expr as T).clone()` (DB-300).
+// Rewrite illegal `expr as T.clone()` → `(expr as T).clone()`.
 ///
 /// Rust parses `as` tighter than method call, so a naive `{cast}.clone()` append
 /// attaches `.clone()` to the type name. Call this as a terminal sanitize.
 ///
-/// DB-343: Copy scalar casts (`as i32` / `as usize` / …) never keep `.clone()`.
+// Copy scalar casts (`as i32` / `as usize` / …) never keep `.clone()`.
 ///
 /// P3.683: must not treat nested casts inside indexing (`out[(j as usize)].clone()`)
 /// as scalar-cast clones — that wrongly peels the Index element clone (E0507).
@@ -265,10 +265,10 @@ pub fn is_copy_scalar_numeric_cast(expr: &str) -> bool {
 /// Append `.clone()` for owned pass, parenthesizing casts/compounds.
 ///
 /// `x as T.clone()` is illegal Rust (`as` binds tighter than method call). Always
-/// emit `(x as T).clone()` when `as` is present (DB-300).
+// emit `(x as T).clone()` when `as` is present.
 ///
-/// DB-343: never clone a Copy scalar cast — `(x as i32)` is already pass-by-value.
-/// True for unit constructors that must never grow `.clone()` (DB-367).
+// never clone a Copy scalar cast — `(x as i32)` is already pass-by-value.
+// True for unit constructors that must never grow `.clone()`.
 pub fn is_unit_constructor_rust_text(expr: &str) -> bool {
     let t = expr.trim();
     t == "None" || t == "true" || t == "false" || t.ends_with("::None") || t.ends_with(".None")
@@ -287,22 +287,22 @@ pub fn strip_unit_constructor_clone(expr: &str) -> String {
 
 pub fn append_rust_clone(expr: &str) -> String {
     let t = expr.trim();
-    // DB-367: unit keywords / `Value::None` are constructors — never `.clone()`.
+    // unit keywords / `Value::None` are constructors — never `.clone()`.
     if is_unit_constructor_rust_text(t) {
         return t.to_string();
     }
-    // Never `&mut place.clone()` — mut places are lvalues (DB-336/337).
+    // Never `&mut place.clone()` — mut places are lvalues.
     if t.starts_with("&mut ") {
         return t.to_string();
     }
     // Shared-borrow prefix + `.clone()` is `&x.clone()` (borrow-of-clone). Owned
     // formals want `x.clone()`; shared-ref formals peel via `rust_shared_borrow`.
-    // Never emit `&x.clone()` here (DB-184 / Connection reuse).
+    // Never emit `&x.clone()` here (Connection reuse).
     if t.starts_with('&') {
         return append_rust_clone(borrow_base_expr(t));
     }
     // IR Deref of `&Copy` yields `*binding` (owned Copy). Appending `.clone()` would
-    // produce `*binding.clone()` (DB-344 collision2d match payloads) — E0614 / noise.
+    // produce `*binding.clone()` (collision2d match payloads) — E0614 / noise.
     // Non-Copy `&T` uses CoercionKind::Clone, not Deref, so this never drops a needed clone.
     if t.starts_with('*') {
         return t.to_string();
@@ -455,7 +455,7 @@ mod tests {
 
     #[test]
     fn append_rust_clone_parenthesizes_casts() {
-        // DB-343: Copy scalar casts must not grow `.clone()`.
+        // Copy scalar casts must not grow `.clone()`.
         assert_eq!(append_rust_clone("n as usize"), "n as usize");
         assert_eq!(append_rust_clone("(n as i32)"), "(n as i32)");
         assert_eq!(append_rust_clone("n"), "n.clone()");
@@ -463,7 +463,7 @@ mod tests {
         assert_eq!(
             append_rust_clone("*w1"),
             "*w1",
-            "DB-344: never *w1.clone() after IR Deref of &Copy match payload"
+            "never *w1.clone() after IR Deref of &Copy match payload"
         );
         assert_eq!(
             append_rust_clone("&conn"),

@@ -1,0 +1,11 @@
+# Files allowed to contain a forbidden term (see docs/public-hygiene-patterns.txt).
+# This is known debt, not a license: each entry is production code that special-cases a
+# private project's crate or directory names. The list may only shrink; an entry whose file
+# no longer matches fails the test so stale entries get removed.
+src/cargo_integration.rs
+src/cli/self_install.rs
+src/codegen/rust/backend.rs
+src/plugin.rs
+src/compiler_config.rs
+tests/compiler_config_test.rs
+src/compiler_config.MODULE.md

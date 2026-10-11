@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-422: Copy `f32` array index used in arithmetic must not `.clone()`.
+//! Copy `f32` array index used in arithmetic must not `.clone()`.
 //!
 //! Product `frustum_culling.rs`:
 //!   `view_proj[3].clone() + view_proj[0]`
 //! WJ is `view_proj[3] + view_proj[0]`.
-//! Distinct from DB-393 (`y.clone()` local i32), DB-346 (`color.r.clone()`),
-//! and DB-355 (Copy Vec3).
+//! Distinct from (`y.clone()` local i32), (`color.r.clone()`),
+//! and (Copy Vec3).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

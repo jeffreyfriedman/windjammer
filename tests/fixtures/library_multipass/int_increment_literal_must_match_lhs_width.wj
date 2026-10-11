@@ -1,4 +1,4 @@
-// REPRO — nested untyped index vs `len() as int` (DownstreamApp balance_sheet / aging / bank_import).
+// REPRO — nested untyped index vs `len() as int` (a downstream application balance_sheet / aging / bank_import).
 // Outer `let mut idx: int = 0` is tip-GREEN; inner `let mut acct_idx = 0` still emits
 // `acct_idx += 1 as i32` while compared to `_len as i64` → product tip api-check E0277.
 

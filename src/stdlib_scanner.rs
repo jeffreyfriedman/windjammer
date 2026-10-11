@@ -428,7 +428,7 @@ pub(crate) fn register_rust_std_boundary_signatures(registry: &mut SignatureRegi
     registry.register_runtime_std_module("thread");
     // Runtime `strings::{contains,starts_with,ends_with}`: haystack `AsRef<str>`,
     // needle `&str`. WJ `std/strings.wj` stubs list owned `string` and must not
-    // last-write `String::from("lit")` into the needle (DB-144).
+    // last-write `String::from("lit")` into the needle.
     for name in [
         "strings::contains",
         "strings::starts_with",

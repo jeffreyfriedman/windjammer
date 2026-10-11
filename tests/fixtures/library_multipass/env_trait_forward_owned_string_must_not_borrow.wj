@@ -1,5 +1,5 @@
 // REPRO — env selector forwards owned tenant_id into seed/pg trait formals.
-// Product DownstreamApp tip api-check: env_* emits repo.create(&tenant_id, …).
+// Product a downstream application tip api-check: env_* emits repo.create(&tenant_id, …).
 
 pub trait InvoiceRepository {
     fn create(self, tenant_id: string) -> string

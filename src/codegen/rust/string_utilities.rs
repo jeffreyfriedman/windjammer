@@ -892,7 +892,7 @@ pub fn string_literal_needs_owned_coercion_with_enum(
     // Shared-ref emission / `&str` formals keep bare literals. Everything else that is
     // WJ text / owned `String` allocates — align with
     // `plain_string_formal_passes_owned_at_call_site` (owned until confirmed `&str`).
-    // Stale analyzer `Borrowed` must not suppress `.to_string()` (DB-301).
+    // Stale analyzer `Borrowed` must not suppress `.to_string()`.
     if crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, idx)
         || param_is_rust_str_ref(param_type)
     {
@@ -1222,7 +1222,7 @@ pub fn finalize_string_literal_call_site_arg<'ast>(
 ///
 /// `emitted_rust_ref_formals` is the source of truth — stale analyzer
 /// `Borrowed` alone must not rewrite when the formal still emits `String`
-/// (DB-110/111: `li_path.clone()` into owned formals).
+// (`li_path.clone()` into owned formals).
 ///
 /// Handles both explicit `.clone()` MethodCall AST and codegen-appended
 /// `.clone()` on an Identifier (auto-clone / tuple slot reuse).
@@ -1355,8 +1355,8 @@ pub fn strip_redundant_auto_clone_before_explicit_clone(obj_str: &mut String, me
     }
 }
 
-/// Terminal explicit-clone policy: demoted callees strip clone and borrow (DB-112/113);
-/// owned callees keep `.clone()` (DB-108/110).
+// Terminal explicit-clone policy: demoted callees strip clone and borrow;
+// owned callees keep `.clone()`.
 pub fn finalize_explicit_user_clone_call_site<'ast>(
     arg_expr: &Expression<'ast>,
     prepared_arg: &str,
@@ -1375,7 +1375,7 @@ pub fn finalize_explicit_user_clone_call_site<'ast>(
     let pidx = sig.arg_param_index(arg_index);
     // Demoted `&str` / shared-ref formals: strip stale `.clone()` and reborrow.
     // Caller owned `string` params must still pass `&binding` (not `binding.clone()`) —
-    // Rust cannot coerce owned `String` into `&str`, and keeping the clone was DB-270 RED.
+    // Rust cannot coerce owned `String` into `&str`, and keeping the clone was RED.
     if crate::ir::signature_bridge::call_site_wants_shared_text_ref(sig, pidx)
         || crate::ir::emission_contract::callee_emits_shared_rust_ref_param(sig, pidx)
     {
@@ -1425,7 +1425,7 @@ pub fn finalize_explicit_user_clone_call_site<'ast>(
     restore_stripped_explicit_user_clone(arg_expr, prepared_arg, coerced)
 }
 
-/// Restore `.clone()` when IR / borrow passes stripped an explicit user clone (DB-108).
+// Restore `.clone()` when IR / borrow passes stripped an explicit user clone.
 pub fn restore_stripped_explicit_user_clone(
     arg_expr: &Expression,
     prepared_arg: &str,
@@ -1462,7 +1462,7 @@ pub fn restore_stripped_explicit_user_clone(
 ///
 /// Only rewrite when the binding is in `emitted_rust_ref_formals` (codegen
 /// confirmed `&str`). Stale analyzer Borrowed with owned `String` emit must keep
-/// `.clone()` (DB-110/111).
+// `.clone()`.
 pub fn lower_explicit_clone_call<'ast>(
     object: &Expression<'ast>,
     obj_str: &str,
@@ -1655,7 +1655,7 @@ mod tests {
     #[test]
     fn free_fn_owned_string_formal_with_stale_borrowed_owns_literal() {
         use crate::analyzer::{FunctionSignature, OwnershipMode};
-        // DB-301: `validation_entry(algorithm: string, …)` emits `String` but analyzer
+        // `validation_entry(algorithm: string, …)` emits `String` but analyzer
         // may still say Borrowed — literals must get `.to_string()`, not stay bare `&str`.
         let sig = FunctionSignature {
             name: "validation_entry".into(),
@@ -1677,7 +1677,7 @@ mod tests {
         };
         assert!(
             string_literal_needs_owned_coercion_with_enum(Some(&sig), 0, None, None, None),
-            "free-fn owned String formal must own string literals (DB-301)"
+            "free-fn owned String formal must own string literals"
         );
     }
 

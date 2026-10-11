@@ -9,7 +9,7 @@
 // - Struct type names
 // - Entry points (@compute, @vertex, @fragment)
 //
-// Used by game-host's ShaderGraph builder for compile-time validation.
+// Used by a game engine project's ShaderGraph builder for compile-time validation.
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ShaderMetadata {

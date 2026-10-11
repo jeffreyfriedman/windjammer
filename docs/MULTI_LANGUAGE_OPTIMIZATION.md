@@ -245,7 +245,7 @@ While optimizations are automatic, you can configure them:
 
 ### Rust
 ```rust
-use game_host_framework::runtime_optimizer::*;
+use game_framework::runtime_optimizer::*;
 
 let mut config = RuntimeOptimizerConfig::default();
 config.enable_auto_batching = true;

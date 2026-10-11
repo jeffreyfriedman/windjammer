@@ -240,7 +240,7 @@ impl AutoCloneAnalysis {
                     map,
                     registry,
                 );
-                // DB-418: a then/else that always `return`s is exclusive vs. statements
+                // a then/else that always `return`s is exclusive vs. statements
                 // after the `if`. Do not treat those sibling-path uses as "later".
                 let then_lens: HashMap<String, usize> =
                     map.iter().map(|(k, v)| (k.clone(), v.len())).collect();
@@ -1133,7 +1133,7 @@ impl AutoCloneAnalysis {
                 ..
             } => {
                 // Explicit `.clone()` masks bare binding moves in reuse analysis;
-                // still register a move so preserve_for_reuse / auto-clone fire (DB-108).
+                // still register a move so preserve_for_reuse / auto-clone fire.
                 if crate::type_classification::is_language_level_explicit_clone(method)
                     && arguments.is_empty()
                     && matches!(&**object, Expression::Identifier { .. })
@@ -1595,7 +1595,7 @@ impl AutoCloneAnalysis {
             // an outer scope (each iteration re-uses the same binding). But
             // loop-scoped variables (for-loop pattern vars, let bindings inside
             // the body) get fresh bindings each iteration — no clone needed.
-            // Function-exiting `return` inside a loop does not re-enter (DB-418).
+            // Function-exiting `return` inside a loop does not re-enter.
             let loop_capture_needs_clone = move_usage.in_loop
                 && !definition_is_loop_scoped
                 && !move_usage.in_diverging_early_return;
@@ -1648,7 +1648,7 @@ impl AutoCloneAnalysis {
 
             for field_move in &field_moves {
                 // Ignore projection-parent Reads (`buf` in later `buf.next`) — Rust allows
-                // moving distinct fields of an owned struct without cloning (DB-096).
+                // moving distinct fields of an owned struct without cloning.
                 let root_used_later = root_usages.iter().any(|u| {
                     u.kind != UsageKind::Definition
                         && !u.is_projection_parent
@@ -1668,14 +1668,14 @@ impl AutoCloneAnalysis {
                 // Exception: owned-self wither (`let mut items = self.items` then
                 // reconstruct `Builder { graph: self.graph, … }`, or struct-lit-only
                 // `PassBuilder { graph: self.graph, … }`) — analyzer 2.5 keeps `self`
-                // Owned; distinct fields may move (DB-410).
+                // Owned; distinct fields may move.
                 if root == "self"
                     && Self::self_field_has_writeback(statements, path, field_move.statement_idx)
                 {
                     continue;
                 }
                 // Only force-clone every `self.field` when there is no owned-self field
-                // move in the body. Struct-lit withers count as moves (DB-410 product
+                // move in the body. Struct-lit withers count as moves (product
                 // `PassBuilder::shader`) — previously only `let x = self.field` did.
                 let self_always_clone =
                     root == "self" && !Self::stmts_contain_owned_self_field_move(statements);
@@ -1755,7 +1755,7 @@ impl AutoCloneAnalysis {
     }
 
     /// `Vox::new(self.scene)` / `Builder { graph: self.graph }` are owned-self
-    /// field moves (DB-414 / DB-410), same as a let.
+    // field moves, same as a let.
     fn expr_contains_self_field_move(expr: &Expression) -> bool {
         if Self::expr_is_self_field_move(expr) {
             return true;
@@ -1788,7 +1788,7 @@ impl AutoCloneAnalysis {
     /// Patterns:
     /// - `let mut x = self.field; …; self.field = x`
     /// - `let r = f(self.field); …; self.field = r.subfield`
-    /// - `map = f(map, …)` (direct binding writeback — DB-084)
+    // - `map = f(map, …)` (direct binding writeback)
     pub fn self_field_has_writeback(
         statements: &[&Statement],
         field_path: &str,
@@ -1800,8 +1800,8 @@ impl AutoCloneAnalysis {
     /// Statement indices where ownership is restored after a move of `binding`.
     ///
     /// Patterns (same global counter scheme as [`build_usage_map`]):
-    /// - `binding = f(binding, …)` (DB-084)
-    /// - `let t = f(binding, …); …; binding = t.i` (DB-087 tuple writeback)
+    // - `binding = f(binding, …)`
+    // - `let t = f(binding, …); …; binding = t.i` (tuple writeback)
     /// - `let (binding, …) = f(binding, …)` / `let binding = f(binding, …)` (same-stmt restore)
     fn collect_direct_writeback_indices(
         statements: &[&Statement],
@@ -1868,7 +1868,7 @@ impl AutoCloneAnalysis {
             }
 
             // Same-stmt ownership restore: `let binding = f(binding, …)` or
-            // `let (binding, …) = f(binding, …)` — move then rebind (Row chain / DB-087).
+            // `let (binding, …) = f(binding, …)` — move then rebind (Row chain).
             if let Statement::Let { pattern, value, .. } = stmt {
                 if Self::pattern_binds_identifier(pattern, binding)
                     && Self::expr_call_or_method_has_field_arg(value, binding)
@@ -1877,7 +1877,7 @@ impl AutoCloneAnalysis {
                 }
             }
 
-            // DB-087: `let t = f(binding, …); …; binding = t.0` — mark the Let (move site).
+            // `let t = f(binding, …); …; binding = t.0` — mark the Let (move site).
             if let Statement::Let {
                 pattern: Pattern::Identifier(tmp),
                 value,
@@ -2114,7 +2114,7 @@ impl AutoCloneAnalysis {
     /// Find variables that are bound to string literals
     /// These don't need .clone() because they're just &str references.
     /// Mutable bindings (`let mut s = "…"`) are promoted to owned `String` when
-    /// reassigned — they still move at owned call sites and need reuse clones (DB-143).
+    // reassigned — they still move at owned call sites and need reuse clones.
     fn find_string_literal_vars<'ast>(&mut self, statements: &[&'ast Statement<'ast>]) {
         for stmt in statements {
             match stmt {
@@ -2184,14 +2184,14 @@ struct Usage {
     in_loop: bool,
     /// True when this use exists only because a field/index chain projected through
     /// the binding (`buf` in `buf.scores`). Distinct field moves must not treat these
-    /// as whole-root reuse (DB-096).
+    // as whole-root reuse.
     is_projection_parent: bool,
     /// True when this use is in a Match arm expression body (arms are exclusive).
     /// Multiple moves of the same binding across Ok/Err arms must not force `.clone()`
     /// (P3.332 `recv` returning `rx` from each arm).
     in_exclusive_match_arm: bool,
     /// True when this use is in an `if` then/else that unconditionally `return`s
-    /// (DB-418). Later sibling-path uses after the `if` are not reachable.
+    /// Later sibling-path uses after the `if` are not reachable.
     in_diverging_early_return: bool,
     /// Last statement index belonging to that diverging block (inclusive).
     diverging_region_end: usize,
@@ -2199,7 +2199,7 @@ struct Usage {
 
 impl Usage {
     /// Later-statement reuse on a complementary path after a diverging `return`
-    /// is not reachable (DB-418). Same-block uses still conflict.
+    // is not reachable. Same-block uses still conflict.
     fn has_reachable_later_use(&self, other: &Usage) -> bool {
         if other.statement_idx <= self.statement_idx {
             return false;

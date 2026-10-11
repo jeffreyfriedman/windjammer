@@ -11,11 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-316: owned `String` formals must not receive `&out` (wave1 scale status).
+//! owned `String` formals must not receive `&out` (wave1 scale status).
 //!
 //! Product tip-out/gen:
 //!   `out = wave1_scale_status_append_rows(&out, …)` with `out: String` → E0308.
-//! Twin of DB-314 (hardware report `append_bool(&out)`).
+//! Twin of (hardware report `append_bool(&out)`).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

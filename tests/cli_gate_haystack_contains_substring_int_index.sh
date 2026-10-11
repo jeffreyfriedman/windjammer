@@ -2,10 +2,11 @@
 # CLI emit gate for P3.242 — substring int indices must not mix i64 + 1_usize.
 # Exit 0 = GREEN. Exit 1 = RED (expected on tip today).
 set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -z "${WJ:-}" ]]; then
-  if [[ -x "/home/user/src/wj/windjammer/target/release/wj" ]]; then
-    WJ="/home/user/src/wj/windjammer/target/release/wj"
+  if [[ -x "$REPO_ROOT/target/release/wj" ]]; then
+    WJ="$REPO_ROOT/target/release/wj"
   else
     WJ="$HOME/.cargo/bin/wj"
   fi

@@ -51,7 +51,7 @@ pub(crate) fn strip_partial_literal_float_casts(s: &str) -> String {
         .replace("_usize as f64", "_usize")
 }
 
-/// Strip redundant same-width int casts (`0_i32 as i32` → `0_i32`) — DB-352.
+// Strip redundant same-width int casts (`0_i32 as i32` → `0_i32`) — .
 pub fn strip_redundant_same_width_int_cast(expr: &mut String) {
     const PAIRS: &[(&str, &str)] = &[
         ("_i32", " as i32"),

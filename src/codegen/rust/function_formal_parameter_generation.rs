@@ -109,7 +109,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.remove(&param.name);
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
-                // DB-285: Vec that only forwards as a call argument keeps the WJ owned
+                // Vec that only forwards as a call argument keeps the WJ owned
                 // formal even when the next sibling already demoted (`median_pair: &Vec`).
                 // Reuse sites clone into this slot; do not cascade `&Vec` up the chain.
                 if param.name != "self"
@@ -275,7 +275,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.inferred_mut_borrowed_params.remove(&param.name);
                         self.str_ref_optimized_params.remove(&param.name);
                         // Keep owned (explicit `.clone()`), but still emit `mut` when a
-                        // clone peels to `&mut v` into a MutBorrowed formal (DB-161).
+                        // clone peels to `&mut v` into a MutBorrowed formal.
                         let type_str = self.type_to_rust(&param.type_);
                         let mut_prefix = if param.is_mutable
                             || self.variable_needs_mut(&param.name)
@@ -321,7 +321,7 @@ impl<'ast> CodeGenerator<'ast> {
                         self.inferred_mut_borrowed_params.insert(param.name.clone());
                         self.inferred_borrowed_params.remove(&param.name);
                         // Record slot before early return so later callers get `mut`
-                        // bindings when peeling `v.clone()` → `&mut v` (DB-161).
+                        // bindings when peeling `v.clone()` → `&mut v`.
                         let user_arg_idx = func
                             .parameters
                             .iter()
@@ -458,7 +458,7 @@ impl<'ast> CodeGenerator<'ast> {
                         &param.name,
                         func,
                     );
-                // DB-101: opaque cross-module `&T` wrappers keep owned outer formals.
+                // opaque cross-module `&T` wrappers keep owned outer formals.
                 // P3.669: pure Custom→same-type shared-ref forwarders demote instead.
                 let cross_module_borrow_keep_owned = param.name != "self"
                     && matches!(&param.type_, Type::Custom(_))
@@ -737,7 +737,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.insert(param.name.clone());
                     return format!("{}: &str", param.name);
                 }
-                // DB-110: explicit `.clone()` into AST-owned `string` callees keeps caller `String`.
+                // explicit `.clone()` into AST-owned `string` callees keeps caller `String`.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
@@ -751,7 +751,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.inferred_borrowed_params.remove(&param.name);
                     return format!("{}: String", param.name);
                 }
-                // DB-112/113: explicit `.clone()` into demoted borrow callees keeps caller owned.
+                // explicit `.clone()` into demoted borrow callees keeps caller owned.
                 if param.name != "self"
                     && !self.is_type_copy(&param.type_)
                     && !self.in_trait_impl
@@ -787,9 +787,9 @@ impl<'ast> CodeGenerator<'ast> {
                     return format!("{}: {}", param.name, self.type_to_rust(&param.type_));
                 }
                 // Runtime AsRef<str> forwards (`strings::is_empty` + `.len()`) keep owned
-                // `String` formals before blackboard-style demotion (DB-110/111).
+                // `String` formals before blackboard-style demotion.
                 // Text-returning helpers (`parse_body` → `string`) skip this pin so
-                // Phase-2 can emit `&str` — DB-110/111 stay owned via non-text return.
+                // Phase-2 can emit `&str` — stay owned via non-text return.
                 if param.name != "self"
                     && crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
                     && !self.in_trait_impl
@@ -1396,7 +1396,7 @@ impl<'ast> CodeGenerator<'ast> {
                         OwnershipMode::MutBorrowed,
                     )
                 {
-                    // DB-414: MutBorrowed sibling helpers (`setup_materials` /
+                    // MutBorrowed sibling helpers (`setup_materials` /
                     // `build_scene`) must not force `&mut self` when the body still
                     // partial-moves a field into an owned ctor then assigns another.
                     if self.self_field_partial_move_needs_owned_receiver(&analyzed.decl) {
@@ -1435,7 +1435,7 @@ impl<'ast> CodeGenerator<'ast> {
                                 self.inferred_mut_borrowed_params.remove("self");
                                 return "mut self".to_string();
                             }
-                            // DB-414: stale MutBorrowed upgrade must not beat owned
+                            // stale MutBorrowed upgrade must not beat owned
                             // partial-move receivers.
                             if self.self_field_partial_move_needs_owned_receiver(&analyzed.decl) {
                                 self.inferred_borrowed_params.remove("self");
@@ -1504,7 +1504,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     }
                                     OwnershipMode::MutBorrowed => {
                                         // P3.584: MutBorrowed upgrade / inference must not
-                                        // force `&mut self` over DB-414 owned partial moves.
+                                        // force `&mut self` over owned partial moves.
                                         if !self.in_trait_impl
                                             && (body_modifies
                                                 && super::self_analysis::function_consumes_self(
@@ -1912,7 +1912,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     "mut self"
                                 } else {
                                     // P3.584: may be `&mut self` (clone under mut) or
-                                    // owned `mut self` (DB-414 partial move).
+                                    // owned `mut self` (partial move).
                                     self.owned_self_receiver(&analyzed.decl)
                                 };
                                 // Sync borrow tracking with the *emitted* receiver —
@@ -1967,7 +1967,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     {
                                         // P3.584: mutating + field-move consume → prefer
                                         // owned_self_receiver (`&mut self` + Clone, or
-                                        // DB-414 owned partial-move).
+                                        // owned partial-move).
                                         if returns_self {
                                             if body_modifies {
                                                 "mut self"
@@ -3100,7 +3100,7 @@ impl<'ast> CodeGenerator<'ast> {
                             // Free functions included (wal `replay_all(path)`).
                             // Discard-only `let _ = path` / `let _ = (path, …)` also demote — analyzer
                             // often keeps Owned for the move-into-discard, which must not win here.
-                            // Pure unused + analyzer Owned stay Owned (DB-152): sibling APIs that
+                            // Pure unused + analyzer Owned stay Owned: sibling APIs that
                             // return/consume the same `string` formal must share call-site
                             // `.to_string()` (claim_next vs heartbeat_tick).
                             // Runtime AsRef modules: keep owned `String` + `&` at the call
@@ -3599,7 +3599,7 @@ impl<'ast> CodeGenerator<'ast> {
                                     } else if self.is_public_owned_non_copy_formal_api(param, func)
                                         && !self.for_loop_borrow_needed.contains(&param.name)
                                     {
-                                        // DB-175/178: pub module APIs keep owned Vec/Custom formals.
+                                        // pub module APIs keep owned Vec/Custom formals.
                                         // Exception: `for v in vertices { f(vertices, v) }` demotes to `&Vec`.
                                         // Clear str_ref so call sites do not over-borrow into String.
                                         self.inferred_borrowed_params.remove(&param.name);
@@ -3883,7 +3883,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
             return false;
         }
-        // DB-157 / DB-357: `impl Into<String>` is only for `self` methods
+        // `impl Into<String>` is only for `self` methods
         // (builders like `StatusChip::label`). Associated constructors
         // (`ConsoleCommand::new` / `StatusChip::new` without `self`) keep concrete
         // `String` — Rust callers use `.to_string()` / `.into()` at the call site.
@@ -3891,7 +3891,7 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         // `impl Into<String>` cannot participate in `==` / ordering against `&str`
-        // (DB-139). Keep a concrete `String` formal when the body compares the param.
+        // Keep a concrete `String` formal when the body compares the param.
         if Self::param_used_in_binary_comparison(&param.name, &func.body) {
             return false;
         }
@@ -4087,7 +4087,7 @@ impl<'ast> CodeGenerator<'ast> {
     /// Pub free functions returning `string` that only pass a param into builder/method args
     /// (`grid(left)` → `Tile::value_html(left)`) — emit `impl Into<String>` for `&str` callers.
     ///
-    /// Not for borrow-only sites (`push_str(&str)`): those must stay `String`/`&str` (DB-228).
+    // Not for borrow-only sites (`push_str(&str)`): those must stay `String`/`&str`.
     /// Not for private helpers (`check_nonempty` → `require_nonempty`): Into is a pub Rust
     /// boundary encoding; private formals that rebind via `own(field)` must stay `String` so
     /// call-site `into_string_formal_params` does not paint shadowed locals with `.into()`.
@@ -4441,7 +4441,7 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         let body = func.body.as_slice();
-        // Unused pub free-fn `string` formals keep Owned (DB-152): sibling APIs
+        // Unused pub free-fn `string` formals keep Owned: sibling APIs
         // that consume the same formal (`claim_next`) must share call-site
         // `.to_string()`. Unused pub *method* formals still demote to `&str`
         // (BehaviorTree::add_condition literal call sites).
@@ -4608,13 +4608,13 @@ impl<'ast> CodeGenerator<'ast> {
         }
         // Instance methods (`fn foo(self, …)`) still demote freely. Associated functions
         // (`impl T { pub fn new(palette: MaterialPalette) }`) are public API like free
-        // functions — keep owned non-Copy formals (DB-398 VoxelMaterialEditor::new).
+        // functions — keep owned non-Copy formals (VoxelMaterialEditor::new).
         let is_associated_fn =
             func.parent_type.is_some() && !func.parameters.iter().any(|p| p.name == "self");
         if func.parent_type.is_some() && !is_associated_fn {
             return false;
         }
-        // DB-398: associated `new(T)` with owned Custom formal — keep owned before
+        // associated `new(T)` with owned Custom formal — keep owned before
         // pure-forward / registry / delegation-emit demotion. Do not use the field-proj
         // exclusion here: `palette.copy()` is currently classified as field-proj and would
         // wrongly demote MaterialPalette (Vec-backed) constructors.
@@ -4625,7 +4625,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             // Readonly field/index scans, `&self` methods, and unused bindings are
             // `&T`. Owned-self methods and stores (`palette.copy()`, field init) stay
-            // owned (DB-398).
+            // owned.
             let body = func.body.as_slice();
             let consumed = self.param_has_owning_method_use(body, &param.name, func)
                 || self.param_stored_in_owned_payload(body, &param.name)
@@ -4638,7 +4638,7 @@ impl<'ast> CodeGenerator<'ast> {
                 return true;
             }
         }
-        // DB-407: associated `new(data: Vec<u8>)` stored into a field must stay owned
+        // associated `new(data: Vec<u8>)` stored into a field must stay owned
         // even when WJ omits `pub` (codegen may emit `pub fn`; `&Vec` + `.clone()` is wrong).
         if is_associated_fn
             && Self::param_type_is_owned_forward_container(&param.type_)
@@ -4654,7 +4654,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.param_pure_custom_same_type_shared_ref_should_demote(param, func) {
             return false;
         }
-        // DB-175/190: pub `Vec` wire/decode/on_startup APIs stay owned when multipass
+        // pub `Vec` wire/decode/on_startup APIs stay owned when multipass
         // `restore_pub_owned_non_copy_api_formals` locked the registry to Owned.
         // Readonly pub probes (`finish_execute`, `buf_len`) still demote when registry
         // converged to Borrowed from bare-pass caller hints.
@@ -4663,7 +4663,7 @@ impl<'ast> CodeGenerator<'ast> {
             if !readonly_index_scan && self.pub_vec_non_copy_custom_indexed_api(func, param) {
                 return true;
             }
-            // DB-216/275/276: bare forward into owned FFI / owned siblings must keep Owned
+            // bare forward into owned FFI / owned siblings must keep Owned
             // even when registry stubs are incomplete during library multipass.
             if self.param_passes_to_wj_owned_sibling_call(func.body.as_slice(), &param.name, func)
                 || self.param_only_forwards_to_emitted_owned_callees(
@@ -4712,7 +4712,7 @@ impl<'ast> CodeGenerator<'ast> {
                 || self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
         }
-        // DB-178: pub Custom only when multipass restore_pub locked the global registry
+        // pub Custom only when multipass restore_pub locked the global registry
         // to owned (product live_publishable). Readonly `Graph` helpers stay demotable.
         if matches!(&param.type_, Type::Custom(_))
             && !crate::codegen::rust::types::is_windjammer_text_type(&param.type_)
@@ -4726,7 +4726,7 @@ impl<'ast> CodeGenerator<'ast> {
             {
                 return false;
             }
-            // DB-081: field/index reads + bare forward into shared-ref callees
+            // field/index reads + bare forward into shared-ref callees
             // (`out_degree(view)` → `vertex_index(&view)`). Signature-driven — not a
             // method-name heuristic; requires every call site to expect Borrowed.
             if !self.param_has_field_or_index_move_binding(func.body.as_slice(), &param.name)
@@ -4766,7 +4766,7 @@ impl<'ast> CodeGenerator<'ast> {
             }) {
                 return true;
             }
-            // DB-398: pub associated `new(palette: MaterialPalette)` — source declared
+            // pub associated `new(palette: MaterialPalette)` — source declared
             // owned; keep it even when registry has not locked Owned and body only calls
             // `palette.copy()` (owning-method detection may lag on same-crate methods).
             if func.parent_type.is_some() {
@@ -4775,7 +4775,7 @@ impl<'ast> CodeGenerator<'ast> {
             return self.param_has_owning_method_use(func.body.as_slice(), &param.name, func)
                 || self.param_stored_in_owned_payload(func.body.as_slice(), &param.name);
         }
-        // DB-191: multipass restore keeps pub `string` owned when stored in payload
+        // multipass restore keeps pub `string` owned when stored in payload
         // (`pg_wire_parse` name/sql) even if per-file payload walk misses loop assignments.
         if crate::codegen::rust::types::is_windjammer_text_type(&param.type_) {
             let param_idx = func

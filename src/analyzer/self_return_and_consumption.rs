@@ -1103,7 +1103,7 @@ impl<'ast> Analyzer<'ast> {
             Expression::Block { statements, .. } => statements
                 .iter()
                 .any(|s| self.statement_moves_non_copy_self_field(s, registry)),
-            // DB-414: `Vox::new(self.scene)` moves a non-Copy field through a call arg.
+            // `Vox::new(self.scene)` moves a non-Copy field through a call arg.
             // Without this, impl-self inference only saw later `self.grid = 1` and
             // emitted `&mut self` + `self.scene.clone()`.
             // P3.570: `fetch_note(self.store, …)` with Borrowed formal is a reborrow, not a move.
@@ -1139,7 +1139,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Call/method arguments pass `self.field` by value. Unknown field types
-    /// are moves (DB-414) — unlike bare FieldAccess reads, which stay conservative.
+    // are moves — unlike bare FieldAccess reads, which stay conservative.
     /// Skip when the resolved formal is Borrowed/MutBorrowed (P3.570).
     /// Windjammer `string` fields clone under borrow and do not force owned `self`.
     fn call_arg_moves_non_copy_self_field(

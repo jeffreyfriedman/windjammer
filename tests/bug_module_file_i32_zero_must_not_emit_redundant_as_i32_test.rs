@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-352: i32 zero return must not emit redundant `0_i32 as i32`.
+//! i32 zero return must not emit redundant `0_i32 as i32`.
 //!
 //! Tip output for a game project cluster (14+ files), e.g. `audio/audio_mixer.rs`:
 //!   `0_i32 as i32` on else / early-return arms already typed as i32.

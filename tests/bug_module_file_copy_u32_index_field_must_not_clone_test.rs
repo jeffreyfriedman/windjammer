@@ -11,11 +11,11 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-376: indexed Copy u32 field must not emit `].clone().buffer_id` / `.buffer_id.clone()`.
+//! indexed Copy u32 field must not emit `].clone().buffer_id` / `.buffer_id.clone()`.
 //!
 //! Tip output for a game project `rendering/shader_graph_compiler.rs`:
 //!   `lifetimes[li].clone().buffer_id`
-//! WJ source is `lifetimes[li].buffer_id` (Copy u32). Twin of DB-370 / DB-343.
+//! WJ source is `lifetimes[li].buffer_id` (Copy u32). Twin of .
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

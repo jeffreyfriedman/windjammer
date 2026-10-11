@@ -151,7 +151,7 @@ pub fn merge_wj_meta_signatures_and_copy_structs(
 
 /// Load each external dependency's `metadata.json` and register both bare and
 /// `crate_key::fn` signature keys so qualified call sites resolve under IR
-/// fail-closed (DB-094).
+// fail-closed.
 pub fn merge_external_crate_metadata_with_aliases(
     external_paths: &HashMap<String, std::path::PathBuf>,
     registry: &mut crate::analyzer::SignatureRegistry,

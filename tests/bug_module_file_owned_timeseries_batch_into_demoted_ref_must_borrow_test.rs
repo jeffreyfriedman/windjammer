@@ -10,12 +10,12 @@
     feature = "integration_tests",
 ))]
 
-//! DB-212: owned `TimeseriesIngestBatch` into demoted `&TimeseriesIngestBatch` must borrow.
+//! owned `TimeseriesIngestBatch` into demoted `&TimeseriesIngestBatch` must borrow.
 //!
 //! Product residual, tip-out/gen ops_full_host:
 //!   `timeseries_ingest_batch_point_count(batch: &TimeseriesIngestBatch)`
 //!   call `point_count(batch)` with owned batch → E0308.
-//! Twin of DB-181/203/208.
+//! Twin of .
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

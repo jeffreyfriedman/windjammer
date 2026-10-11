@@ -18,7 +18,7 @@ fn parent_has_manifest(dir: &Path) -> bool {
 
 /// True for manifests that must not become the `.wj-cache` project root.
 fn is_auxiliary_nested_manifest(dir: &Path) -> bool {
-    // Auto-generated `src/Cargo.toml` inside a real crate (e.g. game-host-core/src/).
+    // Auto-generated `src/Cargo.toml` inside a real crate (e.g. game_core/src/).
     if dir.file_name().and_then(|n| n.to_str()) == Some("src") && parent_has_manifest(dir) {
         return true;
     }
@@ -328,7 +328,7 @@ pub(in crate::metadata) fn merge_crate_metadata_file(
 }
 
 /// Like [`merge_crate_metadata_file`], and when `crate_alias` is set also registers
-/// `alias::fn` keys for each bare function (DB-094 qualified external calls).
+// `alias::fn` keys for each bare function (qualified external calls).
 pub(in crate::metadata) fn merge_crate_metadata_file_with_alias(
     path: &Path,
     registry: &mut crate::analyzer::SignatureRegistry,

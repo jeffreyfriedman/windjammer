@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-434: Copy `const i32` into owned call formals must not `.clone()`.
+//! Copy `const i32` into owned call formals must not `.clone()`.
 //!
 //! Product `scene/station_builder.rs`:
 //!   `VoxelGrid::new(GRID.clone(), GRID.clone(), GRID.clone())`
 //! WJ is `VoxelGrid::new(GRID, GRID, GRID)`.
-//! Distinct from DB-426 (`LEAF_FLAG.clone()` on **assign**), DB-428 (local in
-//! println), and DB-385 (`f32::MAX.clone()` assoc path).
+//! Distinct from (`LEAF_FLAG.clone()` on **assign**), (local in
+//! println), and (`f32::MAX.clone()` assoc path).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

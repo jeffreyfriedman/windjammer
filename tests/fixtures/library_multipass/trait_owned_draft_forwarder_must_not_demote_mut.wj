@@ -1,5 +1,5 @@
 // FAILING REPRO — thin trait-impl forwarder must keep owned Draft formal
-// matching the trait (DownstreamApp env_channel_adapter / env_inventory_repository).
+// matching the trait (a downstream application env_channel_adapter / env_inventory_repository).
 //
 // Tip RED: trait keeps `draft: Draft`, impl emits `draft: &mut Draft` → E0053;
 // composition free fn may emit `deps: &Self` when Draft is demoted.

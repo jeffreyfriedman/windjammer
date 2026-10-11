@@ -299,7 +299,7 @@ pub mod ecs_api {
 
 use std::ffi::{c_char, CString};
 use std::ptr;
-use game_host_framework::ecs::*;
+use game_framework::ecs::*;
 
 /// Opaque handle to an entity
 #[repr(C)]

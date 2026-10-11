@@ -11,7 +11,7 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-328: i64 loop counters from negative init must not take `_i32` lit peers.
+//! i64 loop counters from negative init must not take `_i32` lit peers.
 //!
 //! Tip output for a game project `ai/npc_behavior.rs` SearchState::new:
 //!   `let mut i = -1_i64; while i <= 1_i32` / `i != 0_i32` → E0308/E0277.

@@ -11,13 +11,13 @@
     feature = "codegen_tests",
 ))]
 
-//! DB-470: an owned `Vec` return passed into an owned formal must not `.clone()`.
+//! an owned `Vec` return passed into an owned formal must not `.clone()`.
 //!
 //! Product `editor/csg.rs` `csg_union` / `csg_subtract` / `csg_intersect`:
 //!   `build_bsp_from_polygons(clone_polygons(&a).clone())`
 //! WJ is `build_bsp_from_polygons(clone_polygons(a))`.
 //! `clone_polygons` already returns `Vec<CsgPolygon>`.
-//! Distinct from Copy-element `.clone()` gates (DB-464 through DB-469).
+//! Distinct from Copy-element `.clone()` gates (through ).
 
 #[path = "common/integration_test_helpers.rs"]
 mod integration_test_helpers;

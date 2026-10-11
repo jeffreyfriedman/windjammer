@@ -186,7 +186,7 @@ This release reinforces the **explicit mutability** philosophy and improves the 
 This release represents a major milestone: **90+ bug fixes** through rigorous TDD + dogfooding methodology, resulting in a **production-ready compiler** that generates idiomatic, Clippy-clean Rust code across all platforms.
 
 ### Major Achievements
-- ✅ **Zero compilation errors** in game-host (303 .wj files)
+- ✅ **Zero compilation errors** in a game engine project (303 .wj files)
 - ✅ **Zero Clippy warnings** in generated code and compiler code
 - ✅ **246 tests passing** (237 library + 9 new integration tests)
 - ✅ **Cross-platform compatibility** (Ubuntu, macOS, Windows)
@@ -239,7 +239,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 
 ## [0.42.0] - 2026-02-10 (Development Branch)
 ### Focus: Dogfooding & Game Engine Improvements
-- TDD dogfooding with game-host engine
+- TDD dogfooding with a game engine project engine
 - Compiler fixes discovered through real game development
 
 ---
@@ -379,7 +379,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 - Zero regressions introduced
 
 ### Dogfooding
-- **game-host voxel system**: 4/4 files now compile (405 lines)
+- **a game engine project voxel system**: 4/4 files now compile (405 lines)
 - Validated real-world patterns: guard clauses, coordinate conversion, bounds checking
 - Unblocked Phase 2: 3D mesh generation in Windjammer
 
@@ -509,7 +509,7 @@ This release represents a major milestone: **90+ bug fixes** through rigorous TD
 - **String Type Inference**: Auto-detect `&str` vs `String` and insert `.to_string()` when needed
 - **Nested Generics Parser**: Support for `HashMap<K, Vec<V>>` and `>>` token splitting
 - **Doc Comments**: `///` style comments for functions, structs, enums, fields, and variants
-- **Path Dependency Resolution**: Auto-detect local crates (e.g., game-host-core)
+- **Path Dependency Resolution**: Auto-detect local crates (e.g., a game engine project)
 - **LSP Integration (PoC)**: Quick-fixes for missing `mut`, auto-add `&` and `&mut`
 
 ### Fixed
@@ -875,9 +875,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Users who need UI should explicitly add `windjammer-ui` to their `Cargo.toml`
   
 - **Removed Game stdlib** - `std::game` module removed from compiler stdlib
-  - Game functionality should now be provided by the separate `game-host` crate
+  - Game functionality should now be provided by the separate a game engine project crate
   - Clean separation: compiler no longer depends on or references game framework
-  - Users who need game features should explicitly add `game-host` to their `Cargo.toml`
+  - Users who need game features should explicitly add a game engine project to their `Cargo.toml`
 
 ### Fixed
 - Fixed cargo publish issue: added version requirement to `windjammer` dependency in `windjammer-lsp`
@@ -927,7 +927,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ **Rust Target** - Added `CompilationTarget::Rust` enum variant
 - ✅ **Smart Execution** - WASM apps show build instructions, native apps run directly
 - ✅ **Import Handling** - Fixed braced import parsing for Cargo.toml generation
-- ✅ **Framework Support** - Compiler handles both windjammer-ui and game-host-framework imports
+- ✅ **Framework Support** - Compiler handles both windjammer-ui and game_framework imports
 
 ### Fixed
 - **Critical**: Double reference/borrow bug in code generation (`&&` and `&mut &mut`)
@@ -952,7 +952,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for building apps, and a complete 2D/3D game engine. Write once, deploy to Web, Desktop, and Mobile - for both UI apps AND games. Same language, idiomatic Windjammer syntax, Rust performance.
 
 **Major Achievements**: 
-- Separated game engine into dedicated `game-host-framework` crate with full ECS, physics, and wgpu rendering backend
+- Separated game engine into dedicated `game_framework` crate with full ECS, physics, and wgpu rendering backend
 - Implemented key language features: `if let` patterns, fixed-size arrays `[T; N]`, closure compound assignments
 - 97/164 examples passing (59%), comprehensive test coverage
 
@@ -997,7 +997,7 @@ v0.34.0 introduces TWO major frameworks: a Svelte-inspired UI framework for buil
 - `new()` and `with_state()` constructors
 - `#[derive(Props)]` for component props
 
-**game-host-framework (Dedicated Game Engine):**
+**game_framework (Dedicated Game Engine):**
 - Entity-Component System (ECS) with World, Entity, Component
 - 2D/3D math (Vec2, Vec3, Mat4) with SIMD (glam)
 - 2D/3D physics (Rapier2D/3D integration)

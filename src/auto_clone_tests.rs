@@ -578,7 +578,7 @@ fn test_no_clone_needed_single_use() {
 
 #[test]
 fn test_distinct_owned_field_moves_do_not_clone() {
-    // DB-096: return_f64(buf.scores); return_f64(buf.next) — distinct fields.
+    // return_f64(buf.scores); return_f64(buf.next) — distinct fields.
     let func = FunctionDecl {
         name: "release".to_string(),
         is_pub: false,
@@ -1621,7 +1621,7 @@ fn test_field_move_then_format_reuse_needs_clone() {
 
 #[test]
 fn owned_self_wither_must_not_clone_distinct_fields() {
-    // DB-410: `let mut items = self.items; items.push(x); Builder { graph, items, label }`
+    // `let mut items = self.items; items.push(x); Builder { graph, items, label }`
     // Owned self may move distinct fields. `&self` getters still always-clone.
     let func = FunctionDecl {
         name: "push".to_string(),
@@ -1749,7 +1749,7 @@ fn owned_self_wither_must_not_clone_distinct_fields() {
 
 #[test]
 fn owned_self_ctor_arg_must_not_clone_moved_field() {
-    // DB-414: `let v = Vox::new(self.scene); self.grid = 1`
+    // `let v = Vox::new(self.scene); self.grid = 1`
     let func = FunctionDecl {
         name: "initialize".to_string(),
         is_pub: true,

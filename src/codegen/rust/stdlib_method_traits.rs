@@ -1294,7 +1294,7 @@ fn runtime_std_module_arg_needs_rust_borrow(
         return true;
     }
     // Borrowed + WJ-owned formal (no owned-emission record): keep auto-borrow for
-    // cross-crate / body-demoted `&str` contracts (`db_circuit::exists`). Owned
+    // cross-crate / body-demoted `&str` contracts (`graph_circuit::exists`). Owned
     // emission (`Some(false)` above) already returned false.
     runtime_wj_owned_rust_borrowed_param(sig, arg_index)
 }
@@ -1595,7 +1595,7 @@ pub fn is_collection_key_lookup_with_project(
         {
             return true;
         }
-        // DB-329: a type-qualified owned formal (`Vec::remove`, `String::remove`,
+        // a type-qualified owned formal (`Vec::remove`, `String::remove`,
         // `NoteStore::get`) is not a map key. Borrowed wrappers (`MapCell::get`)
         // still fall through to consensus below.
         if from_callee.is_some_and(|b| !is_map_type_name(b) && !is_set_type_name(b))
@@ -1915,7 +1915,7 @@ mod pattern_registry_tests {
             .get_signature("Vec::remove")
             .expect("Vec::remove in stdlib_meta");
         assert!(!is_collection_key_lookup(sig, 0, Some("Vec")));
-        // DB-329: unknown receiver must not inherit HashMap::remove Borrowed consensus.
+        // unknown receiver must not inherit HashMap::remove Borrowed consensus.
         assert!(
             !is_collection_key_lookup(sig, 0, None),
             "Vec::remove must not be a collection-key lookup when receiver_type is None"
@@ -2059,7 +2059,7 @@ mod pattern_registry_tests {
     #[test]
     fn runtime_borrow_is_signature_driven_not_module_name() {
         let mut sig = FunctionSignature::default();
-        sig.name = "db_circuit::exists".into();
+        sig.name = "graph_circuit::exists".into();
         sig.param_types = vec![Type::String];
         sig.formal_param_types = vec![Type::String];
         sig.param_ownership = vec![OwnershipMode::Borrowed];
@@ -2070,7 +2070,7 @@ mod pattern_registry_tests {
         assert!(
             runtime_std_param_needs_auto_borrow_resolved(
                 &reg,
-                "db_circuit::exists",
+                "graph_circuit::exists",
                 Some(&sig),
                 0
             ),
@@ -2083,7 +2083,7 @@ mod pattern_registry_tests {
         owned_reg.add_function(owned.name.clone(), owned.clone());
         assert!(!runtime_std_param_needs_auto_borrow_resolved(
             &owned_reg,
-            "db_circuit::exists",
+            "graph_circuit::exists",
             Some(&owned),
             0
         ));

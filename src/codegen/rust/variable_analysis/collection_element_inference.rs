@@ -93,7 +93,7 @@ impl<'ast> CodeGenerator<'ast> {
         {
             return Some(ty);
         }
-        // Callee `Vec<u64>` / `&Vec<u64>` beats default `vec![10]` → i32 (DB-127).
+        // Callee `Vec<u64>` / `&Vec<u64>` beats default `vec![10]` → i32.
         let body: Vec<&Statement<'_>> = if !self.full_function_body_snapshot.is_empty() {
             self.full_function_body_snapshot.iter().copied().collect()
         } else {
@@ -130,7 +130,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Defining-module signature and the local stub. An importer stub that dropped
-    /// `Vec<u64>` params must not hide the callee element (DB-127).
+    // `Vec<u64>` params must not hide the callee element.
     fn vec_elem_signature_candidates(&self, fn_name: &str) -> Vec<&FunctionSignature> {
         let lookup = self.signature_lookup_callee_name(fn_name);
         let mut out: Vec<&FunctionSignature> = Vec::new();

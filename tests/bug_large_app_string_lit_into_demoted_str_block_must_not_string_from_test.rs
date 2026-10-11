@@ -10,7 +10,7 @@
     feature = "integration_tests",
 ))]
 
-//! P3.376: downstream-screens `render_post_to_gl_block` — string lits / owned locals into
+//! P3.376: a large downstream application `render_post_to_gl_block` — string lits / owned locals into
 //! demoted `&str` formals must not emit `String::from("…")` / bare `String` (tip E0308).
 
 #[path = "common/integration_test_helpers.rs"]
@@ -32,7 +32,7 @@ fn render_post_to_gl_block(
     refresh_sel: string,
     token: string,
 ) -> string {
-    // Readonly uses only — demotes formals to `&str` (downstream-screens list_panels).
+    // Readonly uses only — demotes formals to `&str` (a large downstream application list_panels).
     let _ = kind_label.len()
     let _ = demo_id.len()
     let _ = post_path.len()
@@ -85,7 +85,7 @@ fn bad_owned_local_into_str(rs: &str) -> bool {
 }
 
 #[test]
-fn downstream_screens_string_lit_into_demoted_str_block_must_not_string_from() {
+fn large_app_string_lit_into_demoted_str_block_must_not_string_from() {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", MOD);
     test.add_file("panels.wj", PANELS);
@@ -122,7 +122,7 @@ pub fn render_aging(json: string) -> string {
 "#;
 
 #[test]
-fn downstream_screens_owned_string_into_demoted_str_must_borrow() {
+fn large_app_owned_string_into_demoted_str_must_borrow() {
     let mut test = MultiFileTest::new();
     test.add_file("mod.wj", AGING_MOD);
     test.add_file("aging.wj", AGING);

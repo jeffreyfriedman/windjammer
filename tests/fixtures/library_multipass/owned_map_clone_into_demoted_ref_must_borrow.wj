@@ -8,7 +8,7 @@ pub fn get(map: GraphVertexI64Map, vertex: int) -> int {
 }
 
 /// Multi-use owned map: auto-clone would emit `get(map.clone(), …)` into demoted
-/// `&GraphVertexI64Map` — must peel to `get(&map, …)` (DB-222 / tip WCC/SSSP).
+// `&GraphVertexI64Map` — must peel to `get(&map, …)` (tip WCC/SSSP).
 pub fn read_twice(map: GraphVertexI64Map, vertex: int) -> int {
     let a = get(map, vertex)
     let b = get(map, vertex)

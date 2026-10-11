@@ -11,7 +11,7 @@
     feature = "integration_tests",
 ))]
 
-//! DB-107: isolate-transpile without shared callee metadata must not emit owned
+//! isolate-transpile without shared callee metadata must not emit owned
 //! empty-string literals (`"".to_string()` / `String::new()`) into demoted `&str`
 //! formals (E0308).
 //!

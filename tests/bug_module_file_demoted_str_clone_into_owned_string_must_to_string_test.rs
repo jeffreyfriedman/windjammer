@@ -24,13 +24,13 @@ pub mod exec
 
 const PEG: &str = r#"
 /// Owns the SQL string.
-pub struct WdbAst {
+pub struct SqlAst {
     pub sql: string,
 }
 
-pub fn parse_ast(sql: string) -> WdbAst {
+pub fn parse_ast(sql: string) -> SqlAst {
     // Field store forces owned formal (must not demote to &str).
-    WdbAst { sql: sql }
+    SqlAst { sql: sql }
 }
 
 /// Read-only probe — codegen demotes to `&str` (pulls caller formal toward demotion).
@@ -42,7 +42,7 @@ pub fn sql_label_len(sql: string) -> int {
 const EXEC: &str = r#"
 use crate::peg::parse_ast
 use crate::peg::sql_label_len
-use crate::peg::WdbAst
+use crate::peg::SqlAst
 
 /// Multi-use read-only + owned callee).
 pub fn execute_q1_sum_from_sql(sql: string) -> bool {

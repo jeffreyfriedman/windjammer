@@ -178,7 +178,7 @@ Windows (MinGW):
 
 Usage:
     // In Rust
-    use game_host_framework::prelude::*;
+    use game_framework::prelude::*;
     
     let mut app = App::new();
     let plugin = DynamicPlugin::load("libexample_plugin_cpp.so")?;
