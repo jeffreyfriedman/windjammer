@@ -48,10 +48,9 @@ pub fn try_extract_float_type(ty: &Type) -> Option<&'static str> {
     }
 }
 
-/// Wrapper that defaults to f32 when no float type is found in context.
-/// Windjammer convention: unconstrained float literals default to f32 (game/graphics standard).
+/// Wrapper that defaults to f64 (`float`, ADR-0015 #1) when no float type is found in context.
 pub fn extract_float_type_from_context(ty: &Type) -> &'static str {
-    try_extract_float_type(ty).unwrap_or("f32")
+    try_extract_float_type(ty).unwrap_or("f64")
 }
 
 /// Convert Windjammer Type to FloatType enum for type inference.

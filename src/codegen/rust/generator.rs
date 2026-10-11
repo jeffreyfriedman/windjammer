@@ -1492,7 +1492,7 @@ impl<'ast> CodeGenerator<'ast> {
         let last = qualifier.rsplit("::").next().unwrap_or(qualifier);
         last.chars()
             .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_') && !crate::type_classification::is_primitive_type_name(last)
     }
 
     pub fn ir_cutover_call_sites_enabled(&self) -> bool {
