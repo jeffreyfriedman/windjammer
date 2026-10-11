@@ -1,8 +1,13 @@
-/// Auto-generate the consolidated test module list from all `tests/*.rs` files.
+#[path = "build_support/test_modules.rs"]
+mod test_modules;
+
+/// Auto-generate the consolidated test module list from every test file under `tests/`.
 ///
 /// Consolidating into a single binary eliminates ~800 separate link operations,
 /// reducing full test suite time from 14+ minutes to 2-3 minutes. Adding a new
-/// test file to `tests/` is all that's needed — no manual registration.
+/// test file to `tests/` is all that's needed — no manual registration. The discovery
+/// rule (top-level files, sub-directory files with `#[test]`, excluded dirs, name
+/// collisions) lives in `build_support/test_modules.rs`.
 fn generate_test_all_rs() {
     use std::fs;
     use std::path::Path;
@@ -12,25 +17,10 @@ fn generate_test_all_rs() {
         return;
     }
 
-    /// `tests/all.rs` is the consolidated `cargo test --test all` entry point (includes
-    /// generated module list). Every other `tests/*.rs` file is a test module.
-    /// Shared helpers live under `tests/common/` and are wired in explicitly below.
-    const TEST_BINARY_ENTRY: &str = "all";
-
-    let mut modules: Vec<String> = Vec::new();
-    if let Ok(entries) = fs::read_dir(tests_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "rs") {
-                let name = path.file_stem().unwrap().to_string_lossy().to_string();
-                if name == TEST_BINARY_ENTRY {
-                    continue;
-                }
-                modules.push(name);
-            }
-        }
-    }
-    modules.sort();
+    let modules = match test_modules::discover_test_modules(tests_dir) {
+        Ok(modules) => modules,
+        Err(message) => panic!("tests/ discovery failed: {message}"),
+    };
 
     let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let generated_path = Path::new(&out_dir).join("all_tests_generated.rs");
@@ -67,8 +57,9 @@ fn generate_test_all_rs() {
 
     for module in &modules {
         content.push_str(&format!(
-            "#[path = \"{}\"]\nmod {module};\n\n",
-            path_for_attr(&tests_dir_abs, &format!("{module}.rs"))
+            "#[path = \"{}\"]\nmod {};\n\n",
+            path_for_attr(&tests_dir_abs, &module.rel_path),
+            module.name
         ));
     }
 
@@ -81,6 +72,7 @@ fn generate_test_all_rs() {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=tests");
+    println!("cargo:rerun-if-changed=build_support");
     println!("cargo::rustc-check-cfg=cfg(tarpaulin)");
 
     generate_test_all_rs();
