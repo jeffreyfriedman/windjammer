@@ -1,6 +1,6 @@
 # ADR-0001: Ownership truth: IR solver vs analyzer
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-10)
 - **Date:** 2026-10-10
 - **Related:** [IR_SOLVER_CODEGEN_ARCHITECTURE.md](../IR_SOLVER_CODEGEN_ARCHITECTURE.md), [ARCHITECTURE_IMPROVEMENT_PLAN.md](../ARCHITECTURE_IMPROVEMENT_PLAN.md) WP 2, 8, 9; `src/ir/solver.rs`, `src/ir/constraint_gen.rs`, `src/analyzer/`
 
