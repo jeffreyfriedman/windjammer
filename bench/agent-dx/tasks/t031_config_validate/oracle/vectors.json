@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=example.org\nport=8080\n",
+  "stdout": "ok host=example.org port=8080 debug=false workers=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=0\ndebug=maybe\ncolor=red\nworkers=64\n",
+  "stdout": "error: host: missing\nerror: port: invalid value 0\nerror: debug: invalid value maybe\nerror: unknown key color\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "error: host: missing\nerror: port: missing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=\nport=65535\nworkers=65\nworkers=3\nworkers=x\n",
+  "stdout": "error: host: empty\nerror: workers: invalid value x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "nonsense\n\nhost=a=b\nport=1\ndebug=true\ndebug=false\n",
+  "stdout": "error: malformed line 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=h\nport=+5\nport=05\n",
+  "stdout": "ok host=h port=5 debug=false workers=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=h\nport=99999\nzeta=1\nalpha=2\nzeta=3\noops\n",
+  "stdout": "error: malformed line 6\nerror: port: invalid value 99999\nerror: unknown key zeta\nerror: unknown key alpha\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=\nextra=1\nhost\nport=\ndebug\nport=80\n",
+  "stdout": "error: malformed line 3\nerror: malformed line 5\nerror: host: missing\nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "debug=true\nhost=h\nport=0\n",
+  "stdout": "error: port: invalid value 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "extra=1\nport=80\nhost=\ndebug=\nport=x\nextra\n",
+  "stdout": "error: malformed line 6\nerror: host: empty\nerror: port: invalid value x\nerror: debug: invalid value \nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port\nworkers=4\nhost=\nport=\nport=x\nhost=a.b\nport=443\n",
+  "stdout": "error: malformed line 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=\nhost\n",
+  "stdout": "error: malformed line 2\nerror: host: missing\nerror: port: invalid value \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=70000\nport\nhost=\ndebug\n",
+  "stdout": "error: malformed line 2\nerror: malformed line 4\nerror: host: empty\nerror: port: invalid value 70000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=a.b\nworkers=4\nextra=1\nextra=1\n",
+  "stdout": "error: port: missing\nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port\ndebug=true\nport=x\nport=70000\ndebug=true\nhost=a.b\nhost=\n",
+  "stdout": "error: malformed line 1\nerror: host: empty\nerror: port: invalid value 70000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=h\ndebug=\n",
+  "stdout": "error: port: missing\nerror: debug: invalid value \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=\n",
+  "stdout": "error: host: empty\nerror: port: missing\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=0\nport=70000\nport=\n",
+  "stdout": "error: host: missing\nerror: port: invalid value \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "extra=1\nport=x\nhost=\nport=\ndebug=\ndebug=false\n",
+  "stdout": "error: host: empty\nerror: port: invalid value \nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port\nport=0\nhost=h\nhost=h\ndebug=false\nport=443\n",
+  "stdout": "error: malformed line 1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=\nextra\nport=70000\nhost=h\n",
+  "stdout": "error: malformed line 2\nerror: port: invalid value 70000\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=443\nhost=\nport=x\nworkers=1\nworkers=z\nport=\n",
+  "stdout": "error: host: empty\nerror: port: invalid value \nerror: workers: invalid value z\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "debug=\nworkers=0\nworkers=65\nextra=1\nport=70000\n",
+  "stdout": "error: host: missing\nerror: port: invalid value 70000\nerror: debug: invalid value \nerror: workers: invalid value 65\nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "extra=1\nport=\nhost=\n",
+  "stdout": "error: host: empty\nerror: port: invalid value \nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "host=\nworkers=65\n",
+  "stdout": "error: host: empty\nerror: port: missing\nerror: workers: invalid value 65\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=443\nport=0\nworkers=0\nhost=\nextra=1\nport=70000\nworkers=0\nport=80\n",
+  "stdout": "error: host: empty\nerror: workers: invalid value 0\nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=70000\nport=x\nhost=\nhost=h\nhost=h\nport=0\nport=0\n",
+  "stdout": "error: port: invalid value 0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=\ndebug=\nport=x\nextra=1\nhost=h\nworkers=64\nport=443\n",
+  "stdout": "error: debug: invalid value \nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "debug\nhost=a.b\nextra\nport=0\nport=x\nport=x\nworkers=65\n",
+  "stdout": "error: malformed line 1\nerror: malformed line 3\nerror: port: invalid value x\nerror: workers: invalid value 65\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=443\nhost=h\nport=\nextra=1\nworkers=64\ndebug=true\nhost=\n",
+  "stdout": "error: host: empty\nerror: port: invalid value \nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "port=80\nhost=h\nport=\nport=x\nhost=\nhost=h\nport=\nextra=1\n",
+  "stdout": "error: port: invalid value \nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "extra=1\nhost=a.b\nhost=a.b\nport=443\nport=443\nhost=a.b\nport=443\n",
+  "stdout": "error: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "extra=1\nworkers=z\nhost=a.b\nport=0\nextra=1\nport=0\nport=0\n",
+  "stdout": "error: port: invalid value 0\nerror: workers: invalid value z\nerror: unknown key extra\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "extra=1\nextra=1\ndebug=true\n",
+  "stdout": "error: host: missing\nerror: port: missing\nerror: unknown key extra\n"
+ }
+]

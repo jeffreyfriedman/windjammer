@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add 1 2\nmul 65536 65536\npow 2 10\ndiv 7 0\n",
+  "stdout": "3\noverflow\n1024\ndivzero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sub -2147483648 1\nrem -7 3\npow 2 -1\n",
+  "stdout": "overflow\n-1\ninvalid\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add 2147483647 1\nsub -2147483648 -1\nmul -2147483648 -1\ndiv -2147483648 -1\nrem -2147483648 -1\npow 0 0\npow -1 2000000000\npow -1 2000000001\npow 1 2000000000\npow 0 2000000000\npow -2 31\npow -2 32\npow 2 30\npow 2 31\ndiv 0 0\ndiv -7 2\nrem 7 -3\nmul 0 -2147483648\n",
+  "stdout": "overflow\n-2147483647\noverflow\noverflow\n0\n1\n1\n-1\n1\n0\n-2147483648\noverflow\n1073741824\noverflow\ndivzero\n-3\n1\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add -2147483648 -1\ndiv 2147483647 -74\nrem 1 1\ndiv -1 -81\npow 0 1\nrem -1 -23\npow -3 4\nmul 2147483647 -2147483648\ndiv -1 -2147483648\n",
+  "stdout": "overflow\n-29020049\n0\n0\n0\n-1\n81\noverflow\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div -1 1\nadd -56 2147483647\ndiv 1 1\nrem 6 2147483647\nadd -1 -1\nadd -1 -95\ndiv -1 -1\npow 1 22\nsub -2147483648 -2147483648\nadd 1 1510564592\n",
+  "stdout": "-1\n2147483591\n1\n6\n-2\n-96\n1\n1\n0\n1510564593\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow 2 29\nadd 2147483647 1\nsub -1 -2147483648\nadd -13504725 2147483647\npow 0 10\nsub -1 2147483647\ndiv 1 2147483647\ndiv -9616188 0\nsub 92 -2147483648\n",
+  "stdout": "536870912\noverflow\n2147483647\n2133978922\n0\n-2147483648\n0\ndivzero\noverflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rem 1 2147483647\nrem 60 -1652425597\nsub -1 0\nadd -2147483648 0\npow 0 19\nrem 0 2147483647\nadd 939482643 2147483647\npow 0 1\nmul 1 0\nrem 2147483647 -2147483648\n",
+  "stdout": "1\n60\n-1\n-2147483648\n0\n0\noverflow\n0\n0\n2147483647\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow 1 1\nmul -87 2147483647\nadd 1 -1\nrem -1 0\npow -5 1\nadd 2147483647 2147483647\nsub 45 -5\nrem 672287611 1\n",
+  "stdout": "1\noverflow\n0\ndivzero\n-5\noverflow\n50\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "mul 2147483647 2147483647\npow 9 5\nrem 2147483647 0\nsub -2147483648 2147483647\ndiv -1371068848 2147483647\nadd -12 -1\n",
+  "stdout": "overflow\n59049\ndivzero\noverflow\n0\n-13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "add -2147483648 2147483647\nrem -2147483648 67\npow 2 4\npow -2 28\npow 0 14\n",
+  "stdout": "-1\n-50\n16\n268435456\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div -1 0\nrem -715018967 -1\nmul 52 0\nadd -2147483648 0\nadd 0 -1\n",
+  "stdout": "divzero\n0\n0\n-2147483648\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sub -2147483648 -330990464\nrem 71 -2147483648\nadd -34 -2147483648\nsub -1 -2147483648\n",
+  "stdout": "-1816493184\n71\noverflow\n2147483647\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "mul 87 68\npow -5 1\npow 1 19\ndiv -2147483648 -1\nadd -1 2147483647\npow 2 1\ndiv 0 38\nsub 1 -1\nmul 1 0\ndiv -2147483648 -24\npow 0 1\ndiv 1 0\n",
+  "stdout": "5916\n-5\n1\noverflow\n2147483646\n2\n0\n2\n0\n89478485\n0\ndivzero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rem -1 2147483647\nsub 1 1\nmul -2147483648 -665121420\nrem -1128811419 -2147483648\nrem -2147483648 0\npow 42 3\nadd 1 0\nadd 0 2147483647\nrem 0 -1\npow -1 1\nmul 1 -2147483648\nmul -1 1\n",
+  "stdout": "-1\n0\noverflow\n-1128811419\ndivzero\n74088\n1\n2147483647\n0\n-1\n-2147483648\n-1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow -1 3\npow 2 4\nmul 0 30\nmul 0 0\npow 1 1\npow 0 2\ndiv -1 -2147483648\npow 2 0\nsub 1 1\nsub 0 0\nadd -1 285205720\n",
+  "stdout": "-1\n16\n0\n0\n1\n0\n0\n1\n0\n0\n285205719\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rem 0 -1262800654\ndiv -1 2147483647\nsub -1804054380 2147483647\nsub -78 -71\nsub -2147483648 -2147483648\nmul 1 0\nsub 1191698458 -1\nadd 97 2147483647\n",
+  "stdout": "0\n0\noverflow\n-7\n0\n0\n1191698459\noverflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow 5 21\nrem -1 -315522238\nsub -2147483648 0\nmul 1 1\n",
+  "stdout": "overflow\n-1\n-2147483648\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "mul 39 -1\nadd 1 1\nmul 9 2147483647\ndiv 1 -2147483648\npow 1 22\nsub -72 0\nadd 0 -1\nmul 0 -1\npow 445 0\nsub -1 2147483647\ndiv -1 0\n",
+  "stdout": "-39\n2\noverflow\n0\n1\n-72\n-1\n0\n1\n-2147483648\ndivzero\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div 1 2147483647\nrem 0 -2147483648\nmul -1679925790 -1\nadd 587227913 -2147483648\nsub 2147483647 1\nsub 74 2147483647\nadd 61 0\nsub 2147483647 0\nadd 0 0\nmul 45 1\nmul -2147483648 -1\nadd 622774686 1\n",
+  "stdout": "0\n0\n1679925790\n-1560255735\n2147483646\n-2147483573\n61\n2147483647\n0\n45\noverflow\n622774687\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div 2147483647 1548024819\npow -2 2\nmul 0 -1\nadd 1 1772773416\ndiv -2147483648 -1\ndiv 2147483647 -2147483648\npow -1 23\nmul -601708792 -87\nmul -2147483648 1\nadd 2147483647 -1122824911\npow -548 12\npow 0 18\n",
+  "stdout": "1\n4\n0\n1772773417\noverflow\n0\n-1\noverflow\n-2147483648\n1024658736\noverflow\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sub -12 2147483647\nsub 1136227228 -1\nrem 47 2083398254\npow 580 1\npow -1 26\nsub -2147483648 -2046891597\n",
+  "stdout": "overflow\n1136227229\n47\n580\n1\n-100592051\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div 0 -49\nmul -2147483648 1\ndiv 1 -90\nadd -2147483648 -1\n",
+  "stdout": "0\n-2147483648\n0\noverflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rem -2147483648 -97\nsub -2147483648 -2013442973\nsub 59 -1\n",
+  "stdout": "-66\n-134040675\n60\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow 2 3\nrem -2147483648 1\ndiv 0 -522014515\npow 1 5\nrem 0 -80\npow 0 9\nmul -48 35\nmul -2147483648 1\n",
+  "stdout": "8\n0\n0\n1\n0\n0\n-1680\n-2147483648\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "mul 2147483647 1\nsub 1 1\nrem 1 1\nsub -1 -2147483648\npow -454 2\nadd 0 -2147483648\nadd 2147483647 1\ndiv -2147483648 -2147483648\ndiv -913379699 1\nadd -2147483648 0\nrem 1 1\npow -1 4\n",
+  "stdout": "2147483647\n0\n0\n2147483647\n206116\n-2147483648\noverflow\n1\n-913379699\n-2147483648\n0\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sub -2147483648 2147483647\nrem 1 1\nrem -1 -1740082274\npow 2 2\nadd 1 1\ndiv -458999896 2147483647\npow 1 14\n",
+  "stdout": "overflow\n0\n-1\n4\n2\n0\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "mul 2147483647 -2147483648\nadd 1798802916 1840339735\nadd 1 -537627649\n",
+  "stdout": "overflow\noverflow\n-537627648\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow 0 35\npow -593 39\npow 419 4\ndiv 1 2147483647\n",
+  "stdout": "0\noverflow\noverflow\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "pow -1 3\nmul -2147483648 65\nadd 1 0\n",
+  "stdout": "-1\noverflow\n1\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rem 450325275 2147483647\nrem -2147483648 0\npow -880 0\nadd 0 1\nrem 114125526 1\nrem 1 -2134353282\nsub 1 -1802191253\npow -536 31\nmul -42 620913205\n",
+  "stdout": "450325275\ndivzero\n1\n1\n0\n1\n1802191254\noverflow\noverflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div 2147483647 -2082625723\nadd -2147483648 -2147483648\nsub 64361272 1\nadd -15 1\nmul 0 -1\nsub 2147483647 -52\n",
+  "stdout": "-1\noverflow\n64361271\n-14\n0\noverflow\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "div -2147483648 -50\nmul -1 65\ndiv 2147483647 -1801498279\ndiv 1 -2147483648\n",
+  "stdout": "42949672\n-65\n-1\n0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "rem -1 -2147483648\nrem 26627390 -2147483648\nmul 2147483647 -1\nsub -1 0\nmul -1 -1\nadd 0 -1510602469\nadd 2147483647 0\nsub -2147483648 59\ndiv 77 -2147483648\nrem 0 1\nsub 36 2147483647\nadd 1 2147483647\n",
+  "stdout": "-1\n26627390\n-2147483647\n-1\n1\n-1510602469\n2147483647\noverflow\n0\n0\n-2147483611\noverflow\n"
+ }
+]

@@ -1,0 +1,200 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock bolt 100 5\nstock nut 50 2\nsell bolt 30\nreport\n",
+  "stdout": "ok 100\nok 50\nsold 30 for 150\nbolt 70 x 5 = 350\nnut 50 x 2 = 100\ntotal value 450\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "report\nsell x 1\nremove x\n",
+  "stdout": "(empty)\nerror: unknown sku x\nerror: unknown sku x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock a 1 10\nstock a 1 11\nstock a 0 10\nsell a 5\nsell a 0\nremove a\nsell a 1\nremove a\nreport\nstock b 3 7\nreport\n",
+  "stdout": "ok 1\nerror: price mismatch for a\nerror: bad quantity\nerror: insufficient stock for a (have 1, need 5)\nerror: bad quantity\nerror: not empty a\nsold 1 for 10\nremoved a\n(empty)\nok 3\nb 3 x 7 = 21\ntotal value 21\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ax 16\nsell ax 13\nsell ax 0\nreport\nstock by 9 3\nstock by 18 3\nsell ax 16\nstock ax 8 3\nstock ax 9 3\nstock ax 16 5\nstock ax 10 5\nsell by 13\nstock by 19 5\nremove by\nsell cz 0\nsell by 11\nstock by 4 3\nstock ax 14 3\n",
+  "stdout": "error: unknown sku ax\nerror: unknown sku ax\nerror: bad quantity\n(empty)\nok 9\nok 27\nerror: unknown sku ax\nok 8\nok 17\nerror: price mismatch for ax\nerror: price mismatch for ax\nsold 13 for 39\nerror: price mismatch for by\nerror: not empty by\nerror: bad quantity\nsold 11 for 33\nok 7\nok 31\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove cz\nsell ax 20\nstock cz 12 5\nremove by\nremove ax\nremove cz\nsell by 9\nreport\nremove ax\nstock by 2 3\nsell ax 13\n",
+  "stdout": "error: unknown sku cz\nerror: unknown sku ax\nok 12\nerror: unknown sku by\nerror: unknown sku ax\nerror: not empty cz\nerror: unknown sku by\ncz 12 x 5 = 60\ntotal value 60\nerror: unknown sku ax\nok 2\nerror: unknown sku ax\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock ax 10 3\nsell cz 25\nstock ax 11 3\nreport\nstock ax 17 3\nreport\nstock cz 9 3\nremove ax\nstock cz 16 3\nsell by 24\nstock ax 4 3\nsell ax 6\nsell ax 2\n",
+  "stdout": "ok 10\nerror: unknown sku cz\nok 21\nax 21 x 3 = 63\ntotal value 63\nok 38\nax 38 x 3 = 114\ntotal value 114\nok 9\nerror: not empty ax\nok 25\nerror: unknown sku by\nok 42\nsold 6 for 18\nsold 2 for 6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell cz 8\nsell by 15\nreport\nremove ax\nsell ax 23\nremove ax\nsell ax 22\nremove by\nreport\nstock cz 8 3\nsell ax 15\nstock ax 18 5\nreport\nsell cz 3\nsell cz 23\nremove cz\nstock by 6 5\nsell by 7\nstock ax 15 5\nremove ax\nstock cz 19 5\nsell by 3\nsell ax 22\nremove cz\nstock cz 8 3\nsell ax 18\nsell cz 23\nsell ax 22\nreport\n",
+  "stdout": "error: unknown sku cz\nerror: unknown sku by\n(empty)\nerror: unknown sku ax\nerror: unknown sku ax\nerror: unknown sku ax\nerror: unknown sku ax\nerror: unknown sku by\n(empty)\nok 8\nerror: unknown sku ax\nok 18\nax 18 x 5 = 90\ncz 8 x 3 = 24\ntotal value 114\nsold 3 for 9\nerror: insufficient stock for cz (have 5, need 23)\nerror: not empty cz\nok 6\nerror: insufficient stock for by (have 6, need 7)\nok 33\nerror: not empty ax\nerror: price mismatch for cz\nsold 3 for 15\nsold 22 for 110\nerror: not empty cz\nok 13\nerror: insufficient stock for ax (have 11, need 18)\nerror: insufficient stock for cz (have 13, need 23)\nerror: insufficient stock for ax (have 11, need 22)\nax 11 x 5 = 55\nby 3 x 5 = 15\ncz 13 x 3 = 39\ntotal value 109\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell by 1\nreport\nreport\nsell by 1\nstock by 8 3\nsell by 15\nsell cz 5\nreport\nsell by 19\nreport\nstock by 5 3\nsell ax 22\nstock by 2 5\nstock cz 15 5\nstock ax 4 3\nsell ax 25\nstock cz 3 5\nsell cz 11\nstock cz 7 5\nstock by 20 3\nsell cz 10\n",
+  "stdout": "error: unknown sku by\n(empty)\n(empty)\nerror: unknown sku by\nok 8\nerror: insufficient stock for by (have 8, need 15)\nerror: unknown sku cz\nby 8 x 3 = 24\ntotal value 24\nerror: insufficient stock for by (have 8, need 19)\nby 8 x 3 = 24\ntotal value 24\nok 13\nerror: unknown sku ax\nerror: price mismatch for by\nok 15\nok 4\nerror: insufficient stock for ax (have 4, need 25)\nok 18\nsold 11 for 55\nok 14\nok 33\nsold 10 for 50\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell cz 14\nsell ax 19\nstock cz 3 3\nstock cz 3 5\nremove cz\nsell ax 19\nstock ax 3 3\nsell ax 3\nstock ax 3 3\nreport\nremove ax\nsell ax 16\nreport\nreport\nsell by 14\nstock ax 1 3\nsell by 9\nreport\nsell cz 2\nstock cz 3 3\nstock cz 9 3\nstock cz 18 5\nstock by 17 3\nreport\nstock cz 14 5\nsell cz 10\nreport\n",
+  "stdout": "error: unknown sku cz\nerror: unknown sku ax\nok 3\nerror: price mismatch for cz\nerror: not empty cz\nerror: unknown sku ax\nok 3\nsold 3 for 9\nok 3\nax 3 x 3 = 9\ncz 3 x 3 = 9\ntotal value 18\nerror: not empty ax\nerror: insufficient stock for ax (have 3, need 16)\nax 3 x 3 = 9\ncz 3 x 3 = 9\ntotal value 18\nax 3 x 3 = 9\ncz 3 x 3 = 9\ntotal value 18\nerror: unknown sku by\nok 4\nerror: unknown sku by\nax 4 x 3 = 12\ncz 3 x 3 = 9\ntotal value 21\nsold 2 for 6\nok 4\nok 13\nerror: price mismatch for cz\nok 17\nax 4 x 3 = 12\nby 17 x 3 = 51\ncz 13 x 3 = 39\ntotal value 102\nerror: price mismatch for cz\nsold 10 for 30\nax 4 x 3 = 12\nby 17 x 3 = 51\ncz 3 x 3 = 9\ntotal value 72\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ax 5\nsell by 21\nremove cz\nstock ax 5 5\nstock by 4 3\nsell cz 8\nremove by\nstock ax 8 5\nstock ax 16 3\nsell by 25\nsell cz 8\nreport\nsell cz 20\nstock ax 6 5\nremove cz\nsell by 23\nremove cz\nstock cz 12 3\nstock ax 8 3\nstock by 2 5\nsell ax 3\nstock ax 8 3\nstock by 1 5\n",
+  "stdout": "error: unknown sku ax\nerror: unknown sku by\nerror: unknown sku cz\nok 5\nok 4\nerror: unknown sku cz\nerror: not empty by\nok 13\nerror: price mismatch for ax\nerror: insufficient stock for by (have 4, need 25)\nerror: unknown sku cz\nax 13 x 5 = 65\nby 4 x 3 = 12\ntotal value 77\nerror: unknown sku cz\nok 19\nerror: unknown sku cz\nerror: insufficient stock for by (have 4, need 23)\nerror: unknown sku cz\nok 12\nerror: price mismatch for ax\nerror: price mismatch for by\nsold 3 for 15\nerror: price mismatch for ax\nerror: price mismatch for by\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "report\nstock cz 18 5\nreport\nreport\nstock by 2 5\nreport\nstock by 0 3\nremove by\nstock by 12 3\nremove ax\nreport\nstock by 8 3\nstock cz 5 3\nstock cz 2 5\nreport\nsell ax 25\nreport\nsell cz 14\nreport\nstock by 7 3\nsell ax 7\nreport\nstock cz 13 3\n",
+  "stdout": "(empty)\nok 18\ncz 18 x 5 = 90\ntotal value 90\ncz 18 x 5 = 90\ntotal value 90\nok 2\nby 2 x 5 = 10\ncz 18 x 5 = 90\ntotal value 100\nerror: bad quantity\nerror: not empty by\nerror: price mismatch for by\nerror: unknown sku ax\nby 2 x 5 = 10\ncz 18 x 5 = 90\ntotal value 100\nerror: price mismatch for by\nerror: price mismatch for cz\nok 20\nby 2 x 5 = 10\ncz 20 x 5 = 100\ntotal value 110\nerror: unknown sku ax\nby 2 x 5 = 10\ncz 20 x 5 = 100\ntotal value 110\nsold 14 for 70\nby 2 x 5 = 10\ncz 6 x 5 = 30\ntotal value 40\nerror: price mismatch for by\nerror: unknown sku ax\nby 2 x 5 = 10\ncz 6 x 5 = 30\ntotal value 40\nerror: price mismatch for cz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "report\nstock cz 19 3\nstock ax 17 5\nstock ax 16 5\nsell ax 5\n",
+  "stdout": "(empty)\nok 19\nok 17\nok 33\nsold 5 for 25\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell cz 6\nreport\nsell ax 9\nsell cz 16\nstock cz 15 3\nstock ax 1 5\nremove by\nstock by 11 3\nreport\nstock ax 19 5\nstock ax 0 5\nstock by 14 3\nstock ax 12 3\nstock cz 4 3\nsell ax 24\nreport\nreport\nreport\nreport\nreport\n",
+  "stdout": "error: unknown sku cz\n(empty)\nerror: unknown sku ax\nerror: unknown sku cz\nok 15\nok 1\nerror: unknown sku by\nok 11\nax 1 x 5 = 5\nby 11 x 3 = 33\ncz 15 x 3 = 45\ntotal value 83\nok 20\nerror: bad quantity\nok 25\nerror: price mismatch for ax\nok 19\nerror: insufficient stock for ax (have 20, need 24)\nax 20 x 5 = 100\nby 25 x 3 = 75\ncz 19 x 3 = 57\ntotal value 232\nax 20 x 5 = 100\nby 25 x 3 = 75\ncz 19 x 3 = 57\ntotal value 232\nax 20 x 5 = 100\nby 25 x 3 = 75\ncz 19 x 3 = 57\ntotal value 232\nax 20 x 5 = 100\nby 25 x 3 = 75\ncz 19 x 3 = 57\ntotal value 232\nax 20 x 5 = 100\nby 25 x 3 = 75\ncz 19 x 3 = 57\ntotal value 232\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ax 22\nstock cz 12 3\nsell ax 23\nsell ax 22\nreport\nsell cz 15\nreport\n",
+  "stdout": "error: unknown sku ax\nok 12\nerror: unknown sku ax\nerror: unknown sku ax\ncz 12 x 3 = 36\ntotal value 36\nerror: insufficient stock for cz (have 12, need 15)\ncz 12 x 3 = 36\ntotal value 36\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock cz 14 3\nsell ax 16\nstock by 5 3\nsell cz 4\nsell by 4\nstock by 12 3\nstock cz 14 3\nreport\nsell cz 18\nstock by 15 3\nstock ax 2 3\nsell cz 6\n",
+  "stdout": "ok 14\nerror: unknown sku ax\nok 5\nsold 4 for 12\nsold 4 for 12\nok 13\nok 24\nby 13 x 3 = 39\ncz 24 x 3 = 72\ntotal value 111\nsold 18 for 54\nok 28\nok 2\nsold 6 for 18\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ax 23\nreport\nstock by 14 3\nstock cz 2 5\nstock by 1 3\nstock ax 0 5\nsell ax 10\nstock by 20 5\nreport\nsell cz 23\nstock cz 7 3\n",
+  "stdout": "error: unknown sku ax\n(empty)\nok 14\nok 2\nok 15\nerror: bad quantity\nerror: unknown sku ax\nerror: price mismatch for by\nby 15 x 3 = 45\ncz 2 x 5 = 10\ntotal value 55\nerror: insufficient stock for cz (have 2, need 23)\nerror: price mismatch for cz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ax 12\nsell cz 4\nremove cz\nreport\nstock by 19 3\nstock cz 8 3\nstock cz 7 3\nstock by 7 3\nreport\nreport\nremove by\nreport\nsell ax 23\nstock by 17 3\nreport\nstock ax 15 3\n",
+  "stdout": "error: unknown sku ax\nerror: unknown sku cz\nerror: unknown sku cz\n(empty)\nok 19\nok 8\nok 15\nok 26\nby 26 x 3 = 78\ncz 15 x 3 = 45\ntotal value 123\nby 26 x 3 = 78\ncz 15 x 3 = 45\ntotal value 123\nerror: not empty by\nby 26 x 3 = 78\ncz 15 x 3 = 45\ntotal value 123\nerror: unknown sku ax\nok 43\nby 43 x 3 = 129\ncz 15 x 3 = 45\ntotal value 174\nok 15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock ax 8 3\nsell by 6\nsell by 4\nstock by 19 3\nstock by 19 3\nstock cz 13 3\nsell ax 11\nstock by 7 5\nsell cz 14\nstock cz 2 5\nstock cz 2 3\n",
+  "stdout": "ok 8\nerror: unknown sku by\nerror: unknown sku by\nok 19\nok 38\nok 13\nerror: insufficient stock for ax (have 8, need 11)\nerror: price mismatch for by\nerror: insufficient stock for cz (have 13, need 14)\nerror: price mismatch for cz\nok 15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "report\nreport\nstock by 15 5\nstock cz 15 3\nreport\n",
+  "stdout": "(empty)\n(empty)\nok 15\nok 15\nby 15 x 5 = 75\ncz 15 x 3 = 45\ntotal value 120\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell by 11\nstock by 5 3\nremove by\nsell cz 6\nstock by 12 3\nstock ax 7 3\nreport\nreport\nstock by 18 5\nsell cz 2\nsell cz 21\nsell ax 21\nstock by 14 3\nsell cz 11\nreport\nstock by 7 3\nstock ax 4 3\nremove ax\nsell ax 3\nremove by\nreport\nsell ax 14\nsell by 11\n",
+  "stdout": "error: unknown sku by\nok 5\nerror: not empty by\nerror: unknown sku cz\nok 17\nok 7\nax 7 x 3 = 21\nby 17 x 3 = 51\ntotal value 72\nax 7 x 3 = 21\nby 17 x 3 = 51\ntotal value 72\nerror: price mismatch for by\nerror: unknown sku cz\nerror: unknown sku cz\nerror: insufficient stock for ax (have 7, need 21)\nok 31\nerror: unknown sku cz\nax 7 x 3 = 21\nby 31 x 3 = 93\ntotal value 114\nok 38\nok 11\nerror: not empty ax\nsold 3 for 9\nerror: not empty by\nax 8 x 3 = 24\nby 38 x 3 = 114\ntotal value 138\nerror: insufficient stock for ax (have 8, need 14)\nsold 11 for 33\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell ax 10\nstock by 8 5\nsell ax 12\nsell ax 15\nreport\nsell by 0\nsell by 6\nsell ax 4\nstock by 4 3\nreport\nreport\nstock ax 2 5\nsell cz 19\nsell by 19\nreport\nreport\nsell ax 11\nstock cz 4 5\n",
+  "stdout": "error: unknown sku ax\nok 8\nerror: unknown sku ax\nerror: unknown sku ax\nby 8 x 5 = 40\ntotal value 40\nerror: bad quantity\nsold 6 for 30\nerror: unknown sku ax\nerror: price mismatch for by\nby 2 x 5 = 10\ntotal value 10\nby 2 x 5 = 10\ntotal value 10\nok 2\nerror: unknown sku cz\nerror: insufficient stock for by (have 2, need 19)\nax 2 x 5 = 10\nby 2 x 5 = 10\ntotal value 20\nax 2 x 5 = 10\nby 2 x 5 = 10\ntotal value 20\nerror: insufficient stock for ax (have 2, need 11)\nok 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock by 13 3\nsell ax 8\nsell by 3\nsell ax 16\nstock by 7 3\nreport\nstock cz 3 3\nsell ax 15\nstock cz 12 3\nstock cz 2 3\nstock cz 2 5\nstock by 4 5\nsell cz 23\nreport\nreport\nsell by 3\nreport\nsell cz 8\nstock by 17 5\nstock ax 4 3\n",
+  "stdout": "ok 13\nerror: unknown sku ax\nsold 3 for 9\nerror: unknown sku ax\nok 17\nby 17 x 3 = 51\ntotal value 51\nok 3\nerror: unknown sku ax\nok 15\nok 17\nerror: price mismatch for cz\nerror: price mismatch for by\nerror: insufficient stock for cz (have 17, need 23)\nby 17 x 3 = 51\ncz 17 x 3 = 51\ntotal value 102\nby 17 x 3 = 51\ncz 17 x 3 = 51\ntotal value 102\nsold 3 for 9\nby 14 x 3 = 42\ncz 17 x 3 = 51\ntotal value 93\nsold 8 for 24\nerror: price mismatch for by\nok 4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock ax 6 3\nsell ax 18\nsell ax 23\nstock cz 6 3\nstock ax 11 3\nreport\nreport\nstock by 3 3\nstock by 5 3\nstock ax 12 3\nsell ax 9\nremove cz\nstock cz 5 3\nstock cz 15 3\nstock by 3 5\nstock by 14 3\nstock ax 16 3\nsell by 19\nreport\nreport\nstock cz 4 3\nsell ax 10\nstock ax 1 3\nstock ax 8 3\nsell ax 24\nreport\nstock by 13 5\nstock by 4 3\n",
+  "stdout": "ok 6\nerror: insufficient stock for ax (have 6, need 18)\nerror: insufficient stock for ax (have 6, need 23)\nok 6\nok 17\nax 17 x 3 = 51\ncz 6 x 3 = 18\ntotal value 69\nax 17 x 3 = 51\ncz 6 x 3 = 18\ntotal value 69\nok 3\nok 8\nok 29\nsold 9 for 27\nerror: not empty cz\nok 11\nok 26\nerror: price mismatch for by\nok 22\nok 36\nsold 19 for 57\nax 36 x 3 = 108\nby 3 x 3 = 9\ncz 26 x 3 = 78\ntotal value 195\nax 36 x 3 = 108\nby 3 x 3 = 9\ncz 26 x 3 = 78\ntotal value 195\nok 30\nsold 10 for 30\nok 27\nok 35\nsold 24 for 72\nax 11 x 3 = 33\nby 3 x 3 = 9\ncz 30 x 3 = 90\ntotal value 132\nerror: price mismatch for by\nok 7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove by\nstock by 2 5\nreport\nremove cz\nstock ax 19 5\nsell ax 22\nsell cz 1\nsell by 8\nstock cz 12 3\nstock cz 9 3\nreport\nstock ax 14 3\nsell by 25\nstock cz 1 5\nstock by 19 5\nsell by 10\nstock cz 11 5\nsell by 17\nstock by 4 3\nstock ax 5 3\nstock by 17 3\nstock cz 16 5\n",
+  "stdout": "error: unknown sku by\nok 2\nby 2 x 5 = 10\ntotal value 10\nerror: unknown sku cz\nok 19\nerror: insufficient stock for ax (have 19, need 22)\nerror: unknown sku cz\nerror: insufficient stock for by (have 2, need 8)\nok 12\nok 21\nax 19 x 5 = 95\nby 2 x 5 = 10\ncz 21 x 3 = 63\ntotal value 168\nerror: price mismatch for ax\nerror: insufficient stock for by (have 2, need 25)\nerror: price mismatch for cz\nok 21\nsold 10 for 50\nerror: price mismatch for cz\nerror: insufficient stock for by (have 11, need 17)\nerror: price mismatch for by\nerror: price mismatch for ax\nerror: price mismatch for by\nerror: price mismatch for cz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell cz 19\nstock cz 15 3\nsell ax 21\nreport\nstock ax 20 3\nstock by 19 3\nreport\nstock cz 2 3\n",
+  "stdout": "error: unknown sku cz\nok 15\nerror: unknown sku ax\ncz 15 x 3 = 45\ntotal value 45\nok 20\nok 19\nax 20 x 3 = 60\nby 19 x 3 = 57\ncz 15 x 3 = 45\ntotal value 162\nok 17\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock by 10 3\nstock by 4 3\nsell by 11\nstock ax 18 5\nremove cz\nsell cz 13\nstock ax 19 5\nstock by 5 3\nstock ax 13 3\nsell cz 15\nsell ax 24\nstock ax 14 5\nsell ax 12\nstock by 9 3\n",
+  "stdout": "ok 10\nok 14\nsold 11 for 33\nok 18\nerror: unknown sku cz\nerror: unknown sku cz\nok 37\nok 8\nerror: price mismatch for ax\nerror: unknown sku cz\nsold 24 for 120\nok 27\nsold 12 for 60\nok 17\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "report\nsell ax 15\nreport\nreport\nreport\nstock ax 16 3\nsell ax 16\nstock ax 6 5\nsell cz 13\nstock by 3 5\nsell ax 12\nsell by 24\nsell by 8\nremove ax\nreport\nstock by 7 3\nstock ax 1 3\nsell ax 22\n",
+  "stdout": "(empty)\nerror: unknown sku ax\n(empty)\n(empty)\n(empty)\nok 16\nsold 16 for 48\nerror: price mismatch for ax\nerror: unknown sku cz\nok 3\nerror: insufficient stock for ax (have 0, need 12)\nerror: insufficient stock for by (have 3, need 24)\nerror: insufficient stock for by (have 3, need 8)\nremoved ax\nby 3 x 5 = 15\ntotal value 15\nerror: price mismatch for by\nok 1\nerror: insufficient stock for ax (have 1, need 22)\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock cz 20 3\nsell ax 5\nreport\nremove ax\nstock cz 13 3\nsell cz 25\nsell cz 18\nstock cz 4 3\nsell by 12\nremove ax\nremove cz\nreport\nstock by 1 5\nstock by 5 3\nstock by 9 5\nsell by 15\nstock ax 2 5\nstock cz 2 3\nstock ax 10 5\nreport\nremove cz\nstock by 10 3\nstock ax 15 3\nstock cz 16 3\nsell ax 18\nsell cz 2\nsell by 0\nstock by 6 5\n",
+  "stdout": "ok 20\nerror: unknown sku ax\ncz 20 x 3 = 60\ntotal value 60\nerror: unknown sku ax\nok 33\nsold 25 for 75\nerror: insufficient stock for cz (have 8, need 18)\nok 12\nerror: unknown sku by\nerror: unknown sku ax\nerror: not empty cz\ncz 12 x 3 = 36\ntotal value 36\nok 1\nerror: price mismatch for by\nok 10\nerror: insufficient stock for by (have 10, need 15)\nok 2\nok 14\nok 12\nax 12 x 5 = 60\nby 10 x 5 = 50\ncz 14 x 3 = 42\ntotal value 152\nerror: not empty cz\nerror: price mismatch for by\nerror: price mismatch for ax\nok 30\nerror: insufficient stock for ax (have 12, need 18)\nsold 2 for 6\nerror: bad quantity\nok 16\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell by 4\nsell cz 19\nstock ax 6 3\nstock ax 12 3\nsell ax 4\nstock by 14 3\nsell cz 3\nsell ax 13\nstock cz 13 3\nstock cz 5 5\nsell cz 3\nreport\nstock cz 20 5\nstock cz 5 3\nsell by 0\nstock ax 9 3\nreport\nstock ax 5 3\nstock cz 0 3\nsell cz 20\nreport\nsell ax 0\nsell ax 13\nsell cz 18\nreport\nstock cz 2 3\nsell by 0\nstock cz 5 3\nremove ax\nreport\n",
+  "stdout": "error: unknown sku by\nerror: unknown sku cz\nok 6\nok 18\nsold 4 for 12\nok 14\nerror: unknown sku cz\nsold 13 for 39\nok 13\nerror: price mismatch for cz\nsold 3 for 9\nax 1 x 3 = 3\nby 14 x 3 = 42\ncz 10 x 3 = 30\ntotal value 75\nerror: price mismatch for cz\nok 15\nerror: bad quantity\nok 10\nax 10 x 3 = 30\nby 14 x 3 = 42\ncz 15 x 3 = 45\ntotal value 117\nok 15\nerror: bad quantity\nerror: insufficient stock for cz (have 15, need 20)\nax 15 x 3 = 45\nby 14 x 3 = 42\ncz 15 x 3 = 45\ntotal value 132\nerror: bad quantity\nsold 13 for 39\nerror: insufficient stock for cz (have 15, need 18)\nax 2 x 3 = 6\nby 14 x 3 = 42\ncz 15 x 3 = 45\ntotal value 93\nok 17\nerror: bad quantity\nok 22\nerror: not empty ax\nax 2 x 3 = 6\nby 14 x 3 = 42\ncz 22 x 3 = 66\ntotal value 114\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock by 19 5\nreport\nsell cz 17\nsell ax 24\nsell cz 14\nstock cz 19 5\nstock cz 0 3\nstock ax 12 3\nreport\nsell ax 1\nstock by 0 3\nstock cz 8 5\nreport\nstock ax 0 3\nstock cz 16 3\nsell by 1\nstock ax 14 3\nsell ax 15\n",
+  "stdout": "ok 19\nby 19 x 5 = 95\ntotal value 95\nerror: unknown sku cz\nerror: unknown sku ax\nerror: unknown sku cz\nok 19\nerror: bad quantity\nok 12\nax 12 x 3 = 36\nby 19 x 5 = 95\ncz 19 x 5 = 95\ntotal value 226\nsold 1 for 3\nerror: bad quantity\nok 27\nax 11 x 3 = 33\nby 19 x 5 = 95\ncz 27 x 5 = 135\ntotal value 263\nerror: bad quantity\nerror: price mismatch for cz\nsold 1 for 5\nok 25\nsold 15 for 45\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "remove ax\nstock ax 3 5\nstock cz 10 5\nreport\nreport\nsell by 6\nreport\nstock by 11 3\nreport\nstock cz 17 3\nremove cz\nsell by 8\nsell by 6\nsell ax 5\nstock by 0 3\nstock ax 1 5\nstock by 4 3\nsell cz 20\nsell by 9\nstock by 1 3\nsell ax 2\nstock by 0 3\nsell by 21\nremove ax\nremove ax\nsell ax 5\nsell by 22\nstock by 9 3\nstock cz 9 3\n",
+  "stdout": "error: unknown sku ax\nok 3\nok 10\nax 3 x 5 = 15\ncz 10 x 5 = 50\ntotal value 65\nax 3 x 5 = 15\ncz 10 x 5 = 50\ntotal value 65\nerror: unknown sku by\nax 3 x 5 = 15\ncz 10 x 5 = 50\ntotal value 65\nok 11\nax 3 x 5 = 15\nby 11 x 3 = 33\ncz 10 x 5 = 50\ntotal value 98\nerror: price mismatch for cz\nerror: not empty cz\nsold 8 for 24\nerror: insufficient stock for by (have 3, need 6)\nerror: insufficient stock for ax (have 3, need 5)\nerror: bad quantity\nok 4\nok 7\nerror: insufficient stock for cz (have 10, need 20)\nerror: insufficient stock for by (have 7, need 9)\nok 8\nsold 2 for 10\nerror: bad quantity\nerror: insufficient stock for by (have 8, need 21)\nerror: not empty ax\nerror: not empty ax\nerror: insufficient stock for ax (have 2, need 5)\nerror: insufficient stock for by (have 8, need 22)\nok 17\nerror: price mismatch for cz\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "sell cz 8\nsell by 10\nreport\nsell by 9\nsell ax 25\nsell by 17\nsell ax 11\n",
+  "stdout": "error: unknown sku cz\nerror: unknown sku by\n(empty)\nerror: unknown sku by\nerror: unknown sku ax\nerror: unknown sku by\nerror: unknown sku ax\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stock by 13 3\nsell ax 19\nstock cz 16 3\nsell ax 22\nsell by 9\nreport\nreport\nremove cz\nstock by 9 3\nreport\nstock by 9 3\nsell by 24\nremove cz\nreport\nstock cz 13 3\n",
+  "stdout": "ok 13\nerror: unknown sku ax\nok 16\nerror: unknown sku ax\nsold 9 for 27\nby 4 x 3 = 12\ncz 16 x 3 = 48\ntotal value 60\nby 4 x 3 = 12\ncz 16 x 3 = 48\ntotal value 60\nerror: not empty cz\nok 13\nby 13 x 3 = 39\ncz 16 x 3 = 48\ntotal value 87\nok 22\nerror: insufficient stock for by (have 22, need 24)\nerror: not empty cz\nby 22 x 3 = 66\ncz 16 x 3 = 48\ntotal value 114\nok 29\n"
+ }
+]

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3 4 +\n5 1 2 + 4 * + 3 -\n",
+  "stdout": "7\n14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1 0 /\n+\n1 2\n2 x +\n",
+  "stdout": "error: divzero\nerror: underflow\nerror: leftover\nerror: token\n"
+ }
+]

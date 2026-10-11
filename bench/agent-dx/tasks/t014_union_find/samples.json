@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "5\nunion 0 1\nunion 1 2\nfind 0 2\nfind 0 4\nsize 2\nunion 0 2\n",
+  "stdout": "merged\nmerged\nyes\nno\n3\nsame\ncomponents 3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nsize 0\n",
+  "stdout": "1\ncomponents 1\n"
+ }
+]

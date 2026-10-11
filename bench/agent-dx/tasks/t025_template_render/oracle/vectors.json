@@ -1,0 +1,218 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nname=World\nHello, {{name}}!\n",
+  "stdout": "Hello, World!\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\na=1\nb=x=y\n{{a}}+{{ b }}={{c}}\n",
+  "stdout": "1+x=y=<missing:c>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "0\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nx=\n[{{x}}]{{ x}}{{x }}{{  x  }}\n",
+  "stdout": "[]\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nx={{x}}\n{{x}} { {{ x y }} {{}} {{x\n",
+  "stdout": "{{x}} { {{ x y }} {{}} {{x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\na_1=ok\n{{a_1}}{{a_1}}\nline2 {{A_1}}\n",
+  "stdout": "okok\nline2 <missing:A_1>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nD=z y}\n}}\n",
+  "stdout": "}}\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\na=1=\nbb==  {\nc_3= {\n{{ z }}\n",
+  "stdout": "<missing:z>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nbb=z=\nc_3={1x=\ntext {{c_3}}{{c_3}}\n",
+  "stdout": "text {1x={1x=\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nc_3=\n\n{{ bb }}text {}}{{ z }}\n",
+  "stdout": "\n<missing:bb>text {}}<missing:z>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\na={y \nbb=z\n{{ bb }}{\n",
+  "stdout": "z{\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nbb=yyxx\na=\nD=zx\n}}\n{{ z }}{{ bb }}text \n",
+  "stdout": "}}\n<missing:z>yyxxtext \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nbb=\n{\n\n",
+  "stdout": "{\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nD= {\nc_3=z\n\n{{c_3}}}}{{ z }}text \n",
+  "stdout": "\nz}}<missing:z>text \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "0\n}}{{ bb }}{{{ a b }}}}}}}}text \n",
+  "stdout": "}}<missing:bb>{{{ a b }}}}}}}}text \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nbb== \nD==\nc_3= \n{{{D}}\n",
+  "stdout": "{=\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\na=1z{\n{\n{{ a b }}{{c_3}}\n",
+  "stdout": "{\n{{ a b }}<missing:c_3>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nD=\nc_3={\n{{ z }}{{ a b }}\n",
+  "stdout": "<missing:z>{{ a b }}\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\na=}x{\nbb= \n\n{{ a b }}\n\n",
+  "stdout": "\n{{ a b }}\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\na=y{\nD= =\n{{ bb }}\n{{ bb }}\n{{{ z }}{{a}}\n",
+  "stdout": "<missing:bb>\n<missing:bb>\n{<missing:z>y{\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\na=xx=\nbb=yx\nD=1 y=\n{{ z }}{{D}}{{ a b }}{{a}}{{ bb }}\n",
+  "stdout": "<missing:z>1 y={{ a b }}xx=yx\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nD={x\n{{c_3}}\n}}{{{ bb }}text {{ bb }}{{c_3}}\n",
+  "stdout": "<missing:c_3>\n}}{<missing:bb>text <missing:bb><missing:c_3>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nbb==\na=\n{{ a b }}\n{{ z }}{{ z }}\n",
+  "stdout": "{{ a b }}\n<missing:z><missing:z>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nc_3=1z\n{{{{ z }}}}{{ z }}{{ bb }}}}\n",
+  "stdout": "{{<missing:z>}}<missing:z><missing:bb>}}\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nc_3=\n}}{{ z }}{{D}}}}}}}}{{ z }}{{ a b }}\n",
+  "stdout": "}}<missing:z><missing:D>}}}}}}<missing:z>{{ a b }}\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nbb=y\nc_3=}1\na=11 =\n{{ a b }}{{ a b }}}}{{ z }}{{ z }}\n\n",
+  "stdout": "{{ a b }}{{ a b }}}}<missing:z><missing:z>\n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nD=yx\n{{ bb }}{{D}}\n}}{{a}}{{ bb }}{{a}}}}\n",
+  "stdout": "<missing:bb>yx\n}}<missing:a><missing:bb><missing:a>}}\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nc_3=1}\n{{ z }}{{ a b }}{{ bb }}\n",
+  "stdout": "<missing:z>{{ a b }}<missing:bb>\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\na=1z\nc_3= }=\nD=y\n{{D}}{{D}}{{D}}{{ a b }}{{a}}{{ bb }}{{D}}\n",
+  "stdout": "yyy{{ a b }}1z<missing:bb>y\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nD=y\na={= \n{{c_3}}{{a}}\n{{D}}{{a}}{{ bb }}{{ bb }}{{D}}\n",
+  "stdout": "<missing:c_3>{= \ny{= <missing:bb><missing:bb>y\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nD==\nbb=1==\nc_3=\n{{a}}{{D}}{{D}}{{a}}text \n",
+  "stdout": "<missing:a>==<missing:a>text \n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nc_3==y\nbb=11=}\n{text \n\n",
+  "stdout": "{text \n\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nc_3=\n}}\n",
+  "stdout": "}}\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nc_3=y\n{{a}}{{ bb }}{{D}}{{D}}{{c_3}}\n",
+  "stdout": "<missing:a><missing:bb><missing:D><missing:D>y\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\nD=} }\na={\n{text {{a}}{{a}}{{a}}\n",
+  "stdout": "{text {{{\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "3\nD=}{\nbb=y}x\nc_3={{z\n\n{{ z }}{{c_3}}\n",
+  "stdout": "\n<missing:z>{{z\n"
+ }
+]

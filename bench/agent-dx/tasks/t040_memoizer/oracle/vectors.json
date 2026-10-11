@@ -1,0 +1,206 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 10\nfib 10\ntri 4\ncollatz 6\n",
+  "stdout": "55 miss\n55 hit\n10 miss\n8 miss\nhits=1 misses=3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 0\nfact 3\ntri 0\ntri 0\n",
+  "stdout": "0 miss\nunknown function\n0 miss\n0 hit\nhits=1 misses=2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "hits=0 misses=0\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 80\nfib 79\nfib 80\ncollatz 1\ncollatz 97\ncollatz 100000\ntri 100000000\n",
+  "stdout": "184550589 miss\n923369890 miss\n184550589 hit\n0 miss\n118 miss\n128 miss\n5000000050000000 miss\nhits=1 misses=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 678714\ntri 5\noops 5\ntri 3\noops 1\ntri 6\nfib 75\ntri 612825\noops 207024\ntri 618193\ncollatz 26805\ncollatz 78135\nfib 1\ntri 296099\ntri 4\n",
+  "stdout": "230326686255 miss\n15 miss\nunknown function\n6 miss\nunknown function\n21 miss\n63197655 miss\n187777546725 miss\nunknown function\n191081601721 miss\n139 miss\n107 miss\n1 miss\n43837456950 miss\n10 miss\nhits=0 misses=12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 6\ntri 6\nfib 52\nfib 3\ncollatz 4\nfib 29\ntri 2\ntri 3\noops 974265\ntri 704048\n",
+  "stdout": "8 miss\n21 miss\n951279875 miss\n2 miss\n2 miss\n514229 miss\n3 miss\n6 miss\nunknown function\n247842145176 miss\nhits=0 misses=9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 702449\ncollatz 78189\ntri 3\n",
+  "stdout": "246717650025 miss\n107 miss\n6 miss\nhits=0 misses=3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "oops 0\ntri 5\noops 729171\ncollatz 1\nfib 4\noops 993988\ncollatz 1\nfib 6\ntri 943211\noops 2\ntri 1\noops 6\noops 0\nfib 2\ntri 6\ntri 0\nfib 0\n",
+  "stdout": "unknown function\n15 miss\nunknown function\n0 miss\n3 miss\nunknown function\n0 hit\n8 miss\n444823966866 miss\nunknown function\n1 miss\nunknown function\nunknown function\n1 miss\n21 miss\n0 miss\n0 miss\nhits=1 misses=10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 50\ntri 4\ntri 4\ncollatz 6\nfib 6\nfib 72\ntri 4\nfib 34\nfib 79\nfib 76\nfib 24\nfib 5\nfib 2\ntri 5\n",
+  "stdout": "586268941 miss\n10 miss\n10 hit\n8 miss\n8 miss\n8390086 miss\n10 hit\n5702887 miss\n923369890 miss\n598991529 miss\n46368 miss\n5 miss\n1 miss\n15 miss\nhits=2 misses=12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 1\noops 5\ntri 777331\ncollatz 1\ntri 2\nfib 2\ntri 0\ncollatz 3\nfib 2\noops 1\ntri 580983\nfib 2\ntri 399721\nfib 54\ntri 6\nfib 38\nfib 32\nfib 46\noops 2\n",
+  "stdout": "1 miss\nunknown function\n302122130446 miss\n0 miss\n3 miss\n1 miss\n0 miss\n7 miss\n1 hit\nunknown function\n168770913636 miss\n1 hit\n79888638781 miss\n267570670 miss\n21 miss\n39088169 miss\n2178309 miss\n836311896 miss\nunknown function\nhits=2 misses=14\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 6\ntri 845178\noops 617991\nfib 30\nfib 5\ncollatz 4\ntri 352040\ntri 3\nfib 5\ncollatz 5\ntri 4\ntri 97698\n",
+  "stdout": "21 miss\n357163348431 miss\nunknown function\n832040 miss\n5 miss\n2 miss\n61966256820 miss\n6 miss\n5 hit\n5 miss\n10 miss\n4772498451 miss\nhits=1 misses=10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 4\noops 5\ntri 6\ntri 4\noops 670569\nfib 0\ncollatz 5\ntri 330343\n",
+  "stdout": "3 miss\nunknown function\n21 miss\n10 miss\nunknown function\n0 miss\n5 miss\n54563413996 miss\nhits=0 misses=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 330252\noops 3\ncollatz 1\ntri 1\ntri 6\ntri 972274\nfib 60\nfib 2\ntri 60248\n",
+  "stdout": "54533356878 miss\nunknown function\n0 miss\n1 miss\n21 miss\n472658851675 miss\n8745084 miss\n1 miss\n1814940876 miss\nhits=0 misses=8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "oops 615771\nfib 35\nfib 57\ntri 6\nfib 5\ntri 1\noops 518020\nfib 5\ntri 760038\noops 2\ntri 3\ncollatz 1\nfib 39\nfib 3\ncollatz 59566\ntri 649724\n",
+  "stdout": "unknown function\n9227465 miss\n435293607 miss\n21 miss\n5 miss\n1 miss\nunknown function\n5 hit\n288829260741 miss\nunknown function\n6 miss\n0 miss\n63245986 miss\n2 miss\n135 miss\n211070962950 miss\nhits=1 misses=12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 5999\nfib 18\nfib 64\noops 2\noops 2\ntri 2\nfib 3\noops 5\noops 209767\ntri 932690\nfib 2\ntri 1\ncollatz 79756\ntri 0\nfib 1\ncollatz 68009\nfib 3\ntri 4\nfib 3\n",
+  "stdout": "186 miss\n2584 miss\n209783453 miss\nunknown function\nunknown function\n3 miss\n2 miss\nunknown function\nunknown function\n434955784395 miss\n1 miss\n1 miss\n94 miss\n0 miss\n1 miss\n205 miss\n2 hit\n10 miss\n2 hit\nhits=2 misses=13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "oops 6\ncollatz 6\noops 3\nfib 65\ntri 513987\noops 0\ntri 45376\ntri 1\noops 0\ntri 44495\ntri 4\ntri 3\noops 610310\ncollatz 1\ntri 62940\noops 5\nfib 1\nfib 2\nfib 3\ntri 4\n",
+  "stdout": "unknown function\n8 miss\nunknown function\n680057396 miss\n132091575078 miss\nunknown function\n1029513376 miss\n1 miss\nunknown function\n989924760 miss\n10 miss\n6 miss\nunknown function\n0 miss\n1980753270 miss\nunknown function\n1 miss\n1 miss\n2 miss\n10 hit\nhits=1 misses=13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 4\ncollatz 92801\noops 2\ntri 1\ntri 6\nfib 56\nfib 0\ntri 3\n",
+  "stdout": "3 miss\n177 miss\nunknown function\n1 miss\n21 miss\n851432142 miss\n0 miss\n6 miss\nhits=0 misses=7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 869000\nfib 0\nfib 23\ntri 521336\nfib 5\ncollatz 42445\nfib 1\nfib 51\ntri 3\noops 942834\ntri 941689\noops 991090\ntri 6\ncollatz 25840\ntri 92511\noops 4\ntri 6\n",
+  "stdout": "377580934500 miss\n0 miss\n28657 miss\n135895873116 miss\n5 miss\n101 miss\n1 miss\n365010934 miss\n6 miss\nunknown function\n443389557205 miss\nunknown function\n21 miss\n77 miss\n4279188816 miss\nunknown function\n21 hit\nhits=1 misses=13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "oops 2\nfib 0\ntri 1\nfib 2\ntri 368757\ntri 5\nfib 10\noops 3\n",
+  "stdout": "unknown function\n0 miss\n1 miss\n1 miss\n67991046903 miss\n15 miss\n55 miss\nunknown function\nhits=0 misses=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 3\ntri 27704\nfib 16\ncollatz 1\noops 269827\nfib 6\noops 6\ntri 1\noops 2\ntri 0\nfib 5\ncollatz 87275\nfib 0\nfib 3\nfib 3\ntri 6\noops 794572\ncollatz 37009\n",
+  "stdout": "6 miss\n383769660 miss\n987 miss\n0 miss\nunknown function\n8 miss\nunknown function\n1 miss\nunknown function\n0 miss\n5 miss\n76 miss\n0 miss\n2 miss\n2 hit\n21 miss\nunknown function\n93 miss\nhits=1 misses=13\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 5\noops 779946\ntri 1\noops 416057\nfib 32\ncollatz 86727\noops 2\ntri 4\nfib 78\ntri 5\nfib 2\ncollatz 6\ncollatz 3\ntri 2\nfib 73\ntri 67891\ntri 0\ntri 6\ncollatz 4\n",
+  "stdout": "5 miss\nunknown function\n1 miss\nunknown function\n2178309 miss\n76 miss\nunknown function\n10 miss\n261180706 miss\n15 miss\n1 miss\n8 miss\n7 miss\n3 miss\n527403788 miss\n2304627886 miss\n0 miss\n21 miss\n2 miss\nhits=0 misses=16\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 6\nfib 52\ntri 2\nfib 6\nfib 49\nfib 1\ntri 767391\noops 391350\ntri 5\ntri 571939\nfib 11\ncollatz 65937\n",
+  "stdout": "8 miss\n951279875 miss\n3 miss\n8 miss\n778742000 miss\n1 miss\n294444857136 miss\nunknown function\n15 miss\n163557395830 miss\n89 miss\n42 miss\nhits=0 misses=11\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 3\ncollatz 71613\nfib 5\ncollatz 47129\nfib 40\ntri 2\nfib 3\nfib 4\noops 2\n",
+  "stdout": "7 miss\n99 miss\n5 miss\n282 miss\n102334155 miss\n3 miss\n2 miss\n3 miss\nunknown function\nhits=0 misses=8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 300716\noops 0\ntri 6\ntri 2\ncollatz 4\n",
+  "stdout": "45215206686 miss\nunknown function\n21 miss\n3 miss\n2 miss\nhits=0 misses=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 55\nfib 3\noops 0\noops 277434\ntri 4\ncollatz 6\ntri 180842\noops 0\ntri 6\nfib 3\ncollatz 2\nfib 0\n",
+  "stdout": "583861472 miss\n2 miss\nunknown function\nunknown function\n10 miss\n8 miss\n16352004903 miss\nunknown function\n21 miss\n2 hit\n1 miss\n0 miss\nhits=1 misses=8\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 5\ncollatz 51210\ncollatz 2\nfib 1\ntri 2\nfib 76\nfib 18\ntri 396208\nfib 2\n",
+  "stdout": "15 miss\n127 miss\n1 miss\n1 miss\n3 miss\n598991529 miss\n2584 miss\n78490587736 miss\n1 miss\nhits=0 misses=9\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "fib 40\ntri 2\nfib 6\nfib 3\nfib 2\ntri 2\ntri 3\ntri 523081\n",
+  "stdout": "102334155 miss\n3 miss\n8 miss\n2 miss\n1 miss\n3 hit\n6 miss\n136807127821 miss\nhits=1 misses=7\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 161793\ntri 412118\ncollatz 44426\nfib 6\noops 662157\n",
+  "stdout": "13088568321 miss\n84920829021 miss\n132 miss\n8 miss\nunknown function\nhits=0 misses=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 39037\ntri 5\nfib 49\nfib 5\noops 649984\ncollatz 6\noops 729990\noops 282382\nfib 2\ncollatz 2\ntri 6\noops 0\nfib 0\nfib 6\ntri 425173\nfib 72\ntri 594532\noops 1\ntri 3\ncollatz 46612\n",
+  "stdout": "155 miss\n15 miss\n778742000 miss\n5 miss\nunknown function\n8 miss\nunknown function\nunknown function\n1 miss\n1 miss\n21 miss\nunknown function\n0 miss\n8 miss\n90386252551 miss\n8390086 miss\n176734446778 miss\nunknown function\n6 miss\n114 miss\nhits=0 misses=15\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 35166\nfib 2\nfib 0\n",
+  "stdout": "129 miss\n1 miss\n0 miss\nhits=0 misses=3\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "oops 89022\noops 224562\ntri 863666\ntri 544311\ncollatz 1\noops 501463\ncollatz 40883\nfib 2\ntri 321598\n",
+  "stdout": "unknown function\nunknown function\n372959911611 miss\n148137504516 miss\n0 miss\nunknown function\n62 miss\n1 miss\n51712797601 miss\nhits=0 misses=6\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 1\ncollatz 6\ncollatz 1\ncollatz 1\ncollatz 97977\noops 904724\n",
+  "stdout": "1 miss\n8 miss\n0 miss\n0 hit\n190 miss\nunknown function\nhits=1 misses=4\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "tri 4\nfib 0\ncollatz 58133\nfib 6\nfib 51\nfib 43\ntri 414964\ncollatz 4\nfib 3\ntri 5\nfib 0\ncollatz 32558\nfib 3\ncollatz 50176\n",
+  "stdout": "10 miss\n0 miss\n73 miss\n8 miss\n365010934 miss\n433494437 miss\n86097768130 miss\n2 miss\n2 miss\n15 miss\n0 hit\n116 miss\n2 hit\n34 miss\nhits=2 misses=12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "collatz 4\noops 6\ncollatz 6\ntri 3\ncollatz 5\ntri 2\n",
+  "stdout": "2 miss\nunknown function\n8 miss\n6 miss\n5 miss\n3 miss\nhits=0 misses=5\n"
+ }
+]

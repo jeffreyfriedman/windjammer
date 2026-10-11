@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "1\nname=World\nHello, {{name}}!\n",
+  "stdout": "Hello, World!\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "2\na=1\nb=x=y\n{{a}}+{{ b }}={{c}}\n",
+  "stdout": "1+x=y=<missing:c>\n"
+ }
+]

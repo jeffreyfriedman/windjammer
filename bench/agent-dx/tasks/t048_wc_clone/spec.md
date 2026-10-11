@@ -1,0 +1,3 @@
+Write a `wc`-like tool. Command-line arguments are file names (relative to the current directory). For each file print `<lines> <words> <bytes> <name>` where lines is the number of `\n` characters, words the number of maximal runs of non-whitespace bytes (whitespace = space, tab, newline, carriage return), and bytes the file size in bytes. Files contain only ASCII.
+
+If a file cannot be read print `wc: <name>: No such file` instead of its line (to standard output) and remember the failure. If more than one argument was given, print a final `<lines> <words> <bytes> total` line summing the files that could be read. If there are no arguments, read standard input instead and print `<lines> <words> <bytes>` (no name). Exit with status 1 if any file was missing, otherwise 0.

@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "()\n([{}])\n(]\n",
+  "stdout": "ok\nok\nerror 2\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "((\na(b)c)\n\n",
+  "stdout": "error 2\nerror 6\nok\n"
+ }
+]

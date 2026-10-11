@@ -1,0 +1,419 @@
+[
+ {
+  "args": [
+   "a.txt"
+  ],
+  "files": {
+   "a.txt": "hello world\nfoo\n"
+  },
+  "stdin": "",
+  "stdout": "2 3 16 a.txt\n"
+ },
+ {
+  "args": [
+   "x",
+   "y"
+  ],
+  "files": {
+   "x": "one two\n",
+   "y": "three\n\nfour five six\n"
+  },
+  "stdin": "",
+  "stdout": "1 2 8 x\n3 4 21 y\n4 6 29 total\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "stdin text\nline two\n",
+  "stdout": "2 4 20\n"
+ },
+ {
+  "args": [
+   "nope.txt"
+  ],
+  "code": 1,
+  "files": {},
+  "stdin": "",
+  "stdout": "wc: nope.txt: No such file\n"
+ },
+ {
+  "args": [
+   "e",
+   "e"
+  ],
+  "files": {
+   "e": ""
+  },
+  "stdin": "",
+  "stdout": "0 0 0 e\n0 0 0 e\n0 0 0 total\n"
+ },
+ {
+  "args": [
+   "n",
+   "missing",
+   "n"
+  ],
+  "code": 1,
+  "files": {
+   "n": "no newline at end"
+  },
+  "stdin": "",
+  "stdout": "0 4 17 n\nwc: missing: No such file\n0 4 17 n\n0 8 34 total\n"
+ },
+ {
+  "args": [
+   "t"
+  ],
+  "files": {
+   "t": "a\tb  c\r\nd\n\n\n"
+  },
+  "stdin": "",
+  "stdout": "4 4 12 t\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "",
+  "stdout": "0 0 0\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "x y\n\nab\t",
+   "f1.txt": " \n\n\n cdex ycdecde\n \nx ycdecde\n\n",
+   "f2.txt": "\n\n\n\tcdecde\t\tx yx ycdex y\tx y"
+  },
+  "stdin": "",
+  "stdout": "2 3 8 f0.txt\n2 3 8 f0.txt\nwc: gone.txt: No such file\n4 6 16 total\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\nzz zz \nw ",
+  "stdout": "2 3 10\n"
+ },
+ {
+  "args": [
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "\n\n\tababx y\n\n \nx y\t\ncdex y ",
+   "f1.txt": "\ncdeab\n\tcdex yab\nab x ycdeab \tx y\n\n\n",
+   "f2.txt": "x y cdex y \n\n\n\t\n",
+   "f3.txt": "\ncdecde\n \n\tab\n\n\t\n"
+  },
+  "stdin": "",
+  "stdout": "6 8 36 f1.txt\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": ""
+  },
+  "stdin": "",
+  "stdout": "0 0 0 f0.txt\nwc: gone.txt: No such file\nwc: gone.txt: No such file\n0 0 0 total\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\n\t x y \nab\nabcdeab\n\n",
+   "f1.txt": " \nab\ncde\ncdex ycde\n\n\t \n\tcde\n \t",
+   "f2.txt": "cdeabx y\ncdeabcde\n"
+  },
+  "stdin": "",
+  "stdout": "5 4 20 f0.txt\nwc: gone.txt: No such file\n5 4 20 total\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "zz \nzz zz w ",
+  "stdout": "1 4 12\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n\n\nw w ",
+  "stdout": "3 2 7\n"
+ },
+ {
+  "args": [
+   "f2.txt",
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": " cde\n \n\tx y",
+   "f1.txt": "\t \t\nabx y \t\nx y\t\t\n",
+   "f2.txt": "\n \n\ncde\tcde"
+  },
+  "stdin": "",
+  "stdout": "3 2 11 f2.txt\n3 2 11 f2.txt\n6 4 22 total\n"
+ },
+ {
+  "args": [
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\nx yababcdeabcde"
+  },
+  "stdin": "",
+  "stdout": "wc: gone.txt: No such file\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "f0.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\tcde ab\t  cde\n",
+   "f1.txt": "x yx ycde\n x y\tx ycdecde "
+  },
+  "stdin": "",
+  "stdout": "1 3 14 f0.txt\n1 3 14 f0.txt\n1 3 14 f0.txt\nwc: gone.txt: No such file\n3 9 42 total\n"
+ },
+ {
+  "args": [
+   "gone.txt",
+   "f0.txt",
+   "f0.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\n\nabab x yabcdecde\n cde  cde  "
+  },
+  "stdin": "",
+  "stdout": "wc: gone.txt: No such file\n3 5 30 f0.txt\n3 5 30 f0.txt\n6 10 60 total\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "w \nzz zz w ",
+  "stdout": "1 4 11\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "\n\n\nzz \n",
+  "stdout": "4 1 7\n"
+ },
+ {
+  "args": [
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "\n\t\t\nx y\n",
+   "f1.txt": "x y \n\nab\nab x y\n\n\nx y\nab\t ",
+   "f2.txt": "\n abab\tab\n\tcde\n\tx y  x y"
+  },
+  "stdin": "",
+  "stdout": "7 9 26 f1.txt\n"
+ },
+ {
+  "args": [
+   "gone.txt",
+   "f1.txt",
+   "f3.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "cde\n\n\nab  \t\n ab\nab\nab\n cde\t",
+   "f1.txt": "\n cdecde ",
+   "f2.txt": "x y\n\t",
+   "f3.txt": "\nab"
+  },
+  "stdin": "",
+  "stdout": "wc: gone.txt: No such file\n1 1 9 f1.txt\n1 1 3 f3.txt\n2 2 12 total\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "ab\tab \nab  "
+  },
+  "stdin": "",
+  "stdout": "1 3 11 f0.txt\n1 3 11 f0.txt\n1 3 11 f0.txt\n3 9 33 total\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "\ncdeab",
+   "f1.txt": "cde\tcdeababab \n\tx y"
+  },
+  "stdin": "",
+  "stdout": "1 1 6 f0.txt\n1 1 6 f0.txt\n1 1 6 f0.txt\n3 3 18 total\n"
+ },
+ {
+  "args": [
+   "gone.txt",
+   "f0.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "cde\n\tcde ab\n\nx y \nx yababab"
+  },
+  "stdin": "",
+  "stdout": "wc: gone.txt: No such file\n4 7 27 f0.txt\n4 7 27 total\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt",
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": ""
+  },
+  "stdin": "",
+  "stdout": "0 0 0 f0.txt\n0 0 0 f0.txt\nwc: gone.txt: No such file\n0 0 0 total\n"
+ },
+ {
+  "args": [
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "x yx y x y\t\t\nabab\n"
+  },
+  "stdin": "",
+  "stdout": "2 6 18 f0.txt\n2 6 18 f0.txt\n4 12 36 total\n"
+ },
+ {
+  "args": [
+   "f2.txt",
+   "gone.txt",
+   "f0.txt",
+   "f1.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "cde\n\nab\nabx y\n\t\t\n \n\ncde \t \nab",
+   "f1.txt": "\n\n\n\n\n \ncde",
+   "f2.txt": "x y\tx y",
+   "f3.txt": "cde"
+  },
+  "stdin": "",
+  "stdout": "0 4 7 f2.txt\nwc: gone.txt: No such file\n8 6 29 f0.txt\n6 1 10 f1.txt\n14 11 46 total\n"
+ },
+ {
+  "args": [
+   "gone.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": "\tab\tx y\n"
+  },
+  "stdin": "",
+  "stdout": "wc: gone.txt: No such file\n"
+ },
+ {
+  "args": [
+   "f3.txt",
+   "f2.txt"
+  ],
+  "files": {
+   "f0.txt": " \n x yab",
+   "f1.txt": "ab\n\tab\tab\t\n",
+   "f2.txt": "x yab\n\n \n\n cde\n\n",
+   "f3.txt": "\nx y\n\tx y\t\nx yx y\nx yab ab\ncdex yab cde"
+  },
+  "stdin": "",
+  "stdout": "5 13 39 f3.txt\n6 3 16 f2.txt\n11 16 55 total\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "zz w \nw w ",
+  "stdout": "1 4 10\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f0.txt",
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "\nabx y\t\n\tabcde\n\t\nabcdeab\n\nx yab\ncde",
+   "f1.txt": "ab x y\t\tabx ycdex yx ycdecde\ncdeab\tcde"
+  },
+  "stdin": "",
+  "stdout": "1 9 38 f1.txt\n7 7 35 f0.txt\n1 9 38 f1.txt\n9 25 111 total\n"
+ },
+ {
+  "args": [
+   "f1.txt"
+  ],
+  "files": {
+   "f0.txt": "cdeab\t\tcdecde\n\ncde",
+   "f1.txt": "cdex y\t",
+   "f2.txt": "cde \n\t\n\tcdeab\n\n",
+   "f3.txt": "cde \nx yx y\n"
+  },
+  "stdin": "",
+  "stdout": "0 2 7 f1.txt\n"
+ },
+ {
+  "args": [
+   "f1.txt",
+   "f0.txt",
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "cde \n\n\nx y cde\n\n",
+   "f1.txt": "\ncdecde\nab\t \ncdeabcde\nabx y\n",
+   "f2.txt": " \t \n x yab \n \nab\ncde\t"
+  },
+  "stdin": "",
+  "stdout": "5 5 28 f1.txt\n5 4 16 f0.txt\n5 4 16 f0.txt\n15 13 60 total\n"
+ },
+ {
+  "args": [
+   "f0.txt"
+  ],
+  "files": {
+   "f0.txt": "x ycde\nab\t\t\nx y \n\n\tx y ",
+   "f1.txt": "cdecde ab\ncde\tcde  ",
+   "f2.txt": "\ncdecdecde ab",
+   "f3.txt": "\n\ncde \tcde\nx y\n\nab ababx yx y\n\tcde"
+  },
+  "stdin": "",
+  "stdout": "4 7 23 f0.txt\n"
+ },
+ {
+  "args": [
+   "gone.txt",
+   "f1.txt"
+  ],
+  "code": 1,
+  "files": {
+   "f0.txt": " ab \n x y\nabx yab abcde",
+   "f1.txt": "ab  \ncdecde"
+  },
+  "stdin": "",
+  "stdout": "wc: gone.txt: No such file\n1 2 11 f1.txt\n1 2 11 total\n"
+ }
+]

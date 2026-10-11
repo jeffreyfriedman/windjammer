@@ -1,0 +1,14 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "dog Rex\ncat Tom\nduck Don\n",
+  "stdout": "Rex the dog says woof on 4 legs\nTom the cat purrs softly\nDon the duck says quack on 2 legs\nlegs total=10\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "snake Sid\nspider Sam\nfish Wanda\n",
+  "stdout": "Sid the snake says hiss on 0 legs\nSam the spider says ... on 8 legs\nunknown kind fish\nlegs total=8\n"
+ }
+]

@@ -1,0 +1,224 @@
+[
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:desc,name:asc\nbob 30 paris\namy 25 rome\ncat 30 oslo\ndan 25 rome\namy 31 bern\n",
+  "stdout": "amy 31 bern\nbob 30 paris\ncat 30 oslo\namy 25 rome\ndan 25 rome\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc\nbob 30 paris\namy 25 rome\ncat 30 oslo\ndan 25 rome\namy 31 bern\n",
+  "stdout": "amy 31 bern\ncat 30 oslo\nbob 30 paris\namy 25 rome\ndan 25 rome\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc\na 1 x\nb 1 x\nc 1 x\n",
+  "stdout": "a 1 x\nb 1 x\nc 1 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:desc,city:desc,name:desc\nbob 30 paris\namy 25 rome\ncat 30 oslo\ndan 25 rome\namy 31 bern\n",
+  "stdout": "amy 31 bern\nbob 30 paris\ncat 30 oslo\ndan 25 rome\namy 25 rome\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:desc,age:asc\nbob 30 paris\namy 25 rome\ncat 30 oslo\ndan 25 rome\namy 31 bern\namy 25 zzz\n",
+  "stdout": "dan 25 rome\ncat 30 oslo\nbob 30 paris\namy 25 rome\namy 25 zzz\namy 31 bern\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc\nn 9 c\nm 10 c\nl -1 c\n",
+  "stdout": "l -1 c\nn 9 c\nm 10 c\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc\ncy 5 x\nDi 19 yy\n",
+  "stdout": "Di 19 yy\ncy 5 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc\nbob 36 a\ncy 34 x\nDi 40 x\nDi 32 yy\nbob 20 a\nDi 3 Zed\nann 11 yy\nDi 12 Zed\nbob -1 Zed\nDi 6 a\nbob 16 Zed\nann 40 x\n",
+  "stdout": "bob -1 Zed\nDi 3 Zed\nDi 6 a\nann 11 yy\nDi 12 Zed\nbob 16 Zed\nbob 20 a\nDi 32 yy\ncy 34 x\nbob 36 a\nDi 40 x\nann 40 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:desc,age:asc\nann 5 yy\nbob 30 yy\nbob 35 x\nbob 28 x\nann -1 x\ncy 17 yy\nbob 17 x\n",
+  "stdout": "cy 17 yy\nbob 17 x\nbob 28 x\nbob 30 yy\nbob 35 x\nann -1 x\nann 5 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc\nbob 31 yy\nann 21 Zed\nbob 20 yy\nDi 11 x\nann 21 yy\ncy 19 a\n",
+  "stdout": "ann 21 Zed\ncy 19 a\nDi 11 x\nbob 31 yy\nbob 20 yy\nann 21 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc,age:asc,city:asc\nDi 26 a\nDi 18 a\nann 0 a\ncy 0 yy\nbob 24 x\n",
+  "stdout": "Di 18 a\nDi 26 a\nann 0 a\nbob 24 x\ncy 0 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc,city:desc\nbob 17 yy\nDi 30 x\nann 32 Zed\ncy 7 a\nDi 27 Zed\nDi 15 x\nann 16 yy\ncy 33 x\nDi 1 yy\nann 30 Zed\nDi 28 Zed\n",
+  "stdout": "Di 1 yy\ncy 7 a\nDi 15 x\nann 16 yy\nbob 17 yy\nDi 27 Zed\nDi 28 Zed\nDi 30 x\nann 30 Zed\nann 32 Zed\ncy 33 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,age:desc,name:desc\nbob 13 Zed\ncy 17 Zed\ncy 2 x\nann 18 a\nbob 23 a\nann 32 Zed\nbob 17 x\nDi -2 a\n",
+  "stdout": "ann 32 Zed\ncy 17 Zed\nbob 13 Zed\nbob 23 a\nann 18 a\nDi -2 a\nbob 17 x\ncy 2 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc,city:desc,age:desc\nann 10 yy\ncy 12 yy\n",
+  "stdout": "ann 10 yy\ncy 12 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,name:desc\nbob 31 Zed\nbob 0 x\nann 22 yy\ncy 25 x\n",
+  "stdout": "bob 31 Zed\ncy 25 x\nbob 0 x\nann 22 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc,city:desc\ncy 39 a\n",
+  "stdout": "cy 39 a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:desc\ncy 2 yy\nbob 26 a\nDi 21 a\nDi 14 x\nbob 37 a\nann 3 Zed\nann 23 x\nbob 0 Zed\ncy 23 Zed\nDi 13 yy\nann 34 a\nbob 7 yy\n",
+  "stdout": "cy 2 yy\nDi 13 yy\nbob 7 yy\nDi 14 x\nann 23 x\nbob 26 a\nDi 21 a\nbob 37 a\nann 34 a\nann 3 Zed\nbob 0 Zed\ncy 23 Zed\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,name:desc\nann 16 a\ncy 38 a\nbob 14 a\nDi 16 Zed\nbob 14 a\nbob 3 yy\nann 28 x\nDi 21 yy\nDi 37 Zed\nann 40 yy\nbob 3 yy\n",
+  "stdout": "Di 16 Zed\nDi 37 Zed\ncy 38 a\nbob 14 a\nbob 14 a\nann 16 a\nann 28 x\nbob 3 yy\nbob 3 yy\nann 40 yy\nDi 21 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc,city:asc\nbob 37 Zed\n",
+  "stdout": "bob 37 Zed\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,age:desc,name:asc\nbob 4 Zed\nbob 33 x\nann 20 a\ncy 5 Zed\nbob 5 yy\nDi 35 yy\nDi 10 a\nDi 20 x\nann 39 yy\nDi 32 x\ncy 4 a\n",
+  "stdout": "cy 5 Zed\nbob 4 Zed\nann 20 a\nDi 10 a\ncy 4 a\nbob 33 x\nDi 32 x\nDi 20 x\nann 39 yy\nDi 35 yy\nbob 5 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc,city:desc\ncy 35 x\ncy -2 Zed\nDi 36 yy\nann 33 Zed\nann 8 Zed\nDi 6 a\nbob 38 x\n",
+  "stdout": "Di 36 yy\nDi 6 a\nann 33 Zed\nann 8 Zed\nbob 38 x\ncy 35 x\ncy -2 Zed\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc,city:desc\nDi 18 Zed\n",
+  "stdout": "Di 18 Zed\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc,city:desc\nDi 23 yy\nann 0 x\nann 2 yy\nann -2 Zed\nbob 23 x\nbob -2 Zed\n",
+  "stdout": "ann -2 Zed\nbob -2 Zed\nann 0 x\nann 2 yy\nDi 23 yy\nbob 23 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:asc,name:desc\ncy 31 a\ncy 20 yy\nbob 31 x\nann 31 yy\ncy 7 Zed\nDi 35 yy\nDi 22 a\nbob 32 Zed\n",
+  "stdout": "cy 7 Zed\ncy 20 yy\nDi 22 a\ncy 31 a\nbob 31 x\nann 31 yy\nbob 32 Zed\nDi 35 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,name:asc,age:asc\n",
+  "stdout": ""
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,name:asc,age:desc\nDi 7 yy\ncy 4 x\n",
+  "stdout": "cy 4 x\nDi 7 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc,age:asc\nann -2 x\nDi 37 x\nbob 5 yy\nDi 4 a\n",
+  "stdout": "Di 4 a\nDi 37 x\nann -2 x\nbob 5 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:desc,city:desc\nDi 11 x\nbob 30 Zed\nann 34 Zed\nbob 32 yy\nDi 11 yy\nbob 19 a\nann 39 a\nbob 6 Zed\n",
+  "stdout": "bob 32 yy\nbob 19 a\nbob 30 Zed\nbob 6 Zed\nann 39 a\nann 34 Zed\nDi 11 yy\nDi 11 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc\ncy 16 yy\nann 21 a\nbob 13 Zed\nann 9 x\nann 30 yy\nDi 25 Zed\nbob -2 a\nann 25 a\nDi 20 a\n",
+  "stdout": "Di 25 Zed\nDi 20 a\nann 21 a\nann 9 x\nann 30 yy\nann 25 a\nbob 13 Zed\nbob -2 a\ncy 16 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:asc,city:asc,age:desc\nann -3 a\ncy 19 x\nDi 24 a\nann 3 yy\n",
+  "stdout": "Di 24 a\nann -3 a\nann 3 yy\ncy 19 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "age:desc,name:asc,city:asc\nbob 18 a\n",
+  "stdout": "bob 18 a\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,name:desc,age:desc\nann 7 a\nDi 15 yy\nDi 1 x\nbob 34 a\nDi 17 Zed\nbob 20 yy\n",
+  "stdout": "Di 17 Zed\nbob 34 a\nann 7 a\nDi 1 x\nbob 20 yy\nDi 15 yy\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,age:asc,name:asc\nann 27 x\nann 27 x\ncy 10 x\ncy 10 Zed\nann 7 x\n",
+  "stdout": "cy 10 Zed\nann 7 x\ncy 10 x\nann 27 x\nann 27 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:desc,age:asc\ncy 0 Zed\nDi 4 a\nDi 4 a\ncy 39 Zed\nann 9 yy\nDi 5 Zed\ncy 16 Zed\nbob 17 yy\nbob -2 yy\ncy 32 Zed\n",
+  "stdout": "cy 0 Zed\ncy 16 Zed\ncy 32 Zed\ncy 39 Zed\nbob -2 yy\nbob 17 yy\nann 9 yy\nDi 4 a\nDi 4 a\nDi 5 Zed\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "name:desc,age:desc,city:desc\ncy 1 yy\ncy 21 a\nbob 10 yy\nann -2 x\nbob 38 a\ncy 30 Zed\nann 14 a\nann 32 yy\nann 12 yy\n",
+  "stdout": "cy 30 Zed\ncy 21 a\ncy 1 yy\nbob 38 a\nbob 10 yy\nann 32 yy\nann 14 a\nann 12 yy\nann -2 x\n"
+ },
+ {
+  "args": [],
+  "files": {},
+  "stdin": "city:asc,age:asc,name:desc\nann -1 Zed\nbob 2 yy\nbob 39 yy\nbob 7 a\nDi 5 x\nann 24 a\nDi 3 yy\nann 37 x\nDi 27 yy\nbob 38 x\nbob -1 Zed\nbob 3 a\n",
+  "stdout": "bob -1 Zed\nann -1 Zed\nbob 3 a\nbob 7 a\nann 24 a\nDi 5 x\nann 37 x\nbob 38 x\nbob 2 yy\nDi 3 yy\nDi 27 yy\nbob 39 yy\n"
+ }
+]

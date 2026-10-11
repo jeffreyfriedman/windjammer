@@ -1,0 +1,83 @@
+use std::fs
+use std::sync::mpsc
+use std::thread
+
+fn apply(stage: string, rx: mpsc::Receiver<i64>) -> mpsc::Receiver<i64> {
+    let (tx, out) = mpsc::channel()
+    thread::spawn(move || {
+        let mut history: Vec<i64> = Vec::new()
+        loop {
+            let x = match rx.recv() {
+                Ok(item) => item,
+                Err(_) => { break }
+            }
+            let mut keep = true
+            let mut v = x
+            if stage.starts_with("add:") {
+                v = x + sub(stage.clone(), 4, stage.len()).parse::<i64>().unwrap_or(0)
+            } else if stage.starts_with("mul:") {
+                v = x * sub(stage.clone(), 4, stage.len()).parse::<i64>().unwrap_or(0)
+            } else if stage.starts_with("gt:") {
+                keep = x > sub(stage.clone(), 3, stage.len()).parse::<i64>().unwrap_or(0)
+            } else if stage == "even" {
+                keep = x % 2 == 0
+            } else if stage == "odd" {
+                keep = x % 2 != 0
+            } else {
+                // comparing a Receiver-loop variable with `==` is emitted as `*x == ..` (E0614): compare via subtraction
+                let n = history.len()
+                if n >= 1 && x - history[n - 1] == 0 { keep = false }
+                if n >= 2 && x - history[n - 2] == 0 { keep = false }
+                history.push(x)
+            }
+            if keep {
+                tx.send(v)
+            }
+        }
+    })
+    out
+}
+
+fn join_ints(v: Vec<i64>) -> string {
+    let mut out = ""
+    let mut first = true
+    for x in v {
+        if !first { out = out + " " }
+        out = out + "${x}"
+        first = false
+    }
+    out
+}
+
+fn sub(s: string, a: usize, b: usize) -> string {
+    s.chars().skip(a).take(b - a).collect::<string>()
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+    let lines: Vec<string> = text.split("\n").map(|s| s.to_string()).collect()
+    let n = lines[0].trim().parse::<i64>().unwrap_or(0)
+    let stages: Vec<string> = lines[1].split_whitespace().map(|s| s.to_string()).collect()
+    let (tx, first) = mpsc::channel()
+    thread::spawn(move || {
+        let mut i: i64 = 1
+        while i <= n {
+            tx.send(i)
+            i += 1
+        }
+    })
+    let mut rx = first
+    for st in stages {
+        rx = apply(st, rx)
+    }
+    let mut items: Vec<i64> = Vec::new()
+    for x in rx {
+        items.push(x)
+    }
+    let strs = join_ints(items.clone())
+    let mut sum: i64 = 0
+    for x in items { sum += x }
+    println("${items.len()}")
+    println(strs)
+    println("sum=${sum}")
+}

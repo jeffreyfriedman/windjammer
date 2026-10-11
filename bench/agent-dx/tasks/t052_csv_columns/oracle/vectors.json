@@ -1,0 +1,571 @@
+[
+ {
+  "args": [
+   "d.csv",
+   "qty",
+   "sum"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "42\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "price",
+   "max"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "12\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "name",
+   "count"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "3\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "name",
+   "sum"
+  ],
+  "code": 3,
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "error: bad value bolt on line 2\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "nope",
+   "sum"
+  ],
+  "code": 2,
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column nope\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "qty",
+   "pow"
+  ],
+  "code": 2,
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "error: unknown op pow\n"
+ },
+ {
+  "args": [
+   "gone.csv",
+   "qty",
+   "sum"
+  ],
+  "code": 1,
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "error: cannot read gone.csv\n"
+ },
+ {
+  "args": [
+   "h.csv",
+   "a",
+   "sum"
+  ],
+  "files": {
+   "h.csv": "a,b\n"
+  },
+  "stdin": "",
+  "stdout": "0\n"
+ },
+ {
+  "args": [
+   "h.csv",
+   "a",
+   "mean"
+  ],
+  "files": {
+   "h.csv": "a,b\n"
+  },
+  "stdin": "",
+  "stdout": "n/a\n"
+ },
+ {
+  "args": [
+   "h.csv",
+   "a",
+   "count"
+  ],
+  "files": {
+   "h.csv": "a,b\n"
+  },
+  "stdin": "",
+  "stdout": "0\n"
+ },
+ {
+  "args": [
+   "s.csv",
+   "b",
+   "sum"
+  ],
+  "code": 3,
+  "files": {
+   "s.csv": "a,b\n1\n2,3\n"
+  },
+  "stdin": "",
+  "stdout": "error: bad value  on line 2\n"
+ },
+ {
+  "args": [
+   "s.csv",
+   "b",
+   "count"
+  ],
+  "files": {
+   "s.csv": "a,b\n1\n2,3\n"
+  },
+  "stdin": "",
+  "stdout": "2\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "qty",
+   "mean"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "14\n"
+ },
+ {
+  "args": [
+   "d.csv",
+   "qty",
+   "min"
+  ],
+  "files": {
+   "d.csv": "name,qty,price\nbolt,10,3\nnut,25,1\nscrew,7,12\n"
+  },
+  "stdin": "",
+  "stdout": "7\n"
+ },
+ {
+  "args": [
+   "n.csv",
+   "a",
+   "sum"
+  ],
+  "code": 3,
+  "files": {
+   "n.csv": "a\n-1\n"
+  },
+  "stdin": "",
+  "stdout": "error: bad value -1 on line 2\n"
+ },
+ {
+  "args": [
+   "n.csv",
+   "a",
+   "sum"
+  ],
+  "files": {
+   "n.csv": "a\n5"
+  },
+  "stdin": "",
+  "stdout": "5\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "mean"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n381,795,218\n"
+  },
+  "stdin": "",
+  "stdout": "218\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "max"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n676,664,165\n"
+  },
+  "stdin": "",
+  "stdout": "165\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "mean"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n244,388,36\n988,649,854\n738,427,279\n188,260,988\n"
+  },
+  "stdin": "",
+  "stdout": "539\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "count"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n210,709,368\n536,670,707\n376,937,459\n245,667,854\n566,44,626\n329,486,29\n449,545,428\n754,665,876\n"
+  },
+  "stdin": "",
+  "stdout": "8\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "count"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n900,904,206\n415,334,300\n60,903,302\n"
+  },
+  "stdin": "",
+  "stdout": "3\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "count"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n162,936,305\n584,459,39\n711,287,444\n828,962,999\n601,159,496\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "mean"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n87,641,757\n224,327,479\n570,574,41\n654,668,536\n34,226,539\n389,730,535\n831,177,481\n"
+  },
+  "stdin": "",
+  "stdout": "481\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "a",
+   "min"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n243,x,516\n"
+  },
+  "stdin": "",
+  "stdout": "243\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "min"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "b",
+   "max"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n619,33,107\n132,0,730\n"
+  },
+  "stdin": "",
+  "stdout": "33\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "b",
+   "max"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n935,729,251\n492,132,346\n956,834,695\n401,386,\n86,740,-2\n822,616,802\n492,313,329\n848,20,693\n"
+  },
+  "stdin": "",
+  "stdout": "834\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "min"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n308,286,989\n315,389,64\n974,644,817\n412,688,53\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "min"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n790,663,270\n49,783,955\n613,98,720\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "a",
+   "max"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n718,764,787\n834,999,83\n"
+  },
+  "stdin": "",
+  "stdout": "834\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "mean"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n390,454,486\nx,863,785\n133,500,239\n510,784,409\n836,,835\n595,144,177\n653,448,926\n,822,324\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "b",
+   "sum"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n784,326,624\n"
+  },
+  "stdin": "",
+  "stdout": "326\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "count"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n119,631,921\n552,797,639\n43,960,908\n927,888,830\n958,264,240\n181,137,612\n"
+  },
+  "stdin": "",
+  "stdout": "6\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "a",
+   "sum"
+  ],
+  "code": 3,
+  "files": {
+   "f.csv": "a,b,c\nx,238,993\n640,358,313\n,976,405\n525,92,934\n583,148,546\n716,675,101\n205,80,654\n"
+  },
+  "stdin": "",
+  "stdout": "error: bad value x on line 2\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "a",
+   "sum"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n252,976,309\n657,480,419\n"
+  },
+  "stdin": "",
+  "stdout": "909\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "b",
+   "mean"
+  ],
+  "code": 3,
+  "files": {
+   "f.csv": "a,b,c\n731,552,927\n947,971,1000\n423,-2,333\n520,415,915\n79,690,950\n633,68,711\n382,338,812\n461,516,347\n"
+  },
+  "stdin": "",
+  "stdout": "error: bad value -2 on line 4\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "max"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n-2,13,189\n566,408,778\n512,487,860\n"
+  },
+  "stdin": "",
+  "stdout": "860\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "b",
+   "mean"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n362,73,221\n264,465,392\n55,927,665\n694,575,358\n819,914,347\n883,102,975\n"
+  },
+  "stdin": "",
+  "stdout": "509\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "min"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n571,860,x\n238,424,587\n326,,296\n14,430,418\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "sum"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n"
+  },
+  "stdin": "",
+  "stdout": "0\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "a",
+   "mean"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n708,48,393\n800,x,255\n523,260,513\n302,375,566\n822,609,971\n721,812,983\n822,345,80\n183,424,392\n"
+  },
+  "stdin": "",
+  "stdout": "610\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "mean"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n782,855,76\n658,432,813\n806,713,234\n652,367,728\n84,140,435\n"
+  },
+  "stdin": "",
+  "stdout": "457\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "c",
+   "mean"
+  ],
+  "code": 3,
+  "files": {
+   "f.csv": "a,b,c\n387,986,454\n140,677,\n921,178,232\n540,439,257\n"
+  },
+  "stdin": "",
+  "stdout": "error: bad value  on line 3\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "b",
+   "sum"
+  ],
+  "files": {
+   "f.csv": "a,b,c\n283,300,165\n602,143,234\n889,734,299\n366,282,\n36,171,510\n886,650,133\n724,10,400\n"
+  },
+  "stdin": "",
+  "stdout": "2290\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "max"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n726,363,183\n928,733,3\n93,814,908\n879,444,613\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ },
+ {
+  "args": [
+   "f.csv",
+   "zz",
+   "sum"
+  ],
+  "code": 2,
+  "files": {
+   "f.csv": "a,b,c\n746,668,137\n-2,997,683\n158,711,104\n137,195,745\n8,717,338\n306,-2,879\n"
+  },
+  "stdin": "",
+  "stdout": "error: no such column zz\n"
+ }
+]
