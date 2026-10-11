@@ -10,6 +10,18 @@ use crate::parser::{Expression, Literal, Type};
 use super::{float_type_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
+    /// A static-str value (module const / literal binding) assigned into an owned text slot.
+    pub(in crate::codegen::rust) fn static_str_into_owned_text_slot(
+        &self,
+        value: &Expression<'_>,
+        target: &Expression<'_>,
+    ) -> bool {
+        self.expression_is_static_str_value(value)
+            && self
+                .infer_expression_type(target)
+                .is_some_and(|t| crate::codegen::rust::string_utilities::type_is_owned_string(&t))
+    }
+
     /// `expr` is a module `const NAME: string` (or a `let s = "lit"` binding): emitted as a
     /// `&'static str`, so it is *borrowed* text even though its WJ type says `string`.
     pub(in crate::codegen::rust) fn expression_is_static_str_value(
