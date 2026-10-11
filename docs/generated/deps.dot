@@ -40,6 +40,7 @@ digraph deps {
     label="ownership";
     "analyzer";
     "auto_clone";
+    "auto_clone_tests";
   }
   subgraph cluster_resolve {
     label="resolve";
@@ -121,7 +122,7 @@ digraph deps {
   "auto_clone_tests" -> "analyzer" [label="23"];
   "auto_clone_tests" -> "lexer" [label="2"];
   "auto_clone_tests" -> "parser" [label="27"];
-  "auto_clone_tests" -> "test_utils" [label="1"];
+  "auto_clone_tests" -> "test_utils" [label="1",color=red,fontcolor=red];
   "build_utils" -> "module_system" [label="4"];
   "build_utils" -> "project_paths" [label="1"];
   "build_utils" -> "rust_integration_tests" [label="2"];
@@ -287,7 +288,7 @@ digraph deps {
   "inference" -> "test_utils" [label="1"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
   "interpreter" -> "lexer" [label="1"];
-  "interpreter" -> "parser" [label="51"];
+  "interpreter" -> "parser" [label="57"];
   "interpreter" -> "source_map" [label="3"];
   "intrinsics" -> "error_catalog" [label="2"];
   "ir" -> "analyzer" [label="57"];
@@ -329,8 +330,8 @@ digraph deps {
   "output_generation" -> "project_paths" [label="1"];
   "package" -> "config" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
-  "parser" -> "lexer" [label="20"];
-  "parser" -> "parser_impl" [label="19"];
+  "parser" -> "lexer" [label="21"];
+  "parser" -> "parser_impl" [label="20"];
   "parser" -> "source_map" [label="2"];
   "parser_impl" -> "lexer" [label="4"];
   "parser_impl" -> "parser" [label="1"];
