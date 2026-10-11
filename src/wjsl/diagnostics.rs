@@ -10,6 +10,22 @@ pub fn format_shader_error(message: &str, source: &str) -> String {
     out
 }
 
+/// Source-aware diagnostics for the WJSL pipeline: enriches errors from any stage.
+pub struct ShaderDiagnostics<'a> {
+    source: &'a str,
+}
+
+impl<'a> ShaderDiagnostics<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Self { source }
+    }
+
+    /// Wrap an error with WJSL context and fix hints.
+    pub fn enrich(&self, err: anyhow::Error) -> anyhow::Error {
+        enrich_shader_error(err, self.source)
+    }
+}
+
 /// Wrap an anyhow error chain with shader-specific hints.
 pub fn enrich_shader_error(err: anyhow::Error, source: &str) -> anyhow::Error {
     let msg = err.to_string();
