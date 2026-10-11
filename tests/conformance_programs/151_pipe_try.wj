@@ -1,0 +1,79 @@
+// expect: ok 12
+// expect: err not a number: abc
+// expect: err negative: -4
+// expect: err boom
+// expect: some 8
+// expect: none
+// expect: ok 101
+// `|>?` is `x? |> stage`: unwrap the left value (early return on failure), then call the stage.
+fn source(s: string) -> Result<string, string> {
+    if s == "boom" {
+        Err("boom")
+    } else {
+        Ok(s)
+    }
+}
+
+fn parse(s: string) -> Result<i32, string> {
+    match s.parse::<i32>() {
+        Ok(n) => Ok(n),
+        Err(_) => Err("not a number: ${s}"),
+    }
+}
+
+fn non_negative(n: i32) -> Result<i32, string> {
+    if n < 0 {
+        Err("negative: ${n}")
+    } else {
+        Ok(n)
+    }
+}
+
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn pipeline(s: string) -> Result<i32, string> {
+    let n = s |> source |>? parse |>? non_negative()? |> add(2) |> (|v| v * 2)
+    Ok(n)
+}
+
+fn check(s: string) -> Result<i32, string> {
+    let n = s |> source |>? parse |>? non_negative()?
+    Ok(n + 1)
+}
+
+fn half(n: i32) -> Option<i32> {
+    match n % 2 {
+        0 => Some(n / 2),
+        _ => None,
+    }
+}
+
+fn quarter_plus(n: i32) -> Option<i32> {
+    let q = Some(n) |>? half |>? half |>? add(_, 6)
+    Some(q)
+}
+
+fn show(r: Result<i32, string>) {
+    match r {
+        Ok(v) => println("ok {}", v),
+        Err(e) => println("err {}", e),
+    }
+}
+
+fn main() {
+    show(pipeline("4"))
+    show(pipeline("abc"))
+    show(pipeline("-4"))
+    show(pipeline("boom"))
+    match quarter_plus(8) {
+        Some(v) => println("some {}", v),
+        None => println("none"),
+    }
+    match quarter_plus(6) {
+        Some(v) => println("some {}", v),
+        None => println("none"),
+    }
+    show(check("100"))
+}
