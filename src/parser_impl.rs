@@ -94,6 +94,10 @@ pub struct Parser {
     /// True when parsing inside an `extern fn` declaration (FFI boundary).
     /// Suppresses W0010 warnings since FFI signatures must match Rust types exactly.
     pub(crate) in_extern_fn: bool,
+    /// True while parsing a `|>` stage: `_` is then a placeholder expression.
+    pub(crate) in_pipe_stage: bool,
+    /// Number of `_` placeholders produced in the current pipe stage.
+    pub(crate) pipe_placeholders: usize,
     // Arena allocators for AST nodes (eliminates recursive Drop)
     // When Parser is dropped, these arenas drop all allocated AST nodes at once
     // without recursive calls to Drop, solving the Windows stack overflow issue
@@ -132,6 +136,8 @@ impl Parser {
             source: String::new(),
             warnings: Vec::new(),
             in_extern_fn: false,
+            in_pipe_stage: false,
+            pipe_placeholders: 0,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -150,6 +156,8 @@ impl Parser {
             source,
             warnings: Vec::new(),
             in_extern_fn: false,
+            in_pipe_stage: false,
+            pipe_placeholders: 0,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),

@@ -1,0 +1,207 @@
+// Conformance Test: Pipe Operator
+//
+// SEMANTIC CONTRACT:
+// - `x |> f(a)` is exactly `f(x, a)`; chains evaluate left to right
+// - `|>` binds looser than every other expression operator
+// - `x |> .m(a)` is `x.m(a)`; `x |> f(a, _)` places x at the placeholder
+// - `x |> |v| body` applies the closure; `?` applies to a stage's result
+//
+// EXPECTED OUTPUT:
+// [pipe_num] 1 -> 16
+// [pipe_num] 5 -> 144
+// [pipe_num] -2 -> 4
+// [pipe_prec] 3 -> 8
+// [pipe_prec] 0 -> 2
+// [pipe_prec] 10 -> 22
+// [pipe_hole] 1 -> 99
+// [pipe_hole] 50 -> 50
+// [pipe_hole] 200 -> -100
+// [pipe_str] bob -> [hello bob!]
+// [pipe_str] Al -> [hello Al!]
+// [pipe_str]  -> [hello !]
+// [pipe_interp] x -> x:x|
+// [pipe_interp] yz -> yz:yz|
+// [pipe_vec] 1 2 3 4 5 6 -> 12 | 36
+// [pipe_vec] 7 9 -> 0 | 0
+// [pipe_vec] 10 -> 10 | 30
+// [pipe_method] 4 -> 10
+// [pipe_method] 0 -> 2
+// [pipe_method] -3 -> -4
+// [pipe_closure] 4 -> 17
+// [pipe_closure] 0 -> 1
+// [pipe_closure] -5 -> 26
+// [pipe_try] 8 -> ok 2
+// [pipe_try] 12 -> ok 3
+// [pipe_try] 6 -> err odd 3
+// [pipe_try] 7 -> err odd 7
+// [pipe_all] PASSED
+
+struct Counter {
+    n: int,
+}
+
+impl Counter {
+    fn new(n: int) -> Counter {
+        Counter { n: n }
+    }
+
+    fn add(self, k: int) -> Counter {
+        Counter { n: self.n + k }
+    }
+
+    fn double(self) -> Counter {
+        Counter { n: self.n * 2 }
+    }
+
+    fn value(self) -> int {
+        self.n
+    }
+}
+
+fn double(x: int) -> int {
+    x * 2
+}
+
+fn add(x: int, y: int) -> int {
+    x + y
+}
+
+fn sub(x: int, y: int) -> int {
+    x - y
+}
+
+fn square(x: int) -> int {
+    x * x
+}
+
+fn greet(name: string) -> string {
+    "hello ${name}"
+}
+
+fn shout(s: string) -> string {
+    "${s}!"
+}
+
+fn wrap(s: string, l: string, r: string) -> string {
+    "${l}${s}${r}"
+}
+
+fn evens(v: Vec<int>) -> Vec<int> {
+    let mut out: Vec<int> = vec![]
+    for n in v {
+        if n % 2 == 0 {
+            out.push(n)
+        }
+    }
+    out
+}
+
+fn scale(v: Vec<int>, k: int) -> Vec<int> {
+    let mut out: Vec<int> = vec![]
+    for n in v {
+        out.push(n * k)
+    }
+    out
+}
+
+fn total(v: Vec<int>) -> int {
+    let mut sum = 0
+    for n in v {
+        sum += n
+    }
+    sum
+}
+
+fn half(n: int) -> Result<int, string> {
+    if n % 2 != 0 {
+        Err("odd ${n}")
+    } else {
+        Ok(n / 2)
+    }
+}
+
+fn quarter(n: int) -> Result<int, string> {
+    let r = n |> half()? |> half()?
+    Ok(r)
+}
+
+fn show_num(x: int) {
+    let r = x |> double |> add(3) |> sub(1) |> square
+    println("[pipe_num] ${x} -> ${r}")
+}
+
+fn show_prec(x: int) {
+    let r = x + 1 |> double
+    println("[pipe_prec] ${x} -> ${r}")
+}
+
+fn show_hole(x: int) {
+    let r = x |> sub(100, _)
+    println("[pipe_hole] ${x} -> ${r}")
+}
+
+fn show_str(name: string) {
+    let r = name |> greet |> shout
+    let r2 = r |> wrap("[", "]")
+    // shout adds "!" and greet adds the prefix; wrap puts brackets around
+    println("[pipe_str] ${name} -> ${r2}")
+}
+
+fn show_interp(name: string) {
+    let r = name |> wrap("${name}:", "|")
+    println("[pipe_interp] ${name} -> ${r}")
+}
+
+fn show_vec(label: string, v: Vec<int>) {
+    let a = v.clone() |> evens |> total
+    let b = v |> evens |> scale(3) |> total
+    println("[pipe_vec] ${label} -> ${a} | ${b}")
+}
+
+fn show_method(x: int) {
+    let r = Counter::new(x) |> .add(2) |> .double() |> .add(-2) |> .value()
+    println("[pipe_method] ${x} -> ${r}")
+}
+
+fn show_closure(x: int) {
+    let r = x |> (|v| v * v) |> add(1)
+    println("[pipe_closure] ${x} -> ${r}")
+}
+
+fn show_try(x: int) {
+    match quarter(x) {
+        Ok(v) => println("[pipe_try] ${x} -> ok ${v}"),
+        Err(e) => println("[pipe_try] ${x} -> err ${e}"),
+    }
+}
+
+fn main() {
+    show_num(1)
+    show_num(5)
+    show_num(-2)
+    show_prec(3)
+    show_prec(0)
+    show_prec(10)
+    show_hole(1)
+    show_hole(50)
+    show_hole(200)
+    show_str("bob")
+    show_str("Al")
+    show_str("")
+    show_interp("x")
+    show_interp("yz")
+    show_vec("1 2 3 4 5 6", vec![1, 2, 3, 4, 5, 6])
+    show_vec("7 9", vec![7, 9])
+    show_vec("10", vec![10])
+    show_method(4)
+    show_method(0)
+    show_method(-3)
+    show_closure(4)
+    show_closure(0)
+    show_closure(-5)
+    show_try(8)
+    show_try(12)
+    show_try(6)
+    show_try(7)
+    println("[pipe_all] PASSED")
+}

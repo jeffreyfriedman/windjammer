@@ -23,7 +23,7 @@ decisions are in [docs/adr/](docs/adr/README.md).
 - Ownership of function parameters and `self` inferred (borrow, mutable borrow, move); clones inserted by the compiler.
 - Local `let` bindings that are mutated are emitted as `let mut` even if you omit `mut` (see
   [ADR-0002](docs/adr/0002-local-mutability.md) for the open decision on whether this is the intended rule).
-- String interpolation (`"${name}"`), pipe operator (`|>`), `defer`, `if`/`else` as expressions, `?` error propagation,
+- String interpolation (`"${name}"`), pipe operator (`|>`: `x |> f(a)`, `x |> .method()`, `x |> f(a, _)`, closures, `?` per stage, multi-line chains; see [docs/design/pipe-operator.md](docs/design/pipe-operator.md)), `defer`, `if`/`else` as expressions, `?` error propagation,
   decorators (`@name`), `mod`, `extern`, `unsafe`, `static`, `where` clauses.
 - Concurrency keywords that exist in the lexer: `thread { }`, `async`/`await`, `async fn`. Channel send/receive operators (`ch <- v`, `<-ch`) are parsed. There is no `go` keyword,
   no `chan::new()` and no `select`; see [ADR-0004](docs/adr/0004-concurrency-surface.md).
