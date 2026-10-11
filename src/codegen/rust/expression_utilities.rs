@@ -512,3 +512,8 @@ mod tests {
         assert_eq!(s, "&mut quads");
     }
 }
+
+/// A string literal expression (`"a"`): `&str`, never an owned `String`.
+pub fn is_string_literal(e: &Expression) -> bool {
+    matches!(e, Expression::Literal { value: crate::parser::Literal::String(_), .. })
+}

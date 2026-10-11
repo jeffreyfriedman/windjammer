@@ -233,7 +233,9 @@ impl<'ast> CodeGenerator<'ast> {
                     // `&Note` / `&String` are Copy as references. Owned context still
                     // needs `.clone()` unless the pointee itself is Copy (P3.638).
                     let pointee_copy = self.is_type_copy(inner)
-                        && !crate::codegen::rust::string_utilities::type_is_owned_string(inner);
+                        && !crate::codegen::rust::string_utilities::type_is_owned_string(inner)
+                        // `&str` is the value itself; `*s` would be unsized `str`.
+                        && !matches!(inner.as_ref(), Type::Custom(n) if n == "str");
                     if pointee_copy {
                         return format!("*{}", base_name);
                     }
@@ -268,15 +270,15 @@ impl<'ast> CodeGenerator<'ast> {
                         if let Some(field_type) = fields.get(field_name) {
                             float_type_utilities::extract_float_type_from_context(field_type)
                         } else {
-                            "f32"
+                            "f64"
                         }
                     } else {
-                        "f32"
+                        "f64"
                     }
                 } else if let Some(return_type) = &self.current_function_return_type {
                     float_type_utilities::extract_float_type_from_context(return_type)
                 } else {
-                    "f32"
+                    "f64"
                 };
 
                 let s = f.to_string();

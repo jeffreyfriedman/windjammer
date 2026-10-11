@@ -882,7 +882,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.in_impl_block = true;
 
                     body.push_str(&self.generate_impl(impl_block, analyzed));
-                    body.push_str("\n\n");
+                    body.push_str(&super::display_from_to_string::after_impl(impl_block, &program.items));
 
                     self.in_impl_block = false;
                     self.current_struct_name = None;
