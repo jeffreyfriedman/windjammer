@@ -173,7 +173,7 @@ fn generate_effects_taint_surface() -> serde_json::Value {
 }
 
 fn generate_spec_index() -> Result<serde_json::Value> {
-    let spec_md = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/LANGUAGE_SPEC_TESTS.md");
+    let spec_md = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/README.md");
     Ok(json!({
         "index_file": repo_relative_path(&spec_md),
         "exists": spec_md.exists(),
