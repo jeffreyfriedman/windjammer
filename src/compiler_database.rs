@@ -137,7 +137,7 @@ pub fn parse_tokens<'db>(
         Err(e) => {
             eprintln!("Parse error: {}", e);
             // Return empty program on error for now
-            parser::Program { items: vec![] }
+            parser::Program::new(vec![])
         }
     };
 
