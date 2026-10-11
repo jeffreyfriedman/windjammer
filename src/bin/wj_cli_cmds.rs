@@ -426,6 +426,7 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
 
 /// Interpret a .wj file or project directory directly (no cargo, no rustc).
 fn interpret_file(file: &std::path::Path, args: Vec<String>, opts: windjammer::interpreter::runner::RunOptions) -> Result<()> {
+    windjammer::cli_execution::report_build_lints(file);
     let code = windjammer::interpreter::runner::run_path_with(file, args, opts);
     if code != 0 {
         std::process::exit(code);

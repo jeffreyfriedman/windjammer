@@ -26,6 +26,20 @@ impl<'ast> CodeGenerator<'ast> {
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));
         let inferred_receiver_ty = self.infer_expression_type(object);
+        // Method-call receivers (`m.keys()`, `s.split(..)`, `xs.filter(..)`) are already iterators or
+        // views whose inferred type is unreliable; only `clone`/`to_vec`/`collect` yield owned collections.
+        let recv_is_adapter_call = matches!(
+            object,
+            Expression::MethodCall { method: m, .. } if !matches!(m.as_str(), "clone" | "to_vec" | "collect")
+        );
+        if super::iterator_lowering::needs_iter_prefix_for(
+            inferred_receiver_ty.as_ref(),
+            method,
+            &obj_str,
+            recv_is_adapter_call,
+        ) {
+            obj_str.push_str(".iter()");
+        }
         let resolved_signature = resolved_signature.map(|mut sig| {
             if let Some(rt) = receiver_type_name.as_deref() {
                 if let Some(reg) = self.resolve_method_function_signature_specialized(
@@ -1543,7 +1557,11 @@ impl<'ast> CodeGenerator<'ast> {
         let turbofish = if let Some(types) = type_args {
             let type_strs: Vec<String> = types.iter().map(|t| self.type_to_rust(t)).collect();
             format!("::<{}>", type_strs.join(", "))
-        } else if method == "collect" {
+        } else if method == "collect"
+            && !receiver_type_name
+                .as_deref()
+                .is_some_and(|rt| self.method_exists_on_type_name(rt, "collect"))
+        {
             let (adapter, turbo) = self.compute_collect_lowering(object);
             collect_adapter = adapter;
             turbo
@@ -1565,6 +1583,16 @@ impl<'ast> CodeGenerator<'ast> {
                 crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(&args[0]);
             let mut end_str =
                 crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(&args[1]);
+            // Slice bounds are `usize`: a bare integer literal must not keep a defaulted `_i32`/`_i64` suffix.
+            for b in [&mut start_str, &mut end_str] {
+                for suffix in ["_i32", "_i64"] {
+                    if let Some(digits) = b.strip_suffix(suffix) {
+                        if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                            *b = digits.to_string();
+                        }
+                    }
+                }
+            }
             if let Some((_, start_expr)) = arguments.first() {
                 self.maybe_cast_index_to_usize(&mut start_str, start_expr);
             }
@@ -1662,7 +1690,18 @@ impl<'ast> CodeGenerator<'ast> {
         // Convert it back to proper Rust slice syntax
         // For strings, we need to add & to get &str (a reference)
         if method == "slice" && args.len() == 2 {
-            return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
+            // Slice bounds are `usize`: drop a defaulted `_i32`/`_i64` suffix from bare integer literals.
+            let bound = |b: &str| -> String {
+                for suffix in ["_i32", "_i64"] {
+                    if let Some(d) = b.strip_suffix(suffix) {
+                        if !d.is_empty() && d.chars().all(|c| c.is_ascii_digit()) {
+                            return d.to_string();
+                        }
+                    }
+                }
+                b.to_string()
+            };
+            return format!("&{}[{}..{}]", obj_str, bound(&args[0]), bound(&args[1]));
         }
 
         // Explicit `.clone()` in WJ source is Rust leakage (W0005). Prefer stripping, but
@@ -2002,6 +2041,62 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arg_str| needs_format_temp(arg_str));
 
+        // `Option<&T>.unwrap_or(default)`: the default has the *owned* element type. `get`-style lookups yield
+        // `Option<&T>`; a Copy `T` is copied out (`.copied()`), and a string-literal default stays `&str`
+        // for `Option<&String>`/`Option<&str>` (no `String::from`). Type-driven via the inferred receiver type.
+        if method == "unwrap_or" && processed_args.len() == 1 {
+            // `it.next()` on a synthetic `Vec<&T>` iterator type is `Option<&T>`.
+            let derived_option = match object {
+                Expression::MethodCall { object: it, method: m, .. }
+                    if matches!(m.as_str(), "next" | "last" | "nth" | "next_back") =>
+                {
+                    match self.infer_expression_type(it) {
+                        Some(Type::Vec(item)) => Some(Type::Option(item)),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            };
+            if let Some(Type::Option(inner)) = inferred_receiver_ty.as_ref().or(derived_option.as_ref()) {
+                if let Type::Reference(pointee) = inner.as_ref() {
+                    let is_text = matches!(pointee.as_ref(), Type::String)
+                        || matches!(pointee.as_ref(), Type::Custom(n) if n == "String" || n == "str" || n == "string");
+                    if is_text {
+                        if let Some(lit) = processed_args[0]
+                            .strip_prefix("String::from(")
+                            .and_then(|r| r.strip_suffix(')'))
+                        {
+                            if lit.starts_with('"') {
+                                processed_args[0] = lit.to_string();
+                            }
+                        }
+                    } else if self.is_type_copy(pointee) {
+                        obj_str.push_str(".copied()");
+                        if let Type::Custom(w) | Type::Parameterized(w, _) = pointee.as_ref() {
+                            for suffix in ["_i32", "_i64"] {
+                                if let Some(d) = processed_args[0].strip_suffix(suffix) {
+                                    if !d.trim_start_matches('-').is_empty()
+                                        && d.trim_start_matches('-').chars().all(|c| c.is_ascii_digit())
+                                    {
+                                        processed_args[0] = format!("{d}_{w}");
+                                    }
+                                }
+                            }
+                        } else if matches!(pointee.as_ref(), Type::Int) {
+                            for suffix in ["_i32", "_i64"] {
+                                if let Some(d) = processed_args[0].strip_suffix(suffix) {
+                                    processed_args[0] = format!("{d}_i64");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // `Ord::cmp` / `PartialOrd::partial_cmp` take `&Self`; the borrow is part of the call, never stripped.
+        if matches!(method, "cmp" | "partial_cmp") && processed_args.len() == 1 && !processed_args[0].starts_with('&') {
+            processed_args[0] = format!("&{}", processed_args[0]);
+        }
         let base_expr = if has_format_arg {
             // Extract format!() macros to temp variables
             let mut temp_decls = String::new();

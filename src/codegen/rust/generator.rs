@@ -1490,6 +1490,14 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         let last = qualifier.rsplit("::").next().unwrap_or(qualifier);
+        // `i64::from_str_radix`, `char::from_u32`: primitive types are not modules.
+        if matches!(
+            last,
+            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128"
+                | "usize" | "f32" | "f64" | "char" | "bool" | "str"
+        ) {
+            return false;
+        }
         last.chars()
             .next()
             .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
