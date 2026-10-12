@@ -3,6 +3,6 @@ use util::math
 
 fn main() {
     greet::hello("modules")
-    println("{}", math::square(7))
-    println("{}", util::math::cube(3))
+    println("${math::square(7)}")
+    println("${util::math::cube(3)}")
 }

@@ -35,10 +35,14 @@ fn args(fixture: &Path) -> Vec<String> {
     read(&fixture.join("args")).map(|s| s.lines().map(str::to_string).collect()).unwrap_or_default()
 }
 
+/// `wj run FLAGS [. ARGS]`: with no program arguments the project is found from the working directory
+/// (`wj.toml` upward); with arguments the path `.` comes first, as with `go run . ARGS`.
 fn wj(dir: &Path, flags: &[&str], args: &[String]) -> Output {
+    let dot: &[&str] = if args.is_empty() { &[] } else { &["."] };
     Command::new(WJ)
         .arg("run")
         .args(flags)
+        .args(dot)
         .args(args)
         .current_dir(dir)
         .stdin(Stdio::null())

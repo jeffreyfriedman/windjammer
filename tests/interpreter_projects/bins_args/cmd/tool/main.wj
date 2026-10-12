@@ -1,5 +1,5 @@
 use helper
 
 fn main() {
-    println("{}", helper::name())
+    println("${helper::name()}")
 }
