@@ -1,0 +1,13 @@
+// spec: SPEC-PAT-004
+// expect: origin | y-axis 4 | x-axis 3 | pt 1,2
+fn f(t: (int, int)) -> string {
+    match t {
+        (0, 0) => "origin",
+        (0, y) => "y-axis ${y}",
+        (x, 0) => "x-axis ${x}",
+        (x, y) => "pt ${x},${y}",
+    }
+}
+fn main() {
+    println("${f((0, 0))} | ${f((0, 4))} | ${f((3, 0))} | ${f((1, 2))}")
+}

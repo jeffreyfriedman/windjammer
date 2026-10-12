@@ -1,0 +1,12 @@
+// spec: SPEC-INTR-004
+// mode: panic
+// expect: 2
+// expect-error: non-positive -1
+fn pick(n: int) -> int {
+    if n > 0 { return n }
+    panic("non-positive ${n}")
+}
+fn main() {
+    println("${pick(2)}")
+    println("${pick(-1)}")
+}

@@ -1,0 +1,13 @@
+// spec: SPEC-EXPR-009
+// expect: 8 25
+fn sq(n: int) -> int {
+    let m = n * n
+    m
+}
+fn main() {
+    let v = {
+        let a = 4
+        a * 2
+    }
+    println("${v} ${sq(5)}")
+}

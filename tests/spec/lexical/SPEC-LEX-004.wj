@@ -1,0 +1,5 @@
+// spec: SPEC-LEX-004
+// mode: parse-error
+fn main() {
+    let loop = 1
+}

@@ -1,0 +1,9 @@
+// spec: SPEC-EXPR-012
+// expect: 6 10
+fn main() {
+    let mut s = 0
+    for i in 0..4 { s += i }
+    let mut t = 0
+    for i in 1..=4 { t += i }
+    println("${s} ${t}")
+}

@@ -703,9 +703,9 @@ impl<'ast> CodeGenerator<'ast> {
                     && type_
                         .as_ref()
                         .is_none_or(crate::type_classification::type_is_vec_container);
-                let generated = self.generate_let_statement(pattern, *mutable, type_, value, location);
+                let generated = self.generate_let_statement_with_context(pattern, *mutable, type_, value, location);
                 self.array_literal_as_list = prev_list;
-                generated
+                self.append_let_else(generated, stmt)
             }
             Statement::Const {
                 name, type_, value, ..

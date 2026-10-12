@@ -1,3 +1,4 @@
+(* The normative, machine-checked grammar of the language specification is docs/spec/grammar.ebnf. *)
 (* Windjammer Formal Grammar — v0.50.0 *)
 (* This EBNF grammar is a reference for constrained-decoding harnesses and *)
 (* code-generation agents. It was reconciled with src/parser and src/lexer on 2026-10-10. *)

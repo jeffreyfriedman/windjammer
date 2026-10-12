@@ -1,0 +1,10 @@
+// spec: SPEC-STMT-005
+// expect: abc0120a1b2c
+fn main() {
+    let v = ["a", "b", "c"]
+    let mut out = ""
+    for s in v { out = out + s }
+    for i in 0..3 { out = out + "${i}" }
+    for (i, s) in v.iter().enumerate() { out = out + "${i}${s}" }
+    println(out)
+}

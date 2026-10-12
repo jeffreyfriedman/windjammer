@@ -19,7 +19,17 @@ impl<'ast> CodeGenerator<'ast> {
                     return_type,
                 ));
             } else {
-                output.push_str(&self.type_to_rust(return_type));
+                let rendered = self.type_to_rust(return_type);
+                // A returned `fn(A) -> B` is usually a capturing closure; a Rust fn pointer cannot be one.
+                match rendered.strip_prefix("fn(") {
+                    Some(rest)
+                        if matches!(return_type, Type::FunctionPointer { .. }) && !func.is_extern =>
+                    {
+                        output.push_str("impl Fn(");
+                        output.push_str(rest);
+                    }
+                    _ => output.push_str(&rendered),
+                }
             }
         }
 

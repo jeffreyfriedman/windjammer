@@ -1,0 +1,11 @@
+// spec: SPEC-EXPR-001
+// expect: 14 20 5 12
+// expect: 5 2 2
+// expect: true
+// expect: 3
+fn main() {
+    println("${2 + 3 * 4} ${(2 + 3) * 4} ${1 << 2 + 1} ${2 * 3 << 1}")
+    println("${10 - 3 - 2} ${100 / 10 / 5} ${2 * 3 % 4}")
+    println("${1 + 2 == 3 && 4 > 3 || false}")
+    println("${1 | 2 ^ 3 & 4}")
+}
