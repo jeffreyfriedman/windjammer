@@ -155,7 +155,7 @@ Full matrix: `results/report.md` (generated from `results/baseline.json`). Windj
 |----------|----------------------------------|-------|
 | python, go, rust, ts | 60/60 each | independent authors; these cross-check the oracle |
 | `wj` (compiled: `wj build` + cargo) | 59/60 | only t043 (thread + channel pipeline) cannot be written; **25/60 compiled on the first draft** (`results/wj_compiled_first_draft.json`), the rest needed the workarounds below |
-| `wj-interp` (`wj run --interpret`) | 54/60 | t042-t046 (threads, channels, Mutex) and t054 (`fs::read_dir`) are unsupported by design (loud, exit 2) |
+| `wj-interp` (`wj run --interpret`) | 60/60 | was 54/60: t042-t046 (threads, channels, Mutex) now run on the interpreter's deterministic scheduler and t054 uses `fs::read_dir` (interp-gaps2, release `wj`) |
 
 Reading this honestly: the Windjammer solutions were written by the benchmark author who knows the language and ran a compile-fix loop of
 about six rounds; the 25/60 first-draft number is the more agent-like figure. Every workaround is a line of evidence for a compiler or
