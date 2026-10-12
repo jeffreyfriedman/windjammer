@@ -21,7 +21,31 @@ pub struct Index {
     pub fns: HashMap<String, Vec<FnInfo>>,
     /// Every user-declared type-like name (struct, enum, trait, alias, bound).
     pub types: HashSet<String>,
+    /// Struct/enum name -> methods available on it (inherent, project-trait and known std-trait impls).
+    pub methods: HashMap<String, HashSet<String>>,
+    /// Types with an impl of a trait this index does not know (its methods are unknown).
+    pub opaque_impls: HashSet<String>,
+    /// Methods every type may have through blanket `impl<T> Trait for T` impls.
+    pub blanket_methods: HashSet<String>,
+    /// Enum names (method checks apply to them too).
+    pub enums: HashSet<String>,
+    traits: HashMap<String, Vec<String>>,
 }
+
+/// Methods of std traits commonly implemented by hand, plus those every value has.
+const STD_TRAIT_METHODS: &[(&str, &[&str])] = &[
+    ("Display", &["fmt", "to_string"]),
+    ("Debug", &["fmt"]),
+    ("Clone", &["clone", "clone_from"]),
+    ("Copy", &[]),
+    ("PartialEq", &["eq", "ne"]),
+    ("Eq", &[]),
+    ("PartialOrd", &["partial_cmp", "lt", "le", "gt", "ge"]),
+    ("Ord", &["cmp", "max", "min", "clamp"]),
+    ("Hash", &["hash"]),
+    ("Default", &["default"]),
+    ("Drop", &["drop"]),
+];
 
 /// Names visible in one file without being declared in a function body.
 #[derive(Default)]
@@ -61,9 +85,46 @@ impl Index {
     pub fn build(programs: &[&Program<'_>]) -> Self {
         let mut idx = Index::default();
         for p in programs {
+            idx.collect_traits(&p.items);
+        }
+        for p in programs {
             idx.add_items(&p.items);
         }
         idx
+    }
+
+    fn collect_traits(&mut self, items: &[Item<'_>]) {
+        for item in items {
+            match item {
+                Item::Trait { decl, .. } => {
+                    let ms = decl.methods.iter().map(|m| m.name.clone()).collect();
+                    self.traits.insert(decl.name.clone(), ms);
+                }
+                Item::Mod { items, .. } => self.collect_traits(items),
+                _ => {}
+            }
+        }
+    }
+
+    fn add_impl(&mut self, block: &crate::parser::ImplBlock<'_>) {
+        let ty = block.type_name.split('<').next().unwrap_or("").trim().to_string();
+        let blanket = block.type_params.iter().any(|t| t.name == ty);
+        let mut names: Vec<String> = block.functions.iter().map(|f| f.name.clone()).collect();
+        if let Some(tr) = &block.trait_name {
+            let tr = tr.rsplit("::").next().unwrap_or(tr);
+            if let Some(ms) = self.traits.get(tr) {
+                names.extend(ms.iter().cloned());
+            } else if let Some((_, ms)) = STD_TRAIT_METHODS.iter().find(|(n, _)| *n == tr) {
+                names.extend(ms.iter().map(|m| m.to_string()));
+            } else if !blanket {
+                self.opaque_impls.insert(ty.clone());
+            }
+        }
+        if blanket {
+            self.blanket_methods.extend(names);
+        } else {
+            self.methods.entry(ty).or_default().extend(names);
+        }
     }
 
     fn add_items(&mut self, items: &[Item<'_>]) {
@@ -86,7 +147,9 @@ impl Index {
                 }
                 Item::Enum { decl, .. } => {
                     self.types.insert(decl.name.clone());
+                    self.enums.insert(decl.name.clone());
                 }
+                Item::Impl { block, .. } => self.add_impl(block),
                 Item::Trait { decl, .. } => {
                     self.types.insert(decl.name.clone());
                 }

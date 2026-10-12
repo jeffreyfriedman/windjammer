@@ -1,0 +1,13 @@
+// mutant: unknown_method of examples/verified/iter_group_by_manual.wj
+use std::collections::BTreeMap
+
+fn main() {
+    let words = ["cat", "bird", "dog", "horse"]
+    let mut groups: BTreeMap<int, Vec<string>> = BTreeMap::new()
+    for w in words {
+        groups.entry(w.length_of() as int).or_insert([]).push(w.to_string())
+    }
+    for (len, ws) in groups {
+        println("${len}: [${ws.join(", ")}]")
+    }
+}

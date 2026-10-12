@@ -28,11 +28,12 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 |------|-----------|
 | WJ0001 / WJ0002 | undefined value / function (with a "did you mean" fix) |
 | WJ0003 | literal of the wrong type in `let`, call argument or struct field |
-| WJ0004 / WJ0008 | assignment to / mutation of a non-`mut` local |
 | WJ0005 / WJ0009 / WJ0014 | unknown struct, missing field, unknown field (literal, `x.f`, `self.f`) |
 | WJ0006 | unresolved `use` |
 | WJ0011 / WJ0012 | syntax error, invalid character (with line/column) |
 | WJ0013 | wrong argument count |
+| WJ0015 | unknown method on a value of a known user struct/enum type |
+| WJ0003 (return) | literal of the wrong type returned from a function |
 | WJ0021 | duplicate top-level definition |
 | WJ0023 | forbidden Rust pattern (`.as_str()`, redundant `@derive`) |
 | WJ0024-0028 | effect, taint, execution-mode, numeric-inference and analysis errors |

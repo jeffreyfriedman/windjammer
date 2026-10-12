@@ -1,4 +1,4 @@
-// expect: rustc:WJ0015
+// expect: WJ0015
 struct Counter {
     n: int,
 }

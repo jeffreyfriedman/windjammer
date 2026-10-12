@@ -247,8 +247,8 @@ fn known_failures() -> BTreeSet<String> {
 fn check_has_no_false_positives_on_the_build_corpus() {
     let known = known_failures();
     let mut files = Vec::new();
-    for dir in ["", "conformance", "conformance/basics", "conformance/control_flow", "conformance/error_handling", "conformance/stdlib", "conformance/types", "conformance/values", "windjammer_tests", "auto_clone", "dogfood", "fixtures", "fixtures/traits", "fixtures/library_multipass"] {
-        let d = manifest().join("tests").join(dir);
+    for dir in ["", "conformance", "conformance/basics", "conformance/control_flow", "conformance/error_handling", "conformance/stdlib", "conformance/types", "conformance/values", "windjammer_tests", "auto_clone", "dogfood", "fixtures", "fixtures/traits", "fixtures/library_multipass", "@verified"] {
+        let d = if dir == "@verified" { manifest().join("examples/verified") } else { manifest().join("tests").join(dir) };
         for e in fs::read_dir(&d).into_iter().flatten().flatten() {
             let p = e.path();
             if p.extension().is_some_and(|x| x == "wj") {
@@ -264,11 +264,10 @@ fn check_has_no_false_positives_on_the_build_corpus() {
     // Corpus files the build accepts although they contain a real error that only rustc reports.
     let true_positives = [
         ("tests/bug_vec_index_passed_to_function.wj", "WJ0009: `Node { value: 10 }` omits field `data`"),
-        ("tests/int_inference_backward_propagation_test.wj", "WJ0008: `items.remove(..)` on a non-mut `let items`"),
     ];
     let mut fps = Vec::new();
     for f in &files {
-        let rel = format!("tests/{}", f.strip_prefix(manifest().join("tests")).unwrap().display());
+        let rel = f.strip_prefix(manifest()).unwrap().display().to_string();
         if known.contains(&rel) || true_positives.iter().any(|(p, _)| *p == rel) {
             continue;
         }

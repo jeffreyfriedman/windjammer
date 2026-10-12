@@ -128,6 +128,10 @@ name = "optimize_rs"
 path = "benchmarks/rust_parity/optimize_rs.rs"
 
 [[test]]
+name = "check_negative_gate"
+path = "tests/check_negative_gate.rs"
+
+[[test]]
 name = "diagnostics_suite"
 path = "tests/diagnostics_suite.rs"
 

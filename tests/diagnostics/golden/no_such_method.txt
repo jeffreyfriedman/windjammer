@@ -1,0 +1,7 @@
+error[WJ0015]: no method `bump` found for `Counter`
+  --> no_such_method.wj:8:7
+  |
+8 |     c.bump()
+  |       ^^^^ method not found
+  = help: define it in an `impl Counter` block
+  = explain: wj explain WJ0015

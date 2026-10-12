@@ -1,0 +1,15 @@
+// mutant: int_annotated_string of examples/verified/basics_for_range.wj
+fn main() {
+    let mut a = ""
+    for i in 0..5 { a = a + "${i} " }
+    println(a.trim())
+    let mut b = ""
+    for i in 5..=7 { b = b + "${i} " }
+    println(b.trim())
+    let mut c = ""
+    for i in (1..=5).rev() { c = c + "${i * 2} " }
+    println(c.trim())
+    let mut total: string = 0
+    for i in 1..=100 { total += i }
+    println("sum 1..=100 = ${total}")
+}
