@@ -1,0 +1,9 @@
+// spec: SPEC-NUM-008
+// expect: inf -inf NaN
+// expect: false true
+fn main() {
+    let z = 0.0
+    let n = z / z
+    println("${1.0 / z} ${-1.0 / z} ${n}")
+    println("${n == n} ${n != n}")
+}

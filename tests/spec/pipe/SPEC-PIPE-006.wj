@@ -1,0 +1,13 @@
+// spec: SPEC-PIPE-006
+// expect: 2
+// expect: bad 2
+fn parse(s: string) -> Result<int, string> { if s == "1" { Ok(1) } else { Err("bad ${s}") } }
+fn inc(x: int) -> Result<int, string> { Ok(x + 1) }
+fn run(s: string) -> Result<int, string> {
+    let r = s |> parse? |> inc?
+    Ok(r)
+}
+fn main() {
+    println("${run("1").unwrap()}")
+    match run("2") { Ok(v) => println("ok ${v}"), Err(e) => println(e) }
+}

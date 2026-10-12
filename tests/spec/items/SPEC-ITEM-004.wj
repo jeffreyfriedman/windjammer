@@ -1,0 +1,14 @@
+// spec: SPEC-ITEM-004
+// expect: 2
+struct Counter { n: int }
+impl Counter {
+    fn new() -> Self { Counter { n: 0 } }
+    fn bump(self) { self.n += 1 }
+    fn get(self) -> int { self.n }
+}
+fn main() {
+    let mut c = Counter::new()
+    c.bump()
+    c.bump()
+    println("${c.get()}")
+}

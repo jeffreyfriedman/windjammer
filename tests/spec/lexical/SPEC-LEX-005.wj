@@ -1,0 +1,5 @@
+// spec: SPEC-LEX-005
+// expect: 255 10 15 1000000 65535
+fn main() {
+    println("${0xff} ${0b1010} ${0o17} ${1_000_000} ${0xFF_FF}")
+}

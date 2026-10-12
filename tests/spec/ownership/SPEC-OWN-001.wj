@@ -1,0 +1,15 @@
+// spec: SPEC-OWN-001
+// expect: 1 50 2
+struct P { x: int }
+fn bump(p: P) -> P {
+    let mut q = p
+    q.x += 1
+    q
+}
+fn main() {
+    let a = P { x: 1 }
+    let mut b = a
+    b.x = 50
+    let c = bump(a)
+    println("${a.x} ${b.x} ${c.x}")
+}

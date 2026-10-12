@@ -1,0 +1,14 @@
+// spec: SPEC-ITEM-003
+// expect: add neg 1 pair 2 3 named 4
+enum Op { Add, Neg(int), Pair(int, int), Named { id: int } }
+fn show(o: Op) -> string {
+    match o {
+        Op::Add => "add",
+        Op::Neg(n) => "neg ${n}",
+        Op::Pair(a, b) => "pair ${a} ${b}",
+        Op::Named { id } => "named ${id}",
+    }
+}
+fn main() {
+    println("${show(Op::Add)} ${show(Op::Neg(1))} ${show(Op::Pair(2, 3))} ${show(Op::Named { id: 4 })}")
+}

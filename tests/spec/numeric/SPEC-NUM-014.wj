@@ -1,0 +1,8 @@
+// spec: SPEC-NUM-014
+// expect: 30 20 3
+fn main() {
+    let v = [10, 20, 30]
+    let last = v.len() - 1
+    let i: int = 1
+    println("${v[last]} ${v[i]} ${v.len()}")
+}

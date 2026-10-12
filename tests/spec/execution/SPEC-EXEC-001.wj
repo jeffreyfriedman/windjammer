@@ -1,0 +1,8 @@
+// spec: SPEC-EXEC-001
+// expect: out1
+// expect: out2
+fn main() {
+    println("out1")
+    eprintln("err")
+    println("out2")
+}

@@ -1,0 +1,12 @@
+// spec: SPEC-OWN-006
+// expect: 3 x
+struct B { n: int, tag: string }
+impl B {
+    fn new() -> B { B { n: 0, tag: "" } }
+    fn n(self, v: int) -> B { B { n: v, tag: self.tag } }
+    fn tag(self, t: string) -> B { B { n: self.n, tag: t } }
+}
+fn main() {
+    let b = B::new().n(3).tag("x")
+    println("${b.n} ${b.tag}")
+}
