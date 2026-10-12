@@ -69,7 +69,8 @@ fn load(root: &Path) -> Vec<Example> {
                 .filter_map(|l| l.strip_prefix("// expect:").map(|v| v.strip_prefix(' ').unwrap_or(v).to_string()))
                 .collect();
             Example {
-                id: header(&source, "spec").unwrap_or_else(|| f.file_stem().unwrap().to_string_lossy().into_owned()),
+                // One row per file: several files may demonstrate the same rule.
+                id: f.strip_prefix(root.join("tests/spec")).unwrap().with_extension("").to_string_lossy().into_owned(),
                 mode: header(&source, "mode").unwrap_or_else(|| "run".into()),
                 xfail: header(&source, "xfail").map(|x| x.split_whitespace().next().unwrap_or("").to_string()),
                 expect: expect.iter().map(|l| format!("{l}\n")).collect(),

@@ -37,7 +37,8 @@ step "check vs build differential" t check_build_differential_test::
 step "interpreter vs compiled Rust" t interpreter_differential_test::
 step "codegen determinism" t codegen_determinism_test::
 step "fmt/fix preserve behavior" t fmt_fix_semantics_test::
-step "spec conformance (interpreter, in-process)" t spec_conformance_test:: && true; step "spec on every backend" t spec_backends_test::
+step "spec examples (interpreter, in-process)" t spec_conformance_test::
+step "spec examples on every backend" t spec_backends_test::
 step "eject == build" t eject_equivalence_test::
 step "installed-binary smoke" t installed_binary_smoke_test::
 step "orphan tests" scripts/check-orphan-tests.sh
