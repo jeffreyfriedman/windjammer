@@ -1,0 +1,241 @@
+# Acceptance cases for the documentation, index, shader and housekeeping commands.
+
+[[case]]
+name = "explain describes a Windjammer error code"
+polarity = "positive"
+args = ["explain", "WJ0003"]
+stdout_has = ["WJ0003"]
+
+[[case]]
+name = "explain describes a lint code"
+polarity = "positive"
+args = ["explain", "W0002"]
+stdout_has = ["W0002", "explicit-unwrap"]
+
+[[case]]
+name = "explain fails on an unknown code"
+polarity = "negative"
+args = ["explain", "WJ9999"]
+exit = 1
+output_has = ["not found"]
+
+[[case]]
+name = "docs searches the offline index"
+polarity = "positive"
+covers = ["feature offline-docs"]
+args = ["docs", "hashmap", "entry", "--limit", "1"]
+stdout_has = ["or_insert"]
+
+[[case]]
+name = "docs --json prints search results as JSON"
+polarity = "positive"
+args = ["docs", "hashmap", "--json", "--limit", "2"]
+json = true
+stdout_has = ["\"kind\""]
+
+[[case]]
+name = "docs says when nothing matches"
+polarity = "negative"
+covers = ["feature offline-docs"]
+args = ["docs", "zzzzqqqxx", "--json"]
+exit = 0
+output_has = ["no matches"]
+
+[[case]]
+name = "docs with no query generates error documentation"
+polarity = "positive"
+args = ["docs", "--output", "{w}/errs", "--format", "markdown"]
+creates = ["errs/errors.md"]
+
+[[case]]
+name = "docs rejects an unknown output format"
+polarity = "negative"
+args = ["docs", "-o", "{w}/errs", "-f", "nope"]
+exit = 1
+output_has = ["Unknown format: nope"]
+
+[[case]]
+name = "agent-index writes the MCP index"
+polarity = "positive"
+args = ["agent-index", "--output", "{w}/ai"]
+creates = ["ai/errors.json", "ai/stdlib.json", "ai/spec.json"]
+
+[[case]]
+name = "agent-index fails when the output cannot be written"
+polarity = "negative"
+files = { "ai" = "a file, not a directory" }
+args = ["agent-index", "-o", "{w}/ai"]
+
+[[case]]
+name = "shader-compile turns WJSL into WGSL"
+polarity = "positive"
+files = { "s.wjsl" = "shader S { uniform screen_size: Vec2<f32> storage out: array<Vec4<f32>> }\n" }
+args = ["shader-compile", "{w}/s.wjsl", "--output", "{w}/s.wgsl"]
+creates = ["s.wgsl"]
+
+[[case]]
+name = "shader-compile rejects a malformed shader"
+polarity = "negative"
+files = { "s.wjsl" = "garbage {{{\n" }
+args = ["shader-compile", "{w}/s.wjsl", "-o", "{w}/s.wgsl"]
+exit = 1
+absent = ["s.wgsl"]
+
+[[case]]
+name = "validate-wjsl accepts valid shaders"
+polarity = "positive"
+files = { "sh/s.wjsl" = "// Test Shader - Solid MAGENTA (WJSL)\n//\n// Minimal shader to test WJSL→WGSL transpilation pipeline.\n// Should output solid MAGENTA color to all pixels.\n\n@group(0) @binding(0) uniform screen_size: vec2<u32>;\n@group(0) @binding(1) storage read_write output: array<vec4<f32> >;\n\n@compute @workgroup_size(8, 8, 1)\nfn main(@builtin(global_invocation_id) id: vec3<u32>) {\n    if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }\n    let pixel_idx = id.y * screen_size.x + id.x;\n    output[pixel_idx] = vec4(1.0, 0.0, 1.0, 1.0); // MAGENTA\n}\n" }
+args = ["validate-wjsl", "{w}/sh"]
+output_has = ["1 shader(s) validated successfully"]
+
+[[case]]
+name = "validate-wjsl fails on a missing directory"
+polarity = "negative"
+args = ["validate-wjsl", "{w}/nope"]
+exit = 1
+output_has = ["path not found"]
+
+[[case]]
+name = "validate-wjsl rejects a malformed shader"
+polarity = "negative"
+xfail = "BUG: `garbage {{{` passes `wj validate-wjsl` (transpile_wjsl_with_includes accepts it)"
+files = { "sh/s.wjsl" = "garbage {{{\n" }
+args = ["validate-wjsl", "{w}/sh"]
+exit = 1
+
+[[case]]
+name = "stats shows the statistics summary"
+polarity = "positive"
+args = ["stats"]
+stdout_has = ["Total Compilations"]
+
+[[case]]
+name = "stats --clear resets statistics"
+polarity = "positive"
+args = ["stats", "--clear"]
+stdout_has = ["Statistics cleared"]
+
+[[case]]
+name = "stats --verbose shows more than the summary"
+polarity = "positive"
+xfail = "BUG: `--verbose` is ignored (`Commands::Stats { clear, verbose: _ }`)"
+args = ["stats", "--verbose"]
+output_has = ["details"]
+
+[[case]]
+name = "stats rejects unexpected arguments"
+polarity = "negative"
+args = ["stats", "--clear", "extra"]
+exit = 2
+
+[[case]]
+name = "clean removes stale build artifacts"
+polarity = "positive"
+args = ["clean"]
+output_has = ["Cleaning Windjammer build artifacts"]
+
+[[case]]
+name = "clean --all also removes local target directories"
+polarity = "positive"
+files = { "proj/target/debug/x" = "x", "proj/Cargo.toml" = "[package]\nname = \"x\"\n" }
+cwd = "proj"
+args = ["clean", "--all"]
+absent = ["proj/target/debug/x"]
+
+[[case]]
+name = "clean rejects unexpected arguments"
+polarity = "negative"
+args = ["clean", "--all", "extra"]
+exit = 2
+
+[[case]]
+name = "cache path prints the shared target dir"
+polarity = "positive"
+args = ["cache", "path"]
+stdout_has = ["cargo-target/shared"]
+
+[[case]]
+name = "cache path --verify prints the verify target dir"
+polarity = "positive"
+args = ["cache", "path", "--verify"]
+stdout_has = ["cargo-target/verify"]
+
+[[case]]
+name = "cache status reports sizes"
+polarity = "positive"
+args = ["cache", "status"]
+stdout_has = ["Windjammer Cargo cache"]
+
+[[case]]
+name = "cache setup writes env helpers"
+polarity = "positive"
+args = ["cache", "setup"]
+stdout_has = ["env.sh"]
+
+[[case]]
+name = "cache prune --aggressive reclaims space"
+polarity = "positive"
+args = ["cache", "prune", "--aggressive"]
+
+[[case]]
+name = "cache rejects an unknown action"
+polarity = "negative"
+args = ["cache", "explode"]
+exit = 2
+
+[[case]]
+name = "cache path rejects unknown flags"
+polarity = "negative"
+args = ["cache", "path", "--verify", "--nope"]
+exit = 2
+
+[[case]]
+name = "cache status rejects arguments"
+polarity = "negative"
+args = ["cache", "status", "extra"]
+exit = 2
+
+[[case]]
+name = "cache setup rejects arguments"
+polarity = "negative"
+args = ["cache", "setup", "extra"]
+exit = 2
+
+[[case]]
+name = "cache prune rejects arguments"
+polarity = "negative"
+args = ["cache", "prune", "--aggressive", "extra"]
+exit = 2
+
+[[case]]
+name = "errors opens the interactive navigator"
+polarity = "positive"
+xfail = "BUG: `wj errors` is a stub: prints `TUI mode coming soon` (src/error_tui.rs is never called)"
+files = { "m.wj" = "fn main( {\n" }
+args = ["errors", "{w}/m.wj", "--output", "{w}/out"]
+output_lacks = ["coming soon"]
+
+[[case]]
+name = "errors fails on a missing file"
+polarity = "negative"
+xfail = "BUG: `wj errors <missing>` exits 0"
+args = ["errors", "{w}/nope.wj", "-o", "{w}/out"]
+
+[[case]]
+name = "self-install installs wj into ~/.wj/bin"
+polarity = "positive"
+args = ["self-install"]
+output_has = [".wj/bin"]
+
+[[case]]
+name = "self-install rejects arguments"
+polarity = "negative"
+args = ["self-install", "--force"]
+exit = 2
+
+[[case]]
+name = "docs --limit must be a number"
+polarity = "negative"
+args = ["docs", "hashmap", "--limit", "many"]
+exit = 2
+output_has = ["invalid value 'many'"]

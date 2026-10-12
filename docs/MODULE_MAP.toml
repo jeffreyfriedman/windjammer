@@ -530,3 +530,9 @@ owner_stage = "built-in function registry (print/assert/panic/debug) and surface
 module_md = "src/intrinsics/MODULE.md"
 allowed_imports = ["compiler_config", "debug_env", "error_catalog", "lexer", "parser", "parser_impl"]
 known_violations = []
+
+# Library API that no driver (wj, wj-lint, LSP, MCP) reaches on purpose: "src path prefix" = "who uses it".
+# Read by tests/capability_reachability_test.rs (dead-capability gate); everything else must be reachable.
+[library_api]
+"src/test_utils.rs" = "arena AST builders for integration tests"
+"src/lexer/keywords.rs" = "keyword table: source of docs/reference/keywords.md (wj-docs) and pinned to the lexer by tests"
