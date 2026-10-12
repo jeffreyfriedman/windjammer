@@ -1,0 +1,116 @@
+//! Multi-file project parity: every fixture under `tests/interpreter_projects/` runs through the real
+//! `wj` binary, interpreted and compiled, and both must match the fixture's hand-written expectation.
+//!
+//! Fixture layout: a project (`wj.toml` + `src/`), or `app/` + sibling packages for dependency fixtures.
+//! - `expect.stdout`            exact stdout
+//! - `expect.exit`              exit status (`fail` = any non-zero); default 0
+//! - `expect.stderr_contains`   substring that stderr must contain (both paths)
+//! - `expect.bin.<NAME>.stdout` stdout of `wj run --bin NAME`
+//! - `args`                     program arguments, one per line
+//!
+//! The compiled half needs cargo and takes minutes; it runs when `WJ_PROJECT_COMPILED=1` (CI sets it).
+
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+
+const WJ: &str = env!("CARGO_BIN_EXE_wj");
+
+fn fixtures() -> Vec<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/interpreter_projects");
+    let mut v: Vec<PathBuf> = std::fs::read_dir(root).unwrap().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    v.sort();
+    v
+}
+
+fn run_dir(fixture: &Path) -> PathBuf {
+    let app = fixture.join("app");
+    if app.is_dir() { app } else { fixture.to_path_buf() }
+}
+
+fn read(p: &Path) -> Option<String> {
+    std::fs::read_to_string(p).ok()
+}
+
+fn args(fixture: &Path) -> Vec<String> {
+    read(&fixture.join("args")).map(|s| s.lines().map(str::to_string).collect()).unwrap_or_default()
+}
+
+fn wj(dir: &Path, flags: &[&str], args: &[String]) -> Output {
+    Command::new(WJ)
+        .arg("run")
+        .args(flags)
+        .args(args)
+        .current_dir(dir)
+        .stdin(Stdio::null())
+        .output()
+        .unwrap()
+}
+
+fn check(fixture: &Path, o: &Output, mode: &str) {
+    let name = fixture.file_name().unwrap().to_string_lossy();
+    let out = String::from_utf8_lossy(&o.stdout);
+    let err = String::from_utf8_lossy(&o.stderr);
+    let want = read(&fixture.join("expect.stdout")).unwrap();
+    assert_eq!(out, want, "[{mode}] {name}: stdout\nstderr:\n{err}");
+    let code = o.status.code().unwrap_or(-1);
+    match read(&fixture.join("expect.exit")).map(|s| s.trim().to_string()).as_deref() {
+        Some("fail") => assert_ne!(code, 0, "[{mode}] {name}: must fail\nstderr:\n{err}"),
+        Some(n) => assert_eq!(code, n.parse::<i32>().unwrap(), "[{mode}] {name}: exit\nstderr:\n{err}"),
+        None => assert_eq!(code, 0, "[{mode}] {name}: exit\nstderr:\n{err}"),
+    }
+    if let Some(needle) = read(&fixture.join("expect.stderr_contains")) {
+        assert!(err.contains(needle.trim()), "[{mode}] {name}: stderr lacks {:?}:\n{err}", needle.trim());
+    }
+}
+
+fn bin_expectations(fixture: &Path) -> Vec<(String, String)> {
+    let mut v = Vec::new();
+    for e in std::fs::read_dir(fixture).unwrap().flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if let Some(bin) = n.strip_prefix("expect.bin.").and_then(|r| r.strip_suffix(".stdout")) {
+            v.push((bin.to_string(), read(&e.path()).unwrap()));
+        }
+    }
+    v
+}
+
+#[test]
+fn fixtures_exist() {
+    assert!(fixtures().len() >= 6, "project fixtures missing");
+}
+
+#[test]
+fn interpreted_projects_match_expectations() {
+    for f in fixtures() {
+        let dir = run_dir(&f);
+        // no path: discovered from the working directory (wj.toml upward), like `go run .`
+        check(&f, &wj(&dir, &["--interpret"], &args(&f)), "interpret");
+        let auto = wj(&dir, &[], &args(&f));
+        check(&f, &auto, "default");
+        assert!(
+            !String::from_utf8_lossy(&auto.stderr).contains("running compiled"),
+            "{}: default `wj run` must not fall back for interpretable programs",
+            f.display()
+        );
+        for (bin, want) in bin_expectations(&f) {
+            let o = wj(&dir, &["--interpret", "--bin", &bin], &[]);
+            assert_eq!(String::from_utf8_lossy(&o.stdout), want, "--bin {bin} in {}", f.display());
+        }
+    }
+}
+
+#[test]
+fn compiled_projects_match_expectations() {
+    if std::env::var("WJ_PROJECT_COMPILED").is_err() {
+        eprintln!("skipped: set WJ_PROJECT_COMPILED=1 to build every fixture with cargo");
+        return;
+    }
+    for f in fixtures() {
+        let dir = run_dir(&f);
+        check(&f, &wj(&dir, &["--compiled"], &args(&f)), "compiled");
+        for (bin, want) in bin_expectations(&f) {
+            let o = wj(&dir, &["--compiled", "--bin", &bin], &[]);
+            assert_eq!(String::from_utf8_lossy(&o.stdout), want, "compiled --bin {bin} in {}", f.display());
+        }
+    }
+}

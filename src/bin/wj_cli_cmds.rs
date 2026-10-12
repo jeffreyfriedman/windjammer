@@ -71,16 +71,32 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Run {
             path,
             args,
+            bin,
             target,
             interpret,
+            compiled,
+            release,
+            watch,
             defer_drop,
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
-            if interpret {
-                interpret_file(&path, args)?;
+            use windjammer::cli::run_dev::{execute, Mode, RunOptions};
+            if watch {
+                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+                let root = windjammer::cli::watch::watch_root(path.as_deref());
+                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            }
+            let mode = if compiled || release {
+                Mode::Compiled { release }
+            } else if interpret {
+                Mode::Interpret
             } else {
-                windjammer::cli::run::execute(&path, &args, &target)?;
+                Mode::Auto
+            };
+            let code = execute(&RunOptions { path, bin, args, mode, target });
+            if code != 0 {
+                std::process::exit(code);
             }
         }
         Commands::Repl {} => {
@@ -104,7 +120,13 @@ pub fn run(cli: Cli) -> Result<()> {
             list,
             allow_empty,
             interpret,
+            watch,
         } => {
+            if watch {
+                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+                let root = windjammer::cli::watch::watch_root(path.as_deref());
+                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            }
             if interpret {
                 return interpret_tests(path.as_deref(), filter.as_deref());
             }
@@ -423,15 +445,6 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
         );
     }
 
-    Ok(())
-}
-
-/// Interpret a .wj file or project directory directly (no cargo, no rustc).
-fn interpret_file(file: &std::path::Path, args: Vec<String>) -> Result<()> {
-    let code = windjammer::interpreter::runner::run_path(file, args);
-    if code != 0 {
-        std::process::exit(code);
-    }
     Ok(())
 }
 

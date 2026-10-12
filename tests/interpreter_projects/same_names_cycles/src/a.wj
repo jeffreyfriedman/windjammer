@@ -1,0 +1,9 @@
+use b
+
+pub fn label() -> string {
+    "a".to_string()
+}
+
+pub fn ping(n: int) -> int {
+    if n == 0 { 0 } else { 1 + b::pong(n - 1) }
+}

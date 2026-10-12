@@ -16,6 +16,8 @@ pub mod new;
 mod new_templates;
 pub mod remove;
 pub mod run;
+pub mod run_dev;
 pub mod self_install;
 pub mod test;
 pub mod update;
+pub mod watch;

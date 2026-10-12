@@ -1,0 +1,9 @@
+use a
+
+pub fn label() -> string {
+    "b".to_string()
+}
+
+pub fn pong(n: int) -> int {
+    if n == 0 { 0 } else { 10 + a::ping(n - 1) }
+}

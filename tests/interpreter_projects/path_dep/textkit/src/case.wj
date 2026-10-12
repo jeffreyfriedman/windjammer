@@ -1,0 +1,8 @@
+pub fn title(s: string) -> string {
+    let mut words: Vec<string> = Vec::new()
+    for w in s.split(" ") {
+        let head = w[0..1].to_uppercase()
+        words.push(format!("{}{}", head, &w[1..]))
+    }
+    words.join(" ")
+}
