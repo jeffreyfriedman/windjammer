@@ -30,6 +30,27 @@ fn parses(path: &str, source: &str) -> bool {
     .unwrap_or(false)
 }
 
+fn name_of(p: &Path) -> String {
+    p.display().to_string()
+}
+
+/// W0009: delete redundant trailing `return` keywords (needs a parse; a file that does not parse is untouched).
+fn fix_trailing_returns(name: &str, text: String) -> String {
+    let (n, t) = (name.to_string(), text.clone());
+    let edited = std::panic::catch_unwind(move || {
+        let tokens = crate::lexer::Lexer::new(&t).tokenize_with_locations();
+        let mut parser = crate::parser::Parser::new_with_source(tokens, n, t.clone());
+        parser.parse().ok().map(|p| {
+            let rs = crate::linter::trailing_return::tail_returns(&p);
+            crate::linter::trailing_return::fix_source(&t, &rs)
+        })
+    });
+    match edited {
+        Ok(Some(new_text)) => new_text,
+        _ => text,
+    }
+}
+
 fn is_target(p: &Path, docs: bool) -> bool {
     p.extension().is_some_and(|e| e == "wj" || (docs && e == "md"))
 }
@@ -77,7 +98,9 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
                 text,
             }
         } else {
-            surface_fix::fix_source(&source)
+            let mut out = surface_fix::fix_source(&source);
+            out.text = fix_trailing_returns(&name_of(file), out.text);
+            out
         };
         summary.skipped += out.skipped_count();
         if out.text == source {
@@ -89,7 +112,7 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
             continue;
         }
         summary.files_changed += 1;
-        summary.rewrites += out.changed_count().max(is_md as usize);
+        summary.rewrites += out.changed_count().max(1);
         if !check {
             fs::write(file, &out.text)?;
         }

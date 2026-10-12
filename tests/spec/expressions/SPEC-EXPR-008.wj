@@ -1,0 +1,7 @@
+// spec: SPEC-EXPR-008
+// expect: yes 20
+fn main() {
+    let x = if 3 > 2 { "yes" } else { "no" }
+    let y = if 1 > 2 { 10 } else if 2 > 1 { 20 } else { 30 }
+    println("${x} ${y}")
+}

@@ -1,0 +1,16 @@
+// spec: SPEC-PAT-005
+// expect: 12 10 0
+// expect: some 4
+enum Shape { Circle(float), Rect { w: float, h: float }, Dot }
+fn area(s: Shape) -> float {
+    match s {
+        Shape::Circle(r) => 3.0 * r * r,
+        Shape::Rect { w, h } => w * h,
+        Shape::Dot => 0.0,
+    }
+}
+fn main() {
+    println("${area(Shape::Circle(2.0))} ${area(Shape::Rect { w: 2.0, h: 5.0 })} ${area(Shape::Dot)}")
+    let o: Option<int> = Some(4)
+    match o { Some(v) => println("some ${v}"), None => println("none") }
+}

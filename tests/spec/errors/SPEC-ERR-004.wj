@@ -1,0 +1,8 @@
+// spec: SPEC-ERR-004
+// mode: panic
+// expect: before
+// expect-error: boom 2
+fn main() {
+    println("before")
+    panic("boom ${1 + 1}")
+}

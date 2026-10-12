@@ -1,0 +1,11 @@
+// spec: SPEC-GRAM-003
+// expect: 2
+fn g(x: int) -> int {
+    return x + 1;
+}
+fn main() {
+    let a = 1
+    let b = 2;
+    (a + b)
+    println("${g(a)}");
+}

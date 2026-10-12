@@ -1,6 +1,10 @@
 # Windjammer
 
-**80% of Rust's power with 20% of its complexity.** Windjammer is a clean, expressive language that compiles to
+**Write it like a script. Ship it like Rust.**
+
+*80% of Rust's power with 20% of its complexity.* 
+
+Windjammer is a clean, expressive language that compiles to
 Rust, with ergonomics as its first priority and performance close behind. You write plain values and functions; the
 compiler works out the borrows, moves and clones. Iterate instantly in the interpreter, then ship native Rust, or
 target Go, JavaScript and WebAssembly from the same code. Designed for developers and their coding agents alike.

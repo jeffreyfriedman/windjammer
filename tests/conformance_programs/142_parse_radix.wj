@@ -1,0 +1,33 @@
+// Integer/float parsing and radix conversion; bad input is Err, not a panic.
+// expect: Ok(255)
+// expect: Ok(10)
+// expect: Ok(-5)
+// expect: true
+// expect: Ok(42)
+// expect: Ok(3.5)
+// expect: true
+// expect: true
+// expect: Ok(-17)
+// expect: true
+fn main() {
+    let a = i64::from_str_radix("ff", 16)
+    println("${a:?}")
+    let b = u64::from_str_radix("1010", 2)
+    println("${b:?}")
+    let c = i64::from_str_radix("-101", 2)
+    println("${c:?}")
+    let d = u8::from_str_radix("100", 16)
+    println("${d.is_err()}")
+    let e = "42".parse::<i32>()
+    println("${e:?}")
+    let f = "3.5".parse::<f64>()
+    println("${f:?}")
+    let g = "300".parse::<u8>()
+    println("${g.is_err()}")
+    let h = "x1".parse::<i64>()
+    println("${h.is_err()}")
+    let k = i32::from_str_radix("-11", 16)
+    println("${k:?}")
+    let m = "-".parse::<i64>()
+    println("${m.is_err()}")
+}

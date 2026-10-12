@@ -1,0 +1,22 @@
+// spec: SPEC-STD-002
+// expect: 2 a 20 false
+// expect: 1 1
+// expect: 2 true false
+use std::collections::HashMap
+use std::collections::HashSet
+fn main() {
+    let mut m = HashMap::new()
+    m.insert("b", 2)
+    m.insert("a", 1)
+    m.insert("b", 20)
+    let mut keys = m.keys().collect::<Vec<&str>>()
+    keys.sort()
+    println("${keys.len()} ${keys[0]} ${m.get("b").unwrap()} ${m.contains_key("z")}")
+    let old = m.remove("a")
+    println("${old.unwrap()} ${m.len()}")
+    let mut s = HashSet::new()
+    s.insert(1)
+    s.insert(1)
+    s.insert(2)
+    println("${s.len()} ${s.contains(2)} ${s.contains(3)}")
+}

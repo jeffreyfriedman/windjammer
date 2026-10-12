@@ -535,10 +535,10 @@ impl<'ast> CodeGenerator<'ast> {
                     emit_shared || self.inferred_borrowed_params.contains(name.as_str()),
                 )
             }
-            Expression::Unary {
-                op: crate::parser::UnaryOp::Ref,
-                ..
-            } => (true, true),
+            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+                let owned_key = self.ref_operand_is_owned_local(operand);
+                (!owned_key, !owned_key)
+            }
             _ => (false, false),
         };
         // Peel only on emit-truth demoted refs (`key: &str`). Owned `String` +
@@ -10228,7 +10228,7 @@ fn safety_type_from_arg_expression(expr: &Expression) -> SafetyType {
         Expression::Literal { value, .. } => match value {
             Literal::String(_) => SafetyType::borrowed(BaseType::String, Region::fresh(2)),
             Literal::Int(_) => SafetyType::copy(BaseType::I32),
-            Literal::Float(_) => SafetyType::copy(BaseType::F32),
+            Literal::Float(_) => SafetyType::copy(BaseType::F64),
             Literal::Bool(_) => SafetyType::copy(BaseType::Bool),
             _ => SafetyType::owned(BaseType::Inferred),
         },

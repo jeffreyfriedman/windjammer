@@ -318,6 +318,9 @@ pub fn static_ret(owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) ->
         ("String", "new") | ("String", "from") | ("String", "with_capacity") | ("string", "new") | ("string", "from") => Ty::Str,
         ("i64" | "i32" | "u64" | "u32" | "u8" | "usize" | "isize" | "i8" | "i16" | "u16", "from") => Ty::Int(IntKind::from_name(owner)?),
         ("i64" | "i32" | "u64" | "u32" | "u8" | "usize" | "isize" | "i8" | "i16" | "u16", "MAX" | "MIN") => Ty::Int(IntKind::from_name(owner)?),
+        ("i64" | "i32" | "u64" | "u32" | "u8" | "usize" | "isize" | "i8" | "i16" | "u16", "from_str_radix") => {
+            Ty::Result(b(Ty::Int(IntKind::from_name(owner)?)), b(Ty::Str))
+        }
         ("f64", "from") => Ty::F64,
         ("char", "from_u32") => Ty::Option(b(Ty::Char)),
         _ => return None,

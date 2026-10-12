@@ -1,0 +1,11 @@
+// spec: SPEC-INTR-002
+// mode: panic
+// expect: passed
+// expect-error: math 2
+fn main() {
+    assert(1 + 1 == 2)
+    assert(true, "never shown")
+    println("passed")
+    assert(1 > 2, "math ${1 + 1}")
+    println("not reached")
+}
