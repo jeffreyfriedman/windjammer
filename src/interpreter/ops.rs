@@ -40,6 +40,9 @@ pub fn compound_to_binary(op: CompoundOp) -> BinaryOp {
 pub fn int_binary(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> R {
     // shifts keep the left type; others unify literal widths
     let ty = if matches!(op, BinaryOp::Shl | BinaryOp::Shr) { at } else { IntTy::unify(at, bt) };
+    if ty == IntTy::U128 {
+        return super::u128ops::binary(op, a, b);
+    }
     let overflow = || panic_ctl(format!("attempt to {} with overflow", op_name(op)));
     let check = |r: Option<i128>| -> R {
         let r = r.ok_or_else(overflow)?;

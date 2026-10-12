@@ -161,6 +161,10 @@ pub enum Commands {
         #[arg(long)]
         deterministic_time: bool,
 
+        /// With --interpret: `walker` (default) or `resolved` (compiled closures, ADR-0020)
+        #[arg(long, value_name = "ENGINE", default_value = "walker")]
+        engine: String,
+
         /// With --interpret: allow plain http:// client requests (default: the http client refuses)
         #[arg(long)]
         allow_network: bool,

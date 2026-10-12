@@ -63,6 +63,8 @@ pub struct RunOptions {
     pub allow_network: bool,
     /// `--mock-http FILE`: canned responses for the http client (takes precedence).
     pub mock_http: Option<PathBuf>,
+    /// `--engine=resolved`: compiled closure engine for the functions it supports.
+    pub engine_resolved: bool,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -83,6 +85,7 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
         it.guard_stack();
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
+        it.set_engine_resolved(opts.engine_resolved);
         if let Some(p) = &opts.mock_http {
             match super::builtins::std_http::HttpMode::mock_from_file(p) {
                 Ok(m) => it.set_http_mode(m),

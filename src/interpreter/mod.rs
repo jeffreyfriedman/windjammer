@@ -26,11 +26,13 @@ mod ops;
 mod pattern;
 mod place;
 mod register;
+mod resolved;
 pub mod repl;
 pub mod runner;
 mod sched;
 mod scope;
 mod slicing;
+mod u128ops;
 pub mod value;
 
 pub use engine::Interpreter;

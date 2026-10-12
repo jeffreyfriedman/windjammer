@@ -2,6 +2,7 @@
 
 use super::engine::Interpreter;
 use super::error::{semantic, R};
+use super::int::IntTy;
 use super::place::deref_value;
 use super::value::*;
 use std::cell::RefCell;
@@ -189,6 +190,7 @@ impl Interpreter {
         match v {
             Value::Unit => Ok("()".into()),
             Value::Bool(b) => Ok(b.to_string()),
+            Value::Int(n, IntTy::U128) => Ok(super::u128ops::display(*n)),
             Value::Int(n, _) => Ok(n.to_string()),
             Value::Float(f, FloatTy::F32) => Ok(format!("{}", *f as f32)),
             Value::Float(f, _) => Ok(format!("{}", f)),
@@ -264,6 +266,7 @@ impl Interpreter {
         match v {
             Value::Unit => out.push_str("()"),
             Value::Bool(b) => out.push_str(&b.to_string()),
+            Value::Int(n, IntTy::U128) => out.push_str(&super::u128ops::display(*n)),
             Value::Int(n, _) => out.push_str(&n.to_string()),
             Value::Float(f, FloatTy::F32) => out.push_str(&format!("{:?}", *f as f32)),
             Value::Float(f, _) => out.push_str(&format!("{:?}", f)),

@@ -106,7 +106,7 @@ impl IntTy {
                 (1i128 << (self.bits() - 1)) - 1
             }
         } else if self.bits() >= 127 {
-            i128::MAX // u128 values above i128::MAX are not representable (documented limit)
+            i128::MAX // the largest literal; larger u128 values are bit patterns (`u128ops.rs`)
         } else {
             (1i128 << self.bits()) - 1
         }

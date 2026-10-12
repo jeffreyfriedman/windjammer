@@ -77,12 +77,23 @@ pub fn run(cli: Cli) -> Result<()> {
             deterministic_time,
             allow_network,
             mock_http,
+            engine,
             defer_drop,
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
             if interpret {
-                let opts = windjammer::interpreter::runner::RunOptions { sched_seed, deterministic_time, allow_network, mock_http };
+                let opts = windjammer::interpreter::runner::RunOptions {
+                    sched_seed,
+                    deterministic_time,
+                    allow_network,
+                    mock_http,
+                    engine_resolved: match engine.as_str() {
+                        "resolved" => true,
+                        "walker" => false,
+                        other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
+                    },
+                };
                 interpret_file(&path, args, opts)?;
             } else {
                 windjammer::cli::run::execute(&path, &args, &target)?;
