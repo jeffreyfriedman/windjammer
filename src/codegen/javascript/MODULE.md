@@ -24,7 +24,7 @@ One emitter serves both languages; `JavaScriptBackend::typescript()` adds type a
 
 ## Intrinsics
 Same as Go: lowered by the portable layer to `$print`/`$eprint`/`$panic`; format specs use `$pad`, `$fixed`, `$radix`, `$dbg*`.
-The TypeScript flavour is exercised on the intrinsic corpus (`intrinsic_corpus_conforms_on_typescript`, Node type stripping).
+The TypeScript flavour runs the whole conformance corpus (`corpus_conforms_on_typescript`, Node type stripping).
 
 
 ## Invariants
