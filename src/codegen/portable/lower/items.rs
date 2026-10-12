@@ -175,9 +175,6 @@ pub(super) fn lower_fn(env: &ItemEnv, decl: &FunctionDecl, sig: &crate::codegen:
         let (_, pty, mode) = sig.params.iter().find(|(n, _, _)| *n == p.name).cloned().unwrap_or((p.name.clone(), fix_self(from_ast(&p.type_, &lw.generics), self_ty.as_ref()), ParamMode::Value));
         let _ = i;
         let out = lw.declare(&p.name, pty.clone(), mode != ParamMode::Value);
-        if p.is_mutable {
-            lw.set_mutable(&p.name);
-        }
         params.push(PParam { name: out, ty: pty, mode, own_mutable: p.is_mutable });
     }
     lw.rets.push(sig.ret.clone());

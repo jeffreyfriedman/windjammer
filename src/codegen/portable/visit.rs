@@ -128,9 +128,8 @@ pub fn types_in_expr(e: &mut PExpr, v: TyFn) {
     v(&mut e.ty);
     match &mut *e.kind {
         PK::Cast(_, t) => v(t),
-        PK::Closure { params, ret, body, captures } => {
+        PK::Closure { params, ret, body } => {
             params.iter_mut().for_each(|(_, t)| v(t));
-            captures.iter_mut().for_each(|(_, t)| v(t));
             v(ret);
             types_in_block(body, v);
         }

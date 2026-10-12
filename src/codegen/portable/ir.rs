@@ -260,8 +260,8 @@ pub enum PK {
     VecRepeat(PExpr, PExpr),
     MapLit(Vec<(PExpr, PExpr)>),
     Tuple(Vec<PExpr>),
-    /// `captures`: outer mutable locals snapshotted at creation (Rust `move` semantics).
-    Closure { params: Vec<(String, Ty)>, ret: Ty, body: PBlock, captures: Vec<(String, Ty)> },
+    /// Captures are by reference (SPEC-EXPR-011): JS/Go closures over the enclosing variables.
+    Closure { params: Vec<(String, Ty)>, ret: Ty, body: PBlock },
     If { cond: PExpr, then: PBlock, els: PBlock },
     Match { scrutinee: PExpr, arms: Vec<PArm> },
     Block(PBlock),

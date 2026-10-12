@@ -54,6 +54,10 @@ Syntax, runtime representation of integers/strings, or naming (emitters do).
 Unit tests next to each module; end-to-end through `tests/backend_conformance_test.rs`
 (runs generated Go/JS against independent oracles). Add a corpus program in `tests/conformance_programs/` for every feature.
 
+## Closures
+Closures capture by reference (SPEC-EXPR-011; the interpreter agrees): the emitted JS/Go closure
+closes over the enclosing variables, so mutations inside it are visible outside. Corpus: `174_closure_mut_capture`.
+
 ## Closure-literal callee
 `(|v| body)(x)` (the desugaring of `x |> |v| body`) lowers the arguments first and types the
 closure parameters from them (`lower/call.rs`), so Go/JS agree with the argument's width.

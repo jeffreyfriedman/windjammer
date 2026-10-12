@@ -212,10 +212,10 @@ impl Flatten {
             }
             PK::Try { expr, fn_ret } => self.try_expr(expr, fn_ret, &ty, pre),
             PK::Binary(op @ (BinKind::And | BinKind::Or), l, r) => self.short_circuit(op, l, r, pre),
-            PK::Closure { params, ret, body, captures } => {
+            PK::Closure { params, ret, body } => {
                 let sink = if ret == Ty::Unit { Sink::Discard } else { Sink::Return };
                 let stmts = self.block(body, sink);
-                PExpr::new(ty, PK::Closure { params, ret, body: PBlock { stmts, tail: None }, captures }).at(line)
+                PExpr::new(ty, PK::Closure { params, ret, body: PBlock { stmts, tail: None } }).at(line)
             }
             mut other => {
                 let kids = children_mut(&mut other);
