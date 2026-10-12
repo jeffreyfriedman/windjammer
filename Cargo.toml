@@ -137,6 +137,17 @@ path = "tests/all.rs"
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
 
+# Convergence gates (golden emitted Rust, rustc-accepts, explain ratchet) also run standalone:
+#   cargo test --release --test convergence_gates
+[[test]]
+name = "convergence_gates"
+path = "tests/convergence_gates_test.rs"
+
+# Inference differential harness standalone: cargo test --release --test inference_differential
+[[test]]
+name = "inference_differential"
+path = "tests/inference_differential_test.rs"
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"
