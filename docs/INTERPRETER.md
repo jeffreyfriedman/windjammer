@@ -10,7 +10,10 @@ Module map and invariants: `src/interpreter/MODULE.md`.
 | Command | Effect |
 |---------|--------|
 | `wj run --interpret FILE_OR_DIR [args]` | Run a file, or a project directory (`main.wj`, or `main.wj` under a `src` directory), with `use`/`mod` resolved across files. No cargo, no rustc. stdout is program output only. |
-| `wj test --interpret [PATH] [--filter S]` | Run `@test`, `@test_cases([...])` and `test_*` functions in `*_test.wj` files. cargo-test-like report, exit 1 on failure. |
+| `wj test --interpret [PATH] [--filter S] [--list]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
+| `wj run --interpret --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
+| `wj run --interpret --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
+| `wj run --interpret --mock-http FILE` / `--allow-network` | Answer `std::http` client calls from canned responses / allow plain `http://` (default: the client refuses). |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);
@@ -151,46 +154,52 @@ Findings from running the same programs through the compiled path (compiler bugs
 
 ## Added in the interp-gaps work
 
-- **Generic static dispatch** (`generics.rs`): `T::new()`, `T::default()`, `T::CONST` resolve through a per-call table
-  `T -> concrete type`, bound from a turbofish, then argument runtime types, then the expected type (`let x: Foo = make()`,
-  a function's declared return type). An uninferable parameter is a located `unsupported` error naming the fix.
-  Impl-level parameters are bound the same way; they are not recovered from `&self` field types.
-- **`matches!(e, pat [if guard])`** is lowered by the parser to a `match` (all backends). Open ranges `(a..)` parse as
-  `std::ops::RangeFrom { start }` (the Rust backend emits `(a..)`).
-- **Lazy iterators** (`iter.rs`, `builtins/iter.rs`): adaptors are pull-based nodes, so `cycle`, unbounded ranges,
-  `repeat`, `from_fn`, `successors` work under `take`/`take_while`/`find`/`break`, and closure side effects interleave exactly as in
-  Rust. Materialising more than 50M items from one iterator is a loud error. `rev` is lazy for double-ended sources
-  and materialises otherwise.
-- **`impl Drop`** (`heap.rs`): destructors run at block/function exit in reverse declaration order, on reassignment, `drop(x)`,
-  discarded temporaries and `let _ =`; owner before fields, `Vec` elements in order. Ownership is answered by reachability from
-  the live frames (the value model has no move tracking), so a value passed into a callee is dropped when its last holder dies
-  (the caller's scope exit), not at the callee's end. Panics unwind through destructors; `process::exit` does not.
-- **`Rc`/`Arc`/`Weak`, `RefCell`/`Cell`/`Mutex`/`RwLock`** (`builtins/shared.rs`): `Rc` is a shared slot; `strong_count`,
-  `weak_count` and `Weak::upgrade` are computed by reachability, so they follow scope exit and `drop`. Reference cycles
-  are not leaked (a cycle with no outside holder is considered dead). `borrow_mut()` never panics with "already borrowed"
-  and `lock()` never blocks or poisons.
-- **`async fn` / `.await`**: calling an async function returns a lazy future; `.await` (and an `async fn main`) runs it
-  to completion, so order matches Rust for single-task programs. There is no executor: `spawn`, `async expr`, channels,
-  `thread {}` stay unsupported.
-- Recursion is bounded by stack bytes used on the 4 GiB interpreter thread (about 120k interpreted frames in a debug
-  build), not a frame count; exceeding it is a panic, never a native stack overflow.
-- Smaller: `None` patterns no longer match everything; `module.func()` and `Enum.Variant()` legacy spellings; bare names
-  from `use std::math`; `math::*` float functions; `fs::is_dir/is_file`; an implicit `self` in `fn f()` impl methods.
+- **Generic static dispatch** (`generics.rs`): `T::new()`, `T::default()`, `T::CONST` through a per-call table bound from a
+  turbofish, argument runtime types, then the expected type. Uninferable parameters are a located `unsupported` error.
+- **`matches!`** lowered by the parser; open ranges `(a..)` as `std::ops::RangeFrom`; `-a..b` read as `(-a)..b`.
+- **Lazy iterators** (`iter.rs`, `builtins/iter.rs`): pull-based adaptors, infinite sources, Rust's side-effect order.
+- **Concurrency** (`sched.rs`, `builtins/{thread,channel,sync,time}.rs`): `std::thread` (spawn, join, scope, sleep,
+  Builder), `mpsc` (channel, sync_channel, try/timeout receive, iteration), `Arc<Mutex/RwLock>` guards released at scope
+  end, `Condvar`, `Barrier`, atomics, and the ADR-0004 surface (`spawn f(x)`/`spawn { }`, `async f(x)`, `scope { }`,
+  `Task.wait()`/`.await`, `std::sync::channel()` with `send`/`recv` methods). One OS thread per task, but a baton runs
+  exactly one at a time: a run is a pure function of the program and `--sched-seed`. `sleep`/timeouts use a virtual clock
+  (no real waiting); a state where every task is blocked and none waits on time is reported as a deadlock. Properly
+  synchronised programs print the same output under every seed (tested over 10 seeds); a check-then-act race across two lock
+  acquisitions shows both outcomes across seeds (tested).
+- **Ownership and memory** (`heap.rs`, `locks.rs`, `builtins/shared.rs`): `impl Drop` at scope exit, on reassignment,
+  `drop(x)` (forced: the object dies even if an auto-borrowed alias remains), discarded temporaries, `let _ =`, and for elements a
+  mutating builtin discards (`clear`, `truncate`, `remove`, overwritten entries); `Rc`/`Arc` counts by reachability,
+  `Weak` is a real weak pointer so `Rc` cycles leak exactly as in Rust; `Rc::make_mut`/`get_mut`; `RefCell` borrow tracking
+  with Rust's `BorrowMutError`/`BorrowError` panics (guards are tokens that live as long as some copy of the guard value).
+  `mut` parameters are owned copies (Q-015).
+- **Std modules**: `fs` (all of `std/fs.wj`, `read_dir`, metadata, path helpers), `path`, `env`, `process`, `time`
+  (`Duration`, `Instant`, `SystemTime`, `DateTime`), `json` (dynamic and typed `to_string`/`parse_string::<T>`), `regex`,
+  `csv`, `url`, `mime`, `crypto` (sha1/256/512, base64, bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`, `log`,
+  `strings`, `testing`; `http` client behind a port (`--mock-http`, `--allow-network`). Same crates as `windjammer-runtime`,
+  so results match compiled programs; tests use Python oracles (`interpreter_std_modules_test`).
+- **Language**: Rust's slicing panic messages (`v[a..b]`, `s[a..b]`, char boundaries), `char::to_lowercase()` displays,
+  top-level macro invocations are loud, `Type::default()` for `@derive(Default)` (Q-016), recursion bounded by stack bytes on
+  the interpreter thread (Q-023), `wj test --interpret` shares `wj test` discovery.
+- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). ADR-0017 proposes a resolved/closure-compiled
+  tier with kill criteria.
+
+Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
+(first interp-gaps measurement: 222 of 382 on the smaller tree then). Of the 138 that do not: 40 are `__SEED__` corpus templates,
+35 panic on purpose (spec/error examples), 18 are parse errors in negative spec examples or syntax the shared parser rejects,
+9 time out (optimizer benchmark kernels), and about 30 need unimplemented libraries (UI/game engine, http servers,
+`std::cli`, subprocess pipes). `bench/agent-dx` reference solutions: 60/60 (was 54/60).
 
 ## Remaining gaps
 
-- Not interpreted: `spawn`/channels/threads (needs a settled ADR-0004 surface and a scheduler), extern/FFI, UI/http/json/db/regex/
-  subprocess std modules, wall-clock `time::now()` objects, `Rc::make_mut`/`get_mut`, RefCell borrow-state panics,
-  macros other than the built-in set plus `matches!`.
-- `u128` values above `i128::MAX` are not representable. `HashMap`/`HashSet` iterate in key order (Rust's order is
-  unspecified, so a correct program cannot depend on it; programs that print an unordered map differ from any single Rust run).
-- Drop/`Rc` reachability limits: values held only by a pending Rust-side temporary are invisible to the scan; a moved-in value
-  outlives the callee; iterator adaptors other than `Vec`-backed ones do not hold values alive for the scan.
-- Performance: a tree walker, roughly two orders of magnitude slower than compiled code; the optimizer kernel
-  benchmarks time out in debug builds.
-- Of the 382 repository `.wj` files with a `main`, 160 still do not exit 0: 37 are `__SEED__` corpus templates, about 25 are
-  tests that panic on purpose, and the rest need UI/engine/http/json/regex std modules or use syntax the shared parser rejects.
-  Re-measure with `scripts/interpreter_coverage.py`.
+- Not interpreted: extern/FFI; `http::serve` servers; `std::cli`; `std::subprocess` pipes; `db`; `config::*`; UI/game engine
+  APIs; `thread {}`/`async {}` statement blocks (deprecated by ADR-0004); `Rc` cycles are leaked but their destructors
+  are not distinguished from reachable values in drop order; mutex poisoning (a panicking holder does not poison).
+- Moves are not tracked: a value moved into a callee by an owned parameter (other than via `drop(x)`) stays reachable from the
+  caller's variable until that dies, so its destructor runs at the caller's scope exit rather than the callee's. Values held only
+  by pending Rust-side temporaries are invisible to the reachability scan.
+- `u128` above `i128::MAX` is not representable. `HashMap`/`HashSet` iterate in key order (Rust's order is unspecified).
+- `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error.
+- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code (ADR-0017).
 
 ## ADR-0007
 
