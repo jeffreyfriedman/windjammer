@@ -107,17 +107,20 @@ impl<'m> Js<'m> {
         self.line(&format!("clone() {{ return new {class}({}); }}", args.join(", ")));
     }
 
+    /// Derived `Debug`: `o` carries the caller's Formatter options to every field.
     fn dbg_method(&mut self, display: &str, fields: &[(String, Ty)], tuple: bool) -> PResult<()> {
         let body = if fields.is_empty() {
             js_string(display)
         } else if tuple {
-            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("{}(this.{})", self.dbg_fn(t)?, prop(n)))).collect();
-            format!("{} + {} + \")\"", js_string(&format!("{display}(")), parts?.join(" + \", \" + "))
+            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("{}(this.{}, o)", self.dbg_fn(t)?, prop(n)))).collect();
+            format!("$dbgTupleS({}, [{}], o)", js_string(display), parts?.join(", "))
         } else {
-            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("{} + {}(this.{})", js_string(&format!("{n}: ")), self.dbg_fn(t)?, prop(n)))).collect();
-            format!("{} + {} + \" }}\"", js_string(&format!("{display} {{ ")), parts?.join(" + \", \" + "))
+            let parts: PResult<Vec<String>> = fields.iter().map(|(n, t)| Ok(format!("[{}, {}(this.{}, o)]", js_string(n), self.dbg_fn(t)?, prop(n)))).collect();
+            format!("$dbgStruct({}, [{}], o)", js_string(display), parts?.join(", "))
         };
-        self.line(&format!("$dbg() {{ return {body}; }}"));
+        let param = if self.ts { "o?: any" } else { "o" };
+        let ret = if self.ts { ": string" } else { "" };
+        self.line(&format!("$dbg({param}){ret} {{ return {body}; }}"));
         Ok(())
     }
 

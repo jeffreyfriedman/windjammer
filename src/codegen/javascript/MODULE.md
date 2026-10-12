@@ -23,7 +23,7 @@ One emitter serves both languages; `JavaScriptBackend::typescript()` adds type a
 
 
 ## Intrinsics
-Same as Go: lowered by the portable layer to `$print`/`$eprint`/`$panic`; format specs use `$pad`, `$fixed`, `$radix`, `$dbg*`.
+Same as Go: lowered by the portable layer to `$print`/`$eprint`/`$panic`; format specs follow Rust's Formatter: an options object `{ w, fill, align, zero, plus, alt, prec }` passed to `$fmtInt`/`$fmtFloat`/`$fmtStr` and to every `$dbg*` formatter (options reach the elements of aggregates; `alt` = pretty layout).
 The TypeScript flavour runs the whole conformance corpus (`corpus_conforms_on_typescript`, Node type stripping).
 
 

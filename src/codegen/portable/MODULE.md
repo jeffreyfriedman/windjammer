@@ -17,7 +17,7 @@ Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emi
 | `ir.rs` | `PModule`, `PFn`, `PStmt`, `PExpr`/`PK`; `Unsupported` (explicit "this construct is not implemented") |
 | `lower/` | bidirectional type inference with inference variables, `?`, interpolation, patterns, value-semantics `Copy` insertion |
 | `lower/intrinsics.rs` | ADR-0014 intrinsics (`print`/`assert*`/`panic`/`todo`/`unreachable`/`debug`/list literal) desugared to `Print`/`Panic`/`If`/`Block`; names come only from `crate::intrinsics` |
-| `lower/fmt.rs` | `{:spec}` parsing; unsupported flags (`+`, `#`, `E`, `x?`) are explicit errors |
+| `lower/fmt.rs` | `{:spec}` parsing (Rust's full flag set: fill/align, `+`, `#`, `0`, width, precision); unsupported types (`E`, `x?`, `#e`) are explicit errors |
 | `builtins.rs` | typing rules of std methods (`Vec`, `String`, `HashMap`, `Option`, iterators, ints, floats) |
 | `flatten.rs` | expression-position `if`/`match`/block/`?` become statements, preserving evaluation order |
 | `visit.rs` | mutable traversals (type resolution after inference) |
