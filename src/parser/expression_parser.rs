@@ -49,7 +49,7 @@ impl Parser {
                 None
             };
 
-            let expr = self.parse_expression()?;
+            let expr = self.parse_argument_with_shorthand()?;
             args.push((label, expr));
 
             if self.current_token() == &Token::Comma {

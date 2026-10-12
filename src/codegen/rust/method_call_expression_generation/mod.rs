@@ -104,6 +104,10 @@ impl<'ast> CodeGenerator<'ast> {
             self.upgrade_get_to_get_mut = false;
         }
         let effective_method = mut_sibling.as_deref().unwrap_or(method);
+        // ADR-0018: surface collection methods (`group_by`, ...) call the inlined enumerable runtime.
+        let effective_method = self
+            .enumerable_rust_name(receiver_type_name.as_deref(), effective_method, arguments.len())
+            .unwrap_or(effective_method);
 
         let obj_str = self.mc_build_method_receiver_string(object, effective_method);
         // `reader.read_line(line)` / `read_to_string(buf)`: std fills a `&mut String`. The lint-clean spelling has no

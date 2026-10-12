@@ -39,6 +39,8 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_cow_import: bool, // For Phase 9 Cow optimization
     pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
     pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
+    /// A call lowered to the enumerable runtime (ADR-0018): inline `mod wj_enumerable`.
+    pub(crate) uses_enumerable: bool,
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -663,6 +665,7 @@ impl<'ast> CodeGenerator<'ast> {
             needs_cow_import: false,
             needs_hashmap_import: false,
             needs_hashset_import: false,
+            uses_enumerable: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),

@@ -582,6 +582,9 @@ impl Parser {
     }
 
     fn parse_match(&mut self) -> Result<&'static Statement<'static>, String> {
+        if self.at_guard_only_match() {
+            return self.parse_guard_only_match(); // ADR-0018: `match { cond => .. }`
+        }
         self.expect(Token::Match)?;
 
         let value = self.parse_match_value()?;
