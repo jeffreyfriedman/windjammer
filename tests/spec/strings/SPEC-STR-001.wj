@@ -1,0 +1,6 @@
+// spec: SPEC-STR-001
+// expect: 6 5
+fn main() {
+    let s = "héllo"
+    println("${s.len()} ${s.chars().count()}")
+}

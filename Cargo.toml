@@ -20,12 +20,12 @@ edition.workspace = true
 default-run = "wj"
 authors.workspace = true
 license.workspace = true
-description = "A simple language inspired by Go, Ruby, and Elixir that transpiles to Rust - 80% of Rust's power with 20% of the complexity"
+description = "Windjammer: 80% of Rust's power with 20% of its complexity. A high-level language that compiles to Rust with inferred ownership; runs instantly in an interpreter and also targets Go, JavaScript and WebAssembly."
 repository = "https://github.com/jeffreyfriedman/windjammer"
 homepage = "https://github.com/jeffreyfriedman/windjammer"
-documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/GUIDE.md"
-keywords = ["compiler", "transpiler", "rust", "go", "language"]
-categories = ["development-tools", "compilers"]
+documentation = "https://github.com/jeffreyfriedman/windjammer/blob/main/docs/index.md"
+keywords = ["compiler", "transpiler", "language", "ownership", "interpreter"]
+categories = ["compilers", "development-tools"]
 readme = "README.md"
 rust-version.workspace = true
 autobins = false
@@ -145,6 +145,12 @@ path = "tests/all.rs"
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
 
+# Language specification (docs/spec): executable rule examples. The grammar is checked by docs_truth.
+#   cargo test --release --test spec_conformance
+[[test]]
+name = "spec_conformance"
+path = "tests/spec_conformance_test.rs"
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"
@@ -165,6 +171,11 @@ path = "tests/interpreter_features_test.rs"
 [[test]]
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
+
+# Codegen correctness gates (compiled Rust vs interpreter): also standalone for fast iteration.
+[[test]]
+name = "codegen_correctness"
+path = "tests/codegen_correctness_test.rs"
 
 [[bench]]
 name = "string_optimization_bench"

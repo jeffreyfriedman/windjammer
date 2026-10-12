@@ -1,0 +1,9 @@
+// spec: SPEC-STR-006
+// expect: foobar true true true
+fn main() {
+    let a = "foo"
+    let b = a + "bar"
+    let c = "abc"
+    let d = "abd"
+    println("${b} ${b == "foobar"} ${c < d} ${c < "b"}")
+}

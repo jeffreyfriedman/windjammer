@@ -1,0 +1,12 @@
+// spec: SPEC-PAT-008
+// expect: digit two more
+fn f(n: int) -> string {
+    match n {
+        0..=9 => "digit",
+        10..100 => "two",
+        _ => "more",
+    }
+}
+fn main() {
+    println("${f(5)} ${f(10)} ${f(100)}")
+}

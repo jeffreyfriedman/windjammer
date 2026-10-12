@@ -1,0 +1,19 @@
+// expect: 8
+// expect: 2.5
+// expect: 5
+trait Doubler { fn double(self) -> int }
+impl Doubler for int {
+    fn double(self) -> int { self * 2 }
+}
+trait Half { fn half(self) -> float }
+impl Half for float {
+    fn half(self) -> float { self / 2.0 }
+}
+fn main() {
+    let x: int = 4
+    println("${x.double()}")
+    let y: float = 5.0
+    println("${y.half()}")
+    let z: int = 5
+    println("${z}")
+}

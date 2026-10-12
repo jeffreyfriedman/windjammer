@@ -1,0 +1,51 @@
+// tags: idioms, regression, strings, sort
+// rust: ok
+// expect: 1
+// expect: world
+// expect: a
+// expect: 5
+// expect: 1
+// expect: yes
+use std::collections::HashMap
+
+struct P { lo: i64 }
+
+struct T { n: i64 }
+impl T {
+    fn collect(self, out: Vec<i64>) {
+        out.push(self.n)
+    }
+}
+
+fn pick(flag: bool) -> string {
+    if flag {
+        return if flag { "yes" } else { "no" }
+    }
+    "none"
+}
+
+fn main() {
+    let mut v: Vec<P> = [P { lo: 2 }, P { lo: 1 }]
+    v.sort_by(|a, b| a.lo.cmp(&b.lo))
+    println("${v[0].lo}")
+    let s = "hello world"
+    let t = s[6..]
+    println(t)
+    let text = "a b"
+    for tok in text.split(" ") {
+        if tok == "a" {
+            println("a")
+        }
+    }
+    let mut it = "5\n6".lines()
+    let first = it.next().unwrap_or("0")
+    println("${first}")
+    let mut m: HashMap<string, i64> = HashMap::new()
+    m.insert("a", 1)
+    let n = m.get("a").unwrap_or(0)
+    println("${n}")
+    println(pick(true))
+    let mut out: Vec<i64> = Vec::new()
+    let tt = T { n: 4 }
+    tt.collect(out)
+}

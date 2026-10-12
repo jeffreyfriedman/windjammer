@@ -524,7 +524,11 @@ export const $charFromU32 = (n) => {
 };
 
 export function $parseInt(s, lo, hi, wide) {
+  return $parseIntRadix(s, 10n, lo, hi, wide);
+}
+export function $parseIntRadix(s, radix, lo, hi, wide) {
   const fail = (m) => ({ ok: false, v: m });
+  const base = BigInt(radix);
   if (s.length === 0) return fail("cannot parse integer from empty string");
   let body = s;
   let neg = false;
@@ -534,8 +538,12 @@ export function $parseInt(s, lo, hi, wide) {
     if (neg && lo === 0n) return fail("invalid digit found in string");
     if (body.length === 0) return fail("invalid digit found in string");
   }
-  if (!/^[0-9]+$/.test(body)) return fail("invalid digit found in string");
-  let v = BigInt(body);
+  let v = 0n;
+  for (const c of body) {
+    const d = parseInt(c, 36);
+    if (c.length !== 1 || Number.isNaN(d) || BigInt(d) >= base) return fail("invalid digit found in string");
+    v = v * base + BigInt(d);
+  }
   if (neg) v = -v;
   if (v > hi) return fail("number too large to fit in target type");
   if (v < lo) return fail("number too small to fit in target type");

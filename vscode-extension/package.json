@@ -1,7 +1,7 @@
 {
   "name": "windjammer",
   "displayName": "Windjammer Language Support",
-  "description": "Language support for Windjammer - 80% of Rust's power, 20% of its complexity",
+  "description": "Language support for Windjammer, a high-level language that compiles to Rust with inferred ownership",
   "version": "0.35.0",
   "publisher": "windjammer",
   "icon": "icon.png",
@@ -21,9 +21,9 @@
   "keywords": [
     "windjammer",
     "rust",
-    "systems programming",
-    "memory safety",
-    "performance"
+    "ownership inference",
+    "transpiler",
+    "ai agents"
   ],
   "activationEvents": [
     "onLanguage:windjammer"

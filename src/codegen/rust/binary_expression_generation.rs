@@ -1376,7 +1376,7 @@ impl<'ast> CodeGenerator<'ast> {
                 op,
                 BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
             );
-            self.balance_eq_operands_for_rust(
+            self.balance_eq_operands_checked(
                 left,
                 right,
                 &mut left_str,

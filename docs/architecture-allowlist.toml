@@ -82,7 +82,7 @@
 "ir->codegen src/ir/signature_bridge.rs" = 33
 "ir->codegen src/ir/target_encodings.rs" = 7
 "ir->compiler src/ir/lower.rs" = 1
-"lexer->type_classification src/lexer/number_lexing.rs" = 2
+"lexer->type_classification src/lexer/number_lexing.rs" = 1
 "linter->intrinsics src/linter/surface_syntax.rs" = 1
 "metadata->compiler src/metadata/mod.rs" = 1
 "parser->intrinsics src/parser/interpolated_string_expression_parser.rs" = 1
@@ -109,7 +109,7 @@
 "src/analyzer/passthrough_inference.rs" = 2357
 "src/analyzer/signature_registry.rs" = 2531
 "src/analyzer/string_optimization.rs" = 2179
-"src/auto_clone.rs" = 2225
+"src/auto_clone.rs" = 2227
 "src/codegen/rust/call_signature_resolution.rs" = 3339
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4866
 "src/codegen/rust/function_generation_prepare.rs" = 13531
@@ -119,7 +119,7 @@
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2153
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
-"src/codegen/rust/statement_generation.rs" = 2543
+"src/codegen/rust/statement_generation.rs" = 2535
 "src/codegen/rust/stdlib_method_traits.rs" = 2483
 "src/codegen/rust/string_utilities.rs" = 2093
 "src/compiler/multipass_bare_pass_demotion.rs" = 4676
@@ -179,12 +179,12 @@
 "src/file_compilation_pipeline.rs::compile_file_impl" = 403
 "src/interpreter/builtins/option.rs::register" = 316
 "src/interpreter/builtins/seq.rs::register_vec" = 360
-"src/ir/constraint_gen.rs::walk_expression" = 377
+"src/ir/constraint_gen.rs::walk_expression" = 362
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 304
 "src/parser/call_expression_parser.rs::parse_postfix_expression" = 489
-"src/parser/pattern_parser.rs::parse_pattern" = 373
-"src/parser/primary_expression_parser.rs::parse_primary_expression" = 563
+"src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
+"src/parser/primary_expression_parser.rs::parse_primary_expression" = 558
 "src/parser/type_parser.rs::parse_type" = 428
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 407
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433

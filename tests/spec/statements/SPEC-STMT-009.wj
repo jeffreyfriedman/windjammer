@@ -1,0 +1,19 @@
+// spec: SPEC-STMT-009
+// expect: a=5
+// expect: 3 -1
+// expect: n=2
+// expect: n=1
+// expect: n=0
+fn first(o: Option<int>) -> int {
+    let Some(v) = o else { return -1 }
+    v
+}
+fn main() {
+    if let Some(a) = Some(5) { println("a=${a}") } else { println("none") }
+    println("${first(Some(3))} ${first(None)}")
+    let mut cur = Some(2)
+    while let Some(n) = cur {
+        println("n=${n}")
+        cur = if n > 0 { Some(n - 1) } else { None }
+    }
+}

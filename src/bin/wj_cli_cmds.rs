@@ -182,6 +182,11 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::agent_index::docs_search::run_cli(&query.join(" "), limit, json)
             }
         }
+        Commands::ExplainOwnership {
+            file,
+            function,
+            json,
+        } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;
@@ -432,6 +437,7 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
 
 /// Interpret a .wj file or project directory directly (no cargo, no rustc).
 fn interpret_file(file: &std::path::Path, args: Vec<String>) -> Result<()> {
+    windjammer::cli_execution::report_build_lints(file);
     let code = windjammer::interpreter::runner::run_path(file, args);
     if code != 0 {
         std::process::exit(code);

@@ -1,0 +1,10 @@
+// spec: SPEC-ITEM-009
+// expect: 11 20
+fn inc(x: int) -> int { x + 1 }
+fn dbl(x: int) -> int { x * 2 }
+fn pick(flag: bool) -> fn(int) -> int { if flag { inc } else { dbl } }
+fn main() {
+    let f = pick(true)
+    let g = pick(false)
+    println("${f(10)} ${g(10)}")
+}

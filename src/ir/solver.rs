@@ -551,6 +551,21 @@ mod tests {
         assert_eq!(result.ownership[0], Some(OwnedType::Ref(Region::fresh(1))));
     }
 
+    /// D-SOLVER-UNION (docs/spec/inference-divergences.md): ownership constraints must survive a
+    /// `TypeEquals` union. The call-site formal of a callee reaches a parameter only this way.
+    #[test]
+    #[ignore = "D-SOLVER-UNION: ownership is not merged when classes are unified"]
+    fn ownership_propagates_across_type_equals() {
+        let mut cs = ConstraintSet::new();
+        let param = cs.fresh_var();
+        let formal = cs.fresh_var();
+        cs.add(Constraint::OwnershipIs(formal, OwnedType::Owned));
+        cs.add(Constraint::TypeEquals(param, formal));
+        let result = Solver::new(&cs).solve(&cs);
+        // The pipeline reads the result at the parameter's own variable.
+        assert_eq!(result.ownership[param.0 as usize], Some(OwnedType::Owned));
+    }
+
     #[test]
     fn test_empty_constraint_set() {
         let cs = ConstraintSet::new();

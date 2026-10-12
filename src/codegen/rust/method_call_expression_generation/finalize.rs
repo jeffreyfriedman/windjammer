@@ -18,14 +18,15 @@ impl<'ast> CodeGenerator<'ast> {
         args: Vec<String>,
         prev_float_target: Option<Type>,
     ) -> String {
-        if crate::debug_env::enabled("WJ_DEBUG_FIND_PATTERN") && method == "find" {}
-        let mut obj_str = obj_str;
+        let (mut obj_str, mut args) = (obj_str, args);
+        self.mc_fix_std_idiom_call(object, method, arguments, &mut obj_str, &mut args);
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);
         let receiver_type_name = self
             .mc_infer_method_receiver_type_name(object)
             .or_else(|| self.infer_type_name(object));
         let inferred_receiver_ty = self.infer_expression_type(object);
+        self.prefix_iter_for_collection_adapter(object, method, inferred_receiver_ty.as_ref(), &mut obj_str);
         let resolved_signature = resolved_signature.map(|mut sig| {
             if let Some(rt) = receiver_type_name.as_deref() {
                 if let Some(reg) = self.resolve_method_function_signature_specialized(
@@ -1543,7 +1544,7 @@ impl<'ast> CodeGenerator<'ast> {
         let turbofish = if let Some(types) = type_args {
             let type_strs: Vec<String> = types.iter().map(|t| self.type_to_rust(t)).collect();
             format!("::<{}>", type_strs.join(", "))
-        } else if method == "collect" {
+        } else if method == "collect" && !self.receiver_defines_method(receiver_type_name.as_deref(), "collect") {
             let (adapter, turbo) = self.compute_collect_lowering(object);
             collect_adapter = adapter;
             turbo
@@ -1561,10 +1562,9 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Special case: substring(start, end) -> text[start..end] (or owned String in match arms)
         if method == "substring" && args.len() == 2 {
-            let mut start_str =
-                crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(&args[0]);
-            let mut end_str =
-                crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix(&args[1]);
+            use crate::codegen::rust::expression_utilities::strip_shared_borrow_prefix as peel;
+            let mut start_str = super::idiom_lowering::usize_bound(&peel(&args[0]));
+            let mut end_str = super::idiom_lowering::usize_bound(&peel(&args[1]));
             if let Some((_, start_expr)) = arguments.first() {
                 self.maybe_cast_index_to_usize(&mut start_str, start_expr);
             }
@@ -1658,11 +1658,9 @@ impl<'ast> CodeGenerator<'ast> {
             _ => ".", // Instance method on expressions
         };
 
-        // SPECIAL CASE: .slice() method is our desugared slice syntax [start..end]
-        // Convert it back to proper Rust slice syntax
-        // For strings, we need to add & to get &str (a reference)
+        // `.slice()` is desugared `[start..end]`: back to Rust slice syntax (`&` for `&str`).
         if method == "slice" && args.len() == 2 {
-            return format!("&{}[{}..{}]", obj_str, args[0], args[1]);
+            return self.mc_slice_expr(&obj_str, &args, arguments);
         }
 
         // Explicit `.clone()` in WJ source is Rust leakage (W0005). Prefer stripping, but
@@ -2002,6 +2000,7 @@ impl<'ast> CodeGenerator<'ast> {
             .iter()
             .any(|arg_str| needs_format_temp(arg_str));
 
+        self.lower_option_default_and_cmp(object, method, inferred_receiver_ty.as_ref(), &mut obj_str, &mut processed_args);
         let base_expr = if has_format_arg {
             // Extract format!() macros to temp variables
             let mut temp_decls = String::new();
