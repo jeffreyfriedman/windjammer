@@ -18,6 +18,12 @@ fn strukt(name: &str, fields: Vec<(&str, Value)>) -> Value {
     }))
 }
 
+/// The one place the interpreter reads the host environment on a program's behalf.
+pub(crate) fn host_var(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|e| e.to_string())
+}
+
+#[allow(dead_code)]
 fn field(v: &Value, name: &str) -> Option<Value> {
     if let Value::Struct(s) = v {
         return s.fields.iter().find(|(n, _)| &**n == name).map(|(_, v)| v.clone());
@@ -188,11 +194,29 @@ pub fn register(r: &mut Registry) {
     });
     r.func("env::var", |_, a| {
         let n = arg_str(&a, 0, "env::var")?;
-        Ok(match std::env::var(&*n) {
+        Ok(match host_var(&n) {
             Ok(v) => Value::ok(Value::str(v)),
-            Err(e) => Value::err(Value::str(e.to_string())),
+            Err(e) => Value::err(Value::str(e)),
         })
     });
+    // `std::env` (Windjammer API): get/get_or/set/remove/current_dir/home_dir/temp_dir
+    r.func("env::get", |_, a| Ok(Value::option(host_var(&arg_str(&a, 0, "get")?).ok().map(Value::str))));
+    r.func("env::get_or", |_, a| {
+        Ok(Value::str(host_var(&arg_str(&a, 0, "get_or")?).unwrap_or_else(|_| arg_str(&a, 1, "get_or").map(|s| (*s).clone()).unwrap_or_default())))
+    });
+    r.func("env::set", |_, a| {
+        std::env::set_var(arg_str(&a, 0, "set")?.as_str(), arg_str(&a, 1, "set")?.as_str());
+        Ok(Value::Unit)
+    });
+    r.func("env::remove", |_, a| {
+        std::env::remove_var(arg_str(&a, 0, "remove")?.as_str());
+        Ok(Value::Unit)
+    });
+    r.func("env::current_dir", |_, _| {
+        Ok(Value::str(std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()))
+    });
+    r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
+    r.func("env::temp_dir", |_, _| Ok(Value::str(std::env::temp_dir().to_string_lossy().to_string())));
     r.func("fs::read_to_string", |_, a| {
         let p = arg_str(&a, 0, "fs::read_to_string")?;
         Ok(match std::fs::read_to_string(&*p) {

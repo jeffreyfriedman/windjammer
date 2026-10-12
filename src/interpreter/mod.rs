@@ -12,6 +12,7 @@ pub mod error;
 mod eval_expr;
 mod eval_stmt;
 pub mod features;
+mod fasthash;
 mod format;
 mod generics;
 mod heap;

@@ -150,6 +150,19 @@ impl Interpreter {
             }
 
             Expression::Unary { op, operand, location } => match op {
+                // the parser reads `-2..3` as `-(2..3)`; a range cannot be negated, so this is `(-2)..3`
+                UnaryOp::Neg if matches!(operand, Expression::Range { .. }) => {
+                    let Expression::Range { start, end, inclusive, .. } = operand else { unreachable!() };
+                    let s = self.eval(start)?;
+                    let s = self.negate(s)?;
+                    let en = self.eval(end)?;
+                    match (s, en) {
+                        (Value::Int(a, at), Value::Int(b, bt)) => {
+                            Ok(Value::Range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
+                        }
+                        _ => Err(unsupported("range over non-integer values")),
+                    }
+                }
                 UnaryOp::Neg => {
                     let v = self.eval(operand)?;
                     self.mark(location.as_ref());

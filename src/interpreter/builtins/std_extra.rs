@@ -202,6 +202,70 @@ pub fn register(r: &mut Registry) {
         Ok(Value::Unit)
     });
 
+    r.func("testing::assert_some", |it, a| match arg(&a, 0, "assert_some")?.as_option() {
+        Some(Some(v)) => Ok(v.clone()),
+        _ => {
+            let _ = it;
+            Err(panic_ctl("Expected Some, got None"))
+        }
+    });
+    r.func("testing::assert_none", |it, a| {
+        let v = arg(&a, 0, "assert_none")?;
+        match v.as_option() {
+            Some(None) => Ok(Value::Unit),
+            _ => Err(panic_ctl(format!("Expected None, got {}", it.debug_string(&v)?))),
+        }
+    });
+    r.func("testing::assert_ok", |it, a| {
+        let v = arg(&a, 0, "assert_ok")?;
+        match &v {
+            Value::Enum(e) if &*e.ty == "Result" => match (&e.payload, e.idx) {
+                (Payload::Tuple(p), 0) => Ok(p[0].clone()),
+                (Payload::Tuple(p), _) => Err(panic_ctl(format!("Expected Ok, got Err({})", it.debug_string(&p[0])?))),
+                _ => Err(semantic("malformed Result")),
+            },
+            _ => Err(semantic("assert_ok needs a Result")),
+        }
+    });
+    r.func("testing::assert_err", |_, a| {
+        let v = arg(&a, 0, "assert_err")?;
+        match &v {
+            Value::Enum(e) if &*e.ty == "Result" => match (&e.payload, e.idx) {
+                (Payload::Tuple(p), 1) => Ok(p[0].clone()),
+                _ => Err(panic_ctl("Expected Err, got Ok")),
+            },
+            _ => Err(semantic("assert_err needs a Result")),
+        }
+    });
+    macro_rules! cmp_assert {
+        ($path:literal, $ok:expr, $op:literal) => {
+            r.func($path, |it, a| {
+                let (l, rr) = (arg(&a, 0, $path)?, arg(&a, 1, $path)?);
+                let ord = l.structural_cmp(&rr);
+                if $ok(ord) {
+                    Ok(Value::Unit)
+                } else {
+                    Err(panic_ctl(format!("Assertion failed: {} {} {}", it.debug_string(&l)?, $op, it.debug_string(&rr)?)))
+                }
+            });
+        };
+    }
+    use std::cmp::Ordering as O;
+    cmp_assert!("testing::assert_gt", |o| o == O::Greater, ">");
+    cmp_assert!("testing::assert_lt", |o| o == O::Less, "<");
+    cmp_assert!("testing::assert_ge", |o| o != O::Less, ">=");
+    cmp_assert!("testing::assert_le", |o| o != O::Greater, "<=");
+    r.func("cli::args", |it, _| {
+        let mut v = vec![Value::str("wj-interpreted")];
+        v.extend(it.args.iter().cloned().map(Value::str));
+        Ok(Value::vec(v))
+    });
+    for (i, l) in ["Trace", "Debug", "Info", "Warn", "Error"].iter().enumerate() {
+        let v = Value::enum_val("LogLevel", l, i as u32, Payload::Unit);
+        r.add_const(format!("LogLevel::{}", l), v.clone());
+        r.add_const(format!("log::LogLevel::{}", l), v);
+    }
+
     // std::async: sleeps run on the virtual clock
     for n in ["async::sleep_ms", "async::sleep_ms_blocking"] {
         r.func(n, |it, a| {
