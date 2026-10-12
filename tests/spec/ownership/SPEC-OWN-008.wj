@@ -1,6 +1,5 @@
 // spec: SPEC-OWN-008
 // expect: 11 1
-// xfail: Q-015
 fn f(mut n: int) -> int {
     n += 10
     n

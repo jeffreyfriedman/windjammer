@@ -1,0 +1,15 @@
+// mutant: int_annotated_string of examples/verified/basics_shadowing_blocks.wj
+fn main() {
+    let x: string = 1
+    {
+        let x = 2
+        println("inner ${x}")
+    }
+    println("outer ${x}")
+    let y = {
+        let a = 5
+        let b = 10
+        a + b
+    }
+    println("${y}")
+}

@@ -1,0 +1,9 @@
+// expect: WJ0002
+fn compute_total(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() {
+    let r = compute_totl(1, 2)
+    println("${r}")
+}

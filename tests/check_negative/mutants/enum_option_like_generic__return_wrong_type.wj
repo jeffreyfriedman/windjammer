@@ -1,0 +1,26 @@
+// mutant: return_wrong_type of examples/verified/enum_option_like_generic.wj
+enum Slot<T> {
+    Full(T),
+    Empty,
+}
+
+fn show(s: Slot<int>) -> string {
+    match s {
+        Slot::Full(v) => "Full(${v})",
+        Slot::Empty => "Empty",
+    }
+}
+
+fn or_zero(s: Slot<int>) -> int {
+    return "oops"
+    match s {
+        Slot::Full(v) => v,
+        Slot::Empty => 0,
+    }
+}
+
+fn main() {
+    println(show(Slot::Full(7)))
+    println(show(Slot::Empty))
+    println("${or_zero(Slot::Full(7))}")
+}

@@ -1,0 +1,11 @@
+// mutant: undefined_variable of examples/verified/basics_if_expression.wj
+fn main() {
+    let a = 3
+    let b = 7
+    let bigger = if a > b { a } else { b }
+    println("${bigger_undefined}")
+    for n in [4, 5] {
+        let kind = if n % 2 == 0 { "even" } else { "odd" }
+        println(kind)
+    }
+}

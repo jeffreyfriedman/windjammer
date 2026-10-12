@@ -1,0 +1,7 @@
+error[WJ0017]: `Opaque` cannot be formatted with `${..}`: it does not implement `Display`
+  --> trait_bound.wj:8:16
+  |
+8 |     println("${o}")
+  |                ^ no `Display` for this type
+  = help: format a field instead, use `${o:?}`, or implement `Display` for `Opaque`
+  = explain: wj explain WJ0017

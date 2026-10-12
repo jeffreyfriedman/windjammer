@@ -1,0 +1,7 @@
+error[WJ0001]: cannot find value `count` in this scope
+  --> undefined_variable.wj:4:23
+  |
+4 |     println("Count: ${count}")
+  |                       ^^^^^ not found in this scope
+  = help: declare it before use, for example `let count = ...`, or check the spelling
+  = explain: wj explain WJ0001

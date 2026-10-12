@@ -138,6 +138,11 @@ impl Interpreter {
     pub(crate) fn binary(&mut self, op: BinaryOp, l: Value, r: Value) -> R {
         let l = super::place::deref_value(l)?;
         let r = super::place::deref_value(r)?;
+        if let (Value::Native(_), _) | (_, Value::Native(_)) = (&l, &r) {
+            if let Some(res) = super::builtins::time::native_binary(op, &l, &r) {
+                return res;
+            }
+        }
         match (&l, &r) {
             (Value::Int(a, at), Value::Int(b, bt)) => int_binary(op, *a, *at, *b, *bt),
             (Value::Float(a, at), Value::Float(b, bt)) => float_binary(op, *a, *at, *b, *bt),

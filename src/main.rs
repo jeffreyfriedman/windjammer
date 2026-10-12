@@ -9,6 +9,8 @@ pub mod build_utils;
 pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 pub mod cargo_toml;
+pub mod check;
+pub mod diagnostics;
 pub mod cli;
 pub mod cli_execution; // CLI execution (run, interpret, REPL)
 pub mod codegen;

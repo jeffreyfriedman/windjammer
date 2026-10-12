@@ -1,0 +1,10 @@
+// expect: WJ0014
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let point = Point { x: 1, y: 2 }
+    println("${point.z}")
+}
