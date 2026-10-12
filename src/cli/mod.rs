@@ -10,6 +10,7 @@ pub mod clean;
 pub mod explain_ownership;
 pub mod fix;
 pub mod fmt;
+pub mod host_build;
 pub mod json_diagnostics;
 pub mod lint;
 pub mod new;

@@ -1,5 +1,5 @@
 //! `wj run`: interpret by default (instant start), fall back to the compiled path with a one-line notice
-//! when the program uses a feature the interpreter does not run (ADR-0017). `--compiled`/`--release`
+//! when the program uses a feature the interpreter does not run (ADR-0019). `--compiled`/`--release`
 //! force the Rust path; `--interpret` forces the interpreter (no fallback).
 //!
 //! Project discovery (`wj.toml` upward, `--bin`, `cmd/<name>/main.wj`, `src/bin/<name>.wj`) is
@@ -47,18 +47,49 @@ pub fn execute(opts: &RunOptions) -> i32 {
     match opts.mode {
         Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release),
         _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false),
-        Mode::Interpret => match runner::run_entry(&target.entry, opts.args.clone(), false) {
-            RunOutcome::Exited(c) => c,
-            RunOutcome::NeedsCompiled(_) => 2,
-        },
-        Mode::Auto => match runner::run_entry(&target.entry, opts.args.clone(), true) {
-            RunOutcome::Exited(c) => c,
-            RunOutcome::NeedsCompiled(e) => {
-                eprintln!("{}", fallback_notice(&e));
-                run_compiled(&target, &opts.args, &opts.target, false)
+        Mode::Interpret | Mode::Auto => {
+            let auto = opts.mode == Mode::Auto;
+            let host = match host_bridge(&target) {
+                Ok(h) => h,
+                Err(m) if auto => {
+                    eprintln!("wj: running compiled (cargo): {}; use `wj run --compiled` to skip this check", m);
+                    return run_compiled(&target, &opts.args, &opts.target, false);
+                }
+                Err(m) => {
+                    eprintln!("error: unsupported in the interpreter: {}", m);
+                    return 2;
+                }
+            };
+            match runner::run_entry(&target.entry, opts.args.clone(), auto, host) {
+                RunOutcome::Exited(c) => c,
+                RunOutcome::NeedsCompiled(e) => {
+                    eprintln!("{}", fallback_notice(&e));
+                    run_compiled(&target, &opts.args, &opts.target, false)
+                }
             }
-        },
+        }
     }
+}
+
+/// Build (or reuse) the host bridge when the program declares `extern fn`s and the project has Rust
+/// sources for them (ADR-0020). `Err` names the item that cannot be bridged.
+fn host_bridge(t: &RunTarget) -> Result<Option<(PathBuf, Vec<crate::interpreter::host_bridge::ExternSig>)>, String> {
+    let Some(root) = t.project_root.clone() else { return Ok(None) };
+    let rust = super::host_build::rust_sources(&root, &t.source_root);
+    if rust.is_empty() {
+        return Ok(None);
+    }
+    let files = crate::interpreter::loader::program_files(&t.entry).map_err(|e| e.message)?;
+    if !files.iter().any(|f| std::fs::read_to_string(&f.file).is_ok_and(|s| s.contains("extern"))) {
+        return Ok(None);
+    }
+    let programs: Vec<&crate::parser::Program<'_>> = files.iter().map(|f| f.program).collect();
+    let sigs = crate::interpreter::host_bridge::extern_signatures(&programs)?;
+    if sigs.is_empty() {
+        return Ok(None);
+    }
+    let lib = super::host_build::ensure(&root, &rust, &sigs, &mut |m| eprintln!("{}", m))?;
+    Ok(Some((lib, sigs)))
 }
 
 /// The one-line notice printed (to stderr) when `wj run` switches to the compiled path.

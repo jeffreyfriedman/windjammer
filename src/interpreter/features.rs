@@ -114,10 +114,14 @@ pub const FEATURES: &[Feature] = &[
        "async fn two() -> int { 2 }\nasync fn main() {\n    let x = two().await\n    println(\"${x}\")\n}\n", "2"),
     ok("intrinsics.assert_debug", "Intrinsics", "`assert`, `assert_eq`, `panic`, `todo`, `debug`",
        "fn main() {\n    assert(1 + 1 == 2)\n    assert_eq(2, 2)\n    println(\"ok\")\n}\n", "ok"),
+    ok("modules.use_forms", "Modules", "multi-file programs and inline `mod`: `use` aliases, groups, globs, `self`/`super`/`crate` paths, `pub use` re-exports (bound by the compiler's resolver; `pub` enforced, E0603)",
+       "mod geo {\n    pub mod metric {\n        pub fn abs(v: int) -> int { if v < 0 { -v } else { v } }\n    }\n    pub use self::metric::abs\n    pub fn twice(v: int) -> int { super::util::double(v) }\n}\nmod util {\n    pub fn double(v: int) -> int { v * 2 }\n    pub fn triple(v: int) -> int { v * 3 }\n}\nuse geo::abs\nuse util::{double, triple}\nuse crate::geo::metric as m\nfn main() {\n    println(\"${abs(-4)} ${double(2)} ${triple(2)} ${m::abs(-1)} ${geo::twice(5)}\")\n}\n", "4 4 6 1 10"),
+    no("modules.same_name_types", "Modules", "two types with the same name in different modules (the interpreter keys types by name)",
+       "mod a {\n    pub struct P { pub x: int }\n}\nmod b {\n    pub struct P { pub y: int }\n}\nfn main() {\n    let p = a::P { x: 1 }\n    println(\"${p.x}\")\n}\n", "defined in two modules"),
     no("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)",
        "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\n", "thread {}"),
-    no("ffi.extern_fn", "FFI", "calls to `extern fn`",
-       "extern fn c_abs(x: int) -> int\nfn main() {\n    println(\"${c_abs(-1)}\")\n}\n", "extern function"),
+    no("ffi.extern_fn", "FFI", "calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0020)",
+       "extern fn c_abs(x: int) -> int\nfn main() {\n    println(\"${c_abs(-1)}\")\n}\n", "`extern fn c_abs`"),
 ];
 
 pub fn supported() -> impl Iterator<Item = &'static Feature> {

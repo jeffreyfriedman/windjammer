@@ -16,7 +16,7 @@ pub mod features;
 mod format;
 mod generics;
 mod heap;
-mod host_bridge;
+pub mod host_bridge;
 mod intrinsics;
 pub mod int;
 mod iter;

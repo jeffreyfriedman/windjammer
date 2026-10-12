@@ -586,7 +586,7 @@ impl Interpreter {
         expected: Option<Type>,
     ) -> R {
         if f.is_extern {
-            return Err(unsupported(format!("extern function `{}`", f.name)));
+            return self.call_host(&f.name, args); // ADR-0020 host bridge (unsupported when none is loaded)
         }
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));

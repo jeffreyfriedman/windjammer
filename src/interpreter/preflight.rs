@@ -17,7 +17,7 @@ pub fn is_preflight(e: &RuntimeError) -> bool {
     e.kind == ErrorKind::Unsupported && e.message.starts_with(TAG)
 }
 
-fn err(id: &str, what: String, file: &std::path::Path, line: usize, column: usize) -> RuntimeError {
+pub(crate) fn err(id: &str, what: String, file: &std::path::Path, line: usize, column: usize) -> RuntimeError {
     let mut e = RuntimeError::new(ErrorKind::Unsupported, format!("{}: {} [{}]", TAG, what, id));
     e.span = Some(Span { file: file.to_string_lossy().to_string(), line, column });
     e
@@ -37,7 +37,7 @@ pub fn check(files: &[LoadedFile], resolved: &ResolvedProgram<'static>, rust_cra
             if matches!(&w[1].token, Token::LBrace) || matches!(&w[1].token, Token::Ident(m) if m == "move") {
                 return Err(err(
                     "concurrency.thread_block",
-                    format!("`{} {{ }}` blocks", kw),
+                    format!("`{} {{}}` blocks", kw),
                     &f.file,
                     w[0].line,
                     w[0].column,

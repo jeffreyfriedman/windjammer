@@ -114,3 +114,69 @@ fn compiled_projects_match_expectations() {
         }
     }
 }
+
+#[path = "common/project_fuzz.rs"]
+mod project_fuzz;
+
+fn fuzz_seeds() -> std::ops::Range<u64> {
+    let n = std::env::var("WJ_FUZZ_SEEDS").ok().and_then(|s| s.parse().ok()).unwrap_or(40);
+    0..n
+}
+
+/// Interpreter vs the generator's own model, for many random module trees.
+#[test]
+fn fuzz_interpreted_module_trees_match_model() {
+    for seed in fuzz_seeds() {
+        let p = project_fuzz::generate(seed);
+        let d = tempfile::tempdir().unwrap();
+        project_fuzz::write(&p, d.path());
+        let o = wj(d.path(), &["--interpret"], &[]);
+        let out = String::from_utf8_lossy(&o.stdout);
+        if out != p.expected || !o.status.success() {
+            let keep = std::env::temp_dir().join(format!("wj_fuzz_seed_{seed}"));
+            let _ = std::fs::remove_dir_all(&keep);
+            project_fuzz::write(&p, &keep);
+            panic!(
+                "seed {seed} (kept at {}): interpreter differs from model\n--- want\n{}--- got\n{}--- stderr\n{}",
+                keep.display(),
+                p.expected,
+                out,
+                String::from_utf8_lossy(&o.stderr)
+            );
+        }
+    }
+}
+
+/// The generator can fail: a wrong model value or a broken import is caught (oracle self-test).
+#[test]
+fn fuzz_oracle_detects_a_mutated_program() {
+    let mut p = project_fuzz::generate(3);
+    let (k, v) = p.files.iter().find(|(k, _)| k.as_str() != "src/main.wj" && k.ends_with(".wj")).map(|(k, v)| (k.clone(), v.clone())).unwrap();
+    p.files.insert(k, v.replacen("% 1000", "% 999", 1));
+    let d = tempfile::tempdir().unwrap();
+    project_fuzz::write(&p, d.path());
+    let o = wj(d.path(), &["--interpret"], &[]);
+    assert_ne!(String::from_utf8_lossy(&o.stdout), p.expected, "mutant must change the output");
+}
+
+/// Compiled vs interpreted for the first seeds (cargo; gated like the compiled fixtures).
+#[test]
+fn fuzz_compiled_module_trees_match_interpreter() {
+    if std::env::var("WJ_PROJECT_COMPILED").is_err() {
+        eprintln!("skipped: set WJ_PROJECT_COMPILED=1");
+        return;
+    }
+    let n = std::env::var("WJ_FUZZ_COMPILED_SEEDS").ok().and_then(|s| s.parse().ok()).unwrap_or(5);
+    for seed in 0..n {
+        let p = project_fuzz::generate(seed);
+        let d = tempfile::tempdir().unwrap();
+        project_fuzz::write(&p, d.path());
+        let o = wj(d.path(), &["--compiled"], &[]);
+        assert_eq!(
+            String::from_utf8_lossy(&o.stdout),
+            p.expected,
+            "seed {seed}: compiled differs\n{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+    }
+}
