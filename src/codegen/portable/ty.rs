@@ -249,7 +249,7 @@ fn from_name(n: &str, generics: &[String]) -> Ty {
         "char" => Ty::Char,
         "()" | "unit" => Ty::Unit,
         _ if generics.iter().any(|g| g == n) => Ty::Param(n.to_string()),
-        _ => Ty::Adt(n.to_string(), vec![]),
+        _ => super::alias::expand(n, &[], generics).unwrap_or_else(|| Ty::Adt(n.to_string(), vec![])),
     }
 }
 
@@ -263,7 +263,10 @@ fn from_parameterized(n: &str, args: &[Type], generics: &[String]) -> Ty {
         "Option" => Ty::Option(arg(0)),
         "Result" => Ty::Result(arg(0), arg(1)),
         "Box" | "Rc" | "Arc" => *arg(0),
-        _ => Ty::Adt(n.to_string(), a),
+        _ => match super::alias::expand(n, &a, generics) {
+            Some(t) => t,
+            None => Ty::Adt(n.to_string(), a),
+        },
     }
 }
 

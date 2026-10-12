@@ -163,6 +163,7 @@ impl<'e> Lowerer<'e> {
 
     fn path_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
         let module = owner.rsplit("::").next().unwrap_or(&owner).to_string();
         if self.env.variant(&owner, name).is_none() && self.env.method(&owner, name).is_none() {
             if let Some(sig) = crate::codegen::portable::stdlib::lookup(&module, name) {

@@ -164,6 +164,7 @@ impl<'e> Lowerer<'e> {
     /// `Owner::member` used as a value: unit variant, associated const, or function reference.
     fn path_value(&mut self, owner: &str, member: &str, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
         if let Some(v) = self.env.variant(&owner, member) {
             if v.fields.is_empty() {
                 let args = self.enum_args_from_want(&owner, want);
@@ -363,6 +364,7 @@ impl<'e> Lowerer<'e> {
 
     fn struct_literal(&mut self, name: &str, fields: &[(String, &Expression)], want: Option<&Ty>) -> PResult<PExpr> {
         let name = if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() };
+        let name = crate::codegen::portable::alias::nominal(&name).unwrap_or(name);
         if let Some((en, var)) = name.split_once("::") {
             return self.variant_struct_literal(en, var, fields, want);
         }

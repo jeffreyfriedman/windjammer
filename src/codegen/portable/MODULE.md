@@ -13,6 +13,7 @@ Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emi
 | file | role |
 |------|------|
 | `ty.rs` | `Ty` / `IntKind`: exact integer widths (the parser collapses `i8..u64` into `Custom`) |
+| `alias.rs` | `type` aliases: installed per `lower_program`, expanded by `ty::from_ast`; `Alias { .. }` / `Alias::f()` resolve to the nominal type |
 | `env.rs` | item tables (structs, enums, fns, methods, traits) + parameter modes from the analyzer registry |
 | `ir.rs` | `PModule`, `PFn`, `PStmt`, `PExpr`/`PK`; `Unsupported` (explicit "this construct is not implemented") |
 | `lower/` | bidirectional type inference with inference variables, `?`, interpolation, patterns, value-semantics `Copy` insertion |
