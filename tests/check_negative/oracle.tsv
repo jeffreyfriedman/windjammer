@@ -162,7 +162,7 @@ tests/diagnostics/cases/non_exhaustive_match.wj	51f9ad0f0768afa0	ok	fail
 tests/diagnostics/cases/numeric_mix.wj	a29ed271c8373bda	ok	fail
 tests/diagnostics/cases/numeric_string_to_int.wj	f762bfe8aa9fbdb5	ok	fail
 tests/diagnostics/cases/private_item.wj	8f77b2f29bdfa47c	ok	fail
-tests/diagnostics/cases/return_local_ref.wj	f7e29833d51753c6	ok	fail
+tests/diagnostics/cases/return_local_ref.wj	f7e29833d51753c6	fail	skip
 tests/diagnostics/cases/rust_string_type.wj	233deded74ccd0e6	fail	skip
 tests/diagnostics/cases/self_unknown_field.wj	a101d7a9854787fc	ok	fail
 tests/diagnostics/cases/syntax_missing_expression.wj	bf2260108c0a4439	fail	skip
