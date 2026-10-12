@@ -18,8 +18,12 @@ use crate::ir::safety_type::{BaseType, OwnedType};
 pub struct SolverResult {
     /// Resolved base types for each constraint variable.
     pub types: Vec<Option<BaseType>>,
-    /// Resolved ownership modes for each constraint variable.
+    /// Ownership requirement of each constraint variable (indexed by variable): the lattice join of
+    /// its own `OwnershipIs` constraints and of every position it is `UsedAs`.
     pub ownership: Vec<Option<OwnedType>>,
+    /// Join of the requirements over each variable's type class (what a local *holds*:
+    /// `let x = make()` holds what `make` returns). Indexed by variable.
+    pub class_ownership: Vec<Option<OwnedType>>,
     /// Which variables need clone insertion.
     pub clones: CloneRequirements,
     /// Diagnostics produced during solving.
@@ -178,6 +182,8 @@ pub struct Solver {
     numeric_classes: Vec<(ConstraintVar, NumericClass)>,
     /// Region union-find for aliasing analysis.
     region_uf: RegionUnionFind,
+    /// `UsedAs(value, site)` edges: `value` must satisfy `site`'s ownership requirement.
+    flows: Vec<(ConstraintVar, ConstraintVar)>,
 }
 
 impl Solver {
@@ -192,6 +198,7 @@ impl Solver {
             diagnostics: Vec::new(),
             numeric_classes: Vec::new(),
             region_uf: RegionUnionFind::new(),
+            flows: Vec::new(),
         }
     }
 
@@ -207,9 +214,40 @@ impl Solver {
         // infer a default type.
         self.resolve_numeric_classes();
 
+        // Pass 3: a value used at a position inherits that position's requirement
+        // (OWN-CALL-FORMAL, OWN-RETURNED through `let` aliases). Monotone over a finite lattice.
+        self.propagate_flows();
+
+        // Results are indexed by variable, never by union-find root (D-SOLVER-UNION).
+        let n = self.types.len() as u32;
+        let types: Vec<Option<BaseType>> = (0..n)
+            .map(|v| {
+                let r = self.uf.find(v);
+                self.types[r as usize].clone()
+            })
+            .collect();
+        let mut class_join: std::collections::HashMap<u32, OwnedType> = std::collections::HashMap::new();
+        for v in 0..n {
+            if let Some(o) = self.ownership[v as usize].clone() {
+                let r = self.uf.find(v);
+                let joined = match class_join.remove(&r) {
+                    Some(e) => join_ownership(e, o),
+                    None => o,
+                };
+                class_join.insert(r, joined);
+            }
+        }
+        let class_ownership: Vec<Option<OwnedType>> = (0..n)
+            .map(|v| {
+                let r = self.uf.find(v);
+                class_join.get(&r).cloned()
+            })
+            .collect();
+
         SolverResult {
-            types: self.types,
+            types,
             ownership: self.ownership,
+            class_ownership,
             clones: self.clones,
             diagnostics: self.diagnostics,
         }
@@ -306,52 +344,22 @@ impl Solver {
             }
 
             Constraint::OwnershipIs(var, ownership) => {
-                let root = self.uf.find(var.0);
-                match &self.ownership[root as usize] {
-                    Some(existing) if existing != ownership => {
-                        // Formal lattice: Owned > MutRef > Ref.
-                        // Owned wins over MutRef so returned/moved params stay by-value
-                        // even when the body also mutates (constraint_gen seeds both).
-                        // MutRef wins over Ref (mutation / `&mut self` method).
-                        match (existing, ownership) {
-                            (OwnedType::Ref(_), OwnedType::MutRef(r)) => {
-                                self.ownership[root as usize] = Some(OwnedType::MutRef(r.clone()));
-                            }
-                            (OwnedType::MutRef(_), OwnedType::Ref(_)) => {
-                                // Already MutRef, keep it
-                            }
-                            (OwnedType::MutRef(_), OwnedType::Owned)
-                            | (OwnedType::Ref(_), OwnedType::Owned) => {
-                                // Move/return requirement beats borrow.
-                                self.ownership[root as usize] = Some(OwnedType::Owned);
-                            }
-                            (OwnedType::Owned, OwnedType::MutRef(_))
-                            | (OwnedType::Owned, OwnedType::Ref(_)) => {
-                                // Formal stays owned; mutation/read does not demote to &mut/&T.
-                            }
-                            _ => {
-                                self.diagnostics.push(SolverDiagnostic {
-                                    kind: DiagnosticKind::OwnershipConflict,
-                                    message: format!(
-                                        "ownership conflict: {:?} vs {:?}",
-                                        ownership, existing
-                                    ),
-                                    vars: vec![*var],
-                                });
-                            }
-                        }
-                    }
-                    _ => {
-                        self.ownership[root as usize] = Some(ownership.clone());
-                    }
-                }
+                // Ownership is a per-variable requirement (OWN-LATTICE), not a property of the
+                // type class: `a == b` unifies the types of `a` and `b` but must not couple their modes.
+                let slot = &mut self.ownership[var.0 as usize];
+                *slot = Some(match slot.take() {
+                    Some(existing) => join_ownership(existing, ownership.clone()),
+                    None => ownership.clone(),
+                });
+            }
+
+            Constraint::UsedAs(value, site) => {
+                self.flows.push((*value, *site));
             }
 
             Constraint::SharesRegion(a, b) => {
-                let ra = self.uf.find(a.0);
-                let rb = self.uf.find(b.0);
-                let oa = self.ownership[ra as usize].clone();
-                let ob = self.ownership[rb as usize].clone();
+                let oa = self.ownership[a.0 as usize].clone();
+                let ob = self.ownership[b.0 as usize].clone();
 
                 // Unify regions if both have region-based ownership
                 match (&oa, &ob) {
@@ -379,9 +387,8 @@ impl Solver {
             }
 
             Constraint::NeedsClone(var) => {
-                let root = self.uf.find(var.0);
-                if (root as usize) < self.clones.needs_clone.len() {
-                    self.clones.needs_clone[root as usize] = true;
+                if (var.0 as usize) < self.clones.needs_clone.len() {
+                    self.clones.needs_clone[var.0 as usize] = true;
                 }
             }
 
@@ -392,6 +399,29 @@ impl Solver {
             | Constraint::TaintPropagates(_, _)
             | Constraint::Sanitizes(_) => {
                 // Handled by EffectSolver/TaintSolver in pipeline
+            }
+        }
+    }
+
+    fn propagate_flows(&mut self) {
+        if self.flows.is_empty() {
+            return;
+        }
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for i in 0..self.flows.len() {
+                let (value, site) = self.flows[i];
+                let Some(req) = self.ownership[site.0 as usize].clone() else { continue };
+                let cur = self.ownership[value.0 as usize].clone();
+                let next = match cur.clone() {
+                    Some(c) => join_ownership(c, req),
+                    None => req,
+                };
+                if cur.as_ref().map(ownership_rank) != Some(ownership_rank(&next)) {
+                    self.ownership[value.0 as usize] = Some(next);
+                    changed = true;
+                }
             }
         }
     }
@@ -451,6 +481,27 @@ impl Solver {
                 self.types[root as usize] = Some(base);
             }
         }
+    }
+}
+
+/// Position in the ownership lattice `&` < `&mut` < owned (OWN-LATTICE). Regions do not matter.
+fn ownership_rank(o: &OwnedType) -> u8 {
+    match o {
+        OwnedType::Inferred => 0,
+        OwnedType::Ref(_) => 1,
+        OwnedType::MutRef(_) => 2,
+        OwnedType::Copy => 3,
+        OwnedType::Owned => 4,
+    }
+}
+
+/// Lattice join: the stronger requirement wins; equal ranks keep the existing value (and region),
+/// so the result does not depend on constraint order up to region identity.
+pub fn join_ownership(existing: OwnedType, new: OwnedType) -> OwnedType {
+    if ownership_rank(&new) > ownership_rank(&existing) {
+        new
+    } else {
+        existing
     }
 }
 
@@ -551,19 +602,156 @@ mod tests {
         assert_eq!(result.ownership[0], Some(OwnedType::Ref(Region::fresh(1))));
     }
 
-    /// D-SOLVER-UNION (docs/spec/inference-divergences.md): ownership constraints must survive a
-    /// `TypeEquals` union. The call-site formal of a callee reaches a parameter only this way.
+    /// D-SOLVER-UNION (docs/spec/inference-divergences.md): the call-site formal of a callee
+    /// (OWN-CALL-FORMAL) must reach the parameter passed to it. Constraint generation links them with
+    /// `TypeEquals` (types) and `UsedAs` (ownership requirement).
     #[test]
-    #[ignore = "D-SOLVER-UNION: ownership is not merged when classes are unified"]
     fn ownership_propagates_across_type_equals() {
         let mut cs = ConstraintSet::new();
         let param = cs.fresh_var();
         let formal = cs.fresh_var();
         cs.add(Constraint::OwnershipIs(formal, OwnedType::Owned));
         cs.add(Constraint::TypeEquals(param, formal));
+        cs.add(Constraint::UsedAs(param, formal));
         let result = Solver::new(&cs).solve(&cs);
         // The pipeline reads the result at the parameter's own variable.
         assert_eq!(result.ownership[param.0 as usize], Some(OwnedType::Owned));
+    }
+
+    /// Order of union and requirement must not matter (the bug lost constraints recorded on a
+    /// class root that later stopped being the root).
+    #[test]
+    fn ownership_survives_union_in_either_order() {
+        for formal_first in [true, false] {
+            let mut cs = ConstraintSet::new();
+            let param = cs.fresh_var();
+            let formal = cs.fresh_var();
+            let other = cs.fresh_var();
+            if formal_first {
+                cs.add(Constraint::OwnershipIs(formal, OwnedType::MutRef(Region::fresh(3))));
+            }
+            cs.add(Constraint::TypeEquals(other, formal));
+            cs.add(Constraint::TypeEquals(param, formal));
+            cs.add(Constraint::UsedAs(param, formal));
+            if !formal_first {
+                cs.add(Constraint::OwnershipIs(formal, OwnedType::MutRef(Region::fresh(3))));
+            }
+            let result = Solver::new(&cs).solve(&cs);
+            assert!(matches!(result.ownership[param.0 as usize], Some(OwnedType::MutRef(_))));
+        }
+    }
+
+    /// `a == b` unifies types; it must not make `b` owned because `a` is returned.
+    #[test]
+    fn type_equality_alone_does_not_couple_parameter_modes() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+        let b = cs.fresh_var();
+        cs.add(Constraint::OwnershipIs(a, OwnedType::Owned));
+        cs.add(Constraint::OwnershipIs(b, OwnedType::Ref(Region::fresh(1))));
+        cs.add(Constraint::TypeEquals(a, b));
+        let result = Solver::new(&cs).solve(&cs);
+        assert!(matches!(result.ownership[b.0 as usize], Some(OwnedType::Ref(_))));
+        // ... but the class view (what a local holds) is the join.
+        assert_eq!(result.class_ownership[b.0 as usize], Some(OwnedType::Owned));
+    }
+
+    /// Requirements flow transitively through `let` aliases: `let x = p; let y = x; keep(y)`.
+    #[test]
+    fn requirement_flows_through_aliases() {
+        let mut cs = ConstraintSet::new();
+        let p = cs.fresh_var();
+        let x = cs.fresh_var();
+        let y = cs.fresh_var();
+        let formal = cs.fresh_var();
+        // Edges added before the requirement exists: propagation is a fixed point, not one pass.
+        cs.add(Constraint::UsedAs(p, x));
+        cs.add(Constraint::UsedAs(x, y));
+        cs.add(Constraint::UsedAs(y, formal));
+        cs.add(Constraint::OwnershipIs(formal, OwnedType::Owned));
+        let result = Solver::new(&cs).solve(&cs);
+        assert_eq!(result.ownership[p.0 as usize], Some(OwnedType::Owned));
+        // The requirement never flows backwards from a value to its use site.
+        let mut cs = ConstraintSet::new();
+        let p = cs.fresh_var();
+        let site = cs.fresh_var();
+        cs.add(Constraint::OwnershipIs(p, OwnedType::Owned));
+        cs.add(Constraint::UsedAs(p, site));
+        let result = Solver::new(&cs).solve(&cs);
+        assert_eq!(result.ownership[site.0 as usize], None);
+    }
+
+    /// OWN-LATTICE: the join is order independent and never reports a conflict, even when the
+    /// borrows carry different regions.
+    #[test]
+    fn ownership_join_is_commutative_and_region_blind() {
+        let modes = [
+            OwnedType::Ref(Region::fresh(1)),
+            OwnedType::Ref(Region::fresh(2)),
+            OwnedType::MutRef(Region::fresh(3)),
+            OwnedType::MutRef(Region::fresh(4)),
+            OwnedType::Owned,
+        ];
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        for _ in 0..200 {
+            // Random subset in random order.
+            let mut picked: Vec<OwnedType> = Vec::new();
+            for m in &modes {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                if seed % 2 == 0 {
+                    picked.push(m.clone());
+                }
+            }
+            if picked.is_empty() {
+                continue;
+            }
+            let expected = picked.iter().map(ownership_rank).max().unwrap();
+            let mut orders = vec![picked.clone()];
+            let mut rev = picked.clone();
+            rev.reverse();
+            orders.push(rev);
+            for order in orders {
+                let mut cs = ConstraintSet::new();
+                let v = cs.fresh_var();
+                for m in &order {
+                    cs.add(Constraint::OwnershipIs(v, m.clone()));
+                }
+                let result = Solver::new(&cs).solve(&cs);
+                assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+                assert_eq!(ownership_rank(result.ownership[0].as_ref().unwrap()), expected);
+            }
+        }
+    }
+
+    /// Types are read per variable: a non-root member of a class sees the class type.
+    #[test]
+    fn types_are_resolved_for_every_class_member() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+        let b = cs.fresh_var();
+        let c = cs.fresh_var();
+        cs.add(Constraint::TypeEquals(a, b));
+        cs.add(Constraint::TypeEquals(c, a));
+        cs.add(Constraint::TypeIs(c, BaseType::I64));
+        let result = Solver::new(&cs).solve(&cs);
+        for v in [a, b, c] {
+            assert_eq!(result.types[v.0 as usize], Some(BaseType::I64));
+        }
+    }
+
+    /// Clone requirements are read at the variable that carries them.
+    #[test]
+    fn clone_requirement_is_read_per_variable() {
+        let mut cs = ConstraintSet::new();
+        let a = cs.fresh_var();
+        let b = cs.fresh_var();
+        cs.add(Constraint::TypeEquals(a, b));
+        cs.add(Constraint::NeedsClone(b));
+        let result = Solver::new(&cs).solve(&cs);
+        assert!(result.clones.needs_clone(b));
+        assert!(!result.clones.needs_clone(a));
     }
 
     #[test]

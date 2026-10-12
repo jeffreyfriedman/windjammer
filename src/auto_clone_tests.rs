@@ -782,6 +782,7 @@ fn test_self_field_in_if_expr_inside_while_loop_needs_clone() {
                         location: None,
                     }),
                 ],
+                label: None,
                 location: None,
             }),
         ],

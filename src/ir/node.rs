@@ -103,6 +103,27 @@ pub struct IrFunction {
 
     /// Expression-level IR body (populated during lowering).
     pub body: Vec<IrNode>,
+
+    /// Provenance only (convergence plan C2): for each parameter, its ownership after every
+    /// pipeline stage that changed it, in order (`analyzer-seed`, `solver`, then each post-pass).
+    /// Never read by a decision; `wj explain-ownership` uses it to name the pass that overrode
+    /// the solver, which is the deletion list for C5.
+    pub ownership_trail: std::collections::BTreeMap<String, Vec<(&'static str, OwnedType)>>,
+}
+
+impl IrFunction {
+    /// Append `stage` to each parameter's trail when its ownership differs from the last entry.
+    pub fn record_ownership_stage(&mut self, stage: &'static str) {
+        for (name, st) in &self.param_types {
+            let trail = self.ownership_trail.entry(name.clone()).or_default();
+            let changed = trail.last().map_or(true, |(_, last)| {
+                std::mem::discriminant(last) != std::mem::discriminant(&st.ownership)
+            });
+            if changed {
+                trail.push((stage, st.ownership.clone()));
+            }
+        }
+    }
 }
 
 /// Convert a parser `Type` to an IR `BaseType`.
@@ -315,6 +336,7 @@ impl IrFunction {
             optimizations,
             local_types: HashMap::new(),
             body: Vec::new(),
+            ownership_trail: std::collections::BTreeMap::new(),
         }
     }
 }
