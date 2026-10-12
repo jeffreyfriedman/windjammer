@@ -15,9 +15,18 @@ impl Parser {
         let mut statements = Vec::new();
 
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
-            // A `;` that no statement consumed (after `if {..}`, `loop {..}`, or doubled) is an
-            // empty statement.
+            // A `;` terminates the statement before it (`if c { .. };` leaves it for us), but a
+            // `;` with no statement before it is an error (SPEC-GRAM-007).
             if self.current_token() == &Token::Semicolon {
+                let after_stmt = !statements.is_empty()
+                    && self.position > 0
+                    && self.tokens[self.position - 1].token != Token::Semicolon;
+                if !after_stmt {
+                    return Err(format!(
+                        "Unexpected `;`: a `;` must follow a statement (at {})",
+                        self.pos_desc()
+                    ));
+                }
                 self.advance();
                 continue;
             }
