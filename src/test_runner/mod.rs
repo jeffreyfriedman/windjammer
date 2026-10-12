@@ -18,6 +18,7 @@ mod test_harness;
 mod test_reporting;
 mod util;
 
+pub mod interpreted;
 pub use options::TestRunOptions;
 pub use test_execution::rewrite_test_crate_imports;
 pub use util::{copy_dir_recursive, path_to_toml_string};

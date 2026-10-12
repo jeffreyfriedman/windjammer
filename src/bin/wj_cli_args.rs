@@ -152,6 +152,23 @@ pub enum Commands {
         #[arg(long)]
         interpret: bool,
 
+        /// With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another
+        /// reproducible interleaving at every synchronisation point)
+        #[arg(long, value_name = "N", default_value = "0")]
+        sched_seed: u64,
+
+        /// With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it
+        #[arg(long)]
+        deterministic_time: bool,
+
+        /// With --interpret: allow plain http:// client requests (default: the http client refuses)
+        #[arg(long)]
+        allow_network: bool,
+
+        /// With --interpret: answer http client calls from a JSON file of canned responses
+        #[arg(long, value_name = "FILE")]
+        mock_http: Option<PathBuf>,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,
@@ -430,7 +447,11 @@ pub enum Commands {
 
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
-    SelfInstall,
+    SelfInstall {
+        /// Print what would be installed (binary, plugins, embedded std/ files) without writing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]
