@@ -1,4 +1,4 @@
-// expect: rustc:WJ0019
+// expect: WJ0019
 mod shapes {
     fn hidden() -> int {
         1

@@ -1,4 +1,4 @@
-// expect: rustc:WJ0010
+// expect: WJ0010
 enum Color {
     Red,
     Green,

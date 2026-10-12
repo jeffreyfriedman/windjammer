@@ -3,6 +3,8 @@
 mod checker;
 mod index;
 mod mismatch;
+mod rules;
+mod std_methods;
 mod visit;
 
 pub use checker::{check_file, FileInput};
