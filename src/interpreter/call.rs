@@ -85,6 +85,14 @@ impl Interpreter {
                 module = self.modules[module].parent.unwrap_or(0);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
+                // `super::super::x`, `super::self::x`
+                while (first == "super" || first == "self") && !rest.is_empty() {
+                    if first == "super" {
+                        module = self.modules[module].parent.unwrap_or(0);
+                    }
+                    first = rest[0].to_string();
+                    rest = rest[1..].to_vec();
+                }
             }
             _ => {}
         }

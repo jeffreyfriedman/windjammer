@@ -1439,7 +1439,7 @@ pub(crate) fn build_library_multipass(
                 Some(dep_epoch_snapshot),
             )?;
 
-            // Bin + lib package: `use crate::` in main must resolve via the lib crate name.
+            // Bin + lib package: `crate::` in main must resolve via the lib crate name.
             // Skip when there is no configured package name (temp/integration trees keep
             // `use crate::` for single-crate cargo-check harnesses).
             if is_crate_root_main {
@@ -1765,15 +1765,46 @@ fn run_parallel_numeric_inference(
     global
 }
 
+/// The binary is its own crate: `crate::x` paths (in `use` and in expressions) name the package lib, and the
+/// lib's public modules are in scope as they are for the crate root in Windjammer (`util::f()` without `use`).
+fn bin_main_against_lib(content: &str, lib_name: &str) -> String {
+    let body = content.replace("crate::", &format!("{}::", lib_name));
+    let glob = format!("#[allow(unused_imports)]\nuse {}::*;\n", lib_name);
+    if body.contains(&glob) {
+        return body;
+    }
+    let split = body
+        .lines()
+        .take_while(|l| l.trim_start().starts_with("#!") || l.trim().is_empty())
+        .map(|l| l.len() + 1)
+        .sum::<usize>()
+        .min(body.len());
+    format!("{}{}{}", &body[..split], glob, &body[split..])
+}
+
 /// Rewrite `use crate::…` in a binary `main.rs` so it resolves against the package lib.
 fn rewrite_bin_crate_imports_to_lib(main_rs: &Path, lib_name: &str) -> Result<()> {
     if !main_rs.exists() {
         return Ok(());
     }
     let content = std::fs::read_to_string(main_rs)?;
-    let updated = content.replace("use crate::", &format!("use {}::", lib_name));
+    let updated = bin_main_against_lib(&content, lib_name);
     if updated != content {
         std::fs::write(main_rs, updated)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod bin_main_tests {
+    use super::bin_main_against_lib;
+
+    #[test]
+    fn bin_main_names_the_lib_for_crate_paths_and_sees_its_modules() {
+        let main = "#![allow(x)]\nuse crate::greet;\nfn main() {\n    crate::util::f();\n    util::g();\n}\n";
+        let out = bin_main_against_lib(main, "app");
+        assert!(out.starts_with("#![allow(x)]\n#[allow(unused_imports)]\nuse app::*;\n"), "{out}");
+        assert!(out.contains("use app::greet;") && out.contains("app::util::f();"), "{out}");
+        assert_eq!(bin_main_against_lib(&out, "app"), out, "idempotent");
+    }
 }

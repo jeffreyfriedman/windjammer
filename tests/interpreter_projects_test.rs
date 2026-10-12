@@ -156,7 +156,7 @@ fn fuzz_interpreted_module_trees_match_model() {
 fn fuzz_oracle_detects_a_mutated_program() {
     let mut p = project_fuzz::generate(3);
     let (k, v) = p.files.iter().find(|(k, _)| k.as_str() != "src/main.wj" && k.ends_with(".wj")).map(|(k, v)| (k.clone(), v.clone())).unwrap();
-    p.files.insert(k, v.replacen("% 1000", "% 999", 1));
+    p.files.insert(k, v.replacen("let mut acc = y\n", "let mut acc = y + 1\n", 1));
     let d = tempfile::tempdir().unwrap();
     project_fuzz::write(&p, d.path());
     let o = wj(d.path(), &["--interpret"], &[]);
