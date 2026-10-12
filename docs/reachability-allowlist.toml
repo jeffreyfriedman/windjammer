@@ -52,10 +52,12 @@
 "src/codegen/rust/call_signature_resolution.rs" = 2
 "src/codegen/rust/call_site_borrow.rs" = 2
 "src/codegen/rust/codegen_helpers.rs" = 3
+"src/codegen/rust/defer_lowering.rs" = 1
 "src/codegen/rust/function_generation_prepare.rs" = 3
 "src/codegen/rust/generator.rs" = 14
 "src/codegen/rust/int_promotion_type_inference.rs" = 1
 "src/codegen/rust/ir_call_site.rs" = 1
+"src/codegen/rust/method_call_expression_generation/idiom_lowering.rs" = 1
 "src/codegen/rust/rust_coercion_rules.rs" = 3
 "src/codegen/rust/rust_stdlib_annotations.rs" = 1
 "src/codegen/rust/statement_generation.rs" = 1
@@ -74,7 +76,7 @@
 "src/config.rs" = 4
 "src/decorator_registry.rs" = 2
 "src/error/mod.rs" = 6
-"src/error_catalog.rs" = 2
+"src/error_catalog.rs" = 1
 "src/error_statistics.rs" = 2
 "src/file_compilation_pipeline.rs" = 1
 "src/fuzzy_matcher.rs" = 10

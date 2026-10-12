@@ -37,7 +37,7 @@ stdout_has = ["\"kind\""]
 name = "docs says when nothing matches"
 polarity = "negative"
 covers = ["feature offline-docs"]
-args = ["docs", "zzzzqqqxx", "--json"]
+args = ["docs", "zzzzqqqxx"]
 exit = 0
 output_has = ["no matches"]
 

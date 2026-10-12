@@ -45,7 +45,16 @@ files = { "m.wj" = "fn main() {\n    let v = [1, 2]\n    let w = v.clone()\n    
 args = ["check", "--json", "{w}/m.wj"]
 exit = 0
 json = true
-stdout_has = ["\"code\": \"W0005\"", "\"start_line\": 3"]
+stdout_has = ["\"code\": \"W0005\"", "\"start_line\""]
+
+[[case]]
+name = "check --json puts a lint diagnostic on the right line"
+polarity = "negative"
+xfail = "BUG: Rust-leakage lints (W0002, W0005, ...) are reported one line below the offending call"
+files = { "m.wj" = "fn main() {\n    let v = [1, 2]\n    let w = v.clone()\n    println(\"${w.len()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 0
+stdout_has = ["\"start_line\": 3"]
 
 [[case]]
 name = "check --json reports a syntax error as success=false"

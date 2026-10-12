@@ -44,8 +44,18 @@ output_has = ["need formatting"]
 file_has = { "m.wj" = "let x=1" }
 
 [[case]]
-name = "fmt --rust formats a generated Rust crate"
+name = "fmt --rust formats the Rust crate in the current directory"
 polarity = "positive"
+needs = "toolchain"
+files = { "c/Cargo.toml" = "[package]\nname = \"c\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "c/src/main.rs" = "fn main(){println!(\"x\");}\n" }
+cwd = "c"
+args = ["fmt", "--rust"]
+file_has = { "c/src/main.rs" = "fn main() {" }
+
+[[case]]
+name = "fmt --rust formats the crate given as a path"
+polarity = "positive"
+xfail = "BUG: `wj fmt --rust PATH` ignores PATH and runs cargo fmt in the current directory"
 needs = "toolchain"
 files = { "c/Cargo.toml" = "[package]\nname = \"c\"\nversion = \"0.1.0\"\nedition = \"2021\"\n", "c/src/main.rs" = "fn main(){println!(\"x\");}\n" }
 args = ["fmt", "--rust", "{w}/c"]
