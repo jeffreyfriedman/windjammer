@@ -1,0 +1,9 @@
+warning[W0007]: `println!` is deprecated: use `println`
+  --> macro_println.wj:3:5
+  |
+3 |     println!("hello")
+  |     ^^^^^^^^^^^^^^^^^
+  = help: replace `println!("hello")` with `println("hello")`
+  = note: ADR-0014: Windjammer has no macros; the `!` forms become errors in a future release
+  = fix (auto-fixable): replace `println!("hello")` with `println("hello")`
+  = explain: wj explain W0007

@@ -1,0 +1,19 @@
+// mutant: return_wrong_type of examples/verified/prog_bit_counting.wj
+fn popcount(n: u32) -> int {
+    return "oops"
+    let mut x = n
+    let mut c = 0
+    while x > 0 {
+        c += (x & 1) as int
+        x = x >> 1
+    }
+    c
+}
+
+fn main() {
+    for n in [5, 255, 1024] {
+        println("${n} -> ${popcount(n)} bits")
+    }
+    let m: u32 = 1023
+    if popcount(m) != 1 { println("${m} is not a power of two") }
+}
