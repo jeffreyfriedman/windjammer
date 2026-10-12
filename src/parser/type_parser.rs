@@ -189,7 +189,23 @@ impl Parser {
     }
 
     /// Parse a type annotation
+    /// A type, with the ADR-0018 `T?` suffix (`T?` is exactly `Option<T>`; `T??` is rejected).
     pub fn parse_type(&mut self) -> Result<Type, String> {
+        let ty = self.parse_type_core()?;
+        if self.current_token() == &Token::QuestionQuestion {
+            return Err(format!("`{}??` is not a type: write `Option<{}?>` for a nested option (at {})", self.type_to_string(&ty), self.type_to_string(&ty), self.pos_desc()));
+        }
+        if self.current_token() == &Token::Question {
+            self.advance();
+            if self.current_token() == &Token::Question {
+                return Err(format!("`{}??` is not a type: write `Option<{}?>` for a nested option (at {})", self.type_to_string(&ty), self.type_to_string(&ty), self.pos_desc()));
+            }
+            return Ok(Type::Option(Box::new(ty)));
+        }
+        Ok(ty)
+    }
+
+    fn parse_type_core(&mut self) -> Result<Type, String> {
         // Handle raw pointer types: *const T, *mut T
         if self.current_token() == &Token::Star {
             self.advance();

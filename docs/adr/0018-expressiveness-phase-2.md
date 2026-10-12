@@ -186,5 +186,30 @@ scrutinee is an expression and can be piped into (`match { .. } |> f`). Formatte
   2026-10-11: `grep -rE ')\?\.' --include=*.wj` finds only comments).
 - Implementation status per feature is tracked in the section below and in `docs/spec/BACKEND_STATUS.md`.
 
-## Implementation status
-(updated as features land; see the per-feature commits on `wt/expressive`)
+## Implementation status (2026-10-12, `wt/expressive`)
+Conformance programs are `tests/conformance_programs/170`-`176`; spec examples `tests/spec/{collections,closures,
+arguments,trailing-blocks,optionals,doctests,guard-match}/`. Backends: interpreter (I), Rust (R), Go (G), JS/TS (J).
+
+| # | Feature | State | I | R | G | J | Notes |
+|---|---|---|---|---|---|---|---|
+| 1 | Collections | implemented | yes | partial | yes | yes | Rust: runtime inlined as `mod wj_enumerable`; 171 passes, 170 blocked by the generic closure-`if`-tail codegen gap; integer-width defaults (ADR-0015 #1) still bite unannotated literals |
+| 2 | `_` closures | implemented | yes | partial | yes | yes | 172 on Rust blocked by `map(\|u\| u.name)` field-move-from-borrow (same with explicit closures) |
+| 3 | Named args / defaults | implemented (same-file callees) | yes | yes | yes | yes | cross-module callees: positional only until the DefId resolver |
+| 4 | Trailing blocks | implemented | yes | yes | yes | yes | header detection by backward token scan |
+| 5 | `T?`, `??` | implemented | yes | yes | yes | yes | `?.` optional chaining NOT implemented: needs the solver to pick `map`/`and_then`/try-then-access by receiver type; `.unwrap()` lint (W0002) now suggests `??`; `wj fix` rewrite not done |
+| 6 | Doctests | implemented | yes | `--compiled` | n/a | n/a | `wj test` / `wj test --doc`; extractor shared with docs-truth (`src/doctest/`) |
+| 7 | Guard-only match | implemented | yes | yes | yes | yes | lowered to `match true { _ if c => .. }` |
+
+Formatter: `??` and `|> .method` spacing, fixture `tests/fixtures/formatter/expressive.*`.
+
+### Agent-dx (first drafts, `bench/agent-dx/phase2_measure.py`, `results/adr0018_phase2_first_draft.json`)
+Four reference tasks (t018, t021, t036, t055) rewritten idiomatically with the new features as first drafts, graded
+once, not edited afterwards:
+- interpreter: 3/4 tasks pass all hidden vectors first try. The failure (t021) is the `_` scoping rule:
+  `group_by(key(_.clone()))` makes the closure `key(|x| x.clone())`, not `|x| key(x.clone())` - the documented rule,
+  but a real first-draft trap (Scala has the same one). Diagnostic today is a runtime type error; a parse-time
+  "closure passed to a non-function parameter" diagnostic is the next step.
+- compiled (Rust): 0/4 (historic plain-style first drafts of the same tasks: 1/4). Causes: integer width defaults
+  (`x ?? 0` literal typed `i32` against `Option<i64>`, `take(k)` usize), `Option<&String> ?? String` ownership,
+  `.as_str()` leak in the draft; none is a new-syntax parse problem, all are solver typing decisions.
+- tokens (word/punctuation count): t018 -53%, t021 -30%, t036 -29%, t055 -33% versus the reference solutions.
