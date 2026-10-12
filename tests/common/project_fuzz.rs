@@ -137,7 +137,7 @@ pub fn generate(seed: u64) -> Project {
                 }
                 // item import with alias
                 1 => {
-                    uses.push(format!("use {}::{} as g{}", abs, fname, alias_n));
+                    uses.push(format!("use crate::{}::{} as g{}", abs, fname, alias_n));
                     format!("g{}", alias_n)
                 }
                 // grouped import of the item under a fresh alias via its module
@@ -233,7 +233,7 @@ pub fn generate(seed: u64) -> Project {
             format!("{}::{}", abs, f.name)
         };
         let x = 1 + (fi as i64 * 7) % 40;
-        let _ = writeln!(main_body, "    println(\"{} {{}}\", {}({}))", fi, call, x);
+        let _ = writeln!(main_body, "    println(\"{} ${{{}({})}}\")", fi, call, x);
         let _ = writeln!(expected, "{} {}", fi, eval(&funcs, fi, x));
     }
     main_body.push_str("}\n");

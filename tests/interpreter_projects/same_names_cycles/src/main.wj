@@ -6,6 +6,6 @@ fn label() -> string {
 }
 
 fn main() {
-    println("{} {} {}", label(), a::label(), b::label())
-    println("{}", a::ping(3))
+    println("${label()} ${a::label()} ${b::label()}")
+    println("${a::ping(3)}")
 }

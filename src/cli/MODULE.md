@@ -22,7 +22,9 @@ Layer `driver`. May import: every module in a lower layer (support < syntax < re
 Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 
 ## Entry points
-Each `cli/<cmd>.rs::execute` (src/cli/mod.rs routes).
+Each `cli/<cmd>.rs::execute` (src/cli/mod.rs routes). `run_dev::execute`: `wj run` policy (interpret by default,
+compiled fallback on a preflight hit, `--compiled`/`--release`, ADR-0019); `watch::watch`: `--watch` restart loop;
+`host_build::ensure`: cached host bridge library for `extern fn` (ADR-0020).
 
 ## Tests
 tests/installed_binary_smoke_test.rs (installed-binary matrix), tests/cli_lint_test.rs and assert_cmd tests of the `wj` binary.

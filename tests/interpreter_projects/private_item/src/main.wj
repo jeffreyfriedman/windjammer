@@ -1,5 +1,5 @@
 use mathx
 
 fn main() {
-    println("{}", mathx::helper(2))
+    println("${mathx::helper(2)}")
 }

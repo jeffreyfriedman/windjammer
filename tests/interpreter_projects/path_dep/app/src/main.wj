@@ -2,6 +2,6 @@ use textkit::banner
 use textkit::case::title
 
 fn main() {
-    println("{}", banner("deps"))
-    println("{}", title("hello world"))
+    println("${banner("deps")}")
+    println("${title("hello world")}")
 }
