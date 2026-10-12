@@ -91,16 +91,18 @@ first-draft failures with `_` than with explicit closures, keep only the single-
 Rules: parameters with defaults must follow those without; at a call, positional arguments come first, then named
 ones in any order; each parameter is bound at most once; unknown names, duplicates, positional-after-named and missing
 required parameters are errors with the parameter list in the message. Defaults are **evaluated at the call site, on
-each call, after the explicit arguments, in parameter order** (Python's shared-mutable-default bug cannot happen) and
-may refer to earlier parameters (`fn pad(s: string, width: int = s.len())`).
+each call** (Python's shared-mutable-default bug cannot happen). A default may not refer to another parameter (error:
+it is evaluated in the caller; may be relaxed once the lowering substitutes arguments). Arguments are evaluated in
+parameter order.
 
-**Lowering.** One desugaring pass (`src/desugar/named_args.rs`) rewrites every resolved call to a positional call
-with the defaults inlined (each default expression cloned per call site), before analysis. Backends see positional
-calls only. Methods: resolved when the receiver's type is known to the pass or the method name is unique among
-user `impl`s; otherwise the call must be positional (error says so). Trait methods: defaults belong to the trait
-declaration; an impl may not redeclare them (error). FFI/`extern fn`: named arguments allowed, defaults allowed
-(the desugared call is positional, so the foreign ABI is unchanged). Function values (`let f = connect`) have the full
-positional signature; no defaults through function pointers.
+**Lowering.** In the parser (`src/parser/named_args.rs`): a default is stored as a `__default` parameter decorator (no
+AST shape change); after a first parse the file's callee table is built (free functions, `Type::assoc`, and methods
+whose name is defined by exactly one `impl` in the file) and, when any default or label exists, the file is parsed again
+so every resolved call becomes positional with the default expression placed at the call site. Backends see positional
+calls only. Callees in other files keep positional-only calls (labels untouched) until the DefId resolver provides
+their signatures. Trait-method defaults belong to the trait declaration (planned with cross-module resolution).
+FFI/`extern fn`: the call is positional, so the foreign ABI is unchanged. Function values have the full positional
+signature; no defaults through function pointers.
 
 **Pipes/inference.** `x |> connect(timeout: 5)` inserts `x` first, then desugars. Default expressions are typed against
 the parameter type by the solver; an `int` default for an `i32` parameter takes the parameter's width.
