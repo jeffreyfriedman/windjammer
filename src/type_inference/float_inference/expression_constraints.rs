@@ -188,21 +188,17 @@ impl FloatInference {
                     };
                     self.constraints.push(cast_constraint);
 
-                    // Only an untyped float literal adopts the cast target; a typed operand
-                    // (`w as f64` with `w: f32`) is exactly what the cast converts.
-                    if matches!(inner, Expression::Literal { value: crate::parser::Literal::Float(_), .. }) {
-                        let inner_id = self.get_expr_id(inner);
-                        let constraint = match float_ty {
-                            FloatType::F32 => {
-                                Constraint::MustBeF32(inner_id, "cast to f32".to_string())
-                            }
-                            FloatType::F64 => {
-                                Constraint::MustBeF64(inner_id, "cast to f64".to_string())
-                            }
-                            FloatType::Unknown => return,
-                        };
-                        self.constraints.push(constraint);
-                    }
+                    let inner_id = self.get_expr_id(inner);
+                    let constraint = match float_ty {
+                        FloatType::F32 => {
+                            Constraint::MustBeF32(inner_id, "cast to f32".to_string())
+                        }
+                        FloatType::F64 => {
+                            Constraint::MustBeF64(inner_id, "cast to f64".to_string())
+                        }
+                        FloatType::Unknown => return,
+                    };
+                    if Self::is_float_literal(inner) { self.constraints.push(constraint); }
                 }
             }
             Expression::Block { statements, .. } => {

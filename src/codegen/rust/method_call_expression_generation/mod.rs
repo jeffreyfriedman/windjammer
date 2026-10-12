@@ -6,8 +6,9 @@ use crate::parser::*;
 
 mod arguments;
 mod finalize;
-mod iterator_lowering;
+mod idiom_lowering;
 mod receiver;
+mod std_idiom_fixups;
 mod signature_resolution;
 
 use crate::codegen::rust::CodeGenerator;

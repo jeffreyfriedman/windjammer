@@ -229,6 +229,13 @@ impl Interpreter {
                     let s = buf.borrow().clone();
                     return Ok(s);
                 }
+                // ADR-0015 #3: a user `fn to_string(self) -> string` makes the type printable.
+                if let Some(f) = self.methods.get(&(tn.clone(), "to_string".to_string())).cloned() {
+                    return match self.call_func(&f, vec![], Some(v.clone()))? {
+                        Value::Str(s) => Ok((*s).clone()),
+                        other => self.display_string(&other),
+                    };
+                }
                 Err(semantic(format!("`{}` doesn't implement `std::fmt::Display`", tn)))
             }
             other => Err(semantic(format!("`{}` doesn't implement `std::fmt::Display`", other.type_name()))),

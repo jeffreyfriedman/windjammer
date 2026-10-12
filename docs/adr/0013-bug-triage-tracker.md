@@ -1,6 +1,6 @@
 ---
 status: proposed
-last_verified: 3406ef05bb35
+last_verified: 203e43d114c9
 ---
 # ADR-0013: Bug-triage tracker
 

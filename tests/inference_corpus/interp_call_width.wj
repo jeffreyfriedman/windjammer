@@ -1,0 +1,6 @@
+// D-NUM-INTERP-CALL: a call inside `${...}` must constrain the literals it passes (rustc: &Vec<i32> vs &Vec<i64>).
+fn read_vec(v: Vec<int>) -> int { v.len() }
+fn main() {
+    let v0 = vec![1, 2, 3]
+    println("${read_vec(v0)}")
+}

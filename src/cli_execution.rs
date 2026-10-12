@@ -117,9 +117,9 @@ pub fn run_repl() -> Result<()> {
 }
 
 /// Print the lints `wj build` would apply (same `linter::lint_text` source of truth) before interpreting.
-/// Interpretation still runs; `WJ_NO_LINT=1` silences it.
+/// Interpretation still runs.
 pub fn report_build_lints(file: &Path) {
-    if file.is_file() && std::env::var_os("WJ_NO_LINT").is_none() {
+    if file.is_file() {
         if let Ok(src) = std::fs::read_to_string(file) {
             let name = file.to_string_lossy().to_string();
             for d in crate::linter::lint_text(&name, &src).unwrap_or_default() {

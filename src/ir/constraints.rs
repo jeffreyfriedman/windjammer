@@ -53,10 +53,23 @@ pub enum Constraint {
     Sanitizes(ConstraintVar),
 }
 
+/// Why a constraint was emitted: a stable rule ID (see `docs/spec/inference.md`) plus the
+/// source position of the use site. Provenance is a side table for reporting
+/// (`wj explain-ownership`); the solver never reads it, so it cannot change a decision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConstraintOrigin {
+    pub rule: &'static str,
+    pub detail: String,
+    /// `(line, column)` of the use site, when the AST node carries a location.
+    pub at: Option<(usize, usize)>,
+}
+
 /// A collection of constraints to be solved.
 #[derive(Debug, Clone, Default)]
 pub struct ConstraintSet {
     constraints: Vec<Constraint>,
+    /// Parallel to `constraints`: `None` for constraints emitted without provenance.
+    origins: Vec<Option<ConstraintOrigin>>,
     next_var: u32,
 }
 
@@ -75,6 +88,38 @@ impl ConstraintSet {
     /// Add a constraint to the set.
     pub fn add(&mut self, constraint: Constraint) {
         self.constraints.push(constraint);
+        self.origins.push(None);
+    }
+
+    /// Add a constraint together with the rule and use site that produced it.
+    pub fn add_because(&mut self, constraint: Constraint, origin: ConstraintOrigin) {
+        self.constraints.push(constraint);
+        self.origins.push(Some(origin));
+    }
+
+    /// A copy of this set keeping only the constraints for which `keep(index, constraint)` holds.
+    /// Variables and provenance are preserved; used by the explain tooling to test which
+    /// constraints actually reach a variable.
+    pub fn filtered(&self, mut keep: impl FnMut(usize, &Constraint) -> bool) -> ConstraintSet {
+        let mut out = ConstraintSet {
+            constraints: Vec::new(),
+            origins: Vec::new(),
+            next_var: self.next_var,
+        };
+        for (i, (c, o)) in self.constraints.iter().zip(self.origins.iter()).enumerate() {
+            if keep(i, c) {
+                out.constraints.push(c.clone());
+                out.origins.push(o.clone());
+            }
+        }
+        out
+    }
+
+    /// Iterate over constraints with their provenance (if recorded).
+    pub fn iter_with_origin(&self) -> impl Iterator<Item = (&Constraint, Option<&ConstraintOrigin>)> {
+        self.constraints
+            .iter()
+            .zip(self.origins.iter().map(|o| o.as_ref()))
     }
 
     /// Number of constraints.

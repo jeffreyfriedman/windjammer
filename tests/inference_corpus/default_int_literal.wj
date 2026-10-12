@@ -1,0 +1,5 @@
+// D-NUM-DEFAULT: ADR-0015 says an unconstrained integer is `int` (i64); 3_000_000_000 overflows i32.
+fn main() {
+    let big = 3000000000
+    println("${big}")
+}

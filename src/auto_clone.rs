@@ -1463,9 +1463,7 @@ impl AutoCloneAnalysis {
                 crate::parser::EnumPatternBinding::None
                 | crate::parser::EnumPatternBinding::Wildcard => {}
             },
-            crate::parser::Pattern::Wildcard
-            | crate::parser::Pattern::Literal(_)
-            | crate::parser::Pattern::Range { .. } => {}
+            crate::parser::Pattern::Wildcard | crate::parser::Pattern::Literal(_) | crate::parser::Pattern::Range { .. } => {}
         }
     }
 
@@ -1488,6 +1486,9 @@ impl AutoCloneAnalysis {
         let is_complex_expr =
             var_name.contains('.') || var_name.contains('(') || var_name.contains('[');
 
+        // A later `let name` / `for name in ..` rebinds the name: uses after it are not uses of the moved value.
+        let rebound_between = |moved: usize, used: usize| usages.iter().any(|d| d.kind == UsageKind::Definition && d.statement_idx > moved && d.statement_idx <= used);
+
         // Statement indices where `var = f(var, …)` restores ownership after the move.
         let writeback_idxs = Self::collect_direct_writeback_indices(statements, var_name);
 
@@ -1507,9 +1508,7 @@ impl AutoCloneAnalysis {
                 if writeback_idxs.contains(&move_usage.statement_idx) {
                     continue;
                 }
-                let has_later_use = total_uses
-                    .iter()
-                    .any(|u| move_usage.has_reachable_later_use(u));
+                let has_later_use = total_uses.iter().any(|u| move_usage.has_reachable_later_use(u) && !rebound_between(move_usage.statement_idx, u.statement_idx));
                 let same_stmt_read_after_move = total_uses.iter().any(|u| {
                     u.statement_idx == move_usage.statement_idx
                         && u.kind == UsageKind::Read
@@ -1569,9 +1568,7 @@ impl AutoCloneAnalysis {
                 continue;
             }
 
-            let has_later_use = total_uses
-                .iter()
-                .any(|u| move_usage.has_reachable_later_use(u));
+            let has_later_use = total_uses.iter().any(|u| move_usage.has_reachable_later_use(u) && !rebound_between(move_usage.statement_idx, u.statement_idx));
 
             // Same statement: `visit_cycle(doc, doc.root_id, ...)` moves `doc` then reads
             // `doc.root_id` — clone the move site so the field access still compiles.

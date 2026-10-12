@@ -298,11 +298,9 @@ pub struct CodeGenerator<'ast> {
     /// WJ `struct` names declared in this compilation unit. Shadows stdlib types
     /// of the same name (`use std::url` + local `struct Url`) so literals stay local.
     pub(crate) user_declared_struct_names: std::collections::HashSet<String>,
-    // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
-    // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
+    // TUPLE STRUCT NAMES (struct Point(i32, i32)): ownership conversion in constructor calls needs owned args
     pub(crate) tuple_struct_names: std::collections::HashSet<String>,
-    // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
-    // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
+    // USER-DEFINED COPY TYPES (@derive(Copy)): lets is_copy_type recognize them, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
     /// Types explicitly annotated with `@derive(Copy)` by the user.
     /// Distinguished from auto-derived Copy types to preserve `&mut` semantics
@@ -312,6 +310,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
     pub(crate) types_with_drop: std::collections::HashSet<String>,
+    pub(crate) idiom: super::program_facts::IdiomScratch, // std-idiom / closure / derive facts
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
@@ -782,6 +781,7 @@ impl<'ast> CodeGenerator<'ast> {
             explicit_copy_types_registry: std::collections::HashSet::new(),
             non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
+            idiom: Default::default(),
             in_struct_literal_field: false,
             array_literal_as_list: false,
             in_owned_value_context: false,
@@ -1490,17 +1490,9 @@ impl<'ast> CodeGenerator<'ast> {
             return false;
         }
         let last = qualifier.rsplit("::").next().unwrap_or(qualifier);
-        // `i64::from_str_radix`, `char::from_u32`: primitive types are not modules.
-        if matches!(
-            last,
-            "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128"
-                | "usize" | "f32" | "f64" | "char" | "bool" | "str"
-        ) {
-            return false;
-        }
         last.chars()
             .next()
-            .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+            .is_some_and(|c| c.is_ascii_lowercase() || c == '_') && !crate::type_classification::is_primitive_type_name(last)
     }
 
     pub fn ir_cutover_call_sites_enabled(&self) -> bool {

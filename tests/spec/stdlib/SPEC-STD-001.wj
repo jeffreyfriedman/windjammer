@@ -1,0 +1,16 @@
+// spec: SPEC-STD-001
+// expect: 0123 4 true
+// expect: 3 3 0 2
+// expect: 0 2 1 true false
+fn main() {
+    let mut v = [3, 1, 2]
+    v.push(0)
+    v.sort()
+    println("${v[0]}${v[1]}${v[2]}${v[3]} ${v.len()} ${v.contains(2)}")
+    let top = v.pop()
+    println("${top.unwrap()} ${v.len()} ${v.first().unwrap()} ${v.last().unwrap()}")
+    v.insert(1, 9)
+    let gone = v.remove(0)
+    v.reverse()
+    println("${gone} ${v[0]} ${v[1]} ${v.get(7).is_none()} ${v.is_empty()}")
+}

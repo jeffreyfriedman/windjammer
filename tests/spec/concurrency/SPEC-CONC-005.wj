@@ -1,0 +1,6 @@
+// spec: SPEC-CONC-005
+// expect: parsed
+async fn fetch(n: int) -> int { n }
+fn main() {
+    println("parsed")
+}

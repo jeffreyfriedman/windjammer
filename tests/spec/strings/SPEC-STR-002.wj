@@ -1,0 +1,9 @@
+// spec: SPEC-STR-002
+// expect: hi wj! 3 8 true
+struct P { x: int }
+fn twice(n: int) -> int { n * 2 }
+fn main() {
+    let p = P { x: 4 }
+    let name = "wj"
+    println("hi ${name}! ${1 + 2} ${twice(p.x)} ${p.x > 3}")
+}
