@@ -102,7 +102,31 @@ impl<'e> Lowerer<'e> {
         if let Some(en) = self.env.enum_of_variant(name).map(|s| s.to_string()) {
             return self.variant_ctor(&en, name, args, want);
         }
+        if self.env.structs.get(name).is_some_and(|s| s.tuple) {
+            return self.tuple_struct_ctor(name, args, want);
+        }
         self.err(format!("call of unknown function `{name}`"))
+    }
+
+    /// `P(a, b)` for `struct P(A, B)`: a struct literal with fields `0`, `1`, ...
+    fn tuple_struct_ctor(&mut self, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        let info = self.env.structs[name].clone();
+        if args.len() != info.fields.len() {
+            return self.err(format!("`{name}` takes {} field(s), got {}", info.fields.len(), args.len()));
+        }
+        let mut bound: Vec<Ty> = match want {
+            Some(Ty::Adt(n, a)) if n == name => a.clone(),
+            _ => vec![Ty::Unknown; info.type_params.len()],
+        };
+        let mut fields = Vec::new();
+        for ((fname, fty), (_, a)) in info.fields.iter().zip(args.iter()) {
+            let expect = fty.subst(&info.type_params, &bound);
+            let v = self.expr(a, Some(&expect).filter(|t| !t.is_unknown()))?;
+            unify(fty, &v.ty, &info.type_params, &mut bound);
+            self.constrain(&expect, &v.ty);
+            fields.push((fname.clone(), self.own(v)));
+        }
+        Ok(PExpr::new(Ty::Adt(name.to_string(), bound), PK::Struct { name: name.to_string(), fields }))
     }
 
     fn call_value(&mut self, f: PExpr, args: &Args) -> PResult<PExpr> {
