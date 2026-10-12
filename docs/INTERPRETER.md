@@ -19,6 +19,7 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 | `wj run --interpret ...` | Interpreter only: never fall back (an unsupported feature exits 2 naming it). |
 | `wj run --compiled ...` / `--release` | Transpile to Rust and run with cargo (`--release`: optimized). `wj build` is unchanged. |
 | `wj run --watch` | Re-run on every change to `.wj`, `.rs`, `wj.toml`, `wj.lock` under the project (restarts long-running programs). |
+| `wj run --hot` | Preview: keep the program running and swap in edited function bodies (state survives; ADR-0021). |
 | `wj test --interpret [PATH] [--filter S] [--watch]` | Run `@test`, `@test_cases([...])` and `test_*` functions in `*_test.wj` files. cargo-test-like report, exit 1 on failure. |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
@@ -72,8 +73,9 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
 
 **Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
 engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
-root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload of function bodies for
-long-running programs is designed in ADR-0021 (`--watch` restarts today).
+root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0021) is a
+preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
+kept; other edits print a restart notice (use `--watch` for those).
 
 ## Measurement
 

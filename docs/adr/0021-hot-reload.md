@@ -1,6 +1,6 @@
 # ADR-0021: `wj run --watch` and hot reload of function bodies
 
-- **Status:** Proposed (watch implemented; hot reload designed, not implemented)
+- **Status:** Proposed (watch implemented; hot reload spike implemented as `wj run --hot`)
 - **Date:** 2026-10-11
 - **Related:** [ADR-0019](0019-interpret-by-default.md), `src/cli/watch.rs`, `src/interpreter/project.rs`
 
@@ -15,7 +15,7 @@ function bodies into the running process keeps the state and the window.
 (portable; no platform notification APIs, works on network and VM file systems). Restart latency = poll interval +
 process start + interpreter load; measured in `docs/INTERPRETER.md`. Target: under 100 ms for a mid-size project.
 
-## Decision 2: hot reload (design; next step)
+## Decision 2: hot reload (spike: `src/interpreter/hot.rs`, test `hot_reload_swaps_a_body_and_keeps_state`)
 `wj run --hot` keeps one interpreter process alive and applies edits at a **safe point**:
 
 1. A watcher thread sets an atomic "reload pending" flag with the changed files.
@@ -29,9 +29,10 @@ process start + interpreter load; measured in `docs/INTERPRETER.md`. Target: und
      `--watch` behaviour) with a one-line notice naming the change: state whose type changed cannot be kept.
 4. Globals and heap values are untouched (same value model, same types), so state survives.
 
-Spike plan: a `game_loop` fixture whose `update()` prints a counter; edit `update` to print `counter * 10`; assert
-the counter continues (state kept) and the new body runs within one loop iteration after the edit. Implementation
-touches `call.rs` (safe-point check, one branch) and adds `src/interpreter/hot.rs` (diff + swap).
+Spike (landed): a loop calls `step::step(state)`; the test edits `step` from `n + 1` to `n + 1000` while it runs and
+asserts the counter keeps growing (no restart, state kept) and the new body runs. The spike checks at every function entry
+(one branch when `--hot` is off); the "outermost loop" safe point of step 2 is the next refinement. Signature/type changes
+print a restart notice and keep the old code (swapping only bodies whose signatures match).
 
 ## Kill criteria
 Hot reload is dropped (watch remains) if a swapped body can observe a value whose layout changed (must restart

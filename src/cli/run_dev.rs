@@ -26,6 +26,8 @@ pub struct RunOptions {
     pub args: Vec<String>,
     pub mode: Mode,
     pub target: String,
+    /// Apply edits to the running program (ADR-0021); interpreter only.
+    pub hot: bool,
     /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report).
     pub lint: Option<fn(&Path)>,
 }
@@ -60,7 +62,8 @@ pub fn execute(opts: &RunOptions) -> i32 {
                     return 2;
                 }
             };
-            match runner::run_entry(&target.entry, opts.args.clone(), auto, host) {
+            let eo = runner::EntryOptions { fallback: auto, host, hot: opts.hot };
+            match runner::run_entry(&target.entry, opts.args.clone(), eo) {
                 RunOutcome::Exited(c) => c,
                 RunOutcome::NeedsCompiled(e) => {
                     eprintln!("{}", fallback_notice(&e));

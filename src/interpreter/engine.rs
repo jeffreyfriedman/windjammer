@@ -151,6 +151,8 @@ pub struct Interpreter {
     pub(crate) project_loading: bool,
     /// Bridge library for `extern fn` (ADR-0020), when the project provides Rust code.
     pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
+    /// `wj run --hot`: pending file edits applied at function entry (`hot.rs`).
+    pub(crate) hot: Option<Box<super::hot::HotState>>,
 }
 
 impl Default for Interpreter {
@@ -194,6 +196,7 @@ impl Interpreter {
             missing_modules: HashSet::new(),
             project_loading: false,
             host: None,
+            hot: None,
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
         s
