@@ -123,6 +123,15 @@ pub struct Interpreter {
     pub(crate) call_cache: HashMap<usize, Rc<FuncDef>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Recycled variable vectors of finished frames.
     pub(crate) vec_pool: Vec<Vec<(&'static str, Slot)>>,
+    /// `--engine=resolved`: run compiled functions where possible (see `resolved/`).
+    pub(crate) engine_resolved: bool,
+    /// Compiled forms by `FuncDef` address (`None` = not compilable).
+    pub(crate) compiled: HashMap<usize, Option<Rc<super::resolved::CompiledFn>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Locals of active compiled calls (one window per call).
+    pub(crate) rstack: Vec<Value>,
+    /// `std::subprocess` children by handle id.
+    pub(crate) subprocesses: HashMap<u64, super::builtins::std_proc::Session>,
+    pub(crate) next_subprocess: u64,
     /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
     pub(crate) sched: super::sched::Sched,
     pub(crate) epoch: std::time::Instant,
@@ -183,6 +192,11 @@ impl Interpreter {
             scope: Scope::new(0),
             call_cache: HashMap::default(),
             vec_pool: Vec::new(),
+            engine_resolved: false,
+            compiled: HashMap::default(),
+            rstack: Vec::new(),
+            subprocesses: HashMap::new(),
+            next_subprocess: 0,
             sched: super::sched::Sched::new(),
             epoch: std::time::Instant::now(),
             rng: None,
@@ -240,6 +254,11 @@ impl Interpreter {
 
     pub fn set_http_mode(&mut self, mode: super::builtins::std_http::HttpMode) {
         self.http = mode;
+    }
+
+    /// Select the resolved (compiled closure) engine for compilable functions.
+    pub fn set_engine_resolved(&mut self, on: bool) {
+        self.engine_resolved = on;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {

@@ -110,6 +110,9 @@ impl Interpreter {
         for v in vals {
             w.walk(v, f);
         }
+        for v in &self.rstack {
+            w.walk(v, f);
+        }
         for slot in self.globals.values() {
             w.walk_slot(slot, f);
         }

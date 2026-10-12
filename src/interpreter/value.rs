@@ -283,6 +283,7 @@ impl Value {
         match (self, other) {
             (Unit, Unit) => Ordering::Equal,
             (Bool(a), Bool(b)) => a.cmp(b),
+            (Int(a, IntTy::U128), Int(b, _)) | (Int(a, _), Int(b, IntTy::U128)) => (*a as u128).cmp(&(*b as u128)),
             (Int(a, _), Int(b, _)) => a.cmp(b),
             (Float(a, _), Float(b, _)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
             (Int(a, _), Float(b, _)) => (*a as f64).partial_cmp(b).unwrap_or(Ordering::Equal),

@@ -552,7 +552,7 @@ impl Interpreter {
         self.define(p, a);
     }
 
-    fn depth_check(&mut self) -> R<()> {
+    pub(crate) fn depth_check(&mut self) -> R<()> {
         let over_stack = match self.stack_guard {
             Some((base, budget)) => {
                 let here = 0u8;
@@ -613,6 +613,11 @@ impl Interpreter {
     ) -> R {
         if f.is_extern {
             return Err(unsupported(format!("extern function `{}`", f.name)));
+        }
+        if self.engine_resolved && self_val.is_none() && targs.is_empty() {
+            if let Some(c) = self.compiled_for(f) {
+                return self.run_compiled(f, &c, args);
+            }
         }
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
@@ -823,6 +828,11 @@ impl Interpreter {
         method: &str,
         args: Vec<Value>,
     ) -> R {
+        if let Value::Int(n, super::int::IntTy::U128) = &recv {
+            if let Some(r) = super::u128ops::method(method, *n, &args) {
+                return r;
+            }
+        }
         if let Value::Native(n) = &recv {
             if let Some(f) = self.builtins.native_method(n.type_name(), method) {
                 return f(self, &recv, args);
