@@ -102,6 +102,10 @@ pub struct Parser {
     pub(crate) shorthand_frames: Vec<crate::parser::shorthand_closure::ShorthandFrame>,
     /// Explicit closures being parsed (a `_` inside one, in the same argument, is an error).
     pub(crate) closure_depth: usize,
+    /// Named-argument lowering table (second parse pass only; `parser/named_args.rs`).
+    pub(crate) call_table: Option<crate::parser::named_args::CallTable>,
+    /// A labelled call argument (`f(x: 1)`) was parsed.
+    pub(crate) saw_label: bool,
     // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
     // SOUNDNESS: `parse()` returns `Program<'static>`, so nothing ties the AST to this Parser. The
@@ -241,6 +245,8 @@ impl Parser {
             pipe_placeholders: Vec::new(),
             shorthand_frames: Vec::new(),
             closure_depth: 0,
+            call_table: None,
+            saw_label: false,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -265,6 +271,8 @@ impl Parser {
             pipe_placeholders: Vec::new(),
             shorthand_frames: Vec::new(),
             closure_depth: 0,
+            call_table: None,
+            saw_label: false,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -576,8 +584,18 @@ impl Parser {
             return Err(errors.join("\n"));
         }
 
+        let program = Program { items };
+        // ADR-0018 named arguments / defaults: parse again with the file's callee table (parser/named_args.rs).
+        if self.call_table.is_none() {
+            if let Some(table) = crate::parser::named_args::call_table(&program, self.saw_label) {
+                self.call_table = Some(table);
+                self.position = 0;
+                self.warnings.clear();
+                return self.parse();
+            }
+        }
         self.emit_surface_syntax_warnings();
-        Ok(Program { items })
+        Ok(program)
     }
 
     pub(crate) fn parse_item(&mut self) -> Result<Item<'static>, String> {

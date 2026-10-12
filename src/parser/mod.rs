@@ -29,9 +29,11 @@ mod intrinsic_lowering;
 mod match_value_expression_parser;
 mod matches_macro;
 mod guard_match;
+pub(crate) mod named_args;
 mod pipe_parser;
 mod primary_expression_parser;
 pub(crate) mod shorthand_closure;
+mod trailing_block;
 
 // Statement parsing module - extracted from parser_impl.rs
 pub mod statement_parser;

@@ -39,6 +39,7 @@ impl Parser {
             let label = if let Token::Ident(name) = self.current_token() {
                 if self.peek(1) == Some(&Token::Colon) {
                     let label = name.clone();
+                    self.saw_label = true;
                     self.advance(); // consume identifier
                     self.advance(); // consume colon
                     Some(label)
