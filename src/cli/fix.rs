@@ -107,6 +107,7 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
             let mut out = surface_fix::fix_source(&source);
             out.text = fix_trailing_returns(&name_of(file), out.text);
             out.text = surface_fix_options(out.text);
+            out.text = crate::linter::redundant_as_str::fix(&out.text);
             out
         };
         summary.skipped += out.skipped_count();

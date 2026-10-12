@@ -11,6 +11,7 @@ pub mod codes;
 pub mod rust_leakage;
 pub mod surface_syntax;
 pub mod missing_value;
+pub mod redundant_as_str;
 pub mod trailing_return;
 
 /// The single lint entry point shared by `wj lint`, `wj build` diagnostics and `wj run --interpret`:
