@@ -48,6 +48,18 @@ impl<'ast> RustLeakageLinter<'ast> {
         }
         self.check_trailing_returns(program);
         self.check_missing_values(program);
+        for m in super::mixed_int_width::mixed_widths(program) {
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0013".to_string(),
+                category: LintCategory::Correctness,
+                level: LintLevel::Warning,
+                message: format!("mixed integer widths `{}` and `{}` without an explicit conversion", m.left, m.right),
+                location: to_source_location(m.location, &self.default_file),
+                help: Some(format!("convert one side explicitly, e.g. `{}(x)`", m.right)),
+                note: Some("ADR-0015: explicit widths are never silently widened or narrowed".to_string()),
+                suggestion: None,
+            });
+        }
     }
 
     /// W0011 (ADR-0015 #4): declared return type but the body definitely ends without a value.

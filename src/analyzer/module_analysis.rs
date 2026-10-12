@@ -631,7 +631,7 @@ impl<'ast> Analyzer<'ast> {
                     // Recursively analyze items inside inline modules
                     // NOTE: We analyze them for signature registry, but don't add them
                     // to the top-level analyzed list since they'll be generated inside their modules
-                    for item in items {
+                    for item in crate::analyzer::nested_mod_items::flatten(items) {
                         match item {
                             Item::Function { decl: func, .. } => {
                                 let mut analyzed_func = self.analyze_function(func, &registry)?;
