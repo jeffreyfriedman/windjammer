@@ -319,6 +319,29 @@ fn char_ret(name: &str) -> Option<Ty> {
     })
 }
 
+/// `f64::MAX`, `f32::EPSILON`, `f64::NAN`, ...: the exact value (an f32 constant is its f32 value widened).
+pub fn float_const(owner: &str, member: &str) -> Option<f64> {
+    let is32 = match owner {
+        "f32" => true,
+        "f64" => false,
+        _ => return None,
+    };
+    Some(match (member, is32) {
+        ("MAX", false) => f64::MAX,
+        ("MIN", false) => f64::MIN,
+        ("EPSILON", false) => f64::EPSILON,
+        ("MIN_POSITIVE", false) => f64::MIN_POSITIVE,
+        ("MAX", true) => f64::from(f32::MAX),
+        ("MIN", true) => f64::from(f32::MIN),
+        ("EPSILON", true) => f64::from(f32::EPSILON),
+        ("MIN_POSITIVE", true) => f64::from(f32::MIN_POSITIVE),
+        ("INFINITY", _) => f64::INFINITY,
+        ("NEG_INFINITY", _) => f64::NEG_INFINITY,
+        ("NAN", _) => f64::NAN,
+        _ => return None,
+    })
+}
+
 /// Static constructors / associated functions on std types, e.g. `Vec::new`, `String::from`.
 pub fn static_ret(owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> {
     let from_want = |pick: fn(&Ty) -> bool, dflt: Ty| want.filter(|w| pick(w)).cloned().unwrap_or(dflt);
@@ -334,6 +357,8 @@ pub fn static_ret(owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) ->
             Ty::Result(b(Ty::Int(IntKind::from_name(owner)?)), b(Ty::Str))
         }
         ("f64", "from") => Ty::F64,
+        ("f32", m) if float_const("f32", m).is_some() => Ty::F32,
+        ("f64", m) if float_const("f64", m).is_some() => Ty::F64,
         ("char", "from_u32") => Ty::Option(b(Ty::Char)),
         (o, v) if super::ordering::is_path(o) && super::ordering::variant_value(v).is_some() => super::ordering::ty(),
         _ => return None,
