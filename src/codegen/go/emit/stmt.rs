@@ -81,6 +81,15 @@ impl<'m> Go<'m> {
 
     pub fn stmt(&mut self, s: &PStmt) -> PResult<()> {
         match s {
+            PStmt::Let { name, ty, init: Some(e), .. } if matches!(&*e.kind, PK::BorrowMut(_)) && !self.is_ref_type(ty) => {
+                // `let r = &mut place`: a pointer; uses of `r` dereference it (`ptr_locals`).
+                let PK::BorrowMut(place) = &*e.kind else { unreachable!() };
+                let (t, n) = (self.ty(ty)?, ident(name));
+                let p = self.addr(place)?;
+                self.line(&format!("var {n} *{t} = {p}"));
+                self.line(&format!("_ = {n}"));
+                self.ptr_locals.insert(name.clone(), ty.clone());
+            }
             PStmt::Let { name, ty, init, .. } => {
                 let t = self.ty(ty)?;
                 let n = ident(name);

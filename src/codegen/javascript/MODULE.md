@@ -15,6 +15,11 @@ One emitter serves both languages; `JavaScriptBackend::typescript()` adds type a
 - `Option<T>` = `null | {v}`, `Result<T, E>` = `{ok, v}`; structs = classes with `clone()`; enums = base class + one class per variant (`$t` tag).
 - Strings are UTF-16 in memory but `len()`, slicing and `find` use UTF-8 byte semantics (`$strlen`, `$strSlice`).
 - Panics exit 101 (`$run`); output is buffered and flushed on exit.
+- `&mut` (`emit/refs.rs`): a `&mut` of a value-represented type (numbers, strings, bool, char, `Option`,
+  `Result`, enums, generics) is an accessor cell `{ v }` reading/writing the borrowed place (`$cellOf`,
+  `$cellIx`, or an inline getter/setter for a local); `&mut self` on an enum is a static method taking a cell.
+  Structs, `Vec`, maps, sets and tuples are shared objects; `*r = x` through such an alias is `$replace(r, x)`.
+  Where borrows exist comes from the IR (`ParamMode::MutRef`, `PK::BorrowMut`); code without them is unchanged.
 
 
 ## Intrinsics
