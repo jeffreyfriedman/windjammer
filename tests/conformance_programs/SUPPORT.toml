@@ -171,9 +171,24 @@ reason = "mut-ref-to-int-parameters: JavaScript backend passes integers by value
 [[unsupported]]
 program = "163_trait_generics_and_aliases"
 backend = "go"
-reason = "portable-type-aliases: the portable lowerer does not expand `type` aliases (explicit `unsupported on this backend` build error)"
+reason = "portable-type-aliases: see docs/known-issues/portable-type-aliases.md"
 
 [[unsupported]]
 program = "163_trait_generics_and_aliases"
 backend = "js"
-reason = "portable-type-aliases: the portable lowerer does not expand `type` aliases (explicit `unsupported on this backend` build error)"
+reason = "portable-type-aliases: see docs/known-issues/portable-type-aliases.md"
+
+[[unsupported]]
+program = "164_into_bound_param_consumed"
+backend = "rust"
+reason = "rust-into-bound-param-borrowed: see docs/known-issues/rust-into-bound-param-borrowed.md"
+
+[[unsupported]]
+program = "164_into_bound_param_consumed"
+backend = "go"
+reason = "portable-generic-into: `T::into` on a bounded generic parameter is an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "164_into_bound_param_consumed"
+backend = "js"
+reason = "portable-generic-into: `T::into` on a bounded generic parameter is an explicit `unsupported on this backend` error"

@@ -1,6 +1,5 @@
 // spec: SPEC-LEX-015
 // expect: ok
-// xfail: Q-002
 fn main() {
     /* outer /* inner */ still comment */
     println("ok")
