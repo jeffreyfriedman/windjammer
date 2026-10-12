@@ -49,6 +49,8 @@ Example file format (`tests/spec/<area>/SPEC-XXX-NNN.wj`): header comments `// s
 | [closures.md](closures.md) | CLOS | `_` shorthand closures (ADR-0018) |
 | [guard-match.md](guard-match.md) | MATCH | `match { cond => .. }` (ADR-0018) |
 | [doctests.md](doctests.md) | DOC | examples in doc comments run by `wj test` (ADR-0018) |
+| [arguments.md](arguments.md) | ARGS | named arguments and parameter defaults (ADR-0018) |
+| [trailing-blocks.md](trailing-blocks.md) | BLOCK | `f(x) { a -> .. }` trailing closures (ADR-0018) |
 | [intrinsics.md](intrinsics.md) | INTR | print/assert/panic/debug/list literal |
 | [attributes.md](attributes.md) | ATTR | `@derive`, `@test`, ... |
 | [stdlib.md](stdlib.md) | STD | portable core and std index |
