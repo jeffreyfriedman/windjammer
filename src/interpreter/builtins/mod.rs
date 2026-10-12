@@ -24,7 +24,7 @@ mod std_fns;
 pub mod std_http;
 mod std_sys;
 pub(crate) mod sync;
-mod thread;
+pub(crate) mod thread;
 pub(crate) mod time;
 mod text;
 

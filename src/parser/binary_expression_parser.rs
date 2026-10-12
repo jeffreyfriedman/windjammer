@@ -9,7 +9,7 @@ impl Parser {
         &mut self,
         min_precedence: u8,
     ) -> Result<&'static Expression<'static>, String> {
-        let mut left = self.parse_primary_expression()?;
+        let mut left = self.parse_prefixed_or_primary()?;
 
         loop {
             // Check for channel send: ch <- value

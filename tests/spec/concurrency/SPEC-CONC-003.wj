@@ -1,6 +1,5 @@
 // spec: SPEC-CONC-003
 // expect: 3
-// xfail: Q-013
 fn work(n: int) -> int { n }
 fn main() {
     scope {

@@ -38,12 +38,15 @@ pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
 
 /// Stack of the interpreter thread; recursion is limited by the bytes actually used (not a frame count),
 /// so the limit does not depend on debug/release frame sizes.
+/// Name of the big-stack thread; an interpreter created on it bounds recursion by stack bytes.
+pub(crate) const BIG_STACK_THREAD: &str = "wj-interpreter";
 pub(crate) const STACK_BYTES: usize = 4 << 30;
 pub(crate) const STACK_HEADROOM: usize = 256 << 20;
 
 /// Run `f` on a thread with a large stack (deeply recursive programs).
 pub fn with_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     std::thread::Builder::new()
+        .name(BIG_STACK_THREAD.to_string())
         .stack_size(STACK_BYTES)
         .spawn(f)
         .expect("spawn interpreter thread")

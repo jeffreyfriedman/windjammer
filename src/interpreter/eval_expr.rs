@@ -304,9 +304,13 @@ impl Interpreter {
                 self.await_value(v)
             }
 
-            Expression::AsyncCall { location, .. }
-            | Expression::SpawnCall { location, .. }
-            | Expression::ChannelSend { location, .. }
+            Expression::AsyncCall { expr, location } | Expression::SpawnCall { expr, location } => {
+                self.mark(location.as_ref());
+                let body = self.task_body(expr)?;
+                super::builtins::thread::start_task(self, body)
+            }
+
+            Expression::ChannelSend { location, .. }
             | Expression::ChannelRecv { location, .. } => {
                 self.mark(location.as_ref());
                 Err(unsupported(
@@ -314,6 +318,24 @@ impl Interpreter {
                 ))
             }
         }
+    }
+
+    /// What a `spawn`/`async` task runs: a call evaluates its callee and arguments now (as Rust
+    /// does) and runs later; any other operand (a block) becomes a closure over the current scope.
+    fn task_body(&mut self, e: &'static Expression<'static>) -> R {
+        if let Expression::Call { function, arguments, .. } = e {
+            let func = self.eval(function)?;
+            let args = self.eval_args(arguments, None, false)?;
+            return Ok(Value::Func(Rc::new(Callable::Thunk { func, args })));
+        }
+        Ok(Value::Func(Rc::new(Callable::Closure {
+            params: &[],
+            body: e,
+            env: self.scope.vars.clone(),
+            module: self.scope.module,
+            self_ty: self.scope.self_ty.clone(),
+            tparams: self.scope.tparams.clone(),
+        })))
     }
 
     fn eval_try(&mut self, v: Value) -> R {
