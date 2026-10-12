@@ -180,7 +180,7 @@ Findings from running the same programs through the compiled path (compiler bugs
 - **Language**: Rust's slicing panic messages (`v[a..b]`, `s[a..b]`, char boundaries), `char::to_lowercase()` displays,
   top-level macro invocations are loud, `Type::default()` for `@derive(Default)` (Q-016), recursion bounded by stack bytes on
   the interpreter thread (Q-023), `wj test --interpret` shares `wj test` discovery.
-- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). ADR-0017 proposes a resolved/closure-compiled
+- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). ADR-0020 proposes a resolved/closure-compiled
   tier with kill criteria.
 
 Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
@@ -199,7 +199,7 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
   by pending Rust-side temporaries are invisible to the reachability scan.
 - `u128` above `i128::MAX` is not representable. `HashMap`/`HashSet` iterate in key order (Rust's order is unspecified).
 - `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error.
-- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code (ADR-0017).
+- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code (ADR-0020).
 
 ## ADR-0007
 

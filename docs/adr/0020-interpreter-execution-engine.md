@@ -2,7 +2,7 @@
 status: proposed
 last_verified: d45cde56a728
 ---
-# ADR-0017: Interpreter execution engine (tree walker vs resolved/bytecode tier)
+# ADR-0020: Interpreter execution engine (tree walker vs resolved/bytecode tier)
 
 - **Status:** Proposed
 - **Date:** 2026-10-12
