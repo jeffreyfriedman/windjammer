@@ -1,0 +1,10 @@
+// spec: SPEC-TRT-006
+// expect: 7
+trait Make { fn make() -> Self }
+struct A { v: int }
+impl Make for A { fn make() -> A { A { v: 7 } } }
+fn build<T: Make>() -> T { T::make() }
+fn main() {
+    let a: A = build()
+    println("${a.v}")
+}

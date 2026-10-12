@@ -119,7 +119,19 @@ impl CodeGenerator<'_> {
             traits.push("Deserialize".to_string());
         }
 
+        self.drop_hand_implemented_traits(&struct_.name, &mut traits);
         traits
+    }
+
+    /// A hand-written `impl Trait for T` replaces the auto-derive of `Trait` (a derive plus an impl is E0119).
+    /// A hand-written `Clone` also rules out the derived `Copy`.
+    pub(super) fn drop_hand_implemented_traits(&self, type_name: &str, traits: &mut Vec<String>) {
+        let has = |t: &str| {
+            self.idiom.user_trait_impls
+                .contains(&(type_name.to_string(), t.to_string()))
+        };
+        let clone_by_hand = has("Clone");
+        traits.retain(|t| !has(t) && !(clone_by_hand && t == "Copy"));
     }
 
     /// Types that prevent auto-deriving `Debug`/`Clone` on a struct (trait objects, `mpsc::Receiver`, …).
@@ -292,6 +304,7 @@ impl CodeGenerator<'_> {
     /// registration mirroring `struct_emits_partial_eq` + `is_partial_eq_type`, and interleave
     /// structs with enums so mutually dependent types converge.
     pub(super) fn collect_partial_eq_types(&mut self, program: &Program) {
+        self.collect_user_trait_impls(program); // hand-written impls must be known before derives are inferred
         for item in &program.items {
             if let Item::Enum { decl: e, .. } = item {
                 self.collect_enum_variant_types(e);
@@ -338,6 +351,12 @@ impl CodeGenerator<'_> {
     /// True if `generate_struct` will emit a `#[derive(...)]` that includes `PartialEq`
     /// (explicit `@derive` / `@auto`, or implicit auto-derive when there is no derive decorator).
     fn struct_emits_partial_eq(&self, s: &StructDecl) -> bool {
+        if self
+            .idiom.user_trait_impls
+            .contains(&(s.name.clone(), "PartialEq".to_string()))
+        {
+            return true;
+        }
         let has_auto_or_derive = s
             .decorators
             .iter()

@@ -1,0 +1,10 @@
+// spec: SPEC-STMT-006
+// expect: neg zero pos
+fn sign(n: int) -> string {
+    if n < 0 { return "neg" }
+    if n == 0 { return "zero" }
+    "pos"
+}
+fn main() {
+    println("${sign(-4)} ${sign(0)} ${sign(9)}")
+}

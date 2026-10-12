@@ -1,3 +1,7 @@
+---
+status: current
+last_verified: 203e43d114c9
+---
 # Lexical grammar decisions
 
 ## Never panic, always a diagnostic with a position

@@ -1,5 +1,10 @@
 impl IntInference {
     fn solve_constraints(&mut self) {
+        if crate::debug_env::enabled("WJ_DEBUG_INT_CONSTRAINTS") {
+            for c in &self.constraints {
+                eprintln!("[int-constraint] {:?}", c);
+            }
+        }
         let mut changed = true;
         let mut iterations = 0;
         const MAX_ITERATIONS: usize = 100;
@@ -106,6 +111,13 @@ impl IntInference {
                         }
                     }
                 }
+            }
+        }
+        if crate::debug_env::enabled("WJ_DEBUG_INT_CONSTRAINTS") {
+            let mut v: Vec<_> = self.inferred_types.iter().collect();
+            v.sort_by_key(|(k, _)| (k.line, k.col));
+            for (k, t) in v {
+                eprintln!("[int-solved] {}:{} -> {:?}", k.line, k.col, t);
             }
         }
     }

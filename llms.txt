@@ -1,0 +1,34 @@
+# Windjammer
+
+> Windjammer is a high-level language that compiles to Rust, with ownership and borrowing inferred by the compiler. The same `.wj` source also runs in an interpreter and has Go, JavaScript and WebAssembly backends of lower maturity.
+
+Version 0.50.0 (pre-1.0: language and compiler behaviour can change between minor versions). You have probably seen almost no Windjammer in training data: do not guess from Rust or Python. Use `wj check --json FILE` for diagnostics, `wj run --interpret FILE` for an instant run, and `wj docs <terms>` for offline search. `llms-full.txt` contains the agent guide, CLI reference, backend matrix, keywords and MCP tool list inline.
+
+## Start here
+
+- [Windjammer for agents](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/agent/WINDJAMMER_FOR_AGENTS.md): The edit-check-run loop, core idioms and pitfalls; every code block is executed in CI
+- [CLI reference](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/cli.md): Every `wj` subcommand, generated from the clap definitions
+- [Backend support matrix](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/targets.md): Which backends pass how much of the conformance corpus (generated)
+
+## Language
+
+- [Keywords and operators](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/keywords.md): Lexer keywords (generated from the lexer)
+- [Intrinsics](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/intrinsics.md): Built-in functions available on every backend
+- [Standard library](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/stdlib.md): Signatures scanned from `std/**/*.wj`
+- [Error and lint codes](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/reference/errors.md): WJ#### and W#### codes
+- [Grammar](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/windjammer.ebnf): EBNF cross-checked against the real parser
+- [Ownership inference](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/language-design/ownership-inference.md): What the compiler infers and how
+- [Cheatsheet from Rust](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/agent/cheatsheet_from_rust.md): Rust to Windjammer mapping (also from Go, Python and TypeScript in the same directory)
+
+## Project state
+
+- [Known gaps](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/known-gaps.md): The ranked, honest list of what is missing
+- [Why Windjammer](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/WHY.md): Comparisons with Rust, Go, Python, Zig, Mojo and Gleam; goals are labelled as goals
+- [Roadmap](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/ROADMAP.md): Work with a concrete plan attached
+
+## Optional
+
+- [Interpreter](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/INTERPRETER.md): What `wj run --interpret` supports and rejects (generated)
+- [Architecture decision records](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/docs/adr/README.md): Open and accepted design decisions
+- [agent-dx benchmark](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/bench/agent-dx/README.md): Same 60 tasks in six languages, graded by hidden tests
+- [Performance benchmarks](https://raw.githubusercontent.com/jeffreyfriedman/windjammer/main/benchmarks/README.md): Inputs, runners and the last recorded results

@@ -1,0 +1,23 @@
+// spec: SPEC-ERR-002
+// expect: 2
+// expect: err odd 3
+// expect: err odd 7
+// expect: 5 true
+fn half(n: int) -> Result<int, string> {
+    if n % 2 != 0 { return Err("odd ${n}") }
+    Ok(n / 2)
+}
+fn quarter(n: int) -> Result<int, string> {
+    let h = half(n)?
+    half(h)
+}
+fn head(v: Vec<int>) -> Option<int> {
+    let f = v.first()?
+    Some(*f + 1)
+}
+fn main() {
+    println("${quarter(8).unwrap()}")
+    match quarter(6) { Ok(v) => println("ok ${v}"), Err(e) => println("err ${e}") }
+    match quarter(7) { Ok(v) => println("ok ${v}"), Err(e) => println("err ${e}") }
+    println("${head([4]).unwrap()} ${head([]).is_none()}")
+}

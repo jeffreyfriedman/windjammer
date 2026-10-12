@@ -1,5 +1,5 @@
 // tags: strings, sort, compare
-// rust: gap error[E0658]: use of unstable library feature 'str_as_str'
+// rust: ok
 // expect: true
 // expect: false
 // expect: [apple, banana, cherry]

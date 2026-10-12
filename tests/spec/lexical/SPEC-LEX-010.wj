@@ -1,0 +1,5 @@
+// spec: SPEC-LEX-010
+// expect: aqb
+fn main() {
+    println("a\qb")
+}

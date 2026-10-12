@@ -1,0 +1,22 @@
+// Captured variables are shared with the enclosing scope: a mutation inside the closure is visible outside.
+// expect: 3
+// expect: 7
+// expect: [1, 2]
+fn main() {
+    let mut c = 0
+    let mut inc = || { c += 1 }
+    inc()
+    inc()
+    inc()
+    println("${c}")
+    let mut d = 1
+    let mut step = || { d = d * 2 + 1 }
+    step()
+    step()
+    println("${d}")
+    let mut log: Vec<int> = []
+    let mut push = |x: int| { log.push(x) }
+    push(1)
+    push(2)
+    println("${log:?}")
+}

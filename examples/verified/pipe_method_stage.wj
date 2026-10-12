@@ -1,5 +1,5 @@
 // tags: pipe, methods, iterators
-// rust: gap error[E0599]: '[i64; 4]' is not an iterator
+// rust: ok
 // expect: 30
 // expect: [2, 4, 6]
 // expect: abc

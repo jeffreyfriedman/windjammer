@@ -377,6 +377,21 @@ pub enum Commands {
         format: String,
     },
 
+    /// Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)
+    #[command(name = "explain-ownership")]
+    ExplainOwnership {
+        /// Windjammer source file
+        file: PathBuf,
+
+        /// Only this function (`name` or `Type::name`)
+        #[arg(long = "fn", value_name = "NAME")]
+        function: Option<String>,
+
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Explain an error code
     Explain {
         /// Error code to explain (e.g., WJ0001, E0425)

@@ -20,6 +20,8 @@ impl<'ast> Analyzer<'ast> {
         current_func_name: &str,
         func: &FunctionDecl<'ast>,
     ) -> Result<OwnershipMode, String> {
+        // 0d. Used inside a closure given to `spawn`: moved into the thread.
+        if !self.is_copy_type(param_type) && super::spawn_capture::param_captured_by_spawned_closure(param_name, body) { return Ok(OwnershipMode::Owned); }
         // 0a. Generic type parameters and impl Trait always stay Owned.
         // Adding & would change trait bounds: `impl Foo` -> `&impl Foo` breaks dispatch.
         // Generic types like T, G, S should always be passed by value.
@@ -242,12 +244,7 @@ impl<'ast> Analyzer<'ast> {
         // When `a.as_float()` is called and `as_float` takes owned `self`, `a` is consumed
         // and must be owned. Without this check, `a` defaults to Borrowed (&a), producing
         // E0507 errors because you can't move out of a shared reference.
-        let receiver_type = match param_type {
-            Type::Custom(name) | Type::Generic(name) => {
-                Some(name.split('<').next().unwrap_or(name.as_str()))
-            }
-            _ => None,
-        };
+        let receiver_type = Self::param_receiver_type_name(param_type);
         if self.calls_consuming_method(param_name, body, registry, receiver_type) {
             return Ok(OwnershipMode::Owned);
         }

@@ -1,0 +1,10 @@
+// spec: SPEC-GRAM-005
+// expect: two
+fn main() {
+    let n = 2
+    match n {
+        1 => { println("one") }
+        2 => { println("two") }
+        _ => println("many"),
+    }
+}

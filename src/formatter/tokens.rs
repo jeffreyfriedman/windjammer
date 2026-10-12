@@ -186,7 +186,10 @@ impl Scanner {
                 self.i += 2;
             } else if ch == '$' && self.at(1) == Some('$') {
                 self.i += 2;
-            } else if ch == '$' && self.at(1) == Some('{') && self.at(2) != Some('"') {
+            } else if ch == '$'
+                && self.at(1) == Some('{')
+                && (self.at(2) != Some('"') || self.interpolation_starts_with_string())
+            {
                 self.i += 2;
                 self.skip_interpolation();
             } else {
@@ -195,9 +198,51 @@ impl Scanner {
         }
     }
 
+    /// Same rule as the compiler lexer (`src/lexer/string_lexing.rs`; kept in sync by
+    /// tests/parser_grammar_roundtrip_test.rs): `${"` opens an interpolation only when the
+    /// nested string literal is followed by `.` or `[`.
+    fn interpolation_starts_with_string(&self) -> bool {
+        let mut k = 3;
+        while let Some(c) = self.at(k) {
+            match c {
+                '\\' => k += 2,
+                '"' => return matches!(self.at(k + 1), Some('.') | Some('[')),
+                '\n' => return false,
+                _ => k += 1,
+            }
+        }
+        false
+    }
+
+    /// Skip a nested string literal (cursor on its opening quote).
+    fn skip_nested_string(&mut self) {
+        self.i += 1;
+        while let Some(c) = self.at(0) {
+            self.i += 1;
+            if c == '\\' {
+                self.i += 1;
+            } else if c == '"' {
+                return;
+            }
+        }
+    }
+
     fn skip_interpolation(&mut self) {
         let mut depth = 1;
         while let Some(ch) = self.at(0) {
+            if ch == '"' {
+                self.skip_nested_string();
+                continue;
+            }
+            if ch == '\'' {
+                let len = match (self.at(1), self.at(2), self.at(3)) {
+                    (Some('\\'), Some(_), Some('\'')) => 4,
+                    (Some(c), Some('\''), _) if c != '\\' && c != '\'' => 3,
+                    _ => 1,
+                };
+                self.i += len;
+                continue;
+            }
             self.i += 1;
             match ch {
                 '{' => depth += 1,
