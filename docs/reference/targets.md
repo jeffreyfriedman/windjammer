@@ -6,9 +6,9 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 154 | 121 | 33 |
-| `go` | 154 | 154 | 0 |
-| `js` | 154 | 154 | 0 |
+| `rust` | 156 | 122 | 34 |
+| `go` | 156 | 156 | 0 |
+| `js` | 156 | 156 | 0 |
 
 ## Known-unsupported pairs by cause
 
@@ -21,6 +21,7 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 | `rust` | rust-int-literal-width-inference | 17 |
 | `rust` | rust-into-bound-param-borrowed | 1 |
 | `rust` | rust-module-impl-self-type | 1 |
+| `rust` | rust-optional-chain | 1 |
 | `rust` | rust-std-runtime-crate-needed-by-rustc | 4 |
 | `rust` | rust-str-vs-string-in-collect-and-concat | 2 |
 | `rust` | rust-tail-none-cast | 2 |

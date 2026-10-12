@@ -1924,7 +1924,7 @@
       "file": "vec_contains_position.wj",
       "kind": "program",
       "rust": "gap",
-      "rust_gap": "nondeterministic codegen: v.contains(15) is emitted with or without the borrow between runs",
+      "rust_gap": "v.position(|x| *x == 15) emits 15_i64 against an i32 array (literal width: numeric solver, convergence C4)",
       "tags": [
         "vec",
         "search",
