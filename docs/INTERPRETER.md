@@ -71,6 +71,23 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
   compares the interpreter with the generator's own model (self-test: a mutated program is detected). `WJ_PROJECT_COMPILED=1`
   adds the compiled half for fixtures and the first fuzz seeds.
 
+**Compiled-path bugs found by the project gates** (fixed here unless marked open):
+- Fixed: `use greet` in a crate-root `src/main.wj` was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
+  package lib in the binary).
+- Fixed: a user module named like a runtime std module (`util::math`) also got `use windjammer_runtime::math;` (E0252).
+- Fixed: `util::math::cube(3)` or `crate::x::f()` in the binary's `main.rs` did not resolve (the modules live in the package lib);
+  the binary now names the lib for `crate::` paths and glob-imports it.
+- Fixed: `wj run` (compiled) printed build progress on stdout; it now goes to stderr so both paths print the same bytes.
+- Fixed: a path dependency on a Windjammer source package was handed to Cargo as-is; `wj run --compiled` now builds it into the
+  package's `gen/` crate first and the generated `Cargo.toml` links that.
+- Open: `wj build .` on a project root (rather than `src/`) treats `src/main.wj` as a module and drops `fn main`; `wj run` passes the
+  source root, so it is unaffected.
+- Open: module aliases and `super::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) fail with
+  `missing boundary signature for m3::f0`: the ownership boundary lookup is keyed by the written path, not the resolved definition.
+  The compiled half of the fuzzer therefore uses item aliases, globs, groups and `crate::` paths (`WJ_FUZZ_ALL_FORMS=1` compiles
+  every form); the interpreted half covers all forms.
+- Open: `env::args().skip(1).collect()` into `Vec<string>` fails in rustc (iterates `&String`).
+
 **Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
 engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
 root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0021) is a
