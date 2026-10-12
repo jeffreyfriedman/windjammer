@@ -167,3 +167,13 @@ reason = "mut-ref-to-int-locals: Go backend does not alias `let r = &mut z` for 
 program = "159_deref_assign_ref_params"
 backend = "js"
 reason = "mut-ref-to-int-parameters: JavaScript backend passes integers by value so `*c = ..` does not reach the caller"
+
+[[unsupported]]
+program = "163_trait_generics_and_aliases"
+backend = "go"
+reason = "portable-type-aliases: the portable lowerer does not expand `type` aliases (explicit `unsupported on this backend` build error)"
+
+[[unsupported]]
+program = "163_trait_generics_and_aliases"
+backend = "js"
+reason = "portable-type-aliases: the portable lowerer does not expand `type` aliases (explicit `unsupported on this backend` build error)"
