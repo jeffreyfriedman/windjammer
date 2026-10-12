@@ -99,3 +99,30 @@ fn strip_positions(s: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
+
+/// Resident set size of this process in MB (`ps`, so no extra dependencies); None where `ps` is unavailable.
+fn rss_mb() -> Option<f64> {
+    let o = std::process::Command::new("ps").args(["-o", "rss=", "-p", &std::process::id().to_string()]).output().ok()?;
+    String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok().map(|kb| kb / 1024.0)
+}
+
+/// Growth gate for the never-freed arenas (docs/design/parser-arena-ownership.md): 1000 parses of a small file,
+/// each dropped, must not grow the process by more than `MAX_GROWTH_MB`, so a long-lived process (the LSP)
+/// cannot silently leak. Fails when per-parse retention rises. When the Arc-owned arenas land, tighten to ~1 MB.
+#[test]
+fn repeated_parses_stay_within_the_memory_growth_budget() {
+    const MAX_GROWTH_MB: f64 = 16.0;
+    if rss_mb().is_none() {
+        return;
+    }
+    for _ in 0..50 {
+        drop(parse_and_drop_parser(SRC));
+    }
+    let before = rss_mb().unwrap();
+    for _ in 0..1000 {
+        drop(parse_and_drop_parser(SRC));
+    }
+    let growth = rss_mb().unwrap() - before;
+    eprintln!("1000 parses grew RSS by {growth:.1} MB (budget {MAX_GROWTH_MB} MB)");
+    assert!(growth <= MAX_GROWTH_MB, "1000 parses of a {}-byte file grew RSS by {growth:.1} MB (budget {MAX_GROWTH_MB} MB): per-parse arena retention regressed", SRC.len());
+}

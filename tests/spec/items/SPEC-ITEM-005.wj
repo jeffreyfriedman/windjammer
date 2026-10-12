@@ -1,0 +1,7 @@
+// spec: SPEC-ITEM-005
+// expect: 12 hi 13
+const LIMIT: int = 3 * 4
+const GREETING: string = "hi"
+fn main() {
+    println("${LIMIT} ${GREETING} ${LIMIT + 1}")
+}

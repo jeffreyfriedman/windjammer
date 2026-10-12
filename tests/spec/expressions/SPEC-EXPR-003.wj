@@ -1,0 +1,6 @@
+// spec: SPEC-EXPR-003
+// expect: true
+fn main() {
+    let a = 6
+    println("${(a & 3) == 2}")
+}

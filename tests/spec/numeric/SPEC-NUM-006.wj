@@ -1,0 +1,7 @@
+// spec: SPEC-NUM-006
+// mode: panic
+// expect-error: zero
+fn main() {
+    let z = 0
+    println("${10 % z}")
+}

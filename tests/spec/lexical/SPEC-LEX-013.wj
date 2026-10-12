@@ -1,0 +1,7 @@
+// spec: SPEC-LEX-013
+// expect: 7
+fn main() {
+    let s = "one
+two"
+    println("${s.len()}")
+}

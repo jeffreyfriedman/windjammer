@@ -1,0 +1,6 @@
+// D-NUM-CLOSURE-LEN: len() inside a closure body is not converted to int.
+fn main() {
+    let v = vec![1, 2, 3]
+    let f = |x: int| x + v.len()
+    println("${f(1)}")
+}

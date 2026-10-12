@@ -182,6 +182,11 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::agent_index::docs_search::run_cli(&query.join(" "), limit, json)
             }
         }
+        Commands::ExplainOwnership {
+            file,
+            function,
+            json,
+        } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;

@@ -1,0 +1,11 @@
+// spec: SPEC-STR-003
+// expect: eval a
+// expect: eval b
+// expect: 1 2
+fn tick(c: int, tag: string) -> int {
+    println("eval ${tag}")
+    c
+}
+fn main() {
+    println("${tick(1, "a")} ${tick(2, "b")}")
+}

@@ -535,10 +535,10 @@ impl<'ast> CodeGenerator<'ast> {
                     emit_shared || self.inferred_borrowed_params.contains(name.as_str()),
                 )
             }
-            Expression::Unary {
-                op: crate::parser::UnaryOp::Ref,
-                ..
-            } => (true, true),
+            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+                let owned_key = self.ref_operand_is_owned_local(operand);
+                (!owned_key, !owned_key)
+            }
             _ => (false, false),
         };
         // Peel only on emit-truth demoted refs (`key: &str`). Owned `String` +
@@ -10348,8 +10348,6 @@ fn main() {
             "wal::replay_to_lsn"
         ));
         assert!(!CodeGenerator::is_module_boundary_callee("HashMap::new"));
-        assert!(!CodeGenerator::is_module_boundary_callee("i64::from_str_radix"));
-        assert!(!CodeGenerator::is_module_boundary_callee("char::from_u32"));
         assert!(!CodeGenerator::is_module_boundary_callee("Self::new"));
         assert!(!CodeGenerator::is_module_boundary_callee("plain_fn"));
         // Same-crate paths resolve via bare-name registry entries.

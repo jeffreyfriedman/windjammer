@@ -1,0 +1,9 @@
+// spec: SPEC-ERR-005
+// mode: panic
+// expect: 1
+// expect-error: wanted ok
+fn main() {
+    let r: Result<int, string> = Err("bad")
+    println("${r.unwrap_or(1)}")
+    println("${r.expect("wanted ok")}")
+}

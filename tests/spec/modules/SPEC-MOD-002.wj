@@ -1,0 +1,12 @@
+// spec: SPEC-MOD-002
+// expect: 1 2 3
+mod m {
+    pub fn f() -> int { 1 }
+    pub fn g() -> int { 2 }
+    pub fn h() -> int { 3 }
+}
+use m::f
+use m::{g, h}
+fn main() {
+    println("${f()} ${g()} ${h()}")
+}

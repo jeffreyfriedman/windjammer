@@ -1,0 +1,9 @@
+// spec: SPEC-TYP-004
+// expect: 1a
+fn pair() -> (int, string) { (1, "a") }
+fn nothing() {}
+fn main() {
+    let (n, s) = pair()
+    nothing()
+    println("${n}${s}")
+}

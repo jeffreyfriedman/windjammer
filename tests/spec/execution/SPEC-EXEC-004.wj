@@ -1,0 +1,10 @@
+// spec: SPEC-EXEC-004
+// expect: 9007199254740993 9007199254740995
+// expect: true
+fn main() {
+    let a = 9007199254740993
+    let b = a + 2
+    println("${a} ${b}")
+    let m = 3037000499
+    println("${m * m - 1 > 0}")
+}
