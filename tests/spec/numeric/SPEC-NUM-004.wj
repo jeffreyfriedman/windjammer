@@ -1,0 +1,10 @@
+// spec: SPEC-NUM-004
+// mode: panic
+// expect: 2
+// expect-error: overflow
+fn main() {
+    let a: u32 = 3
+    let b: u32 = 5
+    println("${b - a}")
+    println("${a - b}")
+}

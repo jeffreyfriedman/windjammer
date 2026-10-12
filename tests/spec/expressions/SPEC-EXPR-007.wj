@@ -1,0 +1,17 @@
+// spec: SPEC-EXPR-007
+// expect: a
+// expect: b
+// expect: c
+// expect: x
+// expect: y
+// expect: 4 5
+fn n(tag: string, v: int) -> int {
+    println(tag)
+    v
+}
+fn sub(a: int, b: int) -> int { a - b }
+fn main() {
+    let r = n("a", 10) - n("b", 3) * n("c", 2)
+    let s = sub(n("x", 9), n("y", 4))
+    println("${r} ${s}")
+}

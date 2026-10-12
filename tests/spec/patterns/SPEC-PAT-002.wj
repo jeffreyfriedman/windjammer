@@ -1,0 +1,12 @@
+// spec: SPEC-PAT-002
+// expect: low mid high
+fn f(n: int) -> string {
+    match n {
+        1 | 2 | 3 => "low",
+        4 | 5 => "mid",
+        _ => "high",
+    }
+}
+fn main() {
+    println("${f(2)} ${f(5)} ${f(6)}")
+}

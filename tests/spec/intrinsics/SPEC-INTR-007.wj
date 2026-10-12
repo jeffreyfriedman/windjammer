@@ -1,0 +1,10 @@
+// spec: SPEC-INTR-007
+// expect: 4 3 0 1
+fn main() {
+    let mut v = [1, 2, 3]
+    v.push(4)
+    let z = [0; 3]
+    let mut e = []
+    e.push("a")
+    println("${v.len()} ${z.len()} ${z[2]} ${e.len()}")
+}
