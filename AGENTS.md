@@ -62,7 +62,7 @@ Design: [docs/superpowers/specs/2026-09-04-shared-cargo-cache-design.md](docs/su
 
 ## Merge gate (mandatory)
 
-Run before merging any branch; targeted tests are not enough (that is how `wj eject`, `wj check` on type errors and
+Run before merging any branch; targeted tests are not enough (that is how eject on the main CLI, `wj check` on type errors and
 `wj new` outside a checkout broke without anyone noticing). Gate list and oracles: [docs/testing/INVARIANTS.md](docs/testing/INVARIANTS.md).
 
 ```bash
