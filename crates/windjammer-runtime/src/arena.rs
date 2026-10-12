@@ -77,7 +77,11 @@ impl<T> Arena<T> {
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        Arena { items: Vec::with_capacity(capacity), generation: 0, id: NEXT_ARENA_ID.fetch_add(1, Ordering::Relaxed) }
+        Arena {
+            items: Vec::with_capacity(capacity),
+            generation: 0,
+            id: NEXT_ARENA_ID.fetch_add(1, Ordering::Relaxed),
+        }
     }
 
     #[inline]
@@ -85,13 +89,21 @@ impl<T> Arena<T> {
         let index = self.items.len();
         assert!(index < u32::MAX as usize, "arena is full (2^32 - 1 values)");
         self.items.push(value);
-        Handle { index: index as u32, generation: self.generation, arena_id: self.id, _t: PhantomData }
+        Handle {
+            index: index as u32,
+            generation: self.generation,
+            arena_id: self.id,
+            _t: PhantomData,
+        }
     }
 
     #[inline]
     fn check(&self, h: Handle<T>) {
         if cfg!(debug_assertions) {
-            assert!(h.arena_id == self.id, "arena handle used with a different arena");
+            assert!(
+                h.arena_id == self.id,
+                "arena handle used with a different arena"
+            );
             assert!(
                 h.generation == self.generation,
                 "stale arena handle: allocated before reset (generation {}, arena is at generation {})",
@@ -185,7 +197,10 @@ impl<'a, T> IntoIterator for &'a mut Arena<T> {
 
 impl<T: fmt::Debug> fmt::Debug for Arena<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Arena").field("len", &self.items.len()).field("generation", &self.generation).finish()
+        f.debug_struct("Arena")
+            .field("len", &self.items.len())
+            .field("generation", &self.generation)
+            .finish()
     }
 }
 
@@ -304,11 +319,19 @@ pub struct Scratch {
 
 impl Scratch {
     pub fn new() -> Self {
-        Scratch { bump: bumpalo::Bump::new(), generation: 0, staging: Default::default() }
+        Scratch {
+            bump: bumpalo::Bump::new(),
+            generation: 0,
+            staging: Default::default(),
+        }
     }
 
     pub fn with_capacity(bytes: usize) -> Self {
-        Scratch { bump: bumpalo::Bump::with_capacity(bytes), generation: 0, staging: Default::default() }
+        Scratch {
+            bump: bumpalo::Bump::with_capacity(bytes),
+            generation: 0,
+            staging: Default::default(),
+        }
     }
 
     /// Copy `s` into the scratch arena.
@@ -363,7 +386,9 @@ impl Scratch {
 
 impl fmt::Debug for Scratch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Scratch").field("allocated_bytes", &self.bump.allocated_bytes()).finish()
+        f.debug_struct("Scratch")
+            .field("allocated_bytes", &self.bump.allocated_bytes())
+            .finish()
     }
 }
 
@@ -459,7 +484,10 @@ mod tests {
         let before = s.allocated_bytes();
         s.reset();
         assert_eq!(s.generation(), 1);
-        assert!(s.allocated_bytes() <= before, "reset keeps at most the existing chunks");
+        assert!(
+            s.allocated_bytes() <= before,
+            "reset keeps at most the existing chunks"
+        );
         // Steady state: the same work after reset needs no new chunk.
         let after_reset = s.allocated_bytes();
         {

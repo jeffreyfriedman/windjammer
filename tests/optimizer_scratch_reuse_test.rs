@@ -8,7 +8,10 @@ use support::*;
 use windjammer::optimizer::{run, Mutant, OptimizationConfig};
 
 fn on() -> OptimizationConfig {
-    OptimizationConfig { scratch_reuse: true, ..OptimizationConfig::disabled() }
+    OptimizationConfig {
+        scratch_reuse: true,
+        ..OptimizationConfig::disabled()
+    }
 }
 
 fn opt(src: &str) -> String {
@@ -65,16 +68,36 @@ fn off_by_default() {
 #[test]
 fn fixture_behaviour_is_preserved_and_the_mutant_is_caught() {
     let dir = scratch("scratch-reuse");
-    let fx = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/optimizer_scratch");
+    let fx =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/optimizer_scratch");
     let src = std::fs::read_to_string(fx.join("s01_scratch_reuse.rs")).unwrap();
-    let want: Vec<String> =
-        std::fs::read_to_string(fx.join("s01_scratch_reuse.expected")).unwrap().lines().map(str::to_string).collect();
-    assert_eq!(check_source(&src, &want, &dir, "plain"), Verdict::Pass, "fixture vs oracle");
+    let want: Vec<String> = std::fs::read_to_string(fx.join("s01_scratch_reuse.expected"))
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert_eq!(
+        check_source(&src, &want, &dir, "plain"),
+        Verdict::Pass,
+        "fixture vs oracle"
+    );
     let out = run(&on(), &src);
-    assert_eq!(out.applied.get("scratch_reuse"), Some(&2), "line and parts hoisted, kept not:\n{}", out.code);
+    assert_eq!(
+        out.applied.get("scratch_reuse"),
+        Some(&2),
+        "line and parts hoisted, kept not:\n{}",
+        out.code
+    );
     assert_eq!(check_source(&out.code, &want, &dir, "opt"), Verdict::Pass);
-    let mutant = OptimizationConfig { mutant: Some(Mutant::ScratchIgnoresMoves), ..on() };
+    let mutant = OptimizationConfig {
+        mutant: Some(Mutant::ScratchIgnoresMoves),
+        ..on()
+    };
     let bad = run(&mutant, &src).code;
     assert_ne!(bad, out.code, "mutant must change the output");
-    assert_ne!(check_source(&bad, &want, &dir, "mutant"), Verdict::Pass, "mutant not caught");
+    assert_ne!(
+        check_source(&bad, &want, &dir, "mutant"),
+        Verdict::Pass,
+        "mutant not caught"
+    );
 }

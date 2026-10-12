@@ -44,7 +44,13 @@ struct Particle {
 
 fn spawn(i: usize, frame: usize) -> Particle {
     let f = (i * 7 + frame * 13) as f32;
-    Particle { x: f * 0.01, y: f * 0.02, vx: (i % 5) as f32 - 2.0, vy: (i % 3) as f32, life: 1.0 + (i % 4) as f32 }
+    Particle {
+        x: f * 0.01,
+        y: f * 0.02,
+        vx: (i % 5) as f32 - 2.0,
+        vy: (i % 3) as f32,
+        life: 1.0 + (i % 4) as f32,
+    }
 }
 
 fn step(p: &mut Particle) {
@@ -106,7 +112,13 @@ fn particles_wj_arena() -> f64 {
                 step(p);
             }
         }
-        sum += live.iter().map(|h| { let p = &arena[*h]; (p.x + p.y + p.life) as f64 }).sum::<f64>();
+        sum += live
+            .iter()
+            .map(|h| {
+                let p = &arena[*h];
+                (p.x + p.y + p.life) as f64
+            })
+            .sum::<f64>();
     }
     sum
 }
@@ -116,7 +128,8 @@ fn particles_bumpalo() -> f64 {
     let mut bump = bumpalo::Bump::new();
     for frame in 0..FRAMES {
         bump.reset();
-        let mut ps: bumpalo::collections::Vec<&mut Particle> = bumpalo::collections::Vec::new_in(&bump);
+        let mut ps: bumpalo::collections::Vec<&mut Particle> =
+            bumpalo::collections::Vec::new_in(&bump);
         for i in 0..N {
             ps.push(bump.alloc(spawn(i, frame)));
         }
@@ -143,7 +156,10 @@ fn box_build(d: u32, seed: i64) -> BoxNode {
     if d == 0 {
         BoxNode::Leaf(seed % 7)
     } else {
-        BoxNode::Add(Box::new(box_build(d - 1, seed * 3 + 1)), Box::new(box_build(d - 1, seed * 5 + 2)))
+        BoxNode::Add(
+            Box::new(box_build(d - 1, seed * 3 + 1)),
+            Box::new(box_build(d - 1, seed * 5 + 2)),
+        )
     }
 }
 fn box_eval(n: &BoxNode) -> i64 {
@@ -153,7 +169,9 @@ fn box_eval(n: &BoxNode) -> i64 {
     }
 }
 fn tree_box() -> f64 {
-    (0..ROUNDS).map(|r| box_eval(&black_box(box_build(DEPTH, r as i64))) as f64).sum()
+    (0..ROUNDS)
+        .map(|r| box_eval(&black_box(box_build(DEPTH, r as i64))) as f64)
+        .sum()
 }
 
 #[derive(Clone, Copy)]
@@ -257,7 +275,12 @@ fn scratch_wj_fmt() -> f64 {
         sc.reset();
         let mut labels = sc.new_list();
         for i in 0..K {
-            labels.push(sc.fmt(format_args!("entity#{} hp={} f={}", i, (i * 7 + frame) % 100, frame)));
+            labels.push(sc.fmt(format_args!(
+                "entity#{} hp={} f={}",
+                i,
+                (i * 7 + frame) % 100,
+                frame
+            )));
         }
         total += labels.iter().map(|s| s.len()).sum::<usize>();
     }
@@ -298,19 +321,52 @@ fn measure(name: &str, frames: usize, f: fn() -> f64, reps: usize) -> (f64, f64,
         assert_eq!(v.to_bits(), check.to_bits(), "{name}: nondeterministic");
     }
     let per_frame = allocs as f64 / frames as f64;
-    println!("{name:<28} {:>9.3} ms   {:>10.1} allocs/frame   checksum {check}", best * 1e3, per_frame);
+    println!(
+        "{name:<28} {:>9.3} ms   {:>10.1} allocs/frame   checksum {check}",
+        best * 1e3,
+        per_frame
+    );
     (best, check, per_frame)
 }
 
 fn main() {
-    let reps: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(15);
+    let reps: usize = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(15);
     let out_path = std::env::args().nth(2);
     let mut json = String::from("{\n");
     println!("# arena benchmark suite (best of {reps}); particles N={N} x {FRAMES} frames, tree depth {DEPTH} x {ROUNDS}, scratch K={K} x {FRAMES}");
     let groups: [(&str, usize, Vec<(&str, fn() -> f64)>); 3] = [
-        ("particles", FRAMES, vec![("box (Vec<Box<P>>)", particles_box), ("vec-new (Vec<P>/frame)", particles_vec_new), ("wj-arena (Arena<P>)", particles_wj_arena), ("bumpalo (&mut P)", particles_bumpalo)]),
-        ("tree", ROUNDS, vec![("box (Box<Node>)", tree_box), ("wj-arena (Handle<Node>)", tree_wj_arena), ("bumpalo (&Node)", tree_bumpalo)]),
-        ("scratch", FRAMES, vec![("string-new (String/label)", scratch_string_new), ("wj-scratch (Scratch string)", scratch_wj), ("wj-scratch fmt (Scratch::fmt)", scratch_wj_fmt), ("reuse (1 buffer, hand-tuned)", scratch_reuse)]),
+        (
+            "particles",
+            FRAMES,
+            vec![
+                ("box (Vec<Box<P>>)", particles_box),
+                ("vec-new (Vec<P>/frame)", particles_vec_new),
+                ("wj-arena (Arena<P>)", particles_wj_arena),
+                ("bumpalo (&mut P)", particles_bumpalo),
+            ],
+        ),
+        (
+            "tree",
+            ROUNDS,
+            vec![
+                ("box (Box<Node>)", tree_box),
+                ("wj-arena (Handle<Node>)", tree_wj_arena),
+                ("bumpalo (&Node)", tree_bumpalo),
+            ],
+        ),
+        (
+            "scratch",
+            FRAMES,
+            vec![
+                ("string-new (String/label)", scratch_string_new),
+                ("wj-scratch (Scratch string)", scratch_wj),
+                ("wj-scratch fmt (Scratch::fmt)", scratch_wj_fmt),
+                ("reuse (1 buffer, hand-tuned)", scratch_reuse),
+            ],
+        ),
     ];
     for (g, frames, vs) in groups {
         println!("\n## {g}");
@@ -318,7 +374,11 @@ fn main() {
         let mut first_check = None;
         for (name, f) in vs {
             let (t, c, apf) = measure(name, frames, f, reps);
-            json.push_str(&format!("  \"{g}/{name}\": {{\"best_ms\": {:.3}, \"allocs_per_frame\": {:.1}}},\n", t * 1e3, apf));
+            json.push_str(&format!(
+                "  \"{g}/{name}\": {{\"best_ms\": {:.3}, \"allocs_per_frame\": {:.1}}},\n",
+                t * 1e3,
+                apf
+            ));
             if let Some(fc) = first_check {
                 assert_eq!(fc, c, "{g}: variants disagree");
             }
@@ -328,8 +388,14 @@ fn main() {
         }
     }
     if let Some(p) = out_path {
-        let load = std::process::Command::new("sysctl").args(["-n", "vm.loadavg"]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
-        json.push_str(&format!("  \"meta\": {{\"reps\": {reps}, \"loadavg\": \"{load}\"}}\n}}\n"));
+        let load = std::process::Command::new("sysctl")
+            .args(["-n", "vm.loadavg"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        json.push_str(&format!(
+            "  \"meta\": {{\"reps\": {reps}, \"loadavg\": \"{load}\"}}\n}}\n"
+        ));
         std::fs::write(&p, json).expect("write results");
     }
 }
