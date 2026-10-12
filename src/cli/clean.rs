@@ -36,12 +36,23 @@ pub fn execute(all: bool) -> Result<()> {
     Ok(())
 }
 
+/// Temp dirs younger than this are left alone (another process may be using them).
+const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(2 * 60 * 60);
+
+fn is_stale(path: &Path) -> bool {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age > STALE_AFTER)
+}
+
 fn clean_temp_artifacts() -> Result<u64> {
     let mut freed = 0u64;
     let temp = std::env::temp_dir();
 
     let windjammer_test = temp.join("windjammer-test");
-    if windjammer_test.exists() {
+    if windjammer_test.exists() && is_stale(&windjammer_test) {
         let size = dir_size(&windjammer_test);
         std::fs::remove_dir_all(&windjammer_test)?;
         println!(
@@ -58,7 +69,8 @@ fn clean_temp_artifacts() -> Result<u64> {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            if stale_prefixes.iter().any(|p| name_str.starts_with(p)) && entry.path().is_dir() {
+            // Only stale dirs: a recently touched one may belong to a build or test that is running now.
+            if stale_prefixes.iter().any(|p| name_str.starts_with(p)) && entry.path().is_dir() && is_stale(&entry.path()) {
                 let size = dir_size(&entry.path());
                 if let Err(e) = std::fs::remove_dir_all(entry.path()) {
                     eprintln!(
