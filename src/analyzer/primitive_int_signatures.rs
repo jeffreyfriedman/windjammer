@@ -121,12 +121,39 @@ fn endian_from_bytes(prim: &str, method: &str, width: usize) -> FunctionSignatur
     }
 }
 
+/// `i64::from_str_radix(&str, u32) -> Result<i64, ParseIntError>`: the radix literal must be `u32`.
+fn from_str_radix_sig(int_name: &str) -> FunctionSignature {
+    let param_types = vec![
+        Type::Reference(Box::new(Type::Custom("str".to_string()))),
+        Type::Custom("u32".to_string()),
+    ];
+    FunctionSignature {
+        name: format!("{int_name}::from_str_radix"),
+        param_types: param_types.clone(),
+        formal_param_types: param_types,
+        param_ownership: vec![OwnershipMode::Borrowed, OwnershipMode::Owned],
+        return_type: Some(Type::Result(
+            Box::new(Type::Custom(int_name.to_string())),
+            Box::new(Type::Custom("ParseIntError".to_string())),
+        )),
+        return_ownership: OwnershipMode::Owned,
+        has_self_receiver: false,
+        is_extern: false,
+        emitted_rust_ref_params: None,
+        string_ref_string_formal_params: None,
+        field_extract_params: None,
+        forwarding_borrow_params: None,
+    }
+}
+
 const ENDIAN_TO_BYTES: &[&str] = &["to_le_bytes", "to_be_bytes", "to_ne_bytes"];
 const ENDIAN_FROM_BYTES: &[&str] = &["from_le_bytes", "from_be_bytes", "from_ne_bytes"];
 
 /// Register `i32::max` / `usize::min` / … inherent signatures on `registry`.
 pub fn register_primitive_int_signatures(registry: &mut SignatureRegistry) {
     for int_name in SIGNED.iter().chain(UNSIGNED.iter()) {
+        let radix = from_str_radix_sig(int_name);
+        registry.add_function(radix.name.clone(), radix);
         for def in INHERENT_INT_METHODS {
             if def.signed_only && UNSIGNED.contains(int_name) {
                 continue;

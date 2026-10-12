@@ -470,6 +470,10 @@ func wjNaN() float64          { return math.NaN() }
 func wjNegZero() float64      { return math.Copysign(0, -1) }
 func wjFneg[T ~float32 | ~float64](x T) T { return -x }
 func wjInf(sign int) float64  { return math.Inf(sign) }
+func wjFadd[T ~float32 | ~float64](a, b T) T { return a + b }
+func wjFsub[T ~float32 | ~float64](a, b T) T { return a - b }
+func wjFmul[T ~float32 | ~float64](a, b T) T { return a * b }
+func wjFdiv[T ~float32 | ~float64](a, b T) T { return a / b }
 func wjFmod[T ~float32 | ~float64](a, b T) T { return T(math.Mod(float64(a), float64(b))) }
 func wjMath_sqrt(x float64) float64  { return math.Sqrt(x) }
 func wjMath_abs(x float64) float64   { return math.Abs(x) }
@@ -1558,6 +1562,33 @@ func wjParseInt[T integer](s string) Result[T, string] {
 		return fail("invalid digit found in string")
 	}
 	v, err := strconv.ParseUint(s, 10, bitsOf[T]())
+	if err != nil {
+		return wjParseErr[T](err, s)
+	}
+	return Result[T, string]{Ok: true, V: T(v)}
+}
+
+// wjParseIntRadix mirrors Rust `from_str_radix`: optional sign, digits of the radix, no whitespace or `_`.
+func wjParseIntRadix[T integer, R integer](s string, radix R) Result[T, string] {
+	fail := func(m string) Result[T, string] { return Result[T, string]{E: m} }
+	if s == "" {
+		return fail("cannot parse integer from empty string")
+	}
+	if s[0] == '-' && !isSigned[T]() {
+		return fail("invalid digit found in string")
+	}
+	body := strings.TrimLeft(s, "+-")
+	if len(s)-len(body) > 1 || body == "" || strings.ContainsAny(body, "_+-") {
+		return fail("invalid digit found in string")
+	}
+	if isSigned[T]() {
+		v, err := strconv.ParseInt(s, int(radix), bitsOf[T]())
+		if err != nil {
+			return wjParseErr[T](err, s)
+		}
+		return Result[T, string]{Ok: true, V: T(v)}
+	}
+	v, err := strconv.ParseUint(strings.TrimPrefix(s, "+"), int(radix), bitsOf[T]())
 	if err != nil {
 		return wjParseErr[T](err, s)
 	}

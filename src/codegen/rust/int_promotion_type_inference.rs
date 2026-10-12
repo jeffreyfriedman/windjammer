@@ -1053,7 +1053,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
-    fn scan_expr_for_call_arg_int_formal(
+    pub(super) fn scan_expr_for_call_arg_int_formal(
         &self,
         expr: &Expression<'ast>,
         name: &str,
@@ -1114,7 +1114,7 @@ impl<'ast> CodeGenerator<'ast> {
             Expression::Unary { operand, .. } => {
                 self.scan_expr_for_call_arg_int_formal(operand, name, peer);
             }
-            _ => {}
+            other => self.scan_extra_exprs_for_call_arg_int_formal(other, name, peer),
         }
     }
 
@@ -1770,9 +1770,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         };
         if let Some(name) = ident_name(left, right).or_else(|| ident_name(right, left)) {
-            if self.let_binding_has_negative_int_literal_init(name.as_str()) {
-                return;
-            }
+            if self.let_binding_has_negative_int_literal_init(&name) || self.explicit_wj_int_annotated_locals.contains(&name) { return; }
             if matches!(self.local_var_types.get(name.as_str()), Some(Type::Int))
                 && self.literal_init_wj_int_loop_counters.contains(&name)
             {

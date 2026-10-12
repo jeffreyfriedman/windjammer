@@ -208,7 +208,9 @@ impl<'ast> Analyzer<'ast> {
                 self.expr_calls_consuming_method(param_name, operand, registry, receiver_type)
             }
             Expression::TryOp { expr, .. } => {
-                self.expr_calls_consuming_method(param_name, expr, registry, receiver_type)
+                // `param?` moves the Option/Result out of the parameter.
+                self.is_direct_receiver(param_name, expr)
+                    || self.expr_calls_consuming_method(param_name, expr, registry, receiver_type)
             }
             _ => false,
         }

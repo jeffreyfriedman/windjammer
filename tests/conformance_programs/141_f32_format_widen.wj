@@ -1,0 +1,18 @@
+// f32 arithmetic and printing: shortest round-trip digits for the f32 value; widening exposes the exact value.
+// expect: 0.3
+// expect: 0.30000001192092896
+// expect: 16777216
+// expect: 0.1
+// expect: 0.10000000149011612
+fn main() {
+    let b: f32 = 0.1 + 0.2
+    println("${b}")
+    let w64: f64 = b as f64
+    println("${w64}")
+    let big: f32 = 16777216.0
+    println("${big + 1.0}")
+    let t: f32 = 0.1
+    println("${t}")
+    let t64: f64 = t as f64
+    println("${t64}")
+}

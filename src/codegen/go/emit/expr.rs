@@ -183,6 +183,20 @@ impl<'m> Go<'m> {
             (_, BinKind::Lt | BinKind::Le | BinKind::Gt | BinKind::Ge) if aggregate => self.unsupported("ordering comparison of aggregate values"),
             (Ty::Int(_), _) => Ok(num::int_binary(op, &x, &y)),
             (Ty::F64 | Ty::F32, BinKind::Rem) => Ok(format!("wjFmod({x}, {y})")),
+            // Two literal operands would be folded by Go's exact constant arithmetic, which has no `-0`
+            // and rounds differently from IEEE; route them through a call so they run as float64 ops.
+            (Ty::F64 | Ty::F32, BinKind::Add | BinKind::Sub | BinKind::Mul)
+                if matches!(*a.kind, PK::Float(_)) && matches!(*b.kind, PK::Float(_)) =>
+            {
+                let f = match op {
+                    BinKind::Add => "wjFadd",
+                    BinKind::Sub => "wjFsub",
+                    _ => "wjFmul",
+                };
+                Ok(format!("{f}({x}, {y})"))
+            }
+            // Go rejects constant float division by zero at compile time; IEEE semantics (inf/NaN) need a call.
+            (Ty::F64 | Ty::F32, BinKind::Div) => Ok(format!("wjFdiv({x}, {y})")),
             (Ty::Str, BinKind::Add) => Ok(format!("({x} + {y})")),
             (_, BinKind::Add | BinKind::Sub | BinKind::Mul | BinKind::Div | BinKind::Lt | BinKind::Le | BinKind::Gt | BinKind::Ge | BinKind::Eq | BinKind::Ne) => Ok(format!("({x} {} {y})", sym(op))),
             _ => self.unsupported("operator on this type"),
