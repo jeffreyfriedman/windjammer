@@ -535,10 +535,10 @@ impl<'ast> CodeGenerator<'ast> {
                     emit_shared || self.inferred_borrowed_params.contains(name.as_str()),
                 )
             }
-            Expression::Unary {
-                op: crate::parser::UnaryOp::Ref,
-                ..
-            } => (true, true),
+            Expression::Unary { op: crate::parser::UnaryOp::Ref, operand, .. } => {
+                let owned_key = self.ref_operand_is_owned_local(operand);
+                (!owned_key, !owned_key)
+            }
             _ => (false, false),
         };
         // Peel only on emit-truth demoted refs (`key: &str`). Owned `String` +

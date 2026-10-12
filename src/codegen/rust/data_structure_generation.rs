@@ -1104,6 +1104,13 @@ impl<'ast> CodeGenerator<'ast> {
 
     /// Generate code for index expression array[index]
     /// Handles auto-cast to usize, slice syntax, auto-borrow/clone for non-Copy elements
+    fn peel_reference_type(t: &Type) -> &Type {
+        match t {
+            Type::Reference(inner) | Type::MutableReference(inner) => Self::peel_reference_type(inner),
+            other => other,
+        }
+    }
+
     pub(in crate::codegen::rust) fn generate_index(
         &mut self,
         object: &Expression<'ast>,
@@ -1190,6 +1197,38 @@ impl<'ast> CodeGenerator<'ast> {
             if pointee.is_some_and(|t| self.is_type_copy(t)) {
                 idx_str = format!("*({idx_str})");
             }
+        }
+
+        // `map[key]` looks the key up by reference: no `usize` cast, and `Index` takes `&Q`.
+        let object_ty = self.infer_expression_type(object);
+        let map_value_ty = match object_ty.as_ref().map(Self::peel_reference_type) {
+            Some(Type::Parameterized(name, args))
+                if crate::type_classification::is_map_type_name(name) && args.len() == 2 =>
+            {
+                Some(args[1].clone())
+            }
+            _ => None,
+        };
+        if let Some(value_ty) = map_value_ty {
+            let key_ty = self.infer_expression_type(index);
+            let key_expr = if idx_str.starts_with('"') || idx_str.starts_with('&') {
+                idx_str
+            } else {
+                match key_ty.as_ref() {
+                    Some(t) if crate::codegen::rust::types::is_windjammer_text_type(t) => {
+                        format!("&*{idx_str}")
+                    }
+                    Some(Type::Reference(_)) if !idx_str.starts_with("*(") => idx_str,
+                    _ => format!("&{idx_str}"),
+                }
+            };
+            let lookup = format!("{}[{}]", obj_str, key_expr);
+            let plain = self.generating_assignment_target
+                || self.in_borrow_context
+                || self.in_field_access_object
+                || self.suppress_borrowed_clone
+                || self.is_type_copy(&value_ty);
+            return if plain { lookup } else { format!("{lookup}.clone()") };
         }
 
         self.maybe_cast_index_to_usize(&mut idx_str, index);
