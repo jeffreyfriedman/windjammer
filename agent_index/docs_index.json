@@ -2294,6 +2294,19 @@
   {
     "kind": "example",
     "module": "",
+    "name": "intrinsic_user_shadow",
+    "signature": "",
+    "source": "examples/verified/intrinsic_user_shadow.wj",
+    "summary": "verified program; first output line: custom: hi",
+    "tags": [
+      "intrinsics",
+      "shadowing",
+      "println"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "iter_any_all_count",
     "signature": "",
     "source": "examples/verified/iter_any_all_count.wj",
@@ -2566,6 +2579,19 @@
       "mod",
       "use",
       "pub"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "module_nested_pub_mod",
+    "signature": "",
+    "source": "examples/verified/module_nested_pub_mod.wj",
+    "summary": "verified program; first output line: 9",
+    "tags": [
+      "modules",
+      "nested",
+      "pub mod"
     ]
   },
   {
