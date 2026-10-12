@@ -33,9 +33,12 @@ so it can offer the same performance with the lifetime reasoning done by the com
    used after `reset()`). Inferred, no annotations; error with a fix hint. Runs on the compiler and interpreter paths.
 5. **Auto-arena (opt-in optimizer pass `scratch_reuse`):** per-iteration `String::new()`/`Vec::new()` buffers that
    are only borrowed are hoisted out of the loop and `clear()`ed, behind `OptimizationConfig::with_auto_arena()`.
-6. **Backends:** Rust uses the runtime types; Go/JS/WASM fall back to their GC heap with identical semantics
-   (an `Arena<T>` is a growable array plus a generation counter; `Scratch` values are plain strings/lists);
-   the interpreter implements the debug-build semantics, including handle checks.
+6. **Backends:** Rust uses the runtime types. Go/JS/WASM fall back to their GC heap with identical semantics
+   (an `Arena<T>` is a growable array plus a generation counter; `Scratch` values are plain strings/lists). The
+   interpreter implements the debug-build semantics, including handle checks and the escape check.
+   *Current state:* Rust and the interpreter are implemented and tested; Go/JS do not lower `std::arena` yet (the
+   module is not in the portable stdlib table, so a Go/JS build fails with "unsupported on this backend: unknown associated function `Arena::new`" instead of
+   emitting placeholder code). The GC lowering is mechanical and listed under follow-ups.
 
 ## Options
 
@@ -98,7 +101,8 @@ that the fixture catches). Promotion of non-buffer allocations (many small `Box`
 into an `Arena` needs type facts the text-level optimizer does not have; it is listed as phase 2 for the IR.
 
 ## Results
-See `benchmarks/arenas/RESULTS.md` (numbers, machine load at measurement time, and where arenas lose).
+Runners and the last recorded run (with the load average at measurement time): `benchmarks/arenas/` (`results.json`).
+This ADR does not retype numbers (docs policy); the summary of where arenas win and lose is in the next section.
 
 ## Kill criteria
 - If `Arena<T>` is not at least 1.5x faster than per-object `Box` allocation on the particle and tree workloads

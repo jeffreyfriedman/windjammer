@@ -285,7 +285,7 @@ fn scratch_reuse() -> f64 {
     total as f64
 }
 
-fn measure(name: &str, frames: usize, f: fn() -> f64, reps: usize) -> (f64, f64) {
+fn measure(name: &str, frames: usize, f: fn() -> f64, reps: usize) -> (f64, f64, f64) {
     let check = f();
     let mut best = f64::MAX;
     let mut allocs = 0;
@@ -297,12 +297,15 @@ fn measure(name: &str, frames: usize, f: fn() -> f64, reps: usize) -> (f64, f64)
         allocs = ALLOCS.load(Ordering::Relaxed) - a0;
         assert_eq!(v.to_bits(), check.to_bits(), "{name}: nondeterministic");
     }
-    println!("{name:<28} {:>9.3} ms   {:>10.1} allocs/frame   checksum {check}", best * 1e3, allocs as f64 / frames as f64);
-    (best, check)
+    let per_frame = allocs as f64 / frames as f64;
+    println!("{name:<28} {:>9.3} ms   {:>10.1} allocs/frame   checksum {check}", best * 1e3, per_frame);
+    (best, check, per_frame)
 }
 
 fn main() {
     let reps: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(15);
+    let out_path = std::env::args().nth(2);
+    let mut json = String::from("{\n");
     println!("# arena benchmark suite (best of {reps}); particles N={N} x {FRAMES} frames, tree depth {DEPTH} x {ROUNDS}, scratch K={K} x {FRAMES}");
     let groups: [(&str, usize, Vec<(&str, fn() -> f64)>); 3] = [
         ("particles", FRAMES, vec![("box (Vec<Box<P>>)", particles_box), ("vec-new (Vec<P>/frame)", particles_vec_new), ("wj-arena (Arena<P>)", particles_wj_arena), ("bumpalo (&mut P)", particles_bumpalo)]),
@@ -314,7 +317,8 @@ fn main() {
         let mut base = None;
         let mut first_check = None;
         for (name, f) in vs {
-            let (t, c) = measure(name, frames, f, reps);
+            let (t, c, apf) = measure(name, frames, f, reps);
+            json.push_str(&format!("  \"{g}/{name}\": {{\"best_ms\": {:.3}, \"allocs_per_frame\": {:.1}}},\n", t * 1e3, apf));
             if let Some(fc) = first_check {
                 assert_eq!(fc, c, "{g}: variants disagree");
             }
@@ -322,5 +326,10 @@ fn main() {
             let b = *base.get_or_insert(t);
             println!("{:<28} speedup vs first: {:.2}x", "", b / t);
         }
+    }
+    if let Some(p) = out_path {
+        let load = std::process::Command::new("sysctl").args(["-n", "vm.loadavg"]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+        json.push_str(&format!("  \"meta\": {{\"reps\": {reps}, \"loadavg\": \"{load}\"}}\n}}\n"));
+        std::fs::write(&p, json).expect("write results");
     }
 }
