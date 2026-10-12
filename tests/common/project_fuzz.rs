@@ -67,6 +67,12 @@ fn eval(funcs: &[Func], i: usize, x: i64) -> i64 {
     acc
 }
 
+/// A module exists on disk when it has a file (`x.wj`, `x/mod.wj`) or a descendant that does.
+fn exists(mods: &[Mod], i: usize) -> bool {
+    let m = &mods[i];
+    !m.is_dir || m.has_mod_wj || (0..mods.len()).any(|k| mods[k].parent == Some(i) && exists(mods, k))
+}
+
 pub fn generate(seed: u64) -> Project {
     let mut r = Rng::new(seed);
     // module tree; index 0 is the crate root (main.wj)
@@ -168,8 +174,14 @@ pub fn generate(seed: u64) -> Project {
                     uses.push(format!("use crate::{}::{{{}}}", abs, fname));
                     fname.clone()
                 }
-                _ => {
+                // bare path: only from the crate root (elsewhere a child module of the same name would shadow it)
+                _ if from == 0 => {
                     uses.push(format!("use {} as m{}", abs, alias_n));
+                    format!("m{}::{}", alias_n, fname)
+                }
+                _ => {
+                    // relative to the crate root through `super` (one per nesting level)
+                    uses.push(format!("use {}{} as m{}", "super::".repeat(mods[from].path.len()), abs, alias_n));
                     format!("m{}::{}", alias_n, fname)
                 }
             };
@@ -208,7 +220,7 @@ pub fn generate(seed: u64) -> Project {
             text.push('\n');
         }
         if m.is_dir && m.has_mod_wj {
-            let kids: Vec<&Mod> = mods.iter().filter(|k| k.parent == Some(mi)).collect();
+            let kids: Vec<&Mod> = mods.iter().enumerate().filter(|(ki, k)| k.parent == Some(mi) && exists(&mods, *ki)).map(|(_, k)| k).collect();
             for k in kids {
                 let _ = writeln!(text, "pub mod {}", k.path.last().unwrap());
             }
