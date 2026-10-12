@@ -167,6 +167,10 @@ pub enum Commands {
         #[arg(long)]
         watch: bool,
 
+        /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
+        #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
+        hot: bool,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,

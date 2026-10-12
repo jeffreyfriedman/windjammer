@@ -50,7 +50,7 @@ pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
             return 1;
         }
     };
-    match run_entry(&entry, args, false, None) {
+    match run_entry(&entry, args, EntryOptions::default()) {
         RunOutcome::Exited(code) => code,
         RunOutcome::NeedsCompiled(_) => unreachable!("fallback disabled"),
     }
@@ -66,17 +66,22 @@ pub enum RunOutcome {
     NeedsCompiled(RuntimeError),
 }
 
-/// Load and run `entry` in the interpreter. With `fallback`, a preflight hit returns
-/// [`RunOutcome::NeedsCompiled`] instead of printing the error.
-/// `host`: bridge library and the `extern fn`s it provides (ADR-0020), built by the CLI.
-pub fn run_entry(
-    entry: &Path,
-    args: Vec<String>,
-    fallback: bool,
-    host: Option<(PathBuf, Vec<super::host_bridge::ExternSig>)>,
-) -> RunOutcome {
+/// How `run_entry` runs a program.
+#[derive(Default)]
+pub struct EntryOptions {
+    /// Return [`RunOutcome::NeedsCompiled`] on a preflight hit instead of printing the error.
+    pub fallback: bool,
+    /// Bridge library and the `extern fn`s it provides (ADR-0020), built by the CLI.
+    pub host: Option<(PathBuf, Vec<super::host_bridge::ExternSig>)>,
+    /// Apply source edits to the running program (ADR-0021).
+    pub hot: bool,
+}
+
+/// Load and run `entry` in the interpreter.
+pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutcome {
     let entry = entry.to_path_buf();
     with_big_stack(move || {
+        let EntryOptions { fallback, host, hot } = opts;
         let mut it = Interpreter::new();
         it.guard_stack();
         it.set_args(args);
@@ -95,6 +100,9 @@ pub fn run_entry(
             }
             eprintln!("{}", e.render());
             return RunOutcome::Exited(exit_code_for(&e));
+        }
+        if hot {
+            it.enable_hot_reload();
         }
         let code = match it.call_main() {
             Ok(_) => 0,

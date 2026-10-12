@@ -77,6 +77,7 @@ pub fn run(cli: Cli) -> Result<()> {
             compiled,
             release,
             watch,
+            hot,
             defer_drop,
             defer_drop_threshold,
         } => {
@@ -89,13 +90,13 @@ pub fn run(cli: Cli) -> Result<()> {
             }
             let mode = if compiled || release {
                 Mode::Compiled { release }
-            } else if interpret {
+            } else if interpret || hot {
                 Mode::Interpret
             } else {
                 Mode::Auto
             };
             let lint = windjammer::cli_execution::report_build_lints;
-            let code = execute(&RunOptions { path, bin, args, mode, target, lint: Some(lint) });
+            let code = execute(&RunOptions { path, bin, args, mode, target, hot, lint: Some(lint) });
             if code != 0 {
                 std::process::exit(code);
             }

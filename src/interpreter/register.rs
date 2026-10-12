@@ -30,7 +30,7 @@ fn has_copy_derive(decl: &crate::parser::StructDecl<'static>) -> bool {
 }
 
 impl Interpreter {
-    fn func_from_decl(
+    pub(crate) fn func_from_decl(
         &self,
         decl: &'static FunctionDecl<'static>,
         module: usize,
