@@ -38,6 +38,7 @@ pub mod expression_helpers;
 mod expression_type_inference;
 pub mod expression_utilities;
 pub mod expressions;
+mod enumerable_lowering;
 pub mod float_type_utilities;
 pub mod for_statement_generation;
 mod function_extern_generation;

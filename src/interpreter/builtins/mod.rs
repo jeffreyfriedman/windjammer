@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+mod enumerable;
 mod iter;
 mod map;
 mod num;
@@ -129,6 +130,7 @@ impl Registry {
         num::register(&mut r);
         text::register(&mut r);
         seq::register(&mut r);
+        enumerable::register(&mut r);
         map::register(&mut r);
         option::register(&mut r);
         std_fns::register(&mut r);

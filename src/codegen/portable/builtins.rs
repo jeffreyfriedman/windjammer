@@ -33,6 +33,9 @@ fn iter_elem(recv: &Ty) -> Option<Ty> {
 }
 
 pub fn arg_want(recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
+    if let Some(t) = super::enumerable::arg_want(recv, name, i, prev) {
+        return Some(t);
+    }
     match recv {
         Ty::Vec(t) => vec_arg_want(t, name, i),
         Ty::Iter(_) | Ty::Range(_) => iter_arg_want(&iter_elem(recv)?, name, i, prev),
@@ -120,6 +123,9 @@ pub fn ret_ty(recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Optio
         "clone" | "to_owned" | "cloned" | "copied" if !matches!(recv, Ty::Iter(_)) => return Some(recv.clone()),
         "to_string" => return Some(Ty::Str),
         _ => {}
+    }
+    if let Some(t) = super::enumerable::ret_ty(recv, name, args) {
+        return Some(t);
     }
     match recv {
         Ty::Vec(t) => vec_ret(t, name, args, want),

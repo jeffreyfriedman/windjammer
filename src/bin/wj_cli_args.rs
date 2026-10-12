@@ -233,6 +233,12 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// Run only the doctests (```wj examples in `///` doc comments)
+        #[arg(long)]
+        doc: bool,
+        /// Also build and run each doctest through the Rust backend (default: interpreter only)
+        #[arg(long)]
+        compiled: bool,
     },
 
     /// Format Windjammer code

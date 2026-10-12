@@ -98,6 +98,10 @@ pub struct Parser {
     pub(crate) in_pipe_stage: bool,
     /// Number of `_` placeholders produced in the current pipe stage.
     pub(crate) pipe_placeholders: Vec<usize>,
+    /// `_` shorthand-closure frames, one per call argument being parsed (ADR-0018, `parser/shorthand_closure.rs`).
+    pub(crate) shorthand_frames: Vec<crate::parser::shorthand_closure::ShorthandFrame>,
+    /// Explicit closures being parsed (a `_` inside one, in the same argument, is an error).
+    pub(crate) closure_depth: usize,
     // Arena allocators for AST nodes (no recursive Drop: Windows stack-overflow fix).
     //
     // SOUNDNESS: `parse()` returns `Program<'static>`, so nothing ties the AST to this Parser. The
@@ -235,6 +239,8 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
+            shorthand_frames: Vec::new(),
+            closure_depth: 0,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
@@ -257,6 +263,8 @@ impl Parser {
             in_extern_fn: false,
             in_pipe_stage: false,
             pipe_placeholders: Vec::new(),
+            shorthand_frames: Vec::new(),
+            closure_depth: 0,
             expr_arena: Arena::new(),
             stmt_arena: Arena::new(),
             pattern_arena: Arena::new(),
