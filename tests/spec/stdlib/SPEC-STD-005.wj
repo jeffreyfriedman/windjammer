@@ -1,0 +1,8 @@
+// spec: SPEC-STD-005
+// expect: 4 1024 2.5 2 3 3
+// expect: 7 3 8
+fn main() {
+    let a = 16.0
+    println("${a.sqrt()} ${2.0.powf(10.0)} ${(-2.5).abs()} ${2.7.floor()} ${2.1.ceil()} ${2.5.round()}")
+    println("${(-7).abs()} ${3.min(8)} ${3.max(8)}")
+}

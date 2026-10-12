@@ -1,0 +1,22 @@
+// A `&mut self` method is inferred when the loop variable's field (or a nested self field chain)
+// receives a mutating call.
+// interp-gap: the interpreter copies loop elements, so `for i in self.list { i.c.inc() }` mutates nothing
+// expect: 8 1
+pub struct Counter { n: int }
+impl Counter {
+    pub fn inc(self) { self.n += 1 }
+}
+pub struct Inner { c: Counter, items: Vec<Counter> }
+pub struct Outer { inner: Inner, list: Vec<Inner> }
+impl Outer {
+    pub fn c(self) { for i in self.list { i.c.inc() } }
+    pub fn h(self) { for c in self.inner.items { c.inc() } }
+    pub fn total(self) -> int { self.inner.items.len() as int + self.list[0].c.n }
+}
+fn main() {
+    let mut o = Outer { inner: Inner { c: Counter { n: 0 }, items: [Counter { n: 0 }] }, list: [Inner { c: Counter { n: 5 }, items: [] }] }
+    o.c()
+    o.c()
+    o.h()
+    println("${o.total()} ${o.inner.items[0].n}")
+}

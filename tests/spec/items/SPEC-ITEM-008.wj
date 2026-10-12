@@ -1,0 +1,8 @@
+// spec: SPEC-ITEM-008
+// expect: 80 24 x
+// xfail: Q-011
+struct Cfg { w: int = 80, h: int = 24, name: string }
+fn main() {
+    let c = Cfg { name: "x" }
+    println("${c.w} ${c.h} ${c.name}")
+}

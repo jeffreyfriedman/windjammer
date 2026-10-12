@@ -320,6 +320,10 @@ impl<'ast> CodeGenerator<'ast> {
 
         if use_additive {
             let mut acc = self.generate_expression(&parts[0]);
+            // `&str + ..` is not an operator in Rust: start the additive chain from an owned String.
+            if acc.starts_with('"') && acc.ends_with('"') && !acc[1..acc.len() - 1].contains('"') {
+                acc = format!("String::from({acc})");
+            }
             for _part in parts.iter().skip(1) {
                 let rhs = self.generate_expression(_part);
                 // Additive chain is `String + &str + &str…`. Literals that stay as

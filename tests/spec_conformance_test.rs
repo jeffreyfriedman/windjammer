@@ -1,247 +1,232 @@
-//! Language-spec conformance gate: every runnable example in tests/spec/** (rule-tagged, with an
-//! `// expect:` oracle written from the spec, not from any backend) runs on the interpreter, Rust,
-//! JS (default) and Go, TypeScript (WJ_SPEC_FULL=1), through the shared conformance harness.
+// consumes: tests/spec/**/*.wj
+//! SPEC executable examples: every `tests/spec/**/*.wj` file is one example for one or more rules in
+//! `docs/spec/*.md`, run in-process through the real lexer, parser and interpreter.
 //!
-//! Status per example and backend: PASS; WRONG = ran but printed the wrong output or exit status
-//! (a silent miscompile: the loudest category); REJECTED = wj or the toolchain refused it.
-//! Ratchet: tests/spec_conformance_status.tsv. Any change fails: regressions (and every WRONG not
-//! already recorded) with their diff; improvements until recorded with SPEC_BLESS=1 (which refuses
-//! to write while anything regressed). `// xfail: Q-NNN` must name a `## Q-NNN` in
-//! docs/spec/OPEN_QUESTIONS.md. Until the spec corpus is in the tree the gate reports and passes;
-//! `WJ_SPEC_ROOT=<checkout>` points it at another checkout.
+//! Header comments (all `//` lines before the first non-comment line):
+//!   spec: SPEC-XXX-NNN      rule(s) this example demonstrates (required, repeatable)
+//!   mode: run | parse-ok | parse-error | panic      (default run)
+//!   expect: TEXT            one expected stdout line, in order (run mode); oracle derived by hand
+//!   expect-error: TEXT      substring of the parse error / panic message
+//!   expect-exit: N          expected exit status for panic mode (default 101)
+//!   xfail: Q-NNN            the implementation currently contradicts the spec (docs/spec/OPEN_QUESTIONS.md);
+//!                           the example must FAIL, and the run fails if it starts passing
+//!
+//! Rule-ID/test consistency (every rule has a test, every test names a known rule) is enforced by
+//! `scripts/spec_check.sh`, which `rule_ids_and_tests_are_consistent` runs.
 
 #![allow(clippy::duplicate_mod)]
 
-#[path = "common/conformance/mod.rs"]
-mod conformance;
-
-use conformance::backends::{compile_and_run, run_interpreter, Backend, Outcome};
-use conformance::toolchain::Tool;
-use std::collections::BTreeMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
+use windjammer::interpreter::runner::{exit_code_for, with_big_stack};
+use windjammer::interpreter::Interpreter;
 
-const WJ: &str = env!("CARGO_BIN_EXE_wj");
-const COLUMNS: [&str; 5] = ["interp", "rust", "go", "js", "ts"];
-const STATUS_FILE: &str = "tests/spec_conformance_status.tsv";
-
-fn repo() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn spec_root() -> PathBuf {
-    std::env::var("WJ_SPEC_ROOT").map(PathBuf::from).unwrap_or_else(|_| repo())
-}
-
-#[derive(Debug, Clone)]
-struct Example {
-    id: String,
-    source: String,
+#[derive(Default, Debug)]
+struct Spec {
+    path: PathBuf,
+    rules: Vec<String>,
     mode: String,
-    expect: String,
+    expect: Vec<String>,
+    expect_error: Option<String>,
+    expect_exit: Option<i32>,
     xfail: Option<String>,
+    src: String,
 }
 
-fn header(src: &str, key: &str) -> Option<String> {
-    src.lines().find_map(|l| l.strip_prefix(&format!("// {key}:")).map(|v| v.trim().to_string()))
-}
-
-fn load(root: &Path) -> Vec<Example> {
-    let mut files = Vec::new();
-    fn walk(d: &Path, out: &mut Vec<PathBuf>) {
-        for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                walk(&p, out)
-            } else if p.extension().is_some_and(|x| x == "wj") {
-                out.push(p)
-            }
+fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
+    let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
+    entries.sort();
+    for p in entries {
+        if p.is_dir() {
+            collect(&p, out);
+        } else if p.extension().is_some_and(|e| e == "wj") {
+            out.push(p);
         }
     }
-    walk(&root.join("tests/spec"), &mut files);
-    files.sort();
-    files
-        .into_iter()
-        .map(|f| {
-            let source = std::fs::read_to_string(&f).unwrap();
-            let expect: Vec<String> = source
-                .lines()
-                .filter_map(|l| l.strip_prefix("// expect:").map(|v| v.strip_prefix(' ').unwrap_or(v).to_string()))
-                .collect();
-            Example {
-                id: header(&source, "spec").unwrap_or_else(|| f.file_stem().unwrap().to_string_lossy().into_owned()),
-                mode: header(&source, "mode").unwrap_or_else(|| "run".into()),
-                xfail: header(&source, "xfail").map(|x| x.split_whitespace().next().unwrap_or("").to_string()),
-                expect: expect.iter().map(|l| format!("{l}\n")).collect(),
-                source,
-            }
-        })
-        .filter(|e| !matches!(e.mode.as_str(), "parse-ok" | "parse-error"))
-        .collect()
 }
 
-/// `PASS` / `WRONG` / `REJECTED` from an outcome (`stdout`, exit code), judged by the spec oracle.
-fn judge(ex: &Example, outcome: Option<(String, i32)>) -> &'static str {
-    let Some((stdout, code)) = outcome else { return "REJECTED" };
-    let exit_ok = if ex.mode == "panic" { code != 0 } else { code == 0 };
-    if exit_ok && stdout == ex.expect {
-        "PASS"
-    } else {
-        "WRONG"
-    }
-}
-
-fn run(ex: &Example, col: &str) -> &'static str {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let wj = Path::new(WJ);
-    let o = match col {
-        "interp" => run_interpreter(wj, tmp.path(), &ex.source),
-        "rust" => compile_and_run(wj, Backend::Rust, tmp.path(), &ex.source),
-        "go" => compile_and_run(wj, Backend::Go, tmp.path(), &ex.source),
-        "js" => compile_and_run(wj, Backend::Js, tmp.path(), &ex.source),
-        _ => compile_and_run(wj, Backend::Ts, tmp.path(), &ex.source),
-    };
-    match o {
-        // The interpreter reports a front-end rejection as a non-zero exit before printing anything.
-        Outcome::Ran(_, e) if col == "interp" && e.code != 0 && e.stdout.is_empty() && ex.mode != "panic" => judge(ex, None),
-        Outcome::Ran(_, e) if !e.timed_out => judge(ex, Some((e.stdout, e.code))),
-        _ => judge(ex, None),
-    }
-}
-
-fn active_columns() -> Vec<&'static str> {
-    let full = std::env::var("WJ_SPEC_FULL").is_ok();
-    COLUMNS
-        .iter()
-        .copied()
-        .filter(|c| match *c {
-            "interp" => true,
-            "rust" => Tool::Rustc.available(),
-            "js" => Tool::Node.available(),
-            "go" => full && Tool::Go.available(),
-            _ => full && Tool::Node.available(),
-        })
-        .collect()
-}
-
-type Table = BTreeMap<String, BTreeMap<String, String>>;
-
-fn read_status(path: &Path) -> Table {
-    let mut t = Table::new();
-    let text = std::fs::read_to_string(path).unwrap_or_default();
-    for l in text.lines().skip(1).filter(|l| !l.starts_with('#') && !l.is_empty()) {
-        let cells: Vec<&str> = l.split('\t').collect();
-        let row = t.entry(cells[0].to_string()).or_default();
-        for (c, v) in COLUMNS.iter().zip(&cells[1..]) {
-            row.insert(c.to_string(), v.to_string());
-        }
-    }
-    t
-}
-
-fn write_status(path: &Path, t: &Table, xfails: &BTreeMap<String, String>) {
-    let mut s = format!("example\t{}\txfail\n", COLUMNS.join("\t"));
-    for (id, row) in t {
-        let cells: Vec<String> = COLUMNS.iter().map(|c| row.get(*c).cloned().unwrap_or_else(|| "-".into())).collect();
-        s.push_str(&format!("{id}\t{}\t{}\n", cells.join("\t"), xfails.get(id).map(String::as_str).unwrap_or("-")));
-    }
-    std::fs::write(path, s).unwrap();
-}
-
-fn rank(s: &str) -> u8 {
-    match s {
-        "PASS" => 2,
-        "REJECTED" => 1,
-        _ => 0, // WRONG is worse than refusing: it silently computes something else
-    }
-}
-
-#[test]
-fn spec_examples_conform_on_every_backend() {
-    let root = spec_root();
-    let examples = load(&root);
-    if examples.is_empty() {
-        eprintln!("spec conformance: no tests/spec corpus in {} (lands with wt/lang-spec); nothing to check", root.display());
-        assert!(!repo().join("docs/spec/README.md").exists(), "docs/spec exists but tests/spec has no runnable examples");
-        return;
-    }
-    let questions = std::fs::read_to_string(root.join("docs/spec/OPEN_QUESTIONS.md")).unwrap_or_default();
-    let bad_xfail: Vec<_> = examples.iter().filter_map(|e| e.xfail.as_ref().filter(|q| !questions.contains(&format!("## {q}"))).map(|q| format!("{}: xfail {q}", e.id))).collect();
-    assert!(bad_xfail.is_empty(), "xfails must name an entry of docs/spec/OPEN_QUESTIONS.md: {bad_xfail:?}");
-
-    let cols = active_columns();
-    let jobs: Vec<(usize, &str)> = (0..examples.len()).flat_map(|i| cols.iter().map(move |c| (i, *c))).collect();
-    let results = std::sync::Mutex::new(Table::new());
-    std::thread::scope(|s| {
-        for chunk in jobs.chunks(jobs.len().div_ceil(4).max(1)) {
-            let (results, examples) = (&results, &examples);
-            s.spawn(move || {
-                for (i, c) in chunk {
-                    let st = run(&examples[*i], c);
-                    results.lock().unwrap().entry(examples[*i].id.clone()).or_default().insert(c.to_string(), st.to_string());
-                }
-            });
-        }
-    });
-    let got = results.into_inner().unwrap();
-    let path = repo().join(STATUS_FILE);
-    let was = read_status(&path);
-    let (mut wrong, mut worse, mut better) = (Vec::new(), Vec::new(), Vec::new());
-    for (id, row) in &got {
-        for (c, st) in row {
-            let old = was.get(id).and_then(|r| r.get(c)).cloned().unwrap_or_else(|| "NEW".into());
-            if st == &old {
+fn load(path: &Path) -> Spec {
+    let src = std::fs::read_to_string(path).unwrap();
+    let mut s = Spec { path: path.to_path_buf(), mode: "run".into(), src: src.clone(), ..Default::default() };
+    for line in src.lines() {
+        let Some(c) = line.strip_prefix("//") else {
+            if line.trim().is_empty() {
                 continue;
             }
-            let line = format!("{id} [{c}]: {old} -> {st}");
-            if st == "WRONG" {
-                wrong.push(line);
-            } else if old == "NEW" || rank(st) < rank(&old) {
-                worse.push(line);
-            } else {
-                better.push(line);
+            break;
+        };
+        let c = c.strip_prefix(' ').unwrap_or(c);
+        let Some((k, v)) = c.split_once(':') else { continue };
+        let v = v.strip_prefix(' ').unwrap_or(v);
+        match k {
+            "spec" => s.rules.push(v.trim().to_string()),
+            "mode" => s.mode = v.trim().to_string(),
+            "expect" => s.expect.push(v.to_string()),
+            "expect-error" => s.expect_error = Some(v.trim().to_string()),
+            "expect-exit" => s.expect_exit = Some(v.trim().parse().expect("expect-exit")),
+            "xfail" => s.xfail = Some(v.trim().to_string()),
+            _ => {}
+        }
+    }
+    s
+}
+
+/// Ok(()) when the example behaves as its header says; Err(why) otherwise.
+fn check(s: &Spec) -> Result<(), String> {
+    let src = s.src.clone();
+    let name = s.path.display().to_string();
+    let (parsed, out, exit, err) = with_big_stack(move || {
+        catch_unwind(AssertUnwindSafe(|| {
+            let mut lexer = windjammer::lexer::Lexer::new(&src);
+            let tokens = lexer.tokenize_with_locations();
+            let parser: &'static mut windjammer::parser::Parser = Box::leak(Box::new(
+                windjammer::parser::Parser::new_with_source(tokens, name.clone(), src.clone()),
+            ));
+            let program = match parser.parse() {
+                Ok(p) => p,
+                Err(e) => return (Err(e.to_string()), String::new(), 1, String::new()),
+            };
+            let mut it = Interpreter::new_capturing();
+            match it.run_checked(&program) {
+                Ok(_) => (Ok(()), it.get_output(), 0, String::new()),
+                Err(e) => (Ok(()), it.get_output(), exit_code_for(&e), e.render()),
             }
+        }))
+        .unwrap_or_else(|_| (Err("lexer/parser panicked".to_string()), String::new(), 1, String::new()))
+    });
+    let want_err = |msg: &str| match &s.expect_error {
+        Some(e) if !msg.contains(e.as_str()) => Err(format!("error {msg:?} lacks {e:?}")),
+        _ => Ok(()),
+    };
+    match s.mode.as_str() {
+        "parse-ok" => parsed.map_err(|e| format!("expected to parse, got: {e}")),
+        "parse-error" => match parsed {
+            Ok(()) => Err("expected a parse error but it parsed".into()),
+            Err(e) => want_err(&e),
+        },
+        "run" | "panic" => {
+            parsed.map_err(|e| format!("parse error: {e}"))?;
+            if s.mode == "panic" {
+                let want = s.expect_exit.unwrap_or(101);
+                if exit != want {
+                    return Err(format!("exit status {exit}, want {want} ({err})"));
+                }
+                want_err(&err)?;
+            } else if exit != 0 {
+                return Err(format!("exit status {exit}: {err}"));
+            }
+            let got: Vec<&str> = out.lines().collect();
+            let want: Vec<&str> = s.expect.iter().map(|x| x.as_str()).collect();
+            if got != want {
+                return Err(format!("stdout mismatch\n  want: {want:?}\n  got:  {got:?}"));
+            }
+            Ok(())
         }
+        m => Err(format!("unknown mode {m}")),
     }
-    let totals: Vec<String> = cols
-        .iter()
-        .map(|c| {
-            let n = |s: &str| got.values().filter(|r| r.get(*c).map(String::as_str) == Some(s)).count();
-            format!("{c}: {} pass / {} WRONG / {} rejected", n("PASS"), n("WRONG"), n("REJECTED"))
-        })
-        .collect();
-    eprintln!("spec conformance ({} examples): {}", examples.len(), totals.join("; "));
-    if wrong.is_empty() && worse.is_empty() && std::env::var("SPEC_BLESS").is_ok() {
-        let mut merged = was.clone();
-        for (id, row) in &got {
-            merged.entry(id.clone()).or_default().extend(row.clone());
-        }
-        merged.retain(|id, _| got.contains_key(id));
-        let xf = examples.iter().filter_map(|e| e.xfail.clone().map(|q| (e.id.clone(), q))).collect();
-        write_status(&path, &merged, &xf);
-        return;
-    }
-    let mut msg = String::new();
-    if !wrong.is_empty() {
-        msg.push_str(&format!("WRONG OUTPUT (backend ran and printed something the spec forbids):\n  {}\n", wrong.join("\n  ")));
-    }
-    if !worse.is_empty() {
-        msg.push_str(&format!("regressions:\n  {}\n", worse.join("\n  ")));
-    }
-    if !better.is_empty() {
-        msg.push_str(&format!("improvements (record with SPEC_BLESS=1):\n  {}\n", better.join("\n  ")));
-    }
-    assert!(msg.is_empty(), "{msg}");
 }
 
 #[test]
-fn selftest_judge_separates_wrong_from_rejected() {
-    let ex = Example { id: "X".into(), source: String::new(), mode: "run".into(), expect: "3\n".into(), xfail: None };
-    assert_eq!(judge(&ex, Some(("3\n".into(), 0))), "PASS");
-    assert_eq!(judge(&ex, Some(("4\n".into(), 0))), "WRONG");
-    assert_eq!(judge(&ex, Some(("3\n".into(), 1))), "WRONG");
-    assert_eq!(judge(&ex, None), "REJECTED");
-    let p = Example { mode: "panic".into(), ..ex };
-    assert_eq!(judge(&p, Some(("3\n".into(), 101))), "PASS");
-    assert_eq!(judge(&p, Some(("3\n".into(), 0))), "WRONG", "a panic example that exits 0 is wrong");
-    assert!(rank("WRONG") < rank("REJECTED") && rank("REJECTED") < rank("PASS"));
+fn spec_examples_behave_as_the_spec_says() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/spec");
+    let mut files = Vec::new();
+    collect(&root, &mut files);
+    assert!(files.len() >= 20, "expected the spec example corpus under tests/spec, found {}", files.len());
+    let mut failures = String::new();
+    for f in &files {
+        let s = load(f);
+        if s.rules.is_empty() {
+            failures.push_str(&format!("{}: no `// spec:` header\n", f.display()));
+            continue;
+        }
+        let res = check(&s);
+        let rel = f.strip_prefix(&root).unwrap().display();
+        match (&s.xfail, res) {
+            (None, Err(e)) => failures.push_str(&format!("{rel} [{}]: {e}\n", s.rules.join(","))),
+            (Some(q), Ok(())) => failures.push_str(&format!(
+                "{rel}: marked xfail {q} but now passes; remove the xfail and close {q} in OPEN_QUESTIONS.md\n"
+            )),
+            _ => {}
+        }
+    }
+    assert!(failures.is_empty(), "spec examples failed:\n{failures}");
+}
+
+#[test]
+fn rule_ids_and_tests_are_consistent() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = std::process::Command::new("bash")
+        .arg(root.join("scripts/spec_check.sh"))
+        .current_dir(root)
+        .output()
+        .expect("run scripts/spec_check.sh");
+    assert!(
+        out.status.success(),
+        "spec_check.sh failed:\n{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn intrinsic_registry_is_documented() {
+    let doc = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/spec/intrinsics.md")).unwrap();
+    for i in windjammer::intrinsics::Intrinsic::ALL {
+        let needle = format!("`{}`", i.call_name());
+        assert!(doc.contains(&needle), "docs/spec/intrinsics.md does not list intrinsic {needle}");
+    }
+}
+
+#[test]
+fn stdlib_index_lists_every_std_module() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let doc = std::fs::read_to_string(root.join("docs/spec/stdlib.md")).unwrap();
+    for e in std::fs::read_dir(root.join("std")).unwrap() {
+        let name = e.unwrap().file_name().to_string_lossy().to_string();
+        if name == "README.md" {
+            continue;
+        }
+        let stem = name.strip_suffix(".wj").unwrap_or(&name);
+        assert!(doc.contains(&format!("`{stem}`")), "docs/spec/stdlib.md does not index std/{name}");
+    }
+}
+
+#[test]
+fn rule_examples_in_chapters_match_the_test_files() {
+    // Each `<!-- example: PATH -->` marker is followed by a fenced block that must equal the
+    // test file with its leading `//` header removed.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut checked = 0;
+    for e in std::fs::read_dir(root.join("docs/spec")).unwrap() {
+        let p = e.unwrap().path();
+        if p.extension().is_none_or(|x| x != "md") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&p).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        for (i, l) in lines.iter().enumerate() {
+            let Some(rest) = l.strip_prefix("<!-- example: ") else { continue };
+            let rel = rest.trim_end_matches(" -->");
+            let src = std::fs::read_to_string(root.join(rel)).unwrap_or_else(|_| panic!("{rel} missing"));
+            let body: Vec<&str> = src.lines().skip_while(|l| l.starts_with("//") && l.contains(": ") && is_header(l)).collect();
+            // the fence follows the marker, optionally after one `<!-- ignore: .. -->` / `<!-- should_fail: .. -->` reason line
+            let start = lines.iter().skip(i + 1).position(|l| l.starts_with("```")).map(|k| i + 1 + k + 1).unwrap_or(lines.len());
+            let mut block = Vec::new();
+            for l in lines.iter().skip(start) {
+                if *l == "```" {
+                    break;
+                }
+                block.push(*l);
+            }
+            assert_eq!(block, body, "{}: example for {rel} differs from the test file", p.display());
+            checked += 1;
+        }
+    }
+    assert!(checked >= 100, "only {checked} examples cross-checked");
+}
+
+fn is_header(l: &str) -> bool {
+    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail"]
+        .iter()
+        .any(|k| l.strip_prefix("// ").is_some_and(|r| r.starts_with(&format!("{k}:"))))
 }

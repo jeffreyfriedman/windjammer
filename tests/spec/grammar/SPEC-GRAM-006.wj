@@ -1,0 +1,8 @@
+// spec: SPEC-GRAM-006
+// expect: 3 2 true true
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let a = id::<int>(3)
+    let v = "ab cd".split(" ").map(|s| s.len()).collect::<Vec<int>>()
+    println("${a} ${v.len()} ${a < 4} ${v.len() > 1}")
+}

@@ -1,0 +1,7 @@
+// D-NUM-FOR-ACC: the accumulator must take the element width (rustc: i64 += i32).
+fn main() {
+    let mut u = 0
+    let w = vec![1, 2]
+    for x in w { u = u + x }
+    println("${u}")
+}

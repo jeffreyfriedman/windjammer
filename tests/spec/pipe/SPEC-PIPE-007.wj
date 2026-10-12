@@ -1,0 +1,5 @@
+// spec: SPEC-PIPE-007
+// mode: parse-error
+fn main() {
+    let r = 1 |> 2
+}

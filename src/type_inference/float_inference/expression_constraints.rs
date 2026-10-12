@@ -198,7 +198,7 @@ impl FloatInference {
                         }
                         FloatType::Unknown => return,
                     };
-                    self.constraints.push(constraint);
+                    if Self::is_float_literal(inner) { self.constraints.push(constraint); }
                 }
             }
             Expression::Block { statements, .. } => {

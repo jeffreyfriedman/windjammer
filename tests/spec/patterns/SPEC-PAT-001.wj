@@ -1,0 +1,15 @@
+// spec: SPEC-PAT-001
+// expect: zero seven other 9
+// expect: any
+fn f(n: int) -> string {
+    match n {
+        0 => "zero",
+        7 => "seven",
+        k => "other ${k}",
+    }
+}
+fn main() {
+    println("${f(0)} ${f(7)} ${f(9)}")
+    let s = match 3 { _ => "any" }
+    println(s)
+}

@@ -819,3 +819,12 @@ mod tests {
         assert!(!is_stdlib_default_empty_type("Mutex"));
     }
 }
+
+/// Rust primitive scalar type names (`i64`, `f32`, `char`, ...): `i64::from_str_radix` is a type path, not a module path.
+pub fn is_primitive_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128"
+            | "usize" | "f32" | "f64" | "char" | "bool" | "str"
+    )
+}

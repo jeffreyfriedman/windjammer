@@ -1,0 +1,14 @@
+// spec: SPEC-PAT-010
+// expect: 1 2 0
+// expect: T
+fn f(s: string) -> int {
+    match s {
+        "a" => 1,
+        "bc" => 2,
+        _ => 0,
+    }
+}
+fn main() {
+    println("${f("a")} ${f("bc")} ${f("z")}")
+    match true { true => println("T"), false => println("F") }
+}

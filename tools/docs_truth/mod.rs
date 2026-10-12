@@ -25,6 +25,8 @@ pub mod links;
 pub mod md;
 pub mod proposal;
 pub mod regions;
+pub mod spec_grammar;
+pub mod spec_random;
 pub mod util;
 
 use std::path::PathBuf;
@@ -82,5 +84,6 @@ pub fn run_all(ctx: &Ctx) -> Vec<Finding> {
     out.extend(freshness::check_all(ctx, &cfg));
     out.extend(proposal::check_all(ctx));
     out.extend(ebnf::check_all(ctx, &cfg));
+    out.extend(spec_grammar::check_all(ctx, &cfg));
     out
 }

@@ -1,0 +1,9 @@
+// spec: SPEC-TYP-002
+// expect: 200 -300 1.5 5000000000
+fn main() {
+    let a: u8 = 200
+    let b: i16 = -300
+    let c: f32 = 1.5
+    let d: u64 = 5000000000
+    println("${a} ${b} ${c} ${d}")
+}
