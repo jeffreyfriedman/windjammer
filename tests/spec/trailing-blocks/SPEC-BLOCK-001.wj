@@ -1,0 +1,12 @@
+// spec: SPEC-BLOCK-001
+// expect: run job
+// expect: 42
+fn run_with(label: string, body: fn() -> int) -> int {
+    println("run ${label}")
+    body()
+}
+
+fn main() {
+    let r = run_with("job") { 40 + 2 }
+    println("${r}")
+}

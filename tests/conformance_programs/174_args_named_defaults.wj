@@ -1,0 +1,37 @@
+// expect: db:30:3
+// expect: db:30:5
+// expect: db:1:2
+// expect: h:30:9
+// expect: 11 15
+// expect: 7
+fn connect(host: string, timeout: int = 30, retries: int = 3) -> string {
+    "${host}:${timeout}:${retries}"
+}
+
+fn next_id() -> int {
+    7
+}
+
+fn tag(id: int = next_id()) -> int {
+    id
+}
+
+struct Counter {
+    n: int,
+}
+
+impl Counter {
+    fn bump(self, by: int = 1) -> int {
+        self.n + by
+    }
+}
+
+fn main() {
+    println(connect("db"))
+    println(connect("db", retries: 5))
+    println(connect("db", timeout: 1, retries: 2))
+    println(connect(retries: 9, host: "h"))
+    let c = Counter { n: 10 }
+    println("${c.bump()} ${c.bump(by: 5)}")
+    println("${tag()}")
+}

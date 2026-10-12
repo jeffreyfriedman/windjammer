@@ -1,0 +1,17 @@
+// spec: SPEC-BLOCK-003
+// expect: yes
+// expect: 3
+fn big(x: int) -> bool {
+    x > 2
+}
+
+fn main() {
+    if big(3) {
+        println("yes")
+    }
+    let mut i = 0
+    while big(5 - i) {
+        i = i + 1
+    }
+    println("${i}")
+}

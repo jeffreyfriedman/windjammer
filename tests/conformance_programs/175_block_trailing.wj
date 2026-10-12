@@ -1,0 +1,30 @@
+// expect: run job
+// expect: 42
+// expect: big
+// expect: 30
+// expect: 6
+fn twice(f: fn(int) -> int, x: int) -> int {
+    f(f(x))
+}
+
+fn run_with(label: string, body: fn() -> int) -> int {
+    println("run ${label}")
+    body()
+}
+
+fn apply_to(x: int, f: fn(int) -> int) -> int {
+    f(x)
+}
+
+fn main() {
+    let r = run_with("job") { 40 + 2 }
+    println("${r}")
+    let x = 3
+    if twice(|v| v + 1, x) > 4 {
+        println("big")
+    }
+    let xs: Vec<int> = [1, 2, 3]
+    let ys: Vec<int> = xs.map() { v -> v * 10 }.collect()
+    println("${ys[2]}")
+    println("${apply_to(3) { n: int -> n * 2 }}")
+}
