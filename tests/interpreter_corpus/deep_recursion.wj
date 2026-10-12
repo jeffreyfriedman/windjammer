@@ -1,4 +1,4 @@
-// seeds: 1 2 3 5
+// seeds: 1 2 3 4
 // Recursion far deeper than a default thread stack allows (the interpreter runs on a big-stack thread).
 fn depth(n: int, acc: int) -> int {
     if n == 0 {

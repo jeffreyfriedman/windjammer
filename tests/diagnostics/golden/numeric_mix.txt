@@ -1,0 +1,7 @@
+error[WJ0020]: operator `+` cannot be applied to `int` and `float`
+  --> numeric_mix.wj:5:13
+  |
+5 |     let c = a + b
+  |             ^ operand here
+  = help: convert one operand explicitly, for example `a as float`
+  = explain: wj explain WJ0020

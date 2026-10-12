@@ -1,0 +1,6 @@
+error[WJ0011]: unexpected token in expression: `}`; expected an expression: a literal, identifier, `(`, `[`, `{`, `|`, `if`, `match`, a unary operator (`-`, `!`, `*`, `&`) or `self`
+  --> syntax_missing_expression.wj:4:1
+  |
+4 | }
+  | ^ unexpected here
+  = explain: wj explain WJ0011

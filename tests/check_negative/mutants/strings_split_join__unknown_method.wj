@@ -1,0 +1,11 @@
+// mutant: unknown_method of examples/verified/strings_split_join.wj
+fn main() {
+    let parts: Vec<string> = "a,b,c".split(",").map(|p| p.to_string()).collect()
+    println("${parts.length_of()}")
+    println(parts.join("|"))
+    let letters = ["x", "y", "z"]
+    println("[${letters.join(", ")}]")
+    let words: Vec<string> = "one two  three   four".split_whitespace().map(|w| w.to_string()).collect()
+    println("${words.len()}")
+    println(words.join(" "))
+}

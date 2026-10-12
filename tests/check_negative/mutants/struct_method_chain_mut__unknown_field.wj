@@ -1,0 +1,26 @@
+// mutant: unknown_field of examples/verified/struct_method_chain_mut.wj
+struct Counter { n: int, step: int }
+
+impl Counter {
+    fn tick(self) {
+        self.nx += self.step
+    }
+    fn value(self) -> int {
+        self.n
+    }
+}
+
+fn run(c: Counter) -> int {
+    c.tick()
+    c.tick()
+    c.value()
+}
+
+fn main() {
+    let mut a = Counter { n: 1, step: 1 }
+    a.tick()
+    a.tick()
+    println("${a.value()}")
+    let mut b = Counter { n: 0, step: 15 }
+    println("${run(b)}")
+}

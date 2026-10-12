@@ -1,0 +1,6 @@
+error[WJ0011]: expected `}`, found end of file
+  --> syntax_unclosed_brace.wj:3:17
+  |
+3 |     println("hi")
+  |                 ^ unexpected here
+  = explain: wj explain WJ0011

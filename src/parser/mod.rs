@@ -30,6 +30,7 @@ mod match_value_expression_parser;
 mod matches_macro;
 mod pipe_parser;
 mod primary_expression_parser;
+pub mod task_prefix;
 
 // Statement parsing module - extracted from parser_impl.rs
 pub mod statement_parser;
