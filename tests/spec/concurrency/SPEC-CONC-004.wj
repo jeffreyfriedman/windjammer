@@ -1,6 +1,5 @@
 // spec: SPEC-CONC-004
 // expect: 5
-// xfail: Q-013
 use std::sync
 fn main() {
     let (tx, rx) = sync::channel()

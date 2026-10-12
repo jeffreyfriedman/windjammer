@@ -1,0 +1,89 @@
+// seeds: 3 5 8 21
+// interp-only: threads/channels compile only against windjammer_runtime (cargo), which the differential harness's plain rustc step lacks; schedule independence is tested in interpreter_concurrency_test.rs
+// Properly synchronised threads: join handles, channels with several producers, a shared
+// counter behind Arc<Mutex>, an atomic, and scoped results collected in order. The output must be
+// identical for every thread schedule.
+use std::sync::{Arc, Mutex}
+use std::sync::atomic::{AtomicUsize, Ordering}
+use std::sync::mpsc
+use std::thread
+use std::thread::JoinHandle
+
+fn work(id: i64, seed: i64) -> i64 {
+    let mut acc: i64 = id + seed
+    let mut i: i64 = 0
+    while i < 50 {
+        acc = (acc * 31 + i) % 1000003
+        i += 1
+    }
+    acc
+}
+
+fn main() {
+    let seed: i64 = __SEED__
+    let mut handles: Vec<JoinHandle<i64>> = Vec::new()
+    let mut id: i64 = 0
+    while id < 4 {
+        let k = id
+        handles.push(thread::spawn(move || {
+            return work(k, seed)
+        }))
+        id += 1
+    }
+    let mut total: i64 = 0
+    for h in handles {
+        let v = h.join().unwrap_or(0)
+        println("joined {}", v)
+        total += v
+    }
+    println("total {}", total)
+
+    let (tx, rx) = mpsc::channel()
+    let mut p: i64 = 0
+    while p < 3 {
+        let tx2 = tx.clone()
+        let base = p
+        thread::spawn(move || {
+            let mut j: i64 = 0
+            while j < 4 {
+                tx2.send(base * 100 + j + seed)
+                j += 1
+            }
+        })
+        p += 1
+    }
+    drop(tx)
+    let mut got: Vec<i64> = Vec::new()
+    for m in rx {
+        got.push(m)
+    }
+    got.sort()
+    println("received {:?}", got)
+
+    let counter = Arc::new(Mutex::new(0))
+    let hits = Arc::new(AtomicUsize::new(0))
+    let mut hs: Vec<JoinHandle<i64>> = Vec::new()
+    let mut w: i64 = 0
+    while w < 5 {
+        let c = counter.clone()
+        let a = hits.clone()
+        let step = w + seed
+        hs.push(thread::spawn(move || {
+            match c.lock() {
+                Ok(mut g) => { *g += step }
+                Err(_) => {}
+            }
+            a.fetch_add(1, Ordering::SeqCst)
+            return 0
+        }))
+        w += 1
+    }
+    for h in hs {
+        h.join().unwrap_or(0)
+    }
+    let final_count = match counter.lock() {
+        Ok(g) => *g,
+        Err(_) => -1,
+    }
+    println("counter {} hits {}", final_count, hits.load(Ordering::SeqCst))
+}

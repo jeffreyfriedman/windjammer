@@ -81,6 +81,16 @@ fn write_tree(asset: Asset, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Number of files in the embedded tree.
+pub fn file_count(asset: Asset) -> usize {
+    asset.table().len()
+}
+
+/// Write the embedded tree for `asset` into `dest` (created if needed).
+pub fn write_to(asset: Asset, dest: &Path) -> std::io::Result<()> {
+    write_tree(asset, dest)
+}
+
 /// Materialize `asset` and return its directory. Idempotent and safe under concurrent
 /// `wj` processes (write to a private temp sibling, then rename into place).
 pub fn materialize(asset: Asset) -> std::io::Result<PathBuf> {

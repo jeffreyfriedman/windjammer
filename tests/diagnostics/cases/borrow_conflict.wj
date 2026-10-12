@@ -1,0 +1,7 @@
+// expect: rustc:WJ0016
+fn main() {
+    let mut v = [1, 2, 3]
+    let a = &mut v
+    let b = &mut v
+    println("${a.len()} ${b.len()}")
+}

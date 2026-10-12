@@ -1,0 +1,11 @@
+error[WJ0021]: the name `Item` is defined more than once in this module
+  --> duplicate_struct.wj:6:8
+  |
+6 | struct Item {
+  |        ^^^^ redefined here
+  :::  duplicate_struct.wj:2:8
+  |
+2 | struct Item {
+  |        ---- first defined here
+  = help: rename one of them or delete the duplicate
+  = explain: wj explain WJ0021

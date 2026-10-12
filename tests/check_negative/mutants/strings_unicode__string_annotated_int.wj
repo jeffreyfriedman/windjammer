@@ -1,0 +1,8 @@
+// mutant: string_annotated_int of examples/verified/strings_unicode.wj
+fn main() {
+    let a: int = "héllo"
+    println("${a.chars().count()} ${a.len()}")
+    let abc = "abc"
+    println("${abc.bytes().count()}")
+    println("${a.chars().next().unwrap_or('?')}")
+}
