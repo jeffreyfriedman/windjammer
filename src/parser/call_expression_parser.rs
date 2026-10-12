@@ -5,11 +5,25 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// Where the postfix chain must stop (docs/design/statement-boundaries.md): `(` or `[` that
+    /// start a new line begin a new statement; `as` after a prefix operator's operand applies to
+    /// the whole prefix expression (`-1 as u8` is `(-1) as u8`, as in Rust).
+    fn postfix_stops_here(&self) -> bool {
+        match self.current_token() {
+            Token::LParen | Token::LBracket => self.had_newline_before_current(),
+            Token::As => self.in_unary_operand,
+            _ => false,
+        }
+    }
+
     pub(in crate::parser) fn parse_postfix_expression(
         &mut self,
         mut expr: &'static Expression<'static>,
     ) -> Result<&'static Expression<'static>, String> {
         loop {
+            if self.postfix_stops_here() {
+                break;
+            }
             expr = match self.current_token() {
                 Token::Dot => {
                     // Peek ahead to check for .await
@@ -248,14 +262,6 @@ impl Parser {
                     }
                 }
                 Token::LParen => {
-                    // Check for newline before LParen (automatic semicolon insertion)
-                    // If there was a newline, this might be a new statement, not a function call
-                    if self.had_newline_before_current() {
-                        // ASI: Treat newline as statement terminator
-                        // Don't consume the LParen - it belongs to the next statement
-                        break;
-                    }
-
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;

@@ -15,7 +15,7 @@ impl Parser {
     ) -> Result<&'static Expression<'static>, String> {
         let left = if self.current_token() == &Token::Bang {
             self.advance();
-            let inner = self.parse_match_value_atom()?;
+            let inner = self.with_unary_operand(|p| p.parse_match_value_atom())?;
             self.alloc_expr(Expression::Unary {
                 op: UnaryOp::Not,
                 operand: inner,
@@ -23,7 +23,7 @@ impl Parser {
             })
         } else if self.current_token() == &Token::Minus {
             self.advance();
-            let inner = self.parse_match_value_atom()?;
+            let inner = self.with_unary_operand(|p| p.parse_match_value_atom())?;
             self.alloc_expr(Expression::Unary {
                 op: UnaryOp::Neg,
                 operand: inner,
@@ -31,7 +31,7 @@ impl Parser {
             })
         } else if self.current_token() == &Token::Star {
             self.advance();
-            let inner = self.parse_match_value_atom()?;
+            let inner = self.with_unary_operand(|p| p.parse_match_value_atom())?;
             self.alloc_expr(Expression::Unary {
                 op: UnaryOp::Deref,
                 operand: inner,
@@ -122,7 +122,7 @@ impl Parser {
                 } else {
                     false
                 };
-                let inner = self.parse_match_value_atom()?;
+                let inner = self.with_unary_operand(|p| p.parse_match_value_atom())?;
                 Ok(self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
