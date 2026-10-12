@@ -1,0 +1,14 @@
+// spec: SPEC-EXPR-011
+// expect: 15
+// expect: 2
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+fn main() {
+    let k = 10
+    let add = |x| x + k
+    println("${apply(add, 5)}")
+    let mut count = 0
+    let mut bump = || { count += 1 }
+    bump()
+    bump()
+    println("${count}")
+}

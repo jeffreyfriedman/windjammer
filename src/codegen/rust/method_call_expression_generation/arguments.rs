@@ -258,7 +258,7 @@ impl<'ast> CodeGenerator<'ast> {
                         );
 
                     if strip_ref_for_collection_key {
-                        if let Expression::Identifier { .. } = &**operand {
+                        if matches!(&**operand, Expression::Identifier { .. }) && !self.is_owned_text_local(operand) {
                             operand
                         } else {
                             arg

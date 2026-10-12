@@ -1,0 +1,7 @@
+// spec: SPEC-EXPR-002
+// expect: true
+// expect: false
+fn main() {
+    println("${1 < 2 == 3 < 4}")
+    println("${1 < 2 == false}")
+}

@@ -1,0 +1,9 @@
+// spec: SPEC-PIPE-001
+// expect: 10
+// expect: 11
+fn double(x: int) -> int { x * 2 }
+fn add(x: int, y: int) -> int { x + y }
+fn main() {
+    println("${5 |> double}")
+    println("${5 |> double |> add(1)}")
+}

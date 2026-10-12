@@ -1,0 +1,10 @@
+// expect: x4
+// expect: n=12!
+fn main() {
+    let i: int = 4
+    let s = "x" + i.to_string()
+    println("${s}")
+    let j: int = 12
+    let t = "n=" + j.to_string() + "!"
+    println("${t}")
+}
