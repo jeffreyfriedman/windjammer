@@ -11,8 +11,6 @@ mod stmt;
 use super::env::ItemEnv;
 use super::ir::*;
 use super::ty::Ty;
-use crate::analyzer::SignatureRegistry;
-use crate::parser::Program;
 use std::collections::HashMap;
 
 pub use items::lower_program;
@@ -24,8 +22,6 @@ pub(super) struct Local {
     pub alias: bool,
     /// Unique emitted name (shadowed declarations get a numeric suffix).
     pub out: String,
-    /// Declared `mut` (closures snapshot such captures).
-    pub mutable: bool,
 }
 
 pub(super) struct Lowerer<'e> {
@@ -79,14 +75,8 @@ impl<'e> Lowerer<'e> {
             out = format!("{name}_{n}");
         }
         self.used.insert(out.clone());
-        self.scopes.last_mut().unwrap().insert(name.to_string(), Local { ty, alias, out: out.clone(), mutable: false });
+        self.scopes.last_mut().unwrap().insert(name.to_string(), Local { ty, alias, out: out.clone() });
         out
-    }
-
-    pub fn set_mutable(&mut self, name: &str) {
-        if let Some(l) = self.scopes.last_mut().and_then(|s| s.get_mut(name)) {
-            l.mutable = true;
-        }
     }
 
     pub fn new_var(&mut self) -> Ty {

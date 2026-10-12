@@ -436,8 +436,7 @@ impl<'e> Lowerer<'e> {
         blk.stmts = prologue;
         let ret = blk.tail.as_ref().map(|t| t.ty.clone()).unwrap_or(Ty::Unit);
         let ty = Ty::Fn(ps.iter().map(|p| p.1.clone()).collect(), Box::new(ret.clone()));
-        let captures = self.closure_captures(&mut blk);
-        Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk, captures }))
+        Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk }))
     }
 
     /// `|(a, b)|`: a hidden tuple parameter plus a destructuring `let` at the top of the body.
@@ -457,24 +456,6 @@ impl<'e> Lowerer<'e> {
         }
         let init = PExpr::new(tup_ty.clone(), PK::Local(hidden.clone()));
         Ok(((hidden, tup_ty), PStmt::LetPat { pat: PPat::Tuple(binds), init, els: None }))
-    }
-
-    /// Outer `mut` locals referenced by the closure body: Rust `move` closures own a snapshot.
-    fn closure_captures(&self, body: &mut PBlock) -> Vec<(String, Ty)> {
-        let mut seen = std::collections::BTreeSet::new();
-        crate::codegen::portable::visit::exprs_in_block(body, &mut |e| {
-            if let PK::Local(n) = &*e.kind {
-                seen.insert(n.clone());
-            }
-        });
-        let mut out = Vec::new();
-        for name in seen {
-            let hit = self.scopes.iter().flat_map(|s| s.values()).find(|l| l.out == name && l.mutable && !l.alias);
-            if let Some(l) = hit {
-                out.push((name, l.ty.clone()));
-            }
-        }
-        out
     }
 
     fn try_op(&mut self, inner: &Expression) -> PResult<PExpr> {

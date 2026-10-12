@@ -92,7 +92,7 @@ impl<'m> Js<'m> {
                 Ok(format!("new Map([{}])", parts?.join(", ")))
             }
             PK::Tuple(es) => Ok(format!("[{}]", self.args(es)?)),
-            PK::Closure { params, body, captures, .. } => self.closure(params, body, captures),
+            PK::Closure { params, body, .. } => self.closure_arrow(params, body),
             PK::Copy(a) => {
                 let v = self.expr(a)?;
                 Ok(self.clone_js(&a.ty, &v))
@@ -191,16 +191,6 @@ impl<'m> Js<'m> {
             vals.push(self.expr(e)?);
         }
         Ok(format!("new {}({})", ident(name), vals.join(", ")))
-    }
-
-    fn closure(&mut self, params: &[(String, Ty)], body: &PBlock, captures: &[(String, Ty)]) -> PResult<String> {
-        let arrow = self.closure_arrow(params, body)?;
-        if captures.is_empty() {
-            return Ok(arrow);
-        }
-        let names: Vec<String> = captures.iter().map(|(n, _)| ident(n)).collect();
-        let vals: Vec<String> = captures.iter().map(|(n, t)| self.clone_js(t, &ident(n))).collect();
-        Ok(format!("(({}) => {arrow})({})", names.join(", "), vals.join(", ")))
     }
 
     fn closure_arrow(&mut self, params: &[(String, Ty)], body: &PBlock) -> PResult<String> {
