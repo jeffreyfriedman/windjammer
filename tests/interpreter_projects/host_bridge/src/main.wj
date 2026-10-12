@@ -1,0 +1,10 @@
+extern fn host_add(a: int, b: int) -> int
+extern fn host_greet(name: string) -> string
+extern fn host_scale(x: f64, on: bool) -> f64
+
+fn main() {
+    println("{}", host_add(40, 2))
+    println("{}", host_greet("wj"))
+    println("{}", host_scale(1.5, true))
+    println("{}", host_scale(1.5, false))
+}

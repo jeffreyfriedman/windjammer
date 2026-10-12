@@ -149,6 +149,8 @@ pub struct Interpreter {
     /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items
     /// are then bound after every module is registered, instead of one at a time.
     pub(crate) project_loading: bool,
+    /// Bridge library for `extern fn` (ADR-0020), when the project provides Rust code.
+    pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
 }
 
 impl Default for Interpreter {
@@ -191,6 +193,7 @@ impl Interpreter {
             expected: None,
             missing_modules: HashSet::new(),
             project_loading: false,
+            host: None,
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
         s

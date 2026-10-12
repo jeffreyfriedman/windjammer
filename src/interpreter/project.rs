@@ -333,17 +333,15 @@ impl Interpreter {
                         let p = r.collected.module_path_of(x.module);
                         if p.is_empty() { "crate".to_string() } else { p.to_string() }
                     };
-                    let mut e = RuntimeError::new(
-                        ErrorKind::Unsupported,
-                        format!(
-                            "{} `{}` is defined in two modules (`{}` and `{}`); types with the same name in different modules",
-                            noun(d.kind),
-                            d.name,
-                            m(prev),
-                            m(d)
-                        ),
+                    let what = format!(
+                        "{} `{}` is defined in two modules (`{}` and `{}`)",
+                        noun(d.kind),
+                        d.name,
+                        m(prev),
+                        m(d)
                     );
-                    e.span = d.location.as_ref().map(|l| Span { file: l.file.to_string_lossy().to_string(), line: l.line, column: l.column });
+                    let (file, line, col) = d.location.as_ref().map(|l| (l.file.clone(), l.line, l.column)).unwrap_or_default();
+                    let e = super::preflight::err("modules.same_name_types", what, &file, line, col);
                     return Err(e);
                 }
             }

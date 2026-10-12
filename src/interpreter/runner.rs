@@ -50,7 +50,7 @@ pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
             return 1;
         }
     };
-    match run_entry(&entry, args, false) {
+    match run_entry(&entry, args, false, None) {
         RunOutcome::Exited(code) => code,
         RunOutcome::NeedsCompiled(_) => unreachable!("fallback disabled"),
     }
@@ -68,12 +68,27 @@ pub enum RunOutcome {
 
 /// Load and run `entry` in the interpreter. With `fallback`, a preflight hit returns
 /// [`RunOutcome::NeedsCompiled`] instead of printing the error.
-pub fn run_entry(entry: &Path, args: Vec<String>, fallback: bool) -> RunOutcome {
+/// `host`: bridge library and the `extern fn`s it provides (ADR-0020), built by the CLI.
+pub fn run_entry(
+    entry: &Path,
+    args: Vec<String>,
+    fallback: bool,
+    host: Option<(PathBuf, Vec<super::host_bridge::ExternSig>)>,
+) -> RunOutcome {
     let entry = entry.to_path_buf();
     with_big_stack(move || {
         let mut it = Interpreter::new();
         it.guard_stack();
         it.set_args(args);
+        if let Some((lib, sigs)) = host {
+            match super::host_bridge::HostLib::open(&lib, &sigs) {
+                Ok(h) => it.attach_host(h),
+                Err(m) => {
+                    eprintln!("error: {}", m);
+                    return RunOutcome::Exited(1);
+                }
+            }
+        }
         if let Err(e) = it.load_program_at(&entry) {
             if fallback && super::preflight::is_preflight(&e) {
                 return RunOutcome::NeedsCompiled(e);
