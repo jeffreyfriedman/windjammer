@@ -14,6 +14,15 @@ impl<'m> Go<'m> {
         if name == "to_string" {
             return self.display(recv, &FmtSpec::default());
         }
+        // A length typed `int` (SPEC-NUM-014) converts the `uint` length.
+        if matches!(name, "len" | "count" | "capacity") {
+            if let Ty::Int(k) = ty {
+                if *k != IntKind::Usize {
+                    let n = self.method(recv, name, args, res, &Ty::usize())?;
+                    return Ok(format!("{}({n})", super::types::int_name(*k)));
+                }
+            }
+        }
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
         match &recv.ty {
             Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),

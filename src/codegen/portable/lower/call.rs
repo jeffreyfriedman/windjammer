@@ -345,6 +345,8 @@ impl<'e> Lowerer<'e> {
             }
         }
         let ty = refine_container(ty, &recv, method, &lowered);
+        // SPEC-NUM-014: a length is usable as `int` (`i < v.len()` with `i: int`, `-> int { v.len() }`).
+        let ty = if matches!(method, "len" | "count" | "capacity") && ty == Ty::usize() { self.len_var() } else { ty };
         Ok(PExpr::new(ty, PK::Method { recv, name: method.to_string(), args: lowered, res: Resolution::Builtin }))
     }
 

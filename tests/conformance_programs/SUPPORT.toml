@@ -140,3 +140,8 @@ reason = "rust-int-literal-width-inference: `Alias::new(3, 4)` through a `type` 
 program = "174_closure_mut_capture"
 backend = "rust"
 reason = "rust-int-literal-width-inference: the `for i in 0..4` range is typed i32 while the closure parameter is i64 (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "175_len_and_index_as_int"
+backend = "rust"
+reason = "rust-int-literal-width-inference: `vec![5, 6, 7]` passed to a `Vec<int>` parameter is typed Vec<i32> (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
