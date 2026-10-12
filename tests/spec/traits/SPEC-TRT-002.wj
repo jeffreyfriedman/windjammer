@@ -1,0 +1,12 @@
+// spec: SPEC-TRT-002
+// expect: ann:30 bo/4
+trait Named { fn name(self) -> string }
+trait Aged { fn age(self) -> int }
+struct P { n: string, a: int }
+impl Named for P { fn name(self) -> string { self.n } }
+impl Aged for P { fn age(self) -> int { self.a } }
+fn describe<T: Named + Aged>(x: T) -> string { "${x.name()}:${x.age()}" }
+fn describe2<T>(x: T) -> string where T: Named + Aged { "${x.name()}/${x.age()}" }
+fn main() {
+    println("${describe(P { n: "ann", a: 30 })} ${describe2(P { n: "bo", a: 4 })}")
+}

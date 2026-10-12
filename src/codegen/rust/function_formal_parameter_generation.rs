@@ -46,7 +46,7 @@ impl<'ast> CodeGenerator<'ast> {
         param: &Parameter,
         analyzed: &AnalyzedFunction<'ast>,
     ) -> String {
-        let type_str = self.type_to_rust(&param.type_);
+        let type_str = self.std_comparison_formal_type(self.type_to_rust(&param.type_));
         let auto_needs_mut = !param.is_mutable
             && (self.variable_needs_mut(&param.name)
                 || analyzed.mutated_parameters.contains(&param.name)

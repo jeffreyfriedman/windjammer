@@ -1,0 +1,8 @@
+// spec: SPEC-LEX-003
+// expect: 1 2 3
+fn main() {
+    let a = 1
+    let A = 2
+    let _x1 = 3
+    println("${a} ${A} ${_x1}")
+}

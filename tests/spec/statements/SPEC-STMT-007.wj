@@ -1,0 +1,14 @@
+// spec: SPEC-STMT-007
+// expect: cleanup2
+// expect: cleanup1
+// expect: 1
+fn work(n: int) -> int {
+    defer println("cleanup1")
+    defer println("cleanup2")
+    if n > 0 { return n }
+    println("not reached when n > 0")
+    0
+}
+fn main() {
+    println("${work(1)}")
+}

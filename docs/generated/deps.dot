@@ -119,7 +119,7 @@ digraph deps {
   "analyzer" -> "type_inference" [label="1"];
   "auto_clone" -> "analyzer" [label="15"];
   "auto_clone" -> "codegen" [label="3",color=red,fontcolor=red];
-  "auto_clone" -> "parser" [label="33"];
+  "auto_clone" -> "parser" [label="34"];
   "auto_clone" -> "type_classification" [label="1"];
   "auto_clone_tests" -> "analyzer" [label="23"];
   "auto_clone_tests" -> "lexer" [label="2"];
@@ -150,7 +150,7 @@ digraph deps {
   "cli" -> "error_mapper" [label="6"];
   "cli" -> "formatter" [label="1"];
   "cli" -> "intrinsics" [label="1"];
-  "cli" -> "ir" [label="2"];
+  "cli" -> "ir" [label="3"];
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="4"];
   "cli" -> "parser" [label="4"];
@@ -297,15 +297,16 @@ digraph deps {
   "interpreter" -> "parser" [label="57"];
   "interpreter" -> "source_map" [label="3"];
   "intrinsics" -> "error_catalog" [label="2"];
-  "ir" -> "analyzer" [label="57"];
+  "ir" -> "analyzer" [label="59"];
   "ir" -> "auto_clone" [label="1"];
   "ir" -> "codegen" [label="51",color=red,fontcolor=red];
   "ir" -> "compiler" [label="1",color=red,fontcolor=red];
-  "ir" -> "lexer" [label="9"];
-  "ir" -> "parser" [label="42"];
+  "ir" -> "lexer" [label="10"];
+  "ir" -> "parser" [label="45"];
   "ir" -> "type_classification" [label="30"];
+  "ir" -> "type_display" [label="1"];
   "ir" -> "type_inference" [label="5"];
-  "lexer" -> "type_classification" [label="2",color=red,fontcolor=red];
+  "lexer" -> "type_classification" [label="1",color=red,fontcolor=red];
   "linter" -> "analyzer" [label="4"];
   "linter" -> "auto_clone" [label="1"];
   "linter" -> "error" [label="3"];

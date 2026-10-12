@@ -1,0 +1,8 @@
+// spec: SPEC-LEX-006
+// expect: 200 7 255
+fn main() {
+    let a = 200u8
+    let b = 7i32
+    let c = 0xffu8
+    println("${a} ${b} ${c}")
+}

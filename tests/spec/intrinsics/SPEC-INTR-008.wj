@@ -1,0 +1,8 @@
+// spec: SPEC-INTR-008
+// expect: old 1
+// expect: 2
+fn main() {
+    println!("old {}", 1)
+    let v = vec![1, 2]
+    println("${v.len()}")
+}

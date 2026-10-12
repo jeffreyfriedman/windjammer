@@ -2002,6 +2002,33 @@
   {
     "kind": "example",
     "module": "",
+    "name": "defer_panic_lifo",
+    "signature": "",
+    "source": "examples/verified/defer_panic_lifo.wj",
+    "summary": "verified program; first output line: open",
+    "tags": [
+      "control-flow",
+      "defer",
+      "panic"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "display_to_string",
+    "signature": "",
+    "source": "examples/verified/display_to_string.wj",
+    "summary": "verified program; first output line: (1, 2)",
+    "tags": [
+      "traits",
+      "display",
+      "to_string",
+      "interpolation"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "enum_basics",
     "signature": "",
     "source": "examples/verified/enum_basics.wj",
@@ -2235,6 +2262,20 @@
       "hashset",
       "collections",
       "set"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "idiom_agentdx_regressions",
+    "signature": "",
+    "source": "examples/verified/idiom_agentdx_regressions.wj",
+    "summary": "verified program; first output line: 1",
+    "tags": [
+      "idioms",
+      "regression",
+      "strings",
+      "sort"
     ]
   },
   {
@@ -3599,7 +3640,7 @@
     "name": "The loop",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
-    "summary": "wj check --json FILE_OR_DIR     # parse + lint + transpile, no cargo; JSON diagnostics with spans",
+    "summary": "<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->",
     "tags": []
   },
   {

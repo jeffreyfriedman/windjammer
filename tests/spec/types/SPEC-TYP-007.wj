@@ -1,0 +1,7 @@
+// spec: SPEC-TYP-007
+// expect: 7
+fn twice(f: fn(int) -> int, x: int) -> int { f(f(x)) }
+fn main() {
+    let inc = |n| n + 1
+    println("${twice(inc, 5)}")
+}

@@ -1,0 +1,21 @@
+// spec: SPEC-ERR-006
+// expect: parse: not a number
+enum AppErr { Parse(string), Neg }
+impl From<string> for AppErr {
+    fn from(s: string) -> AppErr { AppErr::Parse(s) }
+}
+fn parse(s: string) -> Result<int, string> {
+    if s == "x" { Err("not a number") } else { Ok(1) }
+}
+fn run(s: string) -> Result<int, AppErr> {
+    let n = parse(s)?
+    if n < 0 { return Err(AppErr::Neg) }
+    Ok(n)
+}
+fn main() {
+    match run("x") {
+        Ok(_) => println("ok"),
+        Err(AppErr::Parse(m)) => println("parse: ${m}"),
+        Err(AppErr::Neg) => println("neg"),
+    }
+}

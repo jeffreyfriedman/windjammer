@@ -137,6 +137,12 @@ path = "tests/all.rs"
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
 
+# Language specification (docs/spec): executable rule examples. The grammar is checked by docs_truth.
+#   cargo test --release --test spec_conformance
+[[test]]
+name = "spec_conformance"
+path = "tests/spec_conformance_test.rs"
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"
@@ -157,6 +163,11 @@ path = "tests/interpreter_features_test.rs"
 [[test]]
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
+
+# Codegen correctness gates (compiled Rust vs interpreter): also standalone for fast iteration.
+[[test]]
+name = "codegen_correctness"
+path = "tests/codegen_correctness_test.rs"
 
 [[bench]]
 name = "string_optimization_bench"
