@@ -90,16 +90,17 @@ impl<'m> Go<'m> {
         Ok(())
     }
 
+    /// Derived `Debug`: `f` carries the caller's Formatter options to every field.
     fn dbg_body(&mut self, display: &str, fields: &[(String, Ty)], tuple: bool, recv: &str) -> String {
         if fields.is_empty() {
             return go_string(display);
         }
+        let vals: Vec<String> = fields.iter().map(|(n, _)| format!("{recv}.{}", field(n))).collect();
         if tuple {
-            let parts: Vec<String> = fields.iter().map(|(n, _)| format!("wjDbg({recv}.{})", field(n))).collect();
-            format!("{} + {} + \")\"", go_string(&format!("{display}(")), parts.join(" + \", \" + "))
+            format!("wjDbgTupleS(f, {}, {})", go_string(display), vals.join(", "))
         } else {
-            let parts: Vec<String> = fields.iter().map(|(n, _)| format!("{} + wjDbg({recv}.{})", go_string(&format!("{n}: ")), field(n))).collect();
-            format!("{} + {} + \" }}\"", go_string(&format!("{display} {{ ")), parts.join(" + \", \" + "))
+            let names: Vec<String> = fields.iter().map(|(n, _)| go_string(n)).collect();
+            format!("wjDbgStruct(f, {}, []string{{{}}}, {})", go_string(display), names.join(", "), vals.join(", "))
         }
     }
 
@@ -116,7 +117,7 @@ impl<'m> Go<'m> {
         self.ind -= 1;
         self.line("}");
         let body = self.dbg_body(&s.name, &s.fields, s.tuple, "self");
-        self.line(&format!("func (self {name}{tu}) wjDbg() string {{ return {body} }}"));
+        self.line(&format!("func (self {name}{tu}) wjDbgF(f *wjFmt) string {{ return {body} }}"));
         Ok(())
     }
 
@@ -137,7 +138,7 @@ impl<'m> Go<'m> {
             self.line("}");
             self.line(&format!("func ({vt}{tu}) is{name}() {{}}"));
             let body = self.dbg_body(&v.name, &v.fields, !v.named, "self");
-            self.line(&format!("func (self {vt}{tu}) wjDbg() string {{ return {body} }}"));
+            self.line(&format!("func (self {vt}{tu}) wjDbgF(f *wjFmt) string {{ return {body} }}"));
         }
         Ok(())
     }

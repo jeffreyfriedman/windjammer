@@ -194,12 +194,17 @@ pub struct PExpr {
     pub line: u32,
 }
 
-/// Parsed `{...}` format spec (subset of Rust's: `?`, `.N`, width, fill/align, `0`, `x X b o e`).
+/// Parsed `{...}` format spec: Rust's `[[fill]align][sign]['#']['0'][width]['.' precision][type]`
+/// with types `?`, `x X b o e`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FmtSpec {
     pub debug: bool,
-    /// `{:#?}`: pretty Debug. Identical to `{:?}` for scalars; emitters reject it for aggregates.
+    /// `{:#?}`: pretty (multi-line) Debug. Implies `alternate`.
     pub pretty: bool,
+    /// `+`: always print the sign of numbers.
+    pub plus: bool,
+    /// `#`: alternate form (`0x`/`0b`/`0o` prefixes; pretty Debug).
+    pub alternate: bool,
     pub precision: Option<usize>,
     pub width: Option<usize>,
     pub fill: Option<char>,
