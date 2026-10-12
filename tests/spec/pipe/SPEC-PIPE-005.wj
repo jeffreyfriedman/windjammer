@@ -1,0 +1,9 @@
+// spec: SPEC-PIPE-005
+// expect: 7
+fn dbl(x: int) -> int { x * 2 }
+fn main() {
+    let r = 3
+        |> dbl
+        |> |v| v + 1
+    println("${r}")
+}

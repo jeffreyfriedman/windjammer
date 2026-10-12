@@ -1,0 +1,9 @@
+// spec: SPEC-EXEC-006
+// expect: 50005000
+// xfail: Q-023
+fn sum_to(n: int) -> int {
+    if n == 0 { 0 } else { n + sum_to(n - 1) }
+}
+fn main() {
+    println("${sum_to(10000)}")
+}

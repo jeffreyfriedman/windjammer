@@ -43,7 +43,7 @@ impl<'ast> CodeGenerator<'ast> {
         let unused_params = self.compute_unused_formal_parameter_names(func);
         self.refresh_unused_let_bindings_for_function_body(&func.body);
 
-        params.extend(self.collect_additional_formal_parameter_strings(
+        params.extend(self.collect_formal_parameter_strings(
             analyzed,
             func,
             needs_lifetime,
@@ -99,7 +99,7 @@ impl<'ast> CodeGenerator<'ast> {
         let unused_params = self.compute_unused_formal_parameter_names(func);
         self.refresh_unused_let_bindings_for_function_body(&func.body);
 
-        params.extend(self.collect_additional_formal_parameter_strings(
+        params.extend(self.collect_formal_parameter_strings(
             analyzed,
             func,
             needs_lifetime,

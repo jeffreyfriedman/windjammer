@@ -1,0 +1,18 @@
+// spec: SPEC-STD-003
+// expect: 3 20 60
+// expect: 21 21 6
+// expect: true false
+// expect: 21 3
+// expect: 6 5
+fn main() {
+    let v = [1, 2, 3, 4, 5, 6]
+    let ev = v.iter().filter(|x| *x % 2 == 0).map(|x| x * 10).collect::<Vec<int>>()
+    println("${ev.len()} ${ev[0]} ${ev[2]}")
+    let total = v.iter().fold(0, |a, x| a + x)
+    println("${total} ${v.iter().sum::<int>()} ${v.iter().count()}")
+    println("${v.iter().any(|x| *x > 5)} ${v.iter().all(|x| *x > 1)}")
+    let pairs = v.iter().zip(ev.iter()).map(|(a, b)| a + b).collect::<Vec<int>>()
+    println("${pairs[0]} ${pairs.len()}")
+    let r = v.iter().rev().take(2).collect::<Vec<&int>>()
+    println("${r[0]} ${r[1]}")
+}

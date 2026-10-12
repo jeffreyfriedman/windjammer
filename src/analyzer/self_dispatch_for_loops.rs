@@ -148,18 +148,17 @@ impl<'ast> Analyzer<'ast> {
             return false;
         };
         let base_iter = Self::peel_ref_expr(iterable);
-        let Expression::FieldAccess { object, field, .. } = base_iter else {
+        // `self.items` or a nested chain `self.inner.items`.
+        let Some((root, fields)) = Self::field_chain(base_iter) else {
             return false;
         };
-        let is_self_root = matches!(
-            &**object,
-            Expression::Identifier { name, .. } if name == "self"
-        );
-        if !is_self_root {
+        if root != "self" || fields.is_empty() {
             return false;
         }
-        let Some(field_ty) = Self::lookup_struct_field_type(program, impl_ty, field.as_str())
-        else {
+        let Some(first_ty) = Self::lookup_struct_field_type(program, impl_ty, fields[0]) else {
+            return false;
+        };
+        let Some(field_ty) = self.walk_field_chain(&first_ty, &fields[1..]) else {
             return false;
         };
         let Some(elem_ty) = Self::type_vec_element(&field_ty) else {
@@ -168,6 +167,39 @@ impl<'ast> Analyzer<'ast> {
         let peeled = Self::peel_box_and_ref_type(&elem_ty);
         body.iter()
             .any(|s| self.stmt_calls_mut_dispatch_on_var(s, loop_var, peeled, registry))
+    }
+
+    /// `a.b.c` as `("a", ["b", "c"])`; `None` unless rooted at a plain identifier.
+    pub(crate) fn field_chain<'e>(expr: &'e Expression<'ast>) -> Option<(&'e str, Vec<&'e str>)> {
+        let mut fields = Vec::new();
+        let mut cur = expr;
+        loop {
+            match cur {
+                Expression::FieldAccess { object, field, .. } => {
+                    fields.push(field.as_str());
+                    cur = object;
+                }
+                Expression::Identifier { name, .. } => {
+                    fields.reverse();
+                    return Some((name.as_str(), fields));
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    /// Type of `ty.f1.f2...` through the struct field registry (boxes and references peeled).
+    pub(crate) fn walk_field_chain(&self, ty: &Type, fields: &[&str]) -> Option<Type> {
+        let mut cur = ty.clone();
+        for f in fields {
+            let peeled = Self::peel_box_and_ref_type(&cur).clone();
+            let name = match &peeled {
+                Type::Custom(n) | Type::Parameterized(n, _) => n.split('<').next().unwrap_or(n).to_string(),
+                _ => return None,
+            };
+            cur = self.struct_field_types_lookup(&name, f)?;
+        }
+        Some(cur)
     }
 
     pub(crate) fn peel_ref_expr<'e>(expr: &'e Expression<'ast>) -> &'e Expression<'ast> {
@@ -382,11 +414,18 @@ impl<'ast> Analyzer<'ast> {
                 arguments,
                 ..
             } => {
-                if let Expression::Identifier { name, .. } = &**object {
-                    if name == loop_var
-                        && self.type_needs_mut_receiver_for_method(elem, method, registry)
-                    {
-                        return true;
+                if let Some((root, fields)) = Self::field_chain(object) {
+                    if root == loop_var {
+                        let receiver_ty = if fields.is_empty() {
+                            Some(elem.clone())
+                        } else {
+                            self.walk_field_chain(elem, &fields)
+                        };
+                        if receiver_ty.is_some_and(|t| {
+                            self.type_needs_mut_receiver_for_method(&t, method, registry)
+                        }) {
+                            return true;
+                        }
                     }
                 }
                 if self.expr_calls_mut_dispatch_on_var(object, loop_var, elem, registry) {

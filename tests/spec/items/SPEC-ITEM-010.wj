@@ -1,0 +1,15 @@
+// spec: SPEC-ITEM-010
+// expect: 2 x
+struct Stack<T> { items: Vec<T> }
+impl<T> Stack<T> {
+    fn new() -> Stack<T> { Stack { items: Vec::new() } }
+    fn push(self, x: T) { self.items.push(x) }
+    fn len(self) -> int { self.items.len() }
+}
+fn first<T>(v: Vec<T>) -> T { v[0] }
+fn main() {
+    let mut s = Stack::new()
+    s.push(1)
+    s.push(2)
+    println("${s.len()} ${first(["x", "y"])}")
+}

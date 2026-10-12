@@ -300,11 +300,9 @@ pub struct CodeGenerator<'ast> {
     /// WJ `struct` names declared in this compilation unit. Shadows stdlib types
     /// of the same name (`use std::url` + local `struct Url`) so literals stay local.
     pub(crate) user_declared_struct_names: std::collections::HashSet<String>,
-    // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
-    // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
+    // TUPLE STRUCT NAMES (struct Point(i32, i32)): ownership conversion in constructor calls needs owned args
     pub(crate) tuple_struct_names: std::collections::HashSet<String>,
-    // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
-    // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
+    // USER-DEFINED COPY TYPES (@derive(Copy)): lets is_copy_type recognize them, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
     /// Types explicitly annotated with `@derive(Copy)` by the user.
     /// Distinguished from auto-derived Copy types to preserve `&mut` semantics
@@ -314,6 +312,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
     pub(crate) types_with_drop: std::collections::HashSet<String>,
+    pub(crate) idiom: super::program_facts::IdiomScratch, // std-idiom / closure / derive facts
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
@@ -785,6 +784,7 @@ impl<'ast> CodeGenerator<'ast> {
             explicit_copy_types_registry: std::collections::HashSet::new(),
             non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
+            idiom: Default::default(),
             in_struct_literal_field: false,
             array_literal_as_list: false,
             in_owned_value_context: false,

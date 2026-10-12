@@ -1,0 +1,10 @@
+// spec: SPEC-GRAM-002
+// expect: 3 3 8
+struct P { x: int, y: int, }
+fn f(a: int, b: int,) -> int { a + b }
+fn main() {
+    let p = P { x: 1, y: 2, }
+    let v = [1, 2, 3,]
+    let t = (7, 8,)
+    println("${f(p.x, p.y,)} ${v.len()} ${t.1}")
+}

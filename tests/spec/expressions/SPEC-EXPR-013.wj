@@ -1,0 +1,9 @@
+// spec: SPEC-EXPR-013
+// expect: 1 two 3.5 7 8 7
+struct P { x: int, y: int }
+fn main() {
+    let t = (1, "two", 3.5)
+    let p = P { x: 7, y: 8 }
+    let v = [5, 6, 7]
+    println("${t.0} ${t.1} ${t.2} ${p.x} ${p.y} ${v[2]}")
+}

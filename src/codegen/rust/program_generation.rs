@@ -991,7 +991,7 @@ impl<'ast> CodeGenerator<'ast> {
         let mut top_level_funcs: Vec<_> = analyzed
             .iter()
             .filter(|af| {
-                !is_impl_method(af)
+                !is_impl_method(af) && !self.idiom.inline_mod_fn_names.contains(&af.decl.name)
                     && !af.decl.is_extern
                     && !(self.is_module && af.decl.name == "main")
             })

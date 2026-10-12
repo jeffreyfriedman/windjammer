@@ -1,0 +1,6 @@
+// spec: SPEC-EXPR-005
+// expect: 255
+// xfail: Q-004
+fn main() {
+    println("${-1 as u8}")
+}

@@ -28,6 +28,8 @@ pub enum Node {
     Rep(Box<Node>),
     Term(String),
     Nt(String),
+    /// `/a-z_/` character class (lexical productions of docs/spec/grammar.ebnf).
+    Class(Vec<(char, char)>),
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -39,6 +41,7 @@ enum Tok {
     Id(String),
     Str(String),
     P(char),
+    Class(Vec<(char, char)>),
 }
 
 fn lex(text: &str) -> Result<Vec<Tok>, String> {
@@ -80,6 +83,29 @@ fn lex(text: &str) -> Result<Vec<Tok>, String> {
                 return Err(format!("unterminated string starting {s:?}"));
             }
             out.push(Tok::Str(s));
+            i = j + 1;
+        } else if c == '/' {
+            // character class `/a-z_/`: single characters and `x-y` ranges
+            let mut j = i + 1;
+            let mut body = Vec::new();
+            while j < cs.len() && cs[j] != '/' {
+                body.push(cs[j]);
+                j += 1;
+            }
+            if j >= cs.len() {
+                return Err("unterminated character class".into());
+            }
+            let (mut k, mut ranges) = (0, Vec::new());
+            while k < body.len() {
+                if k + 2 < body.len() && body[k + 1] == '-' {
+                    ranges.push((body[k], body[k + 2]));
+                    k += 3;
+                } else {
+                    ranges.push((body[k], body[k]));
+                    k += 1;
+                }
+            }
+            out.push(Tok::Class(ranges));
             i = j + 1;
         } else if c.is_alphabetic() || c == '_' {
             let mut j = i;
@@ -140,6 +166,7 @@ impl P {
         let n = match t {
             Tok::Str(s) => Node::Term(s),
             Tok::Id(s) => Node::Nt(s),
+            Tok::Class(r) => Node::Class(r),
             Tok::P('[') => self.close(']', Node::Opt as fn(Box<Node>) -> Node)?,
             Tok::P('{') => self.close('}', Node::Rep as fn(Box<Node>) -> Node)?,
             Tok::P('(') => {
@@ -191,7 +218,35 @@ pub fn parse(text: &str) -> Result<Vec<(String, Node)>, String> {
     Ok(out)
 }
 
-fn walk<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
+/// `(*@key value*)` comments that precede a production (docs/spec/grammar.ebnf): production -> directives.
+pub fn directives(text: &str) -> BTreeMap<String, Vec<(String, String)>> {
+    let mut out: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    let mut pending = Vec::new();
+    for line in text.lines() {
+        let t = line.trim();
+        if let Some(d) = t.strip_prefix("(*@").and_then(|d| d.strip_suffix("*)")) {
+            let d = d.trim();
+            let (k, v) = d.split_once(char::is_whitespace).unwrap_or((d, ""));
+            pending.push((k.to_string(), v.trim().to_string()));
+            continue;
+        }
+        if let Some((name, _)) = t.split_once('=') {
+            let name = name.trim();
+            if !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_') && !line.starts_with(' ') {
+                if !pending.is_empty() {
+                    out.insert(name.to_string(), std::mem::take(&mut pending));
+                }
+                continue;
+            }
+        }
+        if !t.is_empty() && !t.starts_with("(*") {
+            pending.clear();
+        }
+    }
+    out
+}
+
+pub fn walk<'a>(n: &'a Node, f: &mut dyn FnMut(&'a Node)) {
     f(n);
     match n {
         Node::Alt(v) | Node::Seq(v) => v.iter().for_each(|c| walk(c, f)),
@@ -259,7 +314,7 @@ impl<'a> Gen<'a> {
     }
     fn node_cost(&self, n: &Node) -> usize {
         match n {
-            Node::Term(_) => 1,
+            Node::Term(_) | Node::Class(_) => 1,
             Node::Nt(s) => self
                 .cost
                 .get(s)
@@ -284,6 +339,7 @@ impl<'a> Gen<'a> {
     ) {
         match n {
             Node::Term(s) => out.push(s.clone()),
+            Node::Class(r) => out.push(r[0].0.to_string()),
             Node::Seq(v) => v.iter().for_each(|c| self.emit(c, None, mode, depth, out)),
             Node::Opt(b) => {
                 if mode == Mode::Full && depth < 3 {
@@ -348,7 +404,7 @@ impl<'a> Gen<'a> {
     }
 }
 
-fn join(toks: &[String]) -> String {
+pub fn join(toks: &[String]) -> String {
     // `@` attaches to the decorator name that follows it.
     toks.iter()
         .map(|t| {
@@ -389,7 +445,7 @@ pub fn wrap(production: &str, s: &str) -> Option<String> {
 }
 
 /// Character-level (informative) productions: upper-case names and the helpers they use.
-fn is_lexical(name: &str) -> bool {
+pub fn is_lexical(name: &str) -> bool {
     name.chars().next().is_some_and(char::is_uppercase)
         || [
             "int_suffix",
@@ -430,8 +486,64 @@ pub fn parse_program(src: &str) -> Result<(), String> {
 /// Words that appear quoted in the grammar but are not reserved lexer words (identifier-like names of
 /// library types or soft keywords); everything else alphabetic must be a lexer keyword.
 const NON_RESERVED_TERMINALS: &[&str] = &[
-    "Option", "None", "crate", "bound", "thread", "defer", "Some",
+    "Option", "None", "crate", "bound", "thread", "defer", "Some", "Ok", "Err",
 ];
+
+
+/// `production references undefined production` messages.
+pub fn undefined_refs(list: &[(String, Node)], prods: &BTreeMap<String, Node>) -> Vec<String> {
+    let mut out = Vec::new();
+    for (name, body) in list {
+        walk(body, &mut |n| {
+            if let Node::Nt(r) = n {
+                if !prods.contains_key(r) {
+                    out.push(format!("`{name}` references undefined production `{r}`"));
+                }
+            }
+        });
+    }
+    out
+}
+
+/// Terminal vocabulary checks shared by both grammars: every quoted word is a lexer keyword (or a known
+/// non-reserved name), every operator terminal lexes as one token, every keyword appears or is listed.
+pub fn vocabulary(list: &[(String, Node)], unlisted: &BTreeMap<String, String>, table: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut terms: Vec<String> = Vec::new();
+    for (name, body) in list {
+        walk(body, &mut |n| {
+            if let Node::Term(t) = n {
+                if !is_lexical(name) {
+                    terms.push(t.clone());
+                }
+            }
+        });
+    }
+    terms.sort();
+    terms.dedup();
+    for t in &terms {
+        if t.chars().all(|c| c.is_alphabetic() || c == '_') {
+            if !KEYWORDS.iter().any(|k| k.word == t) && !NON_RESERVED_TERMINALS.contains(&t.as_str()) {
+                out.push(format!("terminal \"{t}\" is not a keyword of the lexer (src/lexer/keywords.rs)"));
+            }
+        } else if let Ok(toks) = std::panic::catch_unwind(|| Lexer::new(t).tokenize()) {
+            if toks.len() != 2 && !t.contains(char::is_whitespace) {
+                out.push(format!("terminal \"{t}\" does not lex as a single token ({} tokens)", toks.len().saturating_sub(1)));
+            }
+        }
+    }
+    for k in KEYWORDS.iter().filter(|k| k.class == KeywordClass::Keyword || k.class == KeywordClass::Literal) {
+        if !terms.iter().any(|t| t == k.word) && !unlisted.contains_key(k.word) {
+            out.push(format!("lexer keyword `{}` never appears in the grammar (add it, or list it under {table} with a reason)", k.word));
+        }
+    }
+    for k in unlisted.keys() {
+        if terms.iter().any(|t| t == k) {
+            out.push(format!("`{k}` is listed under {table} but now appears in the grammar: remove the entry"));
+        }
+    }
+    out
+}
 
 pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
     let text = ctx.read(PATH);
@@ -449,59 +561,9 @@ pub fn check_all(ctx: &Ctx, cfg: &Config) -> Vec<Finding> {
         out.push(f(1, "a production is defined twice".into()));
     }
     // 1. structure
-    let mut terms: Vec<String> = Vec::new();
-    for (name, body) in &list {
-        walk(body, &mut |n| match n {
-            Node::Nt(r) if !prods.contains_key(r) => out.push(f(
-                1,
-                format!("`{name}` references undefined production `{r}`"),
-            )),
-            // Terminals of lexical productions (informative character-level rules) are not checked as tokens.
-            Node::Term(t) if !is_lexical(name) => terms.push(t.clone()),
-            _ => {}
-        });
-    }
+    out.extend(undefined_refs(&list, &prods).into_iter().map(|m| f(1, m)));
     // 2. vocabulary
-    terms.sort();
-    terms.dedup();
-    for t in &terms {
-        if t.chars().all(|c| c.is_alphabetic() || c == '_') {
-            if !KEYWORDS.iter().any(|k| k.word == t)
-                && !NON_RESERVED_TERMINALS.contains(&t.as_str())
-            {
-                out.push(f(
-                    1,
-                    format!(
-                        "terminal \"{t}\" is not a keyword of the lexer (src/lexer/keywords.rs)"
-                    ),
-                ));
-            }
-        } else if let Ok(toks) = std::panic::catch_unwind(|| Lexer::new(t).tokenize()) {
-            if toks.len() != 2 && !t.contains(char::is_whitespace) {
-                out.push(f(
-                    1,
-                    format!(
-                        "terminal \"{t}\" does not lex as a single token ({} tokens)",
-                        toks.len().saturating_sub(1)
-                    ),
-                ));
-            }
-        }
-    }
-    let unlisted = &cfg.ebnf.unlisted_keywords;
-    for k in KEYWORDS
-        .iter()
-        .filter(|k| k.class == KeywordClass::Keyword || k.class == KeywordClass::Literal)
-    {
-        if !terms.iter().any(|t| t == k.word) && !unlisted.contains_key(k.word) {
-            out.push(f(1, format!("lexer keyword `{}` never appears in the grammar (add it, or list it under [ebnf] unlisted_keywords with a reason)", k.word)));
-        }
-    }
-    for k in unlisted.keys() {
-        if terms.iter().any(|t| t == k) {
-            out.push(f(1, format!("`{k}` is listed under [ebnf] unlisted_keywords but now appears in the grammar: remove the entry")));
-        }
-    }
+    out.extend(vocabulary(&list, &cfg.ebnf.unlisted_keywords, "[ebnf] unlisted_keywords").into_iter().map(|m| f(1, m)));
     // 3. derivation
     let mut g = Gen::new(&prods);
     let mut seen = Vec::new();

@@ -1,0 +1,13 @@
+// spec: SPEC-INTR-001
+// expect: ab
+// expect: {}
+// expect: c
+fn main() {
+    print("a")
+    print("b")
+    println("")
+    println("{}")
+    eprintln("not on stdout")
+    stderr.println("nor this")
+    stdout.println("c")
+}
