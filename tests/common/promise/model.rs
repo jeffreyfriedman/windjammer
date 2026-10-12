@@ -19,6 +19,7 @@ pub struct Promise {
     pub id: String,
     /// What the user is told (CLI help text, doc sentence).
     #[serde(default)]
+    #[allow(dead_code)]
     pub statement: String,
     /// For features: the file that makes the promise and a verbatim quote that must still be there.
     #[serde(default)]

@@ -119,7 +119,8 @@ fn check_agrees_with_the_build_pipeline() {
     let grew: Vec<String> = got.iter().filter(|(k, n)| **n > known.get(*k).copied().unwrap_or(0)).map(|(k, n)| format!("{k}: {n} (known {}) e.g. {:?}", known.get(k).copied().unwrap_or(0), &found[k][..found[k].len().min(2)])).collect();
     let shrank: Vec<String> = known.iter().filter(|(k, n)| got.get(*k).copied().unwrap_or(0) < **n).map(|(k, n)| format!("{k}: {} (known {n})", got.get(k).copied().unwrap_or(0))).collect();
     eprintln!("check-vs-build over {} programs: {got:?}", progs.len());
-    if grew.is_empty() && std::env::var("CHECK_DIFF_BLESS").is_ok() {
+    let bootstrap = !root().join(KNOWN).exists();
+    if (bootstrap || grew.is_empty()) && std::env::var("CHECK_DIFF_BLESS").is_ok() {
         let mut s = String::from("# check-vs-build differential findings (tests/check_build_differential_test.rs). May only shrink.\n# class.operator = count over the generated seeds; CHECK_DIFF_BLESS=1 rewrites after an improvement.\n\n[known]\n");
         for (k, n) in &got {
             s.push_str(&format!("{k:?} = {n}\n"));

@@ -239,3 +239,9 @@ polarity = "negative"
 args = ["docs", "hashmap", "--limit", "many"]
 exit = 2
 output_has = ["invalid value 'many'"]
+
+[[case]]
+name = "docs --json rejects a bad --limit"
+polarity = "negative"
+args = ["docs", "hashmap", "--json", "--limit", "-3"]
+exit = 2
