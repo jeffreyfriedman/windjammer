@@ -1,0 +1,11 @@
+// spec: SPEC-CONC-003
+// expect: 3
+// xfail: Q-013
+fn work(n: int) -> int { n }
+fn main() {
+    scope {
+        let a = spawn work(1)
+        let b = spawn work(2)
+        println("${a.wait() + b.wait()}")
+    }
+}

@@ -1,0 +1,10 @@
+// spec: SPEC-NUM-002
+// mode: panic
+// expect: before
+// expect-error: overflow
+fn main() {
+    let a = 9223372036854775807
+    println("before")
+    let b = a + 1
+    println("${b}")
+}

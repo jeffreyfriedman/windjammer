@@ -1,0 +1,19 @@
+// A capturing closure can be passed where a `fn(..) -> ..` parameter is declared.
+// expect: 12
+// expect: 40
+// expect: 25
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+fn call_twice(f: fn() -> int) -> int {
+    f() + f()
+}
+fn main() {
+    let k: int = 7
+    let add = |x| x + k
+    println("${apply(add, 5)}")
+    let base: int = 10
+    let get = || base * 2
+    println("${call_twice(get)}")
+    println("${apply(|x| x * x, 5)}")
+}

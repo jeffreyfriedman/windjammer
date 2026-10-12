@@ -1,0 +1,11 @@
+// spec: SPEC-MOD-001
+// expect: 6 1
+mod geo {
+    pub fn area(w: int, h: int) -> int { w * h }
+    pub mod inner {
+        pub fn one() -> int { 1 }
+    }
+}
+fn main() {
+    println("${geo::area(2, 3)} ${geo::inner::one()}")
+}

@@ -1,0 +1,10 @@
+// spec: SPEC-EXPR-014
+// expect: 1 2 10 3
+struct P { x: int, y: int }
+fn main() {
+    let x = 1
+    let y = 2
+    let p = P { x, y }
+    let q = P { x: 10, y: p.y + 1 }
+    println("${p.x} ${p.y} ${q.x} ${q.y}")
+}

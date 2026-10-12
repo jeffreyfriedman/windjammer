@@ -85,7 +85,7 @@ pub fn primitive_scale(node_type: i32) -> f32 {
 }
 
 #[test]
-fn test_unknown_float_inference_defaults_to_f32_suffix() {
+fn test_unknown_float_inference_defaults_to_f64_suffix() {
     let source = r#"
 pub fn bare() -> i32 {
     let _x = 2.5
@@ -94,8 +94,8 @@ pub fn bare() -> i32 {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("2.5_f32") || output.contains("2.5f32"),
-        "unconstrained literal should default to f32, got:\n{}",
+        output.contains("2.5_f64") || output.contains("2.5f64"),
+        "unconstrained literal should default to f64 (ADR-0015 #1), got:\n{}",
         output
     );
 }

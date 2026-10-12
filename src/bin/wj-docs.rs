@@ -1,7 +1,7 @@
 //! `wj-docs`: generate and verify documentation (see docs/CONTRIBUTING-docs.md).
 //!
 //!   wj-docs gen [--check]      rewrite (or verify) generated files and `wj:gen` regions
-//!   wj-docs check [NAME..]     run all checks (or: gen regions fences links claims freshness proposal ebnf)
+//!   wj-docs check [NAME..]     run all checks (or: gen regions fences links claims freshness proposal ebnf spec-grammar)
 //!   wj-docs update-baseline    lower ratchet baselines to the current counts; refuses to raise or add any
 //!   wj-docs stamp FILE [STATUS]  set front matter `last_verified` to HEAD
 
@@ -14,7 +14,7 @@ mod docs_truth;
 #[path = "wj_cli_args.rs"]
 mod wj_cli_args;
 
-use docs_truth::{claims, config, ebnf, failures, fences, freshness, genfiles, links, proposal, regions, Ctx, Finding};
+use docs_truth::{claims, config, ebnf, failures, fences, freshness, genfiles, links, proposal, regions, spec_grammar, Ctx, Finding};
 
 fn main() {
     std::panic::set_hook(Box::new(|_| {})); // the parser/lexer panic on junk snippets; checks catch it
@@ -33,7 +33,7 @@ fn main() {
             }
         },
         _ => {
-            eprintln!("usage: wj-docs gen [--check] | check [gen|regions|fences|links|claims|freshness|proposal|ebnf].. | update-baseline | stamp FILE [STATUS]");
+            eprintln!("usage: wj-docs gen [--check] | check [gen|regions|fences|links|claims|freshness|proposal|ebnf|spec-grammar].. | update-baseline | stamp FILE [STATUS]");
             2
         }
     };
@@ -93,6 +93,7 @@ fn check(ctx: &Ctx, which: &[String]) -> i32 {
             "freshness" => fs.extend(freshness::check_all(ctx, &cfg)),
             "proposal" => fs.extend(proposal::check_all(ctx)),
             "ebnf" => fs.extend(ebnf::check_all(ctx, &cfg)),
+            "spec-grammar" => fs.extend(spec_grammar::check_all(ctx, &cfg)),
             other => {
                 eprintln!("unknown check {other}");
                 return 2;

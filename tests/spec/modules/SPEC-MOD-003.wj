@@ -1,0 +1,12 @@
+// spec: SPEC-MOD-003
+// expect: 9
+mod shapes {
+    pub struct Sq { pub s: int }
+    impl Sq {
+        pub fn area(self) -> int { self.s * self.s }
+    }
+}
+fn main() {
+    let q = shapes::Sq { s: 3 }
+    println("${q.area()}")
+}

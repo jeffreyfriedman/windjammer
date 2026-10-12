@@ -1,0 +1,8 @@
+// spec: SPEC-OWN-003
+// expect: 3 4
+fn main() {
+    let a = [1, 2, 3]
+    let mut b = a.clone()
+    b.push(4)
+    println("${a.len()} ${b.len()}")
+}

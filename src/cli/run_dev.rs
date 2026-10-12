@@ -26,6 +26,8 @@ pub struct RunOptions {
     pub args: Vec<String>,
     pub mode: Mode,
     pub target: String,
+    /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report).
+    pub lint: Option<fn(&Path)>,
 }
 
 /// Run once; returns the process exit status.
@@ -39,6 +41,9 @@ pub fn execute(opts: &RunOptions) -> i32 {
         }
     };
     let non_rust = !matches!(opts.target.to_lowercase().as_str(), "rust");
+    if let (Some(lint), false, false) = (opts.lint, non_rust, matches!(opts.mode, Mode::Compiled { .. })) {
+        lint(&target.entry);
+    }
     match opts.mode {
         Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release),
         _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false),

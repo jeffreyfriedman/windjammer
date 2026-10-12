@@ -1,0 +1,8 @@
+// spec: SPEC-STMT-002
+// mode: parse-error
+// xfail: Q-007
+fn main() {
+    let x = 1
+    x = 2
+    println("${x}")
+}

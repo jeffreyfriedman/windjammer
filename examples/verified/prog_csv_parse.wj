@@ -1,5 +1,5 @@
 // tags: program, strings, parsing, struct, result
-// rust: gap error[E0599]: no method named 'map' found for struct 'Vec<Row>' in the current s
+// rust: ok
 // expect: skipped bad line: carol,x,oslo
 // expect: alice (30) from paris
 // expect: bob (25) from rome

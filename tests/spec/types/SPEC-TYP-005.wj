@@ -1,0 +1,12 @@
+// spec: SPEC-TYP-005
+// expect: 3 9 3
+fn sum(v: Vec<int>) -> int {
+    let mut t = 0
+    for x in v { t += x }
+    t
+}
+fn main() {
+    let a: [int; 3] = [1, 2, 3]
+    let v: Vec<int> = [4, 5]
+    println("${a[2]} ${sum(v)} ${a.len()}")
+}

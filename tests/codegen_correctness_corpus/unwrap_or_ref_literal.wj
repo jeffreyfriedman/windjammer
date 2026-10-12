@@ -1,0 +1,25 @@
+// `Option<&T>::unwrap_or(&0)` keeps the reference default.
+// expect: 0
+// expect: 7
+use std::collections::HashMap
+pub struct Counter {
+    counts: HashMap<string, u32>,
+}
+impl Counter {
+    pub fn new() -> Counter {
+        Counter { counts: HashMap::new() }
+    }
+    pub fn add(self, key: string, n: u32) {
+        self.counts.insert(key, n)
+    }
+    pub fn get(self, key: string) -> u32 {
+        let c = self.counts.get(key).unwrap_or(&0)
+        c
+    }
+}
+fn main() {
+    let mut c = Counter::new()
+    println("${c.get("a")}")
+    c.add("a", 7)
+    println("${c.get("a")}")
+}

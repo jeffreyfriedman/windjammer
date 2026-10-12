@@ -1,0 +1,8 @@
+// spec: SPEC-STR-005
+// expect: set {a, b} and {}
+// expect: x={x}
+fn main() {
+    let x = 5
+    println("set {a, b} and {}")
+    println("x={x}")
+}
