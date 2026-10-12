@@ -1,0 +1,3 @@
+error[WJ0019]: function `shapes::hidden` is private
+  = help: declare it `pub fn hidden` in module `private_item::shapes`
+  = explain: wj explain WJ0019

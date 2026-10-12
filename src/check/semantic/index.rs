@@ -30,6 +30,12 @@ pub struct Index {
     /// Enum names (method checks apply to them too).
     pub enums: HashSet<String>,
     traits: HashMap<String, Vec<String>>,
+    /// Project trait -> methods without a default body (an impl must define them).
+    pub required: HashMap<String, Vec<String>>,
+    /// Enum -> variant names (only enums declared once).
+    pub variants: HashMap<String, Vec<String>>,
+    /// Types with a `Display` impl (usable in `${x}`).
+    pub display: HashSet<String>,
 }
 
 /// Methods of std traits commonly implemented by hand, plus those every value has.
@@ -53,6 +59,9 @@ pub struct FileNames {
     pub values: HashSet<String>,
     pub imported: HashSet<String>,
     pub glob: bool,
+    /// The file imports a non-std crate or declares `extern` items: method names may come from
+    /// types the checker cannot see.
+    pub external: bool,
 }
 
 /// Std modules usable without an explicit `use` (auto-imported by the compiler).
@@ -93,12 +102,23 @@ impl Index {
         idx
     }
 
+    /// True when some type in the program declares a method, trait method or field of this name.
+    pub fn declares_member(&self, name: &str) -> bool {
+        self.methods.values().any(|m| m.contains(name))
+            || self.blanket_methods.contains(name)
+            || self.traits.values().any(|m| m.iter().any(|x| x == name))
+            || self.structs.values().flatten().any(|s| s.fields.iter().any(|(f, _)| f == name))
+            || self.fns.contains_key(name)
+    }
+
     fn collect_traits(&mut self, items: &[Item<'_>]) {
         for item in items {
             match item {
                 Item::Trait { decl, .. } => {
                     let ms = decl.methods.iter().map(|m| m.name.clone()).collect();
                     self.traits.insert(decl.name.clone(), ms);
+                    let req = decl.methods.iter().filter(|m| m.body.is_none()).map(|m| m.name.clone()).collect();
+                    self.required.insert(decl.name.clone(), req);
                 }
                 Item::Mod { items, .. } => self.collect_traits(items),
                 _ => {}
@@ -112,6 +132,9 @@ impl Index {
         let mut names: Vec<String> = block.functions.iter().map(|f| f.name.clone()).collect();
         if let Some(tr) = &block.trait_name {
             let tr = tr.rsplit("::").next().unwrap_or(tr);
+            if tr == "Display" {
+                self.display.insert(ty.clone());
+            }
             if let Some(ms) = self.traits.get(tr) {
                 names.extend(ms.iter().cloned());
             } else if let Some((_, ms)) = STD_TRAIT_METHODS.iter().find(|(n, _)| *n == tr) {
@@ -147,7 +170,12 @@ impl Index {
                 }
                 Item::Enum { decl, .. } => {
                     self.types.insert(decl.name.clone());
-                    self.enums.insert(decl.name.clone());
+                    if !self.enums.insert(decl.name.clone()) {
+                        self.variants.remove(&decl.name);
+                    } else {
+                        let vs = decl.variants.iter().map(|v| v.name.clone()).collect();
+                        self.variants.insert(decl.name.clone(), vs);
+                    }
                 }
                 Item::Impl { block, .. } => self.add_impl(block),
                 Item::Trait { decl, .. } => {
@@ -189,7 +217,9 @@ impl FileNames {
             match item {
                 Item::Function { decl, .. } => {
                     self.values.insert(decl.name.clone());
+                    self.external |= decl.is_extern;
                 }
+                Item::Impl { block, .. } => self.external |= block.is_extern,
                 Item::Const { name, .. } | Item::Static { name, .. } => {
                     self.values.insert(name.clone());
                 }
@@ -203,6 +233,10 @@ impl FileNames {
                 Item::Use { path, alias, .. } => {
                     if path.iter().any(|s| s.contains('*')) {
                         self.glob = true;
+                    }
+                    let first = path.first().map(String::as_str).unwrap_or("");
+                    if !(first.starts_with("std") || first.starts_with('.') || matches!(first, "crate" | "self" | "super")) {
+                        self.external = true;
                     }
                     for seg in path {
                         words(seg, &mut self.imported);

@@ -1,4 +1,4 @@
-// expect: rustc:WJ0017
+// expect: WJ0020
 fn main() {
     let a: int = 1
     let b: float = 2.0

@@ -1,4 +1,4 @@
-// expect: rustc:WJ0017
+// expect: WJ0017
 struct Opaque {
     n: int,
 }

@@ -5,11 +5,12 @@
 
 use super::index::{is_std_name, FileNames, Index};
 use super::mismatch::check_literal;
+use super::rules::{self, Kind};
 use super::visit::{walk_block, walk_expr, walk_pattern, Visitor};
 use crate::check::locate::Locator;
 use crate::diagnostics::{Applicability, Diagnostic, Edit, Fix, SourceIndex, Span};
 use crate::fuzzy_matcher::levenshtein_distance;
-use crate::parser::{Expression, Item, Parameter, Pattern, SourceLocation, Statement, Type};
+use crate::parser::{Expression, Item, Literal, Parameter, Pattern, SourceLocation, Statement, Type};
 use std::collections::{HashMap, HashSet};
 
 pub struct FileInput<'a> {
@@ -58,6 +59,14 @@ impl Cx<'_, '_> {
                     self.body(&decl.parameters, &decl.body, None, decl.return_type.as_ref());
                 }
                 Item::Impl { block, .. } => {
+                    if let Some((tr, missing)) = rules::missing_trait_items(self.idx, block) {
+                        let list = missing.iter().map(|m| format!("`{m}`")).collect::<Vec<_>>().join(", ");
+                        let mut d = Diagnostic::error("WJ0018", format!("not all trait items implemented, missing: {list}"));
+                        if let Some(sp) = self.loc.top_level_decl("impl", &tr, 0) {
+                            d = d.at(sp.with_label(format!("missing {list}")));
+                        }
+                        self.out.push(d.with_help(format!("define {list} in this `impl {tr}` block")));
+                    }
                     let self_ty = block.type_name.split('<').next().unwrap_or("").to_string();
                     for f in &block.functions {
                         self.body(&f.parameters, &f.body, Some(&self_ty), f.return_type.as_ref());
@@ -141,7 +150,11 @@ impl Cx<'_, '_> {
             }
         }
         walk_block(&mut col, body);
-        let Collect { names, counts, let_types } = col;
+        let Collect { names, counts, let_types, scalars } = col;
+        let scalars: HashMap<String, (Kind, bool)> = scalars
+            .into_iter()
+            .filter(|(n, _)| counts.get(n).copied().unwrap_or(0) == 1)
+            .collect();
         typed.retain(|n, _| counts.get(n).copied().unwrap_or(0) <= 1);
         for (n, t) in let_types {
             if counts.get(&n).copied().unwrap_or(0) == 1 {
@@ -150,6 +163,7 @@ impl Cx<'_, '_> {
         }
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
         ck.ret_ty = ret.cloned();
+        ck.scalars = scalars;
         walk_block(&mut ck, body);
         // A literal tail expression is the return value too.
         if let (Some(Statement::Expression { expr: Expression::Literal { value, location }, .. }), Some(ty)) =
@@ -170,6 +184,8 @@ struct Collect {
     names: HashSet<String>,
     counts: HashMap<String, usize>,
     let_types: HashMap<String, String>,
+    /// `let x: int = ..` / `let s = "lit"`: scalar kind and whether it was declared.
+    scalars: HashMap<String, (Kind, bool)>,
 }
 
 impl Collect {
@@ -190,7 +206,12 @@ impl Visitor for Collect {
         }
     }
     fn closure(&mut self, params: &[String]) {
-        params.iter().for_each(|p| self.bind(p));
+        // A parameter may be a pattern such as `(k, v)`: bind every identifier in it.
+        for p in params {
+            p.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .filter(|w| !w.is_empty() && !w.starts_with(|c: char| c.is_ascii_digit()))
+                .for_each(|w| self.bind(w));
+        }
     }
     fn stmt(&mut self, s: &Statement<'_>) {
         if let Statement::Let {
@@ -207,6 +228,19 @@ impl Visitor for Collect {
             if let Some(t) = ty {
                 self.let_types.insert(n.clone(), t);
             }
+            let declared = match type_ {
+                Some(Type::Int | Type::Int32 | Type::Uint) => Some((Kind::Int, true)),
+                Some(Type::Float) => Some((Kind::Float, true)),
+                Some(Type::String) => Some((Kind::Str, true)),
+                Some(_) => None,
+                None => match value {
+                    Expression::Literal { value: Literal::String(_), .. } => Some((Kind::Str, false)),
+                    _ => None,
+                },
+            };
+            if let Some(k) = declared {
+                self.scalars.insert(n.clone(), k);
+            }
         }
     }
 }
@@ -217,6 +251,7 @@ struct Checker<'c, 'a, 'o> {
     typed: HashMap<String, String>,
     self_ty: Option<String>,
     ret_ty: Option<Type>,
+    scalars: HashMap<String, (Kind, bool)>,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -234,6 +269,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             typed,
             self_ty,
             ret_ty: None,
+            scalars: HashMap::new(),
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -416,6 +452,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
 
     /// `x.m()` where `x` is known to be a user struct/enum: `m` must exist on it (WJ0015).
     fn method_call(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
+        self.unknown_anywhere(object, method, loc);
         let Expression::Identifier { name, .. } = object else { return };
         let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
         let Some(ty) = ty else { return };
@@ -434,6 +471,9 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         {
             return;
         }
+        if !super::std_methods::is_known(method) && !idx.declares_member(method) && !self.cx.names.external {
+            return; // already reported as unknown everywhere
+        }
         let mut d = Diagnostic::error("WJ0015", format!("no method `{method}` found for `{ty}`"));
         let span = self.cx.loc.word(loc, method).or_else(|| self.cx.loc.first_use(method));
         if let Some(sp) = &span {
@@ -448,6 +488,85 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             _ => d = d.with_help(format!("define it in an `impl {ty}` block")),
         }
         self.cx.out.push(d);
+    }
+
+    /// A method name that no type in the program, the standard library or the runtime has.
+    fn unknown_anywhere(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
+        if self.cx.names.external || self.cx.names.glob || method.starts_with(|c: char| c.is_uppercase()) {
+            return;
+        }
+        // `json.parse(..)`, `fs.read(..)`: calls on modules and imported names are not methods.
+        if let Expression::Identifier { name, .. } = object {
+            if name != "self" && !self.locals.contains(name) {
+                return;
+            }
+        }
+        if super::std_methods::is_known(method) || self.cx.idx.declares_member(method) {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0015", format!("no method named `{method}` exists on any type in scope"));
+        let span = self.cx.loc.word(loc, method).or_else(|| self.cx.loc.first_use(method));
+        if let Some(sp) = &span {
+            d = d.at(sp.clone().with_label("unknown method"));
+        }
+        let pool: Vec<String> = super::std_methods::KNOWN_METHODS.iter().map(|m| m.to_string()).collect();
+        match (closest(method, pool.iter()), span) {
+            (Some(best), Some(sp)) => {
+                d = d.with_help(format!("a method with a similar name exists: `{best}`"));
+                d = d.with_fix(replace_fix(&sp, &best, format!("call `{best}` instead")));
+            }
+            _ => d = d.with_help("check the method name; see the standard library reference"),
+        }
+        d.maturity = Some("heuristic".to_string());
+        self.cx.out.push(d);
+    }
+
+    fn kind_of(&self, e: &Expression<'_>) -> Option<(Kind, bool)> {
+        match e {
+            Expression::Literal { value, .. } => rules::literal_kind(value).map(|k| (k, false)),
+            Expression::Identifier { name, .. } => self.scalars.get(name).copied(),
+            _ => None,
+        }
+    }
+
+    fn operand_span(&self, e: &Expression<'_>) -> Option<Span> {
+        match e {
+            Expression::Literal { value, location } => self.cx.loc.literal(&self.effective(location), value),
+            Expression::Identifier { name, location } => self.cx.loc.word(&self.effective(location), name),
+            _ => None,
+        }
+    }
+
+    fn operands(&mut self, left: &Expression<'_>, op: crate::parser::BinaryOp, right: &Expression<'_>) {
+        let (l, r) = (self.kind_of(left), self.kind_of(right));
+        let strict = l.is_some_and(|k| k.1) && r.is_some_and(|k| k.1);
+        if let Some(mut d) = rules::bad_operands(op, l.map(|k| k.0), r.map(|k| k.0), strict) {
+            if let Some(sp) = self.operand_span(left).or_else(|| self.operand_span(right)) {
+                d = d.at(sp.with_label("operand here"));
+            }
+            self.cx.out.push(d);
+        }
+    }
+
+    /// `${x}` where `x` is a user struct/enum without a `Display` impl (WJ0017).
+    fn display_args(&mut self, args: &[&Expression<'_>]) {
+        let Some(Expression::Literal { value: Literal::String(fmt), .. }) = args.first().map(|a| &**a) else { return };
+        let idx: &'a Index = self.cx.idx;
+        for (display, arg) in rules::placeholders(fmt).into_iter().zip(args.iter().skip(1)) {
+            let Expression::Identifier { name, location } = &**arg else { continue };
+            let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
+            let Some(ty) = ty else { continue };
+            let user_type = self.known_struct_fields(&ty).is_some() || idx.variants.contains_key(&ty);
+            if !display || !user_type || idx.display.contains(&ty) || idx.opaque_impls.contains(&ty) {
+                continue;
+            }
+            let mut d = Diagnostic::error("WJ0017", format!("`{ty}` cannot be formatted with `${{..}}`: it does not implement `Display`"));
+            let sp = self.cx.loc.word(&self.effective(location), name).or_else(|| self.cx.loc.first_use(name));
+            if let Some(sp) = sp {
+                d = d.at(sp.with_label("no `Display` for this type"));
+            }
+            self.cx.out.push(d.with_help(format!("format a field instead, use `${{{name}:?}}`, or implement `Display` for `{ty}`")));
+        }
     }
 
     fn call_literals(&mut self, name: &str, arguments: &[(Option<String>, &Expression<'_>)]) {
@@ -498,6 +617,8 @@ impl Visitor for Checker<'_, '_, '_> {
                 let loc = self.effective(location);
                 self.field_access(object, field, &loc);
             }
+            Expression::Binary { left, op, right, .. } => self.operands(left, *op, right),
+            Expression::MacroInvocation { name, args, .. } if name == "format" => self.display_args(args),
             Expression::MethodCall { object, method, location, .. } => {
                 let loc = self.effective(location);
                 self.method_call(object, method, &loc);
@@ -507,6 +628,16 @@ impl Visitor for Checker<'_, '_, '_> {
     }
 
     fn stmt(&mut self, s: &Statement<'_>) {
+        if let Statement::Match { arms, location, .. } = s {
+            if let Some((e, missing)) = rules::non_exhaustive(self.cx.idx, arms) {
+                let list = missing.iter().map(|v| format!("`{e}::{v}`")).collect::<Vec<_>>().join(", ");
+                let mut d = Diagnostic::error("WJ0010", format!("non-exhaustive match: {list} not covered"));
+                if let Some(sp) = self.cx.loc.word(location, "match") {
+                    d = d.at(sp.with_label("patterns not covered"));
+                }
+                self.cx.out.push(d.with_help("add an arm for each missing variant, or a final `_` arm"));
+            }
+        }
         if let (Statement::Return { value: Some(Expression::Literal { value, location }), .. }, Some(ty)) =
             (s, self.ret_ty.clone())
         {

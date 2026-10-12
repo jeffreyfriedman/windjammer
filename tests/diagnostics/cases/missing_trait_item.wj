@@ -1,4 +1,4 @@
-// expect: rustc:WJ0018
+// expect: WJ0018
 trait Shape {
     fn area(self) -> float
 }
