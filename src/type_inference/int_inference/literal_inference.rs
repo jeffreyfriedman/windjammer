@@ -368,14 +368,21 @@ impl IntInference {
             return None;
         }
 
-        self.function_signatures
+        // Suffix fallback: only when every homonym agrees. Picking "the first" of
+        // `i8::min` / `u16::min` / ... depended on map iteration order (nondeterministic output).
+        let mut candidates = self
+            .function_signatures
             .iter()
             .filter(|(func_name, (params, _))| {
                 func_name.split("::").last() == Some(method)
                     && (params.len() == arg_count + 1 || params.len() == arg_count)
             })
-            .map(|(_, (params, ret))| (substitute(params.clone()), ret.clone()))
-            .next()
+            .map(|(_, sig)| sig);
+        let first = candidates.next()?;
+        if candidates.any(|other| other != first) {
+            return None;
+        }
+        Some((substitute(first.0.clone()), first.1.clone()))
     }
 
     fn builtin_option_method_signature(

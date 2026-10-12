@@ -1,0 +1,61 @@
+use windjammer_runtime::test::*;
+
+use windjammer_app::voxel::VoxelGrid;
+use windjammer_app::voxel::svo64_convert::voxelgrid_to_svo64_flat;
+const LEAF_FLAG: u32 = 256_u32;
+
+#[inline]
+fn decode_node(node: u32) -> (u8, bool, u32) {
+    let material = (node & 255_u32) as u8;
+    let is_leaf = (node & LEAF_FLAG) != 0_u32;
+    let child_ptr = node >> 9_u32;
+    (material, is_leaf, child_ptr)
+}
+
+#[test]
+fn test_empty_grid_creates_empty_octree() {
+    let grid = VoxelGrid::new(8_i32, 8_i32, 8_i32);
+    let svo = voxelgrid_to_svo64_flat(grid);
+    assert_eq!(svo.len(), 1, "Empty grid should have 1 node");
+    let (material, is_leaf, _) = decode_node(svo[0].clone());
+    assert!(is_leaf, "Root should be leaf for empty grid");
+    assert_eq!(material, 0, "Empty grid should have material 0");
+}
+
+#[test]
+fn test_single_voxel_creates_path_to_leaf() {
+    let mut grid = VoxelGrid::new(8_i32, 8_i32, 8_i32);
+    grid.set(4, 4, 4, 5);
+    let svo = voxelgrid_to_svo64_flat(grid);
+    let (_, is_leaf, child_ptr) = decode_node(svo[0].clone());
+    assert!(!is_leaf, "Root should be interior node for single voxel");
+    assert!(child_ptr > 0_u32, "Root should have valid child pointer");
+    println!("[test] Single voxel test: {} nodes generated", svo.len());
+}
+
+#[test]
+fn test_octree_respects_octant_ordering() {
+    let mut grid = VoxelGrid::new(8_i32, 8_i32, 8_i32);
+    grid.set(0, 0, 0, 1);
+    grid.set(4, 0, 0, 2);
+    let svo = voxelgrid_to_svo64_flat(grid);
+    let (_, is_leaf, _) = decode_node(svo[0].clone());
+    assert!(!is_leaf, "Root should be interior for multiple voxels");
+    println!("[test] Octant ordering test: {} nodes generated", svo.len());
+}
+
+#[test]
+fn test_homogeneous_regions_collapse() {
+    let mut grid = VoxelGrid::new(8_i32, 8_i32, 8_i32);
+    for x in 0_i32..2_i32 {
+        for y in 0_i32..2_i32 {
+            for z in 0_i32..2_i32 {
+                grid.set(x, y, z, 5);
+            }
+        }
+    }
+    let svo = voxelgrid_to_svo64_flat(grid);
+    println!("[test] Homogeneous collapse: {} nodes for 8 voxels", svo.len());
+    assert!(svo.len() < 20_usize, "Homogeneous regions should collapse");
+}
+
