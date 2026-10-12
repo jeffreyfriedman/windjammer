@@ -1,0 +1,9 @@
+// expect: WJ0017
+struct Opaque {
+    n: int,
+}
+
+fn main() {
+    let o = Opaque { n: 1 }
+    println("${o}")
+}

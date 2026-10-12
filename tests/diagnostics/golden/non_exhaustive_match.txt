@@ -1,0 +1,7 @@
+error[WJ0010]: non-exhaustive match: `Color::Green` not covered
+  --> non_exhaustive_match.wj:8:5
+  |
+8 |     match c {
+  |     ^^^^^ patterns not covered
+  = help: add an arm for each missing variant, or a final `_` arm
+  = explain: wj explain WJ0010

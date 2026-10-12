@@ -207,6 +207,7 @@ impl ScopeAnalyzer {
                 condition,
                 body,
                 location: _,
+                ..
             } => {
                 self.analyze_expression(condition);
                 self.analyze_statements(body);

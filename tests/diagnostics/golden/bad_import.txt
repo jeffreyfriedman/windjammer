@@ -1,0 +1,7 @@
+error[WJ0006]: unresolved import `util::missing`
+  --> bad_import.wj:8:11
+  |
+8 | use util::missing
+  |           ^^^^^^^ no such module or item
+  = help: check the path, or create / declare the module
+  = explain: wj explain WJ0006

@@ -1,0 +1,18 @@
+// mutant: extra_argument of examples/verified/algo_fibonacci.wj
+fn fib(n: int) -> u64 {
+    let mut a: u64 = 0
+    let mut b: u64 = 1
+    for _ in 0..n {
+        let t = a + b
+        a = b
+        b = t
+    }
+    a
+}
+
+fn main() {
+    let mut parts: Vec<string> = []
+    for i in 0..15 { parts.push(fib(i, 0).to_string()) }
+    println(parts.join(" "))
+    println("fib(50) = ${fib(50)}")
+}

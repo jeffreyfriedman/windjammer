@@ -1,0 +1,37 @@
+// mutant: return_wrong_type of examples/verified/algo_digits.wj
+fn digit_sum(n: int) -> int {
+    return "oops"
+    let mut x = n
+    let mut s = 0
+    while x > 0 {
+        s += x % 10
+        x /= 10
+    }
+    s
+}
+
+fn to_binary(n: int) -> string {
+    if n == 0 { return "0" }
+    let mut x = n
+    let mut digits: Vec<string> = []
+    while x > 0 {
+        digits.push((x % 2).to_string())
+        x /= 2
+    }
+    digits.reverse()
+    digits.join("")
+}
+
+fn from_binary(s: string) -> int {
+    let mut n = 0
+    for c in s.chars() {
+        n = n * 2 + c.to_digit(2).unwrap_or(0) as int
+    }
+    n
+}
+
+fn main() {
+    println("${digit_sum(98765)}")
+    println("${from_binary("1011")}")
+    println(to_binary(37))
+}
