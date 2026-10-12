@@ -130,3 +130,8 @@ reason = "mut-ref-to-int-parameters: Rust backend emits an owned i64 parameter s
 program = "170_mut_ref_value_types"
 backend = "rust"
 reason = "mut-ref-to-int-parameters: Rust backend emits owned i64/f64/bool parameters for `&mut` scalars so `*c = ..` fails with E0614"
+
+[[unsupported]]
+program = "173_type_aliases"
+backend = "rust"
+reason = "rust-int-literal-width-inference: `Alias::new(3, 4)` through a `type` alias types the literals i32 against an i64 signature (E0308); see docs/known-issues/rust-int-literal-width-inference.md"

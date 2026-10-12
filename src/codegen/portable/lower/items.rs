@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 /// Lower a whole program. `reg` supplies analyzer-inferred parameter ownership.
 pub fn lower_program(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
+    let _aliases = crate::codegen::portable::alias::install(program);
     let env = ItemEnv::build(program, reg);
     let mut m = PModule { structs: vec![], enums: vec![], traits: vec![], fns: vec![], consts: vec![] };
     let mut items: Vec<&Item> = Vec::new();
