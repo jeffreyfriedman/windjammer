@@ -98,6 +98,8 @@ impl Interpreter {
         module: usize,
         items: &'static [Item<'static>],
     ) -> Result<(), RuntimeError> {
+        // definitions changed (REPL, lazily loaded modules): cached call resolutions may be stale
+        self.call_cache.clear();
         for item in items {
             match item {
                 Item::Function { decl, .. } => {

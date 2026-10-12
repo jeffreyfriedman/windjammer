@@ -367,17 +367,18 @@ fn register_json(r: &mut Registry) {
             Err(e) => Value::err(s(&e.to_string())),
         })
     });
-    r.func("json::stringify", |_, a| {
-        Ok(match serde_json::to_string(&json_of(&arg(&a, 0, "stringify")?)?) {
-            Ok(t) => Value::ok(s(&t)),
-            Err(e) => Value::err(s(&e.to_string())),
-        })
+    // a json::Value, or any serialisable value (the runtime's `stringify` is generic over Serialize)
+    r.func("json::stringify", |it, a| {
+        let j = to_json(it, &arg(&a, 0, "stringify")?)?;
+        let mut out = String::new();
+        j.render(false, 0, &mut out);
+        Ok(Value::ok(s(&out)))
     });
-    r.func("json::stringify_pretty", |_, a| {
-        Ok(match serde_json::to_string_pretty(&json_of(&arg(&a, 0, "stringify_pretty")?)?) {
-            Ok(t) => Value::ok(s(&t)),
-            Err(e) => Value::err(s(&e.to_string())),
-        })
+    r.func("json::stringify_pretty", |it, a| {
+        let j = to_json(it, &arg(&a, 0, "stringify_pretty")?)?;
+        let mut out = String::new();
+        j.render(true, 0, &mut out);
+        Ok(Value::ok(s(&out)))
     });
     r.func("json::to_string", |it, a| {
         let j = to_json(it, &arg(&a, 0, "to_string")?)?;
@@ -879,6 +880,8 @@ fn register_time(r: &mut Registry) {
             Err(e) => Value::err(s(&e.to_string())),
         })
     });
+    r.func("time::to_rfc3339", |_, a| Ok(s(&dt_of(&arg(&a, 0, "to_rfc3339")?)?.to_rfc3339())));
+    r.func("time::format", |_, a| Ok(s(&dt_of(&arg(&a, 0, "format")?)?.format(arg_str(&a, 1, "format")?.as_str()).to_string())));
     r.native("DateTime", "timestamp", |_, v, _| Ok(Value::Int(dt_of(v)?.timestamp() as i128, IntTy::I64)));
     r.native("DateTime", "timestamp_millis", |_, v, _| Ok(Value::Int(dt_of(v)?.timestamp_millis() as i128, IntTy::I64)));
     r.native("DateTime", "format", |_, v, a| Ok(s(&dt_of(v)?.format(arg_str(&a, 0, "format")?.as_str()).to_string())));
