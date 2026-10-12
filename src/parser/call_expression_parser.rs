@@ -76,6 +76,10 @@ impl Parser {
                                     self.advance();
                                     let arguments = self.parse_arguments()?;
                                     self.expect(Token::RParen)?;
+                                    let arguments = self.append_trailing_block(arguments)?;
+                                    // ADR-0018 named arguments / defaults (parser/named_args.rs)
+                                    let arguments =
+                                        self.resolve_call_arguments(&format!(".{field}"), arguments)?;
                                     if let Some(lowered) =
                                         self.lower_stream_method_call(expr, &field, &arguments)
                                     {
@@ -230,6 +234,13 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
+                            let arguments = self.append_trailing_block(arguments)?;
+                            let arguments = match expr {
+                                Expression::Identifier { name, .. } => {
+                                    self.resolve_call_arguments(&format!("{name}::{method}"), arguments)?
+                                }
+                                _ => arguments,
+                            };
                             self.alloc_expr(Expression::MethodCall {
                                 object: expr,
                                 method,
@@ -259,6 +270,11 @@ impl Parser {
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
+                    let arguments = self.append_trailing_block(arguments)?;
+                    let arguments = match crate::parser::named_args::call_key(expr) {
+                        Some(key) => self.resolve_call_arguments(&key, arguments)?,
+                        None => arguments,
+                    };
                     self.alloc_expr(Expression::Call {
                         function: expr,
                         arguments,
