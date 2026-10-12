@@ -76,6 +76,67 @@ Ownership: messages move, so Rust needs `M: Send + 'static` (the solver reports 
 the `send` site with a Windjammer diagnostic, not a rustc trait error). Go/JS copy on send for value types
 (the portable backends already clone on move where needed).
 
+## Durable processes (optional)
+Input (2026-10-11): Cloudflare's acquisition of Deno was reported to centre on celld, an open-source Rust
+implementation of the Durable Objects model that depends only on object storage for coordination and persistence,
+so the Workers programming model can be self-hosted. The model fits this ADR: a process is already a single-writer
+owner of its state; making that state durable and the identity stable gives the same program three deployments.
+
+**Model.** `durable process` = a process with
+- a **stable identity** (`DurableId<M>` derived from a name or key, e.g. `room("lobby")`), at most one live instance
+  per identity at a time (single writer), activated on first message and passivated when idle;
+- **transactional persisted state**: the state is loaded on activation; each handled message runs as a transaction
+  whose writes commit atomically after the handler returns (or are discarded on panic, so a supervisor restart sees
+  the last committed state); output messages sent during the handler are delivered only after commit (no
+  externally visible effect of an aborted transaction);
+- **location transparency**: `id.send(msg)` / `id.call(msg)` work the same whether the instance is in this process,
+  in another binary on this machine, or on another machine.
+
+**Storage port.** Durability goes through one trait, never a hard-wired backend:
+
+```text
+trait DurableStore {
+    fn load(id: DurableId) -> Result<Bytes?, StoreError>
+    fn commit(id: DurableId, expected_version: int, state: Bytes) -> Result<int, StoreError>  // compare-and-set
+    fn lease(id: DurableId, owner: NodeId, ttl: Duration) -> Result<Lease, StoreError>         // single-writer
+}
+```
+
+Adapters: in-memory fake (tests, interpreter, deterministic scheduler), local file / SQLite (single self-hosted
+binary), object storage with conditional writes (distributed: leases and versions are the only coordination, as in
+celld). The compare-and-set version makes split-brain writes fail instead of corrupting state.
+
+**Same program, three deployments.** Interpreter (in-memory store, deterministic, replayable), one self-hosted binary
+(SQLite/file store, all actors local), distributed (object-storage store, actors placed by lease on any node; a thin
+router forwards messages to the lease holder).
+
+**Mapping onto a database's actor/reducer layer.** A database built as single-writer actors with reducers
+(state' = reduce(state, command)) maps directly: each table partition or document is a durable process, a reducer
+is the message handler, the storage port is the database's own log/page store, and commit = append to its log.
+The language contributes typed messages, ownership-checked state (no shared mutable state escapes a handler) and the
+deterministic interpreter for testing reducers; the database keeps its own storage engine behind `DurableStore`.
+
+**Capabilities (Deno's lesson).** Deno's permission flags were reported to be its most-loved feature; Node still has
+no per-host network allowlist. Processes are the natural unit for capabilities: a process (durable or not) is spawned
+with an explicit capability set, tied to the effects/capability work, at fine grain - e.g.
+`spawn_process(fetcher, s, caps: [net("api.example.com:443"), fs_read("./data")])`. A child can only receive a
+subset of its parent's capabilities; the storage port is itself a capability. The interpreter enforces them at the
+call sites of std effects; compiled backends check at the std boundary (Rust runtime, Go/JS wrappers). Violations
+are errors naming the missing capability, not silent failures.
+
+**Ambition ladder (durable).**
+- D1: `DurableStore` trait + in-memory and SQLite adapters; durable processes on one node; tests in the interpreter
+  with deterministic crashes (kill between handler and commit, assert state = last commit).
+- D2: capability sets on `spawn_process`, enforced in the interpreter and the Rust runtime (per-host net, fs paths).
+- D3: object-storage adapter with leases + compare-and-set; multi-node routing; chaos test (two nodes race for a lease).
+- D4: a database's actor/reducer layer plugged in through `DurableStore` as an external adapter (separate repo).
+
+**Kill criteria (durable).** Stop at D1 if the persisted-state transaction adds more than 2x latency per message
+over an in-memory process with the SQLite adapter on a local benchmark, or if exactly-once-after-commit delivery
+cannot be guaranteed by the store contract (then durable processes become a library pattern, not a language
+feature). Drop D3 if leases on the object-storage adapter cannot be made safe without a separate coordination
+service (that would contradict the "only object storage" premise).
+
 ## Prerequisites, first experiment, benchmark, kill criteria
 - Prerequisites: ADR-0004 rung 1 (`spawn`/`scope`, channels) on Rust and the interpreter; the deterministic
   scheduler in the interpreter.
