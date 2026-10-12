@@ -53,6 +53,9 @@ pub fn to_text(report: &Report) -> String {
                 p.ir_final.as_deref().unwrap_or("-"),
                 p.emitted.as_deref().unwrap_or("-")
             );
+            if p.trail.len() > 1 {
+                let _ = writeln!(s, "    trail: {}", p.trail.join(" -> "));
+            }
             for r in &p.reasons {
                 let _ = writeln!(s, "    {}", reason_line(r));
             }

@@ -150,6 +150,7 @@ impl IrPipeline {
             .map(|af| {
                 let mut ir_fn = IrFunction::from_analyzed(af);
                 ir_fn.body = super::lower::lower_body(&af.decl.body);
+                ir_fn.record_ownership_stage("analyzer-seed");
                 ir_fn
             })
             .collect();
@@ -218,7 +219,7 @@ impl IrPipeline {
             if let Some(ir_fn) = functions.get_mut(i) {
                 for (param_name, &var) in &fc.var_map.params {
                     if let Some(st) = ir_fn.param_types.get_mut(param_name) {
-                        let root_idx = var.0 as usize;
+                        let root_idx = var.0 as usize; // results are indexed by variable
                         if let Some(Some(ref base)) = result.types.get(root_idx) {
                             if *base != BaseType::Inferred {
                                 st.base = base.clone();
@@ -231,6 +232,8 @@ impl IrPipeline {
                         }
                     }
                 }
+
+                ir_fn.record_ownership_stage("solver");
 
                 let ret_idx = fc.var_map.return_var.0 as usize;
                 if let Some(Some(ref base)) = result.types.get(ret_idx) {
@@ -252,11 +255,14 @@ impl IrPipeline {
                     }
                 }
 
+                ir_fn.record_ownership_stage("pipeline::retain_mutated_mutref");
+
                 // Write local variable types from solver.
                 for (local_name, &var) in &fc.var_map.locals {
-                    let root_idx = var.0 as usize;
+                    let root_idx = var.0 as usize; // results are indexed by variable
                     let base = result.types.get(root_idx).and_then(|t| t.as_ref());
-                    let own = result.ownership.get(root_idx).and_then(|o| o.as_ref());
+                    // A local's mode is what it holds (join over its type class), not a requirement.
+                    let own = result.class_ownership.get(root_idx).and_then(|o| o.as_ref());
                     if base.is_some() || own.is_some() {
                         let entry = ir_fn
                             .local_types
@@ -277,14 +283,25 @@ impl IrPipeline {
             }
         }
 
+        let record = |functions: &mut [IrFunction], stage: &'static str| {
+            for f in functions.iter_mut() {
+                f.record_ownership_stage(stage);
+            }
+        };
         apply_analyzer_readonly_string_params_to_ir(&mut functions, analyzed);
+        record(&mut functions, "apply_analyzer_readonly_string_params_to_ir");
         clear_str_ref_for_owned_or_stored_params(&mut functions, analyzed);
         restore_owned_string_params_after_str_ref(&mut functions, analyzed);
+        record(&mut functions, "restore_owned_string_params_after_str_ref");
         converge_impl_param_ownership(&mut functions, analyzed);
+        record(&mut functions, "converge_impl_param_ownership");
         finalize_ir_param_ownership_from_analyzer(&mut functions, analyzed);
+        record(&mut functions, "finalize_ir_param_ownership_from_analyzer");
         propagate_delegation_ownership(&mut functions, analyzed, registry, &struct_field_types);
+        record(&mut functions, "propagate_delegation_ownership");
         // Delegation may force Owned on wrappers; mutated non-returned params stay MutRef.
         restore_mutated_param_mutrefs(&mut functions, analyzed);
+        record(&mut functions, "restore_mutated_param_mutrefs");
 
         diagnostics.push(IrDiagnostic {
             severity: DiagnosticSeverity::Info,

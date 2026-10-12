@@ -59,6 +59,7 @@ fn wrap(name: string) -> Holder {
         optimizations: OptimizationHints::empty(),
         local_types: HashMap::new(),
         body: Vec::new(),
+        ownership_trail: Default::default(),
     }]);
 
     let output = gen.generate_program(&program, &analyzed);

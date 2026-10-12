@@ -424,6 +424,14 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
 
             self.cs.add(Constraint::TypeEquals(arg_var, expected_var));
+            self.cs.add_because(
+                Constraint::UsedAs(arg_var, expected_var),
+                origin(
+                    "OWN-CALL-FORMAL",
+                    format!("argument {} of `{}` takes the formal's requirement", arg_index, sig.name),
+                    &None,
+                ),
+            );
         }
     }
 
@@ -596,6 +604,12 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let val_var = self.walk_expression(value);
                 let bound_var = self.bind_pattern(pattern);
                 self.cs.add(Constraint::TypeEquals(bound_var, val_var));
+                if matches!(pattern, Pattern::Identifier(_) | Pattern::MutBinding(_)) {
+                    self.cs.add_because(
+                        Constraint::UsedAs(val_var, bound_var),
+                        origin("OWN-LATTICE", "bound to a local: the value meets the local's requirements", &value.location()),
+                    );
+                }
                 if let Some(ty) = type_ {
                     let base = parser_type_to_base_type(ty);
                     if base != BaseType::Inferred {
@@ -653,6 +667,10 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                     let val_var = self.walk_expression(val);
                     self.cs
                         .add(Constraint::TypeEquals(self.return_var, val_var));
+                    self.cs.add_because(
+                        Constraint::UsedAs(val_var, self.return_var),
+                        origin("OWN-RETURNED", "returned: the value must be owned", &val.location()),
+                    );
                 }
             }
 
