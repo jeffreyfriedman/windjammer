@@ -268,12 +268,16 @@ impl<'e> Lowerer<'e> {
         Unsupported { what, line: self.line }
     }
 
+    /// An index or count operand: `int` is accepted (SPEC-NUM-014), so an index whose type is still
+    /// open is not forced to `usize`; it is converted (a no-op once it resolves to `usize`).
     pub(super) fn ensure_usize(&mut self, e: PExpr) -> PExpr {
-        self.constrain(&Ty::usize(), &e.ty);
         match self.resolve(&e.ty) {
             Ty::Int(IntKind::Usize) => e,
-            Ty::Int(_) => PExpr::new(Ty::usize(), PK::Cast(e, Ty::usize())),
-            _ => e,
+            Ty::Int(_) | Ty::Var(_) => PExpr::new(Ty::usize(), PK::Cast(e, Ty::usize())),
+            _ => {
+                self.constrain(&Ty::usize(), &e.ty);
+                e
+            }
         }
     }
 

@@ -23,6 +23,15 @@ impl<'m> Js<'m> {
             let r = self.expr_recv(recv)?;
             return Ok(format!("{r}.{}({a})", self.method_name(name)));
         }
+        // A length typed as a narrow `int` (SPEC-NUM-014) is a Number, not a BigInt.
+        if matches!(name, "len" | "count" | "capacity") {
+            if let Ty::Int(k) = ty {
+                if !k.is_wide() {
+                    let n = self.method(recv, name, args, res, &Ty::usize())?;
+                    return Ok(format!("Number({n})"));
+                }
+            }
+        }
         let r = self.expr(recv)?;
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
         if name == "to_string" {

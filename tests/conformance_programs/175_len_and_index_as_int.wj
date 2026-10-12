@@ -1,0 +1,55 @@
+// SPEC-NUM-014: `len()` and indexing accept `int`. A length compared with, returned as, or added
+// to an `int` is an `int`; an `int` index needs no cast. Expected output from rustc on a Rust
+// transliteration with the casts made explicit.
+// expect: at 2
+// expect: missing
+// expect: 3
+// expect: 7 6 3
+// expect: 18
+// expect: 4
+fn find(v: Vec<int>, t: int) -> Option<int> {
+    let mut i = 0
+    while i < v.len() {
+        if v[i] == t {
+            return Some(i)
+        }
+        i += 1
+    }
+    None
+}
+
+struct Stack {
+    items: Vec<int>,
+}
+
+impl Stack {
+    fn size(self) -> int {
+        self.items.len()
+    }
+}
+
+fn main() {
+    let v = vec![5, 6, 7]
+    match find(v.clone(), 7) {
+        Some(i) => println("at ${i}"),
+        None => println("missing"),
+    }
+    match find(v.clone(), 1) {
+        Some(i) => println("at ${i}"),
+        None => println("missing"),
+    }
+    let s = Stack { items: vec![1, 2, 3] }
+    println("${s.size()}")
+    let last = v.len() - 1
+    let i: int = 1
+    println("${v[last]} ${v[i]} ${v.len()}")
+    let mut k = 0
+    let mut total = 0
+    while k < 3 {
+        total += v[k]
+        k += 1
+    }
+    println("${total}")
+    let n: int = v.len() + 1
+    println("${n}")
+}

@@ -189,7 +189,7 @@ pub(super) fn lower_fn(env: &ItemEnv, decl: &FunctionDecl, sig: &crate::codegen:
     let mut bounds: Vec<(String, Vec<String>)> = lw.bounds.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     bounds.sort();
     let mut f = PFn { name: decl.name.clone(), type_params: decl.type_params.iter().map(|t| t.name.clone()).collect(), bounds, recv: sig.recv, params, ret: sig.ret.clone(), body: Some(body), owner: owner.map(|s| s.to_string()), is_async: decl.is_async };
-    let resolver = Lowerer { vars: lw.vars.clone(), int_vars: lw.int_vars.clone(), float_vars: lw.float_vars.clone(), ..Lowerer::new(env) };
+    let resolver = Lowerer { vars: lw.vars.clone(), int_vars: lw.int_vars.clone(), float_vars: lw.float_vars.clone(), usize_vars: lw.usize_vars.clone(), ..Lowerer::new(env) };
     visit::types_in_fn(&mut f, &mut |t| *t = resolver.resolve_final(t));
     Ok(f)
 }
