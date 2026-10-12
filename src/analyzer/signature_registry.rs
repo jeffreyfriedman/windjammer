@@ -1102,16 +1102,17 @@ impl SignatureRegistry {
     /// Prefer [`Self::find_unique_signature_ending_with`] when the result drives
     /// ownership/storage decisions — the first hit among homonyms is unsafe.
     pub fn find_signature_ending_with(&self, suffix: &str) -> Option<&FunctionSignature> {
-        if let Some(keys) = self.method_index.get(suffix) {
-            for key in keys {
-                if let Some(sig) = self.signatures.get(key) {
-                    return Some(sig);
-                }
-            }
-        }
-        self.global_fallback
-            .as_ref()
-            .and_then(|g| g.find_signature_ending_with(suffix))
+        // Deterministic among homonyms: the smallest qualified key (never insertion/hash order).
+        let first = self
+            .method_index
+            .get(suffix)
+            .and_then(|keys| keys.iter().filter(|k| self.signatures.contains_key(*k)).min())
+            .and_then(|k| self.signatures.get(k));
+        first.or_else(|| {
+            self.global_fallback
+                .as_ref()
+                .and_then(|g| g.find_signature_ending_with(suffix))
+        })
     }
 
     /// All registered qualified keys for a bare method name (e.g. `push` → `Vec::push`, …).

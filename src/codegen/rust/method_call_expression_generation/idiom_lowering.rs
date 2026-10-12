@@ -135,7 +135,9 @@ impl<'ast> CodeGenerator<'ast> {
             // copying the receiver there would make the `&0` default a type error.
             let by_ref = args[0].starts_with('&');
             if !by_ref {
+                if !obj_str.ends_with(".copied()") && !obj_str.ends_with(".cloned()") {
                 obj_str.push_str(".copied()");
+            }
             }
             let width = match pointee.as_ref() {
                 Type::Custom(w) | Type::Parameterized(w, _) => Some(w.as_str()),
