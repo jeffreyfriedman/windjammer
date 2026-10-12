@@ -1,0 +1,13 @@
+// mutant: int_annotated_string of examples/verified/closures_basics.wj
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+
+fn main() {
+    let add_one = |x| x + 1
+    println("${add_one(10)}")
+    let k: string = 5
+    let add_k = |x| x + k
+    println("${add_k(10)}")
+    println("${apply(|x| x - 1, 8)}")
+}

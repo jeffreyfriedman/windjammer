@@ -202,6 +202,20 @@ impl Interpreter {
                 let inner = slot.borrow().clone();
                 self.display_string(&inner)
             }
+            Value::Native(n) if n.display().is_some() => Ok(n.display().unwrap_or_default()),
+            // `char::to_lowercase()`/`to_uppercase()`/`escape_*` are char iterators that implement Display
+            Value::Iter(i) => {
+                let copy = super::iter::clone_iter(i);
+                let items = self.drain_iter(&copy)?;
+                let mut out = String::new();
+                for x in &items {
+                    match x {
+                        Value::Char(c) => out.push(*c),
+                        other => return Err(semantic(format!("`{}` iterator doesn't implement `std::fmt::Display`", other.type_name()))),
+                    }
+                }
+                Ok(out)
+            }
             Value::Struct(_) | Value::Enum(_) => {
                 let tn = v.type_name();
                 let f = self
@@ -336,13 +350,19 @@ impl Interpreter {
                 self.debug_fmt(&inner, pretty, ind, out)?;
             }
             Value::Weak(_) => out.push_str("(Weak)"),
-            Value::Cell(kind, slot) => {
+            Value::Native(n) => out.push_str(&n.debug()),
+            Value::Cell(CellKind::Atomic, slot, _) => {
+                let inner = slot.borrow().clone();
+                self.debug_fmt(&inner, pretty, ind, out)?;
+            }
+            Value::Cell(kind, slot, _) => {
                 let inner = slot.borrow().clone();
                 let (name, field) = match kind {
                     CellKind::RefCell => ("RefCell", "value"),
                     CellKind::Cell => ("Cell", "value"),
                     CellKind::Mutex => ("Mutex", "data"),
                     CellKind::RwLock => ("RwLock", "data"),
+                    CellKind::Atomic => ("", ""),
                 };
                 out.push_str(name);
                 let mut fields = vec![(field.to_string(), inner)];

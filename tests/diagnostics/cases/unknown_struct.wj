@@ -1,0 +1,5 @@
+// expect: WJ0005
+fn main() {
+    let p = UndefinedStruct { x: 10, y: 20 }
+    println("${p.x}")
+}

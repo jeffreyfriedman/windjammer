@@ -1,0 +1,10 @@
+// mutant: undefined_function of examples/verified/algo_temperature_table.wj
+fn c_to_f(c: float) -> float {
+    c * 9.0 / 5.0 + 32.0
+}
+
+fn main() {
+    for c in [-40, 0, 37, 100] {
+        println("${c}C = ${c_to_f_missing(c as float):.1}F")
+    }
+}

@@ -1,0 +1,7 @@
+error[WJ0018]: not all trait items implemented, missing: `area`
+  --> missing_trait_item.wj:8:6
+  |
+8 | impl Shape for Dot {
+  |      ^^^^^ missing `area`
+  = help: define `area` in this `impl Shape` block
+  = explain: wj explain WJ0018

@@ -1,6 +1,5 @@
 // spec: SPEC-STR-009
 // expect: p=(1, 2)
-// xfail: Q-006
 struct Pt { x: int, y: int }
 impl Pt {
     fn to_string(self) -> string { "(${self.x}, ${self.y})" }

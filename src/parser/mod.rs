@@ -33,6 +33,7 @@ pub(crate) mod named_args;
 mod pipe_parser;
 mod primary_expression_parser;
 pub(crate) mod shorthand_closure;
+pub mod task_prefix;
 mod trailing_block;
 
 // Statement parsing module - extracted from parser_impl.rs

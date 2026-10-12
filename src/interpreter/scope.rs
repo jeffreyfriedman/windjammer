@@ -23,6 +23,14 @@ impl Interpreter {
         self.scope.vars.push((name, Rc::new(RefCell::new(v))));
     }
 
+    /// Keep a finished frame's variable vector for the next call (saves an allocation per call).
+    pub(crate) fn recycle_vars(&mut self, mut vars: Vec<(&'static str, Slot)>) {
+        if self.vec_pool.len() < 64 && vars.capacity() <= 64 {
+            vars.clear();
+            self.vec_pool.push(vars);
+        }
+    }
+
     pub(crate) fn push_scope(&mut self) {
         let n = self.scope.vars.len();
         self.scope.marks.push(n);

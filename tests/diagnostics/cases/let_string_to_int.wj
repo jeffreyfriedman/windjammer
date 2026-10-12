@@ -1,0 +1,5 @@
+// expect: WJ0003
+fn main() {
+    let x: int = "hello"
+    println("x = ${x}")
+}

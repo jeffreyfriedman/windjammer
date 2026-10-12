@@ -1,0 +1,5 @@
+// expect: WJ0002
+fn main() {
+    let result = calculate_total(100, 200)
+    println("${result}")
+}

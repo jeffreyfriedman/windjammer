@@ -65,7 +65,7 @@ fn descend<'v>(cur: &'v mut Value, p: &Proj) -> R<&'v mut Value> {
 
 impl Place {
     pub fn of_slot(slot: Slot) -> Place {
-        Place { slot, path: Vec::new() }
+        Place { slot, path: Vec::new(), guard: None }
     }
 
     pub fn temp(v: Value) -> Place {
@@ -75,7 +75,7 @@ impl Place {
     pub fn proj(&self, p: Proj) -> Place {
         let mut path = self.path.clone();
         path.push(p);
-        Place { slot: self.slot.clone(), path }
+        Place { slot: self.slot.clone(), path, guard: self.guard.clone() }
     }
 
     /// Run `f` on the target value with unique access (copy-on-write along the path).
@@ -152,7 +152,15 @@ pub fn project(v: &Value, p: &Proj) -> R<Value> {
 }
 
 /// Follow `Ref` values to the underlying value.
+#[inline]
 pub fn deref_value(v: Value) -> R<Value> {
+    if !matches!(v, Value::Ref(_) | Value::Rc(_)) {
+        return Ok(v); // the common case: a plain value, no indirection
+    }
+    deref_chain(v)
+}
+
+fn deref_chain(v: Value) -> R<Value> {
     let mut cur = v;
     let mut n = 0;
     loop {
@@ -169,7 +177,11 @@ pub fn deref_value(v: Value) -> R<Value> {
 }
 
 /// Follow `&`/`&mut` references but keep an `Rc` handle (so sharing is not lost).
+#[inline]
 pub fn strip_refs(v: Value) -> R<Value> {
+    if !matches!(v, Value::Ref(_)) {
+        return Ok(v);
+    }
     let mut cur = v;
     for _ in 0..64 {
         match cur {
