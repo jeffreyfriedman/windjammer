@@ -1,0 +1,13 @@
+// spec: SPEC-CLOS-003
+// expect: 10
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+
+fn twice(x: int) -> int {
+    x * 2
+}
+
+fn main() {
+    println("${twice(apply(_ + 1, 4))}")
+}

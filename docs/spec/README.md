@@ -45,6 +45,10 @@ Example file format (`tests/spec/<area>/SPEC-XXX-NNN.wj`): header comments `// s
 | [errors.md](errors.md) | ERR | Option, Result, `?`, panics |
 | [concurrency.md](concurrency.md) | CONC | ADR-0004 surface (mostly planned) |
 | [pipe.md](pipe.md) | PIPE | `\|>` |
+| [collections.md](collections.md) | COLL | enumerable methods: group_by, count_by, unique, chunk_by, ... (ADR-0018) |
+| [closures.md](closures.md) | CLOS | `_` shorthand closures (ADR-0018) |
+| [guard-match.md](guard-match.md) | MATCH | `match { cond => .. }` (ADR-0018) |
+| [doctests.md](doctests.md) | DOC | examples in doc comments run by `wj test` (ADR-0018) |
 | [intrinsics.md](intrinsics.md) | INTR | print/assert/panic/debug/list literal |
 | [attributes.md](attributes.md) | ATTR | `@derive`, `@test`, ... |
 | [stdlib.md](stdlib.md) | STD | portable core and std index |
