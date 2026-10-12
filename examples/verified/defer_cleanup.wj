@@ -1,5 +1,5 @@
 // tags: control-flow, defer
-// rust: gap output differs from interpreter/oracle
+// rust: ok
 // expect: start
 // expect: work
 // expect: cleanup

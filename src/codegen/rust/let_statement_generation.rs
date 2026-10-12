@@ -515,7 +515,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                if suppress_turbofish_here {
+                if suppress_turbofish_here || Self::string_collect_rhs(t, value) {
                     self.collect_target_type = Some(t.clone());
                 }
 
@@ -1079,7 +1079,7 @@ impl<'ast> CodeGenerator<'ast> {
                 }
 
                 let prev_collect_target = self.collect_target_type.take();
-                if suppress_turbofish_here {
+                if suppress_turbofish_here || Self::string_collect_rhs(t, value) {
                     self.collect_target_type = Some(t.clone());
                 }
 

@@ -228,6 +228,22 @@ pub fn register(r: &mut Registry) {
     });
     r.func("fs::exists", |_, a| Ok(Value::Bool(std::path::Path::new(&*arg_str(&a, 0, "fs::exists")?).exists())));
     r.func("io::stdin", |_, _| Ok(strukt("Stdin", vec![])));
+    // Free-function forms the compiled runtime provides (`windjammer_runtime::io`).
+    r.func("io::read_line", |_, _| {
+        let mut line = String::new();
+        Ok(match std::io::stdin().read_line(&mut line) {
+            Ok(_) => Value::ok(Value::str(line.trim_end())),
+            Err(e) => io_err(e),
+        })
+    });
+    r.func("io::read_to_string", |_, _| {
+        use std::io::Read;
+        let mut buf = String::new();
+        Ok(match std::io::stdin().read_to_string(&mut buf) {
+            Ok(_) => Value::ok(Value::str(buf)),
+            Err(e) => io_err(e),
+        })
+    });
     r.pure(Kind::Struct, "read_line", |_, v, a| {
         if !matches!(v, Value::Struct(s) if &*s.name == "Stdin") {
             return Err(semantic("`read_line` is only available on stdin"));

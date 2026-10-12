@@ -759,34 +759,11 @@ impl<'ast> CodeGenerator<'ast> {
                 // explicit `return match` (E0308 otherwise — wj-todo-cli edit branch).
                 self.maybe_return_value_match_in_void_block(generated, arms)
             }
-            Statement::Loop { body, label, .. } => {
-                let out = self.generate_loop_statement(body);
-                super::loop_statement_generation::with_loop_label(out, label.as_deref())
-            }
-            Statement::While {
-                condition,
-                body,
-                label,
-                ..
-            } => {
-                let out = self.generate_while_statement(condition, body);
-                super::loop_statement_generation::with_loop_label(out, label.as_deref())
-            }
-            Statement::For {
-                pattern,
-                iterable,
-                body,
-                label,
-                location,
-                ..
-            } => {
-                let out = self.generate_for_statement(pattern, iterable, body, location);
-                super::loop_statement_generation::with_loop_label(out, label.as_deref())
-            }
-            Statement::Break { label, value, .. } => {
-                self.generate_break_statement(label.as_deref(), *value)
-            }
-            Statement::Continue { label, .. } => self.generate_continue_statement(label.as_deref()),
+            Statement::Loop { .. }
+            | Statement::While { .. }
+            | Statement::For { .. }
+            | Statement::Break { .. }
+            | Statement::Continue { .. } => self.generate_loop_family_statement(stmt),
             Statement::Use {
                 path,
                 alias,
@@ -815,14 +792,7 @@ impl<'ast> CodeGenerator<'ast> {
             } => self.generate_assignment_statement(target, value, compound_op),
             Statement::Thread { body, .. } => self.generate_thread_statement(body),
             Statement::Async { body, .. } => self.generate_async_statement(body),
-            Statement::Defer { statement: _, .. } => {
-                // Defer is not directly supported in Rust
-                // We'll generate a comment for now
-                let mut output = self.indent();
-                output.push_str("// TODO: defer not yet implemented\n");
-                output.push_str(&self.generate_statement(stmt));
-                output
-            }
+            Statement::Defer { statement, .. } => self.generate_defer_statement(statement, stmt),
         }
     }
 

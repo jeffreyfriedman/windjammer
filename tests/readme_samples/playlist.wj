@@ -1,0 +1,24 @@
+struct Playlist {
+    name: string,
+    songs: Vec<string>,
+}
+
+fn add_song(list: Playlist, song: string) {
+    list.songs.push(song)
+}
+
+fn count(list: Playlist) -> int {
+    list.songs.len()
+}
+
+fn describe(list: Playlist) -> string {
+    "${list.name}: ${list.songs.join(", ")}"
+}
+
+fn main() {
+    let mut list = Playlist { name: "Road trip", songs: [] }
+    add_song(list, "Africa")
+    add_song(list, "Hey Jude")
+    println(describe(list))
+    println("${count(list)} songs")
+}

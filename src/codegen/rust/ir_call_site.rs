@@ -10228,7 +10228,7 @@ fn safety_type_from_arg_expression(expr: &Expression) -> SafetyType {
         Expression::Literal { value, .. } => match value {
             Literal::String(_) => SafetyType::borrowed(BaseType::String, Region::fresh(2)),
             Literal::Int(_) => SafetyType::copy(BaseType::I32),
-            Literal::Float(_) => SafetyType::copy(BaseType::F32),
+            Literal::Float(_) => SafetyType::copy(BaseType::F64),
             Literal::Bool(_) => SafetyType::copy(BaseType::Bool),
             _ => SafetyType::owned(BaseType::Inferred),
         },

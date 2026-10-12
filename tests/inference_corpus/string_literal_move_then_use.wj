@@ -1,0 +1,6 @@
+// D-CLONE-STRLIT: a variable bound to a literal is treated as Copy by auto-clone, but is emitted as String.
+fn main() {
+    let s = "str"
+    let t = s
+    println("${s} ${t}")
+}
