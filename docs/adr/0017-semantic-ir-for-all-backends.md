@@ -32,10 +32,15 @@ Keyed by stable identity (function `DefId` / parameter index / binding id / expr
 | `receiver_mode(fn)` | same for `self` (SELF-* rules) | IR solver |
 | `mutated(binding)` | the binding (or a path rooted at it) is written | fact pass |
 | `escapes(binding)` | the value is stored, returned or captured by an escaping closure | fact pass |
+| `lent_mut(binding)` | the binding is passed to a `&mut` formal or receiver (GC targets need a cell/pointer representation for scalars, e.g. `&mut int` in Go/JS) | IR solver (call-site formals) |
+| `consumed(binding, site)` | the use moves the value (owned formal, a `self`-by-value method including generic trait methods such as `Into::into`) | IR solver |
 | `last_use(binding, site)` | no later read of the binding on any path after `site` | liveness pass |
 | `needs_copy(site)` | the use at `site` must observe an independent value (CLONE-* rules) | IR solver |
 | `width(expr)` | resolved numeric type (ADR-0015 defaults: `int`=i64, `float`=f64; explicit widths exact) | numeric solver |
 | `conversions(expr)` | checked conversions the solver placed (ADR-0015 #2) | numeric solver |
+
+Requests for new facts from a backend stream (for example the portable-gaps stream asking for `lent_mut`) are
+added to this table and produced by the semantic layer; the backend does not derive them locally.
 
 ### What each backend may and must do
 * **Must** read every decision it emits from the facts: Rust prints `&`/`&mut`/owned and `.clone()` exactly where the

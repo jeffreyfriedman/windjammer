@@ -127,7 +127,8 @@ static STDLIB_BASELINE: OnceLock<SignatureRegistry> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub struct SignatureRegistry {
-    pub signatures: HashMap<String, FunctionSignature>,
+    /// Ordered so every iteration (and every "first match" fallback) is deterministic.
+    pub signatures: std::collections::BTreeMap<String, FunctionSignature>,
     /// Param-type mismatches (namespace collisions) — used for int→float cast safety.
     type_collision_keys: HashSet<String>,
     /// Same param types but different ownership — used for auto-borrow safety.
@@ -221,7 +222,7 @@ impl SignatureRegistry {
     /// Lightweight empty registry (no stdlib) for building deltas.
     pub fn empty() -> Self {
         SignatureRegistry {
-            signatures: HashMap::new(),
+            signatures: std::collections::BTreeMap::new(),
             type_collision_keys: HashSet::new(),
             ownership_collision_keys: HashSet::new(),
             method_index: HashMap::new(),
@@ -797,13 +798,20 @@ impl SignatureRegistry {
                 }
             }
         }
-        if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
-            self.method_index
-                .entry(suffix)
-                .or_default()
-                .push(name.clone());
-        }
+        self.index_method_key(&name);
         self.signatures.insert(name, sig);
+    }
+
+    /// Record `name` (`Type::method`) under its bare method name. Each bucket is kept sorted and
+    /// deduplicated, so "first candidate" lookups do not depend on registration order (which
+    /// follows `HashMap` iteration in several callers and made emission nondeterministic).
+    fn index_method_key(&mut self, name: &str) {
+        if let Some((_, suffix)) = name.rsplit_once("::") {
+            let bucket = self.method_index.entry(suffix.to_string()).or_default();
+            if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) {
+                bucket.insert(pos, name.to_string());
+            }
+        }
     }
 
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
@@ -1083,6 +1091,8 @@ impl SignatureRegistry {
             }
             current = reg.global_fallback.as_deref();
         }
+        // Deterministic order (method_index is a HashMap).
+        out.sort_by(|a, b| a.0.cmp(b.0));
         out.into_iter()
     }
 
@@ -1877,12 +1887,7 @@ impl SignatureRegistry {
                 }
                 }
             }
-            if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
-                self.method_index
-                    .entry(suffix)
-                    .or_default()
-                    .push(name.clone());
-            }
+            self.index_method_key(&name);
             // Never let a bare-Owned stub replace stdlib/meta `&T` key contracts
             // (`HashMap::get(key: &K)` poisoned by `std/collections.wj` `key: K`).
             if let Some(existing) = self.get_signature(name) {
@@ -2048,12 +2053,7 @@ impl SignatureRegistry {
     /// Merge a delta into this registry (changed keys only).
     pub fn merge_delta(&mut self, delta: &SignatureDelta) {
         for (name, sig) in &delta.changed {
-            if let Some(suffix) = name.rsplit_once("::").map(|(_, s)| s.to_string()) {
-                self.method_index
-                    .entry(suffix)
-                    .or_default()
-                    .push(name.clone());
-            }
+            self.index_method_key(&name);
             self.signatures.insert(name.clone(), sig.clone());
         }
     }

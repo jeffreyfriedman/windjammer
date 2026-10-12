@@ -60,7 +60,7 @@ pub struct IntInference {
     pub inferred_types: HashMap<ExprId, IntType>,
     constraints: Vec<IntConstraint>,
     pub errors: Vec<String>,
-    function_signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
+    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
     var_assignments: HashMap<String, ExprId>,
     /// Element expr ids of `let v = vec![…]` / `[…]` so later `push`/`insert` args share that width.
     var_collection_elements: HashMap<String, Vec<ExprId>>,
@@ -98,7 +98,7 @@ impl IntInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: HashMap::new(),
+            function_signatures: std::collections::BTreeMap::new(),
             var_assignments: HashMap::new(),
             var_collection_elements: HashMap::new(),
             var_types: HashMap::new(),

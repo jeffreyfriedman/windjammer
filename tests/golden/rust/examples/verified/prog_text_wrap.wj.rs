@@ -1,0 +1,28 @@
+
+fn wrap(text: &str, width: i64) -> Vec<String> {
+    let mut lines: Vec<String> = vec![];
+    let mut cur = String::new();
+    for w in text.split_whitespace() {
+        if !cur.is_empty() && ((cur.len() + 1_usize + w.len()) as i64) > width {
+            lines.push(cur.clone());
+            cur = w.to_string();
+        } else {
+            if cur.is_empty() {
+                cur = w.to_string();
+            } else {
+                { use std::fmt::Write as _; write!(cur, "{}{}", " ", w).expect("a formatting trait implementation returned an error"); };
+            }
+        }
+    }
+    if !cur.is_empty() {
+        let _ = lines.push(cur.clone());
+    }
+    lines
+}
+
+fn main() {
+    for l in wrap("the quick brown fox jumps over the lazy dog", 15_i64) {
+        println!("{}", l);
+    }
+}
+

@@ -1,0 +1,35 @@
+use std::collections::VecDeque;
+
+fn bfs(grid: &Vec<Vec<i64>>, n: i64) -> i64 {
+    let mut dist = vec![vec![-1; 5]; 5];
+    let mut q: VecDeque<(i64, i64)> = VecDeque::new();
+    dist[0][0] = 0_i64;
+    q.push_back((0_i64, 0_i64));
+    loop {
+        if let Some((r, c)) = q.pop_front() {
+            if r == n - 1_i64 && c == n - 1_i64 {
+                return dist[r as usize][c as usize];
+            }
+            let moves = vec![(1_i64, 0_i64), (-1_i64, 0_i64), (0_i64, 1_i64), (0_i64, -1_i64)];
+            for (dr, dc) in moves {
+                let nr = r + dr;
+                let nc = c + dc;
+                if nr >= 0_i64 && nr < n && nc >= 0_i64 && nc < n {
+                    if grid[nr as usize][nc as usize] == 0_i64 && dist[nr as usize][nc as usize] == -1 {
+                        dist[nr as usize][nc as usize] = dist[r as usize][c as usize] + 1_i64;
+                        let _ = q.push_back((nr, nc));
+                    }
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    -1_i64
+}
+
+fn main() {
+    let grid = vec![vec![0_i64, 0_i64, 0_i64, 1_i64, 0_i64], vec![1_i64, 1_i64, 0_i64, 1_i64, 0_i64], vec![0_i64, 0_i64, 0_i64, 0_i64, 0_i64], vec![0_i64, 1_i64, 1_i64, 1_i64, 1_i64], vec![0_i64, 0_i64, 0_i64, 0_i64, 0_i64]];
+    println!("shortest path: {}", bfs(&grid, 5_i64));
+}
+

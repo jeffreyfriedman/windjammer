@@ -1,0 +1,48 @@
+use std::collections::HashMap;
+#[derive(Debug, Clone, PartialEq)]
+
+struct Lru {
+    cap: i64,
+    order: Vec<String>,
+    data: HashMap<String, i64>,
+}
+
+impl Lru {
+#[inline]
+fn new(cap: i64) -> Lru {
+        Lru { cap, order: vec![], data: HashMap::new() }
+}
+#[inline]
+fn touch(&mut self, k: String) {
+        self.order.retain(move |x| *x != k);
+        self.order.push(k);
+}
+#[inline]
+fn put(&mut self, k: String, v: i64) {
+        if !self.data.contains_key(k) && self.order.len() as i64 >= self.cap {
+            let oldest = self.order.remove(0_usize);
+            let _ = self.data.remove(&oldest);
+        }
+        self.data.insert(k.clone(), v);
+        self.touch(k.clone());
+}
+#[inline]
+fn get(&mut self, k: String) -> Option<i64> {
+        let v = self.data.get(k).copied();
+        if v.is_some() {
+            let _ = self.touch(k);
+        }
+        v
+}
+}
+
+fn main() {
+    let mut c = Lru::new(2_i64);
+    c.put("a".to_string(), 1_i64);
+    c.put("b".to_string(), 2_i64);
+    println!("get a = {:?}", c.get(String::from("a")));
+    c.put("c".to_string(), 3_i64);
+    println!("get b = {:?}", c.get(String::from("b")));
+    println!("keys = [{}]", c.order.join(", "));
+}
+
