@@ -1,0 +1,108 @@
+# Acceptance cases for `wj check` (tests/promise_registry_test.rs).
+
+[[case]]
+name = "check accepts a valid program"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let n = 40 + 2\n    println(\"n=${n}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+output_has = ["No errors found"]
+
+[[case]]
+name = "check rejects a syntax error"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["check", "{w}/m.wj"]
+exit = 1
+output_has = ["Expected parameter name", "line 1, column 10"]
+
+[[case]]
+name = "check with no path checks the current directory"
+polarity = "positive"
+files = { "src/main.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["check"]
+output_has = ["No errors found"]
+
+[[case]]
+name = "check with no path finds errors in the current directory"
+polarity = "negative"
+files = { "src/main.wj" = "fn main() {\n    let s = \"unterminated\n}\n" }
+args = ["check"]
+exit = 1
+
+[[case]]
+name = "check --json emits machine-readable success"
+polarity = "positive"
+covers = ["feature json-diagnostics"]
+files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+json = true
+stdout_has = ["\"success\": true", "\"schema_version\""]
+
+[[case]]
+name = "check --json reports lint codes with spans"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let v = [1, 2]\n    let w = v.clone()\n    println(\"${w.len()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 0
+json = true
+stdout_has = ["\"code\": \"W0005\"", "\"start_line\": 3"]
+
+[[case]]
+name = "check --json reports a syntax error as success=false"
+polarity = "negative"
+covers = ["feature json-diagnostics"]
+files = { "m.wj" = "fn main( {\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+json = true
+stdout_has = ["\"success\": false", "Expected parameter name"]
+
+[[case]]
+name = "check rejects a string assigned to an int"
+polarity = "negative"
+xfail = "BUG: `wj check` reports success on `let x: int = \"s\"` (wt/wj-check)"
+files = { "m.wj" = "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+exit = 1
+
+[[case]]
+name = "check rejects an undefined variable (WJ0001)"
+polarity = "negative"
+xfail = "BUG: `wj check` reports success on an undefined variable (wt/wj-check)"
+files = { "m.wj" = "fn main() {\n    let y = undefined_thing + 1\n    println(\"${y}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["WJ0001"]
+
+[[case]]
+name = "check --json keeps the code of a W0010 error"
+polarity = "negative"
+xfail = "BUG: W0010 (`String` spelled in source) is reported as code \"compile\" with a generic message"
+files = { "m.wj" = "fn main() {\n    let n: String = \"x\"\n    println(\"${n}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"W0010\""]
+
+[[case]]
+name = "check reports deprecated macro spelling (W0007)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let v = vec![1, 2]\n    println(\"${v.len()}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 0
+stdout_has = ["\"code\": \"W0007\""]
+
+[[case]]
+name = "check reports a {}-style format string (W0008)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let n = 1\n    println(\"n={}\", n)\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 0
+stdout_has = ["\"code\": \"W0008\""]
+
+[[case]]
+name = "check rejects the Rust String type (W0010)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let n: String = \"x\"\n    println(\"${n}\")\n}\n" }
+args = ["check", "{w}/m.wj"]
+exit = 1
+output_has = ["W0010"]

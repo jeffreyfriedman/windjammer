@@ -1,0 +1,114 @@
+# Acceptance cases for `wj run` and `wj repl` (tests/promise_registry_test.rs).
+
+[[case]]
+name = "run --interpret executes a file instantly"
+polarity = "positive"
+covers = ["feature interpret-instant"]
+files = { "m.wj" = "fn main() {\n    let v = [3, 1, 2]\n    println(\"len=${v.len()}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+stdout_has = ["len=3"]
+
+[[case]]
+name = "run --interpret passes program arguments"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let args = std::env::args()\n    println(\"argc=${args.len()}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj", "alpha", "beta"]
+stdout_has = ["argc=3"]
+
+[[case]]
+name = "run --interpret runs a project directory"
+polarity = "positive"
+files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "src/main.wj" = "fn main() {\n    println(\"from project\")\n}\n" }
+args = ["run", "--interpret", "{w}"]
+stdout_has = ["from project"]
+
+[[case]]
+name = "run --interpret reports a parse error and fails"
+polarity = "negative"
+covers = ["feature interpret-instant"]
+files = { "m.wj" = "fn main( {\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 1
+output_has = ["Expected parameter name"]
+
+[[case]]
+name = "run --interpret of a missing file fails"
+polarity = "negative"
+args = ["run", "--interpret", "{w}/nope.wj"]
+exit = 1
+output_has = ["File not found"]
+
+[[case]]
+name = "run --interpret propagates a panic as a failure"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"before\")\n    panic(\"boom\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+stdout_has = ["before"]
+output_has = ["boom"]
+
+[[case]]
+name = "run --interpret rejects a string assigned to an int"
+polarity = "negative"
+xfail = "BUG: the interpreter runs `let x: int = \"s\"` and prints `s` (no type check before execution)"
+files = { "m.wj" = "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+output_lacks = ["\ns\n"]
+
+[[case]]
+name = "run --target javascript compiles and runs with node"
+polarity = "positive"
+needs = "toolchain"
+files = { "m.wj" = "fn main() {\n    println(\"js ${6 * 7}\")\n}\n" }
+args = ["run", "--target", "javascript", "{w}/m.wj"]
+stdout_has = ["js 42"]
+
+[[case]]
+name = "run --target rejects an unknown target"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--target", "nope", "{w}/m.wj"]
+output_has = ["nope"]
+
+[[case]]
+name = "run accepts --defer-drop modes"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["run", "--interpret", "--defer-drop", "always", "--defer-drop-threshold", "64", "{w}/m.wj"]
+stdout_has = ["ok"]
+
+[[case]]
+name = "run --defer-drop-threshold must be a number"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--defer-drop-threshold", "x", "{w}/m.wj"]
+exit = 2
+output_has = ["invalid value 'x'"]
+
+[[case]]
+name = "run --defer-drop rejects an unknown mode"
+polarity = "negative"
+xfail = "BUG: `--defer-drop bogus` is accepted silently"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--defer-drop", "bogus", "{w}/m.wj"]
+
+[[case]]
+name = "repl evaluates statements from stdin"
+polarity = "positive"
+args = ["repl"]
+stdin = "let x = 1 + 2\nprintln(\"${x}\")\n"
+stdout_has = ["3"]
+
+[[case]]
+name = "repl reports an error for an undefined name"
+polarity = "negative"
+args = ["repl"]
+stdin = "println(\"${nope_undefined}\")\n"
+exit = 0
+output_has = ["nope_undefined"]
+
+[[case]]
+name = "run --defer-drop still reports parse errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["run", "--interpret", "--defer-drop", "never", "{w}/m.wj"]
+exit = 1
