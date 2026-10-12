@@ -596,8 +596,8 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str("async ");
             }
 
-            output.push_str("fn ");
-            output.push_str(&method.name);
+            let generics = self.angle_type_params(&method.type_params);
+            output.push_str(&format!("fn {}{}", method.name, generics));
             output.push('(');
 
             // TDD FIX: Trait Method Ownership Inference

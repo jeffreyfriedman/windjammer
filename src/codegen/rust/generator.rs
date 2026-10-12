@@ -2424,18 +2424,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Item::TypeAlias {
                 name,
+                type_params,
                 target,
                 is_pub,
                 ..
-            } => {
-                let pub_prefix = if *is_pub { "pub " } else { "" };
-                format!(
-                    "{}type {} = {};\n",
-                    pub_prefix,
-                    name,
-                    self.type_to_rust(target)
-                )
-            }
+            } => self.generate_type_alias(name, type_params, target, *is_pub),
             Item::Macro {
                 doc_comment, expr, ..
             } => {
