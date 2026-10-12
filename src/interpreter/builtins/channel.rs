@@ -21,6 +21,8 @@ pub struct Chan {
     cap: Option<usize>,
     senders: RefCell<Vec<Weak<EndToken>>>,
     receiver: RefCell<Weak<EndToken>>,
+    /// ADR-0004 `std::sync::channel()`: `recv()` returns the value (panics when closed), `send` returns ().
+    wj: bool,
 }
 
 impl Chan {
@@ -103,13 +105,14 @@ fn new_sender(chan: &Rc<Chan>) -> Value {
     Value::Native(Rc::new(SenderObj { chan: chan.clone(), _token: token }))
 }
 
-fn make_channel(cap: Option<usize>) -> Value {
+fn make_channel(cap: Option<usize>, wj: bool) -> Value {
     let rx_token = Rc::new(EndToken);
     let chan = Rc::new(Chan {
         q: RefCell::new(VecDeque::new()),
         cap,
         senders: RefCell::new(Vec::new()),
         receiver: RefCell::new(Rc::downgrade(&rx_token)),
+        wj,
     });
     let tx = new_sender(&chan);
     let rx = Value::Native(Rc::new(ReceiverObj { chan, _token: rx_token }));
@@ -147,8 +150,12 @@ fn send(it: &mut Interpreter, tx: &Value, a: &[Value], blocking: bool) -> R {
     let v = raw_arg(a, 0, "send")?;
     it.preempt()?;
     if !chan.receiver_alive() {
+        if chan.wj {
+            return Err(panic_ctl("sending on a closed channel"));
+        }
         return Ok(Value::err(err_obj("SendError", "SendError { .. }")));
     }
+    let wj = chan.wj;
     match chan.cap {
         Some(c) if !chan.has_room() => {
             if !blocking {
@@ -169,7 +176,7 @@ fn send(it: &mut Interpreter, tx: &Value, a: &[Value], blocking: bool) -> R {
         }
         _ => chan.q.borrow_mut().push_back(v),
     }
-    Ok(Value::ok(Value::Unit))
+    Ok(if wj { Value::Unit } else { Value::ok(Value::Unit) })
 }
 
 /// The argument with references followed (like `arg`) but handles/natives left intact.
@@ -179,16 +186,19 @@ pub(crate) fn raw_arg(args: &[Value], i: usize, what: &str) -> R<Value> {
 }
 
 pub fn register(r: &mut Registry) {
-    r.func("mpsc::channel", |_, _| Ok(make_channel(None)));
-    r.func("mpsc::sync_channel", |_, a| Ok(make_channel(Some(arg_usize(&a, 0, "sync_channel")?))));
+    r.func("mpsc::channel", |_, _| Ok(make_channel(None, false)));
+    r.func("mpsc::sync_channel", |_, a| Ok(make_channel(Some(arg_usize(&a, 0, "sync_channel")?), false)));
+    r.func("sync::channel", |_, _| Ok(make_channel(None, true)));
     r.native("Sender", "send", |it, v, a| send(it, v, &a, true));
     r.native("Sender", "try_send", |it, v, a| send(it, v, &a, false));
     r.native("Sender", "clone", |_, v, _| Ok(new_sender(&chan_of(v)?.0)));
     r.native("Receiver", "recv", |it, v, _| {
         let (chan, _) = chan_of(v)?;
-        Ok(match it.chan_recv_item(&chan, false)? {
-            Some(x) => Value::ok(x),
-            None => Value::err(err_obj("RecvError", "RecvError")),
+        Ok(match (it.chan_recv_item(&chan, false)?, chan.wj) {
+            (Some(x), true) => x,
+            (None, true) => return Err(panic_ctl("receiving on a closed channel")),
+            (Some(x), false) => Value::ok(x),
+            (None, false) => Value::err(err_obj("RecvError", "RecvError")),
         })
     });
     r.native("Receiver", "try_recv", |it, v, _| {

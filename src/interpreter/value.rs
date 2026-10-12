@@ -99,6 +99,8 @@ pub enum Callable {
     Named { module: usize, name: Rc<str> },
     /// A builtin function or enum-variant constructor addressed by path, e.g. `Some`.
     Path(Rc<str>),
+    /// A call with evaluated arguments, run later (the body of a `spawn f(x)` task).
+    Thunk { func: Value, args: Vec<Value> },
     /// The future of a not-yet-run `async fn` call: arguments are evaluated, the body runs on `.await`.
     Deferred { func: Rc<crate::interpreter::engine::FuncDef>, args: Vec<Value>, self_val: Option<Value>, targs: Vec<Type>, expected: Option<Type> },
 }
@@ -110,6 +112,7 @@ impl fmt::Debug for Callable {
             Callable::Named { name, .. } => write!(f, "<fn {}>", name),
             Callable::Path(p) => write!(f, "<fn {}>", p),
             Callable::Deferred { func, .. } => write!(f, "<future {}>", func.qual),
+            Callable::Thunk { .. } => write!(f, "<task body>"),
         }
     }
 }

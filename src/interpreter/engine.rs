@@ -212,6 +212,9 @@ impl Interpreter {
             missing_modules: HashSet::new(),
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
+        if std::thread::current().name() == Some(super::runner::BIG_STACK_THREAD) {
+            s.guard_stack();
+        }
         s
     }
 

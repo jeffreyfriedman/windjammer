@@ -8,6 +8,8 @@ use crate::interpreter::sched::Wait;
 use std::any::Any;
 
 struct JoinHandleObj(usize);
+/// ADR-0004 `Task<T>` (`spawn f(x)`, `async f(x)`): `wait()` returns the value, a panic propagates.
+struct TaskObj(usize);
 struct ThreadObj(usize, Option<String>);
 struct ScopeObj(RefCell<Vec<usize>>);
 struct BuilderObj(RefCell<Option<String>>);
@@ -27,6 +29,7 @@ macro_rules! plain {
     };
 }
 plain!(JoinHandleObj, "JoinHandle");
+plain!(TaskObj, "Task");
 plain!(ScopeObj, "Scope");
 plain!(BuilderObj, "Builder");
 impl Native for ThreadObj {
@@ -103,7 +106,52 @@ fn join(it: &mut Interpreter, id: usize) -> R {
     })
 }
 
+/// Start `f()` as an ADR-0004 task; it joins the innermost `scope { }` if there is one.
+pub(crate) fn start_task(it: &mut Interpreter, f: Value) -> R {
+    let id = it.spawn_task(f, None)?;
+    if let Some(top) = it.sched.scopes.last_mut() {
+        top.push(id);
+    }
+    Ok(Value::Native(Rc::new(TaskObj(id))))
+}
+
+fn wait_task(it: &mut Interpreter, id: usize) -> R {
+    it.preempt()?;
+    it.block_on(Wait::Join(id))?;
+    match it.sched.tasks[id].result.clone() {
+        Some(Ok(v)) => Ok(v),
+        Some(Err(msg)) => Err(panic_ctl(msg)),
+        None => Err(semantic("task result missing")),
+    }
+}
+
+/// `.wait()` / `.await` on a task value; `None` when `v` is not a task.
+pub(crate) fn wait_if_task(it: &mut Interpreter, v: &Value) -> Option<R> {
+    downcast::<TaskObj>(v).map(|t| t.0).map(|id| wait_task(it, id))
+}
+
 pub fn register(r: &mut Registry) {
+    r.type_name("Task");
+    r.native("Task", "wait", |it, v, _| wait_task(it, downcast::<TaskObj>(v).map(|t| t.0).ok_or_else(|| semantic("not a Task"))?));
+    r.native("Task", "is_finished", |it, v, _| {
+        let id = downcast::<TaskObj>(v).map(|t| t.0).ok_or_else(|| semantic("not a Task"))?;
+        Ok(Value::Bool(it.sched.tasks[id].done))
+    });
+    // `scope { body }`: run the body, then wait for every task it started; a task's panic propagates
+    r.func(crate::parser::task_prefix::SCOPE_FN, |it, a| {
+        let body = arg(&a, 0, "scope")?;
+        it.sched.scopes.push(Vec::new());
+        let out = it.call_value(&body, vec![]);
+        let ids = it.sched.scopes.pop().unwrap_or_default();
+        for id in ids {
+            it.block_on(Wait::Join(id))?;
+            if let Some(Err(msg)) = it.sched.tasks[id].result.clone() {
+                return Err(panic_ctl(msg));
+            }
+        }
+        out
+    });
+
     for t in ["thread", "JoinHandle"] {
         r.type_name(t);
     }

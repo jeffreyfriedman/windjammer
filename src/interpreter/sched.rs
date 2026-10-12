@@ -113,6 +113,8 @@ pub(crate) struct Sched {
     fatal: Option<RuntimeError>,
     /// Fixed wall clock, no real time (see `builtins/time.rs`).
     pub deterministic: bool,
+    /// Tasks started inside each open `scope { }` (innermost last).
+    pub scopes: Vec<Vec<usize>>,
 }
 
 impl Sched {
@@ -126,6 +128,7 @@ impl Sched {
             baton: Arc::new(Baton { current: Mutex::new(0), cv: Condvar::new() }),
             fatal: None,
             deterministic: false,
+            scopes: Vec::new(),
         }
     }
 

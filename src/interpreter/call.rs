@@ -506,6 +506,11 @@ impl Interpreter {
                 }
             }
             Callable::Deferred { .. } => Err(semantic("a future is not callable; `.await` it")),
+            Callable::Thunk { func, args } => {
+                let (f, a) = (func.clone(), args.clone());
+                let r = self.call_value(&f, a)?;
+                self.await_value(r)
+            }
             Callable::Path(p) => {
                 let p = p.to_string();
                 if let Some((en, var)) = p.rsplit_once("::") {
@@ -583,6 +588,9 @@ impl Interpreter {
 
     /// `.await`: run a deferred async call to completion; any other value is already a result.
     pub(crate) fn await_value(&mut self, v: Value) -> R {
+        if let Some(r) = super::builtins::thread::wait_if_task(self, &v) {
+            return r;
+        }
         match &v {
             Value::Func(c) => match &**c {
                 Callable::Deferred { func, args, self_val, targs, expected } => {
