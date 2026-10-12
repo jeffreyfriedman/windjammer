@@ -32,15 +32,20 @@ invokes cargo or rustc and never writes generated code. Exit status is 1 when an
 | WJ0006 | unresolved `use` |
 | WJ0011 / WJ0012 | syntax error, invalid character (with line/column) |
 | WJ0013 | wrong argument count |
-| WJ0015 | unknown method on a value of a known user struct/enum type |
+| WJ0010 | `match` over a user enum that misses variants |
+| WJ0015 | unknown method (on a known user type, or a name no type has) |
+| WJ0017 | `${x}` where `x` is a user type without `Display` |
+| WJ0018 | `impl Trait for T` missing required methods |
+| WJ0019 | call to a private function of another module |
+| WJ0020 | arithmetic on strings, or declared `int` mixed with declared `float` |
 | WJ0003 (return) | literal of the wrong type returned from a function |
 | WJ0021 | duplicate top-level definition |
 | WJ0023 | forbidden Rust pattern (`.as_str()`, redundant `@derive`) |
 | WJ0024-0028 | effect, taint, execution-mode, numeric-inference and analysis errors |
 | W0001-W0008, W0010, W0011 | Rust-leakage lints and ADR-0014 deprecations |
 
-Everything else (moves, borrow conflicts, trait bounds, unknown methods, non-exhaustive
-`match`, privacy, operand types, lifetimes) still needs rustc. Those errors are translated back to
+Moves, borrow conflicts, lifetimes and anything that needs expression types beyond the cases
+above still need rustc. Those errors are translated back to
 `.wj` source with WJ codes by `src/error_mapper.rs` + `src/diagnostics/rustc_text.rs`
 (ADR-0005, option C). Each such code has `origin: "rustc_mapped"`: it is a front-end coverage gap,
 tracked in `wj explain CODE` ("Detection: found by rustc and translated").
@@ -126,3 +131,21 @@ Result on the 47 cases in `tests/diagnostics/cases` (11 of them are errors only 
 "before" is the committed mapper, whose registry knew 11 rustc codes. Single-file and project builds
 write no source maps, so mapped locations come from searching the `.wj` text for the identifier rustc
 named; when none is found the location is marked approximate.
+
+## Negative gate (check vs build + rustc)
+
+`tests/check_negative_gate.rs` is a differential test against a recorded rustc oracle. Corpus: 131
+type-error mutants of the `// rust: ok` verified examples (`scripts/gen-check-mutants.py`: string
+into int, int into string, undefined variable / function, dropped / extra / wrong-typed argument,
+wrong return literal, unknown field, unknown method), the diagnostics cases and the error-system
+corpora. `scripts/check-negative-oracle.sh` records whether `wj build --no-cargo` + `cargo check`
+accepts each program (`tests/check_negative/oracle.tsv`, keyed by a source hash; the test fails when
+it is stale). Whenever build + rustc rejects a program, `wj check` must report an error, except the
+entries in `tests/check_negative/known_false_negatives.txt` (ratchet: only shrinks). Programs rustc
+accepts must get no front-end semantic error. A mutation self-test proves the gate fails for a
+checker that reports nothing.
+
+| | false negatives (of 180 rejected programs) |
+|--|--|
+| check that only parses, lints and transpiles (the previous `wj check`) | 169 (93.9%) |
+| `wj check` now | 3 (1.7%): two borrow conflicts and one use-after-move |
