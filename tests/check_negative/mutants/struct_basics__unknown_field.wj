@@ -1,0 +1,26 @@
+// mutant: unknown_field of examples/verified/struct_basics.wj
+struct Point { x: int, y: int }
+
+impl Point {
+    fn new(x: int, y: int) -> Point {
+        Point { x: x, y: y }
+    }
+    fn dist2(self) -> int {
+        self.xx * self.x + self.y * self.y
+    }
+    fn translate(self, dx: int, dy: int) {
+        self.x += dx
+        self.y += dy
+    }
+    fn show(self) -> string {
+        "Point(${self.x}, ${self.y})"
+    }
+}
+
+fn main() {
+    let mut p = Point::new(3, 4)
+    println(p.show())
+    println("${p.dist2()}")
+    p.translate(1, 2)
+    println(p.show())
+}

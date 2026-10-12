@@ -139,21 +139,8 @@ pub fn file_checks(p: &Parsed, out: &mut Vec<Diagnostic>) {
             out.push(d);
         }
     }
-    let mut mc = crate::errors::MutabilityChecker::new(std::path::PathBuf::from(&p.file));
-    let mut fns: Vec<&crate::parser::FunctionDecl<'_>> = Vec::new();
-    for item in &p.program.items {
-        match item {
-            crate::parser::Item::Function { decl, .. } => fns.push(decl),
-            crate::parser::Item::Impl { block, .. } => fns.extend(block.functions.iter()),
-            _ => {}
-        }
-    }
-    let loc = crate::check::locate::Locator::new(&ix);
-    for f in fns {
-        for e in mc.check_function(f) {
-            out.push(mutability(&e, &loc));
-        }
-    }
+    // No front-end mutability check: Windjammer infers `mut` for locals (the build accepts
+    // `let x = 1` followed by `x = 2`), so the legacy MutabilityChecker would report false errors.
 }
 
 fn locate_type_word(ix: &SourceIndex, l: usize, c: usize) -> crate::diagnostics::Span {
@@ -190,43 +177,6 @@ fn forbidden(msg: &str, ix: &SourceIndex) -> Diagnostic {
     d.with_help("Windjammer converts strings automatically; delete the construct")
 }
 
-fn mutability(e: &crate::errors::mutability::MutabilityError, loc: &crate::check::locate::Locator) -> Diagnostic {
-    use crate::errors::mutability::MutabilityErrorType as T;
-    let (code, msg) = match e.error_type {
-        T::Reassignment => ("WJ0004", format!("cannot assign twice to immutable variable `{}`", e.variable)),
-        T::CompoundAssignment => ("WJ0004", format!("cannot use compound assignment on immutable variable `{}`", e.variable)),
-        T::FieldMutation => ("WJ0004", format!("cannot mutate a field of immutable binding `{}`", e.variable)),
-        T::MutatingMethodCall => ("WJ0008", format!("cannot borrow `{}` as mutable, as it is not declared `mut`", e.variable)),
-    };
-    let mut d = Diagnostic::error(code, msg).with_help(e.suggestion.clone());
-    if let Some(sp) = loc.word(&e.location, &e.variable) {
-        d = d.at(sp.clone().with_label("not mutable"));
-        if let Some(fix) = add_mut_fix(loc.ix, &e.variable, sp.byte_start) {
-            d = d.with_fix(fix);
-        }
-    }
-    d
-}
-
-/// `let x = ..` -> `let mut x = ..` for the nearest `let x` declaration before `before`.
-fn add_mut_fix(ix: &SourceIndex, name: &str, before: usize) -> Option<crate::diagnostics::Fix> {
-    let text = ix.text();
-    let needle = format!("let {name}");
-    let at = text[..before.min(text.len())].rfind(&needle)?;
-    let after = text.get(at + needle.len()..)?;
-    if after.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_') {
-        return None;
-    }
-    let insert_at = at + 4;
-    Some(crate::diagnostics::Fix {
-        description: format!("declare `{name}` as mutable: `let mut {name}`"),
-        applicability: crate::diagnostics::Applicability::MachineApplicable,
-        edits: vec![crate::diagnostics::Edit {
-            span: ix.span(insert_at, insert_at),
-            replacement: "mut ".to_string(),
-        }],
-    })
-}
 
 /// Span of the token the parser stopped at; at end of file, the last character of the text.
 fn error_span(ix: &SourceIndex, l: usize, c: usize) -> crate::diagnostics::Span {

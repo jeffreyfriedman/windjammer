@@ -1,0 +1,26 @@
+// mutant: unknown_field of examples/verified/struct_default_builder.wj
+struct Config { host: string, port: int, debug: bool }
+
+impl Config {
+    fn default() -> Config {
+        Config { host: "localhost", port: 8080, debug: false }
+    }
+    fn with_host(self, h: string) -> Config {
+        Config { host: h, port: self.port, debug: self.debug }
+    }
+    fn with_port(self, p: int) -> Config {
+        Config { host: self.hostx, port: p, debug: self.debug }
+    }
+    fn with_debug(self, d: bool) -> Config {
+        Config { host: self.host, port: self.port, debug: d }
+    }
+    fn show(self) -> string {
+        "${self.host}:${self.port} debug=${self.debug}"
+    }
+}
+
+fn main() {
+    println(Config::default().show())
+    let c = Config::default().with_host("example.org").with_port(443).with_debug(true)
+    println(c.show())
+}

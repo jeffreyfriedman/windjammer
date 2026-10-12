@@ -1,8 +1,0 @@
-error[WJ0008]: cannot borrow `items` as mutable, as it is not declared `mut`
-  --> immutable_push.wj:4:5
-  |
-4 |     items.push(4)
-  |     ^^^^^ not mutable
-  = help: consider changing this to be mutable: `let mut items`
-  = fix (auto-fixable): declare `items` as mutable: `let mut items`
-  = explain: wj explain WJ0008

@@ -55,12 +55,12 @@ impl Cx<'_, '_> {
                     if top_level {
                         self.duplicate("fn", &decl.name, &mut seen_values);
                     }
-                    self.body(&decl.parameters, &decl.body, None);
+                    self.body(&decl.parameters, &decl.body, None, decl.return_type.as_ref());
                 }
                 Item::Impl { block, .. } => {
                     let self_ty = block.type_name.split('<').next().unwrap_or("").to_string();
                     for f in &block.functions {
-                        self.body(&f.parameters, &f.body, Some(&self_ty));
+                        self.body(&f.parameters, &f.body, Some(&self_ty), f.return_type.as_ref());
                     }
                 }
                 Item::Trait { decl, .. } => {
@@ -69,7 +69,7 @@ impl Cx<'_, '_> {
                     }
                     for m in &decl.methods {
                         if let Some(body) = &m.body {
-                            self.body(&m.parameters, body, None);
+                            self.body(&m.parameters, body, None, m.return_type.as_ref());
                         }
                     }
                 }
@@ -122,7 +122,13 @@ impl Cx<'_, '_> {
         walk_expr(&mut ck, e);
     }
 
-    fn body(&mut self, params: &[Parameter<'_>], body: &[&Statement<'_>], self_ty: Option<&str>) {
+    fn body(
+        &mut self,
+        params: &[Parameter<'_>],
+        body: &[&Statement<'_>],
+        self_ty: Option<&str>,
+        ret: Option<&Type>,
+    ) {
         let mut col = Collect::default();
         let mut typed: HashMap<String, String> = HashMap::new();
         for p in params {
@@ -143,7 +149,17 @@ impl Cx<'_, '_> {
             }
         }
         let mut ck = Checker::new(self, &names, typed, self_ty.map(str::to_string));
+        ck.ret_ty = ret.cloned();
         walk_block(&mut ck, body);
+        // A literal tail expression is the return value too.
+        if let (Some(Statement::Expression { expr: Expression::Literal { value, location }, .. }), Some(ty)) =
+            (body.last().map(|s| &**s), ret)
+        {
+            let span = ck.cx.loc.literal(location, value);
+            if let Some(d) = check_literal(value, ty, ck.cx.idx, span, " in return value") {
+                ck.cx.out.push(d);
+            }
+        }
     }
 }
 
@@ -200,6 +216,7 @@ struct Checker<'c, 'a, 'o> {
     locals: &'c HashSet<String>,
     typed: HashMap<String, String>,
     self_ty: Option<String>,
+    ret_ty: Option<Type>,
     skip: HashSet<usize>,
     macro_locs: Vec<SourceLocation>,
 }
@@ -216,6 +233,7 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
             locals,
             typed,
             self_ty,
+            ret_ty: None,
             skip: HashSet::new(),
             macro_locs: Vec::new(),
         }
@@ -396,6 +414,42 @@ impl<'c, 'a, 'o> Checker<'c, 'a, 'o> {
         self.cx.out.push(d);
     }
 
+    /// `x.m()` where `x` is known to be a user struct/enum: `m` must exist on it (WJ0015).
+    fn method_call(&mut self, object: &Expression<'_>, method: &str, loc: &SourceLocation) {
+        let Expression::Identifier { name, .. } = object else { return };
+        let ty = if name == "self" { self.self_ty.clone() } else { self.typed.get(name).cloned() };
+        let Some(ty) = ty else { return };
+        let idx: &'a Index = self.cx.idx;
+        let is_struct = self.known_struct_fields(&ty).is_some();
+        let is_enum = idx.enums.contains(&ty) && !idx.types.iter().any(|t| t == &ty && idx.structs.contains_key(t));
+        if !(is_struct || is_enum) || idx.opaque_impls.contains(&ty) {
+            return;
+        }
+        const UNIVERSAL: &[&str] = &["clone", "to_string", "eq", "ne", "into", "try_into", "to_owned", "borrow", "borrow_mut", "as_ref", "hash", "fmt", "cmp", "partial_cmp"];
+        let known = idx.methods.get(&ty);
+        if known.is_some_and(|m| m.contains(method))
+            || idx.blanket_methods.contains(method)
+            || UNIVERSAL.contains(&method)
+            || self.known_struct_fields(&ty).is_some_and(|f| f.iter().any(|(n, _)| n == method))
+        {
+            return;
+        }
+        let mut d = Diagnostic::error("WJ0015", format!("no method `{method}` found for `{ty}`"));
+        let span = self.cx.loc.word(loc, method).or_else(|| self.cx.loc.first_use(method));
+        if let Some(sp) = &span {
+            d = d.at(sp.clone().with_label("method not found"));
+        }
+        let candidates: Vec<String> = known.map(|m| m.iter().cloned().collect()).unwrap_or_default();
+        match (closest(method, candidates.iter()), span) {
+            (Some(best), Some(sp)) => {
+                d = d.with_help(format!("a method with a similar name exists: `{best}`"));
+                d = d.with_fix(replace_fix(&sp, &best, format!("call `{best}` instead")));
+            }
+            _ => d = d.with_help(format!("define it in an `impl {ty}` block")),
+        }
+        self.cx.out.push(d);
+    }
+
     fn call_literals(&mut self, name: &str, arguments: &[(Option<String>, &Expression<'_>)]) {
         if name.contains("::") || self.locals.contains(name) {
             return;
@@ -444,11 +498,23 @@ impl Visitor for Checker<'_, '_, '_> {
                 let loc = self.effective(location);
                 self.field_access(object, field, &loc);
             }
+            Expression::MethodCall { object, method, location, .. } => {
+                let loc = self.effective(location);
+                self.method_call(object, method, &loc);
+            }
             _ => {}
         }
     }
 
     fn stmt(&mut self, s: &Statement<'_>) {
+        if let (Statement::Return { value: Some(Expression::Literal { value, location }), .. }, Some(ty)) =
+            (s, self.ret_ty.clone())
+        {
+            let span = self.cx.loc.literal(location, value);
+            if let Some(d) = check_literal(value, &ty, self.cx.idx, span, " in return value") {
+                self.cx.out.push(d);
+            }
+        }
         if let Statement::Let {
             type_: Some(ty),
             value: Expression::Literal { value, location },
