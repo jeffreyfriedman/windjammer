@@ -31,16 +31,71 @@ use syn::visit::Visit;
 use syn::{Block, Expr, Pat, Stmt};
 
 const BORROWING_METHODS: &[&str] = &[
-    "push", "push_str", "pop", "insert", "remove", "extend", "extend_from_slice", "len", "is_empty", "iter",
-    "iter_mut", "clear", "sort", "sort_by", "sort_unstable", "sort_by_key", "dedup", "contains", "truncate",
-    "as_str", "as_slice", "get", "get_mut", "first", "last", "join", "starts_with", "ends_with", "chars", "bytes",
-    "retain", "reverse", "clone", "to_string", "lines", "split", "trim", "find", "swap", "capacity", "concat",
-    "to_vec", "to_owned", "to_uppercase", "to_lowercase", "write_str", "write_fmt", "as_bytes", "binary_search",
+    "push",
+    "push_str",
+    "pop",
+    "insert",
+    "remove",
+    "extend",
+    "extend_from_slice",
+    "len",
+    "is_empty",
+    "iter",
+    "iter_mut",
+    "clear",
+    "sort",
+    "sort_by",
+    "sort_unstable",
+    "sort_by_key",
+    "dedup",
+    "contains",
+    "truncate",
+    "as_str",
+    "as_slice",
+    "get",
+    "get_mut",
+    "first",
+    "last",
+    "join",
+    "starts_with",
+    "ends_with",
+    "chars",
+    "bytes",
+    "retain",
+    "reverse",
+    "clone",
+    "to_string",
+    "lines",
+    "split",
+    "trim",
+    "find",
+    "swap",
+    "capacity",
+    "concat",
+    "to_vec",
+    "to_owned",
+    "to_uppercase",
+    "to_lowercase",
+    "write_str",
+    "write_fmt",
+    "as_bytes",
+    "binary_search",
 ];
 
 const FORMAT_MACROS: &[&str] = &[
-    "format", "print", "println", "eprint", "eprintln", "write", "writeln", "assert", "assert_eq", "assert_ne",
-    "panic", "debug_assert", "debug_assert_eq",
+    "format",
+    "print",
+    "println",
+    "eprint",
+    "eprintln",
+    "write",
+    "writeln",
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "panic",
+    "debug_assert",
+    "debug_assert_eq",
 ];
 
 fn mentions(ts: proc_macro2::TokenStream, name: &str) -> bool {
@@ -63,7 +118,12 @@ fn is_name(e: &Expr, name: &str) -> bool {
 fn scratch_ctor(e: &Expr) -> Option<bool> {
     let Expr::Call(c) = e else { return None };
     let Expr::Path(p) = &*c.func else { return None };
-    let segs: Vec<String> = p.path.segments.iter().map(|s| s.ident.to_string()).collect();
+    let segs: Vec<String> = p
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect();
     if !c.args.is_empty() {
         return None;
     }
@@ -95,7 +155,9 @@ impl<'ast> Visit<'ast> for UseCheck<'_> {
             }
             Expr::Reference(r) if is_name(&r.expr, self.name) => {}
             Expr::Index(i) if is_name(&i.expr, self.name) => self.visit_expr(&i.index),
-            Expr::Binary(b) if matches!(b.op, syn::BinOp::AddAssign(_)) && is_name(&b.left, self.name) => {
+            Expr::Binary(b)
+                if matches!(b.op, syn::BinOp::AddAssign(_)) && is_name(&b.left, self.name) =>
+            {
                 self.visit_expr(&b.right)
             }
             Expr::Path(_) if is_name(e, self.name) => self.bad |= !self.ignore_moves,
@@ -105,7 +167,10 @@ impl<'ast> Visit<'ast> for UseCheck<'_> {
     }
     fn visit_macro(&mut self, m: &'ast syn::Macro) {
         if mentions(m.tokens.clone(), self.name) {
-            let is_fmt = m.path.get_ident().is_some_and(|i| FORMAT_MACROS.contains(&i.to_string().as_str()));
+            let is_fmt = m
+                .path
+                .get_ident()
+                .is_some_and(|i| FORMAT_MACROS.contains(&i.to_string().as_str()));
             self.bad |= !is_fmt;
         }
     }
@@ -151,13 +216,23 @@ impl V<'_, '_> {
             };
             let Pat::Ident(pi) = pat else { continue };
             let Some(init) = &l.init else { continue };
-            if pi.mutability.is_none() || pi.by_ref.is_some() || pi.subpat.is_some() || init.diverge.is_some() {
+            if pi.mutability.is_none()
+                || pi.by_ref.is_some()
+                || pi.subpat.is_some()
+                || init.diverge.is_some()
+            {
                 continue;
             }
-            let Some(is_vec) = scratch_ctor(&init.expr) else { continue };
+            let Some(is_vec) = scratch_ctor(&init.expr) else {
+                continue;
+            };
             let name = pi.ident.to_string();
             // 1. not mentioned before the let or in the header
-            if mentions(header.clone(), &name) || body.stmts[..i].iter().any(|s| mentions(tokens_of(s), &name)) {
+            if mentions(header.clone(), &name)
+                || body.stmts[..i]
+                    .iter()
+                    .any(|s| mentions(tokens_of(s), &name))
+            {
                 continue;
             }
             // 2. later uses borrow; single binding
@@ -181,13 +256,26 @@ impl V<'_, '_> {
             let (ls, le) = self.ctx.idx.range(lp.span())?;
             let (ss, se) = self.ctx.idx.range(st.span())?;
             let decl = match ty {
-                Some(t) => format!("let mut {name}: {} = {};", self.ctx.idx.text(t.span())?, self.ctx.idx.text(init.expr.span())?),
+                Some(t) => format!(
+                    "let mut {name}: {} = {};",
+                    self.ctx.idx.text(t.span())?,
+                    self.ctx.idx.text(init.expr.span())?
+                ),
                 None => format!("let mut {name} = {};", self.ctx.idx.text(init.expr.span())?),
             };
             // Keep the line count (source maps): the replaced `let` keeps its newlines.
             let nl = "\n".repeat(src[ss..se].matches('\n').count());
-            let text = format!("{{ {decl} {}{name}.clear();{nl}{} }}", &src[ls..ss], &src[se..le]);
-            self.out.push(Edit { start: ls, end: le, text, pass: "scratch_reuse" });
+            let text = format!(
+                "{{ {decl} {}{name}.clear();{nl}{} }}",
+                &src[ls..ss],
+                &src[se..le]
+            );
+            self.out.push(Edit {
+                start: ls,
+                end: le,
+                text,
+                pass: "scratch_reuse",
+            });
             return Some(());
         }
         None

@@ -34,12 +34,24 @@ pub struct ArenaEscape {
 
 impl ArenaEscape {
     pub fn render(&self) -> String {
-        format!("error[WJ0160]: {}\n  --> line {}\n  = help: {}", self.message, self.line, self.hint)
+        format!(
+            "error[WJ0160]: {}\n  --> line {}\n  = help: {}",
+            self.message, self.line, self.hint
+        )
     }
 }
 
 const ALLOC_METHODS: &[&str] = &["alloc", "str", "new_string", "new_list"];
-const STORE_METHODS: &[&str] = &["push", "insert", "push_back", "push_front", "extend", "add", "set", "append"];
+const STORE_METHODS: &[&str] = &[
+    "push",
+    "insert",
+    "push_back",
+    "push_front",
+    "extend",
+    "add",
+    "set",
+    "append",
+];
 
 #[derive(Clone)]
 struct ArenaInfo {
@@ -99,24 +111,37 @@ fn expr_line(e: &Expression) -> usize {
 fn callee_path(e: &Expression) -> Option<String> {
     match e {
         Expression::Identifier { name, .. } => Some(name.clone()),
-        Expression::FieldAccess { object, field, .. } => Some(format!("{}::{}", callee_path(object)?, field)),
+        Expression::FieldAccess { object, field, .. } => {
+            Some(format!("{}::{}", callee_path(object)?, field))
+        }
         _ => None,
     }
 }
 
 fn is_arena_ctor(e: &Expression) -> bool {
-    let Expression::Call { function, .. } = e else { return false };
-    let Some(p) = callee_path(function) else { return false };
+    let Expression::Call { function, .. } = e else {
+        return false;
+    };
+    let Some(p) = callee_path(function) else {
+        return false;
+    };
     let segs: Vec<&str> = p.split("::").filter(|s| !s.is_empty()).collect();
-    matches!(segs.as_slice(), [.., "Arena" | "Scratch", "new" | "with_capacity"])
+    matches!(
+        segs.as_slice(),
+        [.., "Arena" | "Scratch", "new" | "with_capacity"]
+    )
 }
 
 /// Root variable of a place (`a`, `a.b`, `a[i].c`, `self.f`).
 fn place_root<'a>(e: &'a Expression<'_>) -> Option<&'a str> {
     match e {
         Expression::Identifier { name, .. } => Some(name.as_str()),
-        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => place_root(object),
-        Expression::MethodCall { object, method, .. } if method == "get_mut" || method == "borrow_mut" => {
+        Expression::FieldAccess { object, .. } | Expression::Index { object, .. } => {
+            place_root(object)
+        }
+        Expression::MethodCall { object, method, .. }
+            if method == "get_mut" || method == "borrow_mut" =>
+        {
             place_root(object)
         }
         _ => None,
@@ -127,14 +152,18 @@ fn place_root<'a>(e: &'a Expression<'_>) -> Option<&'a str> {
 fn arena_key(e: &Expression) -> Option<String> {
     match e {
         Expression::Identifier { name, .. } => Some(name.clone()),
-        Expression::FieldAccess { object, field, .. } => Some(format!("{}.{}", arena_key(object)?, field)),
+        Expression::FieldAccess { object, field, .. } => {
+            Some(format!("{}.{}", arena_key(object)?, field))
+        }
         _ => None,
     }
 }
 
 fn pattern_names(p: &Pattern) -> Vec<String> {
     match p {
-        Pattern::Identifier(n) | Pattern::MutBinding(n) | Pattern::Ref(n) | Pattern::RefMut(n) => vec![n.clone()],
+        Pattern::Identifier(n) | Pattern::MutBinding(n) | Pattern::Ref(n) | Pattern::RefMut(n) => {
+            vec![n.clone()]
+        }
         Pattern::Tuple(ps) | Pattern::Or(ps) => ps.iter().flat_map(pattern_names).collect(),
         Pattern::Reference(p) => pattern_names(p),
         _ => Vec::new(),
@@ -160,22 +189,37 @@ impl Checker {
 
     fn declare(&mut self, name: &str, bound: Vec<(String, usize)>) {
         let depth = self.depth();
-        self.vars.last_mut().expect("scope").insert(name.to_string(), VarInfo { depth, bound });
+        self.vars
+            .last_mut()
+            .expect("scope")
+            .insert(name.to_string(), VarInfo { depth, bound });
     }
 
     fn err(&mut self, line: usize, message: String, hint: String) {
-        self.errors.push(ArenaEscape { line, message, hint });
+        self.errors.push(ArenaEscape {
+            line,
+            message,
+            hint,
+        });
     }
 
     /// Arenas `e` is bound to (empty: an ordinary value). Also checks nested expressions.
     fn bound_of(&mut self, e: &Expression) -> Vec<(String, usize)> {
         match e {
             Expression::Identifier { name, location } => {
-                let Some(v) = self.lookup(name).cloned() else { return Vec::new() };
+                let Some(v) = self.lookup(name).cloned() else {
+                    return Vec::new();
+                };
                 self.check_use_after_reset(name, &v, line_of(location));
                 v.bound
             }
-            Expression::MethodCall { object, method, arguments, location, .. } => {
+            Expression::MethodCall {
+                object,
+                method,
+                arguments,
+                location,
+                ..
+            } => {
                 // `try_get` is the checked lookup: a possibly stale handle is its purpose.
                 let arg_bounds: Vec<Vec<(String, usize)>> = if method == "try_get" {
                     Vec::new()
@@ -202,24 +246,37 @@ impl Checker {
                     self.check_store(object, &arg_bounds, line_of(location));
                 }
                 // Views of an arena value stay in the arena; anything else (len, to_string, to_vec, get) is owned.
-                if matches!(method.as_str(), "as_str" | "as_slice" | "iter" | "clone" | "trim") {
+                if matches!(
+                    method.as_str(),
+                    "as_str" | "as_slice" | "iter" | "clone" | "trim"
+                ) {
                     inner
                 } else {
                     Vec::new()
                 }
             }
-            Expression::Call { function, arguments, .. } => {
+            Expression::Call {
+                function,
+                arguments,
+                ..
+            } => {
                 self.bound_of(function);
                 for (_, a) in arguments {
                     self.bound_of(a);
                 }
                 Vec::new()
             }
-            Expression::StructLiteral { fields, .. } => fields.iter().flat_map(|(_, f)| self.bound_of(f)).collect(),
+            Expression::StructLiteral { fields, .. } => {
+                fields.iter().flat_map(|(_, f)| self.bound_of(f)).collect()
+            }
             Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => {
                 elements.iter().flat_map(|x| self.bound_of(x)).collect()
             }
-            Expression::Block { statements, location, .. } => self.block_value(statements, line_of(location)),
+            Expression::Block {
+                statements,
+                location,
+                ..
+            } => self.block_value(statements, line_of(location)),
             Expression::Binary { left, right, .. } => {
                 self.bound_of(left);
                 self.bound_of(right);
@@ -230,9 +287,9 @@ impl Checker {
                 self.bound_of(object);
                 Vec::new()
             }
-            Expression::Cast { expr, .. } | Expression::TryOp { expr, .. } | Expression::Await { expr, .. } => {
-                self.bound_of(expr)
-            }
+            Expression::Cast { expr, .. }
+            | Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. } => self.bound_of(expr),
             Expression::MacroInvocation { args, .. } => {
                 for a in args {
                     self.bound_of(a);
@@ -243,7 +300,10 @@ impl Checker {
                 self.bound_of(body);
                 Vec::new()
             }
-            Expression::MapLiteral { pairs, .. } => pairs.iter().flat_map(|(k, v)| [self.bound_of(k), self.bound_of(v)].concat()).collect(),
+            Expression::MapLiteral { pairs, .. } => pairs
+                .iter()
+                .flat_map(|(k, v)| [self.bound_of(k), self.bound_of(v)].concat())
+                .collect(),
             Expression::Range { start, end, .. } => {
                 self.bound_of(start);
                 self.bound_of(end);
@@ -254,9 +314,19 @@ impl Checker {
     }
 
     fn arena_for_mut(&mut self, key: &str) -> Option<&mut ArenaInfo> {
-        if !self.arenas.contains_key(key) && (key.starts_with("self.") || self.lookup(key).is_none()) {
+        if !self.arenas.contains_key(key)
+            && (key.starts_with("self.") || self.lookup(key).is_none())
+        {
             // External arena (parameter or field): tracked for reset only.
-            self.arenas.insert(key.to_string(), ArenaInfo { depth: 0, local: false, line: 0, resets: Vec::new() });
+            self.arenas.insert(
+                key.to_string(),
+                ArenaInfo {
+                    depth: 0,
+                    local: false,
+                    line: 0,
+                    resets: Vec::new(),
+                },
+            );
         }
         self.arenas.get_mut(key)
     }
@@ -277,9 +347,17 @@ impl Checker {
         }
     }
 
-    fn escape_msg(&mut self, bound: &[(String, usize)], line: usize, what: &str, outer_depth: Option<usize>) {
+    fn escape_msg(
+        &mut self,
+        bound: &[(String, usize)],
+        line: usize,
+        what: &str,
+        outer_depth: Option<usize>,
+    ) {
         for (arena, _) in bound {
-            let Some(a) = self.arenas.get(arena).cloned() else { continue };
+            let Some(a) = self.arenas.get(arena).cloned() else {
+                continue;
+            };
             if !a.local {
                 continue;
             }
@@ -298,15 +376,27 @@ impl Checker {
         }
     }
 
-    fn check_store(&mut self, receiver: &Expression, arg_bounds: &[Vec<(String, usize)>], line: usize) {
-        let Some(root) = place_root(receiver) else { return };
+    fn check_store(
+        &mut self,
+        receiver: &Expression,
+        arg_bounds: &[Vec<(String, usize)>],
+        line: usize,
+    ) {
+        let Some(root) = place_root(receiver) else {
+            return;
+        };
         if self.arenas.contains_key(root) {
             return; // storing into the arena itself
         }
         let d = self.root_depth(root);
         let root = root.to_string();
         for b in arg_bounds {
-            self.escape_msg(b, line, &format!("is stored into `{root}`, which outlives it"), Some(d));
+            self.escape_msg(
+                b,
+                line,
+                &format!("is stored into `{root}`, which outlives it"),
+                Some(d),
+            );
         }
     }
 
@@ -326,8 +416,17 @@ impl Checker {
             self.stmt(s);
         }
         for (arena, _) in tail.clone() {
-            if self.arenas.get(&arena).is_some_and(|a| a.local && a.depth >= inner_depth) {
-                self.escape_msg(&tail, line, "is the value of the block that declares the arena", Some(inner_depth - 1));
+            if self
+                .arenas
+                .get(&arena)
+                .is_some_and(|a| a.local && a.depth >= inner_depth)
+            {
+                self.escape_msg(
+                    &tail,
+                    line,
+                    "is the value of the block that declares the arena",
+                    Some(inner_depth - 1),
+                );
                 break;
             }
         }
@@ -352,12 +451,26 @@ impl Checker {
     fn stmt(&mut self, s: &Statement) {
         self.serial += 1;
         match s {
-            Statement::Let { pattern, value, else_block, location, .. } => {
+            Statement::Let {
+                pattern,
+                value,
+                else_block,
+                location,
+                ..
+            } => {
                 let names = pattern_names(pattern);
                 if is_arena_ctor(value) {
                     if let [n] = names.as_slice() {
                         let depth = self.depth();
-                        self.arenas.insert(n.clone(), ArenaInfo { depth, local: true, line: line_of(location), resets: Vec::new() });
+                        self.arenas.insert(
+                            n.clone(),
+                            ArenaInfo {
+                                depth,
+                                local: true,
+                                line: line_of(location),
+                                resets: Vec::new(),
+                            },
+                        );
                         return;
                     }
                 }
@@ -370,30 +483,51 @@ impl Checker {
                     self.block(e);
                 }
             }
-            Statement::Assignment { target, value, location, .. } => {
+            Statement::Assignment {
+                target,
+                value,
+                location,
+                ..
+            } => {
                 let b = self.bound_of(value);
                 if let Some(root) = place_root(target) {
                     let d = self.root_depth(root);
                     let root = root.to_string();
                     if !b.is_empty() && !self.arenas.contains_key(&root) {
                         // Plain rebinding of a variable inside the arena's scope keeps it bound.
-                        if let (Expression::Identifier { .. }, Some(v)) = (*target, self.vars.iter_mut().rev().find_map(|s| s.get_mut(&root))) {
+                        if let (Expression::Identifier { .. }, Some(v)) = (
+                            *target,
+                            self.vars.iter_mut().rev().find_map(|s| s.get_mut(&root)),
+                        ) {
                             if v.depth >= 1 {
                                 v.bound.extend(b.iter().cloned());
                             }
                         }
-                        self.escape_msg(&b, line_of(location), &format!("is assigned to `{root}`, which outlives it"), Some(d));
+                        self.escape_msg(
+                            &b,
+                            line_of(location),
+                            &format!("is assigned to `{root}`, which outlives it"),
+                            Some(d),
+                        );
                     }
                 }
             }
-            Statement::Return { value: Some(v), location } => {
+            Statement::Return {
+                value: Some(v),
+                location,
+            } => {
                 let b = self.bound_of(v);
                 self.escape_msg(&b, line_of(location), "is returned from the function", None);
             }
             Statement::Expression { expr, .. } => {
                 self.bound_of(expr);
             }
-            Statement::If { condition, then_block, else_block, .. } => {
+            Statement::If {
+                condition,
+                then_block,
+                else_block,
+                ..
+            } => {
                 self.bound_of(condition);
                 self.block(then_block);
                 if let Some(e) = else_block {
@@ -414,7 +548,12 @@ impl Checker {
                     self.pop_scope();
                 }
             }
-            Statement::For { pattern, iterable, body, .. } => {
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                ..
+            } => {
                 let b = self.bound_of(iterable);
                 self.vars.push(HashMap::new());
                 for n in pattern_names(pattern) {
@@ -425,11 +564,15 @@ impl Checker {
                 }
                 self.pop_scope();
             }
-            Statement::While { condition, body, .. } => {
+            Statement::While {
+                condition, body, ..
+            } => {
                 self.bound_of(condition);
                 self.block(body);
             }
-            Statement::Loop { body, .. } | Statement::Thread { body, .. } | Statement::Async { body, .. } => self.block(body),
+            Statement::Loop { body, .. }
+            | Statement::Thread { body, .. }
+            | Statement::Async { body, .. } => self.block(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
             Statement::Break { value: Some(v), .. } => {
                 self.bound_of(v);
@@ -447,7 +590,12 @@ impl Checker {
                 if let Statement::Expression { expr, location } = s {
                     self.serial += 1;
                     let b = self.bound_of(expr);
-                    self.escape_msg(&b, line_of(location).max(expr_line(expr)), "is returned from the function (final expression)", None);
+                    self.escape_msg(
+                        &b,
+                        line_of(location).max(expr_line(expr)),
+                        "is returned from the function (final expression)",
+                        None,
+                    );
                     continue;
                 }
             }
@@ -486,7 +634,12 @@ pub fn uses_arenas(program: &Program) -> bool {
 pub fn check_program(program: &Program) -> Vec<ArenaEscape> {
     let mut fns = Vec::new();
     walk_items(&program.items, &mut fns);
-    let mut c = Checker { arenas: HashMap::new(), vars: Vec::new(), serial: 0, errors: Vec::new() };
+    let mut c = Checker {
+        arenas: HashMap::new(),
+        vars: Vec::new(),
+        serial: 0,
+        errors: Vec::new(),
+    };
     for f in fns {
         c.function(f);
     }
@@ -507,6 +660,10 @@ pub fn gate(program: &Program) -> Result<(), String> {
     if errors.is_empty() {
         Ok(())
     } else {
-        Err(errors.iter().map(ArenaEscape::render).collect::<Vec<_>>().join("\n\n"))
+        Err(errors
+            .iter()
+            .map(ArenaEscape::render)
+            .collect::<Vec<_>>()
+            .join("\n\n"))
     }
 }

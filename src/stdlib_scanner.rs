@@ -3,8 +3,8 @@
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
 use crate::parser::Type;
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
+mod generic_returns;
 
 /// Resolve `windjammer-runtime/src` for signature scanning.
 ///
@@ -129,7 +129,6 @@ fn scan_rust_file(
 
     registry.register_runtime_file_stem(module_name);
     maybe_register_platform_leaf_alias(registry, module_name);
-    let generic_structs = generic_struct_names(&content);
 
     // Track `impl Type { ... }` so methods register as `Type::fn` (free functions
     // keep exclusive claim on `module::fn` — see `register_scanned_runtime_signature`).
@@ -154,8 +153,7 @@ fn scan_rust_file(
             }
             let header_done = header.contains('{') || trimmed.ends_with(';');
             if header_done {
-                if let Some(mut sig) = parse_function_signature(&header, module_name) {
-                    erase_generic_struct_return(&mut sig, &generic_structs);
+                if let Some(sig) = generic_returns::parse_sig(&header, module_name, &content) {
                     let mark_sanitizer = pending_sanitizer;
                     pending_sanitizer = false;
                     register_scanned_runtime_signature(
@@ -255,8 +253,7 @@ fn scan_rust_file(
 
         // Single-line `pub fn … {` (multi-line headers registered via pending_fn_header).
         if pending_fn_header.is_none() {
-            if let Some(mut sig) = parse_function_signature(trimmed, module_name) {
-                erase_generic_struct_return(&mut sig, &generic_structs);
+            if let Some(sig) = generic_returns::parse_sig(trimmed, module_name, &content) {
                 let mark_sanitizer = pending_sanitizer;
                 pending_sanitizer = false;
                 register_scanned_runtime_signature(
@@ -271,26 +268,6 @@ fn scan_rust_file(
     }
 
     Ok(())
-}
-
-/// `pub struct Name<..>` declared in a runtime file (e.g. `arena::Handle<T>`).
-fn generic_struct_names(content: &str) -> std::collections::HashSet<String> {
-    content
-        .lines()
-        .filter_map(|l| l.trim().strip_prefix("pub struct "))
-        .filter_map(|r| r.split_once('<').map(|(n, _)| n.trim().to_string()))
-        .filter(|n| !n.is_empty() && n.chars().all(|c| c.is_alphanumeric() || c == '_'))
-        .collect()
-}
-
-/// The scanner keeps only the base name of a return type (`Handle<T>` -> `Handle`). For a generic struct of the
-/// same file that bare name is not a valid Rust type, so let rustc infer it instead (`Vec<_>`, no annotation).
-fn erase_generic_struct_return(sig: &mut FunctionSignature, generic_structs: &std::collections::HashSet<String>) {
-    if let Some(Type::Custom(n)) = &sig.return_type {
-        if generic_structs.contains(n) {
-            sig.return_type = Some(Type::Infer);
-        }
-    }
 }
 
 /// Register a scanned runtime fn under `module::name`, optional `*_mod` → short alias,

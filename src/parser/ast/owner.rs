@@ -46,7 +46,12 @@ unsafe impl Sync for AstArenas {}
 
 impl AstArenas {
     pub fn new() -> Self {
-        AstArenas { expr: Arena::new(), stmt: Arena::new(), pattern: Arena::new(), ledger: ArenaLedger::default() }
+        AstArenas {
+            expr: Arena::new(),
+            stmt: Arena::new(),
+            pattern: Arena::new(),
+            ledger: ArenaLedger::default(),
+        }
     }
 
     pub fn ledger(&self) -> ArenaLedger {

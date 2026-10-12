@@ -14,8 +14,8 @@
 //! parser first (the common pattern) must not invalidate the program. See docs/design/parser-arena-ownership.md.
 
 use windjammer::lexer::Lexer;
-use windjammer::parser::{Parser, Program};
 use windjammer::parser::ArenaLedger;
+use windjammer::parser::{Parser, Program};
 
 const SRC: &str = r#"
 struct P { x: int, y: int }
@@ -48,7 +48,11 @@ fn parse_and_drop_parser(src: &str) -> (Program<'static>, ArenaLedger) {
 #[test]
 fn program_outlives_its_parser() {
     let (program, ledger) = parse_and_drop_parser(SRC);
-    assert_eq!(ledger.freed(), 0, "arenas freed while a Program still borrows them");
+    assert_eq!(
+        ledger.freed(),
+        0,
+        "arenas freed while a Program still borrows them"
+    );
     // Churn the allocator so that freed arena memory would be reused and clobbered.
     let churn: Vec<Vec<u8>> = (0..2000).map(|i| vec![(i % 251) as u8; 4096]).collect();
     let rendered = format!("{program:?}");
@@ -59,7 +63,10 @@ fn program_outlives_its_parser() {
     );
     // Deterministic across a second parse of the same text: a clobbered tree would differ.
     let (again, _) = parse_and_drop_parser(SRC);
-    assert_eq!(strip_positions(&rendered), strip_positions(&format!("{again:?}")));
+    assert_eq!(
+        strip_positions(&rendered),
+        strip_positions(&format!("{again:?}"))
+    );
     assert_eq!(churn.len(), 2000);
 }
 
@@ -70,10 +77,18 @@ fn arenas_are_freed_with_the_last_owner() {
     let (program, ledger) = parse_and_drop_parser("fn main() { let x = 1 + 2 }");
     let clone = program.clone(); // co-owner
     drop(program);
-    assert_eq!(ledger.freed(), 0, "a clone of the program still borrows the arenas");
+    assert_eq!(
+        ledger.freed(),
+        0,
+        "a clone of the program still borrows the arenas"
+    );
     assert_eq!(clone.items.len(), 1);
     drop(clone);
-    assert_eq!(ledger.freed(), 1, "last owner dropped: arenas must be freed");
+    assert_eq!(
+        ledger.freed(),
+        1,
+        "last owner dropped: arenas must be freed"
+    );
 }
 
 /// A program assembled from another program's items (module merging) co-owns the storage.
@@ -91,9 +106,15 @@ fn merged_program_keeps_storage_alive() {
 #[test]
 fn programs_cross_threads() {
     let (program, ledger) = parse_and_drop_parser(SRC);
-    let n = std::thread::spawn(move || format!("{program:?}").len()).join().unwrap();
+    let n = std::thread::spawn(move || format!("{program:?}").len())
+        .join()
+        .unwrap();
     assert!(n > 100);
-    assert_eq!(ledger.freed(), 1, "program (sole owner) dropped on the other thread");
+    assert_eq!(
+        ledger.freed(),
+        1,
+        "program (sole owner) dropped on the other thread"
+    );
 }
 
 #[test]
@@ -103,7 +124,10 @@ fn one_parser_many_parses_have_independent_arenas() {
     let l1 = parser.arena_ledger();
     let p1 = parser.parse().unwrap();
     let l2 = parser.arena_ledger();
-    assert!(!std::ptr::eq(l1.counter(), l2.counter()), "sealing installs a fresh bundle");
+    assert!(
+        !std::ptr::eq(l1.counter(), l2.counter()),
+        "sealing installs a fresh bundle"
+    );
     drop(p1);
     assert_eq!((l1.freed(), l2.freed()), (1, 0));
 }
@@ -117,3 +141,16 @@ fn strip_positions(s: &str) -> String {
 
 // The memory growth gate (precise, counting allocator, 1 MB per 1000 parses) lives in
 // tests/parser_arena_memory_test.rs: it needs its own #[global_allocator], hence its own test binary.
+
+/// Miri self-test (run explicitly: `cargo +nightly miri test --test parser_arena_soundness -- --ignored`):
+/// the one hazard the owner model cannot rule out by type, an `Item` cloned out of a program and used after
+/// every owner is gone. Miri must report a use after free here; if it does not, the miri run proves nothing.
+#[test]
+#[ignore = "deliberately unsound; only meaningful under miri, which must reject it"]
+fn miri_detects_an_item_outliving_its_owner() {
+    let (program, ledger) = parse_and_drop_parser(SRC);
+    let item = program.items[1].clone(); // `impl P`: its method bodies live in the arenas
+    drop(program);
+    assert_eq!(ledger.freed(), 1);
+    let _ = format!("{item:?}"); // reads freed arena memory
+}

@@ -34,9 +34,17 @@ fn parse_once(src: &str) -> usize {
 fn main() {
     // A larger input: the sample repeated with distinct function names.
     let big: String = (0..200)
-        .map(|i| SRC.replace("fn main", &format!("fn main{i}")).replace("struct P", &format!("struct P{i}")).replace("impl P", &format!("impl P{i}")).replace("let p = P {", &format!("let p = P{i} {{")))
+        .map(|i| {
+            SRC.replace("fn main", &format!("fn main{i}"))
+                .replace("struct P", &format!("struct P{i}"))
+                .replace("impl P", &format!("impl P{i}"))
+                .replace("let p = P {", &format!("let p = P{i} {{"))
+        })
         .collect();
-    for (name, src, iters) in [("small", SRC.to_string(), 20000usize), ("big(200x)", big, 200)] {
+    for (name, src, iters) in [
+        ("small", SRC.to_string(), 20000usize),
+        ("big(200x)", big, 200),
+    ] {
         for _ in 0..iters / 10 {
             std::hint::black_box(parse_once(&src));
         }
@@ -49,6 +57,11 @@ fn main() {
             best = best.min(t.elapsed().as_secs_f64());
         }
         let per = best / iters as f64;
-        println!("parse[{name}]: {:.1} us/parse, {:.1} MB/s ({} bytes)", per * 1e6, src.len() as f64 / per / 1e6, src.len());
+        println!(
+            "parse[{name}]: {:.1} us/parse, {:.1} MB/s ({} bytes)",
+            per * 1e6,
+            src.len() as f64 / per / 1e6,
+            src.len()
+        );
     }
 }

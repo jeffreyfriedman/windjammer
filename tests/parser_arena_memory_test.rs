@@ -77,7 +77,10 @@ fn growth(leak: bool, n: usize) -> isize {
 fn repeated_parses_do_not_grow_memory_and_the_gate_detects_a_leak() {
     const LIMIT: isize = 1024 * 1024; // 1 MB over 1000 parses
     let sound = growth(false, 1000);
-    assert!(sound < LIMIT, "1000 parses grew live memory by {sound} bytes (limit {LIMIT}): arenas leak");
+    assert!(
+        sound < LIMIT,
+        "1000 parses grew live memory by {sound} bytes (limit {LIMIT}): arenas leak"
+    );
     let leaked = growth(true, 1000);
     assert!(
         leaked > LIMIT,
