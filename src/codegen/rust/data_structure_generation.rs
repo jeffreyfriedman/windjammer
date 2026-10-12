@@ -1143,9 +1143,9 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 )
             };
-            if bound_is_offset(start) || bound_is_offset(end) {
-                self.assignment_int_target_type = Some(Type::Custom("usize".into()));
-            }
+            let _ = bound_is_offset;
+            // Slice bounds are always `usize` (`s[6..]` must not default the literal to i32).
+            self.assignment_int_target_type = Some(Type::Custom("usize".into()));
             let mut start_str = self.generate_expression(start);
             let mut end_str = self.generate_expression(end);
             self.in_index_context = prev_index_ctx;

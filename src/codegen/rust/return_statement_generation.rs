@@ -22,7 +22,11 @@ impl<'ast> CodeGenerator<'ast> {
         output.push_str("return");
         if let Some(e) = expr {
             output.push(' ');
+            // The operand is a value: `return if c { "a" } else { "b" }` must keep branch values (not `let _ =`).
+            let prev_expression_context = self.in_expression_context;
+            self.in_expression_context = true;
             let mut return_str = self.generate_expression(e);
+            self.in_expression_context = prev_expression_context;
 
             // TDD FIX: Borrowed iterator vars need deref when returned as Copy types
             // For `for (_, val) in &vec` where val: &i32, `return val` needs `return *val`

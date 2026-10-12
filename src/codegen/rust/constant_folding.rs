@@ -64,10 +64,12 @@ pub fn try_fold_constant<'ast>(expr: &Expression<'ast>) -> Option<Expression<'as
                     (Int(a), Mod, Int(b)) if *b != 0 => Some(Literal::Int(a % b)),
 
                     // Float arithmetic
-                    (Float(a), Add, Float(b)) => Some(Literal::Float(a + b)),
-                    (Float(a), Sub, Float(b)) => Some(Literal::Float(a - b)),
-                    (Float(a), Mul, Float(b)) => Some(Literal::Float(a * b)),
-                    (Float(a), Div, Float(b)) if *b != 0.0 => Some(Literal::Float(a / b)),
+                    // Folded only when the result is finite and identical in f32 and f64 arithmetic
+                    // (the literal's width is decided later); otherwise rustc folds it at the right width.
+                    (Float(a), Add, Float(b)) => fold_float(*a, *b, |x, y| x + y, |x, y| x + y),
+                    (Float(a), Sub, Float(b)) => fold_float(*a, *b, |x, y| x - y, |x, y| x - y),
+                    (Float(a), Mul, Float(b)) => fold_float(*a, *b, |x, y| x * y, |x, y| x * y),
+                    (Float(a), Div, Float(b)) if *b != 0.0 => fold_float(*a, *b, |x, y| x / y, |x, y| x / y),
 
                     // Integer comparisons
                     (Int(a), Eq, Int(b)) => Some(Literal::Bool(a == b)),
@@ -109,7 +111,7 @@ pub fn try_fold_constant<'ast>(expr: &Expression<'ast>) -> Option<Expression<'as
 
                 let result = match (op, lit) {
                     (Neg, Int(n)) => Some(Literal::Int(-n)),
-                    (Neg, Float(f)) => Some(Literal::Float(-f)),
+                    (Neg, Float(f)) if *f != 0.0 => Some(Literal::Float(-f)),
                     (Not, Bool(b)) => Some(Literal::Bool(!b)),
                     _ => None,
                 };
@@ -126,5 +128,25 @@ pub fn try_fold_constant<'ast>(expr: &Expression<'ast>) -> Option<Expression<'as
         Expression::Literal { .. } => None,
         // Can't fold non-constant expressions
         _ => None,
+    }
+}
+
+/// Width-independent float fold: `Some` only if f64 and f32 arithmetic agree and the result is finite.
+fn fold_float(a: f64, b: f64, f64op: fn(f64, f64) -> f64, f32op: fn(f32, f32) -> f32) -> Option<Literal> {
+    let wide = f64op(a, b);
+    let narrow = f32op(a as f32, b as f32);
+    (wide.is_finite() && wide != 0.0 && f64::from(narrow) == wide && f64::from(a as f32) == a && f64::from(b as f32) == b)
+        .then_some(Literal::Float(wide))
+}
+
+#[cfg(test)]
+mod float_fold_tests {
+    use super::fold_float;
+    #[test]
+    fn folds_only_width_independent_results() {
+        assert!(fold_float(3.5, 2.5, |x, y| x + y, |x, y| x + y).is_some());
+        assert!(fold_float(0.1, 0.2, |x, y| x + y, |x, y| x + y).is_none());
+        assert!(fold_float(1e300, 1e300, |x, y| x * y, |x, y| x * y).is_none());
+        assert!(fold_float(1.0, -1.0, |x, y| x + y, |x, y| x + y).is_none());
     }
 }

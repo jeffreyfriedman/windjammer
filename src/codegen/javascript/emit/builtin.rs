@@ -380,6 +380,7 @@ impl<'m> Js<'m> {
                 "MAX" => Ok(num::lit_int(hi, k)),
                 "MIN" => Ok(num::lit_int(lo, k)),
                 "from" => Ok(num::cast(&args[0].ty, &Ty::Int(k), a)),
+                "from_str_radix" => Ok(format!("$parseIntRadix({a}, {lo}n, {hi}n, {})", num::is_wide(k))),
                 _ => self.unsupported(format!("`{owner}::{name}`")),
             };
         }

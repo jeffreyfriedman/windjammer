@@ -1,0 +1,957 @@
+# Windjammer (full context for LLM agents)
+
+> Windjammer is a high-level language that compiles to Rust, with ownership and borrowing inferred by the compiler. The same `.wj` source also runs in an interpreter and has Go, JavaScript and WebAssembly backends of lower maturity.
+
+Version 0.50.0. Assembled by `scripts/docs_gen.sh` from the files named in each section heading; do not edit. Index version: llms.txt.
+
+
+---
+
+# Source: docs/agent/WINDJAMMER_FOR_AGENTS.md
+
+## Windjammer for agents
+
+Windjammer (`.wj`) is a Rust-family language with inferred ownership: you write `fn f(x: Vec<int>)`, the compiler
+decides borrow/move/clone. You have almost certainly seen no Windjammer in training. Do not guess from Rust or
+Python: look things up (`wj docs <terms>`), and check every edit. Every code block below is executed by CI.
+
+### The loop
+
+<!-- ignore: command shapes with FILE/DIR placeholders; every subcommand and flag is checked against the CLI by the links check -->
+```bash,ignore
+wj check --json FILE_OR_DIR     # parse + lint + transpile, no cargo; JSON diagnostics with spans
+wj run --interpret FILE         # instant run, no cargo/rustc; stdout is program output only
+wj test --interpret DIR         # runs @test and test_* functions in *_test.wj
+wj build FILE                   # production path (transpiles to Rust, then cargo)
+wj docs hashmap entry           # offline search: stdlib, built-ins, idioms, 150+ verified examples
+wj explain WJ0001               # error code explanation
+wj fmt FILE                     # formatter; wj lint FILE checks Rust-isms; wj fix PATH migrates them
+```
+
+Exit status of a program: 0 ok, 101 panic, N for `process::exit(N)`, 2 means "unsupported in the interpreter".
+`wj check` passing does not mean `wj run --interpret` passes, and the interpreter accepts more than `wj build`
+(see "Compiled path gaps").
+
+### Core idioms
+
+Types: `int` (64-bit), `float` (f64), `bool`, `string`, `char`, `Vec<T>`, `Option<T>`, `Result<T, E>`,
+`HashMap<K, V>`. Locals are immutable unless `let mut`. The last expression of a block is its value; do not write
+`return` at the end of a function. Strings interpolate with `${expr}`, with format specs after a colon.
+
+```windjammer
+// expect: Ada is 36; pi=3.14; [   42]; [00042]; Some(3)
+fn main() {
+    let name = "Ada"
+    let age = 36
+    let mut parts: Vec<string> = []
+    parts.push("${name} is ${age}")
+    parts.push("pi=${3.14159:.2}")
+    parts.push("[${42:>5}]")
+    parts.push("[${42:05}]")
+    parts.push("${Some(3):?}")
+    println(parts.join("; "))
+}
+```
+
+`println`, `print`, `panic`, `assert`, `assert_eq`, `assert_ne`, `todo`, `debug` are plain functions, not macros.
+There are no semicolons. `if`, `match` and blocks are expressions.
+
+```windjammer
+// expect: small
+// expect: 7
+fn size(n: int) -> string {
+    if n < 10 { "small" } else if n < 100 { "medium" } else { "large" }
+}
+
+fn main() {
+    println(size(3))
+    let best = { let a = 3
+        let b = 7
+        if a > b { a } else { b } }
+    println("${best}")
+}
+```
+
+### Structs, enums, traits
+
+Methods take plain `self`; whether it is read-only, mutating or consuming is inferred from the body. Mutating a
+receiver still requires the caller to hold it in a `let mut`. Derives (Debug, Clone, PartialEq, Copy) are inferred:
+never write `#[derive(...)]`.
+
+```windjammer
+// expect: Rect(3x4) area=12
+// expect: Rect(6x4) area=24
+// expect: Circle r=2
+struct Rect { w: int, h: int }
+
+impl Rect {
+    fn area(self) -> int { self.w * self.h }
+    fn show(self) -> string { "Rect(${self.w}x${self.h}) area=${self.area()}" }
+    fn widen(self, by: int) { self.w += by }
+}
+
+trait Named {
+    fn label(self) -> string
+}
+
+struct Circle { r: int }
+
+impl Named for Circle {
+    fn label(self) -> string { "Circle r=${self.r}" }
+}
+
+fn main() {
+    let mut r = Rect { w: 3, h: 4 }
+    println(r.show())
+    r.widen(3)
+    println(r.show())
+    println(Circle { r: 2 }.label())
+}
+```
+
+Enums carry data and are consumed with exhaustive `match`; arms may have guards and or-patterns. Range patterns
+(`1..=9`) are not supported yet: use a guard.
+
+```windjammer
+// expect: Circle 12
+// expect: Rect 6
+// expect: big
+enum Shape {
+    Circle(int),
+    Rect(int, int),
+}
+
+fn describe(s: Shape) -> string {
+    match s {
+        Shape::Circle(r) => "Circle ${r * r * 3}",
+        Shape::Rect(w, h) => "Rect ${w * h}",
+    }
+}
+
+fn bucket(n: int) -> string {
+    match n {
+        0 | 1 => "tiny",
+        x if x < 100 => "mid",
+        _ => "big",
+    }
+}
+
+fn main() {
+    println(describe(Shape::Circle(2)))
+    println(describe(Shape::Rect(2, 3)))
+    println(bucket(1000))
+}
+```
+
+### Error handling
+
+Use `Option`/`Result`, `match`, `?`, `unwrap_or`, `map_err`, `ok_or`. `.unwrap()` and `.expect()` are lint errors
+(W0002), so `wj build` rejects them. `?` propagates `Err`/`None` from the enclosing function.
+
+```windjammer
+// expect: Ok(10)
+// expect: Err("bad: x")
+// expect: 0
+fn parse(s: string) -> Result<int, string> {
+    s.parse::<int>().map_err(|_| "bad: ${s}")
+}
+
+fn double(s: string) -> Result<int, string> {
+    let n = parse(s)?
+    Ok(n * 2)
+}
+
+fn main() {
+    println("${double("5"):?}")
+    println("${double("x"):?}")
+    let n: Option<int> = None
+    println("${n.unwrap_or(0)}")
+}
+```
+
+`Result` and `Option` do not implement Display: print with `${x:?}` or `match` first. Custom error types are plain
+enums (see `wj docs error enum`).
+
+### Collections and iteration
+
+`let v = [1, 2, 3]` is a growable `Vec`. Iterate directly: `for x in v`, `for (i, x) in v.enumerate()`. Adapter
+chains start from the collection itself: write `v.map(..)`, not `v.iter().map(..)` (`.iter()` is lint error W0003).
+Maps need `use std::collections::HashMap`; iteration order of a `HashMap` is unspecified, so sort keys before printing.
+
+```windjammer
+// expect: [1, 4, 9]
+// expect: 6
+// expect: a=1 b=2
+// expect: 0:x 1:y
+use std::collections::HashMap
+
+fn main() {
+    let v = [1, 2, 3]
+    let squares: Vec<int> = v.map(|x| x * x).collect()
+    println("${squares:?}")
+    println("${v.sum::<int>()}")
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("b", 2)
+    m.insert("a", 1)
+    let mut keys: Vec<string> = m.keys().collect()
+    keys.sort()
+    let mut out: Vec<string> = []
+    for k in keys { out.push("${k}=${m[k]}") }
+    println(out.join(" "))
+    let mut line: Vec<string> = []
+    for (i, s) in ["x", "y"].enumerate() { line.push("${i}:${s}") }
+    println(line.join(" "))
+}
+```
+
+The pipe operator feeds the left value into a call: `x |> f(a)` is `f(x, a)`; `x |> .method(a)` is `x.method(a)`.
+It has the lowest precedence, so `a + 1 |> f` is `f(a + 1)`. A trailing `?` applies to that stage.
+
+```windjammer
+// expect: 16
+// expect: [2, 4, 6]
+fn double(x: int) -> int { x * 2 }
+fn add(x: int, y: int) -> int { x + y }
+
+fn main() {
+    println("${3 |> add(5) |> double}")
+    let d: Vec<int> = [1, 2, 3] |> .map(|x| x * 2) |> .collect()
+    println("${d:?}")
+}
+```
+
+### Modules and tests
+
+Inline `mod name { pub fn .. }` and one-file-per-module (`a.wj` or `a/mod.wj`, found next to the importer or in the
+project root/`src/`) are both resolved with `use a::f`; paths use `::`. Tests live in `*_test.wj`: `@test`, `test_*`
+functions, or `@test_cases([(in, expected), ...])` with one parameter per tuple field.
+
+```windjammer
+// expect: 12
+mod geo {
+    pub fn area(w: int, h: int) -> int { w * h }
+}
+
+use geo::area
+
+fn main() {
+    println("${area(3, 4)}")
+}
+```
+
+```windjammer,test
+fn square(x: int) -> int { x * x }
+
+@test
+fn squares() {
+    assert_eq(square(4), 16)
+}
+
+@test_cases([(2, 4), (3, 9)])
+fn table(x: int, expected: int) {
+    assert_eq(square(x), expected)
+}
+```
+
+### The 25 things agents get wrong first
+
+1. `println!("{}", x)`: macros do not exist. Write `println("${x}")` (W0007/W0008, ADR-0014).
+2. `vec![1, 2]`: write `[1, 2]`; `vec![0; n]` is `[0; n]`.
+3. `#[derive(Debug, Clone)]`: the lexer rejects `#`. Derives are inferred; no attribute needed.
+4. `&self`, `&mut self`, `&x` arguments: write `self`; ownership and borrows are inferred (W0001, W0004).
+5. `.iter()` / `.iter_mut()`: delete them (W0003, an error in `wj build`).
+6. `.unwrap()` / `.expect("..")`: use `match`, `?`, `unwrap_or`, `unwrap_or_default` (W0002).
+7. `"lit".to_string()`: a literal is already a `string` (W0006). `.clone()` is usually unnecessary (W0005).
+8. `i32`/`u64`/`usize` everywhere: use `int` and `float`; widths only at FFI/binary boundaries (ADR-0015).
+9. A trailing `return x`: the last expression is the value; `return` is for early exit.
+10. Semicolons: not needed.
+11. `x as usize` indexing: `v[i]` accepts `int`. `as` still exists for explicit numeric/char casts.
+12. `let x = 5; x += 1`: needs `let mut x` (ADR-0002). Parameters and receivers need no `mut`.
+13. `{}` placeholders: use `"${x}"`; for literal braces nothing is needed, for a literal dollar write `$$`.
+14. A string literal at the start of an interpolation, `"${"abc".len()}"`, fails to parse (open finding): bind it first with `let s = "abc"`.
+15. `3.0` prints as `3`, `0.1 + 0.2` as `0.30000000000000004` (Rust's Display): use `${x:.2}` for fixed output.
+16. Printing a `Result`/`Option`/`Vec`/struct needs `:?`; there is no auto Display for user types: define `fn to_string(self) -> string` and call it.
+17. Range patterns (`1..=9 =>`), labeled `break 'outer`, and `if x is Some(v)` are not parsed yet: use guards, helper functions with `return`, `if let`.
+18. `*counter += 1` as the first statement after a line ending in `)` is parsed as multiplication (open finding): use `.entry(k).and_modify(|c| *c += 1).or_insert(1)`.
+19. `char::to_uppercase()` returns an iterator: use `to_ascii_uppercase()` for a char.
+20. `HashMap` iteration order is unspecified: sort the keys; use `BTreeMap` for ordered output.
+21. `mem::swap(&mut a, &mut b)` fails the borrow lint: use `v.swap(i, j)` or a temp.
+22. `string.len()` is bytes, `.chars().count()` is characters; slicing is by bytes: `s[1..4]` (no `&`).
+23. `x / y` on `int` truncates toward zero and `%` keeps the sign of the dividend; overflow panics (exit 101).
+24. No ternary, no `while let` on non-patterns, no `async`/threads/`Rc`/`RefCell`/`impl Drop` in the interpreter (exit 2): use `wj build` for those.
+25. Declaring success from `wj check` alone: always `wj run --interpret` (or `wj test --interpret`) to see behaviour.
+
+### What not to write
+
+Each of these is flagged by `wj check` (the block must produce a diagnostic):
+
+```windjammer,bad
+fn main() {
+    let v = vec![1, 2, 3]
+    println!("sum = {}", v.iter().sum::<i32>())
+}
+```
+
+```windjammer,bad
+fn first(v: &Vec<int>) -> int {
+    v.get(0).unwrap()
+}
+
+fn main() {
+    println("${first(&[1])}")
+}
+```
+
+<!-- should_fail: Rust attribute syntax `#[derive]` is rejected (use `@derive`) -->
+```windjammer,should_fail,bad
+##[derive(Debug, Clone)]
+struct P { x: int }
+
+fn main() {
+    println("${P { x: 1 }:?}")
+}
+```
+
+### Compiled path gaps (be honest with the user)
+
+`wj run --interpret` is the reference for behaviour. `wj build` additionally runs rustc: today about half of
+`examples/verified` compiles and matches (`// rust: ok`); the rest carry a recorded `// rust: gap` reason in the
+header. Known classes: adapter chains on a collection without `.iter()` (emitted as `v.map(..)` on a `Vec`),
+integer-width inference between `i32` and `i64` in mixed expressions, `HashMap` indexing with `&str` keys,
+inline `mod` plus `use` duplicates. If `wj build` fails on code the interpreter runs, report it with the
+smallest repro; do not contort the source.
+
+### Where to look next
+
+`wj docs <terms>` searches this guide, the cheat sheets (`cheatsheet_from_rust.md`, `_python`, `_go`, `_typescript`),
+built-in methods, stdlib signatures and the verified examples (`examples/verified/*.wj`, indexed by tag in
+`manifest.json`). Design decisions: `docs/adr/0014`, `0015`, `docs/design/pipe-operator.md`, `docs/INTERPRETER.md`.
+
+
+---
+
+# Source: docs/reference/cli.md
+
+## `wj` command-line reference
+
+Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `wj new` | Create a new Windjammer project |
+| `wj build` | Build a Windjammer project |
+| `wj run` | Compile and run a Windjammer file |
+| `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
+| `wj test` | Run tests |
+| `wj fmt` | Format Windjammer code |
+| `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
+| `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
+| `wj check` | Type check without building |
+| `wj add` | Add a dependency to wj.toml |
+| `wj remove` | Remove a dependency from wj.toml |
+| `wj update` | Update Windjammer to the latest version |
+| `wj stats` | Show error statistics |
+| `wj errors` | Interactive error navigator (TUI) |
+| `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
+| `wj explain` | Explain an error code |
+| `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
+| `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
+| `wj validate-wjsl` | Validate WJSL shader files (transpile to WGSL and check for errors) |
+| `wj clean` | Clean build artifacts and stale temp files |
+| `wj cache` | Manage the shared Cargo target cache (outside application repos) |
+| `wj cache path` | Print the shared (or --verify) Cargo target directory |
+| `wj cache status` | Show cache sizes and free disk |
+| `wj cache prune` | Reclaim space (old incremental; aggressive when disk is low) |
+| `wj cache setup` | Write env.sh / env.ps1 for bare `cargo` invocations |
+| `wj self-install` | Install wj and plugins to ~/.wj/bin/ and ensure PATH |
+
+### `wj new`
+
+Create a new Windjammer project
+
+```text
+Usage: wj new [OPTIONS] <NAME>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<NAME>` | NAME |  | Project name |
+| `-t`, `--template` | TEMPLATE | cli | Project template (cli, web, lib, wasm) |
+
+### `wj build`
+
+Build a Windjammer project
+
+```text
+Usage: wj build [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | FILE |  | Path to .wj file or directory |
+| `-o`, `--output` | DIR |  | Output directory (default: ./build) |
+| `-r`, `--release` | RELEASE |  | Build in release mode |
+| `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
+| `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
+| `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
+| `--minify` | MINIFY |  | Minify JavaScript output (JS target only) |
+| `--tree-shake` | TREE_SHAKE |  | Enable tree shaking (dead code elimination) |
+| `--source-maps` | SOURCE_MAPS |  | Generate source maps |
+| `--polyfills` | POLYFILLS |  | Include polyfills for older browsers (JS target only) |
+| `--v8-optimize` | V8_OPTIMIZE |  | Apply V8 optimizations (JS target only) |
+| `--check` | CHECK |  | Run cargo build after transpilation and show errors |
+| `--raw-errors` | RAW_ERRORS |  | Show raw Rust errors instead of translated Windjammer errors |
+| `--fix` | FIX |  | Automatically apply fixes for fixable errors |
+| `-v`, `--verbose` | VERBOSE |  | Show verbose error output (includes all notes and suggestions) |
+| `-q`, `--quiet` | QUIET |  | Show only error count (suppress detailed output) |
+| `--filter-file` | PATH |  | Filter errors by file path |
+| `--filter-type` | TYPE |  | Filter errors by type (error, warning) |
+| `--library` | LIBRARY |  | Library mode: exclude test main() functions from output |
+| `--module-file` | MODULE_FILE |  | Auto-generate mod.rs with pub mod declarations and re-exports |
+| `--no-cargo` | NO_CARGO |  | Skip cargo build after transpilation (transpile only) |
+| `--no-lint` | NO_LINT |  | Disable Rust leakage linter warnings (style, .unwrap(), .iter(), etc.) |
+| `--no-generate-cargo-toml` | NO_GENERATE_CARGO_TOML |  | Skip Cargo.toml generation (use project-maintained manifest) |
+| `--metadata` | NAME=PATH |  | External crate metadata for cross-crate type inference (NAME=PATH, repeatable) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+| `--ir-shadow-validate` | IR_SHADOW_VALIDATE |  | Run IR shadow validation (compare solver results against legacy analyzer). Discrepancies are reported as errors instead of warnings (CI gate) |
+
+### `wj run`
+
+Compile and run a Windjammer file
+
+```text
+Usage: wj run [OPTIONS] <FILE> [ARGS]...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | FILE |  | Path to .wj file |
+| `<ARGS>` | ARGS |  | Arguments to pass to the program |
+| `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
+| `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
+| `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
+| `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
+
+### `wj repl`
+
+Start the Windjammerscript REPL (interactive interpreter)
+
+```text
+Usage: wj repl
+```
+
+### `wj test`
+
+Run tests
+
+```text
+Usage: wj test [OPTIONS] [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Directory or file containing tests (defaults to current directory) |
+| `-f`, `--filter` | FILTER |  | Run only tests matching this pattern |
+| `--nocapture` | NOCAPTURE |  | Show output from passing tests |
+| `--parallel` | PARALLEL | true | Run tests in parallel (default: true) |
+| `--json` | JSON |  | Output results as JSON for tooling |
+| `--library` | LIBRARY | true | Compile the library under test (default when `src/` has `.wj` files) |
+| `--module-file` | MODULE_FILE |  | Generate scoped `mod.rs` layout after transpile (same as `wj build --module-file`) |
+| `-o`, `--output` | DIR |  | Output directory for library compile (default: temp `{lib}/`) |
+| `--use-build-dir` | DIR |  | Use a pre-built outbound tree instead of recompiling the library |
+| `--use-project-cargo` | USE_PROJECT_CARGO |  | Merge `[dependencies]` from project root `Cargo.toml` into the test library crate |
+| `--no-runtime-copy` | NO_RUNTIME_COPY |  | Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp). Also the default when `wj.toml` declares a path dep on `windjammer-runtime` |
+| `--copy-runtime` | COPY_RUNTIME |  | Force copying windjammer-runtime into the temp tree (overrides path-dep inference) |
+| `--runtime-path` | PATH |  | Explicit path to windjammer-runtime (with `--no-runtime-copy`) |
+| `--no-generate-cargo-toml` | NO_GENERATE_CARGO_TOML |  | Skip auto-generated Cargo.toml for library compile |
+| `--list` | LIST |  | List discovered test files and functions, then exit without compiling |
+| `--allow-empty` | ALLOW_EMPTY |  | Exit 0 when no tests are found (default: finding none is an error) |
+| `--interpret` | INTERPRET |  | Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc |
+
+### `wj fmt`
+
+Format Windjammer code
+
+```text
+Usage: wj fmt [OPTIONS] [PATH]...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--check` | CHECK |  | Check formatting without applying changes (non-zero exit if changes are needed) |
+| `--rust` | RUST |  | Format generated Rust crates with `cargo fmt --all` instead of .wj files |
+| `<PATHS>` | PATH |  | Files or directories to format (default: current directory); `-` reads stdin |
+
+### `wj fix`
+
+Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms
+
+```text
+Usage: wj fix [OPTIONS] <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | File or directory to rewrite in place |
+| `--check` | CHECK |  | Do not write; exit non-zero if any file would change |
+| `--docs` | DOCS |  | Also migrate ```windjammer / ```wj code fences in .md files |
+
+### `wj lint`
+
+Run Rust leakage linter on .wj files (W0001-W0004)
+
+```text
+Usage: wj lint [OPTIONS] <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | File or directory to lint |
+| `--strict` | STRICT |  | Fail on warnings (for CI) |
+
+### `wj check`
+
+Type check without building
+
+```text
+Usage: wj check [OPTIONS] [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Path to .wj file or directory (default: current directory) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+
+### `wj add`
+
+Add a dependency to wj.toml
+
+```text
+Usage: wj add [OPTIONS] <PACKAGE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PACKAGE>` | PACKAGE |  | Package name |
+| `-f`, `--features` | FEATURES |  | Comma-separated list of features |
+| `-p`, `--path` | PATH |  | Local path dependency |
+
+### `wj remove`
+
+Remove a dependency from wj.toml
+
+```text
+Usage: wj remove <PACKAGE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PACKAGE>` | PACKAGE |  | Package name |
+
+### `wj update`
+
+Update Windjammer to the latest version
+
+```text
+Usage: wj update [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--check` | CHECK |  | Check for updates without installing |
+| `--force` | FORCE |  | Force reinstall even if already up to date |
+
+### `wj stats`
+
+Show error statistics
+
+```text
+Usage: wj stats [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--clear` | CLEAR |  | Clear statistics |
+| `-v`, `--verbose` | VERBOSE |  | Show detailed statistics |
+
+### `wj errors`
+
+Interactive error navigator (TUI)
+
+```text
+Usage: wj errors [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | File to check |
+| `-o`, `--output` | OUTPUT | ./build | Output directory |
+
+### `wj docs`
+
+Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation
+
+```text
+Usage: wj docs [OPTIONS] [QUERY]...
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<QUERY>` | QUERY |  | Search terms, e.g. `wj docs hashmap entry` (all terms must match) |
+| `--limit` | LIMIT | 8 | Maximum number of search results |
+| `--json` | JSON |  | Print search results as JSON |
+| `-o`, `--output` | OUTPUT | ./docs/errors | Output directory for generated docs |
+| `-f`, `--format` | FORMAT | html | Format (html, markdown, json) |
+
+### `wj explain`
+
+Explain an error code
+
+```text
+Usage: wj explain <CODE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<CODE>` | CODE |  | Error code to explain (e.g., WJ0001, E0425) |
+
+### `wj agent-index`
+
+Generate agent index artifacts for MCP (errors, stdlib, spec JSON)
+
+```text
+Usage: wj agent-index [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | OUTPUT | agent_index | Output directory |
+
+### `wj shader-compile`
+
+Compile .wjsl shader to WGSL (with type checking)
+
+```text
+Usage: wj shader-compile [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<INPUT>` | FILE |  | Path to .wjsl file |
+| `-o`, `--output` | FILE |  | Output path for .wgsl file (default: stdout) |
+
+### `wj validate-wjsl`
+
+Validate WJSL shader files (transpile to WGSL and check for errors)
+
+```text
+Usage: wj validate-wjsl <DIR>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | DIR |  | Path to directory containing .wjsl files |
+
+### `wj clean`
+
+Clean build artifacts and stale temp files
+
+```text
+Usage: wj clean [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--all` | ALL |  | Also clean local target/ directories (deep clean) |
+
+### `wj cache`
+
+Manage the shared Cargo target cache (outside application repos)
+
+```text
+Usage: wj cache <COMMAND>
+```
+
+### `wj cache path`
+
+Print the shared (or --verify) Cargo target directory
+
+```text
+Usage: wj cache path [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--verify` | VERIFY |  | Use the ephemeral verify cache (integration / codegen cargo checks) |
+
+### `wj cache status`
+
+Show cache sizes and free disk
+
+```text
+Usage: wj cache status
+```
+
+### `wj cache prune`
+
+Reclaim space (old incremental; aggressive when disk is low)
+
+```text
+Usage: wj cache prune [OPTIONS]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--aggressive` | AGGRESSIVE |  | Also clear debug incremental trees when reclaiming |
+
+### `wj cache setup`
+
+Write env.sh / env.ps1 for bare `cargo` invocations
+
+```text
+Usage: wj cache setup
+```
+
+### `wj self-install`
+
+Install wj and plugins to ~/.wj/bin/ and ensure PATH
+
+```text
+Usage: wj self-install
+```
+
+
+---
+
+# Source: docs/reference/targets.md
+
+## Backend support matrix
+
+Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus in `tests/conformance_programs/`. A listed pair must fail its oracle; the harness ratchets the list down.
+
+| Backend | Corpus programs | Passing | Known unsupported |
+|---|---|---|---|
+| `rust` | 127 | 103 | 24 |
+| `go` | 127 | 124 | 3 |
+| `js` | 127 | 124 | 3 |
+| `ts` | 127 | 125 | 2 |
+
+### Known-unsupported pairs by cause
+
+| Backend | Cause | Programs |
+|---|---|---|
+| `go` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
+| `go` | mut-ref-to-int-locals | 1 |
+| `go` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
+| `js` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
+| `js` | mut-ref-to-int-parameters | 1 |
+| `js` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
+| `rust` | mut-ref-to-int-parameters | 1 |
+| `rust` | rust-closure-returned-as-fn-pointer | 1 |
+| `rust` | rust-int-literal-width-inference | 14 |
+| `rust` | rust-std-runtime-crate-needed-by-rustc | 4 |
+| `rust` | rust-str-vs-string-in-collect-and-concat | 2 |
+| `rust` | rust-tail-none-cast | 2 |
+| `ts` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
+| `ts` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
+
+
+---
+
+# Source: docs/reference/keywords.md
+
+## Keywords and operators
+
+Generated from `src/lexer/keywords.rs` (pinned to the lexer by unit tests) and from the lexer itself.
+
+### Reserved words
+
+| Word | Meaning |
+|---|---|
+| `fn` | function item or function type |
+| `let` | local binding |
+| `mut` | mutable binding or mutable reference |
+| `const` | compile-time constant |
+| `static` | static item |
+| `struct` | struct item |
+| `enum` | enum item |
+| `trait` | trait item |
+| `impl` | implementation block |
+| `match` | pattern match expression |
+| `if` | conditional expression |
+| `else` | alternative branch of `if` |
+| `for` | loop over an iterator |
+| `in` | separator in `for pat in expr` |
+| `while` | conditional loop |
+| `loop` | unconditional loop |
+| `return` | return from a function |
+| `break` | leave a loop |
+| `continue` | next loop iteration |
+| `use` | import |
+| `mod` | module declaration |
+| `extern` | foreign declaration |
+| `thread` | `thread { }` block |
+| `async` | async function or block |
+| `await` | await a future |
+| `defer` | run a statement at scope exit |
+| `pub` | public visibility |
+| `self` | the receiver value |
+| `unsafe` | unsafe block or function |
+| `as` | type cast |
+| `where` | trait-bound clause |
+| `type` | type alias or associated type |
+| `dyn` | trait object |
+
+### Built-in type names
+
+| Word | Meaning |
+|---|---|
+| `int` | default signed integer type |
+| `int32` | 32-bit signed integer |
+| `uint` | default unsigned integer type |
+| `float` | default floating-point type |
+| `bool` | boolean type |
+| `string` | owned string type |
+
+### Literals and wildcard
+
+| Word | Meaning |
+|---|---|
+| `true` | boolean literal |
+| `false` | boolean literal |
+| `_` | wildcard pattern |
+
+### Soft keywords (identifiers outside their position)
+
+| Word | Meaning |
+|---|---|
+| `Self` | the implementing type (lexes as an identifier) |
+| `bound` | `bound Alias = Trait + ...` item (identifier elsewhere) |
+
+### Operators and punctuation
+
+Every punctuation string of up to three characters that the lexer turns into exactly one token.
+
+| Lexeme | Token |
+|---|---|
+| `!` | Bang |
+| `%` | Percent |
+| `&` | Ampersand |
+| `(` | LParen |
+| `)` | RParen |
+| `*` | Star |
+| `+` | Plus |
+| `,` | Comma |
+| `-` | Minus |
+| `.` | Dot |
+| `/` | Slash |
+| `:` | Colon |
+| `;` | Semicolon |
+| `<` | Lt |
+| `=` | Assign |
+| `>` | Gt |
+| `?` | Question |
+| `@` | At |
+| `[` | LBracket |
+| `]` | RBracket |
+| `^` | Caret |
+| `{` | LBrace |
+| `\|` | Pipe |
+| `}` | RBrace |
+| `!=` | Ne |
+| `%=` | PercentAssign |
+| `&&` | And |
+| `&=` | AndAssign |
+| `*=` | StarAssign |
+| `+=` | PlusAssign |
+| `-=` | MinusAssign |
+| `->` | Arrow |
+| `..` | DotDot |
+| `/=` | SlashAssign |
+| `::` | ColonColon |
+| `<-` | LeftArrow |
+| `<<` | Shl |
+| `<=` | Le |
+| `==` | Eq |
+| `=>` | FatArrow |
+| `>=` | Ge |
+| `>>` | Shr |
+| `^=` | XorAssign |
+| `\|=` | OrAssign |
+| `\|>` | PipeOp |
+| `\|\|` | Or |
+| `..=` | DotDotEq |
+| `<<=` | ShlAssign |
+| `>>=` | ShrAssign |
+| `\|>?` | PipeTry |
+
+
+---
+
+# Source: crates/windjammer-mcp/tools/manifest.json
+
+The `windjammer-mcp` server (`cargo build --release -p windjammer-mcp`, stdio by default) exposes:
+
+- `parse_code` (analyze, stable): Parse Windjammer code and return AST structure
+- `analyze_types` (analyze, stable): Perform type inference and analysis on Windjammer code
+- `get_definition` (analyze, beta): Find the definition of a symbol at a given position
+- `generate_code` (generate, beta): Generate Windjammer code from natural language description
+- `explain_error` (knowledge, stable): Explain a Windjammer compiler error in plain English
+- `search_workspace` (analyze, beta): Search for code patterns across the workspace
+- `extract_function` (refactor, stable): Extract selected code into a new function
+- `inline_variable` (refactor, stable): Inline a variable by replacing all uses with its value
+- `rename_symbol` (refactor, stable): Rename a symbol with workspace-wide updates
+- `generate_component` (generate, beta): Generate a Windjammer UI component with @component decorator
+- `generate_game_entity` (generate, beta): Generate a game entity with @game decorator and ECS components
+- `analyze_ssr_routing` (analyze, beta): Analyze SSR and routing configurations
+- `get_language_info` (knowledge, stable): Get Windjammer compiler version, MCP version, and agent index metadata
+- `query_diagnostics` (analyze, beta): Query structured compiler diagnostics for a scope (file, function, workspace)
+- `query_effects` (analyze, beta): Query the resolved effect set and propagation chain for a function
+- `check_code` (agent-loop, stable): Check Windjammer source (parse, lint, transpile) and return JSON diagnostics with spans and repair hints
+- `run_code` (agent-loop, stable): Run Windjammer source in the interpreter (wj run --interpret); returns exit code, stdout, stderr
+- `test_code` (agent-loop, stable): Run @test / test_* functions in the interpreter (wj test --interpret)
+- `format_code` (agent-loop, stable): Format Windjammer source with the canonical formatter
+- `docs_search` (knowledge, stable): Search offline docs: stdlib signatures, built-in methods, idioms, verified examples, error codes
+- `insert_statement` (patch, beta): Insert a Windjammer statement at a given location with optional validation
+- `change_type` (patch, beta): Change a type annotation at a given location in a source file
+
+
+---
+
+# Source: docs/known-gaps.md
+
+## Known gaps
+
+Ranked list of what is missing or wrong relative to what the documentation, RFCs and README promise. Source: the architecture
+audit in [ARCHITECTURE_IMPROVEMENT_PLAN.md](ARCHITECTURE_IMPROVEMENT_PLAN.md) section 6, re-verified against the code on 2026-10-10.
+Individual compiler bugs are not listed here ([ADR-0013](adr/0013-bug-triage-tracker.md)).
+
+Status values: **Open** (nothing wired), **Partial** (some of it works), **Decision needed** (blocked on an ADR).
+
+| Rank | Gap | Status | Evidence (today) | Work / decision |
+|------|-----|--------|------------------|-----------------|
+| 1 | Ownership, clone and numeric-width correctness is not owned by one component; blocks every dogfood project | Partial | Analyzer, IR solver and post-IR patches all decide ownership; width decided in 11 places; Rust-only solver consumption | Plan WP 6-9; [ADR-0001](adr/0001-ownership-truth.md) |
+| 2 | No native diagnostics: type/borrow errors come from rustc and are translated; `compile_error!` emitted for unresolved boundary signatures | Partial | `src/error_mapper.rs`; IR doc "missing boundary signature" | [ADR-0005](adr/0005-error-strategy.md); needs name resolution (WP 6-7) |
+| 3a | `.wj` formatter | Open | `wj fmt` runs `cargo fmt --all` (`src/cli/fmt.rs`) | Formatter work package (in progress elsewhere) |
+| 3b | Real `wj check` | Open | `wj check` runs `cargo check` (`src/cli/check.rs`) | ADR-0005 |
+| 3c | `wj watch`, `wj doc`, `wj publish` | Open | No such subcommands in `src/bin/wj_cli_args.rs` (`wj docs` generates error docs only) | Roadmap "Then" list |
+| 3d | `wj eject` on the main CLI | Partial | `eject` exists only on the older `windjammer` binary (`src/cli_args.rs`, `src/ejector.rs`) | ADR-0012 (move into `wj` or drop the promise) |
+| 4 | Dependencies: path/git build in dependency order, lock file; registry deferred | Partial | `DependencySpec` has path/git; `src/package/` is a stub; no `wj.lock` | [ADR-0010](adr/0010-package-source-of-truth.md), [WJ-PKG-01](proposals/rfcs/WJ-PKG-01-package-management.md) |
+| 5 | Concurrency: one coherent surface across backends; `async expr`/`spawn expr` do not parse; `go`/`chan::new()` were advertised but never existed | Decision needed | `AsyncCall`/`SpawnCall` never constructed; `thread {}`, `async fn`, `<-` do parse | [ADR-0004](adr/0004-concurrency-surface.md), [WJ-CONC-01](proposals/rfcs/WJ-CONC-01-async-concurrency.md) |
+| 6a | Taint errors do not fail the build | Partial | Only `src/cli/json_diagnostics.rs` consumes `taint_errors` | [ADR-0009](adr/0009-security-enforcement.md) |
+| 6b | `.wj-capabilities.lock` not wired | Open | `src/ir/capability_lock.rs` unused by the CLI | ADR-0009, ADR-0010 |
+| 6c | Unknown external calls have no effect classification; effects checked only with `[app_capabilities]` | Partial | `src/output_generation.rs` | ADR-0009, ADR-0012 |
+| 7a | Go and JavaScript backends do not consume the IR | Open | `let _ir = ...prepare_ir_context(...)` in both generators | Plan WP 11; [ADR-0007](adr/0007-target-tiers-conformance.md) |
+| 7b | Conformance suite runs only the Rust path | Partial | `tests/conformance/run_conformance_tests.sh` | ADR-0007 |
+| 7c | Stdlib is Rust-host-only; no portability tags | Open | `std/*.wj` over `windjammer-runtime` | [ADR-0008](adr/0008-stdlib-portability.md) |
+| 8 | Optimizer disabled; performance and economics claims unmeasured | Decision needed | `src/compiler_database.rs` `optimize_program`; no `wj optimize`/`wj economics` | [ADR-0006](adr/0006-optimizer-fate.md), [WJ-PERF-01](proposals/rfcs/WJ-PERF-01-economic-efficiency.md) |
+| 9 | RFC features (comptime, const generics, `owned`) | Not started | No tokens/syntax; only `ConstEval::Comptime` IR scaffolding | [ADR-0003](adr/0003-owned-keyword.md), [WJ-LANG-02](proposals/rfcs/WJ-LANG-02-mojo-feature-analysis.md) |
+
+### Language-surface questions the code and docs disagree on
+| Question | State | ADR |
+|----------|-------|-----|
+| Is `let mut` required? | Docs say yes; codegen infers `mut` for mutated locals and parameters | [ADR-0002](adr/0002-local-mutability.md) |
+| Does ternary `c ? a : b` exist? | RFC says implemented; parser removed it | WJ-SYN-02 row in the [RFC table](proposals/rfcs/README.md) |
+| Are `use ... as` aliases and `std::http.client` submodule syntax supported? | Old docs said "future"; not verified in tests | [MODULE_SYSTEM.md](MODULE_SYSTEM.md) |
