@@ -23,6 +23,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj stats` | Show error statistics |
 | `wj errors` | Interactive error navigator (TUI) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
+| `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -272,6 +273,20 @@ Usage: wj docs [OPTIONS] [QUERY]...
 | `--json` | JSON |  | Print search results as JSON |
 | `-o`, `--output` | OUTPUT | ./docs/errors | Output directory for generated docs |
 | `-f`, `--format` | FORMAT | html | Format (html, markdown, json) |
+
+## `wj explain-ownership`
+
+Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)
+
+```text
+Usage: wj explain-ownership [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | Windjammer source file |
+| `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
+| `--json` | JSON |  | Machine-readable JSON output |
 
 ## `wj explain`
 

@@ -106,3 +106,21 @@ fn generic_type_aliases() {
     let Item::TypeAlias { type_params, .. } = &p.items[1] else { panic!() };
     assert!(type_params.is_empty());
 }
+
+#[test]
+fn as_inside_parentheses_under_a_prefix_operator_stays_inside() {
+    // Found by the spec grammar's random corpus: `!(x as f64 >> y)` was rejected.
+    for src in ["fn f() {\n    let a = !(false as u8 >> 1)\n}\n", "fn f() {\n    let a = -(x[y as usize] as i64)\n}\n"] {
+        dbg(src);
+    }
+}
+
+#[test]
+fn as_inside_parentheses_in_conditions_and_scrutinees() {
+    for src in [
+        "fn f() {\n    if !(!!false as u8 >> 1 == 0) {\n    }\n}\n",
+        "fn f() {\n    match (-x as f64 >> (1, 2).0) {\n        _ => {}\n    }\n}\n",
+    ] {
+        dbg(src);
+    }
+}
