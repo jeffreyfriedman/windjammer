@@ -123,8 +123,6 @@ pub struct Interpreter {
     pub(crate) call_cache: HashMap<usize, Rc<FuncDef>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Recycled variable vectors of finished frames.
     pub(crate) vec_pool: Vec<Vec<(&'static str, Slot)>>,
-    /// Recycled variable slots (unshared when their scope ended).
-    pub(crate) slot_pool: Vec<Slot>,
     /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
     pub(crate) sched: super::sched::Sched,
     pub(crate) epoch: std::time::Instant,
@@ -185,7 +183,6 @@ impl Interpreter {
             scope: Scope::new(0),
             call_cache: HashMap::default(),
             vec_pool: Vec::new(),
-            slot_pool: Vec::new(),
             sched: super::sched::Sched::new(),
             epoch: std::time::Instant::now(),
             rng: None,

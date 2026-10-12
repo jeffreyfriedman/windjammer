@@ -20,35 +20,13 @@ impl Interpreter {
         if name == "_" {
             return;
         }
-        let slot = match self.slot_pool.pop() {
-            Some(s) => {
-                *s.borrow_mut() = v;
-                s
-            }
-            None => Rc::new(RefCell::new(v)),
-        };
-        self.scope.vars.push((name, slot));
-    }
-
-    /// Return slots nobody else holds (not captured by a closure, no `&mut` to them) to the pool.
-    fn release_slots(&mut self, from: usize) {
-        for (_, slot) in self.scope.vars.drain(from..) {
-            if Rc::strong_count(&slot) == 1 && Rc::weak_count(&slot) == 0 && self.slot_pool.len() < 256 {
-                *slot.borrow_mut() = Value::Unit;
-                self.slot_pool.push(slot);
-            }
-        }
+        self.scope.vars.push((name, Rc::new(RefCell::new(v))));
     }
 
     /// Keep a finished frame's variable vector for the next call (saves an allocation per call).
     pub(crate) fn recycle_vars(&mut self, mut vars: Vec<(&'static str, Slot)>) {
         if self.vec_pool.len() < 64 && vars.capacity() <= 64 {
-            for (_, slot) in vars.drain(..) {
-                if Rc::strong_count(&slot) == 1 && Rc::weak_count(&slot) == 0 && self.slot_pool.len() < 256 {
-                    *slot.borrow_mut() = Value::Unit;
-                    self.slot_pool.push(slot);
-                }
-            }
+            vars.clear();
             self.vec_pool.push(vars);
         }
     }
@@ -63,7 +41,7 @@ impl Interpreter {
     pub(crate) fn pop_scope(&mut self, r: R) -> R {
         let Some(n) = self.scope.marks.pop() else { return r };
         if self.drop_types.is_empty() {
-            self.release_slots(n);
+            self.scope.vars.truncate(n);
             return r;
         }
         let popped = self.scope.vars.split_off(n);
