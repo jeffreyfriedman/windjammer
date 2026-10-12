@@ -389,7 +389,12 @@ impl Lexer {
             }
             Some('?') => {
                 self.advance();
-                Token::Question
+                if self.peek(0) == Some('?') {
+                    self.advance();
+                    Token::QuestionQuestion
+                } else {
+                    Token::Question
+                }
             }
             Some(ch) => {
                 self.advance();

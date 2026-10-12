@@ -1,0 +1,34 @@
+// expect: 5 0
+// expect: 9
+// expect: fallback
+// expect: 104
+// expect: 2 1
+// expect: 12
+// expect: none
+fn lookup(key: string) -> int? {
+    if key == "a" {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+fn loud() -> int {
+    println("fallback")
+    100
+}
+
+fn main() {
+    let a: int? = Some(5)
+    let b: int? = None
+    println("${a ?? 0} ${b ?? 0}")
+    let c: int? = None
+    println("${b ?? c ?? 9}")
+    let d = b ?? loud()
+    let e = a ?? loud()
+    println("${d + e - 1}")
+    println("${lookup("a") ?? 0 + 1} ${lookup("z") ?? 0 + 1}")
+    println("${(a ?? 0) + 7}")
+    let name: string? = None
+    println(name ?? "none")
+}

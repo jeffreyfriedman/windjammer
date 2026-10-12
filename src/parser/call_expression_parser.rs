@@ -281,6 +281,17 @@ impl Parser {
                         location: self.current_location(),
                     })
                 }
+                // `x??` (two `?` with nothing to default to): two try operators, as before `??` existed.
+                Token::QuestionQuestion
+                    if matches!(
+                        self.peek(1),
+                        Some(Token::Dot | Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Semicolon | Token::Eof)
+                    ) =>
+                {
+                    self.advance();
+                    let once = self.alloc_expr(Expression::TryOp { expr, location: self.current_location() });
+                    self.alloc_expr(Expression::TryOp { expr: once, location: self.current_location() })
+                }
                 Token::Question => {
                     // TryOp: expr?
                     // No ambiguity since we removed ternary operator

@@ -51,6 +51,7 @@ Example file format (`tests/spec/<area>/SPEC-XXX-NNN.wj`): header comments `// s
 | [doctests.md](doctests.md) | DOC | examples in doc comments run by `wj test` (ADR-0018) |
 | [arguments.md](arguments.md) | ARGS | named arguments and parameter defaults (ADR-0018) |
 | [trailing-blocks.md](trailing-blocks.md) | BLOCK | `f(x) { a -> .. }` trailing closures (ADR-0018) |
+| [optionals.md](optionals.md) | OPT | `T?`, `x ?? d` (ADR-0018; `?.` planned) |
 | [intrinsics.md](intrinsics.md) | INTR | print/assert/panic/debug/list literal |
 | [attributes.md](attributes.md) | ATTR | `@derive`, `@test`, ... |
 | [stdlib.md](stdlib.md) | STD | portable core and std index |

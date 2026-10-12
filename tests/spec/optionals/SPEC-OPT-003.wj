@@ -1,0 +1,11 @@
+// spec: SPEC-OPT-003
+// expect: 4
+// expect: 1
+// expect: true
+fn main() {
+    let a: int? = None
+    let b: int? = Some(4)
+    println("${a ?? b ?? 0}")
+    println("${a ?? 0 + 1}")
+    println("${b ?? 0 > 3}")
+}
