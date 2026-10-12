@@ -490,6 +490,19 @@ impl<'ast> RustLeakageLinter<'ast> {
         for diag in super::surface_syntax::diagnostics(&self.default_file, source) {
             self.collector.add(diag);
         }
+        for off in super::redundant_as_str::find(source) {
+            let (line, column) = super::redundant_as_str::line_col(source, off);
+            self.collector.add(LintDiagnostic {
+                lint_name: "W0012".to_string(),
+                category: LintCategory::Style,
+                level: LintLevel::Warning,
+                message: "`.as_str()` is redundant: Windjammer has one string type".to_string(),
+                location: SourceLocation { file: self.default_file.clone(), line, column },
+                help: Some("remove `.as_str()` (or run `wj fix`)".to_string()),
+                note: Some("every backend treats `.as_str()` as identity".to_string()),
+                suggestion: Some(String::new()),
+            });
+        }
     }
 
     pub fn into_diagnostics(self) -> Vec<LintDiagnostic> {
