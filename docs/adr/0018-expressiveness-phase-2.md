@@ -79,9 +79,9 @@ ambiguity because the two meanings are distinguished syntactically (bare argumen
 inside an explicit closure in the same argument (`map(|x| x + _)`): error "mix of `_` shorthand and explicit closure".
 `_` patterns (`let _ =`, `match` arms) are unaffected.
 
-**Lowering.** The parser emits a plain `Closure` with fresh parameter names (`__it0`, `__it1`, ...); all backends
+**Lowering.** The parser emits a plain `Closure` with fresh parameter names (`_it0`, `_it1`, ...); all backends
 and the solver see an ordinary closure, so ownership and parameter types follow the closure rules (the solver types
-`__it0` from the callee signature, e.g. `&T` for `filter`).
+`_it0` from the callee signature, e.g. `&T` for `filter`).
 
 **Formatter.** Token-based, prints the source spelling; never expands shorthand. **Kill:** if agent-dx shows more
 first-draft failures with `_` than with explicit closures, keep only the single-`_` form.

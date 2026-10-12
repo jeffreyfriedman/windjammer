@@ -4,6 +4,7 @@
 //! (expression-position control flow becomes statements) -> target emitter.
 
 pub mod builtins;
+pub mod enumerable;
 pub mod env;
 pub mod flatten;
 pub mod ir;

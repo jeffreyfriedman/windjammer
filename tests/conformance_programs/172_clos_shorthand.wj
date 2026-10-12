@@ -1,0 +1,37 @@
+// expect: 2 6
+// expect: ann,cy
+// expect: 10
+// expect: 10 40
+// expect: 15
+// expect: 4 6
+// expect: 70
+struct User {
+    name: string,
+    active: bool,
+    age: int,
+}
+
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+
+fn main() {
+    let xs: Vec<int> = [1, 2, 3]
+    let doubled: Vec<int> = xs.map(_ * 2).collect()
+    println("${doubled[0]} ${doubled[2]}")
+    let users: Vec<User> = [
+        User { name: "ann", active: true, age: 30 },
+        User { name: "bob", active: false, age: 20 },
+        User { name: "cy", active: true, age: 40 },
+    ]
+    let names: Vec<string> = users.filter(_.active).map(_.name).collect()
+    println(names.join(","))
+    let ys: Vec<int> = [1, 2, 3, 4]
+    println("${ys.fold(0, _ + _)}")
+    let z = [1, 2].zip_with([10, 20], _ * _)
+    println("${z[0]} ${z[1]}")
+    println("${5 |> apply(_ * 3, _)}")
+    let w = [1, 2] |> .zip_with([3, 4], _ + _)
+    println("${w[0]} ${w[1]}")
+    println("${users.filter(_.active).map(_.age).sum::<int>()}")
+}

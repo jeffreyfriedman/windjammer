@@ -5,7 +5,7 @@
 // the SMALLEST enclosing call argument: `f(g(_ + 1))` is `f(g(|x| x + 1))`.
 //
 // A bare `_` argument is never a closure: in a `|>` stage it is the pipe placeholder (pipe_parser.rs), anywhere
-// else an error. The parser emits a plain `Expression::Closure` with parameters `__it0`, `__it1`, ..., so the
+// else an error. The parser emits a plain `Expression::Closure` with parameters `_it0`, `_it1`, ..., so the
 // analyzer, the IR solver and every backend only ever see ordinary closures.
 //
 // State: one `ShorthandFrame` per call argument being parsed (a stack, innermost last). `parse_primary_expression`
@@ -16,7 +16,7 @@ use crate::parser_impl::Parser;
 
 /// Parameter name of the `i`-th `_` of a shorthand closure.
 pub(crate) fn hole_name(i: usize) -> String {
-    format!("__it{i}")
+    format!("_it{i}")
 }
 
 #[derive(Debug, Default)]

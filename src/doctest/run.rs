@@ -152,7 +152,10 @@ fn run_compiled(program: &str, wj_bin: &Path) -> Result<String, String> {
                 .join("\n")
         ));
     }
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    // `wj run` announces itself on stdout: drop exactly that banner line.
+    let banner = format!("Running {} (target: rust)", main.display());
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(text.lines().filter(|l| *l != banner).map(|l| format!("{l}\n")).collect())
 }
 
 fn unique() -> u64 {

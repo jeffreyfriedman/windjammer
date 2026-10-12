@@ -380,8 +380,13 @@ impl<'ast> CodeGenerator<'ast> {
                 object,
                 method,
                 type_args,
+                arguments,
                 ..
             } => {
+                // ADR-0018 enumerable surface (`group_by` -> HashMap, ...): one table, see stdlib_surface.
+                if let Some(t) = self.enumerable_call_type(object, method, arguments.len()) {
+                    return Some(t);
+                }
                 // Explicit turbofish return target: `collect::<Vec<char>>()`, …
                 // Without this, `let codepoints = ….collect::<Vec<_>>()` never
                 // enters `local_var_types`, so `codepoints.remove` had no receiver
@@ -732,11 +737,16 @@ impl<'ast> CodeGenerator<'ast> {
             // TDD FIX: Index expressions: vec[i] → element type of the collection
             // Example: let mask: Vec<u8> = ...; let color_id = mask[i]; → color_id: u8
             // Peel `&Vec<T>` / `&mut Vec<T>` so `vals: &Vec<f32>` still yields `f32`.
-            Expression::Index { object, .. } => self
-                .infer_expression_type(object)
-                .as_ref()
-                .and_then(|ot| Self::peeled_collection_element_type(ot))
-                .cloned(),
+            Expression::Index { object, .. } => {
+                let ot = self.infer_expression_type(object)?;
+                // `m[&k]` on a map is the value type.
+                if let Type::Parameterized(n, params) = &ot {
+                    if matches!(n.as_str(), "HashMap" | "BTreeMap") && params.len() == 2 {
+                        return Some(params[1].clone());
+                    }
+                }
+                Self::peeled_collection_element_type(&ot).cloned()
+            }
             // `[ (1.0, 0.0, 0.0), … ]` must type as `[ (f32,f32,f32); N ]`
             // so index destructure is Copy and does not `.clone()`.
             Expression::Tuple { elements, .. } => {
