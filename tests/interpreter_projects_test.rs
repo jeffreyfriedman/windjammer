@@ -172,7 +172,7 @@ fn fuzz_compiled_module_trees_match_interpreter() {
     }
     let n = std::env::var("WJ_FUZZ_COMPILED_SEEDS").ok().and_then(|s| s.parse().ok()).unwrap_or(5);
     for seed in 0..n {
-        let p = project_fuzz::generate(seed);
+        let p = project_fuzz::generate_compiled(seed);
         let d = tempfile::tempdir().unwrap();
         project_fuzz::write(&p, d.path());
         let o = wj(d.path(), &["--compiled"], &[]);
@@ -196,7 +196,7 @@ fn hot_reload_swaps_a_body_and_keeps_state() {
     std::fs::write(d.path().join("src/step.wj"), "pub fn step(n: int) -> int {\n    n + 1\n}\n").unwrap();
     std::fs::write(
         d.path().join("src/main.wj"),
-        "use std::time\nuse step\n\nfn main() {\n    let mut state = 0\n    let mut i = 0\n    while i < 3000 {\n        state = step::step(state)\n        println(\"${state}\")\n        time::sleep_millis(2)\n        i += 1\n    }\n}\n",
+        "use std::time\nuse step\n\nfn main() {\n    let mut state = 0\n    let mut i = 0\n    while i < 4000 {\n        state = step::step(state)\n        println(\"${state}\")\n        time::sleep_millis(2)\n        i += 1\n    }\n}\n",
     )
     .unwrap();
     let mut child = Command::new(WJ).args(["run", "--hot"]).current_dir(d.path()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
@@ -209,7 +209,8 @@ fn hot_reload_swaps_a_body_and_keeps_state() {
     std::fs::write(d.path().join("src/step.wj"), "pub fn step(n: int) -> int {\n    n + 1000\n}\n").unwrap();
     let mut prev = before;
     let mut jumped = false;
-    for _ in 0..1500 {
+    // stdout is block-buffered, so lines printed before the edit can still arrive: read to the end
+    loop {
         let Some(Ok(l)) = lines.next() else { break };
         let v: i64 = l.trim().parse().unwrap();
         assert!(v > prev, "state must keep growing (no restart): {prev} then {v}");
