@@ -23,13 +23,6 @@ pub(crate) fn host_var(name: &str) -> Result<String, String> {
     std::env::var(name).map_err(|e| e.to_string())
 }
 
-#[allow(dead_code)]
-fn field(v: &Value, name: &str) -> Option<Value> {
-    if let Value::Struct(s) = v {
-        return s.fields.iter().find(|(n, _)| &**n == name).map(|(_, v)| v.clone());
-    }
-    None
-}
 
 fn io_err(e: std::io::Error) -> Value {
     Value::err(Value::str(e.to_string()))
