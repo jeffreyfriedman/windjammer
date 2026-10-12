@@ -147,7 +147,7 @@ statement = "Build a Windjammer project"
 [[promise]]
 id = "wj build --check"
 statement = "Run cargo build after transpilation and show errors"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --defer-drop"
@@ -160,17 +160,17 @@ statement = "Defer drop threshold in bytes (default: 102400 = 100KB)"
 [[promise]]
 id = "wj build --filter-file"
 statement = "Filter errors by file path"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --filter-type"
 statement = "Filter errors by type (error, warning)"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --fix"
 statement = "Automatically apply fixes for fixable errors"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --ir-shadow-validate"
@@ -222,17 +222,17 @@ pending = "BUG: advertised in `wj build --help` but always fails with `were remo
 [[promise]]
 id = "wj build --quiet"
 statement = "Show only error count (suppress detailed output)"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --raw-errors"
 statement = "Show raw Rust errors instead of translated Windjammer errors"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --release"
 statement = "Build in release mode"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj build --source-maps"
@@ -255,7 +255,7 @@ pending = "BUG: advertised in `wj build --help` but always fails with `were remo
 [[promise]]
 id = "wj build --verbose"
 statement = "Show verbose error output (includes all notes and suggestions)"
-pending = "needs a cargo build of the generated crate (add a needs="cargo" case)"
+pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
 
 [[promise]]
 id = "wj cache"
@@ -440,7 +440,7 @@ pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo
 [[promise]]
 id = "wj test --copy-runtime"
 statement = "Force copying windjammer-runtime into the temp tree (overrides path-dep inference)"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --filter"
@@ -458,7 +458,7 @@ pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo
 [[promise]]
 id = "wj test --library"
 statement = "Compile the library under test (default when `src/` has `.wj` files)"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --list"
@@ -467,17 +467,17 @@ statement = "List discovered test files and functions, then exit without compili
 [[promise]]
 id = "wj test --module-file"
 statement = "Generate scoped `mod.rs` layout after transpile (same as `wj build --module-file`)"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --no-generate-cargo-toml"
 statement = "Skip auto-generated Cargo.toml for library compile"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --no-runtime-copy"
 statement = "Use a Cargo path dependency for windjammer-runtime (no recursive copy into temp). Also the default when `wj.toml` declares a path dep on `windjammer-runtime`"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --nocapture"
@@ -487,7 +487,7 @@ pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo
 [[promise]]
 id = "wj test --output"
 statement = "Output directory for library compile (default: temp `{lib}/`)"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --parallel"
@@ -496,17 +496,17 @@ statement = "Run tests in parallel (default: true)"
 [[promise]]
 id = "wj test --runtime-path"
 statement = "Explicit path to windjammer-runtime (with `--no-runtime-copy`)"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --use-build-dir"
 statement = "Use a pre-built outbound tree instead of recompiling the library"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj test --use-project-cargo"
 statement = "Merge `[dependencies]` from project root `Cargo.toml` into the test library crate"
-pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs="cargo" case)"
+pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
 
 [[promise]]
 id = "wj update"
@@ -526,3 +526,15 @@ pending = "needs network access to the release server; add a case against a loca
 [[promise]]
 id = "wj validate-wjsl"
 statement = "Validate WJSL shader files (transpile to WGSL and check for errors)"
+
+[[promise]]
+id = "wj explain-ownership"
+statement = "Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)"
+
+[[promise]]
+id = "wj explain-ownership --fn"
+statement = "Only this function (`name` or `Type::name`)"
+
+[[promise]]
+id = "wj explain-ownership --json"
+statement = "Machine-readable JSON output"
