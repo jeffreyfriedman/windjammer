@@ -6,7 +6,7 @@ Part of the [Windjammer language specification](README.md). Rule IDs are checked
 
 ## spawn
 
-**SPEC-CONC-001** [PLANNED ADR-0004] `spawn f(x)` and `spawn { ... }` run work in parallel and evaluate to a `Task<T>`; `t.wait()` returns the result (`.await` is accepted sugar). Not implemented: `spawn` is not parsed as a keyword today.
+**SPEC-CONC-001** [PLANNED ADR-0004] `spawn f(x)` and `spawn { ... }` run work in parallel and evaluate to a `Task<T>`; `t.wait()` returns the result (`.await` is accepted sugar). Implemented in the interpreter (deterministic cooperative scheduler); not yet in the compiled backends.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-001.wj -->
 <!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
@@ -25,7 +25,7 @@ Output:
 
 ## async call
 
-**SPEC-CONC-002** [PLANNED ADR-0004] `async f(x)` and `async { ... }` overlap work on the current executor and evaluate to a `Task<T>`. Not implemented as an expression prefix.
+**SPEC-CONC-002** [PLANNED ADR-0004] `async f(x)` and `async { ... }` overlap work on the current executor and evaluate to a `Task<T>`. Implemented in the interpreter; not yet in the compiled backends.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-002.wj -->
 <!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
@@ -44,7 +44,7 @@ Output:
 
 ## Structured concurrency
 
-**SPEC-CONC-003** [PLANNED ADR-0004] A `spawn` must occur inside a `scope { }` or return a handle that is waited on; an un-waited task is a compile-time error; errors propagate to the enclosing scope. Not implemented: `scope` is not a construct.
+**SPEC-CONC-003** [PLANNED ADR-0004] A `spawn` must occur inside a `scope { }` or return a handle that is waited on; an un-waited task is a compile-time error; errors propagate to the enclosing scope. Implemented in the interpreter (`scope { }` waits for its tasks and propagates their panics); the un-waited-task compile error is not implemented.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-003.wj -->
 <!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
@@ -66,7 +66,7 @@ Output:
 
 ## Channels
 
-**SPEC-CONC-004** [PLANNED ADR-0004] Channels are library values with methods `send(x)` and `recv()`; the `<-` operators are removed. `select { }` stays and is designed in the library first. Not implemented in the interpreter (`std::sync::channel` unsupported).
+**SPEC-CONC-004** [PLANNED ADR-0004] Channels are library values with methods `send(x)` and `recv()`; the `<-` operators are removed. `select { }` stays and is designed in the library first. Implemented in the interpreter (`std::sync::channel()`; `recv()` returns the value and panics on a closed channel).
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-004.wj -->
 <!-- ignore: known divergence Q-013; the example shows the specified behaviour, which the implementation does not have yet -->
@@ -86,7 +86,7 @@ Output:
 
 ## Accepted legacy forms
 
-**SPEC-CONC-005** Until the ADR-0004 surface lands, `async fn`, `.await`, `thread { }` and `async { }` blocks are parsed and compile on the Rust backend; the interpreter rejects thread/async blocks as unsupported. They are deprecated by ADR-0004 decision 1-2.
+**SPEC-CONC-005** Until the ADR-0004 surface lands, `async fn`, `.await`, `thread { }` and `async { }` blocks are parsed and compile on the Rust backend; the interpreter rejects thread/async blocks as unsupported (use `spawn`/`async` prefixes or `std::thread`). They are deprecated by ADR-0004 decision 1-2.
 
 <!-- example: tests/spec/concurrency/SPEC-CONC-005.wj -->
 ```windjammer

@@ -15,8 +15,10 @@ fn main() {
     let shared = Rc::new(RefCell::new(s))
     let a = Rc::clone(&shared)
     println("count {}", Rc::strong_count(&shared))
-    let mut ga = a.borrow_mut();
-    *ga += 10
+    {
+        let mut ga = a.borrow_mut();
+        *ga += 10
+    }
     println("{}", shared.borrow())
     {
         let b = Rc::clone(&shared)
@@ -42,8 +44,10 @@ fn main() {
     println("orphan {}", leaf.parent.borrow().upgrade().is_none())
     {
         let branch = Rc::new(Node { val: s + 1, parent: RefCell::new(Weak::new()) })
-        let mut lp = leaf.parent.borrow_mut();
-        *lp = Rc::downgrade(&branch)
+        {
+            let mut lp = leaf.parent.borrow_mut();
+            *lp = Rc::downgrade(&branch)
+        }
         println("parent {}", leaf.parent.borrow().upgrade().unwrap().val)
         println("{} {}", Rc::strong_count(&branch), Rc::weak_count(&branch))
     }

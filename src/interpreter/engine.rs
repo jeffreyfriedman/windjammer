@@ -119,6 +119,19 @@ pub struct Interpreter {
     pub(crate) type_aliases: HashMap<String, Type>,
     pub(crate) globals: HashMap<(usize, String), Slot>,
     pub(crate) scope: Scope,
+    /// Call-site cache: call expression address -> the module function it resolved to.
+    pub(crate) call_cache: HashMap<usize, Rc<FuncDef>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Recycled variable vectors of finished frames.
+    pub(crate) vec_pool: Vec<Vec<(&'static str, Slot)>>,
+    /// Threads/tasks, the virtual clock and the schedule seed (see `sched.rs`).
+    pub(crate) sched: super::sched::Sched,
+    pub(crate) epoch: std::time::Instant,
+    /// Global random generator (`std::random`), seeded from entropy unless time is deterministic.
+    pub(crate) rng: Option<rand::rngs::StdRng>,
+    /// `std::log` threshold (0 = error .. 4 = trace); `None` until `log::init`.
+    pub(crate) log_level: Option<i32>,
+    /// How `std::http` client calls are answered (default: refuse).
+    pub(crate) http: super::builtins::std_http::HttpMode,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -168,6 +181,13 @@ impl Interpreter {
             type_aliases: HashMap::new(),
             globals: HashMap::new(),
             scope: Scope::new(0),
+            call_cache: HashMap::default(),
+            vec_pool: Vec::new(),
+            sched: super::sched::Sched::new(),
+            epoch: std::time::Instant::now(),
+            rng: None,
+            log_level: None,
+            http: Default::default(),
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,
@@ -189,6 +209,9 @@ impl Interpreter {
             missing_modules: HashSet::new(),
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
+        if std::thread::current().name() == Some(super::runner::BIG_STACK_THREAD) {
+            s.guard_stack();
+        }
         s
     }
 
@@ -203,6 +226,20 @@ impl Interpreter {
     pub fn guard_stack(&mut self) {
         let here = 0u8;
         self.stack_guard = Some((&here as *const u8 as usize, super::runner::STACK_BYTES - super::runner::STACK_HEADROOM));
+    }
+
+    /// Schedule seed: 0 = FIFO run-to-block, N = seeded exploration of other interleavings.
+    pub fn set_sched_seed(&mut self, seed: u64) {
+        self.sched.set_seed(seed);
+    }
+
+    /// Deterministic time: no real clock is read; time advances only through `sleep`.
+    pub fn set_deterministic_time(&mut self, on: bool) {
+        self.sched.deterministic = on;
+    }
+
+    pub fn set_http_mode(&mut self, mode: super::builtins::std_http::HttpMode) {
+        self.http = mode;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {
