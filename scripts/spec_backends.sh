@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Run the tests/spec examples through a compiled backend and compare with their `// expect:` oracle.
 #
-#   scripts/spec_backends.sh <path-to-wj> rust|js [out.tsv]
+#   scripts/spec_backends.sh <path-to-wj> rust|go|js|ts [out.tsv]
 #
-# Needs rustc (rust) or node >= 18 (js). Sequential on purpose (shared machines). Examples in
+# Needs rustc (rust), go (go: `go vet` must be clean too) or node >= 22.6 (js, ts: type stripping). Sequential on purpose (shared machines). Examples in
 # `parse-ok` / `parse-error` mode are skipped: the compiled backends have no front-end-only mode.
 # Result per example: PASS, FAIL (built, wrong output or status), BUILD (wj or the toolchain rejected it).
 set -uo pipefail
-WJ="${1:?usage: spec_backends.sh <wj> rust|js [out.tsv]}"; BACKEND="${2:?backend}"; OUT="${3:-/dev/stdout}"
+WJ="${1:?usage: spec_backends.sh <wj> rust|go|js|ts [out.tsv]}"; BACKEND="${2:?backend}"; OUT="${3:-/dev/stdout}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
+# SPEC_WORK=<dir> keeps the per-example build directories for inspection.
+if [ -n "${SPEC_WORK:-}" ]; then W="$SPEC_WORK"; mkdir -p "$W"; else W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT; fi
 : > "$OUT"
 pass=0; fail=0; build=0
 while IFS= read -r f; do
@@ -25,6 +26,15 @@ while IFS= read -r f; do
     if "$WJ" build "$d/$n.wj" -o "$d/out" --no-cargo > "$d/build.log" 2>&1 && [ -f "$d/out/$n.rs" ] \
        && rustc --edition 2021 -A warnings --crate-name spec -o "$d/prog" "$d/out/$n.rs" >> "$d/build.log" 2>&1; then
       "$d/prog" > "$d/got.txt" 2> "$d/err.txt"; got_exit=$?; status=RAN
+    fi
+  elif [ "$BACKEND" = go ]; then
+    if "$WJ" build "$d/$n.wj" -t go -o "$d/out" > "$d/build.log" 2>&1 \
+       && (cd "$d/out" && go vet ./... && go build -o "$d/prog" .) >> "$d/build.log" 2>&1; then
+      "$d/prog" > "$d/got.txt" 2> "$d/err.txt"; got_exit=$?; status=RAN
+    fi
+  elif [ "$BACKEND" = ts ]; then
+    if "$WJ" build "$d/$n.wj" -t typescript -o "$d/out" > "$d/build.log" 2>&1 && [ -f "$d/out/main.ts" ]; then
+      (cd "$d/out" && node --experimental-strip-types --no-warnings main.ts > "$d/got.txt" 2> "$d/err.txt"); got_exit=$?; status=RAN
     fi
   else
     if "$WJ" build "$d/$n.wj" -t javascript -o "$d/out" > "$d/build.log" 2>&1 && [ -f "$d/out/main.mjs" ]; then
