@@ -109,7 +109,7 @@ fn types_in_arm(a: &mut PArm, v: TyFn) {
 
 pub fn children_mut(k: &mut PK) -> Vec<&mut PExpr> {
     match k {
-        PK::Unary(_, a) | PK::Cast(a, _) | PK::Field(a, _) | PK::TupleIdx(a, _) | PK::Some(a) | PK::Ok(a) | PK::Err(a) | PK::Copy(a) | PK::Panic(a) => vec![a],
+        PK::Unary(_, a) | PK::Cast(a, _) | PK::Field(a, _) | PK::TupleIdx(a, _) | PK::Some(a) | PK::Ok(a) | PK::Err(a) | PK::Copy(a) | PK::BorrowMut(a) | PK::Panic(a) => vec![a],
         PK::Try { expr, .. } => vec![expr],
         PK::Binary(_, a, b) | PK::Index(a, b) | PK::VecRepeat(a, b) => vec![a, b],
         PK::Range { start, end, .. } => vec![start, end],

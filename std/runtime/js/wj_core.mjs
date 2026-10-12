@@ -246,6 +246,24 @@ export function $ix(v, i) {
   return n;
 }
 export const $at = (v, i) => v[$ix(v, i)];
+
+// ---------------------------------------------------------------------------------------------
+// `&mut` of a value-represented place (numbers, strings, Option, Result, enums): an accessor
+// cell `{ v }` whose reads and writes go to the place. The container and key are evaluated once,
+// when the borrow is taken (Rust evaluates the place expression at the borrow).
+// ---------------------------------------------------------------------------------------------
+export function $cellOf(o, k) {
+  return { get v() { return o[k]; }, set v(x) { o[k] = x; } };
+}
+export const $cellIx = (v, i) => $cellOf(v, $ix(v, i));
+/** `*r = x` through an alias of an object-represented value (struct, Vec, HashMap, HashSet, tuple). */
+export function $replace(dst, src) {
+  if (dst === src) return;
+  if (Array.isArray(dst)) { dst.length = 0; for (const x of src) dst.push(x); return; }
+  if (dst instanceof Map) { dst.clear(); for (const [k, v] of src) dst.set(k, v); return; }
+  if (dst instanceof Set) { dst.clear(); for (const x of src) dst.add(x); return; }
+  Object.assign(dst, src);
+}
 export const $pop = (v) => (v.length ? { v: v.pop() } : null);
 export const $popFront = (v) => (v.length ? { v: v.shift() } : null);
 export const $vget = (v, i) => {

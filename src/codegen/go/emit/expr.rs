@@ -30,7 +30,7 @@ impl<'m> Go<'m> {
             PK::Local(n) if self.ptr_locals.contains_key(n) => Ok(ident(n)),
             PK::Local(n) => Ok(format!("&{}", ident(n))),
             PK::Field(..) | PK::TupleIdx(..) | PK::Index(..) => Ok(format!("&{}", self.expr(e)?)),
-            PK::Copy(inner) => self.addr(inner),
+            PK::Copy(inner) | PK::BorrowMut(inner) => self.addr(inner),
             _ => Ok(format!("wjPtr({})", self.expr(e)?)),
         }
     }
@@ -120,6 +120,8 @@ impl<'m> Go<'m> {
                 let v = self.expr(a)?;
                 self.clone_go(&a.ty, &v)
             }
+            // Only reference types (maps, sets) reach here: the alias is the value itself.
+            PK::BorrowMut(a) => self.expr(a),
             PK::Format(pieces) => self.format(pieces),
             PK::Print { newline, to_stderr, pieces } => {
                 let s = self.format(pieces)?;

@@ -267,6 +267,11 @@ pub enum PK {
     Range { start: PExpr, end: PExpr, inclusive: bool },
     /// Value-semantics copy of a place used as an owned value.
     Copy(PExpr),
+    /// `&mut place` bound to a local (`let r = &mut z`): the local aliases the place, so writes
+    /// through it (`*r = ..`, `r.f = ..`, `r.push(..)`) reach the place. Only appears as the
+    /// `init` of a `PStmt::Let`; the expression's type is the pointee type. Emitters realise it
+    /// as a pointer (Go) or as the shared object / an accessor cell (JS/TS).
+    BorrowMut(PExpr),
     Panic(PExpr),
     /// Reference to a top-level function used as a value.
     FnRef(String),

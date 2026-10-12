@@ -29,6 +29,9 @@ Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emi
 - Value semantics: an owned use of a place of aggregate type is wrapped in `PK::Copy`; `&`/`&mut` parameter modes
   come from `analyzer::SignatureRegistry` (`ParamMode::{Value, Ref, MutRef}`), so emitters never guess ownership.
 - Anything not implemented returns `Unsupported` (compile error) - never placeholder code.
+- `let r = &mut place` lowers to `Let { init: PK::BorrowMut(place) }` and `r` is an alias local: emitters
+  bind a pointer (Go) or the shared object / an accessor cell (JS/TS), never a copy. Other `&`/`&mut`/`*` are
+  erased; `&mut` arguments are recognised by the callee's `ParamMode::MutRef`.
 
 
 ## Owns

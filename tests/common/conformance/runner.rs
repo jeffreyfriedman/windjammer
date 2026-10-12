@@ -56,7 +56,7 @@ impl Report {
 
     pub fn summary(&self) -> String {
         let mut s = String::from("backend  pass  unsupported  skip  fail\n");
-        for b in ALL_BACKENDS {
+        for b in selected_backends() {
             let (p, u, k, f) = self.counts(b);
             s += &format!("{:<8} {p:>4}  {u:>11}  {k:>4}  {f:>4}\n", b.name());
         }

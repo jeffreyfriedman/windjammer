@@ -12,9 +12,16 @@ fn range_of(k: IntKind) -> (i128, i128) {
 
 impl<'m> Js<'m> {
     pub fn method(&mut self, recv: &PExpr, name: &str, args: &[PExpr], res: &Resolution, ty: &Ty) -> PResult<String> {
-        if let Resolution::User { .. } = res {
+        if let Resolution::User { owner } = res {
+            let f = self.find_fn(Some(owner), name);
+            let a = self.args_for(f, args)?;
+            if let Some(f) = f.filter(|f| self.is_enum_mut_method(owner, f)) {
+                let cell = self.cell_of(recv)?;
+                let sep = if a.is_empty() { "" } else { ", " };
+                return Ok(format!("{}.{}({cell}{sep}{a})", super::names::ident(owner), self.method_name(&f.name)));
+            }
             let r = self.expr_recv(recv)?;
-            return Ok(format!("{r}.{}({})", self.method_name(name), self.args(args)?));
+            return Ok(format!("{r}.{}({a})", self.method_name(name)));
         }
         let r = self.expr(recv)?;
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
