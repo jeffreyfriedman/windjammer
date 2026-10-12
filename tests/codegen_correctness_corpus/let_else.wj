@@ -1,0 +1,18 @@
+// expect: 4
+// expect: -1
+// expect: 9
+fn f(o: Option<int>) -> int {
+    let Some(v) = o else { return -1 }
+    v + 1
+}
+fn g(o: Option<int>) -> int {
+    let Some(v) = o else {
+        return 0
+    }
+    v * 3
+}
+fn main() {
+    println("${f(Some(3))}")
+    println("${f(None)}")
+    println("${g(Some(3))}")
+}

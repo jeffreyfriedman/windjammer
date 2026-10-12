@@ -164,6 +164,11 @@ path = "tests/interpreter_features_test.rs"
 name = "parser_arena_soundness"
 path = "tests/parser_arena_soundness_test.rs"
 
+# Codegen correctness gates (compiled Rust vs interpreter): also standalone for fast iteration.
+[[test]]
+name = "codegen_correctness"
+path = "tests/codegen_correctness_test.rs"
+
 [[bench]]
 name = "string_optimization_bench"
 harness = false

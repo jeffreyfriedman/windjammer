@@ -1,0 +1,14 @@
+// Expressions inside `${..}` take part in integer width inference.
+// expect: 9
+// expect: 12
+fn total(v: Vec<int>, t: int) -> int {
+    let mut s = 0
+    for x in v { s += x }
+    s + t
+}
+fn main() {
+    let w = [2, 4]
+    println("${total(w, 3)}")
+    let u = [1, 2, 3]
+    println("${total(u, 6)}")
+}
