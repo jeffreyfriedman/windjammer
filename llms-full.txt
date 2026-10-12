@@ -355,6 +355,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj stats` | Show error statistics |
 | `wj errors` | Interactive error navigator (TUI) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
+| `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -605,6 +606,20 @@ Usage: wj docs [OPTIONS] [QUERY]...
 | `-o`, `--output` | OUTPUT | ./docs/errors | Output directory for generated docs |
 | `-f`, `--format` | FORMAT | html | Format (html, markdown, json) |
 
+### `wj explain-ownership`
+
+Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)
+
+```text
+Usage: wj explain-ownership [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | Windjammer source file |
+| `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
+| `--json` | JSON |  | Machine-readable JSON output |
+
 ### `wj explain`
 
 Explain an error code
@@ -733,10 +748,10 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 127 | 103 | 24 |
-| `go` | 127 | 124 | 3 |
-| `js` | 127 | 124 | 3 |
-| `ts` | 127 | 125 | 2 |
+| `rust` | 135 | 110 | 25 |
+| `go` | 135 | 130 | 5 |
+| `js` | 135 | 130 | 5 |
+| `ts` | 135 | 133 | 2 |
 
 ### Known-unsupported pairs by cause
 
@@ -744,13 +759,18 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 |---|---|---|
 | `go` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
 | `go` | mut-ref-to-int-locals | 1 |
+| `go` | portable-generic-into | 1 |
+| `go` | portable-type-aliases | 1 |
 | `go` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
 | `js` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
 | `js` | mut-ref-to-int-parameters | 1 |
+| `js` | portable-generic-into | 1 |
+| `js` | portable-type-aliases | 1 |
 | `js` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
 | `rust` | mut-ref-to-int-parameters | 1 |
 | `rust` | rust-closure-returned-as-fn-pointer | 1 |
 | `rust` | rust-int-literal-width-inference | 14 |
+| `rust` | rust-into-bound-param-borrowed | 1 |
 | `rust` | rust-std-runtime-crate-needed-by-rustc | 4 |
 | `rust` | rust-str-vs-string-in-collect-and-concat | 2 |
 | `rust` | rust-tail-none-cast | 2 |

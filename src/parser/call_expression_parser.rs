@@ -91,8 +91,7 @@ impl Parser {
                             if self.current_token() == &Token::LParen {
                                 // Check for newline before LParen (ASI)
                                 if self.had_newline_before_current() {
-                                    // ASI: This LParen starts a new statement, not a method call
-                                    // Create a field access and break
+                                    // ASI: `(` on a new line starts a statement; keep the field access
                                     self.alloc_expr(Expression::FieldAccess {
                                         object: expr,
                                         field,

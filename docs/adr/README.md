@@ -25,6 +25,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0013](0013-bug-triage-tracker.md) | Bug-triage tracker | Proposed |
 | [0014](0014-surface-syntax-rust-isms.md) | Windjammer-native surface syntax (retire leaked Rust-isms) | Accepted |
 | [0015](0015-language-consistency-proposals.md) | Language consistency proposals (numerics, casts, paths, returns) | Accepted |
+| [0016](0016-ownership-pins.md) | Pins: the surface for overriding inference | Proposed |
 <!-- wj:end -->
 
 ## Template
