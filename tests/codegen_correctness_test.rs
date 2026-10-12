@@ -128,6 +128,7 @@ corpus_tests!(
     direct_iteration_adapters,
     self_mut_inference,
     std_idioms,
+    literal_default_through_adapters,
 );
 
 // ------------------------------------------------------------------ generated programs
