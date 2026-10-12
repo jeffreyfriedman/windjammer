@@ -212,7 +212,8 @@ fn spec_examples_conform_on_every_backend() {
         })
         .collect();
     eprintln!("spec backends ({} examples): {}", examples.len(), totals.join("; "));
-    if wrong.is_empty() && worse.is_empty() && std::env::var("SPEC_BLESS").is_ok() {
+    let bootstrap = !path.exists();
+    if (bootstrap || wrong.is_empty() && worse.is_empty()) && std::env::var("SPEC_BLESS").is_ok() {
         let mut merged = was.clone();
         for (id, row) in &got {
             merged.entry(id.clone()).or_default().extend(row.clone());

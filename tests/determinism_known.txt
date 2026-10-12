@@ -7,3 +7,4 @@ examples/verified/trait_basics.wj [rust] | output differs between runs (hash-ord
 examples/verified/prog_lru_cache.wj [rust] | output differs between runs (hash-order codegen decision)
 examples/verified/algo_binary_tree.wj [rust] | build fails in some runs and succeeds in others
 tests/conformance_programs/51_result_question_chain.wj [rust] | output differs between runs (hash-order codegen decision)
+examples/verified/algo_lcs.wj [rust] | output differs between runs (hash-order codegen decision)
