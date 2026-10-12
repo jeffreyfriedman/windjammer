@@ -63,6 +63,11 @@ impl<'e> Lowerer<'e> {
             Expression::Cast { expr, type_, .. } => {
                 let inner = self.expr(expr, None)?;
                 let ty = from_ast(type_, &self.generics);
+                // Constant integer casts are folded with Rust `as` semantics (wrap to the target
+                // width): Go rejects `uint8(-1)` as a constant overflow.
+                if let (Some(v), Some(k)) = (const_int(&inner), ty.int_kind()) {
+                    return Ok(PExpr::new(ty, PK::Int(wrap_int(v, k.bits(), k.signed()))));
+                }
                 Ok(PExpr::new(ty.clone(), PK::Cast(inner, ty)))
             }
             Expression::Index { object, index, .. } => self.index(object, index),
@@ -535,4 +540,26 @@ fn split_top(s: &str) -> Vec<&str> {
         out.push(last);
     }
     out
+}
+
+/// Value of an integer literal, possibly negated (`7`, `-1`).
+fn const_int(e: &PExpr) -> Option<i128> {
+    match &*e.kind {
+        PK::Int(v) => Some(*v),
+        PK::Unary(UnKind::Neg, inner) => const_int(inner).map(|v| -v),
+        _ => None,
+    }
+}
+
+/// Two's-complement wrap of `v` to `bits`, read back signed or unsigned (Rust `as`).
+fn wrap_int(v: i128, bits: u32, signed: bool) -> i128 {
+    if bits >= 128 {
+        return v;
+    }
+    let m = v & ((1i128 << bits) - 1);
+    if signed && m >= 1i128 << (bits - 1) {
+        m - (1i128 << bits)
+    } else {
+        m
+    }
 }

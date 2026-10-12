@@ -431,6 +431,16 @@ impl Parser {
         }))
     }
 
+    /// After `return`: is this a bare return? A value must start on the same line as `return`
+    /// (docs/design/statement-boundaries.md, STMT-011).
+    pub(in crate::parser) fn return_has_no_value(&self) -> bool {
+        self.had_newline_before_current()
+            || matches!(
+                self.current_token(),
+                Token::RBrace | Token::Semicolon | Token::Comma | Token::Eof
+            )
+    }
+
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
         // Location of the `return` keyword itself (lints and `wj fix` edit at this position).
         let return_location = self.current_location();
@@ -438,10 +448,7 @@ impl Parser {
 
         // TDD FIX: Check for Comma too! Match arms can have: None => return,
         // The comma indicates end of return statement (no value to return)
-        let stmt = if matches!(
-            self.current_token(),
-            Token::RBrace | Token::Semicolon | Token::Comma
-        ) {
+        let stmt = if self.return_has_no_value() {
             self.alloc_stmt(Statement::Return {
                 value: None,
                 location: return_location,
