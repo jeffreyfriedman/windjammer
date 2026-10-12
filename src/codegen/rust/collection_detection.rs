@@ -65,6 +65,41 @@ fn iterator_collect_should_use_inferred_vec(iter_item: &Type, target_elem: &Type
 }
 
 impl CodeGenerator<'_> {
+    /// `let s: String = chars.collect()`: `String` is a collect target, but only for the RHS call itself.
+    pub(in crate::codegen::rust) fn string_collect_rhs(target: &Type, value: &Expression) -> bool {
+        matches!(value, Expression::MethodCall { method, .. } if method == "collect")
+            && (matches!(target, Type::String)
+                || matches!(target, Type::Custom(n) if n == "String" || n == "string"))
+    }
+
+    /// `for tok in text.split(..)` yields `&str` values: the loop variable is used as a string and never dereferenced
+    /// (`*tok == "a"` would compare `str` with `&str`). Returns whether the iterable yields string slices and the loop
+    /// bindings removed from `inferred_borrowed_params` for the loop body (the caller re-adds them afterwards).
+    pub(in crate::codegen::rust) fn shadow_str_slice_loop_vars(
+        &mut self,
+        iterable: &Expression,
+        pattern: &Pattern,
+    ) -> (bool, Vec<String>) {
+        const STR_SLICE_METHODS: [&str; 8] = [
+            "split", "split_whitespace", "lines", "split_terminator", "rsplit", "splitn", "rsplitn",
+            "split_ascii_whitespace",
+        ];
+        let yields = match iterable {
+            Expression::MethodCall { method, .. } => STR_SLICE_METHODS.contains(&method.as_str()),
+            Expression::Call { function: Expression::FieldAccess { field, .. }, .. } => {
+                STR_SLICE_METHODS.contains(&field.as_str())
+            }
+            _ => false,
+        };
+        let mut shadowed = Vec::new();
+        if yields {
+            let mut names = std::collections::HashSet::new();
+            self.extract_pattern_bindings(pattern, &mut names);
+            shadowed.extend(names.into_iter().filter(|n| self.inferred_borrowed_params.remove(n)));
+        }
+        (yields, shadowed)
+    }
+
     /// Check if a program references a collection type (HashMap or HashSet)
     /// by walking the AST properly -- not by searching debug text which
     /// includes comments and causes false positives.

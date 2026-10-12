@@ -147,6 +147,43 @@ impl<'ast> CodeGenerator<'ast> {
         output
     }
 
+    /// `loop` / `while` / `for` (with their optional `'label:`), `break [label] [value]`, `continue [label]`.
+    pub(in crate::codegen::rust) fn generate_loop_family_statement(
+        &mut self,
+        stmt: &Statement<'ast>,
+    ) -> String {
+        match stmt {
+            Statement::Loop { body, label, .. } => {
+                let out = self.generate_loop_statement(body);
+                with_loop_label(out, label.as_deref())
+            }
+            Statement::While {
+                condition,
+                body,
+                label,
+                ..
+            } => {
+                let out = self.generate_while_statement(condition, body);
+                with_loop_label(out, label.as_deref())
+            }
+            Statement::For {
+                pattern,
+                iterable,
+                body,
+                label,
+                location,
+            } => {
+                let out = self.generate_for_statement(pattern, iterable, body, location);
+                with_loop_label(out, label.as_deref())
+            }
+            Statement::Break { label, value, .. } => {
+                self.generate_break_statement(label.as_deref(), *value)
+            }
+            Statement::Continue { label, .. } => self.generate_continue_statement(label.as_deref()),
+            _ => unreachable!("not a loop-family statement"),
+        }
+    }
+
     pub(in crate::codegen::rust) fn generate_break_statement(
         &mut self,
         label: Option<&str>,

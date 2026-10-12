@@ -1,0 +1,13 @@
+// spec: SPEC-NUM-010
+// expect: 5 44 255
+// expect: 3 -3 9223372036854775807
+// expect: 3.5
+fn main() {
+    let a: i32 = 5
+    let b = a as int
+    let c = 300 as u8
+    let d = (-1) as u8
+    println("${b} ${c} ${d}")
+    println("${3.9 as int} ${(-3.9) as int} ${1e30 as int}")
+    println("${7 as float / 2.0}")
+}

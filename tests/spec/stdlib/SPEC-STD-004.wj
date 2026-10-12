@@ -1,0 +1,10 @@
+// spec: SPEC-STD-004
+// expect: 1259
+// expect: 9521
+fn main() {
+    let mut v = [5, 2, 9, 1]
+    v.sort()
+    println("${v[0]}${v[1]}${v[2]}${v[3]}")
+    v.sort_by(|a, b| b.cmp(a))
+    println("${v[0]}${v[1]}${v[2]}${v[3]}")
+}

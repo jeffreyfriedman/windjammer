@@ -1,0 +1,9 @@
+// spec: SPEC-MOD-005
+// expect: 2 1 false
+use std::collections::HashMap
+fn main() {
+    let mut m = HashMap::new()
+    m.insert("a", 1)
+    m.insert("b", 2)
+    println("${m.len()} ${m.get("a").unwrap()} ${m.contains_key("z")}")
+}

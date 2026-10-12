@@ -1,0 +1,14 @@
+// spec: SPEC-EXEC-005
+// expect: abc
+use std::collections::HashMap
+fn main() {
+    let mut m = HashMap::new()
+    m.insert(3, "c")
+    m.insert(1, "a")
+    m.insert(2, "b")
+    let mut ks = m.keys().collect::<Vec<&int>>()
+    ks.sort()
+    let mut out = ""
+    for k in ks { out = out + m.get(k).unwrap() }
+    println(out)
+}

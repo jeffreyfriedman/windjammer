@@ -1,0 +1,18 @@
+// A hand-written `impl PartialEq` replaces the inferred derive.
+// expect: true
+// expect: false
+struct P { a: int, b: int }
+impl PartialEq for P {
+    fn eq(self, other: P) -> bool { self.a == other.a }
+}
+enum Tag { A, B }
+impl PartialEq for Tag {
+    fn eq(self, other: Tag) -> bool { true }
+}
+fn main() {
+    let x = P { a: 1, b: 2 }
+    let y = P { a: 1, b: 3 }
+    let z = P { a: 2, b: 3 }
+    println("${x == y}")
+    println("${x == z}")
+}

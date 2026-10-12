@@ -1,0 +1,18 @@
+// tags: control-flow, defer, panic
+// rust: ok
+// exit: 101
+// expect: open
+// expect: second-cleanup
+// expect: first-cleanup
+fn risky(n: int) -> int {
+    println("open")
+    defer println("first-cleanup")
+    defer println("second-cleanup")
+    if n > 0 {
+        panic("boom")
+    }
+    n
+}
+fn main() {
+    println("${risky(1)}")
+}

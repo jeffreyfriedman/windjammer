@@ -1,0 +1,10 @@
+// spec: SPEC-STMT-004
+// expect: 12
+fn main() {
+    let mut n = 0
+    loop {
+        n += 3
+        if n > 10 { break }
+    }
+    println("${n}")
+}

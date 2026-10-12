@@ -1,0 +1,16 @@
+// spec: SPEC-ERR-001
+// expect: at 2
+// expect: missing
+fn find(v: Vec<int>, t: int) -> Option<int> {
+    let mut i = 0
+    while i < v.len() {
+        if v[i] == t { return Some(i) }
+        i += 1
+    }
+    None
+}
+fn main() {
+    let v = [5, 6, 7]
+    match find(v, 7) { Some(i) => println("at ${i}"), None => println("missing") }
+    match find(v, 1) { Some(i) => println("at ${i}"), None => println("missing") }
+}

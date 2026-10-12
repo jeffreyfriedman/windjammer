@@ -15,6 +15,12 @@ impl Parser {
         let mut statements = Vec::new();
 
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
+            // A `;` that no statement consumed (after `if {..}`, `loop {..}`, or doubled) is an
+            // empty statement.
+            if self.current_token() == &Token::Semicolon {
+                self.advance();
+                continue;
+            }
             let start = self.position;
             match self.parse_statement() {
                 Ok(stmt) => statements.push(stmt),
@@ -257,6 +263,10 @@ impl Parser {
 
     /// Optional `'label` after `break` / `continue`.
     fn parse_optional_jump_label(&mut self) -> Option<String> {
+        // The label must be on the same line: `continue` newline `'outer: loop {..}` is two statements.
+        if self.had_newline_before_current() {
+            return None;
+        }
         if let Token::Lifetime(name) = self.current_token().clone() {
             self.advance();
             Some(name)
@@ -422,6 +432,8 @@ impl Parser {
     }
 
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
+        // Location of the `return` keyword itself (lints and `wj fix` edit at this position).
+        let return_location = self.current_location();
         self.advance();
 
         // TDD FIX: Check for Comma too! Match arms can have: None => return,
@@ -432,13 +444,13 @@ impl Parser {
         ) {
             self.alloc_stmt(Statement::Return {
                 value: None,
-                location: self.current_location(),
+                location: return_location,
             })
         } else {
             let value = self.parse_expression()?;
             self.alloc_stmt(Statement::Return {
                 value: Some(value),
-                location: self.current_location(),
+                location: return_location,
             })
         };
 
