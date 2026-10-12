@@ -1,0 +1,3 @@
+pub fn name() -> string {
+    "tool".to_string()
+}

@@ -133,24 +133,39 @@ pub enum Commands {
         ir_shadow_validate: bool,
     },
 
-    /// Compile and run a Windjammer file
+    /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// Path to .wj file
-        #[arg(value_name = "FILE")]
-        path: PathBuf,
+        /// A .wj file or a directory; omitted: the project containing the current directory (wj.toml)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
 
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
 
-        /// Target platform (rust, javascript, wasm)
+        /// Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)
+        #[arg(long, value_name = "NAME")]
+        bin: Option<String>,
+
+        /// Target platform (rust, javascript, wasm); non-rust targets always compile
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
-        /// Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start.
-        /// Accepts a file or a project directory. Same source compiles with `wj build` for release.
-        #[arg(long)]
+        /// Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature)
+        #[arg(long, conflicts_with_all = ["compiled", "release"])]
         interpret: bool,
+
+        /// Transpile to Rust and run with cargo (the release path), skipping the interpreter
+        #[arg(long)]
+        compiled: bool,
+
+        /// Like --compiled, with optimizations
+        #[arg(long)]
+        release: bool,
+
+        /// Re-run on every source change (restarts long-running programs)
+        #[arg(long)]
+        watch: bool,
 
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
@@ -233,6 +248,9 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// Re-run the tests on every source change
+        #[arg(long)]
+        watch: bool,
     },
 
     /// Format Windjammer code

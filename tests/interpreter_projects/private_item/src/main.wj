@@ -1,0 +1,5 @@
+use mathx
+
+fn main() {
+    println("{}", mathx::helper(2))
+}

@@ -12,6 +12,8 @@
 pub(crate) mod import_resolution;
 pub(crate) mod module_graph;
 pub(crate) mod module_resolution;
+pub mod project;
+pub mod sources;
 
 pub use module_graph::{discover_nested_modules, Module, ModuleTree};
 

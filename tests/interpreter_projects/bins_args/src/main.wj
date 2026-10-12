@@ -1,0 +1,12 @@
+use std::env
+use std::process
+use report
+
+fn main() {
+    let args: Vec<string> = env::args().skip(1).collect()
+    println("{}", report::summary(args.len() as int))
+    for a in args {
+        println("arg {}", a)
+    }
+    process::exit(3)
+}

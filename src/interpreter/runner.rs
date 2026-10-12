@@ -19,21 +19,11 @@ pub fn exit_code_for(e: &RuntimeError) -> i32 {
     }
 }
 
-/// Find the entry `.wj` file for a path: a file, or a project directory (`main.wj` / `src/main.wj`).
+/// Find the entry `.wj` file for a path: a file, or a project directory (`main.wj`, `src/main.wj`, or the
+/// default binary of its `wj.toml`). Discovery is `module_system::project`, shared with the compiled `wj run`.
 pub fn entry_file(path: &Path) -> Result<PathBuf, String> {
-    if path.is_file() {
-        return Ok(path.to_path_buf());
-    }
-    if path.is_dir() {
-        for cand in ["main.wj", "src/main.wj", "src/lib.wj"] {
-            let p = path.join(cand);
-            if p.is_file() {
-                return Ok(p);
-            }
-        }
-        return Err(format!("no main.wj or src/main.wj found in {}", path.display()));
-    }
-    Err(format!("File not found: {}", path.display()))
+    let cwd = std::env::current_dir().unwrap_or_default();
+    crate::module_system::project::resolve_run_target(Some(path), &cwd, None).map(|t| t.entry)
 }
 
 /// Stack of the interpreter thread; recursion is limited by the bytes actually used (not a frame count),
@@ -60,15 +50,38 @@ pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
             return 1;
         }
     };
+    match run_entry(&entry, args, false) {
+        RunOutcome::Exited(code) => code,
+        RunOutcome::NeedsCompiled(_) => unreachable!("fallback disabled"),
+    }
+}
+
+/// Result of an interpreted run.
+#[derive(Debug)]
+pub enum RunOutcome {
+    /// The program ran (or failed) in the interpreter; this is its exit status.
+    Exited(i32),
+    /// The program uses a registry-unsupported feature, detected at load time before anything ran
+    /// (see `preflight.rs`); the caller should run it compiled. Only returned when `fallback` is set.
+    NeedsCompiled(RuntimeError),
+}
+
+/// Load and run `entry` in the interpreter. With `fallback`, a preflight hit returns
+/// [`RunOutcome::NeedsCompiled`] instead of printing the error.
+pub fn run_entry(entry: &Path, args: Vec<String>, fallback: bool) -> RunOutcome {
+    let entry = entry.to_path_buf();
     with_big_stack(move || {
         let mut it = Interpreter::new();
         it.guard_stack();
         it.set_args(args);
-        if let Err(e) = it.load_entry_file(&entry) {
+        if let Err(e) = it.load_program_at(&entry) {
+            if fallback && super::preflight::is_preflight(&e) {
+                return RunOutcome::NeedsCompiled(e);
+            }
             eprintln!("{}", e.render());
-            return exit_code_for(&e);
+            return RunOutcome::Exited(exit_code_for(&e));
         }
-        match it.call_main() {
+        let code = match it.call_main() {
             Ok(_) => 0,
             Err(e) => {
                 if !matches!(e.kind, ErrorKind::Exit(_)) {
@@ -76,7 +89,9 @@ pub fn run_path(path: &Path, args: Vec<String>) -> i32 {
                 }
                 exit_code_for(&e)
             }
-        }
+        };
+        it.flush();
+        RunOutcome::Exited(code)
     })
 }
 
@@ -128,7 +143,7 @@ pub fn run_tests(path: &Path, filter: Option<&str>) -> Vec<TestResult> {
             // names are discovered once, then each test runs against its own interpreter
             let mut probe = Interpreter::new_capturing();
             probe.guard_stack();
-            if let Err(e) = probe.load_entry_file(&f) {
+            if let Err(e) = probe.load_program_at(&f) {
                 results.push(TestResult { file: f.clone(), name: "<load>".into(), passed: false, message: e.render() });
                 continue;
             }
@@ -141,7 +156,7 @@ pub fn run_tests(path: &Path, filter: Option<&str>) -> Vec<TestResult> {
                 }
                 let mut it = Interpreter::new_capturing();
                 it.guard_stack();
-                if it.load_entry_file(&f).is_err() {
+                if it.load_program_at(&f).is_err() {
                     continue;
                 }
                 match it.run_test(&name) {

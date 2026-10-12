@@ -9,7 +9,17 @@ use std::process::Command;
 use tempfile::TempDir;
 
 pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
-    println!(
+    let code = execute_status(path, args, target_str, false)?;
+    if code != 0 {
+        bail!("Program exited with error");
+    }
+    Ok(())
+}
+
+/// Build and run; returns the program's exit status (stdout carries only program output: the
+/// banner and cargo's progress go to stderr).
+pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: bool) -> Result<i32> {
+    eprintln!(
         "{} {} (target: {})",
         "Running".green().bold(),
         path.display(),
@@ -63,10 +73,7 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
         };
         cmd.current_dir(output_dir).args(args);
         let status = cmd.status()?;
-        if !status.success() {
-            bail!("Program exited with error");
-        }
-        return Ok(());
+        return Ok(status.code().unwrap_or(1));
     }
 
     // Build to temp directory (build_project handles both files and directories)
@@ -84,7 +91,10 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
     // Run with cargo (shared target dir outside the temp project)
     let _ = crate::cargo_cache::reclaim();
     let mut cmd = Command::new("cargo");
-    cmd.arg("run").current_dir(output_dir);
+    cmd.args(["run", "--quiet"]).current_dir(output_dir);
+    if release {
+        cmd.arg("--release");
+    }
     crate::cargo_cache::configure_cargo_command(&mut cmd, crate::cargo_cache::TargetKind::Shared);
 
     // Forward arguments to the program
@@ -92,12 +102,6 @@ pub fn execute(path: &Path, args: &[String], target_str: &str) -> Result<()> {
         cmd.arg("--").args(args);
     }
 
-    // Execute and capture status
     let status = cmd.status()?;
-
-    if !status.success() {
-        bail!("Program exited with error");
-    }
-
-    Ok(())
+    Ok(status.code().unwrap_or(1))
 }
