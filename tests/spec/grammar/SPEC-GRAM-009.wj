@@ -1,0 +1,10 @@
+// spec: SPEC-GRAM-009
+// expect: body
+// expect: 1
+struct P { x: int }
+fn main() {
+    let ready = true
+    if ready { println("body") }
+    let p = P { x: 1 }
+    match p { P { x } => println("${x}") }
+}

@@ -241,8 +241,22 @@ impl<'ast> Analyzer<'ast> {
             Expression::FieldAccess { object, .. } => {
                 self.expression_calls_mutating_self_methods(object, registry, visited)
             }
-            Expression::Cast { expr, .. } => {
+            Expression::Cast { expr, .. }
+            | Expression::TryOp { expr, .. }
+            | Expression::Await { expr, .. } => {
                 self.expression_calls_mutating_self_methods(expr, registry, visited)
+            }
+            Expression::Tuple { elements, .. } | Expression::Array { elements, .. } => elements
+                .iter()
+                .any(|e| self.expression_calls_mutating_self_methods(e, registry, visited)),
+            Expression::MacroInvocation { args, .. } => args
+                .iter()
+                .any(|e| self.expression_calls_mutating_self_methods(e, registry, visited)),
+            Expression::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, e)| self.expression_calls_mutating_self_methods(e, registry, visited)),
+            Expression::Closure { body, .. } => {
+                self.expression_calls_mutating_self_methods(body, registry, visited)
             }
             _ => false,
         }
@@ -319,7 +333,7 @@ impl<'ast> Analyzer<'ast> {
     }
 
     /// Look up a field's type from the global struct field type map.
-    fn struct_field_types_lookup(
+    pub(crate) fn struct_field_types_lookup(
         &self,
         struct_name: &str,
         field_name: &str,

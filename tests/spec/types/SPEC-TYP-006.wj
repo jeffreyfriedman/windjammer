@@ -1,0 +1,10 @@
+// spec: SPEC-TYP-006
+// expect: 4
+// expect: true
+fn wrap(x: int) -> Option<Box<int>> { Some(Box::new(x)) }
+fn main() {
+    let o = wrap(4)
+    match o { Some(b) => println("${*b}"), None => println("none") }
+    let r: Result<Vec<int>, string> = Ok([1])
+    println("${r.is_ok()}")
+}

@@ -1,0 +1,6 @@
+// spec: SPEC-PIPE-003
+// expect: 2
+fn main() {
+    let n = "  hi  " |> .trim() |> .len()
+    println("${n}")
+}

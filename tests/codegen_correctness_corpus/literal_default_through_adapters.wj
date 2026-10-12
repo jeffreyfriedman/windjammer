@@ -1,0 +1,10 @@
+// OPEN (convergence): an unannotated literal list takes its width from how the result is used.
+// expect: [1, 4, 9]
+// expect: 6
+fn main() {
+    let v = [1, 2, 3]
+    let sq: Vec<int> = v.map(|x| x * x).collect()
+    println("${sq:?}")
+    let total: int = v.sum()
+    println("${total}")
+}

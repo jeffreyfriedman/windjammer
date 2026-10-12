@@ -1,0 +1,11 @@
+// spec: SPEC-EXPR-015
+// expect: 7 8
+struct C { n: int }
+impl C {
+    fn new(n: int) -> C { C { n: n } }
+    fn plus(self, k: int) -> int { self.n + k }
+}
+fn main() {
+    let c = C::new(4)
+    println("${c.plus(3)} ${c.plus(4)}")
+}

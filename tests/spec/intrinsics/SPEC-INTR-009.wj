@@ -1,0 +1,10 @@
+// spec: SPEC-INTR-009
+// expect: shadowed:x
+fn println(s: string) {
+    print("shadowed:")
+    print(s)
+    print("\n")
+}
+fn main() {
+    println("x")
+}

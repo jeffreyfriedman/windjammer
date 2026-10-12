@@ -1,0 +1,36 @@
+// Idiomatic std calls an agent writes first: `cmp(&x)`, open slices, `&str` comparisons, defaults.
+// expect: 1
+// expect: world
+// expect: a
+// expect: 5 7 0
+// expect: yes
+use std::collections::HashMap
+struct P { lo: int }
+fn pick(flag: bool) -> string {
+    if flag {
+        return if flag { "yes" } else { "no" }
+    }
+    "none"
+}
+fn main() {
+    let mut v: Vec<P> = [P { lo: 2 }, P { lo: 1 }]
+    v.sort_by(|a, b| a.lo.cmp(&b.lo))
+    println("${v[0].lo}")
+    let s = "hello world"
+    let t = s[6..]
+    println("${t}")
+    for tok in "a b".split(" ") {
+        if tok == "a" {
+            println("a")
+        }
+    }
+    let mut it = "5\n6".lines()
+    let first = it.next().unwrap_or("0")
+    let mut m: HashMap<string, int> = HashMap::new()
+    m.insert("k", 7)
+    let n = m.get("k").unwrap_or(0)
+    let w: Vec<int> = [1, 2]
+    let z = w.get(9).unwrap_or(0)
+    println("${first} ${n} ${z}")
+    println("${pick(true)}")
+}

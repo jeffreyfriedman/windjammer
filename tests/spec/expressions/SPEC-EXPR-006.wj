@@ -1,0 +1,20 @@
+// spec: SPEC-EXPR-006
+// expect: f 1
+// expect: t 3
+// expect: t 5
+// expect: f 6
+// expect: false true false
+fn t(tag: string) -> bool {
+    println("t ${tag}")
+    true
+}
+fn f(tag: string) -> bool {
+    println("f ${tag}")
+    false
+}
+fn main() {
+    let a = f("1") && t("2")
+    let b = t("3") || f("4")
+    let c = t("5") && f("6")
+    println("${a} ${b} ${c}")
+}
