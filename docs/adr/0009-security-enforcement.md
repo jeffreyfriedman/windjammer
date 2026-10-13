@@ -6,7 +6,7 @@ last_verified: 3406ef05bb35
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** RFCs [WJ-SEC-01..04](../proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md); `src/ir/effects.rs`, `src/ir/taint.rs`, `src/ir/capability_lock.rs`, `src/ir/capability_profiles.rs`, `src/output_generation.rs`, `src/cli/json_diagnostics.rs`, `src/config.rs`
+- **Related:** [ADR-0021](0021-effects-and-capabilities.md) (the effects and capabilities mechanism this level applies to); RFCs [WJ-SEC-01..04](../proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md); `src/ir/effects.rs`, `src/ir/taint.rs`, `src/ir/capability_lock.rs`, `src/ir/capability_profiles.rs`, `src/output_generation.rs`, `src/cli/json_diagnostics.rs`, `src/config.rs`
 
 ## Context
 Four security RFCs are "Draft" but CHANGELOG 0.50.0 lists them as added. What is actually enforced:
