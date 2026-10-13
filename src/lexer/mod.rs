@@ -90,6 +90,39 @@ impl Lexer {
         }
     }
 
+    /// Block comment `/* .. */`, nesting like Rust, is whitespace. A comment spanning lines still
+    /// separates statements (boundaries are decided by token line numbers).
+    fn after_block_comment(&mut self) -> Token {
+        if !self.skip_block_comment() {
+            return Token::Invalid("unterminated block comment (missing `*/`)".to_string());
+        }
+        self.next_token()
+    }
+
+    /// Skip a (nested) block comment; cursor on `/*`. False when it is not terminated.
+    fn skip_block_comment(&mut self) -> bool {
+        self.advance();
+        self.advance();
+        let mut depth = 1;
+        while let Some(ch) = self.current_char {
+            if ch == '/' && self.peek(1) == Some('*') {
+                depth += 1;
+                self.advance();
+                self.advance();
+            } else if ch == '*' && self.peek(1) == Some('/') {
+                depth -= 1;
+                self.advance();
+                self.advance();
+                if depth == 0 {
+                    return true;
+                }
+            } else {
+                self.advance();
+            }
+        }
+        false
+    }
+
     fn skip_comment(&mut self) {
         // Skip until end of line
         while let Some(ch) = self.current_char {
@@ -147,9 +180,9 @@ impl Lexer {
                 self.skip_comment();
                 return self.next_token();
             }
+            Some('/') if self.peek(1) == Some('*') => return self.after_block_comment(),
             Some('r') if self.peek(1) == Some('#') && self.is_raw_string_start() => {
-                // Raw string literal: r#"..."# or r##"..."## etc.
-                // (r#ident is a raw identifier — handled by read_identifier)
+                // Raw string literal r#"..."# (r#ident is a raw identifier: read_identifier)
                 self.read_raw_string()
             }
             Some('"') => self.read_string(),
@@ -431,8 +464,16 @@ impl Lexer {
 
     /// Get next token with its source location
     pub fn next_token_with_location(&mut self) -> TokenWithLocation {
-        // Leading blanks belong to no token: the span must start at the token itself.
+        // Leading blanks and block comments belong to no token: the span starts at the token.
         self.skip_whitespace();
+        while self.current_char == Some('/') && self.peek(1) == Some('*') {
+            let (line, column) = (self.line, self.column);
+            if !self.skip_block_comment() {
+                let token = Token::Invalid("unterminated block comment (missing `*/`)".to_string());
+                return TokenWithLocation { token, line, column };
+            }
+            self.skip_whitespace();
+        }
         let line = self.line;
         let column = self.column;
         let token = self.next_token();
