@@ -608,7 +608,7 @@ fn main() {
     let (tx, rx) = sync::channel()
     scope {
         for i in 0..3 {
-            let t = tx.clone()
+            let t = tx
             spawn {
                 t.send(i * 10 + random::range(0, 10))
             }
