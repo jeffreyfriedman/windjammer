@@ -1,0 +1,18 @@
+// mutant: argument_wrong_type of examples/verified/basics_functions.wj
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn square(x: int) -> int {
+    x * x
+}
+
+fn factorial(n: int) -> int {
+    if n <= 1 { 1 } else { n * factorial("oops") }
+}
+
+fn main() {
+    println("${add(3, 4)}")
+    println("${square(5)}")
+    println("${factorial(5)}")
+}

@@ -1,0 +1,6 @@
+// expect: WJ0001
+fn main() {
+    let a = 1
+    let b = missing + a
+    println("${b}")
+}

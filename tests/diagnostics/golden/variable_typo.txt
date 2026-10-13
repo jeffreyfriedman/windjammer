@@ -1,0 +1,8 @@
+error[WJ0001]: cannot find value `countr` in this scope
+  --> variable_typo.wj:4:16
+  |
+4 |     println("${countr}")
+  |                ^^^^^^ not found in this scope
+  = help: a value with a similar name exists: `counter`
+  = fix (suggested): replace `countr` with `counter`
+  = explain: wj explain WJ0001

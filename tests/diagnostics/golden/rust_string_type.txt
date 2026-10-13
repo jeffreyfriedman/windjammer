@@ -1,0 +1,7 @@
+error[W0010]: use `string` instead of `str` -- Windjammer has one string type
+  --> rust_string_type.wj:2:16
+  |
+2 | fn greet(name: str) {
+  |                ^^^
+  = help: write `string`
+  = explain: wj explain W0010

@@ -704,6 +704,7 @@ fn test_self_field_in_if_expr_inside_while_loop_needs_clone() {
             }),
             // while i <= self.max {
             test_alloc_stmt(Statement::While {
+                label: None,
                 condition: test_alloc_expr(Expression::Binary {
                     left: test_alloc_expr(Expression::Identifier {
                         name: "i".to_string(),
