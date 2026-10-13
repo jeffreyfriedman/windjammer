@@ -470,7 +470,25 @@ impl<'e> Lowerer<'e> {
             Ty::Result(t, _) => (**t).clone(),
             other => return self.err(format!("`?` applied to `{}`", other.describe())),
         };
-        Ok(PExpr::new(ty, PK::Try { expr: e, fn_ret }))
+        let conv = self.try_conversion(&e.ty, &fn_ret)?;
+        Ok(PExpr::new(ty, PK::Try { expr: e, fn_ret, conv }))
+    }
+
+    /// `?` converts the error with `From` when the function's error type differs (Rust semantics).
+    fn try_conversion(&mut self, inner: &Ty, fn_ret: &Ty) -> PResult<Option<(String, String)>> {
+        let (Ty::Result(_, from), Ty::Result(_, to)) = (self.resolve(inner), self.resolve(fn_ret)) else { return Ok(None) };
+        let Ty::Adt(owner, _) = &*to else {
+            self.constrain(&to, &from);
+            return Ok(None);
+        };
+        if matches!(&*from, Ty::Adt(n, _) if n == owner) || from.is_unknown() || matches!(*from, Ty::Var(_)) {
+            self.constrain(&to, &from);
+            return Ok(None);
+        }
+        match self.pick_impl(owner, "from", Some((*from).clone())) {
+            Some(m) => Ok(Some((owner.clone(), m))),
+            None => self.err(format!("`?` needs `impl From<{}> for {owner}`", from.describe())),
+        }
     }
 
     /// Lower a statement list as a value-producing block (`let x = { ... }`, arm bodies, closures).

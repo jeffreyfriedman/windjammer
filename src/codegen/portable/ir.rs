@@ -265,8 +265,9 @@ pub enum PK {
     If { cond: PExpr, then: PBlock, els: PBlock },
     Match { scrutinee: PExpr, arms: Vec<PArm> },
     Block(PBlock),
-    /// `e?`; `fn_ret` is the return type of the enclosing function or closure.
-    Try { expr: PExpr, fn_ret: Ty },
+    /// `e?`; `fn_ret` is the return type of the enclosing function or closure. `conv` names the
+    /// `From` impl (`owner`, emitted method) applied to the error when the error types differ.
+    Try { expr: PExpr, fn_ret: Ty, conv: Option<(String, String)> },
     Format(Vec<FmtPiece>),
     Print { newline: bool, to_stderr: bool, pieces: Vec<FmtPiece> },
     Range { start: PExpr, end: PExpr, inclusive: bool },

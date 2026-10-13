@@ -1,0 +1,74 @@
+// `?` converts the error with the matching `impl From<X> for E` (several impls coexist); `E::from(x)`
+// and `x.into()` pick the impl by argument type. Expected output from rustc on a Rust transliteration.
+// expect: parse: not a number
+// expect: code 70
+// expect: ok 3
+// expect: code 42
+// expect: parse: direct
+// expect: code 7
+// expect: parse: via into
+enum AppErr {
+    Parse(string),
+    Code(int),
+    Neg,
+}
+
+impl From<string> for AppErr {
+    fn from(s: string) -> AppErr {
+        AppErr::Parse(s)
+    }
+}
+
+impl From<int> for AppErr {
+    fn from(c: int) -> AppErr {
+        AppErr::Code(c)
+    }
+}
+
+fn parse(s: string) -> Result<int, string> {
+    if s == "x" {
+        Err("not a number".to_string())
+    } else {
+        Ok(1)
+    }
+}
+
+fn code(n: int) -> Result<int, int> {
+    if n > 5 {
+        Err(n * 10)
+    } else {
+        Ok(n)
+    }
+}
+
+fn run(s: string, n: int) -> Result<int, AppErr> {
+    let a = parse(s)?
+    let b = code(n)?
+    if a + b < 0 {
+        return Err(AppErr::Neg)
+    }
+    Ok(a + b)
+}
+
+fn show(r: Result<int, AppErr>) -> string {
+    match r {
+        Ok(v) => "ok ${v}",
+        Err(AppErr::Parse(m)) => "parse: ${m}",
+        Err(AppErr::Code(c)) => "code ${c}",
+        Err(AppErr::Neg) => "neg".to_string(),
+    }
+}
+
+fn main() {
+    println(show(run("x", 1)))
+    println(show(run("y", 7)))
+    println(show(run("y", 2)))
+    let e1 = AppErr::from(42)
+    let e2 = AppErr::from("direct".to_string())
+    println(show(Err(e1)))
+    println(show(Err(e2)))
+    let e3: AppErr = 7.into()
+    println(show(Err(e3)))
+    let e4: AppErr = "via into".to_string().into()
+    println(show(Err(e4)))
+}
