@@ -171,11 +171,18 @@ fn fuzz_compiled_module_trees_match_interpreter() {
         return;
     }
     let n = std::env::var("WJ_FUZZ_COMPILED_SEEDS").ok().and_then(|s| s.parse().ok()).unwrap_or(5);
-    for seed in 0..n {
+    let first: u64 = std::env::var("WJ_FUZZ_FIRST_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+    for seed in first..first + n {
         let p = project_fuzz::generate_compiled(seed);
         let d = tempfile::tempdir().unwrap();
         project_fuzz::write(&p, d.path());
         let o = wj(d.path(), &["--compiled"], &[]);
+        if String::from_utf8_lossy(&o.stdout) != p.expected {
+            let keep = std::env::temp_dir().join(format!("wj_fuzz_compiled_seed_{seed}"));
+            let _ = std::fs::remove_dir_all(&keep);
+            project_fuzz::write(&p, &keep);
+            eprintln!("kept seed {seed} at {}", keep.display());
+        }
         assert_eq!(
             String::from_utf8_lossy(&o.stdout),
             p.expected,

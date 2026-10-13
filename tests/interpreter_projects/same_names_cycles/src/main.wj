@@ -2,7 +2,7 @@ use a
 use b
 
 fn label() -> string {
-    "main".to_string()
+    "main"
 }
 
 fn main() {
