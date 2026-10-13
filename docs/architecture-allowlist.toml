@@ -185,7 +185,7 @@
 "src/parser/call_expression_parser.rs::parse_postfix_expression" = 489
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
 "src/parser/primary_expression_parser.rs::parse_primary_expression" = 558
-"src/parser/type_parser.rs::parse_type" = 428
+"src/parser/type_parser.rs::parse_type_core" = 428
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 407
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433
 

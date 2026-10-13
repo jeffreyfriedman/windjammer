@@ -28,7 +28,11 @@ fn element_type(recv: &Type) -> Option<Type> {
     match recv {
         Type::Vec(t) | Type::Array(t, _) => Some((**t).clone()),
         Type::Reference(t) | Type::MutableReference(t) => element_type(t),
-        Type::Parameterized(n, args) if matches!(n.as_str(), "Vec" | "HashSet" | "BTreeSet" | "VecDeque") => args.first().cloned(),
+        Type::Parameterized(n, args)
+            if matches!(n.as_str(), "Vec" | "HashSet" | "BTreeSet" | "VecDeque") =>
+        {
+            args.first().cloned()
+        }
         _ => None,
     }
 }
@@ -71,6 +75,32 @@ impl<'ast> CodeGenerator<'ast> {
         }
         self.uses_enumerable = true;
         Some(m.rust)
+    }
+
+    /// Append the inlined enumerable runtime (and its `use`) when this file called a surface method.
+    pub(in crate::codegen::rust) fn with_enumerable_runtime(
+        &self,
+        body: String,
+        imports: &mut String,
+    ) -> String {
+        if !self.uses_enumerable {
+            return body;
+        }
+        imports.push_str(&format!(
+            "#[allow(unused_imports)]\nuse self::{}::*;\n",
+            enumerable::RUST_MODULE
+        ));
+        format!("{body}\n{}", inline_module())
+    }
+
+    /// Type of `x[i]`: the value type for maps (`m[&k]`), else the element type.
+    pub(in crate::codegen::rust) fn indexed_type(container: &Type) -> Option<Type> {
+        if let Type::Parameterized(n, params) = container {
+            if matches!(n.as_str(), "HashMap" | "BTreeMap") && params.len() == 2 {
+                return Some(params[1].clone());
+            }
+        }
+        Self::peeled_collection_element_type(container).cloned()
     }
 
     /// Static type of `object.method(args)` when `method` is a surface method (for map indexing, `len`, ...).

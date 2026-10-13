@@ -22,10 +22,15 @@ impl Parser {
         if self.current_token() != &Token::LBrace || self.position == 0 {
             return false;
         }
-        let (Some(close), Some(open)) = (self.tokens.get(self.position - 1), self.tokens.get(self.position)) else {
+        let (Some(close), Some(open)) = (
+            self.tokens.get(self.position - 1),
+            self.tokens.get(self.position),
+        ) else {
             return false;
         };
-        close.token == Token::RParen && close.line == open.line && !self.header_context(self.position - 1)
+        close.token == Token::RParen
+            && close.line == open.line
+            && !self.header_context(self.position - 1)
     }
 
     /// Scanning back from the `)` at `close`: is this expression part of an `if`/`while`/`for`/`match` header?
@@ -48,9 +53,12 @@ impl Parser {
                     // `while let P = e {` / `if let P = e {`
                     return i > 0 && matches!(self.tokens[i - 1].token, Token::If | Token::While);
                 }
-                Token::LBrace | Token::RBrace | Token::Semicolon | Token::FatArrow | Token::Return | Token::Comma => {
-                    return false
-                }
+                Token::LBrace
+                | Token::RBrace
+                | Token::Semicolon
+                | Token::FatArrow
+                | Token::Return
+                | Token::Comma => return false,
                 _ => {}
             }
             if i == 0 {
@@ -66,7 +74,9 @@ impl Parser {
         self.advance(); // `{`
         let mut params = Vec::new();
         loop {
-            let Token::Ident(name) = self.current_token().clone() else { break };
+            let Token::Ident(name) = self.current_token().clone() else {
+                break;
+            };
             self.advance();
             let mut p = name;
             if self.current_token() == &Token::Colon {
@@ -91,7 +101,10 @@ impl Parser {
     }
 
     /// After `f(args)`: append a trailing block closure to `args` when one follows.
-    pub(in crate::parser) fn append_trailing_block(&mut self, mut args: Args) -> Result<Args, String> {
+    pub(in crate::parser) fn append_trailing_block(
+        &mut self,
+        mut args: Args,
+    ) -> Result<Args, String> {
         if !self.at_trailing_block() {
             return Ok(args);
         }
@@ -105,9 +118,20 @@ impl Parser {
         };
         let statements = self.with_explicit_closure(|p| p.parse_block_statements())?;
         self.expect(Token::RBrace)?;
-        let body = self.alloc_expr(Expression::Block { statements, is_unsafe: false, location: location.clone() });
-        let closure = self.alloc_expr(Expression::Closure { parameters, body, location });
-        let at = args.iter().position(|(l, _)| l.is_some()).unwrap_or(args.len());
+        let body = self.alloc_expr(Expression::Block {
+            statements,
+            is_unsafe: false,
+            location: location.clone(),
+        });
+        let closure = self.alloc_expr(Expression::Closure {
+            parameters,
+            body,
+            location,
+        });
+        let at = args
+            .iter()
+            .position(|(l, _)| l.is_some())
+            .unwrap_or(args.len());
         args.insert(at, (None, closure));
         if self.current_token() == &Token::LBrace && self.at_trailing_block_after_block() {
             return Err(format!(
@@ -120,7 +144,10 @@ impl Parser {
 
     /// A second `{` right after a trailing block's `}` on the same line.
     fn at_trailing_block_after_block(&self) -> bool {
-        match (self.tokens.get(self.position.wrapping_sub(1)), self.tokens.get(self.position)) {
+        match (
+            self.tokens.get(self.position.wrapping_sub(1)),
+            self.tokens.get(self.position),
+        ) {
             (Some(a), Some(b)) => a.token == Token::RBrace && a.line == b.line,
             _ => false,
         }

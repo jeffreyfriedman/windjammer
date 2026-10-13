@@ -39,8 +39,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_cow_import: bool, // For Phase 9 Cow optimization
     pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
     pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
-    /// A call lowered to the enumerable runtime (ADR-0018): inline `mod wj_enumerable`.
-    pub(crate) uses_enumerable: bool,
+    pub(crate) uses_enumerable: bool, // ADR-0018: a surface call needs the inlined `mod wj_enumerable`
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -2545,14 +2544,8 @@ impl<'ast> CodeGenerator<'ast> {
             ("test", _) => "test".to_string(),
             ("async", _) => "async".to_string(),
             ("ignore", _) => "ignore".to_string(),
-            ("timeout", _) => {
-                // TODO: Timeout requires special body wrapping
-                "test".to_string()
-            }
-            ("bench", _) => {
-                // TODO: Benchmark tests use criterion
-                "bench".to_string()
-            }
+            ("timeout", _) => "test".to_string(), // timeout needs body wrapping (not done)
+            ("bench", _) => "bench".to_string(),  // benchmark tests would use criterion
             // HTTP method decorators for Axum
             ("get", _) => "axum::routing::get".to_string(),
             ("post", _) => "axum::routing::post".to_string(),

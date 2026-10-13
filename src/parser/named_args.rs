@@ -55,11 +55,12 @@ pub(crate) fn call_table(program: &Program<'static>, saw_label: bool) -> Option<
     let mut table: HashMap<String, Vec<ParamSig>> = HashMap::new();
     let mut method_counts: HashMap<String, usize> = HashMap::new();
     let mut any_default = false;
-    let mut add = |key: String, f: &FunctionDecl<'static>, table: &mut HashMap<String, Vec<ParamSig>>| {
-        let sig = sig_of(f);
-        any_default |= sig.iter().any(|p| p.default.is_some());
-        table.insert(key, sig);
-    };
+    let mut add =
+        |key: String, f: &FunctionDecl<'static>, table: &mut HashMap<String, Vec<ParamSig>>| {
+            let sig = sig_of(f);
+            any_default |= sig.iter().any(|p| p.default.is_some());
+            table.insert(key, sig);
+        };
     for item in &program.items {
         match item {
             Item::Function { decl, .. } => add(decl.name.clone(), decl, &mut table),
@@ -107,12 +108,18 @@ impl Parser {
                 }
             }
         }
-        decorators.push(Decorator { name: DEFAULT_DECORATOR.to_string(), arguments: vec![(String::new(), expr)] });
+        decorators.push(Decorator {
+            name: DEFAULT_DECORATOR.to_string(),
+            arguments: vec![(String::new(), expr)],
+        });
         Ok(())
     }
 
     /// Check that parameters with defaults come after those without.
-    pub(in crate::parser) fn check_default_order(&self, params: &[Parameter<'static>]) -> Result<(), String> {
+    pub(in crate::parser) fn check_default_order(
+        &self,
+        params: &[Parameter<'static>],
+    ) -> Result<(), String> {
         let mut seen_default = false;
         for p in params.iter().filter(|p| p.name != "self") {
             let has = p.decorators.iter().any(|d| d.name == DEFAULT_DECORATOR);
@@ -130,15 +137,27 @@ impl Parser {
 
     /// Bind `args` (as written) to the parameters of `key`'s callee, in parameter order. Unknown callee or no
     /// table: the arguments are returned unchanged.
-    pub(in crate::parser) fn resolve_call_arguments(&mut self, key: &str, args: Args) -> Result<Args, String> {
-        let Some(table) = self.call_table.clone() else { return Ok(args) };
-        let Some(params) = table.get(key) else { return Ok(args) };
+    pub(in crate::parser) fn resolve_call_arguments(
+        &mut self,
+        key: &str,
+        args: Args,
+    ) -> Result<Args, String> {
+        let Some(table) = self.call_table.clone() else {
+            return Ok(args);
+        };
+        let Some(params) = table.get(key) else {
+            return Ok(args);
+        };
         let needs = args.iter().any(|(l, _)| l.is_some()) || args.len() < params.len();
         if !needs {
             return Ok(args);
         }
         let callee = key.trim_start_matches('.');
-        let list = params.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", ");
+        let list = params
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
         let mut slots: Vec<Option<&'static Expression<'static>>> = vec![None; params.len()];
         let mut named_seen = false;
         for (i, (label, e)) in args.iter().enumerate() {
@@ -148,14 +167,20 @@ impl Parser {
                         return Err(format!("`{callee}`: positional argument after a named one (at {}); write positional arguments first", self.pos_desc()));
                     }
                     if i >= params.len() {
-                        return Err(format!("`{callee}` takes {} argument(s) ({list}), got {}", params.len(), args.len()));
+                        return Err(format!(
+                            "`{callee}` takes {} argument(s) ({list}), got {}",
+                            params.len(),
+                            args.len()
+                        ));
                     }
                     slots[i] = Some(e);
                 }
                 Some(name) => {
                     named_seen = true;
                     let Some(j) = params.iter().position(|p| &p.name == name) else {
-                        return Err(format!("`{callee}` has no parameter `{name}` (parameters: {list})"));
+                        return Err(format!(
+                            "`{callee}` has no parameter `{name}` (parameters: {list})"
+                        ));
                     };
                     if slots[j].is_some() {
                         return Err(format!("`{callee}`: parameter `{name}` is given twice"));
@@ -168,10 +193,61 @@ impl Parser {
         for (p, slot) in params.iter().zip(slots) {
             match slot.or(p.default) {
                 Some(e) => out.push((None, e)),
-                None => return Err(format!("`{callee}`: missing argument `{}` (parameters: {list})", p.name)),
+                None => {
+                    return Err(format!(
+                        "`{callee}`: missing argument `{}` (parameters: {list})",
+                        p.name
+                    ))
+                }
             }
         }
         Ok(out)
+    }
+}
+
+impl Parser {
+    /// After `callee(args)`: a trailing block (parser/trailing_block.rs), then named-argument lowering.
+    pub(in crate::parser) fn finish_call_arguments(
+        &mut self,
+        key: Option<String>,
+        args: Args,
+    ) -> Result<Args, String> {
+        let args = self.append_trailing_block(args)?;
+        match key {
+            Some(k) => self.resolve_call_arguments(&k, args),
+            None => Ok(args),
+        }
+    }
+
+    /// `x??` with nothing after it to default to: two try operators (the meaning before `??` existed).
+    pub(in crate::parser) fn double_try_follows(&self) -> bool {
+        matches!(
+            self.peek(1),
+            Some(
+                Token::Dot
+                    | Token::RParen
+                    | Token::RBracket
+                    | Token::RBrace
+                    | Token::Comma
+                    | Token::Semicolon
+                    | Token::Eof
+            )
+        )
+    }
+
+    pub(in crate::parser) fn double_try(
+        &mut self,
+        expr: &'static Expression<'static>,
+    ) -> &'static Expression<'static> {
+        self.advance();
+        let once = self.alloc_expr(Expression::TryOp {
+            expr,
+            location: self.current_location(),
+        });
+        self.alloc_expr(Expression::TryOp {
+            expr: once,
+            location: self.current_location(),
+        })
     }
 }
 

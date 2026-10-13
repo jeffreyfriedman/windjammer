@@ -1286,15 +1286,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 "#);
         }
 
-        let body = if self.uses_enumerable {
-            implicit_imports.push_str(&format!(
-                "#[allow(unused_imports)]\nuse self::{}::*;\n",
-                crate::stdlib_surface::enumerable::RUST_MODULE
-            ));
-            format!("{body}\n{}", super::enumerable_lowering::inline_module())
-        } else {
-            body
-        };
+        let body = self.with_enumerable_runtime(body, &mut implicit_imports);
         // Combine: implicit imports + explicit imports + tauri helper + body
         let mut combined_imports = String::new();
         if !implicit_imports.is_empty() {
