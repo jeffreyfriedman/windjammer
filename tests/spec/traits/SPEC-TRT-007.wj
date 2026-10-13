@@ -1,6 +1,5 @@
 // spec: SPEC-TRT-007
 // expect: 4
-// xfail: Q-025
 trait Conv { fn conv<T>(self, x: T) -> T }
 struct S {}
 impl Conv for S { fn conv<T>(self, x: T) -> T { x } }

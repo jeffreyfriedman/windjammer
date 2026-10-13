@@ -95,7 +95,8 @@ impl<'ast> CodeGenerator<'ast> {
             // Track which traits need imports
             for param in &merged {
                 for trait_name in &param.bounds {
-                    self.needs_trait_imports.insert(trait_name.clone());
+                    self.needs_trait_imports
+                        .insert(trait_name.split('<').next().unwrap_or(trait_name).to_string());
                 }
             }
             merged
@@ -103,7 +104,8 @@ impl<'ast> CodeGenerator<'ast> {
             // Still track explicit bounds
             for param in &func.type_params {
                 for trait_name in &param.bounds {
-                    self.needs_trait_imports.insert(trait_name.clone());
+                    self.needs_trait_imports
+                        .insert(trait_name.split('<').next().unwrap_or(trait_name).to_string());
                 }
             }
             func.type_params.clone()
