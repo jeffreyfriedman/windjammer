@@ -187,7 +187,12 @@ impl IntInference {
                 arguments,
                 ..
             } => {
-                self.collect_expression_constraints(function, return_type);
+                if let Expression::Closure { parameters, body, .. } = function {
+                    let arg_ids: Vec<ExprId> = arguments.iter().map(|(_, a)| self.get_expr_id(a)).collect();
+                    self.collect_closure_constraints(parameters, body, &arg_ids);
+                } else {
+                    self.collect_expression_constraints(function, return_type);
+                }
 
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.clone()),

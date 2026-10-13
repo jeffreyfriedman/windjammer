@@ -10,7 +10,7 @@ impl IntInference {
             Expression::Unary { op, operand, .. } => {
                 self.collect_unary_constraints(expr, format!("{op:?}"), operand, return_type)
             }
-            Expression::Closure { parameters, body, .. } => self.collect_closure_constraints(parameters, body),
+            Expression::Closure { parameters, body, .. } => self.collect_closure_constraints(parameters, body, &[]),
             _ => {}
         }
     }
@@ -41,11 +41,14 @@ impl IntInference {
         &mut self,
         parameters: &[String],
         body: &Expression<'ast>,
+        // Immediately-invoked closure (`(|v| v * 2)(x)`, the lowering of `x |> (|v| v * 2)`): an untyped
+        // parameter is bound to its argument, so the body's literals take the argument's width.
+        args: &[ExprId],
     ) {
                 // A closure body is ordinary code: its literals follow the captured locals they meet
                 // (`|| base * 2` with `base: int`). Parameters shadow outer names for the duration.
                 let mut saved: Vec<(String, Option<ExprId>, Option<Type>)> = Vec::new();
-                for p in parameters {
+                for (i, p) in parameters.iter().enumerate() {
                     let (name, ty) = match p.split_once(':') {
                         Some((n, t)) => (n.trim().to_string(), Some(self.parse_type_from_string(t.trim()))),
                         None => (p.trim().to_string(), None),
@@ -54,10 +57,13 @@ impl IntInference {
                         name.clone(),
                         self.var_assignments.remove(&name),
                         match ty {
-                            Some(t) => self.var_types.insert(name, t),
+                            Some(t) => self.var_types.insert(name.clone(), t),
                             None => self.var_types.remove(&name),
                         },
                     ));
+                    if let Some(&arg) = args.get(i) {
+                        self.var_assignments.insert(name, arg);
+                    }
                 }
                 self.collect_expression_constraints(body, None);
                 for (name, assignment, ty) in saved {
