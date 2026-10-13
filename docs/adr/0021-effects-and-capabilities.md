@@ -245,7 +245,7 @@ not repeat use an idempotency key (`step.key()`). Journal format = the effect lo
   Because the scheduler is deterministic given the seed and the effect results, the seed plus the effect results
   determine the run; no schedule trace is needed in the interpreter.
 - **Simulation** (`wj test --simulate --seed N`, `--seeds 1..1000`): virtual clock (starts at
-  2000-01-01T00:00:00Z, advances only by sleeps/timeouts), seeded `random`, in-memory filesystem seeded from a
+  Unix time 1_700_000_000 s, the epoch `--deterministic-time` already uses; advances only by sleeps/timeouts), seeded `random`, in-memory filesystem seeded from a
   fixture directory, network answered by a mock table or by in-process simulated services, seeded fault injection
   (connection errors, partial writes, slow responses, crash points for durable fns). A failing seed is printed and
   re-runs exactly.
