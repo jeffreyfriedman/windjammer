@@ -481,6 +481,8 @@ pub struct TraitDecl<'ast> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitMethod<'ast> {
     pub name: String,
+    /// Generic parameters of the method itself: `fn map<U: Clone>(self, ..)`.
+    pub type_params: Vec<TypeParam>,
     pub parameters: Vec<Parameter<'ast>>,
     pub return_type: Option<Type>,
     pub is_async: bool,
@@ -578,6 +580,8 @@ pub enum Item<'ast> {
     }, // bound Printable = Display + Debug
     TypeAlias {
         name: String,
+        /// `type Pair<T> = (T, T)`: the alias's own generic parameters.
+        type_params: Vec<TypeParam>,
         target: Type,
         is_pub: bool,
         location: SourceLocation,

@@ -109,7 +109,11 @@ impl InferredBounds {
                 // Add inferred bounds that aren't already explicit
                 if let Some(inferred) = self.bounds.get(&param.name) {
                     for trait_name in inferred {
-                        if !merged_bounds.contains(trait_name) {
+                        // An explicit `Into<string>` already covers an inferred `Into`.
+                        let covered = merged_bounds
+                            .iter()
+                            .any(|b| b.split('<').next() == Some(trait_name.as_str()));
+                        if !covered && !merged_bounds.contains(trait_name) {
                             merged_bounds.push(trait_name.clone());
                         }
                     }
