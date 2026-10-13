@@ -54,7 +54,6 @@
 "analyzer->ir src/analyzer/usage_tracking/storage_tracking.rs" = 6
 "analyzer->metadata src/analyzer/signature_registry.rs" = 1
 "auto_clone->codegen src/auto_clone.rs" = 3
-"auto_clone_tests->test_utils src/auto_clone_tests.rs" = 1
 "codegen->compiler src/codegen/portable/tests.rs" = 3
 "codegen->compiler src/codegen/rust/collection_detection.rs" = 1
 "codegen->compiler src/codegen/rust/function_generation_prepare.rs" = 3

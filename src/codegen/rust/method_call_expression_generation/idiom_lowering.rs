@@ -131,6 +131,12 @@ impl<'ast> CodeGenerator<'ast> {
                 args[0] = lit.to_string();
             }
         } else if self.is_type_copy(pointee) {
+            // `unwrap_or(&0)` keeps the `Option<&T>` (reference default); an already copied/cloned
+            // receiver is `Option<T>` text even when the type query still reports the source `Option<&T>`.
+            let by_value_default = !args[0].starts_with('&');
+            if !by_value_default || obj_str.ends_with(".copied()") || obj_str.ends_with(".cloned()") {
+                return;
+            }
             obj_str.push_str(".copied()");
             let width = match pointee.as_ref() {
                 Type::Custom(w) | Type::Parameterized(w, _) => Some(w.as_str()),

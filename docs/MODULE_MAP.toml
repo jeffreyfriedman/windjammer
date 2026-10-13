@@ -22,7 +22,7 @@ known_violations = ["codegen", "ir", "metadata"]
 layer = "ownership"
 owner_stage = "unit tests for auto_clone (included via #[path])"
 module_md = ""
-allowed_imports = ["auto_clone", "analyzer", "parser", "lexer"]
+allowed_imports = ["auto_clone", "analyzer", "parser", "lexer", "test_utils"]
 known_violations = []
 
 [modules.auto_clone]
