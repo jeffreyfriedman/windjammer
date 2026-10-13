@@ -370,3 +370,116 @@ fn main() {
     let (out, _, code) = run(&["--version"]);
     assert_eq!((out.as_str(), code), ("tool 1.2.3\n", Some(0)));
 }
+
+const MOVES_WJ: &str = r#"
+struct G { n: int }
+impl Drop for G { fn drop(&mut self) { println("drop ${self.n}") } }
+struct Pair { left: G, right: G }
+struct Wrap { g: G }
+fn keep(g: G) {
+    let mut v: Vec<G> = Vec::new()
+    v.push(g)
+    println("in keep")
+}
+fn take<T>(t: T) {
+    println("took")
+}
+fn show(g: G) {
+    println("show ${g.n}")
+}
+fn main() {
+    let a = G { n: 1 }
+    let b = G { n: 2 }
+    {
+        let mut v: Vec<G> = Vec::new()
+        v.push(a)
+        println("inner end")
+    }
+    println("after block")
+    keep(G { n: 3 })
+    let c = G { n: 4 }
+    keep(c)
+    println("after keep")
+    let d = G { n: 5 }
+    take(d)
+    println("after take")
+    let p = Pair { left: G { n: 6 }, right: G { n: 7 } }
+    {
+        let l = p.left
+        println("partial ${l.n}")
+    }
+    println("after partial")
+    let e = G { n: 8 }
+    {
+        let w = Wrap { g: e }
+        println("wrapped ${w.g.n}")
+    }
+    let f = G { n: 9 }
+    {
+        let f2 = f
+        println("rebound ${f2.n}")
+    }
+    let s = G { n: 10 }
+    show(s)
+    println("end ${b.n}")
+}
+"#;
+
+const MOVES_RS: &str = r#"
+struct G { n: i64 }
+impl Drop for G { fn drop(&mut self) { println!("drop {}", self.n) } }
+struct Pair { left: G, right: G }
+struct Wrap { g: G }
+fn keep(g: G) {
+    let mut v: Vec<G> = Vec::new();
+    v.push(g);
+    println!("in keep");
+}
+fn take<T>(_t: T) {
+    println!("took");
+}
+fn show(g: &G) {
+    println!("show {}", g.n);
+}
+fn main() {
+    let a = G { n: 1 };
+    let b = G { n: 2 };
+    {
+        let mut v: Vec<G> = Vec::new();
+        v.push(a);
+        println!("inner end");
+    }
+    println!("after block");
+    keep(G { n: 3 });
+    let c = G { n: 4 };
+    keep(c);
+    println!("after keep");
+    let d = G { n: 5 };
+    take(d);
+    println!("after take");
+    let p = Pair { left: G { n: 6 }, right: G { n: 7 } };
+    {
+        let l = p.left;
+        println!("partial {}", l.n);
+    }
+    println!("after partial");
+    let e = G { n: 8 };
+    {
+        let w = Wrap { g: e };
+        println!("wrapped {}", w.g.n);
+    }
+    let f = G { n: 9 };
+    {
+        let f2 = f;
+        println!("rebound {}", f2.n);
+    }
+    let s = G { n: 10 };
+    show(&s);
+    println!("end {}", b.n);
+}
+"#;
+
+#[test]
+fn moves_decide_where_destructors_run() {
+    parity(MOVES_WJ, MOVES_RS);
+}

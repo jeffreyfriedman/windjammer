@@ -8,6 +8,7 @@
 //! blocks, `format`/interpolation, `print`/`println`/`eprint`/`eprintln`, calls to user functions
 //! and to callable locals. Anything else returns `None` and the function runs in the walker.
 
+use super::fast::{self, Operand};
 use super::{Code, CompiledFn};
 use crate::interpreter::engine::{FuncDef, Interpreter};
 use crate::interpreter::error::{semantic, unsupported, Ctl, R};
@@ -15,7 +16,7 @@ use crate::interpreter::eval_expr::stmt_loc;
 use crate::interpreter::int::IntTy;
 use crate::interpreter::place::{deref_value, strip_refs};
 use crate::interpreter::value::*;
-use crate::intrinsics::Intrinsic;
+use crate::interpreter::intrinsics::Intrinsic;
 use crate::parser::{BinaryOp, Expression, Pattern, Statement, Type, UnaryOp};
 use std::rc::Rc;
 
@@ -123,6 +124,10 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
                 let new = match op {
                     None => retag(&it.rstack[b + slot], rhs),
                     Some(cop) => {
+                        let bop = crate::interpreter::ops::compound_to_binary(cop);
+                        if let Some(r) = fast::compound_int(it, b, slot, bop, &rhs) {
+                            return r.map(|_| Value::Unit);
+                        }
                         let cur = std::mem::replace(&mut it.rstack[b + slot], Value::Unit);
                         if let (Value::Str(_), Value::Str(add), crate::parser::CompoundOp::Add) = (&cur, &rhs, cop) {
                             let mut cur = cur;
@@ -130,15 +135,6 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
                                 Rc::make_mut(rc).push_str(add);
                             }
                             it.rstack[b + slot] = cur;
-                            return Ok(Value::Unit);
-                        }
-                        let bop = crate::interpreter::ops::compound_to_binary(cop);
-                        if let (Value::Int(a, at), Value::Int(c, ct)) = (&cur, &rhs) {
-                            let r = crate::interpreter::ops::int_binary(bop, *a, *at, *c, *ct);
-                            if r.is_err() {
-                                it.rstack[b + slot] = cur;
-                            }
-                            it.rstack[b + slot] = r?;
                             return Ok(Value::Unit);
                         }
                         match it.binary(bop, cur.clone(), rhs) {
@@ -162,31 +158,28 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
             None => Box::new(|_, _| Err(Ctl::Return(Value::Unit))),
         },
         Statement::If { condition, then_block, else_block, .. } => {
-            let c = expr_code(cx, condition)?;
+            let c = cond(cx, condition, "if", true)?;
             let t = block(cx, then_block)?;
             let e = match else_block {
                 Some(eb) => Some(block(cx, eb)?),
                 None => None,
             };
-            Box::new(move |it, b| match deref_value(c(it, b)?)? {
-                Value::Bool(true) => t(it, b),
-                Value::Bool(false) => match &e {
+            Box::new(move |it, b| match c(it, b)? {
+                true => t(it, b),
+                false => match &e {
                     Some(e) => e(it, b),
                     None => Ok(Value::Unit),
                 },
-                other => Err(semantic(format!("`if` condition must be bool, found {}", other.type_name()))),
             })
         }
         Statement::While { condition, body, label, .. } => {
-            let c = expr_code(cx, condition)?;
+            let c = cond(cx, condition, "while", false)?;
             let body = block(cx, body)?;
             let label: Option<&'static str> = label.as_deref();
             Box::new(move |it, b| {
                 loop {
-                    match c(it, b)? {
-                        Value::Bool(true) => {}
-                        Value::Bool(false) => break,
-                        other => return Err(semantic(format!("`while` condition must be bool, found {}", other.type_name()))),
+                    if !c(it, b)? {
+                        break;
                     }
                     let r = body(it, b);
                     if crate::interpreter::eval_stmt::loop_exit(r, label)?.is_some() {
@@ -282,22 +275,6 @@ fn retag(old: &Value, new: Value) -> Value {
     }
 }
 
-/// An operand: a local slot or a constant are read inline, anything else runs its code.
-enum Operand {
-    Slot(usize),
-    Const(Value),
-    Code(Code),
-}
-
-#[inline(always)]
-fn read(it: &mut Interpreter, b: usize, o: &Operand) -> R {
-    match o {
-        Operand::Slot(s) => Ok(it.rstack[b + s].clone()),
-        Operand::Const(v) => Ok(v.clone()),
-        Operand::Code(c) => c(it, b),
-    }
-}
-
 fn operand(cx: &mut Cx, e: E) -> Option<Operand> {
     Some(match e {
         Expression::Identifier { name, .. } if cx.local(name).is_some() => Operand::Slot(cx.local(name)?),
@@ -306,17 +283,20 @@ fn operand(cx: &mut Cx, e: E) -> Option<Operand> {
     })
 }
 
-/// `l op r` with the integer case inlined; every other combination goes through `binary`.
-fn binary_code(l: Operand, r: Operand, op: BinaryOp, loc: Option<&'static crate::source_map::Location>) -> Code {
-    Box::new(move |it, b| {
-        let x = read(it, b, &l)?;
-        let y = read(it, b, &r)?;
-        it.mark(loc);
-        if let (Value::Int(a, at), Value::Int(c, ct)) = (&x, &y) {
-            return crate::interpreter::ops::int_binary(op, *a, *at, *c, *ct);
+/// A condition for `if` / `while`: comparisons are specialized, anything else must yield a bool.
+fn cond(cx: &mut Cx, e: E, what: &'static str, deref: bool) -> Option<fast::Cond> {
+    if let Expression::Binary { left, op, right, location } = e {
+        if !matches!(op, BinaryOp::And | BinaryOp::Or) {
+            let (l, r) = (operand(cx, left)?, operand(cx, right)?);
+            if let Some(c) = fast::compare(l, r, *op, location.as_ref(), what) {
+                return Some(c);
+            }
+            // not a comparison: rebuild the operands as a plain binary
+            let (l, r) = (operand(cx, left)?, operand(cx, right)?);
+            return Some(fast::general(fast::binary(l, r, *op, location.as_ref()), what, deref));
         }
-        it.binary(op, x, y)
-    })
+    }
+    Some(fast::general(expr_code(cx, e)?, what, deref))
 }
 
 fn exprs(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
@@ -350,7 +330,7 @@ fn expr_code(cx: &mut Cx, e: E) -> Option<Code> {
         },
         Expression::Binary { left, op, right, location } if !matches!(op, BinaryOp::And | BinaryOp::Or) => {
             let (l, r) = (operand(cx, left)?, operand(cx, right)?);
-            binary_code(l, r, *op, location.as_ref())
+            fast::binary(l, r, *op, location.as_ref())
         }
         Expression::Binary { left, op, right, location } => {
             let (l, r) = (expr_code(cx, left)?, expr_code(cx, right)?);

@@ -12,6 +12,7 @@
 //! (`impl Drop`) are not compiled: scope-exit drops need the walker's slots.
 
 mod compile;
+mod fast;
 
 use super::engine::{FuncDef, Interpreter, Scope};
 use super::error::{semantic, Ctl, R};

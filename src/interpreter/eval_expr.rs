@@ -210,7 +210,9 @@ impl Interpreter {
 
             Expression::StructLiteral { name, fields, location } => {
                 self.mark(location.as_ref());
-                self.eval_struct_literal(name, fields)
+                let v = self.eval_struct_literal(name, fields)?;
+                self.note_moves(fields.iter().map(|(_, e)| *e));
+                Ok(v)
             }
 
             Expression::MapLiteral { pairs, .. } => {
@@ -270,6 +272,7 @@ impl Interpreter {
                 for x in elements {
                     items.push(self.eval(x)?);
                 }
+                self.note_moves(elements.iter().copied());
                 Ok(Value::tuple(items))
             }
 
@@ -278,6 +281,7 @@ impl Interpreter {
                 for x in elements {
                     items.push(self.eval(x)?);
                 }
+                self.note_moves(elements.iter().copied());
                 Ok(Value::vec(items))
             }
 

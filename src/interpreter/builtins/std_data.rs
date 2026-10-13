@@ -592,6 +592,14 @@ fn register_regex(r: &mut Registry) {
 // ================================================================ csv/url/mime
 
 fn register_csv_url_mime(r: &mut Registry) {
+    // std declares these as returning the Rust `csv` crate's builder types, which have no
+    // Windjammer surface (and no runtime counterpart): loud, pointing at the supported API
+    r.func("csv::reader_with_delimiter", |_, _| {
+        Err(unsupported("`csv::reader_with_delimiter` returns the Rust csv crate's builder, which has no Windjammer API; use `csv::parse`"))
+    });
+    r.func("csv::writer_with_delimiter", |_, _| {
+        Err(unsupported("`csv::writer_with_delimiter` returns the Rust csv crate's builder, which has no Windjammer API; use `csv::write`"))
+    });
     r.func("csv::parse", |it, a| csv_parse(it, &arg_str(&a, 0, "parse")?, b',', false));
     r.func("csv::parse_bytes", |it, a| {
         let b = bytes_of(it, arg(&a, 0, "parse_bytes")?)?;

@@ -116,6 +116,8 @@ bcrypt = "0.17"
 jsonwebtoken = "9"
 url = "2"
 csv = "1"
+# std::db in the interpreter (SQLite; the same library sqlx bundles for windjammer-runtime)
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 once_cell = "1.19"
 rayon = "1.10"
 smallvec = "1.13"

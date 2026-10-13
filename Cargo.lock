@@ -4390,6 +4390,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "jsonwebtoken",
+ "libsqlite3-sys",
  "mime_guess",
  "once_cell",
  "proc-macro2",
