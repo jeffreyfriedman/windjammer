@@ -20,21 +20,22 @@
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
+/// CLOS-MOVE-CAPTURE (docs/spec/inference.md): a let-bound closure that never leaves the function borrows
+/// its captures, so it gets no `move` (escaping closures and thread blocks still do).
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
-fn test_closures_that_capture_get_move() {
+fn test_non_escaping_closures_that_capture_borrow() {
     let generated = test_utils::compile_fixture("move_closures").expect("Compilation failed");
 
-    // Closures that capture outer variables should get `move`
     assert!(
-        generated.contains("let closure = move || x + 1"),
-        "Closure capturing outer `x` should get `move`. Generated:\n{}",
+        generated.contains("let closure = || x + 1"),
+        "Non-escaping closure capturing outer `x` borrows it (no `move`). Generated:\n{}",
         generated
     );
 
     assert!(
-        generated.contains("let add_offset = move |n| n + offset"),
-        "Closure capturing outer `offset` should get `move`. Generated:\n{}",
+        generated.contains("let add_offset = |n| n + offset"),
+        "Non-escaping closure capturing outer `offset` borrows it (no `move`). Generated:\n{}",
         generated
     );
 }

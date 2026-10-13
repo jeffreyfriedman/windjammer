@@ -9,11 +9,6 @@ backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
 [[unsupported]]
-program = "17_closure_counter_capture"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
 program = "22_vec_index_mutate"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
@@ -25,11 +20,6 @@ reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-liter
 
 [[unsupported]]
 program = "44_hashmap_counts"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
-program = "49_closures_fold"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
@@ -79,11 +69,6 @@ backend = "rust"
 reason = "rust-tail-none-cast: see docs/known-issues/rust-tail-none-cast.md"
 
 [[unsupported]]
-program = "63_closures_capture"
-backend = "rust"
-reason = "rust-closure-returned-as-fn-pointer: see docs/known-issues/rust-closure-returned-as-fn-pointer.md"
-
-[[unsupported]]
 program = "61_string_split_trim"
 backend = "rust"
 reason = "rust-str-vs-string-in-collect-and-concat: see docs/known-issues/rust-str-vs-string-in-collect-and-concat.md"
@@ -112,14 +97,6 @@ reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std
 program = "113_std_time_monotonic"
 backend = "rust"
 reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
-
-[[unsupported]]
-program = "56_float_math"
-backend = "rust"
-reason = "rust-int-literal-width-inference: a float literal is typed f32 where f64 is needed (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
-
-
-# ---- ADR-0014 format specs the portable (Go/JS/TS) emitters reject explicitly ---------------
 
 [[unsupported]]
 program = "137_intr_format_sign_alt"
