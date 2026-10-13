@@ -7,7 +7,11 @@
 //   Option -> null | {v}     Result -> {ok: true|false, v}
 // Arithmetic that overflows panics (like Rust debug builds); `wrapping_*` ops wrap explicitly.
 
-const fs = typeof process !== "undefined" && process.versions && process.versions.node ? await import("node:fs") : null;
+const isNode = typeof process !== "undefined" && process.versions && process.versions.node;
+const fs = isNode ? await import("node:fs") : null;
+const threads = isNode ? await import("node:worker_threads") : null;
+/** Stack of the thread that runs `main` (Rust's main thread has 8 MiB; Node's default is ~1 MiB). */
+const MAIN_STACK_MB = 64;
 
 export class WjPanic extends Error {}
 
@@ -56,7 +60,23 @@ export function $eprint(s) {
   else console.error(s);
 }
 
-export function $run(main) {
+/**
+ * Run `main` with Rust's process semantics (panic = exit 101, buffered stdout). Under Node the
+ * program runs on a worker thread with a Rust-like stack, so recursion as deep as a Rust program
+ * allows does not overflow Node's small default stack; `entry` is the program module's URL.
+ */
+export function $run(main, entry) {
+  if (threads && threads.isMainThread && entry) {
+    const w = new threads.Worker(new URL(entry), { resourceLimits: { stackSizeMb: MAIN_STACK_MB } });
+    w.on("error", (e) => {
+      writeAll(2, `internal error: ${(e && e.stack) || e}\n`);
+      process.exitCode = 70;
+    });
+    w.on("exit", (code) => {
+      if (code !== 0 || process.exitCode === undefined) process.exitCode = code;
+    });
+    return;
+  }
   try {
     main();
     $flush();
