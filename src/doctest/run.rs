@@ -126,8 +126,7 @@ pub fn compose(module_src: &str, fence_body: &str) -> String {
 
 /// Build and run `program` through the Rust backend with `wj run` (`wj_bin`), returning stdout.
 fn run_compiled(program: &str, wj_bin: &Path) -> Result<String, String> {
-    let dir = std::env::temp_dir().join(format!("wj-doctest-{}-{}", std::process::id(), unique()));
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dir = fresh_dir()?;
     let main = dir.join("main.wj");
     std::fs::write(&main, program).map_err(|e| e.to_string())?;
     let out = std::process::Command::new(wj_bin)
@@ -155,13 +154,23 @@ fn run_compiled(program: &str, wj_bin: &Path) -> Result<String, String> {
     // `wj run` announces itself on stdout: drop exactly that banner line.
     let banner = format!("Running {} (target: rust)", main.display());
     let text = String::from_utf8_lossy(&out.stdout);
-    Ok(text.lines().filter(|l| *l != banner).map(|l| format!("{l}\n")).collect())
+    Ok(text
+        .lines()
+        .filter(|l| *l != banner)
+        .map(|l| format!("{l}\n"))
+        .collect())
 }
 
-fn unique() -> u64 {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static N: AtomicU64 = AtomicU64::new(0);
-    N.fetch_add(1, Ordering::Relaxed)
+/// A new, empty temp directory (`create_dir` fails if the name is taken, so retry with the next suffix).
+fn fresh_dir() -> Result<std::path::PathBuf, String> {
+    let base = std::env::temp_dir();
+    for n in 0..10_000u32 {
+        let dir = base.join(format!("wj-doctest-{}-{n}", std::process::id()));
+        if std::fs::create_dir(&dir).is_ok() {
+            return Ok(dir);
+        }
+    }
+    Err("cannot create a temporary directory for a compiled doctest".to_string())
 }
 
 /// Run one doctest. `compiled`: also through the Rust backend with this `wj` binary.

@@ -76,10 +76,7 @@ impl Parser {
                                     self.advance();
                                     let arguments = self.parse_arguments()?;
                                     self.expect(Token::RParen)?;
-                                    let arguments = self.append_trailing_block(arguments)?;
-                                    // ADR-0018 named arguments / defaults (parser/named_args.rs)
-                                    let arguments =
-                                        self.resolve_call_arguments(&format!(".{field}"), arguments)?;
+                                    let arguments = self.finish_call_arguments(Some(format!(".{field}")), arguments)?;
                                     if let Some(lowered) =
                                         self.lower_stream_method_call(expr, &field, &arguments)
                                     {
@@ -234,13 +231,8 @@ impl Parser {
                             self.advance();
                             let arguments = self.parse_arguments()?;
                             self.expect(Token::RParen)?;
-                            let arguments = self.append_trailing_block(arguments)?;
-                            let arguments = match expr {
-                                Expression::Identifier { name, .. } => {
-                                    self.resolve_call_arguments(&format!("{name}::{method}"), arguments)?
-                                }
-                                _ => arguments,
-                            };
+                            let key = crate::parser::named_args::call_key(expr).map(|t| format!("{t}::{method}"));
+                            let arguments = self.finish_call_arguments(key, arguments)?;
                             self.alloc_expr(Expression::MethodCall {
                                 object: expr,
                                 method,
@@ -270,28 +262,14 @@ impl Parser {
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
-                    let arguments = self.append_trailing_block(arguments)?;
-                    let arguments = match crate::parser::named_args::call_key(expr) {
-                        Some(key) => self.resolve_call_arguments(&key, arguments)?,
-                        None => arguments,
-                    };
+                    let arguments = self.finish_call_arguments(crate::parser::named_args::call_key(expr), arguments)?;
                     self.alloc_expr(Expression::Call {
                         function: expr,
                         arguments,
                         location: self.current_location(),
                     })
                 }
-                // `x??` (two `?` with nothing to default to): two try operators, as before `??` existed.
-                Token::QuestionQuestion
-                    if matches!(
-                        self.peek(1),
-                        Some(Token::Dot | Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Semicolon | Token::Eof)
-                    ) =>
-                {
-                    self.advance();
-                    let once = self.alloc_expr(Expression::TryOp { expr, location: self.current_location() });
-                    self.alloc_expr(Expression::TryOp { expr: once, location: self.current_location() })
-                }
+                Token::QuestionQuestion if self.double_try_follows() => self.double_try(expr),
                 Token::Question => {
                     // TryOp: expr?
                     // No ambiguity since we removed ternary operator

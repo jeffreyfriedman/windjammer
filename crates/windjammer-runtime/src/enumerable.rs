@@ -76,7 +76,9 @@ pub trait WjIterExt: Iterator + Sized {
         out
     }
     fn wj_each_slice<N: TryInto<usize>>(self, n: N) -> Vec<Vec<Self::Item>> {
-        let n: usize = n.try_into().unwrap_or_else(|_| panic!("chunk size must be non-negative"));
+        let n: usize = n
+            .try_into()
+            .unwrap_or_else(|_| panic!("chunk size must be non-negative"));
         assert!(n != 0, "chunk size must be non-zero");
         let mut out: Vec<Vec<Self::Item>> = Vec::new();
         for x in self {
