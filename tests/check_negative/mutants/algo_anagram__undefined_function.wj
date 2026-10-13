@@ -1,0 +1,15 @@
+// mutant: undefined_function of examples/verified/algo_anagram.wj
+fn sorted_chars(s: string) -> Vec<char> {
+    let mut cs: Vec<char> = s.chars().collect()
+    cs.sort()
+    cs
+}
+
+fn is_anagram(a: string, b: string) -> bool {
+    sorted_chars_missing(a) == sorted_chars(b)
+}
+
+fn main() {
+    println("listen/silent: ${is_anagram("listen", "silent")}")
+    println("apple/pale: ${is_anagram("apple", "pale")}")
+}

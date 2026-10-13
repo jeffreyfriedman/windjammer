@@ -209,6 +209,70 @@ pub fn to_lsp_diagnostics(diagnostics: &[IdeDiagnostic]) -> Vec<tower_lsp::lsp_t
         .collect()
 }
 
+/// Convert shared-schema diagnostics (`windjammer::diagnostics`, the same records `wj check --json`
+/// prints) to LSP diagnostics. Fixes travel in `data` so a code-action provider can offer them.
+pub fn to_lsp_from_schema(
+    uri: &tower_lsp::lsp_types::Url,
+    diagnostics: &[windjammer::diagnostics::Diagnostic],
+) -> Vec<tower_lsp::lsp_types::Diagnostic> {
+    use tower_lsp::lsp_types::{
+        CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity as Sev,
+        Location, NumberOrString, Position, Range,
+    };
+    use windjammer::diagnostics::{Severity, Span};
+
+    let range = |s: &Span| Range {
+        start: Position {
+            line: s.line_start.saturating_sub(1) as u32,
+            character: s.col_start.saturating_sub(1) as u32,
+        },
+        end: Position {
+            line: s.line_end.saturating_sub(1) as u32,
+            character: s.col_end.saturating_sub(1) as u32,
+        },
+    };
+    diagnostics
+        .iter()
+        .map(|d| {
+            let whole_line = Range {
+                start: Position { line: 0, character: 0 },
+                end: Position { line: 0, character: 0 },
+            };
+            let mut message = d.message.clone();
+            for h in &d.help {
+                message.push_str(&format!("\nhelp: {h}"));
+            }
+            Diagnostic {
+                range: d.primary_span.as_ref().map_or(whole_line, range),
+                severity: Some(match d.severity {
+                    Severity::Error => Sev::ERROR,
+                    Severity::Warning => Sev::WARNING,
+                    Severity::Note => Sev::INFORMATION,
+                    Severity::Help => Sev::HINT,
+                }),
+                code: Some(NumberOrString::String(d.code.clone())),
+                code_description: tower_lsp::lsp_types::Url::parse(&d.docs.url)
+                    .ok()
+                    .map(|href| CodeDescription { href }),
+                source: Some("windjammer".to_string()),
+                message,
+                related_information: Some(
+                    d.secondary_spans
+                        .iter()
+                        .map(|s| DiagnosticRelatedInformation {
+                            location: Location { uri: uri.clone(), range: range(s) },
+                            message: s.label.clone().unwrap_or_default(),
+                        })
+                        .collect(),
+                )
+                .filter(|v: &Vec<_>| !v.is_empty()),
+                tags: None,
+                data: serde_json::to_value(&d.fixes).ok(),
+            }
+        })
+        .collect()
+}
+
 /// Convert IDE diagnostics to LSP-style message strings.
 pub fn format_diagnostic(d: &IdeDiagnostic) -> String {
     let prefix = match d.severity {

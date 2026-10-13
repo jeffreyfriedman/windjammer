@@ -7,6 +7,12 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ## [Unreleased]
 
 ### Added
+- **`wj check` is a real front-end check** (no cargo/rustc): `wj check [PATH] [--json] [--watch] [--fix]`.
+- **Diagnostics schema v2** (`docs/diagnostics-schema.json`): stable codes, spans with byte ranges, fixes with
+  applicability, `wj explain` links; shared by `wj check/build/test --json`, the LSP and the MCP `check_code` tool.
+  See `docs/DIAGNOSTICS.md`.
+- Error codes WJ0011-WJ0028, WJ0098, WJ0099 with `wj explain` entries; rustc errors are translated to WJ codes with
+  `.wj` locations, untranslatable ones become WJ0099.
 - Post-codegen, `syn`-based Rust optimizer (`src/optimizer/`) replacing the retired AST-level phases (ADR-0006).
 - `wj fmt` formats `.wj` files; `wj fix` migrates deprecated surface syntax (ADR-0014 phase 1); architecture fitness tests
   (`tests/architecture.rs`), orphan-test checker, per-module `MODULE.md` files, ADR-0001 to ADR-0015.
@@ -24,6 +30,9 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ### Removed
 - Stale documentation, SDK/docker leftovers, committed binaries, game/UI-era examples and the per-ticket repro queue
   (2026-10-11 cleanup; history is in git).
+
+### Changed
+- `wj build --json` / `wj check --json` exit non-zero on errors and use diagnostics schema v2 (v1 was the legacy shape).
 
 ## [0.50.0] - 2026-07-07
 

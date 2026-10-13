@@ -1,0 +1,11 @@
+// mutant: let_int_gets_string of examples/verified/error_unwrap_or_expect.wj
+fn main() {
+    let a: int = "oops"
+    let b: int = "nope".parse().unwrap_or(0)
+    println("${a}")
+    println("${b}")
+    let c = "8".parse::<int>().unwrap_or_default()
+    println("${c}")
+    let name: Option<string> = None
+    println(name.unwrap_or("fallback"))
+}

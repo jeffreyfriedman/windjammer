@@ -1,0 +1,7 @@
+error[WJ0015]: no method named `bump` exists on any type in scope
+  --> no_such_method.wj:8:7
+  |
+8 |     c.bump()
+  |       ^^^^ unknown method
+  = help: check the method name; see the standard library reference
+  = explain: wj explain WJ0015
