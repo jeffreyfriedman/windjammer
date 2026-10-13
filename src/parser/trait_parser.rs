@@ -143,6 +143,7 @@ impl Parser {
             } else {
                 return Err("Expected method name in trait".to_string());
             };
+            let method_type_params = self.parse_type_params()?;
 
             self.expect(Token::LParen)?;
             let parameters = self.parse_parameters()?;
@@ -193,6 +194,7 @@ impl Parser {
 
             methods.push(TraitMethod {
                 name: method_name,
+                type_params: method_type_params,
                 parameters,
                 return_type,
                 is_async,

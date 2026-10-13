@@ -14,14 +14,25 @@ the property "splitting a program across lines at a boundary token never changes
 | Next line begins with | Rule |
 |---|---|
 | `(` | Never a call continuation: starts a new statement (so `f(x)` newline `(a, b) = ...` is two statements). |
+| `[` | Never an index continuation: starts a new statement (a list literal), like `(`. Write `xs[i]` on one line. |
 | `*` | Starts a new statement **iff** the rest of that line contains an assignment operator (`=`, `+=`, ...) at bracket depth 0, i.e. it is a deref-assignment `*p = v` / `*p += 1`. Otherwise it is multiplication continuing the previous expression (`let a = w` newline `* h`). A binary continuation can never contain a depth-0 assignment, so the two readings are never both valid. |
 | `.` | Method/field continuation (`xs` newline `.map(f)`). |
 | `+ - / % == != < <= > >= && \|\| \|> ^ <<  >>` | Binary or pipe continuation. |
 | anything else | New statement. |
 
+## `return`
+
+`return` takes a value only when the value starts on the **same line**: `return` followed by a
+newline is a bare `return`, and the next line is the next statement (STMT-011).
+
+## Block comments
+
+`/* .. */` (nesting like Rust) is whitespace. A block comment that spans lines still separates
+statements: line numbers, not comment content, decide boundaries.
+
 ## `break` / `continue`
 
-`break` takes an optional label and an optional value: `break`, `break 'outer`, `break v`,
+`break` takes an optional label (on the same line) and an optional value: `break`, `break 'outer`, `break v`,
 `break 'outer v`. The value is parsed only when an expression starts on the **same line** as
 `break` and the next token is not `;`, `,`, `}`, `)`, `]`, `=>`, `else`. `continue` takes an
 optional label only. Labels are `'name:` before `for`/`while`/`loop`; `loop` is also an
