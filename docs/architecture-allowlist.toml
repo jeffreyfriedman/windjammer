@@ -113,7 +113,7 @@
 "src/codegen/rust/call_signature_resolution.rs" = 3339
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4866
 "src/codegen/rust/function_generation_prepare.rs" = 13531
-"src/codegen/rust/generator.rs" = 5238
+"src/codegen/rust/generator.rs" = 5231
 "src/codegen/rust/int_promotion_type_inference.rs" = 2299
 "src/codegen/rust/ir_call_site.rs" = 10448
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2152
@@ -169,7 +169,7 @@
 "src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 996
 "src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2136
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 329
-"src/codegen/rust/program_generation.rs::generate_program" = 1099
+"src/codegen/rust/program_generation.rs::generate_program" = 1096
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345
 "src/codegen/rust/type_balancing.rs::balance_eq_operands_for_rust" = 497
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
@@ -182,9 +182,9 @@
 "src/ir/constraint_gen.rs::walk_expression" = 362
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 304
-"src/parser/call_expression_parser.rs::parse_postfix_expression" = 489
+"src/parser/call_expression_parser.rs::parse_postfix_chain" = 484
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
-"src/parser/primary_expression_parser.rs::parse_primary_expression" = 558
+"src/parser/primary_expression_parser.rs::parse_primary_expression" = 555
 "src/parser/type_parser.rs::parse_type" = 428
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 407
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433

@@ -1,0 +1,11 @@
+// spec: SPEC-EFF-027
+// mode: simulate
+// seed: 7
+// expect: 1700000000
+// expect: 1700000002
+use std::time
+fn main() {
+    println("${time::now().timestamp()}")
+    time::sleep_millis(2000)
+    println("${time::now().timestamp()}")
+}

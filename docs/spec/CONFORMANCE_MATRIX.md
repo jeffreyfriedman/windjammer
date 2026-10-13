@@ -16,6 +16,38 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-CONC-004 | concurrency.md | `concurrency/SPEC-CONC-004.wj` |
 | SPEC-CONC-005 | concurrency.md | `concurrency/SPEC-CONC-005.wj` |
 | SPEC-CONC-006 | concurrency.md | untestable |
+| SPEC-EFF-001 | effects.md | `effects/SPEC-EFF-001.wj` (xfail Q-032) |
+| SPEC-EFF-002 | effects.md | `effects/SPEC-EFF-002.wj` (xfail Q-032) |
+| SPEC-EFF-003 | effects.md | `effects/SPEC-EFF-003.wj` (xfail Q-032) |
+| SPEC-EFF-004 | effects.md | `effects/SPEC-EFF-004.wj` (xfail Q-032) |
+| SPEC-EFF-005 | effects.md | `effects/SPEC-EFF-005.wj` (xfail Q-032) |
+| SPEC-EFF-006 | effects.md | `effects/SPEC-EFF-006.wj` (xfail Q-032) |
+| SPEC-EFF-007 | effects.md | `effects/SPEC-EFF-007.wj` (xfail Q-032) |
+| SPEC-EFF-008 | effects.md | `effects/SPEC-EFF-008.wj` (xfail Q-032) |
+| SPEC-EFF-009 | effects.md | `effects/SPEC-EFF-009.wj` (xfail Q-032) |
+| SPEC-EFF-010 | effects.md | `effects/SPEC-EFF-010.wj` (xfail Q-032) |
+| SPEC-EFF-011 | effects.md | `effects/SPEC-EFF-011.wj` (xfail Q-032) |
+| SPEC-EFF-012 | effects.md | `effects/SPEC-EFF-012.wj` (xfail Q-032) |
+| SPEC-EFF-013 | effects.md | `effects/SPEC-EFF-013.wj` (xfail Q-032) |
+| SPEC-EFF-014 | effects.md | `effects/SPEC-EFF-014.wj` (xfail Q-032) |
+| SPEC-EFF-015 | effects.md | `effects/SPEC-EFF-015.wj` (xfail Q-032) |
+| SPEC-EFF-016 | effects.md | `effects/SPEC-EFF-016.wj` (xfail Q-032) |
+| SPEC-EFF-017 | effects.md | `effects/SPEC-EFF-017.wj` |
+| SPEC-EFF-018 | effects.md | `effects/SPEC-EFF-018.wj` (xfail Q-032) |
+| SPEC-EFF-019 | effects.md | `effects/SPEC-EFF-019.wj` (xfail Q-032) |
+| SPEC-EFF-020 | effects.md | `effects/SPEC-EFF-020.wj` (xfail Q-032) |
+| SPEC-EFF-021 | effects.md | `effects/SPEC-EFF-021.wj` (xfail Q-032) |
+| SPEC-EFF-022 | effects.md | `effects/SPEC-EFF-022.wj` (xfail Q-032) |
+| SPEC-EFF-023 | effects.md | `effects/SPEC-EFF-023.wj` (xfail Q-032) |
+| SPEC-EFF-024 | effects.md | `effects/SPEC-EFF-024.wj` (xfail Q-032) |
+| SPEC-EFF-025 | effects.md | `effects/SPEC-EFF-025.wj` (xfail Q-032) |
+| SPEC-EFF-026 | effects.md | `effects/SPEC-EFF-026.wj` (xfail Q-032) |
+| SPEC-EFF-027 | effects.md | `effects/SPEC-EFF-027.wj` |
+| SPEC-EFF-028 | effects.md | `effects/SPEC-EFF-028.wj` |
+| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` (xfail Q-032) |
+| SPEC-EFF-030 | effects.md | untestable |
+| SPEC-EFF-031 | effects.md | untestable |
+| SPEC-EFF-032 | effects.md | untestable |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
 | SPEC-ERR-002 | errors.md | `errors/SPEC-ERR-002.wj` |
 | SPEC-ERR-003 | errors.md | `errors/SPEC-ERR-003.wj` |
@@ -36,7 +68,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EXPR-002 | expressions.md | `expressions/SPEC-EXPR-002.wj` |
 | SPEC-EXPR-003 | expressions.md | `expressions/SPEC-EXPR-003.wj` |
 | SPEC-EXPR-004 | expressions.md | `expressions/SPEC-EXPR-004.wj` |
-| SPEC-EXPR-005 | expressions.md | `expressions/SPEC-EXPR-005.wj` (xfail Q-004) |
+| SPEC-EXPR-005 | expressions.md | `expressions/SPEC-EXPR-005.wj` |
 | SPEC-EXPR-006 | expressions.md | `expressions/SPEC-EXPR-006.wj` |
 | SPEC-EXPR-007 | expressions.md | `expressions/SPEC-EXPR-007.wj` |
 | SPEC-EXPR-008 | expressions.md | `expressions/SPEC-EXPR-008.wj` |
@@ -53,7 +85,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-GRAM-001 | grammar.md | untestable |
 | SPEC-GRAM-002 | grammar.md | `grammar/SPEC-GRAM-002.wj` |
 | SPEC-GRAM-003 | grammar.md | `grammar/SPEC-GRAM-003.wj` |
-| SPEC-GRAM-004 | grammar.md | `grammar/SPEC-GRAM-004.wj` (xfail Q-019) |
+| SPEC-GRAM-004 | grammar.md | `grammar/SPEC-GRAM-004.wj` |
 | SPEC-GRAM-005 | grammar.md | `grammar/SPEC-GRAM-005.wj` |
 | SPEC-GRAM-006 | grammar.md | `grammar/SPEC-GRAM-006.wj` |
 | SPEC-GRAM-007 | grammar.md | `grammar/SPEC-GRAM-007.wj` |
@@ -78,7 +110,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-ITEM-008 | items.md | `items/SPEC-ITEM-008.wj` (xfail Q-011) |
 | SPEC-ITEM-009 | items.md | `items/SPEC-ITEM-009.wj` |
 | SPEC-ITEM-010 | items.md | `items/SPEC-ITEM-010.wj` |
-| SPEC-ITEM-011 | items.md | `items/SPEC-ITEM-011.wj` (xfail Q-010) |
+| SPEC-ITEM-011 | items.md | `items/SPEC-ITEM-011.wj` |
 | SPEC-LEX-001 | lexical.md | `lexical/SPEC-LEX-001.wj` |
 | SPEC-LEX-002 | lexical.md | `lexical/SPEC-LEX-002.wj` |
 | SPEC-LEX-003 | lexical.md | `lexical/SPEC-LEX-003.wj` |
@@ -93,7 +125,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-LEX-012 | lexical.md | `lexical/SPEC-LEX-012.wj` |
 | SPEC-LEX-013 | lexical.md | `lexical/SPEC-LEX-013.wj` |
 | SPEC-LEX-014 | lexical.md | `lexical/SPEC-LEX-014.wj` |
-| SPEC-LEX-015 | lexical.md | `lexical/SPEC-LEX-015.wj` (xfail Q-002) |
+| SPEC-LEX-015 | lexical.md | `lexical/SPEC-LEX-015.wj` |
 | SPEC-MOD-001 | modules.md | `modules/SPEC-MOD-001.wj` |
 | SPEC-MOD-002 | modules.md | `modules/SPEC-MOD-002.wj` |
 | SPEC-MOD-003 | modules.md | `modules/SPEC-MOD-003.wj` |
@@ -158,7 +190,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-STMT-008 | statements.md | `statements/SPEC-STMT-008.wj` |
 | SPEC-STMT-009 | statements.md | `statements/SPEC-STMT-009.wj` |
 | SPEC-STMT-010 | statements.md | `statements/SPEC-STMT-010.wj` |
-| SPEC-STMT-011 | statements.md | `statements/SPEC-STMT-011.wj` (xfail Q-026) |
+| SPEC-STMT-011 | statements.md | `statements/SPEC-STMT-011.wj` |
 | SPEC-STR-001 | strings.md | `strings/SPEC-STR-001.wj` |
 | SPEC-STR-002 | strings.md | `strings/SPEC-STR-002.wj` |
 | SPEC-STR-003 | strings.md | `strings/SPEC-STR-003.wj` |
@@ -176,8 +208,8 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-TRT-004 | traits.md | `traits/SPEC-TRT-004.wj` |
 | SPEC-TRT-005 | traits.md | `traits/SPEC-TRT-005.wj` |
 | SPEC-TRT-006 | traits.md | `traits/SPEC-TRT-006.wj` |
-| SPEC-TRT-007 | traits.md | `traits/SPEC-TRT-007.wj` (xfail Q-025) |
-| SPEC-TRT-008 | traits.md | `traits/SPEC-TRT-008.wj` (xfail Q-024) |
+| SPEC-TRT-007 | traits.md | `traits/SPEC-TRT-007.wj` |
+| SPEC-TRT-008 | traits.md | `traits/SPEC-TRT-008.wj` |
 | SPEC-TRT-009 | traits.md | `traits/SPEC-TRT-009.wj` |
 | SPEC-TYP-001 | types.md | `types/SPEC-TYP-001.wj` |
 | SPEC-TYP-002 | types.md | `types/SPEC-TYP-002.wj` |

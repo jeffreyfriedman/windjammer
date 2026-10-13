@@ -44,6 +44,7 @@ Example file format (`tests/spec/<area>/SPEC-XXX-NNN.wj`): header comments `// s
 | [strings.md](strings.md) | STR | strings, interpolation, format specs |
 | [errors.md](errors.md) | ERR | Option, Result, `?`, panics |
 | [concurrency.md](concurrency.md) | CONC | ADR-0004 surface (mostly planned) |
+| [effects.md](effects.md) | EFF | ADR-0021 effects, capabilities, `durable fn`, simulation and replay (mostly planned) |
 | [pipe.md](pipe.md) | PIPE | `\|>` |
 | [intrinsics.md](intrinsics.md) | INTR | print/assert/panic/debug/list literal |
 | [attributes.md](attributes.md) | ATTR | `@derive`, `@test`, ... |
