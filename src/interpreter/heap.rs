@@ -7,10 +7,8 @@
 //! explicitly (a function's return value). An `Rc` is alive while some reachable slot holds it;
 //! a struct with a destructor is dropped when a scope exit leaves it unreachable.
 //!
-//! Known limits (documented in docs/INTERPRETER.md): values held only by a pending Rust-side
-//! temporary are invisible; a value moved into a callee stays reachable from the caller's slot
-//! until that slot dies, so its destructor runs at the caller's scope exit rather than the
-//! callee's (unless the parameter is declared `owned`).
+//! Moves (`moves.rs`) take moved-out slots and fields out of the roots. Known limit (documented in
+//! docs/INTERPRETER.md): values held only by a pending Rust-side temporary are invisible.
 
 use super::engine::{Interpreter, Scope};
 use super::error::{ErrorKind, Ctl, R};
@@ -88,9 +86,19 @@ impl Walker {
         }
     }
 
-    fn walk_scope(&mut self, s: &Scope, f: &mut dyn FnMut(&Value)) {
+    fn walk_scope(&mut self, s: &Scope, moves: &super::moves::Moves, f: &mut dyn FnMut(&Value)) {
         for (_, slot) in &s.vars {
-            self.walk_slot(slot, f);
+            if moves.is_moved(slot) {
+                continue; // the object is owned elsewhere (or nowhere)
+            }
+            match moves.owned_value(slot) {
+                Some(v) if moves.has_moved_fields(slot) => {
+                    if self.seen.insert(Rc::as_ptr(slot) as usize) {
+                        self.walk(&v, f);
+                    }
+                }
+                _ => self.walk_slot(slot, f),
+            }
         }
     }
 }
@@ -99,13 +107,13 @@ impl Interpreter {
     /// Visit every value reachable from the roots (plus `extra`).
     pub(crate) fn walk_roots(&self, extra: &[&Value], f: &mut dyn FnMut(&Value)) {
         let mut w = Walker::new();
-        w.walk_scope(&self.scope, f);
+        w.walk_scope(&self.scope, &self.moves, f);
         for fr in &self.frames {
-            w.walk_scope(fr, f);
+            w.walk_scope(fr, &self.moves, f);
         }
         let (scopes, vals) = self.sched.parked_roots();
         for s in scopes {
-            w.walk_scope(s, f);
+            w.walk_scope(s, &self.moves, f);
         }
         for v in vals {
             w.walk(v, f);
@@ -283,8 +291,11 @@ impl Interpreter {
     }
 
     /// Values of the slots being popped, in drop order (last declared first).
-    pub(crate) fn slot_values_rev(slots: &[(&'static str, Slot)]) -> Vec<Value> {
-        slots.iter().rev().map(|(_, s)| s.borrow().clone()).collect()
+    /// Moved-out slots and fields are left out: their objects belong to someone else now.
+    pub(crate) fn slot_values_rev(&mut self, slots: &[(&'static str, Slot)]) -> Vec<Value> {
+        let vals = slots.iter().rev().filter_map(|(_, s)| self.moves.owned_value(s)).collect();
+        self.moves.forget(slots);
+        vals
     }
 
     /// An error that is a `process::exit`, which never unwinds (no destructors run).

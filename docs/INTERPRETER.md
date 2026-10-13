@@ -166,22 +166,32 @@ Findings from running the same programs through the compiled path (compiler bugs
   (no real waiting); a state where every task is blocked and none waits on time is reported as a deadlock. Properly
   synchronised programs print the same output under every seed (tested over 10 seeds); a check-then-act race across two lock
   acquisitions shows both outcomes across seeds (tested).
-- **Ownership and memory** (`heap.rs`, `locks.rs`, `builtins/shared.rs`): `impl Drop` at scope exit, on reassignment,
+- **Ownership and memory** (`heap.rs`, `moves.rs`, `locks.rs`, `builtins/shared.rs`): `impl Drop` at scope exit, on reassignment,
   `drop(x)` (forced: the object dies even if an auto-borrowed alias remains), discarded temporaries, `let _ =`, and for elements a
   mutating builtin discards (`clear`, `truncate`, `remove`, overwritten entries); `Rc`/`Arc` counts by reachability,
   `Weak` is a real weak pointer so `Rc` cycles leak exactly as in Rust; `Rc::make_mut`/`get_mut`; `RefCell` borrow tracking
   with Rust's `BorrowMutError`/`BorrowError` panics (guards are tokens that live as long as some copy of the guard value).
-  `mut` parameters are owned copies (Q-015).
+  `mut` parameters are owned copies (Q-015). Moves decide where an object dies: `let y = x`, partial moves
+  (`let l = p.left`), aggregates (`S { f: x }`, tuples, arrays, variants) and consuming builtins (`push`, `insert`, `send`)
+  move a variable's ownership; a callee that moves its parameter (or owns it by rule: `owned`, `mut`, generic `T`) takes
+  the caller's object, so it dies at the callee's end; a parameter the callee only reads stays a borrow. Mutex poisoning:
+  a panic unwinding past a held guard poisons the lock (`PoisonError`, `is_poisoned`, `clear_poison`).
 - **Std modules**: `fs` (all of `std/fs.wj`, `read_dir`, metadata, path helpers), `path`, `env`, `process`, `time`
   (`Duration`, `Instant`, `SystemTime`, `DateTime`), `json` (dynamic and typed `to_string`/`parse_string::<T>`), `regex`,
   `csv`, `url`, `mime`, `crypto` (sha1/256/512, base64, bcrypt), `yaml`, `compress`, `jwt`, `uuid`, seeded `random`, `log`,
-  `strings`, `testing`; `http` client behind a port (`--mock-http`, `--allow-network`). Same crates as `windjammer-runtime`,
-  so results match compiled programs; tests use Python oracles (`interpreter_std_modules_test`).
+  `strings`, `testing`; `http` client and servers behind a port (`--mock-http`, `--allow-network`; axum routing rules,
+  mock files replay recorded requests), `config` (the runtime's own code path), `db` on SQLite (Postgres is refused with an
+  error), `subprocess` line pipes, `cli` (clap), `u128` over its full range. Same crates as `windjammer-runtime`, so results
+  match compiled programs; tests use Python, rustc and runtime-code oracles (`interpreter_std_modules_test`,
+  `interpreter_http_server_test`, `interpreter_config_db_test`). Every top-level `std/*.wj` function has a builtin
+  (`std_interpreter_agreement_test`, ratchet at 0); the four legacy `config::get*` hooks and the two `csv::*_with_delimiter`
+  builders (no implementation in any backend) are loud errors.
 - **Language**: Rust's slicing panic messages (`v[a..b]`, `s[a..b]`, char boundaries), `char::to_lowercase()` displays,
   top-level macro invocations are loud, `Type::default()` for `@derive(Default)` (Q-016), recursion bounded by stack bytes on
   the interpreter thread (Q-023), `wj test --interpret` shares `wj test` discovery.
-- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). ADR-0020 proposes a resolved/closure-compiled
-  tier with kill criteria.
+- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). `--engine=resolved` (ADR-0020 option B,
+  milestone 1): functions compiled to closures over slot-indexed locals, walker fallback per function; results in ADR-0020.
+  `scripts/interp_bench.py` is the benchmark ratchet (median of 5, load recorded).
 
 Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
 (first interp-gaps measurement: 222 of 382 on the smaller tree then). Of the 138 that do not: 40 are `__SEED__` corpus templates,
@@ -191,15 +201,17 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
 
 ## Remaining gaps
 
-- Not interpreted: extern/FFI; `http::serve` servers; `std::cli`; `std::subprocess` pipes; `db`; `config::*`; UI/game engine
-  APIs; `thread {}`/`async {}` statement blocks (deprecated by ADR-0004); `Rc` cycles are leaked but their destructors
-  are not distinguished from reachable values in drop order; mutex poisoning (a panicking holder does not poison).
-- Moves are not tracked: a value moved into a callee by an owned parameter (other than via `drop(x)`) stays reachable from the
-  caller's variable until that dies, so its destructor runs at the caller's scope exit rather than the callee's. Values held only
-  by pending Rust-side temporaries are invisible to the reachability scan.
-- `u128` above `i128::MAX` is not representable. `HashMap`/`HashSet` iterate in key order (Rust's order is unspecified).
-- `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error.
-- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code (ADR-0020).
+- Not interpreted: extern/FFI; UI/game engine APIs; Postgres (`db::connect("postgres://..")`); `thread {}`/`async {}`
+  statement blocks (deprecated by ADR-0004); `Rc` cycles are leaked but their destructors are not distinguished from
+  reachable values in drop order.
+- Moves: a moved variable stays readable (a valid program never reads it; where Windjammer would auto-clone it, the
+  interpreter shares the object instead of copying it, so that clone's destructor does not run). Returning a parameter
+  does not move the caller's variable early (the object is reachable from the result either way). Values held only by
+  pending Rust-side temporaries are invisible to the reachability scan.
+- `HashMap`/`HashSet` iterate in key order (Rust's order is unspecified).
+- `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error (owned by the parser stream; ignored test
+  `interpolation_escaped_quotes_test`).
+- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code; see ADR-0020.
 
 ## ADR-0007
 

@@ -356,6 +356,12 @@ impl Value {
         if let (Value::Float(a, _), Value::Float(b, _)) = (self, other) {
             return a == b;
         }
+        // runtime `impl PartialEq<&str> for HttpMethod` (case-insensitive)
+        if let (Value::Enum(e), Value::Str(s)) | (Value::Str(s), Value::Enum(e)) = (self, other) {
+            if &*e.ty == "HttpMethod" {
+                return e.variant.eq_ignore_ascii_case(s);
+            }
+        }
         self.structural_cmp(other) == Ordering::Equal
     }
 }

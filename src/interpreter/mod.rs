@@ -20,6 +20,7 @@ mod intrinsics;
 pub mod int;
 mod iter;
 mod locks;
+mod moves;
 mod native;
 pub mod loader;
 mod ops;

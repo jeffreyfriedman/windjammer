@@ -1,18 +1,3 @@
 # std/<mod>.wj top-level fns with no interpreter builtin (`"mod::fn"` registration). Ratchet: only shrinks.
 # Regenerate: WJ_UPDATE_STD_GATE=1 cargo test --test all std_interpreter_agreement
-config::get
-config::get_backend
-config::get_or
-config::has_backend
-config::merge
-config::overlay_matching
-config::parse_flat
-config::resolve
-config::resolve_text
-config::to_json
-csv::reader_with_delimiter
-csv::writer_with_delimiter
-db::connect
-http::serve
-http::serve_fn
-http::server_serve
+

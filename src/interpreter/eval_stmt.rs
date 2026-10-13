@@ -65,6 +65,7 @@ impl Interpreter {
                         v = self.coerce(v, t)?;
                     }
                 }
+                self.note_move(value);
                 match pattern {
                     Pattern::Identifier(n) | Pattern::MutBinding(n) => {
                         self.define(n.as_str(), v);
@@ -101,6 +102,10 @@ impl Interpreter {
 
             Statement::Assignment { target, value, compound_op, .. } => {
                 self.exec_assign(target, value, *compound_op)?;
+                if compound_op.is_none() {
+                    self.note_assign(target);
+                    self.note_move(value);
+                }
                 Ok(Value::Unit)
             }
 

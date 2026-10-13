@@ -49,7 +49,7 @@ impl Interpreter {
         if matches!(&r, Err(e) if Self::is_exit(e)) {
             return r;
         }
-        let vals = Self::slot_values_rev(&popped);
+        let vals = self.slot_values_rev(&popped);
         let keep: Vec<Value> = match &r {
             Ok(v) | Err(Ctl::Return(v)) => vec![v.clone()],
             _ => vec![],
@@ -87,7 +87,7 @@ impl Interpreter {
             return r;
         }
         let popped = self.scope.vars.split_off(from.min(self.scope.vars.len()));
-        let vals = Self::slot_values_rev(&popped);
+        let vals = self.slot_values_rev(&popped);
         let keep: Vec<Value> = match &r {
             Ok(v) | Err(Ctl::Return(v)) => vec![v.clone()],
             _ => vec![],
