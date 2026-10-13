@@ -1,0 +1,14 @@
+// mutant: int_annotated_string of examples/verified/closures_counter.wj
+fn main() {
+    let mut count: string = 0
+    let mut inc = || {
+        count += 1
+        count
+    }
+    println("${inc()}")
+    println("${inc()}")
+    println("${inc()}")
+    let mut total = 0
+    for x in [1, 2, 3] { total += x }
+    println("total ${total}")
+}

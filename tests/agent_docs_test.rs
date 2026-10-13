@@ -225,8 +225,8 @@ fn wj_check_json_reports_diagnostics_with_spans() {
     assert_eq!(v["success"], false);
     let diag = &v["diagnostics"][0];
     assert_eq!(diag["code"], "W0003");
-    assert_eq!(diag["span"]["start_line"], 3);
-    assert!(diag["repair_hint"]["description"].as_str().unwrap().contains("iter"));
+    assert_eq!(diag["primary_span"]["line_start"], 3);
+    assert!(diag["help"][0].as_str().unwrap().contains("iter"));
 
     let ok = d.path().join("ok.wj");
     fs::write(&ok, "fn main() {\n    println(\"hi\")\n}\n").unwrap();
@@ -241,7 +241,7 @@ fn wj_check_json_reports_diagnostics_with_spans() {
     let o = Command::new(WJ).args(["check", "--json"]).arg(&bad).output().unwrap();
     assert_eq!(o.status.code(), Some(1));
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-    assert_eq!(v["diagnostics"][0]["code"], "parse");
+    assert_eq!(v["diagnostics"][0]["code"], "WJ0011", "syntax errors are WJ0011 (docs/diagnostics-schema.json)");
 }
 
 #[test]

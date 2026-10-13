@@ -1,0 +1,19 @@
+// mutant: undefined_function of examples/verified/basics_if_else.wj
+fn classify(n: int) -> string {
+    if n < 0 {
+        "negative"
+    } else if n == 0 {
+        "zero"
+    } else if n < 100 {
+        "small"
+    } else {
+        "big"
+    }
+}
+
+fn main() {
+    println(classify_missing(-5))
+    println(classify(0))
+    println(classify(42))
+    println(classify(1000))
+}

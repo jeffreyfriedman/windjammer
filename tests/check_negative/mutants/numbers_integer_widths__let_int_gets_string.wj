@@ -1,0 +1,11 @@
+// mutant: let_int_gets_string of examples/verified/numbers_integer_widths.wj
+fn main() {
+    let a: u8 = 255
+    println("${a}")
+    let b: i64 = "oops"
+    println("${b}")
+    let c: u32 = 4294967295
+    println("${c}")
+    let d: u8 = 200
+    println("${d.wrapping_add(100)}")
+}

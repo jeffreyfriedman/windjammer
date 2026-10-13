@@ -79,6 +79,8 @@ digraph deps {
     label="tooling";
     "agent_index";
     "auto_fix";
+    "check";
+    "diagnostics";
     "error_catalog";
     "error_handling";
     "error_mapper";
@@ -143,11 +145,13 @@ digraph deps {
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
   "cli" -> "cargo_cache" [label="7"];
+  "cli" -> "check" [label="2"];
   "cli" -> "codegen" [label="7"];
   "cli" -> "compiler" [label="2"];
   "cli" -> "compiler_config" [label="3"];
   "cli" -> "config" [label="2"];
-  "cli" -> "error_mapper" [label="6"];
+  "cli" -> "diagnostics" [label="6"];
+  "cli" -> "error_mapper" [label="8"];
   "cli" -> "formatter" [label="1"];
   "cli" -> "intrinsics" [label="1"];
   "cli" -> "ir" [label="3"];
@@ -238,6 +242,11 @@ digraph deps {
   "component_analyzer" -> "parser" [label="5"];
   "config" -> "ir" [label="5",color=red,fontcolor=red];
   "config" -> "package" [label="2",color=red,fontcolor=red];
+  "diagnostics" -> "error_mapper" [label="1"];
+  "diagnostics" -> "intrinsics" [label="1"];
+  "diagnostics" -> "linter" [label="1"];
+  "diagnostics" -> "source_map" [label="1"];
+  "diagnostics" -> "type_classification" [label="1"];
   "ejector" -> "analyzer" [label="1"];
   "ejector" -> "codegen" [label="1"];
   "ejector" -> "inference" [label="1"];
@@ -247,6 +256,7 @@ digraph deps {
   "error_catalog" -> "intrinsics" [label="1",color=red,fontcolor=red];
   "error_handling" -> "error_mapper" [label="1"];
   "error_mapper" -> "auto_fix" [label="2"];
+  "error_mapper" -> "diagnostics" [label="1"];
   "error_mapper" -> "error" [label="1"];
   "error_mapper" -> "error_codes" [label="1"];
   "error_mapper" -> "fuzzy_matcher" [label="1"];
@@ -352,8 +362,10 @@ digraph deps {
   "test_runner" -> "build_utils" [label="1"];
   "test_runner" -> "cargo_cache" [label="3"];
   "test_runner" -> "cargo_toml" [label="1"];
+  "test_runner" -> "check" [label="2"];
   "test_runner" -> "compiler_config" [label="1"];
   "test_runner" -> "config" [label="3"];
+  "test_runner" -> "diagnostics" [label="1"];
   "test_runner" -> "lexer" [label="2"];
   "test_runner" -> "parser" [label="3"];
   "test_runner" -> "rust_integration_tests" [label="1"];

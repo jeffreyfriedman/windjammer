@@ -1,0 +1,5 @@
+// expect: W0002
+fn main() {
+    let v: Option<int> = Some(1)
+    println("${v.unwrap()}")
+}

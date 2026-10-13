@@ -60,9 +60,11 @@ $ wj run --interpret hello.wj
 Hello, World!
 $ wj check --json hello.wj
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "windjammer_version": "0.50.0",
+  "command": "check",
   "success": true,
+  "summary": { "errors": 0, "warnings": 0, "files_checked": 1, "files_cached": 0, "elapsed_ms": 3 },
   "diagnostics": []
 }
 $ wj build --no-cargo hello.wj -o out
