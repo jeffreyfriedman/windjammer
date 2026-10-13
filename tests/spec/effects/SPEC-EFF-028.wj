@@ -1,0 +1,19 @@
+// spec: SPEC-EFF-028
+// mode: simulate
+// seed: 42
+use std::random
+use std::sync
+fn main() {
+    let (tx, rx) = sync::channel()
+    scope {
+        for i in 0..3 {
+            let t = tx
+            spawn {
+                t.send(i * 10 + random::range(0, 10))
+            }
+        }
+    }
+    for _ in 0..3 {
+        println("${rx.recv()}")
+    }
+}
