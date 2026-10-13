@@ -380,10 +380,9 @@ impl<'ast> CodeGenerator<'ast> {
                 object,
                 method,
                 type_args,
-                arguments,
                 ..
             } => {
-                if let Some(t) = self.enumerable_call_type(object, method, arguments.len()) {
+                if let Some(t) = self.enumerable_call_type(expr) {
                     return Some(t); // ADR-0018 enumerable surface (stdlib_surface)
                 }
                 // Explicit turbofish return target: `collect::<Vec<char>>()`, …
@@ -733,9 +732,8 @@ impl<'ast> CodeGenerator<'ast> {
                 }
                 None
             }
-            // TDD FIX: Index expressions: vec[i] → element type of the collection
-            // Example: let mask: Vec<u8> = ...; let color_id = mask[i]; → color_id: u8
-            // Peel `&Vec<T>` / `&mut Vec<T>` so `vals: &Vec<f32>` still yields `f32`.
+            // `vec[i]` → element type (peeling `&Vec<T>`: `vals: &Vec<f32>` yields `f32`; `mask[i]` of
+            // `Vec<u8>` is `u8`); `map[&k]` → value type.
             Expression::Index { object, .. } => {
                 Self::indexed_type(&self.infer_expression_type(object)?)
             }
