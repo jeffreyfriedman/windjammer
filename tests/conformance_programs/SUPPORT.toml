@@ -150,3 +150,28 @@ reason = "rust-int-literal-width-inference: `vec![5, 6, 7]` passed to a `Vec<int
 program = "178_struct_patterns_slices"
 backend = "rust"
 reason = "rust-unsized-slice-binding: `let mid = v[1..4]` is emitted without a borrow, so rustc rejects the unsized `[i32]` local (E0277); also SPEC-EXPR-018 on Rust"
+
+[[unsupported]]
+program = "163_trait_generics_and_aliases"
+backend = "go"
+reason = "portable-type-aliases: see docs/known-issues/portable-type-aliases.md"
+
+[[unsupported]]
+program = "163_trait_generics_and_aliases"
+backend = "js"
+reason = "portable-type-aliases: see docs/known-issues/portable-type-aliases.md"
+
+[[unsupported]]
+program = "164_into_bound_param_consumed"
+backend = "rust"
+reason = "rust-into-bound-param-borrowed: see docs/known-issues/rust-into-bound-param-borrowed.md"
+
+[[unsupported]]
+program = "164_into_bound_param_consumed"
+backend = "go"
+reason = "portable-generic-into: `T::into` on a bounded generic parameter is an explicit `unsupported on this backend` error"
+
+[[unsupported]]
+program = "164_into_bound_param_consumed"
+backend = "js"
+reason = "portable-generic-into: `T::into` on a bounded generic parameter is an explicit `unsupported on this backend` error"

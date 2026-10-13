@@ -1,0 +1,18 @@
+// expect: 3
+// expect: 10
+// expect: a/*b*/c
+/* leading block comment
+   spanning lines */
+fn add(a: int, /* inline */ b: int) -> int {
+    a /* between */ + b
+}
+
+/* outer /* nested */ still a comment */
+fn main() {
+    println("${add(1, 2)}")
+    let x = 4 /* multi
+    line */
+    let y = 6
+    println("${x + y}")
+    println("a/*b*/c")
+}

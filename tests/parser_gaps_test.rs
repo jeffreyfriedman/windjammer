@@ -196,6 +196,9 @@ fn split_line_equals_one_line_property() {
         "let z = (a + b) * 2",
         "if a > 1 { *c = 3 }",
         "g(1) * 2",
+        "[1, 2].len()",
+        "[a, b]",
+        "xs[0] = 1",
     ];
     let mut rng = Rng(0xABCDEF0123456789);
     for case in 0..400 {

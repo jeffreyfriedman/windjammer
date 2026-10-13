@@ -1,6 +1,5 @@
 // spec: SPEC-ITEM-011
 // expect: 21
-// xfail: Q-010
 type Pair<T> = (T, T)
 fn swap(p: Pair<int>) -> Pair<int> { (p.1, p.0) }
 fn main() {
