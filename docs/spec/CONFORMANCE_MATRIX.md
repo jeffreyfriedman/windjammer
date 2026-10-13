@@ -7,13 +7,13 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | Rule | Chapter | Examples |
 |------|---------|----------|
 | SPEC-ATTR-001 | attributes.md | `attributes/SPEC-ATTR-001.wj` |
-| SPEC-ATTR-002 | attributes.md | `attributes/SPEC-ATTR-002.wj` (xfail Q-016) |
+| SPEC-ATTR-002 | attributes.md | `attributes/SPEC-ATTR-002.wj` |
 | SPEC-ATTR-003 | attributes.md | `attributes/SPEC-ATTR-003.wj` |
 | SPEC-ATTR-004 | attributes.md | `attributes/SPEC-ATTR-004.wj` |
-| SPEC-CONC-001 | concurrency.md | `concurrency/SPEC-CONC-001.wj` (xfail Q-013) |
-| SPEC-CONC-002 | concurrency.md | `concurrency/SPEC-CONC-002.wj` (xfail Q-013) |
-| SPEC-CONC-003 | concurrency.md | `concurrency/SPEC-CONC-003.wj` (xfail Q-013) |
-| SPEC-CONC-004 | concurrency.md | `concurrency/SPEC-CONC-004.wj` (xfail Q-013) |
+| SPEC-CONC-001 | concurrency.md | `concurrency/SPEC-CONC-001.wj` |
+| SPEC-CONC-002 | concurrency.md | `concurrency/SPEC-CONC-002.wj` |
+| SPEC-CONC-003 | concurrency.md | `concurrency/SPEC-CONC-003.wj` |
+| SPEC-CONC-004 | concurrency.md | `concurrency/SPEC-CONC-004.wj` |
 | SPEC-CONC-005 | concurrency.md | `concurrency/SPEC-CONC-005.wj` |
 | SPEC-CONC-006 | concurrency.md | untestable |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
@@ -28,7 +28,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EXEC-003 | execution.md | `execution/SPEC-EXEC-003.wj` |
 | SPEC-EXEC-004 | execution.md | `execution/SPEC-EXEC-004.wj` |
 | SPEC-EXEC-005 | execution.md | `execution/SPEC-EXEC-005.wj` |
-| SPEC-EXEC-006 | execution.md | `execution/SPEC-EXEC-006.wj` (xfail Q-023) |
+| SPEC-EXEC-006 | execution.md | `execution/SPEC-EXEC-006.wj` |
 | SPEC-EXEC-007 | execution.md | `execution/SPEC-EXEC-007.wj` |
 | SPEC-EXEC-008 | execution.md | untestable |
 | SPEC-EXEC-009 | execution.md | `execution/SPEC-EXEC-009.wj` |
@@ -123,7 +123,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-OWN-005 | ownership.md | `ownership/SPEC-OWN-005.wj` |
 | SPEC-OWN-006 | ownership.md | `ownership/SPEC-OWN-006.wj` |
 | SPEC-OWN-007 | ownership.md | `ownership/SPEC-OWN-007.wj` |
-| SPEC-OWN-008 | ownership.md | `ownership/SPEC-OWN-008.wj` (xfail Q-015) |
+| SPEC-OWN-008 | ownership.md | `ownership/SPEC-OWN-008.wj` |
 | SPEC-OWN-009 | ownership.md | untestable |
 | SPEC-PAT-001 | patterns.md | `patterns/SPEC-PAT-001.wj` |
 | SPEC-PAT-002 | patterns.md | `patterns/SPEC-PAT-002.wj` |
@@ -167,7 +167,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-STR-006 | strings.md | `strings/SPEC-STR-006.wj` |
 | SPEC-STR-007 | strings.md | `strings/SPEC-STR-007.wj` |
 | SPEC-STR-008 | strings.md | `strings/SPEC-STR-008.wj` |
-| SPEC-STR-009 | strings.md | `strings/SPEC-STR-009.wj` (xfail Q-006) |
+| SPEC-STR-009 | strings.md | `strings/SPEC-STR-009.wj` |
 | SPEC-STR-010 | strings.md | `strings/SPEC-STR-010.wj` |
 | SPEC-STR-011 | strings.md | `strings/SPEC-STR-011.wj` |
 | SPEC-TRT-001 | traits.md | `traits/SPEC-TRT-001.wj` |

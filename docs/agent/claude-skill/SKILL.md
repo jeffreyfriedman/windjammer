@@ -11,9 +11,11 @@ Read `docs/agent/WINDJAMMER_FOR_AGENTS.md` (or `wj docs idioms`) once per sessio
 ## The loop (always in this order)
 
 1. Write or edit the `.wj` file (small steps; one function at a time).
-2. `wj check --json FILE_OR_DIR`: parse, lint and transpile without cargo. Output is one JSON object
-   `{success, diagnostics:[{code, severity, message, span:{file,start_line,start_col}, repair_hint}]}`.
-   Exit 1 when `success` is false. Fix every error; honour `repair_hint.description`.
+2. `wj check --json FILE_OR_DIR`: front-end check without cargo or rustc. Output is one JSON object
+   (docs/diagnostics-schema.json) `{success, diagnostics:[{code, severity, message,
+   primary_span:{file,line_start,col_start,byte_start,byte_end}, help, fixes}]}`.
+   Exit 1 when `success` is false. Fix every error; `wj check --fix` applies `machine_applicable` fixes;
+   `wj explain CODE` explains any code.
 3. `wj run --interpret FILE`: instant execution (no cargo, no rustc). stdout is program output only.
    Exit 101 is a panic, 2 means the construct is unsupported in the interpreter.
 4. `wj test --interpret DIR_OR_FILE`: runs `@test`, `test_*` and `@test_cases` functions in `*_test.wj`.

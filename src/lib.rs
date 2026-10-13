@@ -19,6 +19,8 @@ pub mod analyzer;
 pub mod auto_clone;
 pub mod auto_fix;
 pub mod cargo_toml;
+pub mod check;
+pub mod diagnostics;
 pub mod codegen;
 pub mod component_analyzer;
 pub mod compiler_config;

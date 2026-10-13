@@ -18,6 +18,11 @@ pub struct Lexer {
 }
 
 impl Lexer {
+    /// 1-based (line, column) the lexer has reached (used to locate lexing failures).
+    pub fn position(&self) -> (usize, usize) {
+        (self.line, self.column)
+    }
+
     pub fn new(input: &str) -> Self {
         let chars: Vec<char> = input.chars().collect();
         let current_char = chars.first().copied();

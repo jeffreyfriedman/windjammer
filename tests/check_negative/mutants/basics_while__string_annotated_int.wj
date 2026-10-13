@@ -1,0 +1,13 @@
+// mutant: string_annotated_int of examples/verified/basics_while.wj
+fn main() {
+    let mut x = 1
+    let mut steps = 0
+    let mut line: int = ""
+    while x <= 32 {
+        line = line + "${x} "
+        x *= 2
+        steps += 1
+    }
+    println(line)
+    println("steps: ${steps}")
+}

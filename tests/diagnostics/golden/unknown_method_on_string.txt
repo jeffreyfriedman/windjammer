@@ -1,0 +1,7 @@
+error[WJ0015]: no method named `frobnicate` exists on any type in scope
+  --> unknown_method_on_string.wj:4:18
+  |
+4 |     println("${s.frobnicate()}")
+  |                  ^^^^^^^^^^ unknown method
+  = help: check the method name; see the standard library reference
+  = explain: wj explain WJ0015

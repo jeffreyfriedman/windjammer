@@ -1,0 +1,5 @@
+# Programs the build + rustc reject but `wj check` accepts: `<path> | <reason>`.
+# Ratchet: an entry that `wj check` starts catching fails tests/check_negative_gate.rs until removed.
+tests/diagnostics/cases/borrow_conflict.wj | two live `&mut` borrows (E0499): needs borrow/lifetime analysis the front end does not have
+tests/error_system/test_ownership.wj | use after move of a non-Copy value (E0382): needs move analysis in the front end
+tests/error_system_e2e/test_borrow_errors.wj | conflicting `&mut`/`&` borrows (E0499/E0502): needs borrow analysis in the front end

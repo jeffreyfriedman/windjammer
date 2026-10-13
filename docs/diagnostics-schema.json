@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://windjammer.dev/schemas/diagnostics/v2.json",
+  "title": "Windjammer diagnostics report",
+  "description": "Output of `wj check --json`, `wj build --json` and `wj test --json` (compile failures). schema_version 2; v1 was the legacy `wj build --json` shape.",
+  "type": "object",
+  "required": ["schema_version", "windjammer_version", "command", "success", "summary", "diagnostics"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "windjammer_version": { "type": "string" },
+    "command": { "enum": ["check", "build", "test"] },
+    "success": { "type": "boolean", "description": "true when there are no error-severity diagnostics" },
+    "summary": {
+      "type": "object",
+      "required": ["errors", "warnings", "files_checked", "files_cached", "elapsed_ms"],
+      "properties": {
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "files_checked": { "type": "integer", "minimum": 0 },
+        "files_cached": { "type": "integer", "minimum": 0 },
+        "elapsed_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
+    "effects_summary": { "type": "object" },
+    "taint_summary": { "type": "object" }
+  },
+  "$defs": {
+    "span": {
+      "type": "object",
+      "description": "Lines and columns are 1-based (columns count Unicode scalar values). Byte offsets are 0-based, half-open.",
+      "required": ["file", "byte_start", "byte_end", "line_start", "col_start", "line_end", "col_end"],
+      "properties": {
+        "file": { "type": "string" },
+        "byte_start": { "type": "integer", "minimum": 0 },
+        "byte_end": { "type": "integer", "minimum": 0 },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "col_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "col_end": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string" }
+      }
+    },
+    "edit": {
+      "description": "A text replacement: a span plus the replacement text. Insert = empty range; delete = empty replacement.",
+      "allOf": [
+        { "$ref": "#/$defs/span" },
+        { "type": "object", "required": ["replacement"], "properties": { "replacement": { "type": "string" } } }
+      ]
+    },
+    "fix": {
+      "type": "object",
+      "required": ["description", "applicability", "edits"],
+      "properties": {
+        "description": { "type": "string" },
+        "applicability": {
+          "enum": ["machine_applicable", "maybe_incorrect", "has_placeholders", "unspecified"],
+          "description": "Only machine_applicable fixes are applied by `wj check --fix`."
+        },
+        "edits": { "type": "array", "items": { "$ref": "#/$defs/edit" }, "minItems": 1 }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "severity", "category", "origin", "message", "primary_span", "docs"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^(WJ|W)[0-9]{4}$", "description": "Stable; never reused. WJxxxx = error classes, Wxxxx = lints." },
+        "severity": { "enum": ["error", "warning", "note", "help"] },
+        "category": { "enum": ["syntax", "name_resolution", "type", "ownership", "mutability", "module", "lint", "effects", "internal"] },
+        "origin": { "enum": ["front_end", "rustc_mapped", "lint", "internal"], "description": "rustc_mapped and internal mark front-end coverage gaps (ADR-0005)." },
+        "message": { "type": "string" },
+        "primary_span": { "oneOf": [{ "$ref": "#/$defs/span" }, { "type": "null" }] },
+        "secondary_spans": { "type": "array", "items": { "$ref": "#/$defs/span" } },
+        "help": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "fixes": { "type": "array", "items": { "$ref": "#/$defs/fix" } },
+        "docs": {
+          "type": "object",
+          "required": ["explain", "url"],
+          "properties": { "explain": { "type": "string", "description": "shell command, e.g. `wj explain WJ0001`" }, "url": { "type": "string" } }
+        },
+        "maturity": { "enum": ["proven", "high_confidence", "heuristic", "hint"] }
+      }
+    }
+  }
+}
