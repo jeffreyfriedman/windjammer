@@ -9,6 +9,18 @@ impl Parser {
         &mut self,
         min_precedence: u8,
     ) -> Result<&'static Expression<'static>, String> {
+        // A (sub)expression parsed here is never itself a prefix operator's operand, whatever
+        // context it is nested in (parentheses, index, arguments): `-(a as u8)` keeps its cast.
+        let saved = std::mem::replace(&mut self.in_unary_operand, false);
+        let r = self.parse_binary_expression_inner(min_precedence);
+        self.in_unary_operand = saved;
+        r
+    }
+
+    fn parse_binary_expression_inner(
+        &mut self,
+        min_precedence: u8,
+    ) -> Result<&'static Expression<'static>, String> {
         let mut left = self.parse_prefixed_or_primary()?;
 
         loop {

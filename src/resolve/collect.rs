@@ -231,6 +231,7 @@ impl<'a> Collected<'a> {
                 target,
                 is_pub,
                 location,
+                ..
             } => {
                 let id = self.alloc_in(module, DefKind::TypeAlias, name, &mp, location);
                 self.defs_set_pub(id, *is_pub);
