@@ -1,0 +1,15 @@
+// expect: WJ0014
+struct Counter {
+    count: int,
+}
+
+impl Counter {
+    fn show(self) {
+        println("${self.cnt}")
+    }
+}
+
+fn main() {
+    let c = Counter { count: 1 }
+    c.show()
+}

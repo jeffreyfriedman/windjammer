@@ -1,0 +1,12 @@
+// expect: WJ0006
+mod util {
+    pub fn helper() -> int {
+        1
+    }
+}
+
+use util::missing
+
+fn main() {
+    println("hi")
+}

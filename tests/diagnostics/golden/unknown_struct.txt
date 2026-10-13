@@ -1,0 +1,7 @@
+error[WJ0005]: cannot find struct `UndefinedStruct` in this scope
+  --> unknown_struct.wj:3:13
+  |
+3 |     let p = UndefinedStruct { x: 10, y: 20 }
+  |             ^^^^^^^^^^^^^^^ not found in this scope
+  = help: define it with `struct UndefinedStruct { .. }` or import it with `use`
+  = explain: wj explain WJ0005

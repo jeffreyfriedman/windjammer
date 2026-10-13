@@ -1,0 +1,13 @@
+// mutant: argument_wrong_type of examples/verified/pipe_result_question.wj
+fn half(n: int) -> Result<int, string> {
+    if n % 2 != 0 { Err("odd ${n}") } else { Ok(n / 2) }
+}
+
+fn quarter(n: int) -> Result<int, string> {
+    n |> half()? |> half()
+}
+
+fn main() {
+    println("${quarter("oops"):?}")
+    println("${quarter(6):?}")
+}
