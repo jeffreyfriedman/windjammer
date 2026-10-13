@@ -15,9 +15,18 @@ impl Parser {
         let mut statements = Vec::new();
 
         while self.current_token() != &Token::RBrace && self.current_token() != &Token::Eof {
-            // A `;` that no statement consumed (after `if {..}`, `loop {..}`, or doubled) is an
-            // empty statement.
+            // A `;` terminates the statement before it (`if c { .. };` leaves it for us), but a
+            // `;` with no statement before it is an error (SPEC-GRAM-007).
             if self.current_token() == &Token::Semicolon {
+                let after_stmt = !statements.is_empty()
+                    && self.position > 0
+                    && self.tokens[self.position - 1].token != Token::Semicolon;
+                if !after_stmt {
+                    return Err(format!(
+                        "Unexpected `;`: a `;` must follow a statement (at {})",
+                        self.pos_desc()
+                    ));
+                }
                 self.advance();
                 continue;
             }
@@ -431,6 +440,16 @@ impl Parser {
         }))
     }
 
+    /// After `return`: is this a bare return? A value must start on the same line as `return`
+    /// (docs/design/statement-boundaries.md, STMT-011).
+    pub(in crate::parser) fn return_has_no_value(&self) -> bool {
+        self.had_newline_before_current()
+            || matches!(
+                self.current_token(),
+                Token::RBrace | Token::Semicolon | Token::Comma | Token::Eof
+            )
+    }
+
     fn parse_return(&mut self) -> Result<&'static Statement<'static>, String> {
         // Location of the `return` keyword itself (lints and `wj fix` edit at this position).
         let return_location = self.current_location();
@@ -438,10 +457,7 @@ impl Parser {
 
         // TDD FIX: Check for Comma too! Match arms can have: None => return,
         // The comma indicates end of return statement (no value to return)
-        let stmt = if matches!(
-            self.current_token(),
-            Token::RBrace | Token::Semicolon | Token::Comma
-        ) {
+        let stmt = if self.return_has_no_value() {
             self.alloc_stmt(Statement::Return {
                 value: None,
                 location: return_location,

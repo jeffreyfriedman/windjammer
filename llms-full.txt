@@ -432,10 +432,6 @@ Usage: wj run [OPTIONS] <FILE> [ARGS]...
 | `<ARGS>` | ARGS |  | Arguments to pass to the program |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
-| `--sched-seed` | N | 0 | With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
-| `--deterministic-time` | DETERMINISTIC_TIME |  | With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it |
-| `--allow-network` | ALLOW_NETWORK |  | With --interpret: allow plain http:// client requests (default: the http client refuses) |
-| `--mock-http` | FILE |  | With --interpret: answer http client calls from a JSON file of canned responses |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -738,12 +734,8 @@ Usage: wj cache setup
 Install wj and plugins to ~/.wj/bin/ and ensure PATH
 
 ```text
-Usage: wj self-install [OPTIONS]
+Usage: wj self-install
 ```
-
-| Argument | Value | Default | Description |
-|---|---|---|---|
-| `--dry-run` | DRY_RUN |  | Print what would be installed (binary, plugins, embedded std/ files) without writing anything |
 
 
 ---
@@ -756,10 +748,10 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 130 | 106 | 24 |
-| `go` | 130 | 127 | 3 |
-| `js` | 130 | 127 | 3 |
-| `ts` | 130 | 128 | 2 |
+| `rust` | 135 | 110 | 25 |
+| `go` | 135 | 130 | 5 |
+| `js` | 135 | 130 | 5 |
+| `ts` | 135 | 133 | 2 |
 
 ### Known-unsupported pairs by cause
 
@@ -767,13 +759,18 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 |---|---|---|
 | `go` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
 | `go` | mut-ref-to-int-locals | 1 |
+| `go` | portable-generic-into | 1 |
+| `go` | portable-type-aliases | 1 |
 | `go` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
 | `js` | format flags `+` and `#` (sign / 0x prefix) are not implemented by the | 1 |
 | `js` | mut-ref-to-int-parameters | 1 |
+| `js` | portable-generic-into | 1 |
+| `js` | portable-type-aliases | 1 |
 | `js` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
 | `rust` | mut-ref-to-int-parameters | 1 |
 | `rust` | rust-closure-returned-as-fn-pointer | 1 |
 | `rust` | rust-int-literal-width-inference | 14 |
+| `rust` | rust-into-bound-param-borrowed | 1 |
 | `rust` | rust-std-runtime-crate-needed-by-rustc | 4 |
 | `rust` | rust-str-vs-string-in-collect-and-concat | 2 |
 | `rust` | rust-tail-none-cast | 2 |

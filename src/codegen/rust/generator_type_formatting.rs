@@ -114,6 +114,47 @@ impl<'ast> CodeGenerator<'ast> {
         self.is_type_copy(pointee)
     }
 
+    /// `<T: Bound, U>` or the empty string.
+    pub(crate) fn angle_type_params(&self, type_params: &[crate::parser::TypeParam]) -> String {
+        if type_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", self.format_type_params(type_params))
+        }
+    }
+
+    /// `pub type Name<T: Bound> = Target;` (generic aliases keep their parameters).
+    pub(crate) fn generate_type_alias(
+        &self,
+        name: &str,
+        type_params: &[crate::parser::TypeParam],
+        target: &crate::parser::Type,
+        is_pub: bool,
+    ) -> String {
+        let pub_prefix = if is_pub { "pub " } else { "" };
+        let generics = self.angle_type_params(type_params);
+        format!(
+            "{}type {}{} = {};\n",
+            pub_prefix,
+            name,
+            generics,
+            self.type_to_rust(target)
+        )
+    }
+
+    /// A trait bound with type arguments is stored in Windjammer spelling (`Into<string>`); its
+    /// arguments are types and must be mapped like any other type (`Into<String>`).
+    pub(crate) fn bound_to_rust(&self, bound: &str) -> String {
+        if !bound.contains('<') {
+            return bound.to_string();
+        }
+        let tokens = crate::lexer::Lexer::new(bound).tokenize_with_locations();
+        match crate::parser::Parser::new(tokens).parse_type() {
+            Ok(ty) => self.type_to_rust(&ty),
+            Err(_) => bound.to_string(),
+        }
+    }
+
     // Example: [TypeParam { name: "T", bounds: ["Display", "Clone"] }] -> "T: Display + Clone"
     pub(crate) fn format_type_params(&self, type_params: &[crate::parser::TypeParam]) -> String {
         type_params
@@ -131,7 +172,7 @@ impl<'ast> CodeGenerator<'ast> {
                             if let Some(traits) = self.bound_aliases.get(bound) {
                                 traits.clone()
                             } else {
-                                vec![bound.clone()]
+                                vec![self.bound_to_rust(bound)]
                             }
                         })
                         .collect();
