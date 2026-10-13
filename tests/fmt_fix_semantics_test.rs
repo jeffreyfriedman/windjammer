@@ -81,13 +81,15 @@ pub fn unfix(src: &str) -> String {
     let mut out = String::new();
     for line in src.lines() {
         let mut l = line.to_string();
-        if let Some(i) = l.find("println(\"") {
+        // Only the free function `println(..)`, not methods such as `stdout.println(..)`.
+        let free = l.find("println(\"").filter(|&i| !l[..i].ends_with(|c: char| c == '.' || c == '_' || c.is_alphanumeric()));
+        if let Some(i) = free {
             let rest = &l[i + 9..];
             if let Some(end) = rest.find("\")") {
                 let body = &rest[..end];
                 let mut tmpl = String::new();
                 let mut args = Vec::new();
-                let mut ok = !body.contains('{') || body.contains("${");
+                let mut ok = true;
                 let mut chars = body.char_indices().peekable();
                 while let Some((j, c)) = chars.next() {
                     if c == '$' && body[j..].starts_with("${") {
@@ -102,6 +104,10 @@ pub fn unfix(src: &str) -> String {
                             }
                             _ => ok = false,
                         }
+                    } else if c == '{' || c == '}' {
+                        // A literal brace in a Rust format string is doubled.
+                        tmpl.push(c);
+                        tmpl.push(c);
                     } else {
                         tmpl.push(c);
                     }
@@ -110,7 +116,7 @@ pub fn unfix(src: &str) -> String {
                     let new = format!("println!(\"{tmpl}\", {})", args.join(", "));
                     l = format!("{}{}{}", &l[..i], new, &rest[end + 2..]);
                 } else if ok && !body.contains('$') {
-                    l = format!("{}println!(\"{}\"){}", &l[..i], body, &rest[end + 2..]);
+                    l = format!("{}println!(\"{}\"){}", &l[..i], tmpl, &rest[end + 2..]);
                 }
             }
         }
@@ -190,6 +196,15 @@ fn fmt_and_fix_preserve_behavior_through_the_cli() {
     let keys: Vec<String> = fails.iter().map(|f| f.split(':').next().unwrap().to_string()).collect();
     let new: Vec<_> = fails.iter().zip(&keys).filter(|(_, k)| !known.contains(k)).map(|(f, _)| f.clone()).collect();
     let stale: Vec<_> = known.iter().filter(|k| !keys.contains(k)).collect();
+    if !root().join("tests/fmt_fix_known.txt").exists() && std::env::var("FMT_FIX_BLESS").is_ok() {
+        let mut body = String::from("# fmt/fix metamorphic failures (tests/fmt_fix_semantics_test.rs). `<fmt|fix> <program> | message`. Only shrinks.\n");
+        for f in &fails {
+            let (k, msg) = f.split_once(": ").unwrap();
+            body.push_str(&format!("{k} | {msg}\n"));
+        }
+        std::fs::write(root().join("tests/fmt_fix_known.txt"), body).unwrap();
+        return;
+    }
     assert!(new.is_empty(), "behavior changed by fmt/fix:\n{}", new.join("\n"));
     assert!(stale.is_empty(), "now passing, remove from tests/fmt_fix_known.txt: {stale:?}");
 }
@@ -201,5 +216,7 @@ fn selftest_unfix_produces_the_deprecated_surface() {
     assert!(u.contains("let v = vec![1, 2]"), "{u}");
     assert!(u.contains("println!(\"n={} v\", n)"), "{u}");
     assert!(u.contains("println!(\"plain\")"), "{u}");
+    assert_eq!(unfix("    stdout.println(\"x ${n}\")\n"), "    stdout.println(\"x ${n}\")\n", "methods are not macros");
     assert_eq!(unfix("let s = \"${a.b}\"\n"), "let s = \"${a.b}\"\n", "non-identifier interpolation is left alone");
+    assert!(unfix("    println(\"lit {x} ${n}\")\n").contains("println!(\"lit {{x}} {}\", n)"), "literal braces are escaped");
 }
