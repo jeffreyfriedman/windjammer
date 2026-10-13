@@ -94,3 +94,6 @@ The generator emits `// TODO: defer not yet implemented` (once per deferred stat
 
 ## Q-031 Rust backend: function in a nested `pub mod` is not found
 `mod geo { pub mod inner { pub fn one() } }` called as `geo::inner::one()` fails with E0425 (`cannot find function one in module geo::inner`). Evidence: SPEC-MOD-001 BUILD on Rust.
+
+## Q-032 Effects and capabilities are designed, not implemented (ADR-0021)
+ADR-0021 (accepted for design 2026-10-12) specifies effect inference, grants, capability values, `durable fn` and record/replay; the implementation is staged (E1-E7) and waits on convergence C2/C3 for provenance and resolved calls. Today: `src/ir/effects.rs` infers coarse effects by module name (no `time`/`random`/`console`, no resources, no provenance) and the build checks them only against `[app_capabilities]`; `wj check` reports no effects; the interpreter gates only the http client (`--allow-network`, `--mock-http`) and leaves fs/env/process ambient. Rec.: implement stage E1 test-first against the `tests/spec/effects/` examples. Repro: every `xfail: Q-032` example under `tests/spec/effects/`.
