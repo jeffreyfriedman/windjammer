@@ -1,0 +1,8 @@
+// expect: rustc:WJ0003
+fn five() -> int {
+    "five"
+}
+
+fn main() {
+    println("${five()}")
+}

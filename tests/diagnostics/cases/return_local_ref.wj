@@ -1,0 +1,9 @@
+// expect: rustc:WJ0022
+fn longest() -> &string {
+    let s = "hi"
+    &s
+}
+
+fn main() {
+    println("x")
+}

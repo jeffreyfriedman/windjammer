@@ -1,0 +1,13 @@
+// mutant: argument_wrong_type of examples/verified/pipe_basics.wj
+fn double(x: int) -> int { x * 2 }
+fn add(x: int, y: int) -> int { x + y }
+fn shout(s: string) -> string { s.to_uppercase() + "!" }
+fn greet(name: string) -> string { "hello ${name}" }
+
+fn main() {
+    let a = 3 |> add("oops") |> double
+    println("${a}")
+    let b = 4 |> double |> add(10)
+    println("${b}")
+    println("ada" |> greet |> shout)
+}

@@ -1,0 +1,23 @@
+// mutant: unknown_method of examples/verified/prog_text_wrap.wj
+fn wrap(text: string, width: int) -> Vec<string> {
+    let mut lines: Vec<string> = []
+    let mut cur = ""
+    for w in text.split_whitespace() {
+        if cur.length_of() > 0 && (cur.len() + 1 + w.len()) as int > width {
+            lines.push(cur)
+            cur = w.to_string()
+        } else if cur.len() == 0 {
+            cur = w.to_string()
+        } else {
+            cur = cur + " " + w
+        }
+    }
+    if cur.len() > 0 { lines.push(cur) }
+    lines
+}
+
+fn main() {
+    for l in wrap("the quick brown fox jumps over the lazy dog", 15) {
+        println(l)
+    }
+}

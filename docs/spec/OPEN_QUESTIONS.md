@@ -6,12 +6,14 @@ Each entry is a place where the implementation contradicts an accepted ADR or th
 Old `docs/windjammer.ebnf` lists `\xNN`; the lexer maps any unknown `\c` to `c` (so `"\x41"` is `x41`). Rule SPEC-LEX-010 records the implementation. Rec.: reject unknown escapes with an error and add `\u{...}`; hex escapes only if byte strings arrive. Repro: `tests/spec/lexical/SPEC-LEX-010.wj`.
 
 ## Q-002 Block comments
+**Resolved (wt/parser-gaps2):** nested `/* */` implemented in the lexer and formatter (SPEC-LEX-015 passes).
 Old grammar documents nested `/* */`; the lexer has no block comments (`/*` is `/` `*`, a parse error). Rec.: implement nesting (Rust-like, since users paste Rust). Repro: SPEC-LEX-015 (xfail).
 
 ## Q-003 `int(x)` / `float(x)` checked conversions
 ADR-0015 section 2 (Accepted) says these replace `as`. The parser rejects `int(a)` (`int` is a type keyword token). `as` is the only conversion. Rec.: parse `int(..)`/`float(..)` as conversion calls; keep `as` until `wj fix` migrates. Repro: SPEC-NUM-011 (xfail).
 
 ## Q-004 `as` versus prefix minus
+**Resolved (wt/parser-gaps2):** prefix operators bind tighter than `as` (`-1 as u8` is 255; SPEC-EXPR-005 passes).
 `as` is a postfix operator here, so `-1 as u8` is `-(1 as u8)` and panics; Rust and C give `(-1) as u8 = 255`. Rec.: make `as` bind looser than prefix unary operators. Repro: SPEC-EXPR-005 (xfail).
 
 ## Q-005 `loop` with `break value` as an expression
@@ -30,6 +32,7 @@ The Rust backend still infers `mut` for locals (`auto_needs_mut`), and the inter
 `m::secret()` from outside `mod m` runs. The Rust backend relies on rustc. Rec.: a resolver check (depends on the DefId resolver work). Repro: SPEC-MOD-004 (xfail).
 
 ## Q-010 Generic type aliases
+**Resolved (wt/parser-gaps2):** `type Name<T> = ..` accepted; Rust backend emits it (SPEC-ITEM-011 passes; portable backends do not expand aliases, docs/known-issues/portable-type-aliases.md).
 `type Pair<T> = (T, T)` is a parse error. Rec.: accept generic parameters on `type`. Repro: SPEC-ITEM-011 (xfail).
 
 ## Q-011 Struct field defaults
@@ -57,6 +60,7 @@ Type/borrow errors come from translated rustc output; `wj check` does not check 
 Rust prints `1000000000000000000000`; Go and JavaScript print exponents (`1e+21`). Also `{:.N}` ties: Rust/Python round half to even on the exact binary value, JavaScript `toFixed` differs in places. Corpus programs `55_float_format`, `101` pin the safe range. Rec.: declare the guaranteed range in SPEC-NUM-013 (|x| < 1e16) or make the portable layer implement Rust's algorithm. No xfail (the interpreter agrees with Rust).
 
 ## Q-019 Line-initial `[`
+**Resolved (wt/parser-gaps2):** line-initial `[` starts a new statement (SPEC-GRAM-004 passes).
 docs/design/statement-boundaries.md (normative table, merged with parser-gaps) says a line that begins with anything other than `.`, `*` (non-assignment) or a binary operator starts a new statement, so `f()` newline `[1, 2].len()` is two statements. The parser still reads the `[` as an index into the previous line (`Expected RBracket, got Comma`). Rec.: implement the documented rule (add `[` to the new-statement set, as `(` already is). Repro: SPEC-GRAM-004 (xfail).
 
 ## Q-020 Loop labels
@@ -72,12 +76,15 @@ Examples run in-process via the interpreter. The Rust/Go/JS backends are not run
 **Resolved** (interp-gaps2): on the interpreter's big-stack thread (CLI, `wj test`, REPL, and any interpreter created on that thread) recursion is bounded by stack bytes (about 120k frames in a debug build, far more in release), not a frame count; other threads keep a 10,000-frame guard. SPEC-EXEC-006 is a normal example.
 
 ## Q-024 Trait bounds cannot take type arguments
+**Resolved (wt/parser-gaps2):** bounds take type arguments in `<..>` and `where` (SPEC-TRT-008 passes on the interpreter; Rust ownership inference still borrows the bounded parameter, docs/known-issues/rust-into-bound-param-borrowed.md).
 `fn f<T: Into<string>>(x: T)`, `where T: Clone + Into<string>`, `trait A: B<int>` and `trait V<T: Bound>` are parse errors; only plain trait names are bounds (`struct S<T: Clone>` and `fn f<T: A + B>` work). This blocks idiomatic `Into`, `From`, `Iterator`, `Add<Output=..>` bounds. Rec.: parse `Name<types>` in bounds everywhere (the parser already parses type arguments in types). Repro: SPEC-TRT-008 (xfail); grammar.ebnf `bound`.
 
 ## Q-025 Generic methods in traits
+**Resolved (wt/parser-gaps2):** generic methods in traits parse and are emitted (SPEC-TRT-007 passes).
 `trait T { fn m<U>(self, x: U) }` fails at the `<` (impls may have generic methods). Rec.: share the function-signature parser. Repro: SPEC-TRT-007 (xfail).
 
 ## Q-026 `return` followed by a newline swallows the next statement (semantic bug)
+**Resolved (wt/parser-gaps2):** `return` takes a value only on the same line; `break`/`continue` labels only on the same line (SPEC-STMT-011 passes).
 `return` NEWLINE `println("x")` parses as `return println("x")`: the call runs, then the function returns. Silent wrong behaviour for any "early return" without value followed by more code in the same block. Rec.: a bare `return` ends at a newline when the next line cannot continue an expression (or always require the operand on the same line). Repro: SPEC-STMT-011 (xfail). Same family: a bare `break` followed by a line that starts with a label (`'inner: while ...`) takes the label as its own and fails to parse (found by the spec grammar's random corpus). The grammar models both by ending bare `return`/`break`/`continue` with `;`.
 
 ## Q-027 Rust backend: unannotated integer literals are `i32`, not `int` (i64)

@@ -1,0 +1,7 @@
+error[WJ0002]: cannot find function `calculate_total` in this scope
+  --> undefined_function.wj:3:18
+  |
+3 |     let result = calculate_total(100, 200)
+  |                  ^^^^^^^^^^^^^^^ not found in this scope
+  = help: define it, or import it with `use`
+  = explain: wj explain WJ0002
