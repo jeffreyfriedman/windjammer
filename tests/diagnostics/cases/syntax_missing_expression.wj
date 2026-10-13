@@ -1,0 +1,4 @@
+// expect: WJ0011
+fn main() {
+    let x = 
+}

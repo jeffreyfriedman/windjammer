@@ -1,0 +1,15 @@
+// mutant: int_annotated_string of examples/verified/algo_collatz.wj
+fn collatz(start: int) -> int {
+    let mut n = start
+    let mut steps: string = 0
+    while n != 1 {
+        if n % 2 == 0 { n = n / 2 } else { n = 3 * n + 1 }
+        steps += 1
+    }
+    steps
+}
+
+fn main() {
+    println("collatz(27) = ${collatz(27)}")
+    println("collatz(97) = ${collatz(97)}")
+}

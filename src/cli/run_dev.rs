@@ -19,7 +19,7 @@ pub enum Mode {
     Compiled { release: bool },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RunOptions {
     pub path: Option<PathBuf>,
     pub bin: Option<String>,
@@ -28,6 +28,8 @@ pub struct RunOptions {
     pub target: String,
     /// Apply edits to the running program (ADR-0021); interpreter only.
     pub hot: bool,
+    /// Interpreter knobs (scheduler seed, deterministic time, network policy).
+    pub interp: runner::RunOptions,
     /// Called with the entry file before interpreting (the binary passes `wj build`'s lint report).
     pub lint: Option<fn(&Path)>,
 }
@@ -62,7 +64,7 @@ pub fn execute(opts: &RunOptions) -> i32 {
                     return 2;
                 }
             };
-            let eo = runner::EntryOptions { fallback: auto, host, hot: opts.hot };
+            let eo = runner::EntryOptions { fallback: auto, host, hot: opts.hot, run: opts.interp.clone() };
             match runner::run_entry(&target.entry, opts.args.clone(), eo) {
                 RunOutcome::Exited(c) => c,
                 RunOutcome::NeedsCompiled(e) => {

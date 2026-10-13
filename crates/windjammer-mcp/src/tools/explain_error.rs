@@ -61,6 +61,15 @@ fn explain_error_with_catalog(
     // Try WJ code in error message
     for token in error.split_whitespace() {
         if token.starts_with("WJ") && token.len() >= 6 {
+            // The shared diagnostics registry (same entries as `wj explain`) is authoritative.
+            let code = token.trim_matches(|c: char| !c.is_alphanumeric());
+            if let Some(info) = windjammer::diagnostics::codes::lookup(code) {
+                return (
+                    format!("{} {}", info.explanation, info.cause),
+                    info.fix.to_string(),
+                    Some(info.example_good.to_string()),
+                );
+            }
             if let Ok(catalog) = crate::agent_index::load_errors_json() {
                 if let Some(entry) = catalog.get(token.trim_matches(|c: char| !c.is_alphanumeric()))
                 {

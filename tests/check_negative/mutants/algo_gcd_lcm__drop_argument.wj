@@ -1,0 +1,14 @@
+// mutant: drop_argument of examples/verified/algo_gcd_lcm.wj
+fn gcd(a: int, b: int) -> int {
+    if b == 0 { a } else { gcd(b) }
+}
+
+fn lcm(a: int, b: int) -> int {
+    a / gcd(a, b) * b
+}
+
+fn main() {
+    println("gcd(48, 18) = ${gcd(48, 18)}")
+    println("gcd(17, 5) = ${gcd(17, 5)}")
+    println("lcm(48, 18) = ${lcm(48, 18)}")
+}

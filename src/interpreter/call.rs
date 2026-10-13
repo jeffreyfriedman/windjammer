@@ -238,8 +238,17 @@ impl Interpreter {
     ) -> R {
         if let Expression::Identifier { name, .. } = function {
             if self.lookup_var(name).is_none() {
+                // call-site cache: a plain call that resolved to a module function keeps resolving to it
+                let site = function as *const Expression<'static> as usize;
+                if let Some(f) = self.call_cache.get(&site).cloned() {
+                    let args = self.eval_args(arguments, Some(&f), false)?;
+                    return self.call_func_g(&f, args, None, &[], expected);
+                }
                 if let Some(intr) = self.intrinsic_for_call(name) {
                     return self.eval_intrinsic_call(intr, function, arguments);
+                }
+                if let Some(f) = self.modules[self.scope.module].funcs.get(name.as_str()).cloned() {
+                    self.call_cache.insert(site, f);
                 }
                 return self.call_named(name, arguments, &[], expected);
             }
@@ -303,7 +312,7 @@ impl Interpreter {
         if let Expression::Unary { op: crate::parser::UnaryOp::MutRef, .. } = a {
             return self.eval_raw(a);
         }
-        self.eval(a)
+        self.eval_keep_guard(a)
     }
 
     pub(crate) fn call_named(
@@ -364,6 +373,9 @@ impl Interpreter {
             }
             Some(Resolved::Builtin(p)) => {
                 let args = self.eval_args(arguments, None, false)?;
+                if p.ends_with("json::parse_string") && self.type_hint.is_none() {
+                    self.type_hint = targs.first().cloned().or(expected);
+                }
                 self.call_builtin_fn(&p, args)
             }
             Some(Resolved::Const(m, n)) => {
@@ -390,6 +402,10 @@ impl Interpreter {
                         let recv = args.remove(0);
                         return self.call_method_value(recv, method, args, None);
                     }
+                    if method == "default" && args.is_empty() && (self.structs.contains_key(ty) || self.enums.contains_key(ty)) {
+                        // `@derive(Default)` (or a field-wise default) for a user type
+                        return self.default_for(&Type::Custom(ty.to_string()));
+                    }
                     return Err(unsupported(format!(
                         "cannot resolve `{}`: unknown type or unimplemented std item",
                         name
@@ -414,7 +430,9 @@ impl Interpreter {
                 *slot.borrow_mut() = Value::Unit;
             }
         }
-        self.drop_unreachable(&[v], &[])?;
+        // `drop(x)` takes ownership: the object dies now even if an alias (an auto-borrowed caller
+        // copy) still mentions it; values behind an `Rc` only lose this handle
+        self.drop_values(&[v], &[], true)?;
         Ok(Value::Unit)
     }
 
@@ -496,6 +514,11 @@ impl Interpreter {
                 }
             }
             Callable::Deferred { .. } => Err(semantic("a future is not callable; `.await` it")),
+            Callable::Thunk { func, args } => {
+                let (f, a) = (func.clone(), args.clone());
+                let r = self.call_value(&f, a)?;
+                self.await_value(r)
+            }
             Callable::Path(p) => {
                 let p = p.to_string();
                 if let Some((en, var)) = p.rsplit_once("::") {
@@ -573,6 +596,9 @@ impl Interpreter {
 
     /// `.await`: run a deferred async call to completion; any other value is already a result.
     pub(crate) fn await_value(&mut self, v: Value) -> R {
+        if let Some(r) = super::builtins::thread::wait_if_task(self, &v) {
+            return r;
+        }
         match &v {
             Value::Func(c) => match &**c {
                 Callable::Deferred { func, args, self_val, targs, expected } => {
@@ -602,6 +628,7 @@ impl Interpreter {
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
         let mut scope = Scope::new(f.module);
+        scope.vars = self.vec_pool.pop().unwrap_or_default();
         scope.self_ty = f.self_ty.clone();
         scope.ret_ty = f.ret;
         if !f.type_params.is_empty() {
@@ -681,7 +708,8 @@ impl Interpreter {
         };
         let r = self.exit_scope_vars(0, r);
         self.depth -= 1;
-        self.scope = self.frames.pop().expect("frame stack");
+        let done = std::mem::replace(&mut self.scope, self.frames.pop().expect("frame stack"));
+        self.recycle_vars(done.vars);
         self.backtrace.pop();
         r
     }
@@ -806,6 +834,17 @@ impl Interpreter {
         method: &str,
         args: Vec<Value>,
     ) -> R {
+        if let Value::Native(n) = &recv {
+            if let Some(f) = self.builtins.native_method(n.type_name(), method) {
+                return f(self, &recv, args);
+            }
+        }
+        if let Value::Struct(sv) = &recv {
+            // builtin structs (`regex::Match`, `url::Url`...) keep their methods in the native table
+            if let Some(f) = self.builtins.native_method(&sv.name, method) {
+                return f(self, &recv, args);
+            }
+        }
         let kind = Kind::of(&recv);
         let imp = self.builtins.method(kind, method);
         match imp {
@@ -821,8 +860,15 @@ impl Interpreter {
                     None => Place::temp(recv),
                 };
                 let mut v = place.take()?;
+                let before = if self.drop_types.is_empty() { None } else { Some(v.clone()) };
                 let r = f(self, &mut v, args);
                 place.write(v)?;
+                // elements a mutating builtin discarded (`clear`, `truncate`, `remove`, overwritten map
+                // entries...) are dropped now; what it returns stays alive
+                if let (Some(before), Ok(res)) = (before, &r) {
+                    let keep = res.clone();
+                    self.drop_unreachable(&[before], &[&keep])?;
+                }
                 r
             }
             Some(MethodImpl::Place(f)) => {

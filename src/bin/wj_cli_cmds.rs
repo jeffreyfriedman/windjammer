@@ -78,6 +78,10 @@ pub fn run(cli: Cli) -> Result<()> {
             release,
             watch,
             hot,
+            sched_seed,
+            deterministic_time,
+            allow_network,
+            mock_http,
             defer_drop,
             defer_drop_threshold,
         } => {
@@ -96,7 +100,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 Mode::Auto
             };
             let lint = windjammer::cli_execution::report_build_lints;
-            let code = execute(&RunOptions { path, bin, args, mode, target, hot, lint: Some(lint) });
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, deterministic_time, allow_network, mock_http };
+            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint) });
             if code != 0 {
                 std::process::exit(code);
             }
@@ -130,7 +135,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
             }
             if interpret {
-                return interpret_tests(path.as_deref(), filter.as_deref());
+                return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json);
             }
             windjammer::run_tests_with_options(windjammer::TestRunOptions {
                 path,
@@ -160,8 +165,13 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Lint { path, strict } => {
             windjammer::cli::lint::execute(&path, strict)?;
         }
-        Commands::Check { path, json } => {
-            windjammer::cli::check::run(path.as_deref(), json)?;
+        Commands::Check {
+            path,
+            json,
+            watch,
+            fix,
+        } => {
+            windjammer::cli::check::execute(path.as_deref(), json, watch, fix)?;
         }
         Commands::Add {
             package,
@@ -230,8 +240,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::cli::cache::execute_setup()?;
             }
         },
-        Commands::SelfInstall => {
-            windjammer::cli::self_install::execute()?;
+        Commands::SelfInstall { dry_run } => {
+            windjammer::cli::self_install::execute(dry_run)?;
         }
         Commands::Plugin(plugin_args) => {
             if plugin_args.is_empty() {
@@ -292,6 +302,10 @@ fn cmd_generate_docs(output: &std::path::Path, format: &str) -> Result<()> {
 }
 
 fn cmd_explain(code: &str) -> Result<()> {
+    if let Some(text) = windjammer::diagnostics::codes::explain(&code.to_uppercase()) {
+        println!("{text}");
+        return Ok(());
+    }
     let registry = windjammer::error_codes::get_registry();
 
     if let Some(wj_code) = registry.get(code) {
@@ -456,17 +470,3 @@ fn run_repl() -> Result<()> {
     Ok(())
 }
 
-/// `wj test --interpret`: run `@test` / `test_*` functions without compiling.
-fn interpret_tests(path: Option<&std::path::Path>, filter: Option<&str>) -> Result<()> {
-    let root = path.unwrap_or_else(|| std::path::Path::new("."));
-    let results = windjammer::interpreter::runner::run_tests(root, filter);
-    let code = windjammer::interpreter::runner::report_tests(&results);
-    if results.is_empty() {
-        eprintln!("no test files (*_test.wj) found under {}", root.display());
-        std::process::exit(1);
-    }
-    if code != 0 {
-        std::process::exit(code);
-    }
-    Ok(())
-}

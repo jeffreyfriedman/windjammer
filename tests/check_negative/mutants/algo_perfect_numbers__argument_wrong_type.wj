@@ -1,0 +1,16 @@
+// mutant: argument_wrong_type of examples/verified/algo_perfect_numbers.wj
+fn is_perfect(n: int) -> bool {
+    let mut s = 0
+    for d in 1..n {
+        if n % d == 0 { s += d }
+    }
+    s == n
+}
+
+fn main() {
+    let mut found: Vec<string> = []
+    for n in 2..500 {
+        if is_perfect("oops") { found.push(n.to_string()) }
+    }
+    println("perfect: ${found.join(" ")}")
+}

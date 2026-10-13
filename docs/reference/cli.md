@@ -23,6 +23,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj stats` | Show error statistics |
 | `wj errors` | Interactive error navigator (TUI) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
+| `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -99,6 +100,10 @@ Usage: wj run [OPTIONS] <FILE> [ARGS]...
 | `<ARGS>` | ARGS |  | Arguments to pass to the program |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
+| `--sched-seed` | N | 0 | With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
+| `--deterministic-time` | DETERMINISTIC_TIME |  | With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it |
+| `--allow-network` | ALLOW_NETWORK |  | With --interpret: allow plain http:// client requests (default: the http client refuses) |
+| `--mock-http` | FILE |  | With --interpret: answer http client calls from a JSON file of canned responses |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -190,7 +195,9 @@ Usage: wj check [OPTIONS] [PATH]
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `<PATH>` | PATH |  | Path to .wj file or directory (default: current directory) |
-| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json) |
+| `--watch` | WATCH |  | Re-check whenever a .wj file changes |
+| `--fix` | FIX |  | Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...) |
 
 ## `wj add`
 
@@ -272,6 +279,20 @@ Usage: wj docs [OPTIONS] [QUERY]...
 | `--json` | JSON |  | Print search results as JSON |
 | `-o`, `--output` | OUTPUT | ./docs/errors | Output directory for generated docs |
 | `-f`, `--format` | FORMAT | html | Format (html, markdown, json) |
+
+## `wj explain-ownership`
+
+Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites)
+
+```text
+Usage: wj explain-ownership [OPTIONS] <FILE>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<FILE>` | FILE |  | Windjammer source file |
+| `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
+| `--json` | JSON |  | Machine-readable JSON output |
 
 ## `wj explain`
 
@@ -387,5 +408,9 @@ Usage: wj cache setup
 Install wj and plugins to ~/.wj/bin/ and ensure PATH
 
 ```text
-Usage: wj self-install
+Usage: wj self-install [OPTIONS]
 ```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--dry-run` | DRY_RUN |  | Print what would be installed (binary, plugins, embedded std/ files) without writing anything |
