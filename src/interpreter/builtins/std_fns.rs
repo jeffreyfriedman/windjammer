@@ -18,12 +18,11 @@ fn strukt(name: &str, fields: Vec<(&str, Value)>) -> Value {
     }))
 }
 
-fn field(v: &Value, name: &str) -> Option<Value> {
-    if let Value::Struct(s) = v {
-        return s.fields.iter().find(|(n, _)| &**n == name).map(|(_, v)| v.clone());
-    }
-    None
+/// The one place the interpreter reads the host environment on a program's behalf.
+pub(crate) fn host_var(name: &str) -> Result<String, String> {
+    std::env::var(name).map_err(|e| e.to_string())
 }
+
 
 fn io_err(e: std::io::Error) -> Value {
     Value::err(Value::str(e.to_string()))
@@ -188,11 +187,29 @@ pub fn register(r: &mut Registry) {
     });
     r.func("env::var", |_, a| {
         let n = arg_str(&a, 0, "env::var")?;
-        Ok(match std::env::var(&*n) {
+        Ok(match host_var(&n) {
             Ok(v) => Value::ok(Value::str(v)),
-            Err(e) => Value::err(Value::str(e.to_string())),
+            Err(e) => Value::err(Value::str(e)),
         })
     });
+    // `std::env` (Windjammer API): get/get_or/set/remove/current_dir/home_dir/temp_dir
+    r.func("env::get", |_, a| Ok(Value::option(host_var(&arg_str(&a, 0, "get")?).ok().map(Value::str))));
+    r.func("env::get_or", |_, a| {
+        Ok(Value::str(host_var(&arg_str(&a, 0, "get_or")?).unwrap_or_else(|_| arg_str(&a, 1, "get_or").map(|s| (*s).clone()).unwrap_or_default())))
+    });
+    r.func("env::set", |_, a| {
+        std::env::set_var(arg_str(&a, 0, "set")?.as_str(), arg_str(&a, 1, "set")?.as_str());
+        Ok(Value::Unit)
+    });
+    r.func("env::remove", |_, a| {
+        std::env::remove_var(arg_str(&a, 0, "remove")?.as_str());
+        Ok(Value::Unit)
+    });
+    r.func("env::current_dir", |_, _| {
+        Ok(Value::str(std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()))
+    });
+    r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
+    r.func("env::temp_dir", |_, _| Ok(Value::str(std::env::temp_dir().to_string_lossy().to_string())));
     r.func("fs::read_to_string", |_, a| {
         let p = arg_str(&a, 0, "fs::read_to_string")?;
         Ok(match std::fs::read_to_string(&*p) {
@@ -260,33 +277,6 @@ pub fn register(r: &mut Registry) {
         }
         Ok(Value::ok(Value::usize(n)))
     });
-    r.func("time::Instant::now", |_, _| {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        Ok(strukt("Instant", vec![("t", Value::float(t))]))
-    });
-    r.func("Instant::now", |_, _| {
-        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        Ok(strukt("Instant", vec![("t", Value::float(t))]))
-    });
-    r.pure(Kind::Struct, "elapsed", |_, v, _| {
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
-        let t = match field(v, "t") {
-            Some(Value::Float(f, _)) => f,
-            _ => now,
-        };
-        Ok(strukt("Duration", vec![("secs", Value::float((now - t).max(0.0)))]))
-    });
-    fn secs(v: &Value) -> f64 {
-        match field(v, "secs") {
-            Some(Value::Float(f, _)) => f,
-            _ => 0.0,
-        }
-    }
-    r.pure(Kind::Struct, "as_secs_f64", |_, v, _| Ok(Value::float(secs(v))));
-    r.pure(Kind::Struct, "as_secs", |_, v, _| Ok(Value::Int(secs(v) as i128, IntTy::U64)));
-    r.pure(Kind::Struct, "as_millis", |_, v, _| Ok(Value::Int((secs(v) * 1e3) as i128, IntTy::U128)));
-    r.pure(Kind::Struct, "as_micros", |_, v, _| Ok(Value::Int((secs(v) * 1e6) as i128, IntTy::U128)));
-    r.pure(Kind::Struct, "as_nanos", |_, v, _| Ok(Value::Int((secs(v) * 1e9) as i128, IntTy::U128)));
     let _ = call;
     register_std_modules(r);
 }
@@ -369,11 +359,12 @@ fn register_std_modules(r: &mut Registry) {
     fn now() -> std::time::Duration {
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
     }
-    r.func("time::now_millis", |_, _| Ok(Value::Int(now().as_millis() as i128, IntTy::I64)));
-    r.func("time::now_unix", |_, _| Ok(Value::Int(now().as_secs() as i128, IntTy::I64)));
-    r.func("time::now_unix_nano", |_, _| Ok(Value::Int(now().as_nanos() as i128, IntTy::I64)));
-    r.func("time::sleep_millis", |_, a| {
-        std::thread::sleep(std::time::Duration::from_millis(arg_int(&a, 0, "sleep_millis")?.max(0) as u64));
+    let _ = now;
+    r.func("time::now_millis", |it, _| Ok(Value::Int((it.wall_ns() / 1_000_000) as i128, IntTy::I64)));
+    r.func("time::now_unix", |it, _| Ok(Value::Int((it.wall_ns() / 1_000_000_000) as i128, IntTy::I64)));
+    r.func("time::now_unix_nano", |it, _| Ok(Value::Int(it.wall_ns() as i128, IntTy::I64)));
+    r.func("time::sleep_millis", |it, a| {
+        it.sleep_ns(arg_int(&a, 0, "sleep_millis")?.max(0) as u64 * 1_000_000)?;
         Ok(Value::Unit)
     });
     macro_rules! unary_math {

@@ -1,0 +1,11 @@
+// mutant: int_annotated_string of examples/verified/iter_scan_running_total.wj
+fn main() {
+    let v = [1, 2, 3, 4, 5]
+    let mut running: Vec<int> = []
+    let mut acc: string = 0
+    for x in v {
+        acc += x
+        running.push(acc)
+    }
+    println("${running:?}")
+}

@@ -22,12 +22,13 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `deps.rs`              Windjammer dependencies as source (`package::graph`: path/git + `wj.lock`)
 - `host_bridge.rs`       `extern fn` through a cached bridge library (ADR-0020): signatures, shim source, libloading calls
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
-- `generics.rs`          type-parameter bindings (`T::new()`), expected-type hints
+- `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
-- `builtins/`            native stdlib registry (`Registry`): `num`, `text`, `seq`, `map`, `option`, `std_fns`
+- `builtins/`            native stdlib registry (`Registry`; `native(type, method)` for host objects): core types, `std_*` modules, `thread`/`channel`/`sync`/`time`
+- `sched.rs`, `locks.rs`, `native.rs`  deterministic task scheduler (virtual clock), guard tokens, host-object trait; `slicing.rs` panic texts
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
 - `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists
 
@@ -52,7 +53,7 @@ Owns evaluation semantics, value model, native stdlib registry, CLI port. Never 
 `crate::type_display`, `crate::intrinsics` (name registry only; a ratcheted known violation like codegen/parser/linter), std, libloading. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*` and `Interpreter`.
 
 ## Entry points
-`runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::run_path`, `runner::run_tests`, `Interpreter::load_program_at`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
+`runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
 
 ## Intrinsics
 Names come only from `crate::intrinsics::Intrinsic` (plain call and `name!` spelling alike); do not register them in
@@ -63,9 +64,8 @@ same name shadows the intrinsic. Add a new intrinsic: extend the registry, then 
 Add `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in the matching `builtins/*.rs`.
 
 ## Test
-- `cargo test --test interpreter_semantics_test` hand-derived Rust semantics
-- `cargo test --test interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
-- `cargo test --test interpreter_cli_test` real `wj` binary: no-cargo, multi-file, `wj test`, REPL, exit codes
+- `interpreter_semantics_test` hand-derived Rust semantics; `interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
+- `interpreter_cli_test`, `interpreter_concurrency_test`, `interpreter_std_modules_test` (Python oracles), `interpreter_rust_parity_test` (rustc oracle)
 - `python3 scripts/interpreter_coverage.py <wj> out.json --corpus <dir> --rust-diff tests examples`
 - `cargo test --test interpreter_features` every registry entry's probe program behaves as registered (replaces the old probes script);
   `Unsupported` ones are caught by the preflight at load, `Supported` ones are not

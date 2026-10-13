@@ -49,7 +49,7 @@ impl Interpreter {
     pub(crate) fn exec_stmt(&mut self, s: &'static Statement<'static>) -> R {
         self.mark(stmt_loc(s));
         match s {
-            Statement::Expression { expr, .. } => self.eval(expr),
+            Statement::Expression { expr, .. } => self.eval_raw(expr),
 
             Statement::Let { pattern, type_, value, else_block, .. } => {
                 if let Some(t) = type_ {
@@ -180,7 +180,7 @@ impl Interpreter {
             return self.eval_raw(e);
         }
         // a guard/reference returned by a call (`cell.borrow_mut()`, `lock().unwrap()`) stays a reference
-        if let Expression::MethodCall { .. } = e {
+        if let Expression::MethodCall { .. } | Expression::Block { .. } | Expression::Call { .. } = e {
             return self.eval_raw(e);
         }
         self.eval(e)
@@ -192,7 +192,7 @@ impl Interpreter {
         value: &'static Expression<'static>,
         op: Option<crate::parser::CompoundOp>,
     ) -> R<()> {
-        let rhs = self.eval(value)?;
+        let rhs = self.eval_keep_guard(value)?;
         if let Expression::Identifier { name, .. } = target {
             if name == "_" {
                 return Ok(());
@@ -285,6 +285,7 @@ impl Interpreter {
             }
             return Ok(Value::Unit);
         }
+        let src = if let Value::Native(_) = &src { Value::Iter(super::iter::as_iter(self, src)?) } else { src };
         if let Value::Iter(s) = &src {
             while let Some(item) = super::iter::next(self, s)? {
                 if self.run_iteration(pattern, item, body, label)?.is_some() {
@@ -335,6 +336,10 @@ impl Interpreter {
                 Ok((a..b).map(|i| Value::Int(i, ty)).collect())
             }
             Value::Iter(s) => self.drain_iter(&s),
+            n @ Value::Native(_) => {
+                let s = super::iter::as_iter(self, n)?;
+                self.drain_iter(&s)
+            }
             Value::Map(m) => Ok(m.iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
             Value::Set(m) => Ok(m.keys().map(|k| k.0.clone()).collect()),
             Value::Enum(e) if &*e.ty == "Option" => Ok(match &e.payload {
@@ -405,7 +410,7 @@ impl Interpreter {
                         }
                     }
                 }
-                let r = self.eval(arm.body);
+                let r = self.eval_raw(arm.body);
                 return self.pop_scope(r);
             }
             let _ = self.pop_scope(Ok(Value::Unit));

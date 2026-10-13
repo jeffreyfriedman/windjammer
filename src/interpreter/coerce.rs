@@ -9,6 +9,9 @@ use std::rc::Rc;
 
 impl Interpreter {
     fn resolve_alias<'t>(&'t self, t: &'t Type) -> &'t Type {
+        if self.type_aliases.is_empty() {
+            return t;
+        }
         let mut cur = t;
         for _ in 0..8 {
             if let Type::Custom(n) = cur {

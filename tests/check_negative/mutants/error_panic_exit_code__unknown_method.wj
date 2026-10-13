@@ -1,0 +1,10 @@
+// mutant: unknown_method of examples/verified/error_panic_exit_code.wj
+fn main() {
+    println("before")
+    let v: Vec<int> = [1, 2, 3]
+    let i = 10
+    if i >= v.length_of() {
+        panic("index ${i} out of range")
+    }
+    println("unreachable")
+}

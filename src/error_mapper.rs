@@ -257,6 +257,31 @@ impl ErrorMapper {
             }
         }
 
+        // Errors are rewritten into Windjammer terms with a stable WJ code; anything the
+        // translator does not know becomes WJ0099 (an internal coverage gap), never raw rustc.
+        let (message, wj_code, help) = if rustc_diag.level == "error" {
+            let tr = crate::diagnostics::rustc_text::translate(
+                rustc_diag.code.as_ref().map(|c| c.code.as_str()),
+                &rustc_diag.message,
+                primary_span.label.as_deref(),
+            );
+            // rustc's own help/notes are phrased in Rust terms; only the translated help is kept.
+            let mut help: Vec<String> = Vec::new();
+            notes.clear();
+            if tr.code == "WJ0099" {
+                notes.push(format!(
+                    "untranslated rustc code: {}",
+                    rustc_diag.code.as_ref().map_or("none", |c| c.code.as_str())
+                ));
+            }
+            if let Some(h) = tr.help {
+                help.insert(0, h);
+            }
+            (tr.message, Some(tr.code.to_string()), help)
+        } else {
+            (message, wj_code, help)
+        };
+
         Some(WindjammerDiagnostic {
             message,
             level: match rustc_diag.level.as_str() {
@@ -538,7 +563,7 @@ impl WindjammerDiagnostic {
     /// Check if this error is automatically fixable
     pub fn is_fixable(&self) -> bool {
         if let Some(code) = &self.code {
-            matches!(code.as_str(), "E0384" | "E0308" | "E0425" | "E0596")
+            matches!(code.as_str(), "WJ0004" | "WJ0003" | "WJ0001" | "WJ0008")
         } else {
             false
         }
@@ -553,7 +578,7 @@ impl WindjammerDiagnostic {
         }
 
         match self.code.as_ref()?.as_str() {
-            "E0384" | "E0596" => {
+            "WJ0004" | "WJ0008" => {
                 // Immutability error - suggest adding mut
                 extract_variable_from_message(&self.message).map(|var_name| FixType::AddMut {
                     file: self.location.file.clone(),
@@ -561,7 +586,7 @@ impl WindjammerDiagnostic {
                     variable_name: var_name,
                 })
             }
-            "E0308" => {
+            "WJ0003" => {
                 // Type mismatch - suggest conversion
                 if self.message.contains("expected int") && self.message.contains("found string") {
                     Some(FixType::AddParse {

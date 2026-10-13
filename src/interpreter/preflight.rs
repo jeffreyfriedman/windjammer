@@ -24,7 +24,14 @@ pub(crate) fn err(id: &str, what: String, file: &std::path::Path, line: usize, c
 }
 
 /// First registry-unsupported feature used by the program, if any.
-pub fn check(files: &[LoadedFile], resolved: &ResolvedProgram<'static>, rust_crates: &[String], bridged: &dyn Fn(&str) -> bool) -> Result<(), RuntimeError> {
+/// `std_fn`: does the interpreter implement this `std::module::function` path.
+pub fn check(
+    files: &[LoadedFile],
+    resolved: &ResolvedProgram<'static>,
+    rust_crates: &[String],
+    bridged: &dyn Fn(&str) -> bool,
+    std_fn: &dyn Fn(&str) -> bool,
+) -> Result<(), RuntimeError> {
     for f in files {
         let Ok(src) = std::fs::read_to_string(&f.file) else { continue };
         let toks = crate::lexer::Lexer::new(&src).tokenize_with_locations();
@@ -65,6 +72,21 @@ pub fn check(files: &[LoadedFile], resolved: &ResolvedProgram<'static>, rust_cra
                         "deps.rust_crate",
                         format!("call into Rust crate dependency `{}` (`{}`)", head, path),
                     ));
+                }
+                // `std::module::function(..)` (module segment lowercase; type paths like `HashMap::new` are not
+                // module functions) that the interpreter's std registry does not provide
+                // The reason carries the import target (`std::http`); the rest of the written callee
+                // (`http::serve_fn`) names the member.
+                let full = match call.callee.split_once("::") {
+                    Some((_, rest)) => format!("{}::{}", path, rest),
+                    None => path.clone(),
+                };
+                let segs: Vec<&str> = full.split("::").collect();
+                let lower = |s: &str| s.chars().next().is_some_and(|c| c.is_ascii_lowercase());
+                let module_fn = segs.len() >= 3 && head == "std" && lower(segs[segs.len() - 2]) && lower(segs[segs.len() - 1]);
+                if module_fn && !std_fn(&full) {
+                    let id = if segs[1] == "http" { "std.http_network" } else { "std.module_fn" };
+                    return Err(at(id, format!("`{}` is not implemented by the interpreter", full)));
                 }
             }
             _ => {}

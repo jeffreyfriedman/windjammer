@@ -171,6 +171,23 @@ pub enum Commands {
         #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
         hot: bool,
 
+        /// Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another
+        /// reproducible interleaving at every synchronisation point)
+        #[arg(long, value_name = "N", default_value = "0")]
+        sched_seed: u64,
+
+        /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
+        #[arg(long)]
+        deterministic_time: bool,
+
+        /// Interpreted runs: allow plain http:// client requests (default: the http client refuses)
+        #[arg(long)]
+        allow_network: bool,
+
+        /// Interpreted runs: answer http client calls from a JSON file of canned responses
+        #[arg(long, value_name = "FILE")]
+        mock_http: Option<PathBuf>,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
         defer_drop: String,
@@ -304,9 +321,17 @@ pub enum Commands {
         #[arg(value_name = "PATH")]
         path: Option<PathBuf>,
 
-        /// Output diagnostics as machine-readable JSON (for agent/IDE consumption)
+        /// Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json)
         #[arg(long)]
         json: bool,
+
+        /// Re-check whenever a .wj file changes
+        #[arg(long)]
+        watch: bool,
+
+        /// Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...)
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Add a dependency to wj.toml
@@ -452,7 +477,11 @@ pub enum Commands {
 
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
-    SelfInstall,
+    SelfInstall {
+        /// Print what would be installed (binary, plugins, embedded std/ files) without writing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]

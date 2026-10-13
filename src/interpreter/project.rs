@@ -277,7 +277,8 @@ impl Interpreter {
         self.bind_uses(&resolved, &module_ids, &vis)?;
         check_call_privacy(&resolved, &vis)?;
         let bridged = |name: &str| self.has_host_fn(name);
-        super::preflight::check(&all, &resolved, &rust_crates, &bridged)?;
+        let std_fn = |path: &str| self.builtins.has_function(path);
+        super::preflight::check(&all, &resolved, &rust_crates, &bridged, &std_fn)?;
         self.finish_registration()
     }
 
