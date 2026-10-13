@@ -14,7 +14,8 @@ One emitter serves both languages; `JavaScriptBackend::typescript()` adds type a
 - `Vec` = Array, `HashMap` = Map (integer/string/char/bool keys only), `HashSet` = Set, tuple = Array.
 - `Option<T>` = `null | {v}`, `Result<T, E>` = `{ok, v}`; structs = classes with `clone()`; enums = base class + one class per variant (`$t` tag).
 - Strings are UTF-16 in memory but `len()`, slicing and `find` use UTF-8 byte semantics (`$strlen`, `$strSlice`).
-- Panics exit 101 (`$run`); output is buffered and flushed on exit.
+- Panics exit 101 (`$run`); output is buffered and flushed on exit. Under Node, `main` runs on a worker thread
+  with a 64 MiB stack (Rust's main thread has 8 MiB; Node's default ~1 MiB overflowed at ~10k frames).
 - `&mut` (`emit/refs.rs`): a `&mut` of a value-represented type (numbers, strings, bool, char, `Option`,
   `Result`, enums, generics) is an accessor cell `{ v }` reading/writing the borrowed place (`$cellOf`,
   `$cellIx`, or an inline getter/setter for a local); `&mut self` on an enum is a static method taking a cell.
