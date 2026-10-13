@@ -1,0 +1,10 @@
+// spec: SPEC-EFF-015
+// mode: check-error
+// xfail: Q-032
+// manifest: [capabilities]
+// manifest: net.connect = ["api.example.com"]
+// expect-error: WJ0041: `net.connect(evil.example)` is outside the grant
+use std::http
+fn main() {
+    println("${http::get("http://evil.example/").is_ok()}")
+}
