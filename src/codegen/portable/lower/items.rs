@@ -93,8 +93,10 @@ fn attach_impl(env: &ItemEnv, block: &ImplBlock, defaults: &Defaults, m: &mut PM
     let owner = crate::codegen::portable::env::base_name(&block.type_name).to_string();
     let mut methods = Vec::new();
     for f in &block.functions {
-        let sig = &env.methods[&(owner.clone(), f.name.clone())];
+        let name = crate::codegen::portable::env::impl_method_name(block, &f.name);
+        let sig = &env.methods[&(owner.clone(), name.clone())];
         let mut fx = lower_fn(env, f, sig, Some(&owner), &outer)?;
+        fx.name = name;
         fx.owner = Some(owner.clone());
         methods.push(fx);
     }

@@ -173,6 +173,9 @@ impl<'e> Lowerer<'e> {
         if self.env.variant(&owner, name).is_some() {
             return self.variant_ctor(&owner, name, args, want);
         }
+        if self.env.method(&owner, name).is_none() && self.env.trait_impls.contains_key(&(owner.clone(), name.to_string())) {
+            return self.generic_impl_call(&owner, name, args, want);
+        }
         if let Some(sig) = self.env.method(&owner, name).cloned() {
             if sig.recv.is_some() {
                 return self.ufcs_call(&owner, name, args, want);
@@ -190,6 +193,50 @@ impl<'e> Lowerer<'e> {
             Some(ty) => Ok(PExpr::new(ty, PK::StaticCall { owner, name: name.to_string(), args: out })),
             None => self.err(format!("unknown associated function `{owner}::{name}`")),
         }
+    }
+
+    /// `E::from(x)` with several `impl From<X> for E`: the impl is chosen by the argument type.
+    fn generic_impl_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
+        let single = self.env.trait_impls[&(owner.to_string(), name.to_string())].len() == 1;
+        let first = match args.first() {
+            Some((_, a)) if !single => Some(self.expr(a, None)?),
+            _ => None,
+        };
+        let Some(mangled) = self.pick_impl(owner, name, first.as_ref().map(|e| e.ty.clone())) else {
+            return self.err(format!("no `{owner}::{name}` impl for this argument type"));
+        };
+        let sig = self.env.method(owner, &mangled).cloned().expect("registered impl method");
+        let (mut a, ret) = match first {
+            None => self.lower_args_sig(&sig, args, want, false)?,
+            Some(f) => {
+                let (rest, ret) = self.lower_args_sig(&FnSig { params: sig.params[1..].to_vec(), ..sig.clone() }, &args[1..], want, false)?;
+                let mut all = vec![if sig.params[0].2 == ParamMode::Value { self.own(f) } else { f }];
+                all.extend(rest);
+                (all, ret)
+            }
+        };
+        Ok(PExpr::new(ret, PK::StaticCall { owner: owner.to_string(), name: mangled, args: a }))
+    }
+
+    /// The emitted name of the `owner::name` generic-trait impl whose first trait argument is
+    /// `arg` (any impl when there is exactly one).
+    pub(super) fn pick_impl(&mut self, owner: &str, name: &str, arg: Option<Ty>) -> Option<String> {
+        let cands = self.env.trait_impls.get(&(owner.to_string(), name.to_string()))?.clone();
+        if cands.len() == 1 {
+            return Some(cands[0].1.clone());
+        }
+        let arg = self.resolve(&arg?);
+        if let Some((_, n)) = cands.iter().find(|(targs, _)| targs.first() == Some(&arg)) {
+            return Some(n.clone());
+        }
+        // An unsuffixed literal: the only integer (or float) impl, as rustc's inference picks it.
+        let Ty::Var(v) = arg else { return None };
+        let fits = |t: &Ty| if self.float_vars.contains(&v) { matches!(t, Ty::F32 | Ty::F64) } else if self.int_vars.contains(&v) { matches!(t, Ty::Int(_)) } else { false };
+        let hits: Vec<&(Vec<Ty>, String)> = cands.iter().filter(|(targs, _)| targs.first().is_some_and(fits)).collect();
+        let [(targs, n)] = hits.as_slice() else { return None };
+        let (t, n) = (targs[0].clone(), n.clone());
+        self.constrain(&t, &arg);
+        Some(n)
     }
 
     fn std_call(&mut self, module: &str, name: &str, sig: crate::codegen::portable::stdlib::StdSig, args: &Args) -> PResult<PExpr> {
@@ -269,6 +316,16 @@ impl<'e> Lowerer<'e> {
         let recv = self.expr(object, None)?;
         let rty = self.resolve_for_dispatch(&recv.ty);
         let recv = PExpr { ty: rty, ..recv };
+        // `x.into()` where the expected type has `impl From<X>`: that impl's `from`.
+        if method == "into" && args.is_empty() {
+            if let Some(Ty::Adt(target, _)) = want.map(|w| self.resolve(w)) {
+                if let Some(m) = self.pick_impl(&target, "from", Some(recv.ty.clone())) {
+                    let ty = want.cloned().unwrap_or(Ty::Unknown);
+                    let recv = self.own(recv);
+                    return Ok(PExpr::new(ty, PK::StaticCall { owner: target, name: m, args: vec![recv] }));
+                }
+            }
+        }
         let owner_ty = match &recv.ty {
             Ty::Adt(n, a) => Some((n.clone(), a.clone())),
             _ => None,
