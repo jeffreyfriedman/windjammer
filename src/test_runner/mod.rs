@@ -190,7 +190,7 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
 
     if opts.json {
         // JSON output for tooling
-        println!("{{");
+        print_json_envelope(test_dir);
         println!("  \"success\": {},", output.status.success());
         println!("  \"duration_ms\": {},", duration.as_millis());
         println!("  \"test_files\": {},", test_files.len());
@@ -381,4 +381,19 @@ fn report_no_tests(dir: &Path, allow_empty: bool, json: bool) -> Result<()> {
         return Ok(());
     }
     anyhow::bail!("{message} Pass --allow-empty if an empty test set is expected.")
+}
+
+/// Opening of `wj test --json`: schema version, command and the shared-schema front-end
+/// diagnostics (docs/diagnostics-schema.json) for the tested sources.
+fn print_json_envelope(test_dir: &Path) {
+    let diagnostics = crate::check::check_path(test_dir, &crate::check::CheckOptions::default())
+        .map(|c| c.report.diagnostics)
+        .unwrap_or_default();
+    println!("{{");
+    println!("  \"schema_version\": {},", crate::diagnostics::SCHEMA_VERSION);
+    println!("  \"command\": \"test\",");
+    println!(
+        "  \"diagnostics\": {},",
+        serde_json::to_string(&diagnostics).unwrap_or_else(|_| "[]".to_string())
+    );
 }

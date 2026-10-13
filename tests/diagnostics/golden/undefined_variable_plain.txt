@@ -1,0 +1,7 @@
+error[WJ0001]: cannot find value `missing` in this scope
+  --> undefined_variable_plain.wj:4:13
+  |
+4 |     let b = missing + a
+  |             ^^^^^^^ not found in this scope
+  = help: declare it before use, for example `let missing = ...`, or check the spelling
+  = explain: wj explain WJ0001

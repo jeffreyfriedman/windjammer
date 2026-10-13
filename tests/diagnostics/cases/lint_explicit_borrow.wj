@@ -1,0 +1,9 @@
+// expect: W0004
+fn show(n: int) {
+    println("${n}")
+}
+
+fn main() {
+    let n = 1
+    show(&n)
+}

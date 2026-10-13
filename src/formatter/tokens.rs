@@ -106,6 +106,9 @@ impl Scanner {
                 self.i += 1;
             }
             Kind::Comment
+        } else if ch == '/' && self.at(1) == Some('*') {
+            self.block_comment()?;
+            Kind::Comment
         } else if ch == 'r' && self.is_raw_string() {
             self.raw_string();
             Kind::Str
@@ -136,6 +139,27 @@ impl Scanner {
             text
         };
         Ok((kind, text))
+    }
+
+    /// `/* .. */`, nested like the compiler lexer; kept verbatim (it may span lines).
+    fn block_comment(&mut self) -> Result<(), FormatError> {
+        self.i += 2;
+        let mut depth = 1;
+        while let Some(c) = self.at(0) {
+            if c == '/' && self.at(1) == Some('*') {
+                depth += 1;
+                self.i += 2;
+            } else if c == '*' && self.at(1) == Some('/') {
+                depth -= 1;
+                self.i += 2;
+                if depth == 0 {
+                    return Ok(());
+                }
+            } else {
+                self.i += 1;
+            }
+        }
+        Err(FormatError::Lex("unterminated block comment".to_string()))
     }
 
     fn punct(&mut self, ch: char) -> Result<Kind, FormatError> {

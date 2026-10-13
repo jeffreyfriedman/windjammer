@@ -1,0 +1,8 @@
+// mutant: unknown_method of examples/verified/sort_stability_keys.wj
+fn main() {
+    let mut v = ["bb", "aa", "c", "dd"]
+    v.sort_by_key(|s| s.length_of())
+    v.reverse()
+    v.sort_by_key(|s| 0 - s.len() as int)
+    println("[${v.join(", ")}]")
+}

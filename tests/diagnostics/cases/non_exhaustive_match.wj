@@ -1,0 +1,15 @@
+// expect: WJ0010
+enum Color {
+    Red,
+    Green,
+}
+
+fn name(c: Color) -> string {
+    match c {
+        Color::Red => "red",
+    }
+}
+
+fn main() {
+    println("${name(Color::Red)}")
+}
