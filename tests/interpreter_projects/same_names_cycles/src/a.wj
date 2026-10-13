@@ -1,7 +1,7 @@
 use b
 
 pub fn label() -> string {
-    "a".to_string()
+    "a"
 }
 
 pub fn ping(n: int) -> int {

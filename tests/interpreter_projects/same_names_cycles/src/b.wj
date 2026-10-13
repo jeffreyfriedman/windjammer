@@ -1,7 +1,7 @@
 use a
 
 pub fn label() -> string {
-    "b".to_string()
+    "b"
 }
 
 pub fn pong(n: int) -> int {
