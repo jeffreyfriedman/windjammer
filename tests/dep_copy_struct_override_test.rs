@@ -34,7 +34,7 @@ fn compile_wj(source: &str) -> String {
     std::fs::create_dir_all(&out_dir).unwrap();
     std::fs::write(&wj_path, source).unwrap();
 
-    let wj_binary = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output = Command::new(wj_binary)
         .args([

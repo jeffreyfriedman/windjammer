@@ -17,6 +17,9 @@
 //! * ```` ```windjammer,bad ````   a "what not to write" block: `wj check --json` must report a diagnostic
 //! * ```` ```windjammer,parse ```` a fragment: wrapped in `fn main() { .. }` and only parsed (`wj check`)
 //!
+//! The info string is a comma-separated annotation list shared with docs-truth (`tools/docs_truth/fences.rs`),
+//! so `windjammer,should_fail,bad` is a `bad` block here: the kind is the first annotation this file knows.
+//!
 //! Also: the main context pack stays within its token budget, the `wj docs` CLI answers real queries
 //! from the embedded index, and the agent-tool instruction files agree with the CLI.
 
@@ -92,7 +95,7 @@ fn expect_lines(code: &str) -> Vec<String> {
 fn check_block(b: &Block) -> Option<String> {
     let d = TempDir::new().unwrap();
     let who = format!("{}:{}", b.file, b.line);
-    match b.kind.split(',').nth(1).unwrap_or("run") {
+    match b.kind.split(',').skip(1).find(|a| matches!(*a, "bad" | "parse" | "test")).unwrap_or("run") {
         "bad" => {
             let f = d.path().join("bad.wj");
             fs::write(&f, &b.code).unwrap();

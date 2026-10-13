@@ -11,6 +11,9 @@
 ))]
 
 //! Regression: explicit clone in loop must emit.
+//!
+//! The values must be non-Copy: an all-scalar enum/struct is auto-derived `Copy`, and MOVE-COPY-TYPE
+//! (docs/spec/inference.md) says a Copy value is copied, never cloned, so its `.clone()` is rightly dropped.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
@@ -19,12 +22,13 @@ mod test_utils;
 fn explicit_clone_in_while_loop_trait_call_must_emit() {
     let source = r#"
 pub enum Ast {
-    Select(i64),
+    Select(string),
     Sum(i64),
 }
 
 pub struct Cursor {
     pub pos: i64,
+    pub path: Vec<i64>,
 }
 
 pub trait SelectAtomExtension {
