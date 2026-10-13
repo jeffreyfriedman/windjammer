@@ -10,6 +10,7 @@ mod fmt;
 mod items;
 mod names;
 mod num;
+mod ordering;
 mod pat;
 mod refs;
 mod stmt;

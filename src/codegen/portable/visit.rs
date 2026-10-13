@@ -39,6 +39,10 @@ fn types_in_pat(p: &mut PPat, v: TyFn) {
         }
         PPat::Tuple(ps) | PPat::Or(ps) => ps.iter_mut().for_each(|p| types_in_pat(p, v)),
         PPat::Variant { fields, .. } => fields.iter_mut().for_each(|(_, p)| types_in_pat(p, v)),
+        PPat::Struct { fields, .. } => fields.iter_mut().for_each(|(_, t, p)| {
+            v(t);
+            types_in_pat(p, v)
+        }),
         PPat::Some(p) | PPat::Ok(p) | PPat::Err(p) => types_in_pat(p, v),
         PPat::Wild | PPat::Bind { .. } | PPat::None => {}
     }

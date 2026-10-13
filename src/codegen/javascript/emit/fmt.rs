@@ -42,6 +42,7 @@ impl<'m> Js<'m> {
                 let fs: PResult<Vec<String>> = ts.iter().map(|t| self.dbg_fn(t)).collect();
                 format!("$dbgTuple([{}])", fs?.join(", "))
             }
+            Ty::Adt(..) if self.builtin_ordering(t) => "$dbgOrd".into(),
             Ty::Adt(..) => "$dbgObj".into(),
             Ty::Param(_) | Ty::Var(_) | Ty::Unknown => "$dbgAny".into(),
             Ty::Fn(..) | Ty::Range(_) => return self.unsupported("Debug formatting of closures/ranges"),
