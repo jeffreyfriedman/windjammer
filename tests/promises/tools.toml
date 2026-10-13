@@ -245,3 +245,15 @@ name = "docs --json rejects a bad --limit"
 polarity = "negative"
 args = ["docs", "hashmap", "--json", "--limit", "-3"]
 exit = 2
+
+[[case]]
+name = "self-install --dry-run writes nothing"
+polarity = "positive"
+args = ["self-install", "--dry-run"]
+output_has = ["would install wj"]
+
+[[case]]
+name = "self-install --dry-run rejects arguments"
+polarity = "negative"
+args = ["self-install", "--dry-run", "extra"]
+exit = 2

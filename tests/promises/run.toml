@@ -112,3 +112,70 @@ polarity = "negative"
 files = { "m.wj" = "fn main( {\n" }
 args = ["run", "--interpret", "--defer-drop", "never", "{w}/m.wj"]
 exit = 1
+
+[[case]]
+name = "run --deterministic-time makes the clock reproducible"
+polarity = "positive"
+files = { "m.wj" = "use std::thread\nuse std::time::{Duration, Instant}\n\nfn main() {\n    let a = Instant::now()\n    thread::sleep(Duration::from_millis(1500))\n    println(\"${a.elapsed():?}\")\n}\n" }
+args = ["run", "--interpret", "--deterministic-time", "{w}/m.wj"]
+stdout_has = ["1.5s"]
+
+[[case]]
+name = "run --deterministic-time still reports parse errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["run", "--interpret", "--deterministic-time", "{w}/m.wj"]
+exit = 1
+
+[[case]]
+name = "run --interpret refuses network access by default"
+polarity = "negative"
+exit = 0
+files = { "m.wj" = "use std::http\n\nfn main() {\n    match http::get(\"http://127.0.0.1:9/hello\") {\n        Ok(r) => println(\"${r.status_code()}\"),\n        Err(e) => println(\"ERR ${e}\"),\n    }\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+stdout_has = ["ERR network access is disabled", "--allow-network"]
+
+[[case]]
+name = "run --allow-network performs real requests"
+polarity = "positive"
+files = { "m.wj" = "use std::http\n\nfn main() {\n    match http::get(\"http://127.0.0.1:9/hello\") {\n        Ok(r) => println(\"${r.status_code()}\"),\n        Err(e) => println(\"ERR ${e}\"),\n    }\n}\n" }
+args = ["run", "--interpret", "--allow-network", "{w}/m.wj"]
+stdout_has = ["ERR Connection refused"]
+output_lacks = ["network access is disabled"]
+
+[[case]]
+name = "run --allow-network still reports parse errors"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["run", "--interpret", "--allow-network", "{w}/m.wj"]
+exit = 1
+
+[[case]]
+name = "run --mock-http answers from canned responses"
+polarity = "positive"
+files = { "m.wj" = "use std::http\n\nfn main() {\n    match http::get(\"http://127.0.0.1:9/hello\") {\n        Ok(r) => println(\"${r.status_code()}\"),\n        Err(e) => println(\"ERR ${e}\"),\n    }\n}\n", "mock.json" = "[{\"method\":\"GET\",\"url\":\"http://127.0.0.1:9/hello\",\"status\":201,\"headers\":{},\"body\":\"c\"}]" }
+args = ["run", "--interpret", "--mock-http", "{w}/mock.json", "{w}/m.wj"]
+stdout_has = ["201"]
+
+[[case]]
+name = "run --mock-http fails on a missing mock file"
+polarity = "negative"
+files = { "m.wj" = "use std::http\n\nfn main() {\n    match http::get(\"http://127.0.0.1:9/hello\") {\n        Ok(r) => println(\"${r.status_code()}\"),\n        Err(e) => println(\"ERR ${e}\"),\n    }\n}\n" }
+args = ["run", "--interpret", "--mock-http", "{w}/nope.json", "{w}/m.wj"]
+exit = 1
+output_has = ["cannot read mock file"]
+
+[[case]]
+name = "run --sched-seed selects a reproducible schedule"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"ok\")\n}\n" }
+args = ["run", "--interpret", "--sched-seed", "3", "{w}/m.wj"]
+stdout_has = ["ok"]
+
+[[case]]
+name = "run --sched-seed must be a number"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["run", "--interpret", "--sched-seed", "abc", "{w}/m.wj"]
+exit = 2
+output_has = ["invalid value 'abc'"]

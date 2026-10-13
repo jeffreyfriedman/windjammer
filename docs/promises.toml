@@ -9,7 +9,7 @@
 #   through the installed binary (codes: >=1 negative case whose expected output contains the code).
 # - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
 
-max_pending = 44
+max_pending = 40
 
 [[promise]]
 id = "feature ownership-inferred"
@@ -82,43 +82,38 @@ id = "code W0010"
 
 [[promise]]
 id = "code WJ0001"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
 
 [[promise]]
 id = "code WJ0002"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
 
 [[promise]]
 id = "code WJ0003"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
 
 [[promise]]
 id = "code WJ0004"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0005"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0006"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0007"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0008"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
+pending = "`wj check` does not emit it yet and only cargo-backed `wj build --check` translates the rustc error (see xfail cases)"
 
 [[promise]]
 id = "code WJ0009"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
 
 [[promise]]
 id = "code WJ0010"
-pending = "only `wj build --check` (cargo) translates rustc errors into this code; no cargo-free command emits it (see check_vs_build_known.toml)"
 
 [[promise]]
 id = "wj add"
@@ -538,3 +533,26 @@ statement = "Only this function (`name` or `Type::name`)"
 [[promise]]
 id = "wj explain-ownership --json"
 statement = "Machine-readable JSON output"
+
+[[promise]]
+id = "wj check --fix"
+
+[[promise]]
+id = "wj check --watch"
+statement = "Re-check whenever a .wj file changes"
+pending = "long-running watch loop: needs a case that edits a file and reads the re-check"
+
+[[promise]]
+id = "wj run --allow-network"
+
+[[promise]]
+id = "wj run --deterministic-time"
+
+[[promise]]
+id = "wj run --mock-http"
+
+[[promise]]
+id = "wj run --sched-seed"
+
+[[promise]]
+id = "wj self-install --dry-run"

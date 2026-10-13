@@ -3,6 +3,7 @@
 # [dead_pub_fns]: per-file count of unreachable pub fns/methods. May only go down (REACH_BLESS=1).
 
 [dead_files]
+"src/cli/json_diagnostics.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
 "src/cli_commands.rs" = "legacy `windjammer` binary dispatch (WP13)"
 "src/codegen/rust/copy_semantics.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
 "src/codegen/rust/expressions.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
@@ -25,7 +26,6 @@
 "src/main.rs" = "legacy `windjammer` binary (WP13: single driver; retire after `wj` covers eject)"
 "src/package/registry.rs" = "package registry stub (roadmap); no `wj` command uses it"
 "src/package/resolver.rs" = "package resolver stub (roadmap); no `wj` command uses it"
-"src/resolve/walk.rs" = "identity-based resolver body walk (shadow mode, not wired)"
 "src/type_registry.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
 
 [dead_pub_fns]
@@ -43,7 +43,6 @@
 "src/cargo_cache/mod.rs" = 2
 "src/cargo_toml/dependency_management.rs" = 1
 "src/cargo_toml/mod.rs" = 1
-"src/cli/json_diagnostics.rs" = 1
 "src/cli_execution.rs" = 1
 "src/codegen/backend.rs" = 3
 "src/codegen/javascript/emit/types.rs" = 1
@@ -75,6 +74,7 @@
 "src/compiler_database.rs" = 6
 "src/config.rs" = 4
 "src/decorator_registry.rs" = 2
+"src/diagnostics/rustc_map.rs" = 1
 "src/error/mod.rs" = 6
 "src/error_catalog.rs" = 1
 "src/error_statistics.rs" = 2
@@ -107,15 +107,12 @@
 "src/parser_impl.rs" = 6
 "src/parser_recovery.rs" = 12
 "src/resolve/def.rs" = 2
-"src/resolve/lookup.rs" = 2
-"src/resolve/mod.rs" = 5
-"src/resolve/paths.rs" = 1
-"src/resolve/prelude.rs" = 1
-"src/resolve/res.rs" = 3
+"src/resolve/mod.rs" = 2
 "src/source_map.rs" = 2
 "src/source_map_cache.rs" = 6
 "src/syntax_highlighter.rs" = 1
 "src/syntax_highlighter_stub.rs" = 1
+"src/test_runner/interpreted.rs" = 1
 "src/type_classification.rs" = 2
 "src/type_inference/float_inference/mod.rs" = 2
 "src/type_inference/int_inference/mod.rs" = 1
