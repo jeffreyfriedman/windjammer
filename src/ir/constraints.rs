@@ -90,7 +90,9 @@ impl ConstraintSet {
         var
     }
 
-    /// Add a constraint to the set.
+    /// Add a constraint without provenance. Test-only: compiler code must say why a constraint
+    /// exists (`add_because`), so `wj explain-ownership` never reports `UNTAGGED` (plan C2).
+    #[cfg(test)]
     pub fn add(&mut self, constraint: Constraint) {
         self.constraints.push(constraint);
         self.origins.push(None);

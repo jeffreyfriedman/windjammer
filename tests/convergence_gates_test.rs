@@ -321,6 +321,20 @@ fn explain_counts(files: &[String]) -> BTreeMap<String, usize> {
                 for f in report.findings() {
                     *counts.entry(f.id.clone()).or_insert(0) += 1;
                 }
+                // C2: every constraint that reaches a report must carry a rule.
+                let untagged = report
+                    .functions
+                    .iter()
+                    .flat_map(|f| {
+                        f.params.iter().flat_map(|p| p.reasons.iter())
+                            .chain(f.locals.iter().flat_map(|l| l.reasons.iter()))
+                            .chain(f.clones.iter().flat_map(|c| c.reasons.iter()))
+                    })
+                    .filter(|r| r.rule == "UNTAGGED")
+                    .count();
+                if untagged > 0 {
+                    *counts.entry("UNTAGGED-REASON".into()).or_insert(0) += untagged;
+                }
             }
             Ok(Err(_)) => *counts.entry("EXPLAIN-ERROR".into()).or_insert(0) += 1,
             Err(_) => *counts.entry("EXPLAIN-PANIC".into()).or_insert(0) += 1,
