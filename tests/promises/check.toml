@@ -69,15 +69,15 @@ stdout_has = ["\"success\": false", "Expected parameter name"]
 [[case]]
 name = "check rejects a string assigned to an int"
 polarity = "negative"
-xfail = "BUG: `wj check` reports success on `let x: int = \"s\"` (wt/wj-check)"
+covers = ["feature json-diagnostics"]
 files = { "m.wj" = "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n" }
-args = ["check", "{w}/m.wj"]
+args = ["check", "--json", "{w}/m.wj"]
 exit = 1
+stdout_has = ["\"code\": \"WJ0003\""]
 
 [[case]]
 name = "check rejects an undefined variable (WJ0001)"
 polarity = "negative"
-xfail = "BUG: `wj check` reports success on an undefined variable (wt/wj-check)"
 files = { "m.wj" = "fn main() {\n    let y = undefined_thing + 1\n    println(\"${y}\")\n}\n" }
 args = ["check", "--json", "{w}/m.wj"]
 exit = 1
@@ -115,3 +115,52 @@ files = { "m.wj" = "fn main() {\n    let n: String = \"x\"\n    println(\"${n}\"
 args = ["check", "{w}/m.wj"]
 exit = 1
 output_has = ["W0010"]
+
+[[case]]
+name = "check rejects a call to an undefined function (WJ0002)"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let n = frobnicate(1)\n    println(\"${n}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0002\""]
+
+[[case]]
+name = "check rejects a struct literal with a missing field (WJ0009)"
+polarity = "negative"
+files = { "m.wj" = "struct P {\n    x: int,\n    y: int,\n}\n\nfn main() {\n    let p = P { x: 1 }\n    println(\"${p.x}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0009\""]
+
+[[case]]
+name = "check rejects a non-exhaustive match (WJ0010)"
+polarity = "negative"
+files = { "m.wj" = "enum E {\n    A,\n    B,\n}\n\nfn main() {\n    let e = E::A\n    match e {\n        E::A => println(\"a\"),\n    }\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["\"code\": \"WJ0010\""]
+
+[[case]]
+name = "check rejects assigning to an immutable binding (WJ0004)"
+polarity = "negative"
+xfail = "BUG: `wj check` accepts `let x = 1; x = 2` (WJ0004 is documented as Proven)"
+files = { "m.wj" = "fn main() {\n    let x = 1\n    x = 2\n    println(\"${x}\")\n}\n" }
+args = ["check", "--json", "{w}/m.wj"]
+exit = 1
+stdout_has = ["WJ0004"]
+
+[[case]]
+name = "check --fix applies machine-applicable rewrites"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v = vec![1, 2]\n    println!(\"{}\", v.len())\n}\n" }
+args = ["check", "--fix", "{w}/m.wj"]
+file_has = { "m.wj" = "println(\"${v.len()}\")" }
+output_has = ["2 edit(s) applied"]
+
+[[case]]
+name = "check --fix leaves a file with errors failing"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["check", "--fix", "{w}/m.wj"]
+exit = 1
+output_has = ["0 edit(s) applied"]
