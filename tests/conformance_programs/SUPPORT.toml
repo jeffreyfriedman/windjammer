@@ -145,3 +145,8 @@ reason = "rust-int-literal-width-inference: the `for i in 0..4` range is typed i
 program = "175_len_and_index_as_int"
 backend = "rust"
 reason = "rust-int-literal-width-inference: `vec![5, 6, 7]` passed to a `Vec<int>` parameter is typed Vec<i32> (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "178_struct_patterns_slices"
+backend = "rust"
+reason = "rust-unsized-slice-binding: `let mid = v[1..4]` is emitted without a borrow, so rustc rejects the unsized `[i32]` local (E0277); also SPEC-EXPR-018 on Rust"

@@ -9,6 +9,7 @@ pub mod env;
 pub mod flatten;
 pub mod ir;
 pub mod lower;
+pub mod ordering;
 pub mod stdlib;
 pub mod ty;
 pub mod visit;

@@ -133,6 +133,8 @@ pub enum PPat {
     Or(Vec<PPat>),
     /// `Enum::Variant(p0, p1)` / struct-like; fields are (field name, pattern).
     Variant { enum_name: String, variant: String, fields: Vec<(String, PPat)> },
+    /// `P { x, y: 2, .. }` on a struct: (field name, field type, pattern).
+    Struct { name: String, fields: Vec<(String, Ty, PPat)> },
     Some(Box<PPat>),
     None,
     Ok(Box<PPat>),

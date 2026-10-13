@@ -1146,6 +1146,143 @@ func wjSwapRemove[T any, I integer](v *[]T, i I) T {
 
 func wjSort[T cmp.Ordered](v []T) { slices.SortStableFunc(v, cmp.Compare[T]) }
 
+// Ordering is Rust's std::cmp::Ordering: -1 (Less), 0 (Equal), 1 (Greater).
+type Ordering int
+
+func (o Ordering) wjDbgF(_ *wjFmt) string {
+	switch {
+	case o < 0:
+		return "Less"
+	case o > 0:
+		return "Greater"
+	}
+	return "Equal"
+}
+
+func wjThen(o, next Ordering) Ordering {
+	if o != 0 {
+		return o
+	}
+	return next
+}
+
+func wjThenWith(o Ordering, next func() Ordering) Ordering {
+	if o != 0 {
+		return o
+	}
+	return next()
+}
+
+// wjCmp is Rust's derived/std `Ord::cmp`: numbers, strings (bytewise), chars, bools, tuples and
+// slices (lexicographic), Option (None < Some), structs (fields in declaration order).
+func wjCmp[T any](a, b T) Ordering { return Ordering(wjCmpValue(reflect.ValueOf(a), reflect.ValueOf(b))) }
+
+func wjCmpValue(a, b reflect.Value) int {
+	if a.Type() == reflect.TypeOf(Char(0)) {
+		return cmp.Compare(a.Int(), b.Int())
+	}
+	switch a.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return cmp.Compare(a.Int(), b.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return cmp.Compare(a.Uint(), b.Uint())
+	case reflect.Float32, reflect.Float64:
+		return cmp.Compare(a.Float(), b.Float())
+	case reflect.String:
+		return strings.Compare(a.String(), b.String())
+	case reflect.Bool:
+		x, y := a.Bool(), b.Bool()
+		switch {
+		case x == y:
+			return 0
+		case !x:
+			return -1
+		}
+		return 1
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < a.Len() && i < b.Len(); i++ {
+			if c := wjCmpValue(a.Index(i), b.Index(i)); c != 0 {
+				return c
+			}
+		}
+		return cmp.Compare(a.Len(), b.Len())
+	case reflect.Struct:
+		if a.Type().Name() != "" && strings.HasPrefix(a.Type().Name(), "Option[") {
+			ao, bo := a.FieldByName("Ok").Bool(), b.FieldByName("Ok").Bool()
+			if !ao || !bo {
+				return cmp.Compare(wjB2I[int](ao), wjB2I[int](bo))
+			}
+			return wjCmpValue(a.FieldByName("V"), b.FieldByName("V"))
+		}
+		for i := 0; i < a.NumField(); i++ {
+			if c := wjCmpValue(a.Field(i), b.Field(i)); c != 0 {
+				return c
+			}
+		}
+		return 0
+	}
+	wjPanic("cmp: unsupported type " + a.Type().String())
+	return 0
+}
+
+func wjHasNaN(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return v.Float() != v.Float()
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			if wjHasNaN(v.Index(i)) {
+				return true
+			}
+		}
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if wjHasNaN(v.Field(i)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// wjPartialCmp is `partial_cmp`: None when a float compared is NaN.
+func wjPartialCmp[T any](a, b T) Option[Ordering] {
+	if wjHasNaN(reflect.ValueOf(a)) || wjHasNaN(reflect.ValueOf(b)) {
+		return Option[Ordering]{}
+	}
+	return Option[Ordering]{Ok: true, V: wjCmp(a, b)}
+}
+
+// wjSortBy / wjSortByKey are Rust's stable `sort_by` / `sort_by_key`.
+func wjSortBy[T any](v []T, f func(T, T) Ordering) {
+	slices.SortStableFunc(v, func(a, b T) int { return int(f(a, b)) })
+}
+
+func wjSortAny[T any](v []T) { slices.SortStableFunc(v, func(a, b T) int { return int(wjCmp(a, b)) }) }
+
+func wjSortByKey[T, K any](v []T, f func(T) K) {
+	slices.SortStableFunc(v, func(a, b T) int { return int(wjCmp(f(a), f(b))) })
+}
+
+// wjMinMaxBy: `max_by` keeps the last maximum (dir 1), `min_by` the first minimum (dir -1).
+func wjMinMaxBy[T any](v []T, f func(T, T) Ordering, dir int) Option[T] {
+	if len(v) == 0 {
+		return Option[T]{}
+	}
+	best := v[0]
+	for _, x := range v[1:] {
+		c := f(x, best)
+		if (dir < 0 && c < 0) || (dir > 0 && c >= 0) {
+			best = x
+		}
+	}
+	return Option[T]{Ok: true, V: best}
+}
+
+func wjMinMaxByKey[T, K any](v []T, f func(T) K, dir int) Option[T] {
+	return wjMinMaxBy(v, func(a, b T) Ordering { return wjCmp(f(a), f(b)) }, dir)
+}
+
 func wjReverseInPlace[T any](v []T) { slices.Reverse(v) }
 
 func wjDedup[T any](v *[]T) {

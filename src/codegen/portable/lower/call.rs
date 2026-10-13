@@ -164,6 +164,12 @@ impl<'e> Lowerer<'e> {
     fn path_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
         let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
+        // `Box<T>` / `Rc<T>` / `Arc<T>` are erased to `T` (values are already heap objects or
+        // copied by value semantics), so `Box::new(x)` is `x`.
+        if matches!(owner.as_str(), "Box" | "Rc" | "Arc") && name == "new" && args.len() == 1 && !self.env.structs.contains_key(&owner) {
+            let v = self.expr(args[0].1, want)?;
+            return Ok(self.own(v));
+        }
         let module = owner.rsplit("::").next().unwrap_or(&owner).to_string();
         if self.env.variant(&owner, name).is_none() && self.env.method(&owner, name).is_none() {
             if let Some(sig) = crate::codegen::portable::stdlib::lookup(&module, name) {
@@ -330,7 +336,8 @@ impl<'e> Lowerer<'e> {
             Ty::Adt(n, a) => Some((n.clone(), a.clone())),
             _ => None,
         };
-        if let Some((owner, targs)) = owner_ty {
+        let builtin_ordering = crate::codegen::portable::ordering::is_ordering(&recv.ty) && !self.env.enums.contains_key(crate::codegen::portable::ordering::NAME);
+        if let Some((owner, targs)) = owner_ty.filter(|_| !builtin_ordering) {
             if let Some(sig) = self.env.method(&owner, method).cloned() {
                 return self.user_method(recv, &owner, &targs, method, &sig, args, want);
             }
@@ -375,6 +382,14 @@ impl<'e> Lowerer<'e> {
         if matches!(method, "clone" | "to_owned") && !matches!(recv.ty, Ty::Iter(_)) {
             let ty = recv.ty.clone();
             return Ok(PExpr::new(ty, PK::Copy(recv)));
+        }
+        // `v[a..b]` / `s[a..]` (the parser's `.slice(a, b)`): a range index (byte offsets on strings).
+        if method == "slice" && args.len() == 2 && matches!(recv.ty, Ty::Vec(_) | Ty::Str) {
+            let (a, b) = (self.expr(args[0].1, Some(&Ty::usize()))?, self.expr(args[1].1, Some(&Ty::usize()))?);
+            let (a, b) = (self.ensure_usize(a), self.ensure_usize(b));
+            let range = PExpr::new(Ty::Range(Box::new(Ty::usize())), PK::Range { start: a, end: b, inclusive: false });
+            let ty = recv.ty.clone();
+            return Ok(PExpr::new(ty, PK::Index(recv, range)));
         }
         let tf = turbofish.and_then(|t| t.first()).map(|t| from_ast(t, &self.generics));
         let want_for_ret: Option<Ty> = match (method, &tf) {

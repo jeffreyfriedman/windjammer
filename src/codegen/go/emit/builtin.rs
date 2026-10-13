@@ -24,6 +24,10 @@ impl<'m> Go<'m> {
             }
         }
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
+        let r = self.expr(recv)?;
+        if let Some(s) = self.ordering_method(recv, name, &r, &a) {
+            return Ok(s);
+        }
         match &recv.ty {
             Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),
             Ty::Str => self.str_method(recv, name, &a, args, ty),
@@ -75,7 +79,8 @@ impl<'m> Go<'m> {
             "remove" => format!("wjRemove({p}, {})", a[0]),
             "swap_remove" => format!("wjSwapRemove({p}, {})", a[0]),
             "clear" => format!("wjClear({p})"),
-            "sort" | "sort_unstable" => format!("wjSort({r})"),
+            "sort" | "sort_unstable" if self.is_prim(&elem) && elem != Ty::Bool => format!("wjSort({r})"),
+            "sort" | "sort_unstable" => format!("wjSortAny({r})"),
             "reverse" => format!("wjReverseInPlace({r})"),
             "dedup" => format!("wjDedup({p})"),
             "extend" | "append" | "extend_from_slice" => format!("wjExtend({p}, {})", a[0]),
@@ -351,6 +356,9 @@ impl<'m> Go<'m> {
     }
 
     pub fn builtin_static(&mut self, owner: &str, name: &str, a: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
+        if let Some(c) = self.ordering_const(owner, name) {
+            return Ok(c);
+        }
         if let Some(k) = IntKind::from_name(owner) {
             let (lo, hi) = num::range_of(k);
             return match name {

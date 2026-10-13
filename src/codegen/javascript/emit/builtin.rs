@@ -37,6 +37,9 @@ impl<'m> Js<'m> {
         if name == "to_string" {
             return self.display(recv, &FmtSpec::default());
         }
+        if let Some(s) = self.ordering_method(recv, name, &r, &a) {
+            return Ok(s);
+        }
         match &recv.ty {
             Ty::Vec(t) => self.vec_method(recv, t, name, &r, &a, args, ty),
             Ty::Iter(t) | Ty::Range(t) => self.iter_method(t, name, &r, &a, args, ty),
@@ -390,6 +393,9 @@ impl<'m> Js<'m> {
     }
 
     pub fn builtin_static(&mut self, owner: &str, name: &str, a: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
+        if let Some(c) = self.ordering_const(owner, name) {
+            return Ok(c);
+        }
         if let Some(k) = IntKind::from_name(owner) {
             let (lo, hi) = range_of(k);
             return match name {

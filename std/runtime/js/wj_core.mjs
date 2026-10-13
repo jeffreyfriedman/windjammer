@@ -229,6 +229,26 @@ export function $cmp(a, b) {
   return 0;
 }
 
+// `Ordering` is -1 / 0 / 1.
+export const $dbgOrd = (x) => (x < 0 ? "Less" : x > 0 ? "Greater" : "Equal");
+const hasNaN = (x) => (typeof x === "number" && Number.isNaN(x)) || (Array.isArray(x) && x.some(hasNaN));
+/** `partial_cmp`: None when a float compared is NaN. */
+export const $pcmp = (a, b) => (hasNaN(a) || hasNaN(b) ? null : { v: $cmp(a, b) });
+/** Stable in-place sort by a comparator returning an `Ordering` (Rust `sort_by` is stable). */
+export function $sortBy(v, f) {
+  v.sort((x, y) => f(x, y));
+}
+/** `max_by` (last maximum, dir 1) / `min_by` (first minimum, dir -1) over a comparator. */
+export function $minmaxBy(v, f, dir) {
+  if (v.length === 0) return null;
+  let best = v[0];
+  for (let i = 1; i < v.length; i++) {
+    const c = f(v[i], best);
+    if (dir < 0 ? c < 0 : c >= 0) best = v[i];
+  }
+  return { v: best };
+}
+
 function cmpStr(a, b) {
   const x = Array.from(a);
   const y = Array.from(b);
