@@ -1,0 +1,8 @@
+error[WJ0003]: mismatched types: expected `string`, found `int`
+  --> let_int_to_string.wj:3:21
+  |
+3 |     let y: string = 42
+  |                     ^^ expected `string`, found `int`
+  = help: make the value match `string`, or change the declared type
+  = fix (suggested): quote the number to make it a string
+  = explain: wj explain WJ0003

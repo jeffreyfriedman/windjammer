@@ -1,0 +1,15 @@
+// mutant: unknown_method of examples/verified/algo_palindrome.wj
+fn is_palindrome(s: string) -> bool {
+    let cleaned: Vec<char> = s.chars().filter(|c| c.is_alphanumeric()).map(|c| c.to_ascii_lowercase()).collect()
+    let n = cleaned.length_of()
+    for i in 0..n / 2 {
+        if cleaned[i] != cleaned[n - 1 - i] { return false }
+    }
+    true
+}
+
+fn main() {
+    for s in ["racecar", "hello", "A man a plan a canal Panama"] {
+        println("${s}: ${is_palindrome(s)}")
+    }
+}

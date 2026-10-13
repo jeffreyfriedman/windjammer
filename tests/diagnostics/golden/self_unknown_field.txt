@@ -1,0 +1,7 @@
+error[WJ0014]: no field `cnt` on type `Counter`
+  --> self_unknown_field.wj:8:25
+  |
+8 |         println("${self.cnt}")
+  |                         ^^^ unknown field
+  = help: `Counter` has the fields: count
+  = explain: wj explain WJ0014

@@ -145,7 +145,14 @@ impl WindjammerLanguageServer {
                 let source_file = db.set_source_text(uri.clone(), content.clone());
                 let analysis = db.get_ide_analysis(source_file);
                 let symbols = db.get_symbols(source_file).clone();
-                let diagnostics = crate::ide_queries::to_lsp_diagnostics(&analysis.diagnostics);
+                // One schema for every consumer: the same records `wj check --json` prints.
+                let _ = &analysis.diagnostics;
+                let file = uri.to_file_path().map(|p| p.display().to_string()).unwrap_or_else(|_| uri.to_string());
+                let schema = windjammer::check::check_sources(
+                    std::path::Path::new("."),
+                    &[(file, content.clone())],
+                );
+                let diagnostics = crate::ide_queries::to_lsp_from_schema(&uri, &schema);
                 let inlay_hints = crate::ide_queries::to_inlay_hints(&analysis, &symbols, &content);
 
                 let mut inlay_hints_provider = InlayHintsProvider::new();

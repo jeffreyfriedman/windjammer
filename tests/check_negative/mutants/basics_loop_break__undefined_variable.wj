@@ -1,0 +1,15 @@
+// mutant: undefined_variable of examples/verified/basics_loop_break.wj
+fn main() {
+    let mut n = 0
+    loop {
+        n += 1
+        if n * n > 40 { break }
+    }
+    println("found ${n}")
+    let mut odds = ""
+    for i in 1..=10 {
+        if i % 2 == 0 { continue }
+        odds_undefined = odds + "${i} "
+    }
+    println("odds: ${odds.trim()}")
+}

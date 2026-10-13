@@ -1,0 +1,7 @@
+error[WJ0013]: function `add` takes 2 arguments but 1 was supplied
+  --> arity_too_few.wj:7:16
+  |
+7 |     println("${add(1)}")
+  |                ^^^ expected 2 argument(s)
+  = note: defined at arity_too_few.wj:6
+  = explain: wj explain WJ0013

@@ -1,0 +1,15 @@
+// mutant: int_annotated_string of examples/verified/basics_loop_break.wj
+fn main() {
+    let mut n: string = 0
+    loop {
+        n += 1
+        if n * n > 40 { break }
+    }
+    println("found ${n}")
+    let mut odds = ""
+    for i in 1..=10 {
+        if i % 2 == 0 { continue }
+        odds = odds + "${i} "
+    }
+    println("odds: ${odds.trim()}")
+}
