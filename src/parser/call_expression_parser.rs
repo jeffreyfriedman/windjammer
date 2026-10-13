@@ -100,9 +100,7 @@ impl Parser {
                                 } else {
                                     // Method call (possibly with turbofish)
                                     self.advance();
-                                    let arguments = self.parse_arguments()?;
-                                    self.expect(Token::RParen)?;
-                                    let arguments = self.finish_call_arguments(Some(format!(".{field}")), arguments)?;
+                                    let arguments = self.parse_call_rest(Some(format!(".{field}")))?;
                                     if let Some(lowered) =
                                         self.lower_stream_method_call(expr, &field, &arguments)
                                     {
@@ -255,10 +253,8 @@ impl Parser {
 
                         if self.current_token() == &Token::LParen {
                             self.advance();
-                            let arguments = self.parse_arguments()?;
-                            self.expect(Token::RParen)?;
                             let key = crate::parser::named_args::call_key(expr).map(|t| format!("{t}::{method}"));
-                            let arguments = self.finish_call_arguments(key, arguments)?;
+                            let arguments = self.parse_call_rest(key)?;
                             self.alloc_expr(Expression::MethodCall {
                                 object: expr,
                                 method,
@@ -278,9 +274,7 @@ impl Parser {
                 }
                 Token::LParen => {
                     self.advance();
-                    let arguments = self.parse_arguments()?;
-                    self.expect(Token::RParen)?;
-                    let arguments = self.finish_call_arguments(crate::parser::named_args::call_key(expr), arguments)?;
+                    let arguments = self.parse_call_rest(crate::parser::named_args::call_key(expr))?;
                     self.alloc_expr(Expression::Call {
                         function: expr,
                         arguments,

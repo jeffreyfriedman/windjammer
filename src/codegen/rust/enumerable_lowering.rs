@@ -104,13 +104,17 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// Static type of `object.method(args)` when `method` is a surface method (for map indexing, `len`, ...).
-    pub(in crate::codegen::rust) fn enumerable_call_type(
-        &self,
-        object: &Expression<'ast>,
-        method: &str,
-        argc: usize,
-    ) -> Option<Type> {
-        let m = enumerable::lookup(method, argc)?;
+    pub(in crate::codegen::rust) fn enumerable_call_type(&self, call: &Expression) -> Option<Type> {
+        let Expression::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } = call
+        else {
+            return None;
+        };
+        let m = enumerable::lookup(method, arguments.len())?;
         let recv_name = self.infer_type_name(object);
         if self.receiver_defines_method(recv_name.as_deref(), method) {
             return None;

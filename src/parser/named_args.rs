@@ -206,12 +206,18 @@ impl Parser {
 }
 
 impl Parser {
-    /// After `callee(args)`: a trailing block (parser/trailing_block.rs), then named-argument lowering.
-    pub(in crate::parser) fn finish_call_arguments(
+    /// The arguments of a call after its `(`, the `)`, a trailing block (parser/trailing_block.rs), then
+    /// named-argument lowering against the callee `key`.
+    pub(in crate::parser) fn parse_call_rest(
         &mut self,
         key: Option<String>,
-        args: Args,
     ) -> Result<Args, String> {
+        let args = self.parse_arguments()?;
+        self.expect(Token::RParen)?;
+        self.finish_call_arguments(key, args)
+    }
+
+    fn finish_call_arguments(&mut self, key: Option<String>, args: Args) -> Result<Args, String> {
         let args = self.append_trailing_block(args)?;
         match key {
             Some(k) => self.resolve_call_arguments(&k, args),
