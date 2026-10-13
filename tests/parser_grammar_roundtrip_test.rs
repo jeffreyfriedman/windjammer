@@ -179,6 +179,11 @@ impl Gen {
         let mut s = String::from("{\n");
         for _ in 0..n {
             s.push_str(&pad);
+            if self.rng.below(8) == 0 {
+                self.note("block-comment");
+                s.push_str(self.rng.pick(&["/* c */ ", "/* a /* nested */ b */ ", "/* multi\n line */\n"]));
+                s.push_str(&pad);
+            }
             s.push_str(&self.stmt(d, in_loop, ind + 4));
             s.push('\n');
         }
@@ -428,4 +433,15 @@ fn formatter_keeps_string_first_interpolation_intact() {
     let src = "fn f() {\n    let a = \"${\"abc\".len()} ${'}'}\"\n}\n";
     let out = format_source(src, &FormatOptions::default()).expect("formats");
     assert_eq!(fingerprint(src), fingerprint(&out), "formatted:\n{out}");
+}
+
+#[test]
+fn formatter_keeps_block_comments_and_the_ast() {
+    let src = "/* head\n   comment */\nfn f(a: int /* x */, b: int) -> int {\n    let c = a /* mid /* nested */ */ + b\n    /* own line */\n    c\n}\n";
+    let out = format_source(src, &FormatOptions::default()).expect("formats");
+    assert_eq!(fingerprint(src), fingerprint(&out), "formatted:\n{out}");
+    for c in ["/* head\n   comment */", "/* x */", "/* mid /* nested */ */", "/* own line */"] {
+        assert!(out.contains(c), "comment {c:?} lost:\n{out}");
+    }
+    assert_eq!(format_source(&out, &FormatOptions::default()).unwrap(), out, "not idempotent");
 }

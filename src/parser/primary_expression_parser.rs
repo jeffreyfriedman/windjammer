@@ -99,7 +99,7 @@ impl Parser {
                 } else {
                     false
                 };
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: if is_mut {
                         UnaryOp::MutRef
@@ -113,7 +113,7 @@ impl Parser {
             Token::Star => {
                 // Dereference: *expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Deref,
                     operand,
@@ -123,7 +123,7 @@ impl Parser {
             Token::Minus => {
                 // Negation: -expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Neg,
                     operand,
@@ -133,7 +133,7 @@ impl Parser {
             Token::Bang => {
                 // Logical not: !expr
                 self.advance();
-                let operand = self.parse_primary_expression()?;
+                let operand = self.parse_unary_operand()?;
                 self.alloc_expr(Expression::Unary {
                     op: UnaryOp::Not,
                     operand,
@@ -518,10 +518,7 @@ impl Parser {
             Token::Return => {
                 // Return expression: return expr
                 self.advance(); // consume 'return'
-                let return_value = if matches!(
-                    self.current_token(),
-                    Token::Comma | Token::RBrace | Token::Semicolon
-                ) {
+                let return_value = if self.return_has_no_value() {
                     None
                 } else {
                     Some(self.parse_expression()?)

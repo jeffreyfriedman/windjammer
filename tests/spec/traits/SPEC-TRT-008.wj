@@ -1,6 +1,5 @@
 // spec: SPEC-TRT-008
 // expect: hi
-// xfail: Q-024
 fn show<T: Into<string>>(x: T) -> string { x.into() }
 fn main() {
     println(show("hi"))
