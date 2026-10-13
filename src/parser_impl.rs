@@ -111,6 +111,8 @@ pub struct Parser {
     pub(crate) recovered_errors: Vec<String>,
     /// Statement-level error recovery is only on inside `parse()`, which reports the errors.
     pub(crate) recovering: bool,
+    /// True while parsing the operand of a prefix operator (stops before `as`).
+    pub(crate) in_unary_operand: bool,
 }
 
 /// An AST arena that is **never freed** (same API as `typed_arena::Arena` for the calls the parser makes).
@@ -248,6 +250,7 @@ impl Parser {
             pattern_arena: Arena::new(),
             recovered_errors: Vec::new(),
             recovering: false,
+            in_unary_operand: false,
         }
     }
 
@@ -270,6 +273,7 @@ impl Parser {
             pattern_arena: Arena::new(),
             recovered_errors: Vec::new(),
             recovering: false,
+            in_unary_operand: false,
         }
     }
 
@@ -844,6 +848,7 @@ impl Parser {
                 } else {
                     return Err("Expected type alias name".to_string());
                 };
+                let type_params = self.parse_type_params()?;
                 self.expect(Token::Assign)?;
                 let target = self.parse_type()?;
                 // Semicolon optional (ASI)
@@ -852,6 +857,7 @@ impl Parser {
                 }
                 Ok(Item::TypeAlias {
                     name,
+                    type_params,
                     target,
                     is_pub,
                     location: self.current_location(),
