@@ -944,18 +944,15 @@ impl<'ast> CodeGenerator<'ast> {
         for item in &program.items {
             if let Item::TypeAlias {
                 name,
+                type_params,
                 target,
                 is_pub,
                 ..
             } = item
             {
-                let pub_prefix = if *is_pub { "pub " } else { "" };
-                body.push_str(&format!(
-                    "{}type {} = {};\n\n",
-                    pub_prefix,
-                    name,
-                    self.type_to_rust(target)
-                ));
+                let alias = self.generate_type_alias(name, type_params, target, *is_pub);
+                body.push_str(&alias);
+                body.push('\n');
             }
         }
 

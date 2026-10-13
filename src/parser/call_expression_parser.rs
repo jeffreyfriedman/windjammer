@@ -5,11 +5,38 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// Where the postfix chain must stop (docs/design/statement-boundaries.md): `(` or `[` that
+    /// start a new line begin a new statement; `as` after a prefix operator's operand applies to
+    /// the whole prefix expression (`-1 as u8` is `(-1) as u8`, as in Rust).
+    fn postfix_stops_here(&self, stop_at_as: bool) -> bool {
+        match self.current_token() {
+            Token::LParen | Token::LBracket => self.had_newline_before_current(),
+            Token::As => stop_at_as,
+            _ => false,
+        }
+    }
+
+    /// Postfix chain. Whether `as` ends it is decided by *this* chain's context only: expressions
+    /// nested inside it (index, arguments, closure bodies) start with the flag cleared.
     pub(in crate::parser) fn parse_postfix_expression(
         &mut self,
+        expr: &'static Expression<'static>,
+    ) -> Result<&'static Expression<'static>, String> {
+        let stop_at_as = std::mem::replace(&mut self.in_unary_operand, false);
+        let r = self.parse_postfix_chain(expr, stop_at_as);
+        self.in_unary_operand = stop_at_as;
+        r
+    }
+
+    fn parse_postfix_chain(
+        &mut self,
         mut expr: &'static Expression<'static>,
+        stop_at_as: bool,
     ) -> Result<&'static Expression<'static>, String> {
         loop {
+            if self.postfix_stops_here(stop_at_as) {
+                break;
+            }
             expr = match self.current_token() {
                 Token::Dot => {
                     // Peek ahead to check for .await
@@ -64,8 +91,7 @@ impl Parser {
                             if self.current_token() == &Token::LParen {
                                 // Check for newline before LParen (ASI)
                                 if self.had_newline_before_current() {
-                                    // ASI: This LParen starts a new statement, not a method call
-                                    // Create a field access and break
+                                    // ASI: `(` on a new line starts a statement; keep the field access
                                     self.alloc_expr(Expression::FieldAccess {
                                         object: expr,
                                         field,
@@ -251,14 +277,6 @@ impl Parser {
                     }
                 }
                 Token::LParen => {
-                    // Check for newline before LParen (automatic semicolon insertion)
-                    // If there was a newline, this might be a new statement, not a function call
-                    if self.had_newline_before_current() {
-                        // ASI: Treat newline as statement terminator
-                        // Don't consume the LParen - it belongs to the next statement
-                        break;
-                    }
-
                     self.advance();
                     let arguments = self.parse_arguments()?;
                     self.expect(Token::RParen)?;
