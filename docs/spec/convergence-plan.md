@@ -116,6 +116,8 @@ init takes the solver's width (and the semantic NUM-DEFAULT-INT fact) before any
 reports a diagnostic with the expression and rule NUM-MIXED instead of casting. Gate: grep of goldens for `as i32` applied to a
 `.amount`-style `int` field must stay empty; count `as i32|as u32|as i16|as u8` narrowing casts in goldens as a ratchet.
 
+**Decision (owner, 2026-10-12): D-WIDTH-OWNERS baseline 184 -> 191 is accepted.** ADR-0015's i64 default makes the IR solver report i64 for unconstrained literals where the legacy i32 default used to agree with it; the extra findings are exactly the remaining C4.4 work (codegen reading widths from the solver) and must now fall to 0.
+
 ## C5. One ownership owner (WP 9), parameters and receivers
 Method: replace the analyzer's decisions with solver-native constraints one *rule category* at a time, never all at once.
 The analyzer's precedence chain (`parameter_analysis.rs` steps 0a-9) maps onto spec rules:
