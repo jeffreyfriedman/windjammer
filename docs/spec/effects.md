@@ -128,7 +128,7 @@ make: random
 run_job: pure + ?
 ```
 
-**SPEC-EFF-006** A call to a trait method through a generic or `dyn` receiver performs the union of the effects of the impls of that method that reach the call in the program. A trait method may bound its impls' effects with `@uses(...)`; then the bound is used.
+**SPEC-EFF-006** A call to a trait method through a generic or `dyn` receiver performs the union of the effects of the impls of that method that reach the call in the program. A trait method may bound its impls' effects with `@uses(...)` or `@pure`; then the bound is used instead of the union (SPEC-EFF-041), and an impl that performs more than the bound is `WJ0042` (SPEC-EFF-042).
 
 <!-- example: tests/spec/effects/SPEC-EFF-006.wj -->
 ```windjammer
@@ -699,3 +699,43 @@ Recorded, then replayed from the effect log: both runs print the same lines and 
 ## Code mode
 
 **SPEC-EFF-032** [PLANNED ADR-0021] `wj mcp bind` generates one Windjammer function per tool of an MCP server, with typed parameters and results and the user-defined effect `mcp.<server>.<tool>`; a sandboxed run may call exactly the tools its grant lists. (untestable: generated from a live tool schema; acceptance test `tests/mcp_bind_test.rs`, stage E5)
+
+**SPEC-EFF-041** A call through a trait method that carries `@uses(...)` performs exactly that bound, whatever the impls in the program do. Callers see a stable effect even when an impl is added later.
+
+<!-- example: tests/spec/effects/SPEC-EFF-041.wj -->
+```windjammer
+use std::fs
+trait Source {
+    @uses(fs.read)
+    fn get(self) -> string
+}
+struct Fixed { text: string }
+struct Cached { text: string }
+impl Source for Fixed { fn get(self) -> string { self.text } }
+impl Source for Cached { fn get(self) -> string { self.text } }
+fn read_any<S: Source>(s: S) -> string { s.get() }
+fn main() {
+    println(read_any(Fixed { text: "x" }))
+}
+```
+`wj explain-effects` (compact):
+```text
+read_any: fs.read
+```
+
+**SPEC-EFF-042** An impl method whose effects exceed its trait method's `@uses(...)` or `@pure` bound is reported as `WJ0042` on the impl method.
+
+<!-- example: tests/spec/effects/SPEC-EFF-042.wj -->
+```windjammer
+use std::fs
+trait Source {
+    @pure
+    fn get(self) -> string
+}
+struct FileSource { path: string }
+impl Source for FileSource { fn get(self) -> string { fs::read_to_string(self.path).unwrap_or("") } }
+fn main() {
+    println(FileSource { path: "cfg.toml" }.get())
+}
+```
+`wj check` reports an error containing: `as Source>::get` performs `fs.read``

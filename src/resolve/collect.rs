@@ -5,7 +5,7 @@ use super::res::Diagnostic;
 use super::uses::{expand_use, UseDecl};
 use super::ParsedFile;
 use crate::parser::ast::core::{
-    EnumDecl, Expression, FunctionDecl, ImplBlock, Item, Parameter, Statement, StructDecl,
+    Decorator, EnumDecl, Expression, FunctionDecl, ImplBlock, Item, Parameter, Statement, StructDecl,
     TraitDecl,
 };
 use crate::source_map::Location;
@@ -63,6 +63,8 @@ pub struct Collected<'a> {
     pub methods_by_name: HashMap<String, Vec<DefId>>,
     /// Function def -> its declaration (attributes, parameters, `extern`); data for fact passes.
     pub decls: HashMap<DefId, &'a FunctionDecl<'a>>,
+    /// Trait method def -> its attributes (`@uses(..)` / `@pure` bounds on what implementations may do).
+    pub trait_method_decorators: HashMap<DefId, &'a [Decorator<'a>]>,
     pub diagnostics: Vec<Diagnostic>,
     /// Roots of dependency crates mounted under the program root: `crate::` inside one means that root.
     pub crate_roots: std::collections::HashSet<DefId>,
@@ -81,6 +83,7 @@ pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
         impls_of: HashMap::new(),
         methods_by_name: HashMap::new(),
         decls: HashMap::new(),
+        trait_method_decorators: HashMap::new(),
         diagnostics: Vec::new(),
         crate_roots: std::collections::HashSet::new(),
     };
@@ -414,6 +417,9 @@ impl<'a> Collected<'a> {
             d.has_self = has_self;
             d.arity = m.parameters.len() - usize::from(has_self);
             self.members.entry(id).or_default().push(mid);
+            if !m.decorators.is_empty() {
+                self.trait_method_decorators.insert(mid, &m.decorators);
+            }
             self.methods_by_name
                 .entry(m.name.clone())
                 .or_default()

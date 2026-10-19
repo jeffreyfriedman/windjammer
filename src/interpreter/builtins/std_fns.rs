@@ -206,7 +206,8 @@ pub fn register(r: &mut Registry) {
         Ok(Value::str(std::env::current_dir().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()))
     });
     r.func("env::home_dir", |_, _| Ok(Value::option(host_var("HOME").ok().map(Value::str))));
-    r.func("env::temp_dir", |_, _| Ok(Value::str(std::env::temp_dir().to_string_lossy().to_string())));
+    // a sandboxed test/REPL session has a private scratch directory (ADR-0021); everyone else gets the system one
+    r.func("env::temp_dir", |it, _| Ok(Value::str(it.scratch_dir().unwrap_or_else(std::env::temp_dir).to_string_lossy().to_string())));
     r.func("fs::read_to_string", |_, a| {
         let p = arg_str(&a, 0, "fs::read_to_string")?;
         Ok(match std::fs::read_to_string(&*p) {
