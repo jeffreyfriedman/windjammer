@@ -1,6 +1,6 @@
 ---
 status: current
-last_verified: ceeebb2da7ef
+last_verified: c1dfbcbe8493
 ---
 # When can the interpreter be the primary development loop?
 
@@ -44,7 +44,7 @@ What each criterion measures, and where the evidence comes from:
 |---|-------------|
 | R1 | `wj test --interpret --json` and compiled `wj test --json` on every project; the two per-test pass/fail *sets* are compared (not counts). Percent = tests passing both / tests passing compiled |
 | R2 | each `// expect:` program of `examples/verified`, `tests/conformance_programs` and `tests/spec` (run/panic modes) against its own oracle, against `wj run --compiled` (stdout, exit code, panic message), and against itself under `--hash-seed 0..3`; every `tests/interpreter_corpus` template against its independent python reference model for >= 300 generated seeds |
-| R2 (agent pilot) | the programs agents wrote interpreted-first (`bench/agent-dx/results/pilot`): every interpreter-green program that fails the compiled grade is a silent divergence, reported as a rate (pilot: 13 of 30) and per program; those that `wj check` accepts are also counted under R5 as check misses, with the compiler error class (E0308 int widths, E0277 collect element types, ...) |
+| R2 (agent pilot) | the programs agents wrote interpreted-first (`bench/agent-dx/results/pilot`): every interpreter-green program that fails the compiled grade is a silent divergence, reported as a rate and per program; those that `wj check` accepts are also counted under R5 as check misses, with the compiler error class (E0308 int widths, E0277 collect element types, ...) |
 | R3 | default `wj run` over the same programs: the one-line `wj: running compiled (cargo): <reason>` stderr notice counts as a fallback (reasons grouped, a notice without a reason fails), plus interpreted tests that the interpreter declined as unsupported |
 | R4 | interpreted vs compiled wall time per project (compiled cache as found, which favours compiled), the warm edit-run loop on a scratch copy of the largest project, and every `bench/interp` kernel vs its hand-written python twin (`bench/interp/twins/`; a generated equivalent is the fallback), plus startup: a hello-world run, and the share of the largest project's interpreted run spent in the pre-run `wj check` |
 | R5 | `wj check` vs `wj run --interpret` refusal over the verified examples and `tests/check_negative/mutants`, and the compiled build (shared with R2) of everything the interpreter accepts, documented `// rust: gap` examples included; `--cargo-gates` also runs the real Rust gates |
