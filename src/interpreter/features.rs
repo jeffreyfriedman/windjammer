@@ -140,6 +140,8 @@ pub const FEATURES: &[Feature] = &[
        "struct G { n: int }\nimpl Drop for G {\n    fn drop(self) { println(\"drop ${self.n}\") }\n}\nfn main() {\n    let a = G { n: 1 }\n    {\n        let mut v: Vec<G> = Vec::new()\n        v.push(a)\n    }\n    println(\"end\")\n}\n", "drop 1\nend"),
     ok("numbers.u128", "Numbers", "`u128` over its full range",
        "fn main() {\n    let m = u128::MAX\n    println(\"${m} ${m / 3}\")\n}\n", "340282366920938463463374607431768211455 113427455640312821154458202477256070485"),
+    ok("collections.ordered", "Collections", "`OrderedMap`/`OrderedSet`: insertion order, `remove` keeps the order of the rest; `HashMap`/`HashSet` order is unspecified (`--hash-seed N` permutes it)",
+       "fn main() {\n    let mut m: OrderedMap<string, int> = OrderedMap::new()\n    m.insert(\"b\", 2)\n    m.insert(\"a\", 1)\n    m.insert(\"c\", 3)\n    m.remove(\"a\")\n    for k in m.keys() { println(k) }\n}\n", "b\nc"),
     no("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)",
        "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\n", "thread {}"),
     no("ffi.extern_fn", "FFI", "calls to `extern fn`",

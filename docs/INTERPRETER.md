@@ -208,7 +208,10 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
   interpreter shares the object instead of copying it, so that clone's destructor does not run). Returning a parameter
   does not move the caller's variable early (the object is reachable from the result either way). Values held only by
   pending Rust-side temporaries are invisible to the reachability scan.
-- `HashMap`/`HashSet` iterate in key order (Rust's order is unspecified).
+- `HashMap`/`HashSet` iterate in key order by default (Rust's order is unspecified; ADR-0021 D6). `--hash-seed N` permutes it
+  deterministically, and `interpreter_hash_order_test` runs the verified examples, spec examples and conformance programs under
+  several seeds to flag order-dependent programs (`tests/data/hash_order_dependent.txt`, shrink-only, currently empty).
+  `OrderedMap`/`OrderedSet` iterate in insertion order (`remove` keeps the order of the rest, `swap_remove` does not).
 - `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error (owned by the parser stream; ignored test
   `interpolation_escaped_quotes_test`).
 - Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code; see ADR-0020.

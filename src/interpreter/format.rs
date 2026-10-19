@@ -287,7 +287,7 @@ impl Interpreter {
                 }
             }
             Value::Set(m) => {
-                let items: Vec<Value> = m.ordered_keys();
+                let items: Vec<Value> = m.ordered_keys(self.hash_seed);
                 self.debug_seq("{", "}", items.iter(), pretty, ind, out)?
             }
             Value::Map(m) => {
@@ -295,7 +295,7 @@ impl Interpreter {
                     out.push_str("{}");
                 } else if pretty {
                     out.push_str("{\n");
-                    for (k, val) in m.ordered() {
+                    for (k, val) in m.ordered(self.hash_seed) {
                         out.push_str(&pad(ind + 1));
                         self.debug_fmt(&k.0, true, ind + 1, out)?;
                         out.push_str(": ");
@@ -306,7 +306,7 @@ impl Interpreter {
                     out.push('}');
                 } else {
                     out.push('{');
-                    for (n, (k, val)) in m.ordered().into_iter().enumerate() {
+                    for (n, (k, val)) in m.ordered(self.hash_seed).into_iter().enumerate() {
                         if n > 0 {
                             out.push_str(", ");
                         }

@@ -74,9 +74,6 @@ impl From<BTreeMap<Key, Value>> for KMap {
     }
 }
 
-/// The seed given with `--hash-seed N` (0 = key order).
-pub static HASH_SEED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
 fn seeded_hash(seed: u64, k: &Key) -> u64 {
     // FNV-1a over the key's structural text, then a splitmix-style finalizer mixed with the seed
     let mut h: u64 = 0xcbf29ce484222325;
@@ -94,22 +91,21 @@ impl KMap {
         KMap { m, hashed: true }
     }
 
-    /// Entries in iteration order (see the type docs).
-    pub fn ordered(&self) -> Vec<(&Key, &Value)> {
+    /// Entries in iteration order (see the type docs); `seed` is `--hash-seed` (0 = key order).
+    pub fn ordered(&self, seed: u64) -> Vec<(&Key, &Value)> {
         let mut v: Vec<(&Key, &Value)> = self.m.iter().collect();
-        let seed = HASH_SEED.load(std::sync::atomic::Ordering::Relaxed);
         if self.hashed && seed != 0 {
             v.sort_by_cached_key(|(k, _)| seeded_hash(seed, k));
         }
         v
     }
 
-    pub fn ordered_keys(&self) -> Vec<Value> {
-        self.ordered().into_iter().map(|(k, _)| k.0.clone()).collect()
+    pub fn ordered_keys(&self, seed: u64) -> Vec<Value> {
+        self.ordered(seed).into_iter().map(|(k, _)| k.0.clone()).collect()
     }
 
-    pub fn ordered_values(&self) -> Vec<Value> {
-        self.ordered().into_iter().map(|(_, v)| v.clone()).collect()
+    pub fn ordered_values(&self, seed: u64) -> Vec<Value> {
+        self.ordered(seed).into_iter().map(|(_, v)| v.clone()).collect()
     }
 }
 

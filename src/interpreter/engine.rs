@@ -149,6 +149,8 @@ pub struct Interpreter {
     pub(crate) dropped: HashSet<u32>,
     /// Ownership moves out of variables (`moves.rs`).
     pub(crate) moves: super::moves::Moves,
+    /// `--hash-seed`: permutation of HashMap/HashSet iteration order (0 = key order).
+    pub hash_seed: u64,
     /// Active user calls: (qualified name, call-site location). Rendered lazily on error.
     pub(crate) backtrace: Vec<(Rc<str>, Option<&'static Location>)>,
     pub(crate) cur: Option<&'static Location>,
@@ -209,6 +211,7 @@ impl Interpreter {
             next_uid: 0,
             dropped: HashSet::new(),
             moves: Default::default(),
+            hash_seed: 0,
             backtrace: Vec::new(),
             cur: None,
             output: Vec::new(),
