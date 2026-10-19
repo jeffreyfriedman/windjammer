@@ -73,7 +73,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli", "safety_typed_ir"]
-cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
+cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
@@ -128,8 +128,6 @@ quote = "1"
 libloading = "0.8"
 
 tempfile = { version = "3.10", optional = true }
-crossterm = { version = "0.28", optional = true }
-ratatui = { version = "0.28", optional = true }
 syntect = { version = "5.2", optional = true }
 salsa = { version = "0.24", optional = true }
 env_logger = { version = "0.11", optional = true }
@@ -161,6 +159,22 @@ path = "tests/all.rs"
 [[test]]
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
+
+# Convergence gates (golden emitted Rust, rustc-accepts, explain ratchet) also run standalone:
+#   cargo test --release --test convergence_gates
+[[test]]
+name = "convergence_gates"
+path = "tests/convergence_gates_test.rs"
+
+# ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
+[[test]]
+name = "semantic_facts_portable"
+path = "tests/semantic_facts_portable_test.rs"
+
+# Inference differential harness standalone: cargo test --release --test inference_differential
+[[test]]
+name = "inference_differential"
+path = "tests/inference_differential_test.rs"
 
 # Language specification (docs/spec): executable rule examples. The grammar is checked by docs_truth.
 #   cargo test --release --test spec_conformance

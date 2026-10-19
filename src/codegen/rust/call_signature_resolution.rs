@@ -51,24 +51,6 @@ pub(crate) fn ownership_collision_blocks_autoborrow(callee_name: &str) -> bool {
     true
 }
 
-/// Whether registry metadata reports an ownership collision that should suppress
-/// auto-borrow/`&` insertion for this call (uses `global_fallback` when layered).
-pub(crate) fn registry_homonym_blocks_autoborrow(
-    registry: &crate::analyzer::SignatureRegistry,
-    callee_name: &str,
-) -> bool {
-    if !ownership_collision_blocks_autoborrow(callee_name) {
-        return false;
-    }
-    let simple = callee_name.rsplit("::").next().unwrap_or(callee_name);
-    if callee_name.contains("::") {
-        registry.has_explicit_ownership_collision(callee_name)
-            || registry.has_collision(callee_name)
-    } else {
-        registry.has_explicit_ownership_collision(simple) || registry.has_collision(simple)
-    }
-}
-
 /// Strip auto-borrow/coercion artifacts when homonym ownership collision forbids them.
 pub(crate) fn strip_collision_blocked_call_site_coercions(coerced: &mut String) {
     while coerced.starts_with('&') && !coerced.starts_with("&mut ") {
@@ -952,33 +934,6 @@ fn try_receiver_qualified(
 pub(crate) fn validate_arg_count(sig: &FunctionSignature, call_arg_count: usize) -> bool {
     let expected = effective_user_arg_count(sig);
     expected == call_arg_count
-}
-
-/// When a per-file stub says `Owned`, look for a longer module-qualified global key
-/// (e.g. `dep::module::touch_grid`) with converged borrow ownership.
-pub(crate) fn global_suffix_param_ownership(
-    global: &SignatureRegistry,
-    func_name: &str,
-    arg_count: usize,
-    arg_idx: usize,
-) -> Option<OwnershipMode> {
-    let method = func_name.rsplit("::").next().unwrap_or(func_name);
-    let suffix = format!("::{method}");
-    let mut best: Option<(usize, OwnershipMode)> = None;
-    for (key, sig) in global.signatures_matching_suffix(&suffix) {
-        if validate_arg_count(sig, arg_count) {
-            if let Some(own) = sig.param_ownership_for_arg(arg_idx) {
-                let key_len = key.len();
-                if best
-                    .as_ref()
-                    .is_none_or(|(best_len, _)| key_len > *best_len)
-                {
-                    best = Some((key_len, *own));
-                }
-            }
-        }
-    }
-    best.map(|(_, own)| own)
 }
 
 /// Whether a formal type should honor a body-converged borrow.

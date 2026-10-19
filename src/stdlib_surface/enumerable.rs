@@ -112,6 +112,11 @@ pub fn lookup(name: &str, argc: usize) -> Option<&'static Method> {
         .find(|m| m.name == name && m.args.len() == argc)
 }
 
+/// Is `name` a surface method (any arity)? Used for arity diagnostics and by `wj check`.
+pub fn is_surface_name(name: &str) -> bool {
+    METHODS.iter().any(|m| m.name == name)
+}
+
 /// Name of the inlined Rust module holding the implementations.
 pub const RUST_MODULE: &str = "wj_enumerable";
 

@@ -377,6 +377,9 @@ impl<'m> Go<'m> {
             ("Vec", "from") => Ok(format!("wjClone({a})")),
             ("String" | "string", "new" | "with_capacity") => Ok("\"\"".into()),
             ("String" | "string", "from") => Ok(a.to_string()),
+            ("f32" | "f64", m) if crate::codegen::portable::builtins::float_const(owner, m).is_some() => {
+                Ok(num::float_lit(crate::codegen::portable::builtins::float_const(owner, m).unwrap_or(0.0), owner == "f32"))
+            }
             ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
             ("char", "from_u32") => Ok(format!("wjCharFromU32({a})")),
             _ => {

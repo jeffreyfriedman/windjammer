@@ -44,16 +44,6 @@ backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
 [[unsupported]]
-program = "75_iterators"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
-program = "90_crc32_known_answer"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
 program = "93_pcg32_known_answer"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
@@ -98,6 +88,7 @@ program = "113_std_time_monotonic"
 backend = "rust"
 reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
 
+# `&mut int` parameters: the Rust backend infers the parameter as an owned i64 (E0614 on `*c`).
 [[unsupported]]
 program = "159_deref_assign_ref_params"
 backend = "rust"
@@ -150,3 +141,9 @@ reason = "rust-closure-if-tail: a closure whose body is an if/else expression an
 program = "172_clos_shorthand"
 backend = "rust"
 reason = "rust-closure-field-move: `map(|u| u.name)` over a borrowed list moves a String out of `&User` (no clone inserted by the ownership pass)"
+
+# ---- ADR-0018 round 2: optional chaining ---------------------------------------------------------------
+[[unsupported]]
+program = "177_opt_chain"
+backend = "rust"
+reason = "rust-optional-chain: `?.` needs the IR solver's receiver type (convergence C2 is not in next); the Rust backend rejects it with an explicit error instead of guessing Option vs Result"

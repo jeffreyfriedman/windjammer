@@ -93,6 +93,17 @@ impl<'ast> CodeGenerator<'ast> {
         format!("{body}\n{}", inline_module())
     }
 
+    /// `a?.b` on the Rust backend: the Option-or-Result choice needs the IR solver's receiver type (ADR-0018 status,
+    /// convergence C2), so the program is rejected loudly instead of silently getting `?` semantics.
+    pub(in crate::codegen::rust) fn unsupported_optional_chain(&self) -> String {
+        let msg = "optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type)".to_string();
+        let mut errors = self.boundary_signature_errors.borrow_mut();
+        if !errors.contains(&msg) {
+            errors.push(msg);
+        }
+        "unreachable!()".to_string()
+    }
+
     /// Type of `x[i]`: the value type for maps (`m[&k]`), else the element type.
     pub(in crate::codegen::rust) fn indexed_type(container: &Type) -> Option<Type> {
         if let Type::Parameterized(n, params) = container {

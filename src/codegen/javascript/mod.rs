@@ -80,9 +80,6 @@ impl CodegenBackend for JavaScriptBackend {
     }
 
     fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
-        if config.minify || config.polyfills || config.v8_optimize {
-            anyhow::bail!("--minify/--polyfills/--v8-optimize were removed: they operated on text and could change program meaning (see docs/backends/ASSESSMENT.md)");
-        }
         let m = self.lower(program, config)?;
         let body = emit::emit_module(&m, &EmitOptions { typescript: self.typescript }).map_err(|e| anyhow!("{e}"))?;
         let ext = if self.typescript { "ts" } else { "mjs" };

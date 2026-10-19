@@ -11,6 +11,7 @@ mod borrow_analysis;
 mod spawn_capture;
 pub(crate) use spawn_capture::param_captured_by_spawned_closure;
 mod cache_locality;
+pub(crate) mod nested_mod_items;
 pub(crate) mod field_enum_borrow;
 mod forbidden_patterns;
 mod function_analysis;

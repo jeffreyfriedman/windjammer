@@ -77,41 +77,6 @@ pub fn type_tuple(elements: Vec<Type>) -> Type {
     Type::Tuple(elements)
 }
 
-/// Build array type: [T; N]
-pub fn type_array(inner: Type, size: usize) -> Type {
-    Type::Array(Box::new(inner), size)
-}
-
-/// Build generic type parameter: T
-pub fn type_generic(name: impl Into<String>) -> Type {
-    Type::Generic(name.into())
-}
-
-/// Build associated type: Self::Item
-pub fn type_associated(base: impl Into<String>, assoc: impl Into<String>) -> Type {
-    Type::Associated(base.into(), assoc.into())
-}
-
-/// Build trait object: dyn Trait
-pub fn type_trait_object(name: impl Into<String>) -> Type {
-    Type::TraitObject(name.into())
-}
-
-/// Build type inference placeholder: _
-pub fn type_infer() -> Type {
-    Type::Infer
-}
-
-/// Build int32 type
-pub fn type_int32() -> Type {
-    Type::Int32
-}
-
-/// Build uint type
-pub fn type_uint() -> Type {
-    Type::Uint
-}
-
 // ============================================================================
 // PARAMETER BUILDERS
 // ============================================================================
@@ -200,14 +165,6 @@ pub fn expr_bool<'ast>(value: bool) -> Expression<'ast> {
     }
 }
 
-/// Build character literal expression
-pub fn expr_char<'ast>(value: char) -> Expression<'ast> {
-    Expression::Literal {
-        value: Literal::Char(value),
-        location: None,
-    }
-}
-
 /// Build variable/identifier expression
 pub fn expr_var<'ast>(name: impl Into<String>) -> Expression<'ast> {
     Expression::Identifier {
@@ -238,36 +195,12 @@ pub fn expr_add<'ast>(
     expr_binary(BinaryOp::Add, left, right)
 }
 
-/// Build subtraction expression (convenience)
-pub fn expr_sub<'ast>(
-    left: &'ast Expression<'ast>,
-    right: &'ast Expression<'ast>,
-) -> Expression<'ast> {
-    expr_binary(BinaryOp::Sub, left, right)
-}
-
 /// Build multiplication expression (convenience)
 pub fn expr_mul<'ast>(
     left: &'ast Expression<'ast>,
     right: &'ast Expression<'ast>,
 ) -> Expression<'ast> {
     expr_binary(BinaryOp::Mul, left, right)
-}
-
-/// Build division expression (convenience)
-pub fn expr_div<'ast>(
-    left: &'ast Expression<'ast>,
-    right: &'ast Expression<'ast>,
-) -> Expression<'ast> {
-    expr_binary(BinaryOp::Div, left, right)
-}
-
-/// Build equality expression (convenience)
-pub fn expr_eq<'ast>(
-    left: &'ast Expression<'ast>,
-    right: &'ast Expression<'ast>,
-) -> Expression<'ast> {
-    expr_binary(BinaryOp::Eq, left, right)
 }
 
 /// Build unary operation expression
@@ -339,34 +272,6 @@ pub fn expr_field<'ast>(
     Expression::FieldAccess {
         object,
         field: field.into(),
-        location: None,
-    }
-}
-
-/// Build array index expression
-pub fn expr_index<'ast>(
-    array: &'ast Expression<'ast>,
-    index: &'ast Expression<'ast>,
-) -> Expression<'ast> {
-    Expression::Index {
-        object: array,
-        index,
-        location: None,
-    }
-}
-
-/// Build array literal expression
-pub fn expr_array<'ast>(elements: Vec<&'ast Expression<'ast>>) -> Expression<'ast> {
-    Expression::Array {
-        elements,
-        location: None,
-    }
-}
-
-/// Build tuple expression
-pub fn expr_tuple<'ast>(elements: Vec<&'ast Expression<'ast>>) -> Expression<'ast> {
-    Expression::Tuple {
-        elements,
         location: None,
     }
 }

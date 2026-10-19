@@ -416,21 +416,6 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
-    /// True when every use of `param_name` is as a callee argument (no operators, returns, etc.).
-    pub(crate) fn param_used_only_as_call_argument(
-        &self,
-        param_name: &str,
-        body: &[&Statement],
-    ) -> bool {
-        let mut saw_use = false;
-        for stmt in body {
-            if !self.stmt_param_uses_only_in_call_args(param_name, stmt, &mut saw_use) {
-                return false;
-            }
-        }
-        saw_use
-    }
-
     fn stmt_param_uses_only_in_call_args(
         &self,
         param_name: &str,

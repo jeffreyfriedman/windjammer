@@ -61,6 +61,8 @@ impl Parser {
                             _ => None,
                         };
                         if let Some(field) = field_opt {
+                            // Diagnostics point at the method name, not at the token after the call.
+                            let name_loc = self.current_location();
                             self.advance();
 
                             // Check for turbofish ::<Type>
@@ -111,7 +113,7 @@ impl Parser {
                                             method: field,
                                             type_args,
                                             arguments,
-                                            location: self.current_location(),
+                                            location: name_loc,
                                         })
                                     }
                                 }
@@ -282,9 +284,9 @@ impl Parser {
                     })
                 }
                 Token::QuestionQuestion if self.double_try_follows() => self.double_try(expr),
+                Token::Question if self.at_optional_chain() => self.parse_optional_chain(expr)?,
                 Token::Question => {
-                    // TryOp: expr?
-                    // No ambiguity since we removed ternary operator
+                    // TryOp: expr? (no ternary operator, so no ambiguity)
                     self.advance();
                     self.alloc_expr(Expression::TryOp {
                         expr,

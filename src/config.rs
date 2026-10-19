@@ -202,13 +202,6 @@ impl AppCapabilities {
         set
     }
 
-    /// Return the set of explicitly denied effects.
-    pub fn denied_effects(&self) -> Vec<crate::ir::safety_type::Effect> {
-        self.deny
-            .iter()
-            .filter_map(|s| parse_effect_name(s))
-            .collect()
-    }
 }
 
 /// Parse a capability name string into an `Effect`.
@@ -252,11 +245,6 @@ impl WjConfig {
     /// Remove a dependency
     pub fn remove_dependency(&mut self, name: &str) -> bool {
         self.dependencies.remove(name).is_some()
-    }
-
-    /// Convert this config into a package manifest for dependency resolution.
-    pub fn to_package_manifest(&self) -> crate::package::PackageManifest {
-        crate::package::PackageManifest::from_config(self)
     }
 
     /// Convert to Cargo.toml format
@@ -400,8 +388,4 @@ impl WindjammerConfig {
         toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
     }
 
-    /// Get backend URL if configured
-    pub fn backend_url(&self) -> Option<&str> {
-        self.backend.as_ref().map(|b| b.url.as_str())
-    }
 }

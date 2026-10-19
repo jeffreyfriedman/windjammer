@@ -79,28 +79,140 @@ fn s(x: impl Into<String>) -> String {
 }
 
 pub const OPERATORS: &[Operator] = &[
-    Operator { name: "string-into-int-annotation", apply: |r| ("slot1", format!("let bad: int = \"s{}\"", r.int(0, 99))) },
-    Operator { name: "int-into-string-annotation", apply: |r| ("slot1", format!("let bad: string = {}", r.int(1, 99))) },
-    Operator { name: "bool-into-int-annotation", apply: |r| ("slot1", s(format!("let bad: int = {}", r.pick(&["true", "false"])))) },
-    Operator { name: "undefined-variable", apply: |r| ("slot2", format!("println(\"${{{}}}\")", r.pick(&["missing_var", "nope", "undefined_x"]))) },
-    Operator { name: "undefined-function", apply: |r| ("slot2", format!("let bad = {}({})", r.pick(&["no_such_fn", "frobnicate"]), r.int(1, 9))) },
-    Operator { name: "wrong-arity", apply: |r| ("slot2", format!("let bad = scale({})", r.int(1, 9))) },
-    Operator { name: "arg-type-mismatch", apply: |r| ("slot2", format!("let bad = scale(\"x{}\", 2)", r.int(1, 9))) },
-    Operator { name: "unknown-method", apply: |r| ("slot2", format!("let bad = p.{}()", r.pick(&["product", "norm", "missing"]))) },
-    Operator { name: "unknown-field", apply: |r| ("slot2", format!("let bad = p.{}", r.pick(&["z", "w", "depth"]))) },
-    Operator { name: "missing-struct-field", apply: |r| ("slot2", format!("let bad = Point {{ x: {} }}", r.int(1, 9))) },
-    Operator { name: "string-plus-int", apply: |r| ("slot2", format!("let bad = label + {}", r.int(1, 9))) },
-    Operator { name: "non-bool-condition", apply: |r| ("slot2", format!("if {} {{\n        println(\"x\")\n    }}", r.int(1, 9))) },
-    Operator { name: "reassign-different-type", apply: |r| ("slot2", format!("let mut bad = {}\n    bad = \"s\"", r.int(1, 9))) },
-    Operator { name: "unknown-type-annotation", apply: |r| ("slot2", format!("let bad: {} = {}", r.pick(&["Widget", "Frob", "Nope"]), r.int(1, 9))) },
-    Operator { name: "unknown-enum-variant", apply: |r| ("slot2", format!("let bad = area(Shape::{}({}))", r.pick(&["Triangle", "Hex"]), r.int(1, 9))) },
-    Operator { name: "return-type-mismatch-call", apply: |r| ("slot2", format!("let bad: int = describe({})", r.int(1, 9))) },
+    Operator {
+        name: "string-into-int-annotation",
+        apply: |r| ("slot1", format!("let bad: int = \"s{}\"", r.int(0, 99))),
+    },
+    Operator {
+        name: "int-into-string-annotation",
+        apply: |r| ("slot1", format!("let bad: string = {}", r.int(1, 99))),
+    },
+    Operator {
+        name: "bool-into-int-annotation",
+        apply: |r| {
+            (
+                "slot1",
+                s(format!("let bad: int = {}", r.pick(&["true", "false"]))),
+            )
+        },
+    },
+    Operator {
+        name: "undefined-variable",
+        apply: |r| {
+            (
+                "slot2",
+                format!(
+                    "println(\"${{{}}}\")",
+                    r.pick(&["missing_var", "nope", "undefined_x"])
+                ),
+            )
+        },
+    },
+    Operator {
+        name: "undefined-function",
+        apply: |r| {
+            (
+                "slot2",
+                format!(
+                    "let bad = {}({})",
+                    r.pick(&["no_such_fn", "frobnicate"]),
+                    r.int(1, 9)
+                ),
+            )
+        },
+    },
+    Operator {
+        name: "wrong-arity",
+        apply: |r| ("slot2", format!("let bad = scale({})", r.int(1, 9))),
+    },
+    Operator {
+        name: "arg-type-mismatch",
+        apply: |r| ("slot2", format!("let bad = scale(\"x{}\", 2)", r.int(1, 9))),
+    },
+    Operator {
+        name: "unknown-method",
+        apply: |r| {
+            (
+                "slot2",
+                format!("let bad = p.{}()", r.pick(&["product", "norm", "missing"])),
+            )
+        },
+    },
+    Operator {
+        name: "unknown-field",
+        apply: |r| {
+            (
+                "slot2",
+                format!("let bad = p.{}", r.pick(&["z", "w", "depth"])),
+            )
+        },
+    },
+    Operator {
+        name: "missing-struct-field",
+        apply: |r| ("slot2", format!("let bad = Point {{ x: {} }}", r.int(1, 9))),
+    },
+    Operator {
+        name: "string-plus-int",
+        apply: |r| ("slot2", format!("let bad = label + {}", r.int(1, 9))),
+    },
+    Operator {
+        name: "non-bool-condition",
+        apply: |r| {
+            (
+                "slot2",
+                format!("if {} {{\n        println(\"x\")\n    }}", r.int(1, 9)),
+            )
+        },
+    },
+    Operator {
+        name: "reassign-different-type",
+        apply: |r| {
+            (
+                "slot2",
+                format!("let mut bad = {}\n    bad = \"s\"", r.int(1, 9)),
+            )
+        },
+    },
+    Operator {
+        name: "unknown-type-annotation",
+        apply: |r| {
+            (
+                "slot2",
+                format!(
+                    "let bad: {} = {}",
+                    r.pick(&["Widget", "Frob", "Nope"]),
+                    r.int(1, 9)
+                ),
+            )
+        },
+    },
+    Operator {
+        name: "unknown-enum-variant",
+        apply: |r| {
+            (
+                "slot2",
+                format!(
+                    "let bad = area(Shape::{}({}))",
+                    r.pick(&["Triangle", "Hex"]),
+                    r.int(1, 9)
+                ),
+            )
+        },
+    },
+    Operator {
+        name: "return-type-mismatch-call",
+        apply: |r| ("slot2", format!("let bad: int = describe({})", r.int(1, 9))),
+    },
 ];
 
 /// The base program for `seed`, with `op` applied (its edit marked `// MUTATED <name>`).
 pub fn instantiate(seed: u64, op: Option<&Operator>) -> String {
     let mut r = Rng(seed.wrapping_mul(0x9E3779B97F4A7C15) | 1);
-    let name = format!("{}_{}", r.pick(&["total", "acc", "value", "score"]), r.int(0, 50));
+    let name = format!(
+        "{}_{}",
+        r.pick(&["total", "acc", "value", "score"]),
+        r.int(0, 50)
+    );
     let mut src = BASE
         .replace("@NAME", &name)
         .replace("@A", &r.int(1, 30).to_string())
@@ -110,7 +222,13 @@ pub fn instantiate(seed: u64, op: Option<&Operator>) -> String {
     if let Some(op) = op {
         let (slot, text) = (op.apply)(&mut r);
         let text = text.replace('\n', &format!(" // MUTATED {}\n", op.name));
-        src = src.replace(&format!("// @{slot}"), &format!("{text} // MUTATED {}", op.name));
+        src = src.replace(
+            &format!("// @{slot}"),
+            &format!("{text} // MUTATED {}", op.name),
+        );
     }
-    src.lines().filter(|l| !l.trim_start().starts_with("// @")).map(|l| format!("{l}\n")).collect()
+    src.lines()
+        .filter(|l| !l.trim_start().starts_with("// @"))
+        .map(|l| format!("{l}\n"))
+        .collect()
 }

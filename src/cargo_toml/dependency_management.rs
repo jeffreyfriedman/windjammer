@@ -40,15 +40,6 @@ pub(crate) fn find_windjammer_runtime_path_with(override_path: Option<&Path>) ->
         .unwrap_or_else(|e| panic!("cannot materialize embedded windjammer-runtime: {e}"))
 }
 
-/// Convert a `DependencySpec` into a Cargo.toml dependency line.
-///
-/// Relative `path` entries are resolved against `base_dir` (the directory containing
-/// `wj.toml` / source `Cargo.toml`) and emitted as absolute paths so they remain valid
-/// when the generated manifest lives in `gen/` rather than the crate root.
-pub(crate) fn dep_spec_to_cargo_line(name: &str, spec: &crate::config::DependencySpec) -> String {
-    dep_spec_to_cargo_line_with_base(name, spec, None)
-}
-
 pub(crate) fn dep_spec_to_cargo_line_with_base(
     name: &str,
     spec: &crate::config::DependencySpec,

@@ -174,22 +174,6 @@ pub fn verify_target_dir() -> PathBuf {
     target_dir(TargetKind::Verify)
 }
 
-/// Binary/library artifact path under the shared target tree.
-pub fn artifact_path(profile: &str, name: &str) -> PathBuf {
-    #[cfg(target_os = "windows")]
-    {
-        let mut p = shared_target_dir().join(profile).join(name);
-        if p.extension().is_none() {
-            p.set_extension("exe");
-        }
-        p
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        shared_target_dir().join(profile).join(name)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct CacheStatus {
     pub root: PathBuf,
@@ -361,21 +345,6 @@ pub fn prune(opts: PruneOptions) -> PruneReport {
     }
 
     report
-}
-
-/// Run prune only when free space is below the threshold (no-op otherwise).
-pub fn prune_if_low_disk() -> PruneReport {
-    let shared = target_dir(TargetKind::Shared);
-    let free = free_disk_bytes(&shared);
-    if free.map(|b| b < min_free_bytes()).unwrap_or(false) {
-        prune(PruneOptions {
-            aggressive: true,
-            auto_low_disk: true,
-            ..PruneOptions::default()
-        })
-    } else {
-        PruneReport::default()
-    }
 }
 
 const ENV_CACHE_MAX_GIB: &str = "WJ_CACHE_MAX_GIB";

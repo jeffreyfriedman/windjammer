@@ -254,6 +254,10 @@ impl Scanner {
     fn skip_interpolation(&mut self) {
         let mut depth = 1;
         while let Some(ch) = self.at(0) {
+            if ch == '\\' {
+                self.i += 2;
+                continue;
+            }
             if ch == '"' {
                 self.skip_nested_string();
                 continue;

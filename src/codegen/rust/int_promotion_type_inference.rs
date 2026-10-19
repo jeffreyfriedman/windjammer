@@ -2046,13 +2046,6 @@ impl<'ast> CodeGenerator<'ast> {
         })
     }
 
-    pub(in crate::codegen::rust) fn expr_is_usize_loop_counter(
-        &self,
-        expr: &Expression<'ast>,
-    ) -> bool {
-        matches!(expr, Expression::Identifier { name, .. } if self.usize_variables.contains(name))
-    }
-
     /// Map parser [`Type`] to [`crate::type_inference::IntType`] for mixed-integer `as T` codegen.
     pub(in crate::codegen::rust) fn parser_type_to_promotion_int_type(
         ty: &Type,

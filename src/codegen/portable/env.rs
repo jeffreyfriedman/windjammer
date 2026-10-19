@@ -46,6 +46,9 @@ pub struct ItemEnv {
     pub consts: HashMap<String, Ty>,
     /// Trait name -> names of methods that have a default body.
     pub trait_defaults: HashMap<String, Vec<String>>,
+    /// Ignore the semantic layer's `last_use` fact (copy at every owned use). Only for measuring
+    /// the fact's effect (`lower_program_without_facts`).
+    pub without_facts: bool,
     /// Methods of generic-trait impls (`impl From<X> for E`), which may coexist under one name:
     /// (owner, method) -> [(trait type arguments, emitted name)].
     pub trait_impls: HashMap<(String, String), Vec<(Vec<Ty>, String)>>,

@@ -21,7 +21,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj remove` | Remove a dependency from wj.toml |
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
-| `wj errors` | Interactive error navigator (TUI) |
+| `wj errors` | Browse the diagnostics of a file or project (summary by code, filterable) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain` | Explain an error code |
@@ -65,11 +65,8 @@ Usage: wj build [OPTIONS] <FILE>
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
-| `--minify` | MINIFY |  | Minify JavaScript output (JS target only) |
 | `--tree-shake` | TREE_SHAKE |  | Enable tree shaking (dead code elimination) |
 | `--source-maps` | SOURCE_MAPS |  | Generate source maps |
-| `--polyfills` | POLYFILLS |  | Include polyfills for older browsers (JS target only) |
-| `--v8-optimize` | V8_OPTIMIZE |  | Apply V8 optimizations (JS target only) |
 | `--check` | CHECK |  | Run cargo build after transpilation and show errors |
 | `--raw-errors` | RAW_ERRORS |  | Show raw Rust errors instead of translated Windjammer errors |
 | `--fix` | FIX |  | Automatically apply fixes for fixable errors |
@@ -263,16 +260,17 @@ Usage: wj stats [OPTIONS]
 
 ## `wj errors`
 
-Interactive error navigator (TUI)
+Browse the diagnostics of a file or project (summary by code, filterable)
 
 ```text
-Usage: wj errors [OPTIONS] <FILE>
+Usage: wj errors [OPTIONS] [PATH]
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<FILE>` | FILE |  | File to check |
-| `-o`, `--output` | OUTPUT | ./build | Output directory |
+| `<PATH>` | PATH |  | .wj file or project directory (default: current directory) |
+| `--code` | CODE |  | Show only this diagnostic code (e.g. WJ0010, W0002) |
+| `--severity` | SEVERITY |  | Show only this severity (error, warning) |
 
 ## `wj docs`
 

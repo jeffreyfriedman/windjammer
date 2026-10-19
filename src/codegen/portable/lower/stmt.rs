@@ -263,6 +263,7 @@ impl<'e> Lowerer<'e> {
         match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => {
                 let out = self.declare(name, ty.clone(), false);
+                self.set_fresh(name);
                 let m = mutable || matches!(pattern, Pattern::MutBinding(_));
                 Ok(vec![PStmt::Let { name: out, ty, mutable: m, init: Some(init) }])
             }

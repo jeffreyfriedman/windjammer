@@ -421,6 +421,9 @@ impl<'m> Js<'m> {
             ("HashSet" | "BTreeSet", "new" | "with_capacity") => Ok("new Set()".into()),
             ("String" | "string", "new" | "with_capacity") => Ok("\"\"".into()),
             ("String" | "string", "from") => Ok(a.to_string()),
+            ("f32" | "f64", m) if crate::codegen::portable::builtins::float_const(owner, m).is_some() => {
+                Ok(num::float_lit(crate::codegen::portable::builtins::float_const(owner, m).unwrap_or(0.0), owner == "f32"))
+            }
             ("f64", "from") => Ok(num::cast(&args[0].ty, &Ty::F64, a)),
             ("char", "from_u32") => Ok(format!("$charFromU32({a})")),
             _ => self.unsupported(format!("`{owner}::{name}`")),

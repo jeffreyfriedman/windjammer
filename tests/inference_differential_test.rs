@@ -190,9 +190,9 @@ fn render(p: &Program) -> String {
         let name = var_name(ty, 0);
         let init = match ty {
             Ty::Vec => "vec![1, 2, 3]".to_string(),
-            Ty::Bag => "Bag { items: Vec::new(), name: \"bag\".to_string() }".to_string(),
-            Ty::Cell => "Cell { n: 0, tag: \"cell\".to_string() }".to_string(),
-            Ty::Str => "\"text\".to_string()".to_string(),
+            Ty::Bag => "Bag { items: Vec::new(), name: \"bag\" }".to_string(),
+            Ty::Cell => "Cell { n: 0, tag: \"cell\" }".to_string(),
+            Ty::Str => "\"text\"".to_string(),
             Ty::Holder => unreachable!(),
         };
         let kw = if matches!(ty, Ty::Bag | Ty::Cell) { "let mut" } else { "let" };
@@ -560,4 +560,9 @@ fn corpus_unsuffixed_integer_literal_defaults_to_int() {
 #[test]
 fn corpus_call_inside_interpolation_constrains_literal_width() {
     corpus_check("interp_call_width");
+}
+
+#[test]
+fn corpus_int_accumulator_over_int_fields_is_not_truncated_to_i32() {
+    corpus_check("int_accumulator_field_width");
 }
