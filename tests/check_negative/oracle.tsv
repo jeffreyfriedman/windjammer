@@ -140,7 +140,7 @@ tests/diagnostics/cases/clean_program.wj	ca47aac7fb737168	ok	ok
 tests/diagnostics/cases/duplicate_function.wj	868823a3b38e5d68	ok	fail
 tests/diagnostics/cases/duplicate_struct.wj	5ce081ac14fa30de	ok	fail
 tests/diagnostics/cases/field_literal_mismatch.wj	39a98b0f5ad785d8	ok	fail
-tests/diagnostics/cases/forbidden_as_str.wj	64efd1679a455dea	fail	skip
+tests/diagnostics/cases/forbidden_derive_copy.wj	4945758853f0419c	fail	skip
 tests/diagnostics/cases/format_placeholder.wj	95d77624e955279f	ok	ok
 tests/diagnostics/cases/function_typo.wj	6e9b0a209d1e50ac	ok	fail
 tests/diagnostics/cases/immutable_push.wj	e35a953dd49b699d	ok	ok

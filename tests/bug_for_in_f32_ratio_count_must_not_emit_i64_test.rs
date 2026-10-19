@@ -39,18 +39,20 @@ pub struct Shot {
     pub pixels: Vec<f32>,
 }
 
-pub fn ratio(self, threshold: f32) -> f32 {
-    let mut count = 0
-    for p in self.pixels {
-        if p > threshold {
-            count = count + 1
+impl Shot {
+    pub fn ratio(self, threshold: f32) -> f32 {
+        let mut count = 0
+        for p in self.pixels {
+            if p > threshold {
+                count = count + 1
+            }
         }
+        let total = self.pixels.len()
+        if total == 0 {
+            return 0.0
+        }
+        (count as f32) / (total as f32)
     }
-    let total = self.pixels.len()
-    if total == 0 {
-        return 0.0
-    }
-    (count as f32) / (total as f32)
 }
 "#,
     );

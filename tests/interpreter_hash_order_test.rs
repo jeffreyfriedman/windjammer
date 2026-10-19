@@ -146,6 +146,7 @@ fn hash_order_gate() {
 }
 
 const ORDERED_WJ: &str = r#"
+use std::map::{OrderedMap, OrderedSet}
 fn main() {
     let mut m: OrderedMap<string, int> = OrderedMap::new()
     m.insert("c", 3)

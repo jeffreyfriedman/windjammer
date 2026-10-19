@@ -125,7 +125,10 @@ struct Scratch {
 impl Scratch {
     fn new() -> Scratch {
         let s = Scratch { dir: tempfile::tempdir().unwrap() };
-        s.write("docs/docs-truth.toml", "[freshness]\ntracked = [\"docs/design/*.md\"]\n");
+        s.write(
+            "docs/docs-truth.toml",
+            "[freshness]\ntracked = [\"docs/design/*.md\"]\n\n[[exclude]]\ncheck = \"links\"\nglob = \"docs/reference/**\"\nreason = \"generated from the real CLI definition, whose help text cites the repository's ADRs; the scratch repo has none of them\"\n",
+        );
         s.write("docs/adr/0001-first.md", "# ADR-0001: First\n\n- **Status:** Accepted (2026-01-01)\n");
         s.write("tests/conformance_programs/SUPPORT.toml", "[[unsupported]]\nprogram = \"01_a\"\nbackend = \"go\"\nreason = \"x: y\"\n");
         s.write("tests/conformance_programs/01_a.wj", "fn main() {}\n");
@@ -145,17 +148,6 @@ impl Scratch {
             s.write(f, if f.ends_with(".json") { "{\"tools\": []}\n" } else { "# Stub\n" });
         }
         let ctx = s.ctx();
-        // The generated CLI/error references cite ADRs by id (clap help text); the scratch repo carries a stub
-        // for every id they cite so its own link check has something to resolve against.
-        for gen in ["cli", "errors"] {
-            let text = genfiles::render_file(&ctx, gen).unwrap();
-            for (i, _) in text.match_indices("ADR-") {
-                let id: String = text[i + 4..].chars().take_while(char::is_ascii_digit).collect();
-                if id.len() == 4 && !s.dir.path().join("docs/adr").read_dir().is_ok_and(|mut d| d.any(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with(&id)))) {
-                    s.write(&format!("docs/adr/{id}-stub.md"), &format!("# ADR-{id}: Stub\n\n- **Status:** Accepted (2026-01-01)\n"));
-                }
-            }
-        }
         genfiles::write_all(&ctx).unwrap();
         s
     }

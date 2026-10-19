@@ -20,6 +20,6 @@ fn test_hashmap_insert_mixed() {
     let value: String = String::from("dynamic_value");
     map.insert(key.to_string(), value.to_string());
     map.insert(String::from("literal_key"), String::from("literal_value"));
-    assert!(map.len() == 2_usize);
+    assert!(map.len() == 2);
 }
 
