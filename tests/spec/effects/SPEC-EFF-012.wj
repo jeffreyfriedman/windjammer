@@ -1,0 +1,13 @@
+// spec: SPEC-EFF-012
+// mode: panic
+// xfail: Q-032
+// manifest: [capabilities]
+// manifest: net.connect = ["*"]
+// expect-exit: 126
+// expect-error: capability denied: net.connect(other.example)
+use std::cap
+fn fetch(net: cap::Net, url: string) -> bool { net.get(url).is_ok() }
+fn main() {
+    let api = cap::net().only(["api.example.com"])
+    println("${fetch(api, "http://other.example/")}")
+}

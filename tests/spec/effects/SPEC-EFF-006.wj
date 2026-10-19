@@ -1,0 +1,15 @@
+// spec: SPEC-EFF-006
+// mode: effects
+// xfail: Q-032
+// expect: read_any: fs.read
+use std::fs
+trait Source { fn get(self) -> string }
+struct FileSource { path: string }
+struct Fixed { text: string }
+impl Source for FileSource { fn get(self) -> string { fs::read_to_string(self.path).unwrap_or("") } }
+impl Source for Fixed { fn get(self) -> string { self.text } }
+fn read_any<S: Source>(s: S) -> string { s.get() }
+fn main() {
+    println(read_any(Fixed { text: "x" }))
+    println(read_any(FileSource { path: "cfg.toml" }))
+}

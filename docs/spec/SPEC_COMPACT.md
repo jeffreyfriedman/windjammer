@@ -62,6 +62,9 @@ Functions, not macros: `print println eprint eprintln panic assert(c, msg?) asse
 ## Concurrency (CONC): mostly **[gap]**
 Decided (ADR-0004): `spawn f()`, `async f()`, blocks, `Task<T>.wait()`, `scope { }`, channel `send`/`recv`. Today only `async fn`/`.await`/`thread { }` parse (Rust backend); not in the interpreter. Do not use `go`, `chan`, `<-`.
 
+## Effects (EFF): **[gap]**, designed (ADR-0021)
+Effects are inferred, never required: `fs.read fs.write net.connect net.listen env.read env.write process time random console ffi` + `@effect("x")`. Grants in `wj.toml [capabilities]` (`net.connect = ["api.example.com"]`, `fs.read = ["./data/**"]`); a denied sink stops the run (exit 126). Optional `@uses(...)`/`@pure`; `durable fn` journals every effectful call. Today only the interpreter's http client is gated (`--allow-network`, `--mock-http`); `--deterministic-time`/`--sched-seed` give reproducible runs.
+
 ## Execution (EXEC)
 Observable = stdout bytes + exit status (0 normal, 101 panic, N via `std::process::exit(N)`). `int` semantics identical on all backends (JS uses BigInt/checked policy). Recursion >= 10,000 frames. Tiers (ADR-0007, proposed): Rust 1, WASM/JS/TS 2, Go/WGSL/interpreter 3. Single-threaded programs are deterministic.
 
