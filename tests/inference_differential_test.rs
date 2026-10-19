@@ -190,9 +190,9 @@ fn render(p: &Program) -> String {
         let name = var_name(ty, 0);
         let init = match ty {
             Ty::Vec => "vec![1, 2, 3]".to_string(),
-            Ty::Bag => "Bag { items: Vec::new(), name: \"bag\".to_string() }".to_string(),
-            Ty::Cell => "Cell { n: 0, tag: \"cell\".to_string() }".to_string(),
-            Ty::Str => "\"text\".to_string()".to_string(),
+            Ty::Bag => "Bag { items: Vec::new(), name: \"bag\" }".to_string(),
+            Ty::Cell => "Cell { n: 0, tag: \"cell\" }".to_string(),
+            Ty::Str => "\"text\"".to_string(),
             Ty::Holder => unreachable!(),
         };
         let kw = if matches!(ty, Ty::Bag | Ty::Cell) { "let mut" } else { "let" };
