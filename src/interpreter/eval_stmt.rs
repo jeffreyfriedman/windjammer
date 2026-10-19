@@ -168,9 +168,9 @@ impl Interpreter {
                     Some(e) => self.eval(e)?,
                     None => Value::Unit,
                 };
-                Err(Ctl::Break { label: label.clone(), value: v })
+                Err(Ctl::Break(Box::new((label.clone(), v))))
             }
-            Statement::Continue { label, .. } => Err(Ctl::Continue { label: label.clone() }),
+            Statement::Continue { label, .. } => Err(Ctl::Continue(Box::new(label.clone()))),
             Statement::Defer { statement, .. } => {
                 self.scope.defers.push(statement);
                 Ok(Value::Unit)
@@ -456,8 +456,8 @@ pub(crate) fn loop_exit(r: R, my_label: Option<&str>) -> R<Option<Value>> {
     let mine = |l: &Option<String>| l.is_none() || l.as_deref() == my_label;
     match r {
         Ok(_) => Ok(None),
-        Err(Ctl::Continue { label }) if mine(&label) => Ok(None),
-        Err(Ctl::Break { label, value }) if mine(&label) => Ok(Some(value)),
+        Err(Ctl::Continue(label)) if mine(&label) => Ok(None),
+        Err(Ctl::Break(b)) if mine(&b.0) => Ok(Some(b.1)),
         Err(e) => Err(e),
     }
 }

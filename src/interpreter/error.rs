@@ -99,9 +99,10 @@ impl fmt::Display for RuntimeError {
 #[derive(Debug)]
 pub enum Ctl {
     /// `break`, `break 'label`, `break value`. `value` is `Unit` for a plain break.
-    Break { label: Option<String>, value: Value },
+    /// Boxed so `Result<Value, Ctl>` stays small (it is returned by every evaluated node).
+    Break(Box<(Option<String>, Value)>),
     /// `continue`, `continue 'label`.
-    Continue { label: Option<String> },
+    Continue(Box<Option<String>>),
     Return(Value),
     Err(Box<RuntimeError>),
 }
