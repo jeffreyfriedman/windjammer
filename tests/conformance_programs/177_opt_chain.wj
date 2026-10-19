@@ -13,7 +13,7 @@ struct User {
 
 impl User {
     fn name_len(self) -> int {
-        self.name.len()
+        self.name.len() as int
     }
 }
 

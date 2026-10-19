@@ -96,9 +96,11 @@ impl<'ast> CodeGenerator<'ast> {
     /// `a?.b` on the Rust backend: the Option-or-Result choice needs the IR solver's receiver type (ADR-0018 status,
     /// convergence C2), so the program is rejected loudly instead of silently getting `?` semantics.
     pub(in crate::codegen::rust) fn unsupported_optional_chain(&self) -> String {
-        self.boundary_signature_errors.borrow_mut().push(
-            "optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type)".to_string(),
-        );
+        let msg = "optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type)".to_string();
+        let mut errors = self.boundary_signature_errors.borrow_mut();
+        if !errors.contains(&msg) {
+            errors.push(msg);
+        }
         "unreachable!()".to_string()
     }
 
