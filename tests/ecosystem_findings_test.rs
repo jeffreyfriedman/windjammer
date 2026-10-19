@@ -47,6 +47,16 @@ fn build_and_run(src: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&run.stdout).to_string())
 }
 
+fn write_project(files: &[(&str, &str)]) -> TempDir {
+    let dir = TempDir::new().unwrap();
+    for (rel, body) in files {
+        let p = dir.path().join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, body).unwrap();
+    }
+    dir
+}
+
 fn expect_output(src: &str, expect: &str) {
     let got = build_and_run(src).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(got, expect);
