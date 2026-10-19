@@ -1675,3 +1675,153 @@ func wjToDigit[R integer](c Char, radix R) Option[uint32] {
 	}
 	return Option[uint32]{Ok: true, V: uint32(d)}
 }
+
+// ---------------------------------------------------------------------------------------------
+// Enumerable collection methods (ADR-0018 feature 1; surface table: src/stdlib_surface/enumerable.rs)
+// ---------------------------------------------------------------------------------------------
+
+func wjGroupBy[T any, K comparable](v []T, f func(T) K) map[K][]T {
+	out := map[K][]T{}
+	for _, x := range v {
+		k := f(x)
+		out[k] = append(out[k], x)
+	}
+	return out
+}
+
+func wjCountBy[T any, K comparable](v []T, f func(T) K) map[K]int64 {
+	out := map[K]int64{}
+	for _, x := range v {
+		out[f(x)]++
+	}
+	return out
+}
+
+func wjTally[T comparable](v []T) map[T]int64 { return wjCountBy(v, func(x T) T { return x }) }
+
+func wjSumBy[T any, N number](v []T, f func(T) N) N {
+	var s N
+	for _, x := range v {
+		s = wjAddAny(s, f(x))
+	}
+	return s
+}
+
+func wjUniqueBy[T, K any](v []T, f func(T) K) []T {
+	var seen []K
+	out := []T{}
+	for _, x := range v {
+		k := f(x)
+		if !slices.ContainsFunc(seen, func(s K) bool { return wjEq(s, k) }) {
+			seen = append(seen, k)
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
+func wjUnique[T any](v []T) []T { return wjUniqueBy(v, func(x T) T { return x }) }
+
+func wjChunkBy[T, K any](v []T, f func(T) K) [][]T {
+	out := [][]T{}
+	var last K
+	for i, x := range v {
+		k := f(x)
+		if i > 0 && wjEq(last, k) {
+			out[len(out)-1] = append(out[len(out)-1], x)
+		} else {
+			out = append(out, []T{x})
+		}
+		last = k
+	}
+	return out
+}
+
+func wjPartitionBy[T any](v []T, f func(T) bool) Tuple2[[]T, []T] {
+	yes, no := []T{}, []T{}
+	for _, x := range v {
+		if f(x) {
+			yes = append(yes, x)
+		} else {
+			no = append(no, x)
+		}
+	}
+	return Tuple2[[]T, []T]{F0: yes, F1: no}
+}
+
+func wjIntersperse[T any](v []T, sep T) []T {
+	out := []T{}
+	for i, x := range v {
+		if i > 0 {
+			out = append(out, sep)
+		}
+		out = append(out, x)
+	}
+	return out
+}
+
+func wjZipWith[T, U, R any](a []T, b []U, f func(T, U) R) []R {
+	out := []R{}
+	for i := 0; i < min(len(a), len(b)); i++ {
+		out = append(out, f(a[i], b[i]))
+	}
+	return out
+}
+
+func wjIndexOf[T any](v []T, x T) Option[uint] {
+	for i, y := range v {
+		if wjEq(x, y) {
+			return Option[uint]{Ok: true, V: uint(i)}
+		}
+	}
+	return Option[uint]{}
+}
+
+func wjSorted[T cmp.Ordered](v []T) []T {
+	out := slices.Clone(v)
+	slices.SortStableFunc(out, cmp.Compare[T])
+	return out
+}
+
+func wjSortedByKey[T any, K cmp.Ordered](v []T, f func(T) K, desc bool) []T {
+	out := slices.Clone(v)
+	slices.SortStableFunc(out, func(a, b T) int {
+		if desc {
+			return cmp.Compare(f(b), f(a))
+		}
+		return cmp.Compare(f(a), f(b))
+	})
+	return out
+}
+
+func wjSortByKeyInPlace[T any, K cmp.Ordered](v []T, f func(T) K, desc bool) {
+	copy(v, wjSortedByKey(v, f, desc))
+}
+
+// Rust semantics: min_by_key returns the first minimum, max_by_key the last maximum.
+func wjMinByKey[T any, K cmp.Ordered](v []T, f func(T) K) Option[T] {
+	if len(v) == 0 {
+		return Option[T]{}
+	}
+	best := v[0]
+	for _, x := range v[1:] {
+		if cmp.Less(f(x), f(best)) {
+			best = x
+		}
+	}
+	return Option[T]{Ok: true, V: best}
+}
+
+func wjMaxByKey[T any, K cmp.Ordered](v []T, f func(T) K) Option[T] {
+	if len(v) == 0 {
+		return Option[T]{}
+	}
+	best := v[0]
+	for _, x := range v[1:] {
+		if !cmp.Less(f(x), f(best)) {
+			best = x
+		}
+	}
+	return Option[T]{Ok: true, V: best}
+}
+

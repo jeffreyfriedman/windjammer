@@ -302,10 +302,15 @@ impl<'ast> CodeGenerator<'ast> {
                 // TDD FIX for E0277: Methods like retain/filter/any/all pass &T to
                 // their closure, so closure params are references. Mark them as
                 // borrowed so binary comparisons (id != val) generate *id != val.
-                let closure_borrowed_params: Vec<String> =
-                    if crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(
+                // `str::find(pattern)` takes `FnMut(char) -> bool`: the closure parameter is a
+                // plain `char`, unlike `Iterator::find` which passes `&Item`.
+                let text_pattern_closure = matches!(receiver_type_name, Some("string" | "String" | "str"));
+                let predicate_receives_ref = !text_pattern_closure
+                    && crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(
                         method,
-                    ) {
+                    );
+                let closure_borrowed_params: Vec<String> =
+                    if predicate_receives_ref {
                         if let Expression::Closure { parameters, .. } = arg_to_generate {
                             let mut added = Vec::new();
                             for p in parameters.iter() {
@@ -324,9 +329,7 @@ impl<'ast> CodeGenerator<'ast> {
                     };
 
                 let prev_closure_predicate = self.closure_predicate_typed_params;
-                if crate::codegen::rust::stdlib_method_traits::method_predicate_closure_receives_ref(
-                    method,
-                ) {
+                if predicate_receives_ref {
                     self.closure_predicate_typed_params = true;
                 }
 

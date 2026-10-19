@@ -1,0 +1,68 @@
+{
+  "module_path": "176_opt_default",
+  "functions": {
+    "lookup": {
+      "params": [
+        "Reference(Custom(\"str\"))"
+      ],
+      "formal_params": [
+        "Reference(Custom(\"str\"))"
+      ],
+      "return_type": "Option(Int)",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        true
+      ],
+      "string_ref_string_formal_params": [
+        false
+      ],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "loud": {
+      "params": [],
+      "formal_params": [],
+      "return_type": "Int",
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "emitted_rust_ref_params": [],
+      "string_ref_string_formal_params": [],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "emitted_rust_ref_params": [],
+      "string_ref_string_formal_params": [],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    }
+  },
+  "structs": {},
+  "trait_impls": {},
+  "copy_structs": [],
+  "non_copy_structs": [],
+  "version": "0.50.0",
+  "analysis_fingerprint": {
+    "content_hash": 6895197725924467317,
+    "compiler_version": "0.50.0:a55c46b1bc493719",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 1688871799053859953
+  }
+}

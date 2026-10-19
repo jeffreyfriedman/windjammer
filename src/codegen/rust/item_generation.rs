@@ -249,7 +249,9 @@ impl<'ast> CodeGenerator<'ast> {
         for field in &s.fields {
             // Emit doc comment for field if present
             if let Some(doc) = &field.doc_comment {
-                output.push_str(&format!("    /// {}\n", doc));
+                for line in doc.lines() {
+                    output.push_str(&format!("    /// {}\n", line.trim()));
+                }
             }
 
             // Generate decorators for the field (convert to Rust attributes)
@@ -491,7 +493,9 @@ impl<'ast> CodeGenerator<'ast> {
         for variant in &e.variants {
             // Emit doc comment for variant if present
             if let Some(doc) = &variant.doc_comment {
-                output.push_str(&format!("    /// {}\n", doc));
+                for line in doc.lines() {
+                    output.push_str(&format!("    /// {}\n", line.trim()));
+                }
             }
 
             use crate::parser::EnumVariantData;

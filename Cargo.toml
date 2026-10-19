@@ -113,6 +113,7 @@ mime_guess = "2"
 serde_yaml = "0.9"
 flate2 = "1"
 bcrypt = "0.17"
+argon2 = { version = "0.5", features = ["std", "password-hash", "rand"] }
 jsonwebtoken = "9"
 url = "2"
 csv = "1"

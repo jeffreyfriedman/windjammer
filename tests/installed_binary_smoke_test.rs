@@ -16,6 +16,10 @@
 //! - Compiled `wj test` (needs cargo + a long runtime build) is opt-in:
 //!   `WJ_SMOKE_COMPILED=1 cargo test --test all installed_binary_smoke`.
 
+#[path = "common/installed_sandbox.rs"]
+mod installed_sandbox;
+
+use installed_sandbox::{real_wj, write, Sandbox};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -23,93 +27,6 @@ use std::process::{Command, Stdio};
 use tempfile::TempDir;
 
 const TEMPLATES: [&str; 4] = ["cli", "web", "lib", "wasm"];
-
-struct Sandbox {
-    _root: TempDir,
-    bin: PathBuf,
-    home: PathBuf,
-    empty_path: PathBuf,
-    /// Working directories, `(label, path)`; the first is the baseline.
-    cwds: Vec<(&'static str, PathBuf)>,
-}
-
-fn real_wj() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_wj"))
-}
-
-fn write(p: &Path, s: &str) {
-    fs::create_dir_all(p.parent().unwrap()).unwrap();
-    fs::write(p, s).unwrap();
-}
-
-impl Sandbox {
-    fn new(bin_src: &Path) -> Sandbox {
-        let root = TempDir::new().unwrap();
-        let r = root.path().canonicalize().unwrap();
-        let prefix = r.join("prefix/bin");
-        fs::create_dir_all(&prefix).unwrap();
-        let bin = prefix.join("wj");
-        fs::copy(bin_src, &bin).unwrap();
-        let home = r.join("home");
-        fs::create_dir_all(&home).unwrap();
-        let empty_path = r.join("emptypath");
-        fs::create_dir_all(&empty_path).unwrap();
-
-        let plain = r.join("cwd-plain");
-        let homelike = r.join("home/work/Documents");
-        let proj = r.join("cwd-project");
-        let stray = r.join("cwd-stray");
-        for d in [&plain, &homelike, &proj, &stray] {
-            fs::create_dir_all(d).unwrap();
-        }
-        // A real project with wj.toml.
-        write(
-            &proj.join("wj.toml"),
-            "[package]\nname = \"other\"\nversion = \"0.1.0\"\n",
-        );
-        write(
-            &proj.join("src/main.wj"),
-            "fn main() {\n    println(\"other\")\n}\n",
-        );
-        // Looks like a compiler checkout, but every asset is a decoy.
-        write(&stray.join("Cargo.toml"), "[package]\nname = \"x\"\nversion = \"0.1.0\"\n[lib]\nname = \"windjammer\"\npath = \"src/lib.rs\"\n");
-        write(&stray.join("src/lib.rs"), "pub fn decoy() {}\n");
-        write(&stray.join("std/decoy.wj"), "pub fn decoy() {}\n");
-        write(&stray.join("stdlib_meta/string.wj.meta"), "garbage");
-        write(&stray.join("templates/cli/main.wj"), "DECOY");
-        write(&stray.join("templates/cli/wj.toml"), "DECOY");
-        write(
-            &stray.join("crates/windjammer-runtime/Cargo.toml"),
-            "[package]\nname = \"decoy\"\n",
-        );
-        write(&stray.join("agent_index/docs_index.json"), "[]");
-
-        let checkout = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        Sandbox {
-            bin,
-            home,
-            empty_path,
-            cwds: vec![
-                ("plain-tmp", plain),
-                ("home-like", homelike),
-                ("compiler-checkout", checkout),
-                ("wj-project", proj),
-                ("stray-src-lib", stray),
-            ],
-            _root: root,
-        }
-    }
-
-    fn command(&self, cwd: &Path) -> Command {
-        let mut c = Command::new(&self.bin);
-        c.current_dir(cwd)
-            .env_clear()
-            .env("PATH", &self.empty_path)
-            .env("HOME", &self.home)
-            .env("NO_COLOR", "1");
-        c
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 struct Outcome {

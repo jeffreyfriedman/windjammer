@@ -1,0 +1,10 @@
+// spec: SPEC-CLOS-005
+// mode: parse-error
+// expect-error: `_` alone is not a function
+fn id(x: int) -> int {
+    x
+}
+
+fn main() {
+    println("${id(_)}")
+}

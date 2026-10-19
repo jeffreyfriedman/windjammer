@@ -1,0 +1,89 @@
+# Acceptance cases for `wj test` (tests/promise_registry_test.rs). Compiled-mode flags need cargo.
+
+[[case]]
+name = "test --interpret runs @test functions"
+polarity = "positive"
+files = { "t/math_test.wj" = "fn add(a: int, b: int) -> int {\n    a + b\n}\n\n@test\nfn test_add() {\n    assert_eq(add(2, 2), 4)\n}\n" }
+args = ["test", "--interpret", "{w}/t"]
+stdout_has = ["test_add ... ok", "1 passed; 0 failed"]
+
+[[case]]
+name = "test --interpret fails when an assertion fails"
+polarity = "negative"
+files = { "t/math_test.wj" = "@test\nfn test_bad() {\n    assert_eq(2 + 2, 5)\n}\n" }
+args = ["test", "--interpret", "{w}/t"]
+exit = 1
+output_has = ["test_bad ... FAILED", "left: 4", "right: 5"]
+
+[[case]]
+name = "test --filter runs only matching tests"
+polarity = "positive"
+files = { "t/x_test.wj" = "@test\nfn test_good() {\n    assert(true)\n}\n\n@test\nfn test_bad() {\n    assert(false)\n}\n" }
+args = ["test", "--interpret", "--filter", "test_good", "{w}/t"]
+stdout_has = ["1 passed; 0 failed"]
+output_lacks = ["test_bad"]
+
+[[case]]
+name = "test --filter still fails a matching failing test"
+polarity = "negative"
+files = { "t/x_test.wj" = "@test\nfn test_good() {\n    assert(true)\n}\n\n@test\nfn test_bad() {\n    assert(false)\n}\n" }
+args = ["test", "--interpret", "-f", "test_bad", "{w}/t"]
+exit = 1
+
+[[case]]
+name = "test --list prints discovered tests without running them"
+polarity = "positive"
+files = { "t/x_test.wj" = "@test\nfn test_one() {\n    assert(false)\n}\n" }
+args = ["test", "--list", "{w}/t"]
+stdout_has = ["test_one", "1 test(s) in 1 file(s)"]
+
+[[case]]
+name = "test --list reports a parse error in a test file"
+polarity = "negative"
+files = { "t/x_test.wj" = "@test\nfn test_one( {\n" }
+args = ["test", "--list", "{w}/t"]
+exit = 1
+
+[[case]]
+name = "test fails when no tests exist"
+polarity = "negative"
+files = { "t/readme.txt" = "nothing" }
+args = ["test", "--interpret", "{w}/t"]
+exit = 1
+output_has = ["no tests found"]
+
+[[case]]
+name = "test --allow-empty succeeds when no tests exist"
+polarity = "positive"
+files = { "t/readme.txt" = "nothing" }
+args = ["test", "--interpret", "--allow-empty", "{w}/t"]
+
+[[case]]
+name = "test --json prints JSON results"
+polarity = "positive"
+xfail = "BUG: `wj test --interpret --json` prints the human report, not JSON"
+files = { "t/x_test.wj" = "@test\nfn test_one() {\n    assert(true)\n}\n" }
+args = ["test", "--interpret", "--json", "{w}/t"]
+json = true
+
+[[case]]
+name = "test --nocapture shows output of passing tests"
+polarity = "positive"
+xfail = "BUG: `--nocapture` is ignored with --interpret (stdout of passing tests is swallowed)"
+files = { "t/x_test.wj" = "@test\nfn test_one() {\n    println(\"visible-output\")\n    assert(true)\n}\n" }
+args = ["test", "--interpret", "--nocapture", "{w}/t"]
+stdout_has = ["visible-output"]
+
+[[case]]
+name = "test --parallel runs every test"
+polarity = "positive"
+files = { "t/a_test.wj" = "@test\nfn test_a() {\n    assert(true)\n}\n\n@test\nfn test_b() {\n    assert(true)\n}\n" }
+args = ["test", "--interpret", "--parallel", "{w}/t"]
+stdout_has = ["2 passed; 0 failed"]
+
+[[case]]
+name = "test --parallel still reports a failure"
+polarity = "negative"
+files = { "t/a_test.wj" = "@test\nfn test_a() {\n    assert(true)\n}\n\n@test\nfn test_b() {\n    assert(false)\n}\n" }
+args = ["test", "--interpret", "--parallel", "{w}/t"]
+exit = 1

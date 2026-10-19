@@ -1,0 +1,1 @@
+# fmt/fix metamorphic failures (tests/fmt_fix_semantics_test.rs). `<fmt|fix> <program> | message`. Only shrinks.

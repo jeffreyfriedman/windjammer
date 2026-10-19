@@ -1,0 +1,34 @@
+// expect: negative zero positive
+// expect: 4
+// expect: fizz buzz fizzbuzz 7
+fn sign(x: int) -> string {
+    match {
+        x < 0 => "negative",
+        x == 0 => "zero",
+        _ => "positive",
+    }
+}
+
+fn fb(n: int) -> string {
+    match {
+        n % 15 == 0 => "fizzbuzz",
+        n % 3 == 0 => "fizz",
+        n % 5 == 0 => "buzz",
+        _ => n.to_string(),
+    }
+}
+
+fn main() {
+    println("${sign(-3)} ${sign(0)} ${sign(8)}")
+    let mut count = 0
+    for x in 0..10 {
+        match {
+            x % 3 == 0 => {
+                count = count + 1
+            }
+            _ => {}
+        }
+    }
+    println("${count}")
+    println("${fb(9)} ${fb(10)} ${fb(30)} ${fb(7)}")
+}
