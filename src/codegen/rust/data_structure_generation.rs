@@ -449,7 +449,14 @@ impl<'ast> CodeGenerator<'ast> {
         use crate::parser::Literal;
         // ADR-0014: `[a, b]` is the list literal. It lowers to a growable `Vec` when the context
         // determines a list (`let x = [..]`, a `Vec` struct field), exactly like `vec![a, b]`.
-        if !elements.is_empty() && (self.array_literal_as_list || self.struct_field_expects_vec()) {
+        // A list literal in argument position takes the formal's type (`Vec<T>` / `&Vec<T>`).
+        let arg_expects_vec = self
+            .call_arg_expected_type
+            .as_ref()
+            .is_some_and(crate::type_classification::type_is_vec_container);
+        if !elements.is_empty()
+            && (self.array_literal_as_list || self.struct_field_expects_vec() || arg_expects_vec)
+        {
             let prev = self.array_literal_as_list;
             self.array_literal_as_list = true; // nested literals are lists too
             let generated = self.generate_macro_invocation(

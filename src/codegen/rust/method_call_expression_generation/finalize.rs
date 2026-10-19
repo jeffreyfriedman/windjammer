@@ -7,6 +7,41 @@ use crate::codegen::rust::CodeGenerator;
 
 impl<'ast> CodeGenerator<'ast> {
     #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
+    /// `Vec<string>.contains(x)` with a text argument (`&str` formal, literal, `String`): `Vec<String>::contains`
+    /// only accepts `&String`, so compare elements by value: `v.iter().any(|m| *m == *x)`.
+    fn mc_lower_string_vec_contains(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        obj_str: &str,
+        args: &[String],
+    ) -> Option<String> {
+        if method != "contains" || arguments.len() != 1 || args.len() != 1 {
+            return None;
+        }
+        let recv_ty = self.infer_expression_type(object)?;
+        if !self.type_is_string_element_vec(&recv_ty) {
+            return None;
+        }
+        let arg_expr = arguments[0].1;
+        let arg_is_text = matches!(arg_expr, Expression::Literal { value: crate::parser::Literal::String(_), .. })
+            || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                crate::codegen::rust::types::is_windjammer_text_type(
+                    crate::codegen::rust::collection_detection::peel_type_reference(&t),
+                )
+            });
+        if !arg_is_text {
+            return None;
+        }
+        let mut x = args[0].trim();
+        while let Some(rest) = x.strip_prefix('&') {
+            x = rest.trim_start();
+        }
+        let x = x.strip_suffix(".to_string()").unwrap_or(x);
+        Some(format!("{obj_str}.iter().any(|m| *m == *{x})"))
+    }
+
     pub(in crate::codegen::rust) fn mc_finalize_method_call_expression(
         &mut self,
         object: &Expression<'ast>,
@@ -19,6 +54,9 @@ impl<'ast> CodeGenerator<'ast> {
         prev_float_target: Option<Type>,
     ) -> String {
         let (mut obj_str, mut args) = (obj_str, args);
+        if let Some(lowered) = self.mc_lower_string_vec_contains(object, method, arguments, &obj_str, &args) {
+            return lowered;
+        }
         self.mc_fix_std_idiom_call(object, method, arguments, &mut obj_str, &mut args);
         let resolved_signature =
             self.mc_select_call_site_signature(object, method, arguments, method_signature);

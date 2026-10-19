@@ -674,7 +674,7 @@ fn test_testing_should_panic() {
 
 #[test]
 fn test_time_now() {
-    let _instant = time::now(); // Returns Instant, not i64
+    let _instant = time::instant_now(); // Instant, not i64
                                 // Instant doesn't implement PartialOrd<i64>, use now_millis() instead
     let timestamp = time::now_millis();
     assert!(timestamp > 0);
