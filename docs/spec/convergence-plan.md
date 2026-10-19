@@ -194,3 +194,10 @@ serialize them. C7 decisions can be taken in parallel and do not block C0-C4.
 `wj explain-ownership` over the corpus prints zero `D-*` findings; `inference.md` has no `Diverges` status; the
 differential harness is green at 1000 seeds; `src/analyzer` has no `inferred_ownership` writer; `src/type_inference/`
 and `auto_clone.rs` are gone; the architecture fitness tests enforce all three.
+
+**C4/C5 inputs (2026-10-19, windjammer-ui M0/M1; repros in windjammer-ui `docs/compiler-requests/repros/`, branch wt/ui-m0).**
+(1) `f("")` emitted as `f(String::new())` for a `&str` param (C5: literal flows to Borrowed formal, never an owned construction);
+(2) of two closures capturing the same Copy handle only the second gets `move` (E0373 for `'static` callbacks; C6 capture mode from liveness/escape facts);
+(3) integer literal suffixes `_i32`/`_i64` inconsistent around dependency method calls (C4: width from the solver, not eager literal paint);
+(5) undeclared dependency makes unknown method calls guess `&mut (..)` borrows (C3/C5: unresolved callee should be a diagnostic, not a guess).
+Item 4 (collections surface, `Vec::map/filter` vs `.iter()` W0003) belongs to ADR-0018, not to this stream.
