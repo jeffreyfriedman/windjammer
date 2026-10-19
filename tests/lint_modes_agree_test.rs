@@ -62,3 +62,11 @@ fn verified_corpus_is_clean_under_the_shared_lints() {
     }
     assert!(bad.is_empty(), "{bad:?}");
 }
+
+/// Span marker: a method-call lint points at the method name, not the end of the expression.
+#[test]
+fn unwrap_lint_points_at_the_method_name() {
+    let src = "fn main() {\n    let v = [1]\n    let x = v.first()\n        .unwrap()\n    println(\"${x}\")\n}\n";
+    let d = lint_text("t.wj", src).unwrap().into_iter().find(|d| d.lint_name == "W0002").expect("W0002");
+    assert_eq!((d.location.line, d.location.column), (4, 10), "{d}");
+}

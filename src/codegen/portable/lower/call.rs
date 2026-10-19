@@ -92,7 +92,7 @@ impl<'e> Lowerer<'e> {
                 return self.call_value(f, args);
             }
         }
-        if let Some(last) = crate::codegen::portable::alias::strip_modules(name) {
+        if let Some(last) = self.env.aliases.strip_modules(name) {
             return self.named_call(&last, args, want);
         }
         if let Some((owner, member)) = name.rsplit_once("::") {
@@ -166,11 +166,11 @@ impl<'e> Lowerer<'e> {
 
     fn path_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
-        if crate::codegen::portable::alias::is_module(&owner) {
+        if self.env.aliases.is_module(&owner) {
             return self.named_call(name, args, want);
         }
-        let owner = crate::codegen::portable::alias::strip_modules(&owner).unwrap_or(owner);
-        let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
+        let owner = self.env.aliases.strip_modules(&owner).unwrap_or(owner);
+        let owner = self.env.aliases.nominal(&owner).unwrap_or(owner);
         // `Box<T>` / `Rc<T>` / `Arc<T>` are erased to `T` (values are already heap objects or
         // copied by value semantics), so `Box::new(x)` is `x`.
         if matches!(owner.as_str(), "Box" | "Rc" | "Arc") && name == "new" && args.len() == 1 && !self.env.structs.contains_key(&owner) {
@@ -348,6 +348,13 @@ impl<'e> Lowerer<'e> {
         };
         let builtin_ordering = crate::codegen::portable::ordering::is_ordering(&recv.ty) && !self.env.enums.contains_key(crate::codegen::portable::ordering::NAME);
         if let Some((owner, targs)) = owner_ty.filter(|_| !builtin_ordering) {
+            // `Scratch::new_list()` is `Vec::new()` (Go cannot infer a type argument that only the return type mentions).
+            if method == "new_list" && args.is_empty() && super::arena::is_prelude_scratch(&self.env, &owner) {
+                return self.path_call("Vec", "new", args, want);
+            }
+            if method == "get_mut" && args.len() == 1 && super::arena::is_prelude_arena(&self.env, &owner) {
+                return self.arena_slot(recv, &targs, args);
+            }
             if let Some(sig) = self.env.method(&owner, method).cloned() {
                 return self.user_method(recv, &owner, &targs, method, &sig, args, want);
             }
@@ -408,7 +415,7 @@ impl<'e> Lowerer<'e> {
             let ty = recv.ty.clone();
             return Ok(PExpr::new(ty, PK::Index(recv, range)));
         }
-        let tf = turbofish.and_then(|t| t.first()).map(|t| from_ast(t, &self.generics));
+        let tf = turbofish.and_then(|t| t.first()).map(|t| from_ast(t, &self.generics, &self.env.aliases));
         let want_for_ret: Option<Ty> = match (method, &tf) {
             ("parse", Some(t)) => Some(Ty::Result(Box::new(t.clone()), Box::new(Ty::Str))),
             ("collect", Some(t)) | ("sum", Some(t)) | ("product", Some(t)) => Some(t.clone()),

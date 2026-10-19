@@ -1,0 +1,44 @@
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+
+struct GameScore {
+    name: String,
+    score: i64,
+}
+
+#[inline]
+fn test_clone_string() {
+    let original: String = String::from("hello");
+    let mut cloned = original.clone();
+    println!("[clone_string] original={}", original);
+    println!("[clone_string] cloned={}", cloned);
+    cloned = format!("{}{}", cloned, " world");
+    println!("[clone_string] after modify clone: original={}, cloned={}", original, cloned);
+}
+
+#[inline]
+fn test_clone_vec() {
+    let original = vec![1_i64, 2_i64, 3_i64];
+    let mut cloned = original.clone();
+    println!("[clone_vec] original len={}", original.len());
+    println!("[clone_vec] cloned len={}", cloned.len());
+    cloned.push(4_i64);
+    println!("[clone_vec] after push to clone: original len={}, cloned len={}", original.len(), cloned.len());
+}
+
+#[inline]
+fn test_clone_struct() {
+    let original = GameScore { name: String::from("Alice"), score: 100_i64 };
+    let mut cloned = original.clone();
+    println!("[clone_struct] original: name={}, score={}", original.name, original.score);
+    println!("[clone_struct] cloned: name={}, score={}", cloned.name, cloned.score);
+    cloned.score = 200_i64;
+    println!("[clone_struct] after modify clone: original score={}, cloned score={}", original.score, cloned.score);
+}
+
+fn main() {
+    test_clone_string();
+    test_clone_vec();
+    test_clone_struct();
+    println!("[clone_all] PASSED");
+}
+

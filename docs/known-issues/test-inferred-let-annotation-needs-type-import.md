@@ -1,6 +1,6 @@
 # Compiled tests: an un-annotated `let` gets an emitted type annotation naming a type the test file never imported
 
-`src/lib.wj`:
+src/lib.wj:
 
 ```windjammer
 pub struct Rule {
@@ -14,7 +14,7 @@ pub fn make() -> Vec<Rule> {
 }
 ```
 
-`tests/rules_test.wj`:
+tests/rules_test.wj:
 
 ```windjammer
 use crate::make

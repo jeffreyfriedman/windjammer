@@ -102,7 +102,7 @@ pub fn watch(root: &Path, args: Vec<String>, max_runs: Option<usize>) -> i32 {
         eprintln!("[wj watch] changed: {}; re-running", shown.join(", "));
         child = spawn(&args);
         runs += 1;
-        if std::env::var_os("WJ_WATCH_TIMING").is_some() {
+        if crate::debug_env::enabled("WJ_WATCH_TIMING") {
             eprintln!("[wj watch] restart issued {:?} after detection", t0.elapsed());
         }
     }

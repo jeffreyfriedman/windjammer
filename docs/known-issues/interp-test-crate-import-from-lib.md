@@ -1,4 +1,4 @@
-# `wj test --interpret`: `use crate::item` in `tests/` is not resolved against `src/lib.wj`
+# `wj test --interpret`: `use crate::item` in `tests/` is not resolved against src/lib.wj
 
 Package layout:
 

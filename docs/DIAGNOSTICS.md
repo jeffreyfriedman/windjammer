@@ -149,7 +149,7 @@ entries in `tests/check_negative/known_false_negatives.txt` (ratchet: only shrin
 accepts must get no front-end semantic error. A mutation self-test proves the gate fails for a
 checker that reports nothing.
 
-| | false negatives (of 180 rejected programs) |
+| | false negatives (of the rejected programs in the negative corpus) |
 |--|--|
 | check that only parses, lints and transpiles (the previous `wj check`) | 169 (93.9%) |
 | `wj check` now | 3 (1.7%): two borrow conflicts and one use-after-move |

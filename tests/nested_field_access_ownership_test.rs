@@ -27,9 +27,7 @@ fn compile_wj_to_rs(source: &str) -> (bool, String, String) {
     std::fs::write(&src_path, source).unwrap();
 
     let wj = std::env::var("WJ_BINARY").unwrap_or_else(|_| {
-        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        manifest
-            .join("target/release/wj")
+        std::path::Path::new(env!("CARGO_BIN_EXE_wj"))
             .to_string_lossy()
             .to_string()
     });

@@ -57,6 +57,7 @@ impl JavaScriptBackend {
 
     fn lower(&self, program: &Program, config: &CodegenConfig) -> Result<portable::PModule> {
         let program = if config.tree_shake { tree_shaker::shake_tree(program) } else { program.clone() };
+        let program = portable::prelude::with_arena_prelude(&program).unwrap_or(program);
         let ctx = crate::ir::analyze_and_lower(&program)?;
         let mut m = portable::lower::lower_program(&program, Some(&ctx.registry)).map_err(|e| anyhow!("{e}"))?;
         flatten::flatten_module(&mut m);

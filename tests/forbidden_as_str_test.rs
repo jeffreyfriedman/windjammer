@@ -10,7 +10,8 @@
     feature = "analyzer_tests",
 ))]
 
-/// TDD TEST: `.as_str()` should be forbidden in Windjammer source
+/// `.as_str()` is accepted (identity on every backend) and reported as the W0012 lint (`wj fix` removes it).
+/// It used to be a hard error in `wj build` only, which rejected interpreter-first code.
 ///
 /// LANGUAGE DESIGN: Windjammer automatically handles string conversions.
 /// Users shouldn't need Rust-specific `.as_str()` boilerplate.
@@ -21,7 +22,7 @@ use windjammer::lexer::Lexer;
 use windjammer::parser::Parser;
 
 #[test]
-fn test_as_str_is_forbidden() {
+fn test_as_str_is_accepted_and_linted() {
     let source = r#"
 enum BuildType {
     Warrior,
@@ -50,18 +51,9 @@ impl BuildType {
     let mut analyzer = Analyzer::new();
     let result = analyzer.analyze_program(&program);
 
-    assert!(result.is_err(), "Should reject .as_str()");
-    let err_msg = result.unwrap_err();
-    assert!(
-        err_msg.contains("`.as_str()` is forbidden"),
-        "Error should explain that .as_str() is forbidden\nActual error: {}",
-        err_msg
-    );
-    assert!(
-        err_msg.contains("backend-agnostic"),
-        "Error should explain backend-agnostic reasoning\nActual error: {}",
-        err_msg
-    );
+    assert!(result.is_ok(), "`.as_str()` must not be rejected: {:?}", result.err());
+    let lints = windjammer::linter::lint_text("t.wj", source).expect("parses");
+    assert!(lints.iter().any(|d| d.lint_name == "W0012"), "W0012 expected: {lints:?}");
 }
 
 #[test]

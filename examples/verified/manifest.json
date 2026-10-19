@@ -1,5 +1,5 @@
 {
-  "count": 167,
+  "count": 169,
   "examples": [
     {
       "expect_lines": 2,
@@ -847,6 +847,17 @@
       ]
     },
     {
+      "expect_lines": 1,
+      "file": "intrinsic_user_shadow.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "intrinsics",
+        "shadowing",
+        "println"
+      ]
+    },
+    {
       "expect_lines": 4,
       "file": "iter_any_all_count.wj",
       "kind": "program",
@@ -1091,6 +1102,17 @@
         "mod",
         "use",
         "pub"
+      ]
+    },
+    {
+      "expect_lines": 1,
+      "file": "module_nested_pub_mod.wj",
+      "kind": "program",
+      "rust": "ok",
+      "tags": [
+        "modules",
+        "nested",
+        "pub mod"
       ]
     },
     {
@@ -1902,7 +1924,7 @@
       "file": "vec_contains_position.wj",
       "kind": "program",
       "rust": "gap",
-      "rust_gap": "nondeterministic codegen: v.contains(15) is emitted with or without the borrow between runs",
+      "rust_gap": "v.position(|x| *x == 15) emits 15_i64 against an i32 array (literal width: numeric solver, convergence C4)",
       "tags": [
         "vec",
         "search",

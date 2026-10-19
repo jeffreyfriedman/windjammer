@@ -1,6 +1,6 @@
 # `wj test`: a test file that uses `std::json` fails with `unresolved import serde`
 
-`tests/x_test.wj`:
+tests/x_test.wj:
 
 ```windjammer
 use std::json

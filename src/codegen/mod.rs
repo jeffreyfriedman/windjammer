@@ -96,7 +96,7 @@ mod tests {
     use super::*;
 
     fn create_test_program() -> Program<'static> {
-        Program { items: vec![] }
+        Program::new(vec![])
     }
 
     #[test]

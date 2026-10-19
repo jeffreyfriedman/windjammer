@@ -80,6 +80,26 @@ impl Classes {
     }
 }
 
+/// Variables whose ownership requirement reaches `var`: itself plus every position it is
+/// (transitively) `UsedAs`. Mirrors the solver's flow propagation.
+fn requirement_sources(cs: &ConstraintSet, var: ConstraintVar) -> std::collections::BTreeSet<u32> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut stack = vec![var.0];
+    while let Some(v) = stack.pop() {
+        if !seen.insert(v) {
+            continue;
+        }
+        for c in cs.iter() {
+            if let Constraint::UsedAs(value, site) = c {
+                if value.0 == v {
+                    stack.push(site.0);
+                }
+            }
+        }
+    }
+    seen
+}
+
 /// Ownership of `var` as the pipeline consumes it (`result.ownership[var]`).
 fn solver_mode(cs: &ConstraintSet, var: ConstraintVar) -> Option<&'static str> {
     let result = Solver::new(cs).solve(cs);
@@ -115,12 +135,11 @@ pub fn param_reports(
     ir_fn: &IrFunction,
     emitted: Option<&EmittedFn>,
 ) -> Vec<ParamReport> {
-    let mut classes = Classes::new(&fc.constraints);
     let mut out = Vec::new();
     for param in &af.decl.parameters {
         let name = &param.name;
         let var = fc.var_map.params.get(name).copied();
-        let class = var.map(|v| classes.find(v.0));
+        let sources = var.map(|v| requirement_sources(&fc.constraints, v));
         let analyzer = af.inferred_ownership.get(name).map(|m| mode_label(*m).to_string());
         let solver = var.and_then(|v| solver_mode(&fc.constraints, v)).map(String::from);
         let ir_final = ir_fn
@@ -131,6 +150,27 @@ pub fn param_reports(
         let emitted_mode = emitted
             .and_then(|e| e.params.iter().find(|p| &p.name == name))
             .map(|p| p.mode.label().to_string());
+        let trail: Vec<String> = ir_fn
+            .ownership_trail
+            .get(name)
+            .map(|t| {
+                t.iter()
+                    .map(|(stage, o)| format!("{}={}", stage, owned_label(o).unwrap_or("-")))
+                    .collect()
+            })
+            .unwrap_or_default();
+        // IR passes that overrode the solver (C5 deletion targets).
+        let overriders: Vec<&str> = ir_fn
+            .ownership_trail
+            .get(name)
+            .map(|t| {
+                t.iter()
+                    .skip_while(|(stage, _)| *stage != "solver")
+                    .skip(1)
+                    .map(|(stage, _)| *stage)
+                    .collect()
+            })
+            .unwrap_or_default();
         let pinned = match param.ownership {
             OwnershipHint::Ref => Some("&".to_string()),
             OwnershipHint::Mut => Some("&mut".to_string()),
@@ -141,12 +181,12 @@ pub fn param_reports(
             .or_else(|| ir_final.clone())
             .unwrap_or_else(|| "unknown".into());
 
-        // Reasons: every ownership constraint in the parameter's class.
+        // Reasons: every ownership constraint on the parameter or on a position it flows to.
         let mut reasons = Vec::new();
-        if let (Some(v), Some(class)) = (var, class) {
+        if let (Some(v), Some(sources)) = (var, sources.as_ref()) {
             for (i, (c, o)) in fc.constraints.iter_with_origin().enumerate() {
                 let Some((label, cvar)) = kind_label(c) else { continue };
-                if classes.find(cvar.0) != class {
+                if !sources.contains(&cvar.0) {
                     continue;
                 }
                 // Does this constraint, alone among ownership constraints, reach the parameter?
@@ -171,7 +211,7 @@ pub fn param_reports(
             findings.push(Finding {
                 id: "D-SOLVER-UNION".into(),
                 message: format!(
-                    "{} ownership constraint(s) on `{}` never reach the solver result (union-find merges types but not ownership)",
+                    "{} ownership constraint(s) on `{}` never reach the solver result",
                     reasons.iter().filter(|r| r.dropped).count(),
                     name
                 ),
@@ -191,9 +231,14 @@ pub fn param_reports(
                 .map(|(s, m)| format!("{}={}", s, m.as_deref().unwrap_or("-")))
                 .collect::<Vec<_>>()
                 .join(" ");
+            let by = if overriders.is_empty() {
+                String::new()
+            } else {
+                format!(" (overridden after the solver by {})", overriders.join(", "))
+            };
             findings.push(Finding {
                 id: "D-OWN-STAGES".into(),
-                message: format!("decision changed between stages: {}", chain),
+                message: format!("decision changed between stages: {}{}", chain, by),
             });
         }
         if let Some(pin) = &pinned {
@@ -225,6 +270,7 @@ pub fn param_reports(
             solver,
             ir_final,
             emitted: emitted_mode,
+            trail,
             effective,
             reasons,
             findings,
@@ -296,7 +342,6 @@ pub fn clone_reports(
     af: &AnalyzedFunction<'_>,
     emitted: Option<&EmittedFn>,
 ) -> Vec<CloneReport> {
-    let mut classes = Classes::new(&fc.constraints);
     let mut names: Vec<String> = fc.var_map.params.keys().cloned().collect();
     names.extend(fc.var_map.locals.keys().cloned());
     names.sort();
@@ -310,11 +355,10 @@ pub fn clone_reports(
             .or_else(|| fc.var_map.locals.get(&name))
             .copied();
         let Some(var) = var else { continue };
-        let class = classes.find(var.0);
         let mut reasons = Vec::new();
         for (c, o) in fc.constraints.iter_with_origin() {
             if let Constraint::NeedsClone(v) = c {
-                if classes.find(v.0) == class {
+                if *v == var {
                     let (rule, detail, line, col) = reason_from(o, "untagged clone constraint");
                     reasons.push(Reason {
                         rule,

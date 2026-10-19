@@ -8,15 +8,14 @@ use super::error::{ErrorKind, RuntimeError};
 use crate::parser::Program;
 use std::path::{Path, PathBuf};
 
-/// Parse `source`. The AST borrows the parser's arenas, so the parser is intentionally leaked:
-/// every `&'static` node handed to the interpreter stays valid for the life of the process.
+/// Parse `source`. The returned `Program` owns its arenas (the parser can be dropped).
 pub fn parse_source(source: &str, file: &str) -> Result<Program<'static>, String> {
     let mut lex = crate::lexer::Lexer::new(source);
     let tokens = lex.tokenize_with_locations();
-    let parse: &'static mut crate::parser::Parser = Box::leak(Box::new(
-        crate::parser::Parser::new_with_source(tokens, file.to_string(), source.to_string()),
-    ));
-    parse.parse()
+    let program = crate::parser::Parser::new_with_source(tokens, file.to_string(), source.to_string()).parse()?;
+    // `std::arena` (ADR-0025): same feature gate and escape check as the compiler.
+    crate::analyzer::arena_escape::gate(&program)?;
+    Ok(program)
 }
 
 /// The files of the program whose entry is `entry` (entry first), with their module paths.
@@ -93,18 +92,6 @@ impl Interpreter {
         Ok(module_path)
     }
 
-    /// Load and run an entry file (with its transitive module files).
-    pub fn load_entry_file(&mut self, path: &Path) -> Result<(), RuntimeError> {
-        let src = std::fs::read_to_string(path)
-            .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", path.display(), e)))?;
-        let program = parse_source(&src, &path.to_string_lossy())
-            .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("parse error: {}", e)))?;
-        let prog: &'static Program<'static> = Box::leak(Box::new(program));
-        self.modules[0].file = path.to_path_buf();
-        self.modules[0].name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        self.load_program(0, prog)
-    }
-
     fn module_search_dirs(&self, from: usize) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
         let f = &self.modules[from].file;
@@ -159,7 +146,7 @@ impl Interpreter {
         let program = parse_source(&src, &file.to_string_lossy()).map_err(|e| {
             RuntimeError::new(ErrorKind::Semantic, format!("parse error in {}: {}", file.display(), e))
         })?;
-        let prog: &'static Program<'static> = Box::leak(Box::new(program));
+        let prog = self.retain_program(program);
         let id = self.new_module(name, file, Some(from));
         self.modules[from].children.insert(name.to_string(), id);
         self.register_items(id, &prog.items)?;

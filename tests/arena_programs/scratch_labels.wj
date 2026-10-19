@@ -1,0 +1,34 @@
+// Per-frame scratch strings and lists; values are copied out before the arena is reset.
+// expect: frame 0: e0,e1,e2
+// expect: frame 1: e1,e2,e3
+// expect: kept=e2 total=6
+use std::arena::Scratch
+
+fn main() {
+    let mut scratch = Scratch::new()
+    let mut kept = ""
+    let mut total = 0
+    for frame in 0..2 {
+        scratch.reset()
+        let mut parts = scratch.new_list()
+        for i in 0..3 {
+            let mut s = scratch.new_string()
+            s.push_str("e")
+            s.push_str(scratch.str((i + frame).to_string()))
+            parts.push(s)
+        }
+        total = total + parts.len()
+        let mut line = ""
+        for p in parts.iter() {
+            if line.len() > 0 {
+                line = "${line},"
+            }
+            line = "${line}${p}"
+        }
+        if frame == 0 {
+            kept = parts[2].to_string()
+        }
+        println("frame ${frame}: ${line}")
+    }
+    println("kept=${kept} total=${total}")
+}

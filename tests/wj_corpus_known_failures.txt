@@ -5,7 +5,6 @@ tests/bug_deref_vec.wj | stale source: `.to_string()` on a string literal is rej
 tests/bug_function_call_deref.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
 tests/bug_method_call_deref.wj | stale source: `.to_string()` on a string literal is rejected by lint W0006 (Rust leakage)
 tests/fixtures/mut_ref_test.wj | stale source: explicit `&` borrow in call is rejected by lint W0004 (Rust leakage)
-tests/fixtures/traits/test_ui_pattern.wj | stale source: `.as_str()` is forbidden in Windjammer source
 tests/framework_validation.wj | stale source: explicit `&` borrow in call is rejected by lint W0004 (Rust leakage)
 tests/function_param_patterns.wj | stale source: no longer parses (Expected Colon, got LBrace (at token position 68))
 tests/generic_owned_param_test.wj | stale source: explicit `&` borrow in call is rejected by lint W0004 (Rust leakage)

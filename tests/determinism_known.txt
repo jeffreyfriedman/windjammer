@@ -1,11 +1,7 @@
 # Programs whose generated output differs between identical builds (tests/codegen_determinism_test.rs).
 # `<path> [<target>] | cause`. Ratchet: fix the cause and delete the line; never add one without a cause.
-examples/verified/numbers_min_max_abs.wj [rust] | integer-literal suffix picked from hash order: `5_u16`/`5_u8`/`5_u32 as i32` in clamp/min args
-examples/verified/generics_struct.wj [rust] | `s.push(10_i64)` vs `s.push(10)`: literal width decided in hash order
-examples/verified/vec_contains_position.wj [rust] | `v.contains(15)` emitted with or without `&` (hash order)
-examples/verified/trait_basics.wj [rust] | output differs between runs (hash-order codegen decision)
-examples/verified/prog_lru_cache.wj [rust] | output differs between runs (hash-order codegen decision)
-examples/verified/algo_binary_tree.wj [rust] | build fails in some runs and succeeds in others
-tests/conformance_programs/51_result_question_chain.wj [rust] | output differs between runs (hash-order codegen decision)
-examples/verified/algo_lcs.wj [rust] | output differs between runs (hash-order codegen decision)
+examples/verified/numbers_min_max_abs.wj [rust] | `3.max(9_u16 as i32)` vs `3.max(9_i32)`: literal width of `max`/`clamp` args chosen in hash order (numeric solver; convergence C4)
+examples/verified/algo_lcs.wj [rust] | `dp[i][j+1].max(dp[i+1][j] as f32)`: `max` homonym (f32/i64) picked in hash order when the receiver type is unknown (numeric solver; convergence C4)
 tests/conformance_programs/80_generic_struct.wj [rust] | output differs between runs (hash-order codegen decision)
+examples/verified/generics_struct.wj [rust] | `s.push(10_i64)` vs `s.push(10)`: literal width decided in hash order
+examples/verified/prog_lru_cache.wj [rust] | output differs between runs (hash-order codegen decision)

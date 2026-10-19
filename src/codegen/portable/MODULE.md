@@ -4,11 +4,9 @@
 Turns a parsed Windjammer `Program` into a typed, statement-oriented IR (`PModule`) that the Go and
 JavaScript/TypeScript emitters print. All semantics that must agree across backends live here, not in the emitters.
 
-
 ## Inputs/Outputs
 In: parsed `Program` plus the analyzer `SignatureRegistry`. Out: `PModule`.
 Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emitter`.
-
 
 | file | role |
 |------|------|
@@ -23,7 +21,6 @@ Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emi
 | `flatten.rs` | expression-position `if`/`match`/block/`?` become statements, preserving evaluation order |
 | `visit.rs` | mutable traversals (type resolution after inference) |
 
-
 ## Invariants
 - After `lower_program` + `flatten_module`, every `PExpr.ty` is resolved (or an emitter reports "type could not be inferred"),
   expressions are pure trees, and `PBlock.tail` is `None`.
@@ -34,21 +31,17 @@ Pipeline: `parser AST -> lower (typing, ownership, desugaring) -> flatten -> emi
   bind a pointer (Go) or the shared object / an accessor cell (JS/TS), never a copy. Other `&`/`&mut`/`*` are
   erased; `&mut` arguments are recognised by the callee's `ParamMode::MutRef`.
 
-
 ## Owns
 Typing and ownership-driven copies.
 
 ## Never decides
 Syntax, runtime representation of integers/strings, or naming (emitters do).
 
-
 ## Allowed imports
 `crate::intrinsics` (the intrinsic name registry; never match `println`/`panic`/... as strings here), `crate::parser`, `crate::analyzer` (registry only), `crate::ir::analyze_and_lower` (done by backends).
 
-
 ## Entry points
 `lower::lower_program(&Program, Some(&registry))`, `flatten::flatten_module(&mut PModule)`.
-
 
 ## Test
 Unit tests next to each module; end-to-end through `tests/backend_conformance_test.rs`

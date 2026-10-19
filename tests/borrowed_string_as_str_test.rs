@@ -10,18 +10,17 @@
     feature = "analyzer_tests",
 ))]
 
-//! TDD Test: .as_str() is forbidden in Windjammer source
+//! TDD Test: .as_str() is redundant in Windjammer source
 //!
 //! Windjammer automatically handles string conversions (String → &str).
-//! Using .as_str() is Rust-specific leakage and must be rejected with
-//! a helpful error message guiding the user toward idiomatic Windjammer.
+//! `.as_str()` is redundant: it compiles (identity) and is reported as the W0012 lint.
 
 #[path = "common/test_utils.rs"]
 mod test_utils;
 
 #[test]
-fn test_as_str_rejected_with_helpful_error() {
-    // .as_str() is forbidden in Windjammer source — the compiler should
+fn test_as_str_is_accepted() {
+    // .as_str() is redundant — the compiler accepts it as identity and lints it
     // reject it with a clear, helpful error message guiding the user
     let code = r#"
 pub fn log_message(msg: string) {
@@ -35,17 +34,12 @@ pub fn test_log() {
 
     let (success, _generated, err) = test_utils::compile_via_cli(code);
 
-    assert!(!success, ".as_str() should be rejected by the compiler");
-    assert!(
-        err.contains(".as_str()") && err.contains("forbidden"),
-        "Error message should explain that .as_str() is forbidden. Got: {}",
-        err
-    );
+    assert!(success, "`.as_str()` is identity (W0012 lint), not an error. Got: {}", err);
 }
 
 #[test]
-fn test_as_str_on_owned_string_rejected() {
-    // Even on owned strings, .as_str() is forbidden — the compiler handles
+fn test_as_str_on_owned_string_accepted() {
+    // Even on owned strings, .as_str() is identity — the compiler handles
     // String → &str conversion automatically
     let code = r#"
 pub fn process(text: string) {
@@ -60,12 +54,7 @@ pub fn test_process() {
 
     let (success, _generated, err) = test_utils::compile_via_cli(code);
 
-    assert!(!success, ".as_str() on owned String should be rejected");
-    assert!(
-        err.contains(".as_str()") && err.contains("forbidden"),
-        "Error message should explain that .as_str() is forbidden. Got: {}",
-        err
-    );
+    assert!(success, "`.as_str()` is identity (W0012 lint), not an error. Got: {}", err);
 }
 
 #[test]

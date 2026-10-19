@@ -1,0 +1,25 @@
+#[inline]
+fn first_even(xs: &Vec<i64>) -> Option<i64> {
+    for x in xs.iter().copied() {
+        if x % 2_i64 == 0_i64 {
+            return Some::<i64>(x);
+        }
+    }
+    None
+}
+
+fn main() {
+    match first_even(&[1_i64, 3_i64, 4_i64, 6_i64]) {
+        Some(v) => println!("found {}", v - 1_i64),
+        None => println!("none"),
+    }
+    match first_even(&[1_i64, 3_i64]) {
+        Some(v) => println!("found {}", v),
+        None => println!("none"),
+    }
+    println!("{}", Some(3).unwrap_or(0));
+    let nothing: Option<i64> = None;
+    println!("{}", nothing.unwrap_or(0));
+    println!("{} {}", Some(1).is_some(), nothing.is_some());
+}
+
