@@ -16,6 +16,7 @@ METRICS = [  # key, label, extractor(trial) -> number|None
     ("wall", "wall seconds", lambda t: t["wall_seconds"]),
     ("think", "agent-thinking seconds (API time)", lambda t: t.get("thinking_seconds")),
     ("tool", "tool-wait seconds (wj commands)", lambda t: t["tool_wait_seconds"]),
+    ("denied", "harness permission denials (should be 0)", lambda t: t["usage"].get("permission_denials")),
     ("silent", "silent divergence (interp pass, compiled fail)", lambda t: 1.0 if t["divergence"]["silent"] else 0.0),
 ]
 

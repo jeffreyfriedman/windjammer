@@ -29,8 +29,8 @@ def grader(compiled="pass", interp="pass"):
 class FakeAgent:
     """Calls the shim like an agent would; returns a Claude-Code-shaped JSON result."""
 
-    def __init__(self, calls, cost=0.3, wj_exit=None):
-        self.calls, self.cost, self.n = calls, cost, 0
+    def __init__(self, calls, cost=0.3, wj_exit=None, denials=()):
+        self.calls, self.cost, self.n, self.denials = calls, cost, 0, list(denials)
 
     def run(self, ws, shim_dir, arm, task):
         self.n += 1
@@ -40,7 +40,8 @@ class FakeAgent:
             subprocess.run([os.path.join(shim_dir, "wj")] + argv, cwd=ws, capture_output=True)
         return {"json": {"usage": {"input_tokens": 100, "cache_creation_input_tokens": 1000, "cache_read_input_tokens": 9000,
                                    "output_tokens": 500}, "total_cost_usd": self.cost, "num_turns": 7, "duration_api_ms": 4000,
-                         "subtype": "success"}, "exit": 0, "log": ""}
+                         "subtype": "success",
+                         "permission_denials": [{"tool_name": "Bash", "tool_input": {"command": c}} for c in self.denials]}, "exit": 0, "log": ""}
 
 
 class TrialRecord(unittest.TestCase):
@@ -283,3 +284,24 @@ class Parallel(unittest.TestCase):
         g.before_trial(); g.before_trial()
         with self.assertRaises(budget.BudgetExceeded):
             g.before_trial()    # 3 x 0.4 > 1.0 although nothing has been spent yet
+
+
+class Denials(unittest.TestCase):
+    def test_denials_recorded_and_pilot_stops_after_two_invalid_trials(self):
+        with tempfile.TemporaryDirectory() as d:
+            real = fake_wj(d)
+            g = budget.BudgetGuard(100, 60, 0.3)
+            r = pilot.run_pilot(FakeAgent([], denials=["cat x | wj run y"]), list(pilot.PILOT_TASKS), ["A", "B"], 3, d, g,
+                                grader(), real, say=lambda *_: None)
+            self.assertEqual(r["completed"], 2)
+            self.assertIn("permission denials", r["aborted_reason"])
+            t = pilot.load_trials(d)[0]
+            self.assertEqual(t["usage"]["permission_denials"], 1)
+            self.assertEqual(t["usage"]["denied_commands"], ["cat x | wj run y"])
+
+    def test_pipeline_helpers_are_allowed_and_cat_ls_are_not(self):
+        allowed = arms.tool_policy()["allowed"]
+        for ok in ("Bash(wj:*)", "Bash(printf:*)", "Bash(echo:*)"):
+            self.assertIn(ok, allowed)
+        for bad in ("Bash(cat:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(grep:*)", "Bash"):
+            self.assertNotIn(bad, allowed)

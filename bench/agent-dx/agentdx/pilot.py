@@ -12,6 +12,7 @@ from . import arms as A, budget as B, diagnostics as dg, grade as G, shim as S, 
 from .runners import wj_bin
 
 SCHEMA = 2
+MAX_DENIED_TRIALS = 2   # stop the pilot when the sandbox policy, not the language, is what blocks agents
 PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_lru_cache", "t013_bst",
                "t018_word_freq", "t022_csv_parse", "t030_bank_ledger", "t034_shapes_trait", "t050_cat_number"]
 
@@ -42,12 +43,16 @@ class ClaudeAgent:
 
 def _usage(j):
     if not j:
-        return {"tokens_in": None, "tokens_out": None, "cost_usd": None, "turns": None, "api_seconds": None, "subtype": None}
+        return {"tokens_in": None, "tokens_out": None, "cost_usd": None, "turns": None, "api_seconds": None, "subtype": None, "permission_denials": None}
     u = j.get("usage") or {}
     tin = sum(u.get(k, 0) or 0 for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
     return {"tokens_in": tin, "tokens_out": u.get("output_tokens", 0), "cost_usd": j.get("total_cost_usd"),
             "turns": j.get("num_turns"), "api_seconds": (j.get("duration_api_ms") or 0) / 1000.0,
-            "subtype": j.get("subtype"), "is_error": j.get("is_error")}
+            "subtype": j.get("subtype"), "is_error": j.get("is_error"),
+            "permission_denials": len(j.get("permission_denials") or []),
+            "denied_commands": [str((d.get("tool_input") or {}).get("command", d.get("tool_name")))[:200]
+                                for d in (j.get("permission_denials") or [])][:5],
+            "result_excerpt": str(j.get("result", ""))[:400]}
 
 
 def analyse_invocations(log):
@@ -159,10 +164,12 @@ def run_pilot(agent, tasks, arm_ids, trials, out_dir, guard, grader=default_grad
         guard.spent += (prev.get("usage") or {}).get("cost_usd") or 0.0
     todo = [(t, a, k) for t, a, k in plan(tasks, arm_ids, trials)
             if not os.path.exists(os.path.join(out_dir, "trials", f"{t}.{a}.{k}.json"))]
-    done, reasons = [], []
+    done, reasons, denied = [], [], []
 
     def one(item):
         task, arm, k = item
+        if reasons:
+            return None
         try:
             guard.before_trial()
         except B.BudgetExceeded as e:
@@ -174,6 +181,10 @@ def run_pilot(agent, tasks, arm_ids, trials, out_dir, guard, grader=default_grad
             guard.record(None)
             raise
         guard.record(tr["usage"]["cost_usd"])
+        if tr["usage"].get("permission_denials"):
+            denied.append(task)
+            if len(denied) >= MAX_DENIED_TRIALS:
+                reasons.append(f"{len(denied)} trials hit harness permission denials (invalid measurements): {tr['usage']['denied_commands'][:2]}")
         done.append(save(tr, out_dir))
         say(f"{task} arm={arm} trial={k} pass={tr['pass_final']} turns={tr['usage']['turns']} "
             f"cost={tr['usage']['cost_usd']} spent=${guard.spent:.2f}")
