@@ -339,6 +339,9 @@ impl<'e> Lowerer<'e> {
                 }
             }
         }
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.optional_chain(recv, args);
+        }
         let owner_ty = match &recv.ty {
             Ty::Adt(n, a) => Some((n.clone(), a.clone())),
             _ => None,

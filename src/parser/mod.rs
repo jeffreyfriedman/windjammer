@@ -30,6 +30,7 @@ mod match_value_expression_parser;
 mod matches_macro;
 mod guard_match;
 pub(crate) mod named_args;
+pub mod optional_chain;
 mod pipe_parser;
 mod primary_expression_parser;
 pub(crate) mod shorthand_closure;

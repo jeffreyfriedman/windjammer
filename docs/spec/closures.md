@@ -128,3 +128,22 @@ fn main() {
 }
 ```
 Error contains: `inside an explicit closure`
+
+**SPEC-CLOS-008** When the callee is declared in the same file and the parameter that receives a shorthand closure is certainly not a function (a number, string, list, option, ...), the error explains the scoping rule and shows the explicit closure to write: `group(key(_.clone()))` closes over `key`'s argument, not over `key(..)`.
+
+<!-- example: tests/spec/closures/SPEC-CLOS-008.wj -->
+<!-- should_fail: misuse is rejected by the parser -->
+```windjammer,should_fail
+fn key(s: string) -> string {
+    s
+}
+
+fn group(f: fn(string) -> string, s: string) -> string {
+    f(s)
+}
+
+fn main() {
+    let r = group(key(_.clone()), "a")
+}
+```
+Error contains: `shorthand makes a closure here`

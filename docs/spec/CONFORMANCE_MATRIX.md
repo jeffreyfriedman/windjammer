@@ -30,6 +30,7 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-CLOS-005 | closures.md | `closures/SPEC-CLOS-005.wj` |
 | SPEC-CLOS-006 | closures.md | `closures/SPEC-CLOS-006.wj` |
 | SPEC-CLOS-007 | closures.md | `closures/SPEC-CLOS-007.wj` |
+| SPEC-CLOS-008 | closures.md | `closures/SPEC-CLOS-008.wj` |
 | SPEC-COLL-001 | collections.md | `collections/SPEC-COLL-001.wj` |
 | SPEC-COLL-002 | collections.md | `collections/SPEC-COLL-002.wj` |
 | SPEC-COLL-003 | collections.md | `collections/SPEC-COLL-003.wj` |
@@ -189,6 +190,8 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-OPT-002 | optionals.md | `optionals/SPEC-OPT-002.wj` |
 | SPEC-OPT-003 | optionals.md | `optionals/SPEC-OPT-003.wj` |
 | SPEC-OPT-004 | optionals.md | `optionals/SPEC-OPT-004.wj` |
+| SPEC-OPT-005 | optionals.md | `optionals/SPEC-OPT-005.wj` |
+| SPEC-OPT-006 | optionals.md | `optionals/SPEC-OPT-006.wj` |
 | SPEC-OWN-001 | ownership.md | `ownership/SPEC-OWN-001.wj` |
 | SPEC-OWN-002 | ownership.md | `ownership/SPEC-OWN-002.wj` |
 | SPEC-OWN-003 | ownership.md | `ownership/SPEC-OWN-003.wj` |

@@ -1,0 +1,62 @@
+{
+  "module_path": "177_opt_chain",
+  "functions": {
+    "User::name_len": {
+      "params": [
+        "Custom(\"User\")"
+      ],
+      "formal_params": [
+        "Custom(\"User\")"
+      ],
+      "return_type": "Int",
+      "is_associated": true,
+      "parent_type": "User",
+      "param_ownership": [
+        "Borrowed"
+      ],
+      "emitted_rust_ref_params": [
+        false
+      ],
+      "string_ref_string_formal_params": null,
+      "forwarding_borrow_params": [
+        false
+      ],
+      "has_self_receiver": true,
+      "is_extern": false,
+      "is_trait_method": false
+    },
+    "main": {
+      "params": [],
+      "formal_params": [],
+      "return_type": null,
+      "is_associated": false,
+      "parent_type": null,
+      "param_ownership": [],
+      "emitted_rust_ref_params": [],
+      "string_ref_string_formal_params": [],
+      "forwarding_borrow_params": null,
+      "has_self_receiver": false,
+      "is_extern": false,
+      "is_trait_method": false
+    }
+  },
+  "structs": {
+    "Profile": {
+      "nick": "Option(String)"
+    },
+    "User": {
+      "name": "String",
+      "profile": "Option(Custom(\"Profile\"))"
+    }
+  },
+  "trait_impls": {},
+  "copy_structs": [],
+  "non_copy_structs": [],
+  "version": "0.50.0",
+  "analysis_fingerprint": {
+    "content_hash": 17114939389266832687,
+    "compiler_version": "0.50.0:cd9b4602b54cffd0",
+    "dep_metadata_epoch": 2435999049025295583,
+    "output_hash": 15061375386219085798
+  }
+}
