@@ -42,6 +42,8 @@ pub struct CapGate {
     pub(crate) bypass: u32,
     /// No `[capabilities]`, `--sandbox` or `--allow`: the project-directory default is in force (messages explain it).
     local_profile: bool,
+    /// `wj test`: there are no `--allow` / `WJ_CAPS` knobs there, so messages offer only the `wj.toml` fix.
+    for_tests: bool,
 }
 
 impl CapGate {
@@ -52,10 +54,16 @@ impl CapGate {
         g
     }
 
+    /// The same gate for `wj test --interpret` (messages without the `wj run` flags).
+    pub fn for_tests(mut self) -> CapGate {
+        self.for_tests = true;
+        self
+    }
+
     pub fn new(grant: Grant, mode: CapMode) -> CapGate {
         let console_open = grant.check(&EffectKind::Console, None).is_ok()
             && grant.scope(&EffectKind::Console).is_none_or(|s| matches!(s, crate::ir::effect_facts::Scope::Any));
-        CapGate { grant, deps: BTreeMap::new(), default_dep: None, mode, warned: HashSet::new(), seen: BTreeSet::new(), console_open, console_seen: false, bypass: 0, local_profile: false }
+        CapGate { grant, deps: BTreeMap::new(), default_dep: None, mode, warned: HashSet::new(), seen: BTreeSet::new(), console_open, console_seen: false, bypass: 0, local_profile: false, for_tests: false }
     }
 
     /// Per-package grants: each dependency's code is checked against its own grant (lexical attribution).
@@ -266,7 +274,13 @@ impl Interpreter {
         }
         if let Err(d) = gate.grant_for(package.as_deref()).check(effect, resource) {
             let who = package.as_deref().map(|p| format!(" (dependency `{p}`)")).unwrap_or_default();
-            let text = if gate.local_profile {
+            let text = if gate.local_profile && gate.for_tests {
+                format!(
+                    "capability denied: {}{who}\n  = why: this project has no [capabilities] in wj.toml, so this session may use files inside the project directory (plus time, random and console) and nothing else\n  = to allow it, put this in wj.toml:\n        [capabilities]\n        fs.read = [\"./**\"]\n        fs.write = [\"./**\"]\n        {}",
+                    d.subject(),
+                    d.entry()
+                )
+            } else if gate.local_profile {
                 format!(
                     "capability denied: {}{who}\n  = why: this project has no [capabilities] in wj.toml, so `wj run` allows files inside the project directory (plus time, random and console) and nothing else\n  = to allow just this once: run with `--allow {}`\n  = to allow it for good, put this in wj.toml:\n        [capabilities]\n        fs.read = [\"./**\"]\n        fs.write = [\"./**\"]\n        {}\n  = to keep the old behaviour while you migrate: WJ_CAPS=warn (or WJ_CAPS=off)",
                     d.subject(),
