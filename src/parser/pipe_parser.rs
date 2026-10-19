@@ -243,7 +243,7 @@ impl Parser {
         }
     }
 
-    fn token_location(&self, token_index: usize) -> SourceLocation {
+    pub(in crate::parser) fn token_location(&self, token_index: usize) -> SourceLocation {
         self.tokens.get(token_index).map(|t| crate::source_map::Location {
             file: std::path::PathBuf::from(&self.filename),
             line: t.line,
