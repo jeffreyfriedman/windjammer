@@ -40,6 +40,13 @@ impl Interpreter {
                     self.resolve_in(m, rest)
                 }
             }
+            Import::Both(module, item_module, name) => {
+                if rest.is_empty() {
+                    self.resolve_in(item_module, &[name.as_str()])
+                } else {
+                    self.resolve_in(module, rest)
+                }
+            }
             Import::Item(m, name) => {
                 let mut segs: Vec<&str> = name.split("::").collect();
                 segs.extend_from_slice(rest);
@@ -49,6 +56,26 @@ impl Interpreter {
     }
 
     pub(crate) fn resolve_in(&mut self, module: usize, segs: &[&str]) -> R<Option<Resolved>> {
+        if let Some(r) = self.resolve_in_module(module, segs)? {
+            return Ok(Some(r));
+        }
+        // a function-body `use` overlay falls through to the module it was written in
+        if let Some(fb) = self.modules[module].fallback {
+            return self.resolve_in(fb, segs);
+        }
+        // `use std::log::*`: a bare name that is a function of a glob-imported std module
+        if segs.len() == 1 {
+            for g in self.modules[module].std_globs.clone() {
+                let path = format!("{g}::{}", segs[0]);
+                if self.builtins.has_function(&path) {
+                    return Ok(Some(Resolved::Builtin(path)));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn resolve_in_module(&mut self, module: usize, segs: &[&str]) -> R<Option<Resolved>> {
         if segs.is_empty() {
             return Ok(None);
         }
@@ -125,6 +152,12 @@ impl Interpreter {
         if let Some(imp) = self.modules[module].imports.get(&first).cloned() {
             if let Some(r) = self.follow_import(imp, &rest)? {
                 return Ok(Some(r));
+            }
+        }
+        // a dependency crate is named from anywhere (`wj_glob::is_match` inside another dependency)
+        if module != 0 && self.dep_crates.contains(&first) {
+            if let Some(&root) = self.modules[0].children.get(&first) {
+                return self.resolve_in(root, &rest);
             }
         }
         let is_type = self.structs.contains_key(&first)

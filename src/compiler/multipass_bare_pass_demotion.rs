@@ -2241,6 +2241,24 @@ fn bare_pass_hint_should_skip(
     if sig.is_extern {
         return true;
     }
+    // A standard-library function's contract is the runtime's (`server_serve(address: String, ..)`): a caller
+    // passing a bare local says nothing about how the runtime function takes it, and the `std/<mod>.wj`
+    // stub's empty body would otherwise be demoted to a borrow. A bare name (glob import) counts when the
+    // program defines no function of that name besides the stub.
+    {
+        let stdlib = SignatureRegistry::stdlib();
+        let runtime = stdlib.get_signature(callee_key).or_else(|| stdlib.get_fallback_signature(callee_key)).or_else(|| {
+            let defs = programs
+                .iter()
+                .flat_map(|p| p.items.iter())
+                .filter(|i| matches!(i, Item::Function { decl, .. } if decl.name == callee_key))
+                .count();
+            (!callee_key.contains("::") && defs <= 1).then(|| stdlib.find_unique_signature_ending_with(callee_key)).flatten()
+        });
+        if runtime.is_some_and(|r| sig.param_types.len() == r.param_types.len()) {
+            return true;
+        }
+    }
     // Path-dep / defining-module codegen already recorded owned emission for this
     // slot (`require_nonempty(value: String)` / `matches_cron(expr: CronExpr)` →
     // emit false). Importer bare-pass cannot see the defining body and must not

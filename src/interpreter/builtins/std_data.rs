@@ -539,6 +539,37 @@ fn register_regex(r: &mut Registry) {
     one_shot!("regex::replace", |re, a| s(&re.replace(arg_str(&a, 1, "replace")?.as_str(), arg_str(&a, 2, "replace")?.as_str())));
     one_shot!("regex::replace_all", |re, a| s(&re.replace_all(arg_str(&a, 1, "replace_all")?.as_str(), arg_str(&a, 2, "replace_all")?.as_str())));
     one_shot!("regex::split", |re, a| Value::vec(re.split(arg_str(&a, 1, "split")?.as_str()).map(s).collect()));
+    one_shot!("regex::find_all", |re, a| Value::vec(re.find_iter(arg_str(&a, 1, "find_all")?.as_str()).map(|m| s(m.as_str())).collect()));
+    r.func("regex::escape", |_, a| Ok(s(&regex::escape(arg_str(&a, 0, "escape")?.as_str()))));
+    r.func("regex::compile_with_flags", |_, a| {
+        let mut b = regex::RegexBuilder::new(arg_str(&a, 0, "compile_with_flags")?.as_str());
+        for f in arg_str(&a, 1, "compile_with_flags")?.chars() {
+            match f {
+                'i' => b.case_insensitive(true),
+                'm' => b.multi_line(true),
+                's' => b.dot_matches_new_line(true),
+                _ => return Ok(Value::err(s(&format!("Unknown regex flag: {}", f)))),
+            };
+        }
+        Ok(match b.build() {
+            Ok(re) => Value::ok(Value::Native(Rc::new(RegexObj(re)))),
+            Err(e) => Value::err(s(&e.to_string())),
+        })
+    });
+    // the pre-compiled forms take the `Regex` first
+    r.func("regex::is_match_compiled", |_, a| Ok(Value::Bool(re_of(&super::channel::raw_arg(&a, 0, "is_match_compiled")?)?.is_match(arg_str(&a, 1, "is_match_compiled")?.as_str()))));
+    r.func("regex::find_compiled", |_, a| {
+        Ok(Value::option(re_of(&super::channel::raw_arg(&a, 0, "find_compiled")?)?.find(arg_str(&a, 1, "find_compiled")?.as_str()).map(|m| s(m.as_str()))))
+    });
+    r.func("regex::find_all_compiled", |_, a| {
+        Ok(Value::vec(re_of(&super::channel::raw_arg(&a, 0, "find_all_compiled")?)?.find_iter(arg_str(&a, 1, "find_all_compiled")?.as_str()).map(|m| s(m.as_str())).collect()))
+    });
+    r.func("regex::replace_compiled", |_, a| {
+        Ok(s(&re_of(&super::channel::raw_arg(&a, 0, "replace_compiled")?)?.replace(arg_str(&a, 1, "replace_compiled")?.as_str(), arg_str(&a, 2, "replace_compiled")?.as_str())))
+    });
+    r.func("regex::replace_all_compiled", |_, a| {
+        Ok(s(&re_of(&super::channel::raw_arg(&a, 0, "replace_all_compiled")?)?.replace_all(arg_str(&a, 1, "replace_all_compiled")?.as_str(), arg_str(&a, 2, "replace_all_compiled")?.as_str())))
+    });
     r.native("Regex", "is_match", |_, v, a| Ok(Value::Bool(re_of(v)?.is_match(arg_str(&a, 0, "is_match")?.as_str()))));
     r.native("Regex", "find", |_, v, a| Ok(Value::option(re_of(v)?.find(arg_str(&a, 0, "find")?.as_str()).map(match_val))));
     r.native("Regex", "find_all", |_, v, a| {

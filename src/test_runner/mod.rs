@@ -124,6 +124,9 @@ pub fn run_tests_with_options(mut opts: TestRunOptions) -> Result<()> {
         println!();
     }
 
+    // packages this one links through `path = "../pkg/build"` are built first
+    crate::cli::path_deps::build_missing(&project_root)?;
+
     let temp_dir = std::env::temp_dir().join(format!(
         "windjammer-test-{}-{}",
         std::process::id(),

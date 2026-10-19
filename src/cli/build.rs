@@ -66,6 +66,12 @@ pub fn execute(
         anyhow::bail!("path not found: {}", path.display());
     }
 
+    if target_str.eq_ignore_ascii_case("rust") {
+        if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
+            super::path_deps::build_missing(&root)?;
+        }
+    }
+
     if json_output {
         let external_metadata = parse_external_metadata_args(metadata)?;
         return super::build_json::run(super::build_json::JsonBuild {

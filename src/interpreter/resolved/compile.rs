@@ -260,7 +260,8 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
             let label = label.clone();
             Box::new(move |_, _| Err(Ctl::Continue(Box::new(label.clone()))))
         }
-        Statement::Use { .. } => Box::new(|_, _| Ok(Value::Unit)),
+        // a function-body `use` binds names at run time: the walker runs such functions
+        Statement::Use { .. } => return None,
         _ => return None,
     };
     Some(code)

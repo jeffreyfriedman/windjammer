@@ -19,11 +19,20 @@ impl Interpreter {
     /// Does a plain call to `name` mean the intrinsic (no local variable or user item shadows it)?
     pub(crate) fn intrinsic_for_call(&self, name: &str) -> Option<Intrinsic> {
         let intr = Intrinsic::from_call_name(name)?;
-        let m = &self.modules[self.scope.module];
-        if self.lookup_var(name).is_some() || m.funcs.contains_key(name) || m.imports.contains_key(name) {
+        if self.lookup_var(name).is_some() || self.module_binds_name(self.scope.module, name) {
             return None;
         }
         Some(intr)
+    }
+
+    /// Is `name` bound in `module`: its own function, an import, a glob-imported std function,
+    /// or (for a function-body `use` overlay) any of those in the module it was written in?
+    fn module_binds_name(&self, module: usize, name: &str) -> bool {
+        let m = &self.modules[module];
+        m.funcs.contains_key(name)
+            || m.imports.contains_key(name)
+            || m.std_globs.iter().any(|g| self.builtins.has_function(&format!("{g}::{name}")))
+            || m.fallback.is_some_and(|f| self.module_binds_name(f, name))
     }
 
     /// Evaluate a registry intrinsic. `whole` is the call/macro node (panic and `debug` location).

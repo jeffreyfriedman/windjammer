@@ -189,6 +189,20 @@ pub fn register(r: &mut Registry) {
     r.func("mpsc::channel", |_, _| Ok(make_channel(None, false)));
     r.func("mpsc::sync_channel", |_, a| Ok(make_channel(Some(arg_usize(&a, 0, "sync_channel")?), false)));
     r.func("sync::channel", |_, _| Ok(make_channel(None, true)));
+    // `std::sync` graduation vocabulary (runtime `sync::{unbounded, sync_channel, send, recv}`)
+    r.func("sync::unbounded", |_, _| Ok(make_channel(None, false)));
+    r.func("sync::sync_channel", |_, a| Ok(make_channel(Some(arg_usize(&a, 0, "sync_channel")?), false)));
+    r.func("sync::send", |it, a| {
+        let tx = raw_arg(&a, 0, "send")?;
+        send(it, &tx, &a[1..], true)?;
+        Ok(tx)
+    });
+    r.func("sync::recv", |it, a| {
+        let rx = raw_arg(&a, 0, "recv")?;
+        let (chan, _) = chan_of(&rx)?;
+        let got = it.chan_recv_item(&chan, false)?;
+        Ok(Value::tuple(vec![rx, Value::option(got)]))
+    });
     r.native("Sender", "send", |it, v, a| send(it, v, &a, true));
     r.native("Sender", "try_send", |it, v, a| send(it, v, &a, false));
     r.native("Sender", "clone", |_, v, _| Ok(new_sender(&chan_of(v)?.0)));

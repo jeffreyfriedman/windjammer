@@ -140,6 +140,29 @@ impl<'ast> CodeGenerator<'ast> {
             && crate::codegen::rust::call_site_borrow::expression_is_stdlib_empty_default_constructor(value)
     }
 
+    /// `Vec<()>` / `HashMap<(), ()>` for an empty-collection constructor call (`Vec::new()`, `HashMap::new()`, ...).
+    fn unused_empty_collection_default_type(value: &Expression<'ast>) -> Option<Type> {
+        let Expression::Call { function, arguments, .. } = value else { return None };
+        if !arguments.is_empty() {
+            return None;
+        }
+        let name = match &**function {
+            Expression::FieldAccess { object, .. } => match &**object {
+                Expression::Identifier { name, .. } => name.as_str(),
+                _ => return None,
+            },
+            Expression::Identifier { name, .. } => name.rsplit_once("::")?.0,
+            _ => return None,
+        };
+        let unit = || Type::Tuple(Vec::new());
+        match name {
+            "Vec" => Some(Type::Vec(Box::new(unit()))),
+            "HashMap" | "BTreeMap" => Some(Type::Parameterized(name.to_string(), vec![unit(), unit()])),
+            "HashSet" | "BTreeSet" | "VecDeque" => Some(Type::Parameterized(name.to_string(), vec![unit()])),
+            _ => None,
+        }
+    }
+
     /// True when `name` is the tail expression of the current function body or the value of a `return`.
     fn local_is_returned(&self, name: &str) -> bool {
         fn is_name(e: &Expression<'_>, name: &str) -> bool {
@@ -178,6 +201,16 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let mut output = self.indent();
         output.push_str("let ");
+
+        // `let _empty = Vec::new()` that nothing reads has no element type to infer (E0282): default it.
+        let defaulted_type: Option<Option<Type>> = (type_.is_none()
+            && location.as_ref().is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column))))
+        .then(|| Self::unused_empty_collection_default_type(value))
+        .filter(Option::is_some);
+        let type_ = match &defaulted_type {
+            Some(t) => t,
+            None => type_,
+        };
 
         // Check if we need &mut for index access on borrowed fields
         // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
