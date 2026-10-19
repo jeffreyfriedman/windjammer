@@ -18,12 +18,19 @@ pub(crate) struct IdiomScratch {
     pub(crate) text_iterator_locals: HashSet<String>,
     /// Functions declared only inside inline `mod`s (emitted inside their module, not at top level).
     pub(crate) inline_mod_fn_names: HashSet<String>,
+    /// Names a type annotation in this file can refer to: items declared here and `use` imports.
+    pub(crate) file_scope_type_names: HashSet<String>,
+    /// True when the file has a glob import or nested `mod` (name scope is not tracked precisely).
+    pub(crate) file_scope_is_open: bool,
+    /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
+    pub(crate) foreign_imported_types: HashSet<String>,
 }
 
 impl<'ast> CodeGenerator<'ast> {
     /// Hand-written trait impls (`impl PartialEq for T`) suppress the matching auto-derive.
     pub(super) fn collect_user_trait_impls(&mut self, program: &Program<'_>) {
         self.idiom.inline_mod_fn_names = Self::inline_mod_only_function_names(program);
+        self.collect_file_scope(program);
         self.idiom.user_trait_impls.clear();
         for item in &program.items {
             if let Item::Impl { block, .. } = item {
@@ -33,6 +40,51 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
         }
+    }
+
+    /// Names this file declares or imports (what an emitted type annotation may spell), and the type names
+    /// imported from other crates.
+    fn collect_file_scope(&mut self, program: &Program<'_>) {
+        let idiom = &mut self.idiom;
+        idiom.file_scope_type_names.clear();
+        idiom.foreign_imported_types.clear();
+        idiom.file_scope_is_open = false;
+        for item in &program.items {
+            match item {
+                Item::Struct { decl, .. } => {
+                    idiom.file_scope_type_names.insert(decl.name.clone());
+                }
+                Item::Enum { decl, .. } => {
+                    idiom.file_scope_type_names.insert(decl.name.clone());
+                }
+                Item::Trait { decl, .. } => {
+                    idiom.file_scope_type_names.insert(decl.name.clone());
+                }
+                Item::TypeAlias { name, .. } | Item::BoundAlias { name, .. } => {
+                    idiom.file_scope_type_names.insert(name.clone());
+                }
+                Item::Use { path, alias, .. } => {
+                    if path.last().is_some_and(|l| l == "*") {
+                        idiom.file_scope_is_open = true;
+                    } else if let Some(n) = alias.as_ref().or(path.last()) {
+                        idiom.file_scope_type_names.insert(n.clone());
+                        let foreign = path.len() >= 2
+                            && !matches!(path[0].as_str(), "std" | "crate" | "super" | "self")
+                            && n.chars().next().is_some_and(char::is_uppercase);
+                        if foreign {
+                            idiom.foreign_imported_types.insert(n.clone());
+                        }
+                    }
+                }
+                Item::Mod { .. } => idiom.file_scope_is_open = true,
+                _ => {}
+            }
+        }
+    }
+
+    /// `opt.copied().unwrap_or(d)` / `.cloned().unwrap_or(d)`: the receiver already yields owned values.
+    pub(super) fn receiver_already_owned(expr_str: &str) -> bool {
+        expr_str.contains(".copied().unwrap_or") || expr_str.contains(".cloned().unwrap_or")
     }
 
     /// Functions declared inside an inline `mod` are analyzed (signature registry) but emitted inside

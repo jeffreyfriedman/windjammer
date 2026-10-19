@@ -153,7 +153,7 @@ impl CodeGenerator<'_> {
         if let Some(fields) = self.lookup_struct_field_types(leaf) {
             return fields.values().all(|t| self.type_is_serde_derivable(t, depth + 1));
         }
-        !self.foreign_imported_types.contains(leaf)
+        !self.idiom.foreign_imported_types.contains(leaf)
     }
 
     /// A hand-written `impl Trait for T` replaces the auto-derive of `Trait` (a derive plus an impl is E0119).

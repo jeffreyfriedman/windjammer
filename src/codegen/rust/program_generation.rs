@@ -418,35 +418,6 @@ impl<'ast> CodeGenerator<'ast> {
         let mut explicitly_imported_traits: std::collections::HashSet<String> =
             std::collections::HashSet::new();
 
-        // PRE-PASS: names an emitted type annotation may use (declared items and imports).
-        self.file_scope_type_names.clear();
-        self.file_scope_is_open = false;
-        for item in &program.items {
-            match item {
-                Item::Struct { decl, .. } => {
-                    self.file_scope_type_names.insert(decl.name.clone());
-                }
-                Item::Enum { decl, .. } => {
-                    self.file_scope_type_names.insert(decl.name.clone());
-                }
-                Item::Trait { decl, .. } => {
-                    self.file_scope_type_names.insert(decl.name.clone());
-                }
-                Item::TypeAlias { name, .. } | Item::BoundAlias { name, .. } => {
-                    self.file_scope_type_names.insert(name.clone());
-                }
-                Item::Use { path, alias, .. } => {
-                    if path.last().is_some_and(|l| l == "*") {
-                        self.file_scope_is_open = true;
-                    } else if let Some(n) = alias.as_ref().or(path.last()) {
-                        self.file_scope_type_names.insert(n.clone());
-                    }
-                }
-                Item::Mod { .. } => self.file_scope_is_open = true,
-                _ => {}
-            }
-        }
-
         // PRE-PASS: Collect import aliases so type_to_rust skips stdlib mappings
         // when the user has defined their own alias (e.g., `use std::collections::HashMap as Map`)
         for item in &program.items {
@@ -513,11 +484,6 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if let Some(first) = path.first() {
                     if !matches!(first.as_str(), "crate" | "super" | "self") {
                         self.imported_path_roots.insert(first.clone());
-                        if path.len() >= 2 {
-                            if let Some(last) = path.last().filter(|l| l.chars().next().is_some_and(char::is_uppercase)) {
-                                self.foreign_imported_types.insert(alias.clone().unwrap_or_else(|| last.clone()));
-                            }
-                        }
                     }
                 }
                 // Track modules imported from `ffi` paths so calls through them
