@@ -45,7 +45,7 @@ impl<'m> Go<'m> {
     fn user_method(&mut self, recv: &PExpr, owner: &str, name: &str, args: &[PExpr]) -> PResult<String> {
         let f = self.find_fn(Some(owner), name);
         let a = self.args_for(f, args)?;
-        if self.is_enum(owner) {
+        if self.is_enum(owner) || f.is_some_and(|f| !f.type_params.is_empty()) {
             let mode = f.and_then(|f| f.recv).unwrap_or(ParamMode::Ref);
             let r = if mode == ParamMode::MutRef { self.addr(recv)? } else { self.expr(recv)? };
             let sep = if a.is_empty() { "" } else { ", " };

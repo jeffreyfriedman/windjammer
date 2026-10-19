@@ -125,7 +125,7 @@ fn lower_trait_method(env: &ItemEnv, tm: &TraitMethod, trait_name: &str, for_typ
         name: tm.name.clone(),
         is_pub: true,
         is_extern: false,
-        type_params: vec![],
+        type_params: tm.type_params.clone(),
         where_clause: vec![],
         decorators: vec![],
         is_async: tm.is_async,

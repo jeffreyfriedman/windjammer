@@ -152,6 +152,9 @@ impl<'e> Lowerer<'e> {
         if let Some(t) = self.env.consts.get(name) {
             return Ok(PExpr::new(t.clone(), PK::Local(name.to_string())));
         }
+        if let Some(last) = crate::codegen::portable::alias::strip_modules(name) {
+            return self.identifier(&last, want);
+        }
         if let Some((owner, member)) = name.rsplit_once("::") {
             return self.path_value(owner, member, want);
         }
@@ -169,6 +172,7 @@ impl<'e> Lowerer<'e> {
     /// `Owner::member` used as a value: unit variant, associated const, or function reference.
     fn path_value(&mut self, owner: &str, member: &str, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        let owner = crate::codegen::portable::alias::strip_modules(&owner).unwrap_or(owner);
         let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
         if let Some(v) = self.env.variant(&owner, member) {
             if v.fields.is_empty() {
@@ -373,6 +377,7 @@ impl<'e> Lowerer<'e> {
 
     fn struct_literal(&mut self, name: &str, fields: &[(String, &Expression)], want: Option<&Ty>) -> PResult<PExpr> {
         let name = if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() };
+        let name = crate::codegen::portable::alias::strip_modules(&name).unwrap_or(name);
         let name = crate::codegen::portable::alias::nominal(&name).unwrap_or(name);
         if let Some((en, var)) = name.split_once("::") {
             return self.variant_struct_literal(en, var, fields, want);
