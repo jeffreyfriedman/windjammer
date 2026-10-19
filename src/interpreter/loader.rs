@@ -48,18 +48,6 @@ impl Interpreter {
         self.load_sources(files, deps.windjammer, deps.rust)
     }
 
-    /// Load and run an entry file (with its transitive module files).
-    pub fn load_entry_file(&mut self, path: &Path) -> Result<(), RuntimeError> {
-        let src = std::fs::read_to_string(path)
-            .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", path.display(), e)))?;
-        let program = parse_source(&src, &path.to_string_lossy())
-            .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("parse error: {}", e)))?;
-        let prog: &'static Program<'static> = Box::leak(Box::new(program));
-        self.modules[0].file = path.to_path_buf();
-        self.modules[0].name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        self.load_program(0, prog)
-    }
-
     fn module_search_dirs(&self, from: usize) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
         let f = &self.modules[from].file;
