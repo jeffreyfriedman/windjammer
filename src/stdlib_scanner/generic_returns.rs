@@ -2,8 +2,8 @@
 //! which is not a valid Rust type on its own, so such returns become `Type::Infer`.
 
 use super::parse_function_signature;
-use crate::analyzer::FunctionSignature;
-use crate::parser::Type;
+use super::FunctionSignature;
+use super::Type;
 
 /// `pub struct Name<..>` declared in a runtime file (e.g. `arena::Handle<T>`).
 pub(super) fn generic_struct_names(content: &str) -> std::collections::HashSet<String> {
