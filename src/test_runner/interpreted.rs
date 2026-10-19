@@ -35,15 +35,6 @@ pub fn specs_for(discovery: &Discovery, filter: Option<&str>) -> Vec<TestSpec> {
         .collect()
 }
 
-/// Every test `wj test` would run under `root`, as `file :: display name` lines (sorted by discovery).
-pub fn list_tests(root: &Path) -> Result<Vec<String>> {
-    let d = test_discovery::discover(root)?;
-    Ok(d.files
-        .iter()
-        .flat_map(|f| f.tests.iter().map(|t| format!("{} :: {}", f.path.display(), t.display_name())))
-        .collect())
-}
-
 /// Entry point of `wj test --interpret`. Exits the process with the test status on failure.
 pub fn run_interpreted(
     path: Option<&Path>,
@@ -80,6 +71,25 @@ pub fn run_interpreted(
         );
     }
     let results = run_specs(specs);
+    if json {
+        let failed = results.iter().filter(|r| !r.passed).count();
+        let tests: Vec<_> = results
+            .iter()
+            .map(|r| serde_json::json!({ "file": r.file.display().to_string(), "name": r.name, "passed": r.passed, "message": r.message }))
+            .collect();
+        let doc = serde_json::json!({
+            "mode": "interpreted",
+            "success": failed == 0,
+            "passed": results.len() - failed,
+            "failed": failed,
+            "tests": tests,
+        });
+        println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
+        if failed > 0 {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     let code = report_tests(&results);
     if code != 0 {
         std::process::exit(code);

@@ -61,6 +61,8 @@ impl Parser {
                             _ => None,
                         };
                         if let Some(field) = field_opt {
+                            // Diagnostics point at the method name, not at the token after the call.
+                            let name_loc = self.current_location();
                             self.advance();
 
                             // Check for turbofish ::<Type>
@@ -111,7 +113,7 @@ impl Parser {
                                             method: field,
                                             type_args,
                                             arguments,
-                                            location: self.current_location(),
+                                            location: name_loc,
                                         })
                                     }
                                 }

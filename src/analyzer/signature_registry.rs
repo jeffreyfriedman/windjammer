@@ -1953,25 +1953,6 @@ impl SignatureRegistry {
             .extend(other.taint_sanitizer_callees.iter().cloned());
     }
 
-    /// Collect only signatures whose ownership differs from `base`.
-    /// Used by multipass Step 3 to avoid deep-cloning the full registry each round.
-    pub fn delta_from_base(
-        base: &SignatureRegistry,
-        updated: &SignatureRegistry,
-    ) -> SignatureDelta {
-        let mut changed = HashMap::new();
-        for (name, sig) in &updated.signatures {
-            let is_new_or_changed = match base.signatures.get(name) {
-                None => true,
-                Some(old) => Self::ownership_changed(old, sig),
-            };
-            if is_new_or_changed {
-                changed.insert(name.clone(), sig.clone());
-            }
-        }
-        SignatureDelta { changed }
-    }
-
     /// WJ `std/strings.wj` / stdlib_meta stubs last-write owned `string` over scanned
     /// runtime `AsRef<str>` / `&str` (e.g. `strings::len`). Restore the fallback
     /// borrow contract for `strings::*` keys so wrapper formals can demote.
@@ -2050,13 +2031,6 @@ impl SignatureRegistry {
         }
     }
 
-    /// Merge a delta into this registry (changed keys only).
-    pub fn merge_delta(&mut self, delta: &SignatureDelta) {
-        for (name, sig) in &delta.changed {
-            self.index_method_key(&name);
-            self.signatures.insert(name.clone(), sig.clone());
-        }
-    }
 }
 
 /// Ownership-only changes from one analysis pass (avoids full registry clone).

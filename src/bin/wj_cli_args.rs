@@ -44,16 +44,12 @@ pub enum Commands {
         target: String,
 
         /// Defer drop optimization mode (auto, always, never)
-        #[arg(long, value_name = "MODE", default_value = "auto")]
+        #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,
 
         /// Defer drop threshold in bytes (default: 102400 = 100KB)
         #[arg(long, value_name = "BYTES")]
         defer_drop_threshold: Option<usize>,
-
-        /// Minify JavaScript output (JS target only)
-        #[arg(long)]
-        minify: bool,
 
         /// Enable tree shaking (dead code elimination)
         #[arg(long)]
@@ -62,14 +58,6 @@ pub enum Commands {
         /// Generate source maps
         #[arg(long)]
         source_maps: bool,
-
-        /// Include polyfills for older browsers (JS target only)
-        #[arg(long)]
-        polyfills: bool,
-
-        /// Apply V8 optimizations (JS target only)
-        #[arg(long)]
-        v8_optimize: bool,
 
         /// Run cargo build after transpilation and show errors
         #[arg(long)]
@@ -198,7 +186,7 @@ pub enum Commands {
         mock_http: Option<PathBuf>,
 
         /// Defer drop optimization mode (auto, always, never)
-        #[arg(long, value_name = "MODE", default_value = "auto")]
+        #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,
 
         /// Defer drop threshold in bytes (default: 102400 = 100KB)
@@ -397,14 +385,19 @@ pub enum Commands {
         verbose: bool,
     },
 
-    /// Interactive error navigator (TUI)
+    /// Browse the diagnostics of a file or project (summary by code, filterable)
     Errors {
-        /// File to check
-        file: PathBuf,
+        /// .wj file or project directory (default: current directory)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
 
-        /// Output directory
-        #[arg(short, long, default_value = "./build")]
-        output: PathBuf,
+        /// Show only this diagnostic code (e.g. WJ0010, W0002)
+        #[arg(long, value_name = "CODE")]
+        code: Option<String>,
+
+        /// Show only this severity (error, warning)
+        #[arg(long, value_name = "SEVERITY")]
+        severity: Option<String>,
     },
 
     /// Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples,

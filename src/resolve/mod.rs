@@ -10,14 +10,14 @@ mod uses;
 mod walk;
 
 pub use collect::{Collected, ModuleScope};
-pub use uses::{Binding, UseDecl};
+pub use uses::{same_crate_callee_key, Binding, UseDecl};
 pub use def::{Def, DefId, DefKind, DefTable};
 pub use lookup::{Found, Ns};
 pub use res::{
     CallKind, CallResolution, Diagnostic, DiagnosticKind, ExprKey, Reason, Res, ResolveReport,
 };
 
-use crate::parser::ast::core::{Expression, Program};
+use crate::parser::ast::core::Program;
 use std::path::{Path, PathBuf};
 
 /// One parsed source file placed in the module tree.
@@ -65,12 +65,6 @@ pub struct ResolvedProgram<'a> {
 impl<'a> ResolvedProgram<'a> {
     pub fn defs(&self) -> &DefTable {
         &self.collected.defs
-    }
-
-    /// Resolution recorded for a specific call expression node.
-    pub fn call_res(&self, expr: &Expression<'_>) -> Option<&Res> {
-        let key = ExprKey(expr as *const Expression<'_> as usize);
-        self.calls.iter().find(|c| c.key == key).map(|c| &c.res)
     }
 
     /// Calls whose enclosing function has the given full path.
