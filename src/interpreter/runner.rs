@@ -64,6 +64,8 @@ pub struct RunOptions {
     pub allow: Vec<String>,
     /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given.
     pub caps_mode: String,
+    /// `--no-jit` / `WJ_JIT=0`: no machine code for hot integer functions (ADR-0020).
+    pub no_jit: bool,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -119,6 +121,7 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
         it.set_engine_resolved(opts.engine_resolved);
+        it.set_jit(!opts.no_jit);
         if let Some(p) = &opts.mock_http {
             match super::builtins::std_http::HttpMode::mock_from_file(p) {
                 Ok(m) => it.set_http_mode(m),
