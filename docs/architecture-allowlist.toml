@@ -113,7 +113,7 @@
 "src/codegen/rust/call_signature_resolution.rs" = 3339
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4866
 "src/codegen/rust/function_generation_prepare.rs" = 13531
-"src/codegen/rust/generator.rs" = 5231
+"src/codegen/rust/generator.rs" = 5227
 "src/codegen/rust/int_promotion_type_inference.rs" = 2299
 "src/codegen/rust/ir_call_site.rs" = 10448
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2152
@@ -181,10 +181,10 @@
 "src/interpreter/builtins/seq.rs::register_vec" = 360
 "src/ir/constraint_gen.rs::walk_expression" = 362
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
-"src/lexer/mod.rs::next_token" = 304
-"src/parser/call_expression_parser.rs::parse_postfix_chain" = 484
+"src/lexer/mod.rs::next_token" = 301
+"src/parser/call_expression_parser.rs::parse_postfix_chain" = 483
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
-"src/parser/primary_expression_parser.rs::parse_primary_expression" = 555
+"src/parser/primary_expression_parser.rs::parse_primary_expression" = 542
 "src/parser/type_parser.rs::parse_type_core" = 428
 "src/type_inference/float_inference/expression_constraints.rs::collect_expression_constraints" = 407
 "src/type_inference/int_inference/expression_constraints.rs::collect_expression_constraints" = 433
