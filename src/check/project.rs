@@ -25,6 +25,7 @@ pub fn run(root: &Path, all: &[Parsed], out: &mut Vec<Diagnostic>) {
     let parsed = parsed.as_slice();
     let by_file: HashMap<String, &Parsed> = parsed.iter().map(|p| (p.file.clone(), *p)).collect();
     resolve_phase(root, parsed, &by_file, out);
+    super::effects::run(root, parsed, &by_file, out);
     let programs: Vec<_> = parsed.iter().map(|p| &p.program).collect();
     let idx = Index::build(&programs);
     for p in parsed {

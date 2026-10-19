@@ -185,6 +185,16 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         mock_http: Option<PathBuf>,
 
+        /// Interpreted runs: ignore the project's grants and start from an empty one (only time, random
+        /// and console); add authority with --allow (ADR-0021)
+        #[arg(long)]
+        sandbox: bool,
+
+        /// Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`,
+        /// `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable)
+        #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
+        allow: Vec<String>,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,

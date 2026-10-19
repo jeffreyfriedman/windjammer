@@ -16,6 +16,7 @@ pub fn exit_code_for(e: &RuntimeError) -> i32 {
         ErrorKind::Exit(n) => *n,
         ErrorKind::Unsupported => 2,
         ErrorKind::Semantic => 1,
+        ErrorKind::CapabilityDenied => 126,
     }
 }
 
@@ -57,6 +58,10 @@ pub struct RunOptions {
     pub mock_http: Option<PathBuf>,
     /// `--engine=resolved`: compiled closure engine for the functions it supports.
     pub engine_resolved: bool,
+    /// `--sandbox`: only `time`, `random` and `console` unless `--allow`ed (ADR-0021).
+    pub sandbox: bool,
+    /// `--allow EFFECT[=RESOURCE]` (repeatable).
+    pub allow: Vec<String>,
 }
 
 /// Execute a program; program stdout goes to stdout, diagnostics to stderr. Returns the exit code.
@@ -121,6 +126,17 @@ pub fn run_entry(entry: &Path, args: Vec<String>, opts: EntryOptions) -> RunOutc
                 }
             }
         } else if opts.allow_network {
+            it.set_http_mode(super::builtins::std_http::HttpMode::Real);
+        }
+        match super::caps::gate_for_run(&entry, opts.sandbox, &opts.allow, opts.allow_network) {
+            Ok(gate) => it.set_caps(gate),
+            Err(m) => {
+                eprintln!("error: {m}");
+                return RunOutcome::Exited(1);
+            }
+        }
+        // a net.connect grant (wj.toml or --allow) turns the http port on; the grant limits which hosts
+        if opts.mock_http.is_none() && !opts.allow_network && it.caps_grant_network() {
             it.set_http_mode(super::builtins::std_http::HttpMode::Real);
         }
         it.set_args(args);

@@ -23,6 +23,7 @@ pub mod coercion;
 pub mod constraint_gen;
 pub mod constraints;
 pub mod context;
+pub mod effect_facts;
 pub mod effects;
 pub mod emission_contract;
 pub mod execution;

@@ -61,6 +61,8 @@ pub struct Collected<'a> {
     pub impls_of: HashMap<DefId, Vec<usize>>,
     /// Method name -> all `Method`/`TraitMethod` defs.
     pub methods_by_name: HashMap<String, Vec<DefId>>,
+    /// Function def -> its declaration (attributes, parameters, `extern`); data for fact passes.
+    pub decls: HashMap<DefId, &'a FunctionDecl<'a>>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -76,6 +78,7 @@ pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
         members: HashMap::new(),
         impls_of: HashMap::new(),
         methods_by_name: HashMap::new(),
+        decls: HashMap::new(),
         diagnostics: Vec::new(),
     };
     for f in files {
@@ -342,6 +345,7 @@ impl<'a> Collected<'a> {
         mut generics: Vec<String>,
     ) {
         generics.extend(decl.type_params.iter().map(|t| t.name.clone()));
+        self.decls.insert(owner, decl);
         self.bodies.push(Body {
             owner: Some(owner),
             module,
