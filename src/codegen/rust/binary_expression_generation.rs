@@ -516,6 +516,11 @@ impl<'ast> CodeGenerator<'ast> {
                     self.generate_expression(left)
                 }
             }
+            // An `if` / `match` / block operand starts with `{`-terminated syntax: unparenthesised
+            // on the left of an operator it ends the statement in Rust (`} + x` is a parse error).
+            Expression::Block { .. } => {
+                format!("({})", self.generate_value_operand(left))
+            }
             _ => self.generate_expression(left),
         };
         let mut right_str = match right {
@@ -539,6 +544,7 @@ impl<'ast> CodeGenerator<'ast> {
                     self.generate_expression(right)
                 }
             }
+            Expression::Block { .. } => self.generate_value_operand(right),
             _ => self.generate_expression(right),
         };
         self.assignment_int_target_type = prev_bin_int;

@@ -81,7 +81,12 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             }
             self.set_assignment_int_target_from_compound_target(target);
+            // The right-hand side is a value position: an `if` / `match` operand must keep its value
+            // (statement context would discard it as `{ if c { x; } else { y; } }`).
+            let prev_expr_ctx = self.in_expression_context;
+            self.in_expression_context = true;
             let mut value_str = self.generate_expression(value);
+            self.in_expression_context = prev_expr_ctx;
 
             // Int counters compared with `.len()` must not accumulate via `1 as usize` (P3.304).
             if self
@@ -317,7 +322,11 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     self.set_assignment_int_target_from_compound_target(target);
+                    // Value position: an `if` / `match` operand keeps its value (see the compound branch above).
+                    let prev_expr_ctx = self.in_expression_context;
+                    self.in_expression_context = true;
                     let mut right_str = self.generate_expression(right);
+                    self.in_expression_context = prev_expr_ctx;
                     if matches!(
                         right,
                         Expression::Literal {
