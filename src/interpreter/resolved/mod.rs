@@ -51,11 +51,11 @@ impl Interpreter {
     /// The compiled form of `f`, compiling it on first use; `None` = run it in the walker.
     pub(crate) fn compiled_for(&mut self, f: &Rc<FuncDef>) -> Option<Rc<CompiledFn>> {
         let key = Rc::as_ptr(f) as usize;
-        if let Some(c) = self.compiled.get(&key) {
+        if let Some((_, c)) = self.compiled.get(&key) {
             return c.clone();
         }
         let c = if self.drop_types.is_empty() { compile::compile_fn(self, f).map(Rc::new) } else { None };
-        self.compiled.insert(key, c.clone());
+        self.compiled.insert(key, (f.clone(), c.clone()));
         c
     }
 

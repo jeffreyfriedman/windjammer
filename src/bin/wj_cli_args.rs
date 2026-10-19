@@ -169,8 +169,9 @@ pub enum Commands {
         #[arg(long, value_name = "N", default_value = "0")]
         hash_seed: u64,
 
-        /// Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020)
-        #[arg(long, value_name = "ENGINE", default_value = "walker")]
+        /// Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset
+        /// run in the tree walker) or `walker` (the tree walker only, the reference semantics)
+        #[arg(long, value_name = "ENGINE", default_value = "resolved")]
         engine: String,
 
         /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
