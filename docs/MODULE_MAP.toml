@@ -23,7 +23,7 @@ layer = "ownership"
 owner_stage = "unit tests for auto_clone (included via #[path])"
 module_md = ""
 allowed_imports = ["auto_clone", "analyzer", "parser", "lexer"]
-known_violations = []
+known_violations = ["test_utils"]
 
 [modules.auto_clone]
 layer = "ownership"

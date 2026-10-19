@@ -77,7 +77,9 @@ fn load(root: &Path) -> Vec<Example> {
                 source,
             }
         })
-        .filter(|e| !matches!(e.mode.as_str(), "parse-ok" | "parse-error"))
+        // Only programs that print (run) or panic can be judged by stdout and exit status; the front-end
+        // modes (parse-ok, parse-error, effects, ...) are checked in-process by spec_conformance_test.
+        .filter(|e| matches!(e.mode.as_str(), "run" | "panic"))
         .collect()
 }
 

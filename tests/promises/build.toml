@@ -62,14 +62,13 @@ name = "build --json on a syntax error reports success=false"
 polarity = "negative"
 files = { "m.wj" = "fn main( {\n" }
 args = ["build", "{w}/m.wj", "--no-cargo", "--json", "-o", "{w}/out"]
-exit = 0
+exit = 1
 json = true
-stdout_has = ["\"success\": false", "Expected parameter name"]
+stdout_has = ["\"success\": false", "expected parameter name"]
 
 [[case]]
 name = "build --json exits non-zero when the build fails"
 polarity = "negative"
-xfail = "BUG: `wj build --json` exits 0 when success=false"
 files = { "m.wj" = "fn main( {\n" }
 args = ["build", "{w}/m.wj", "--no-cargo", "--json", "-o", "{w}/out"]
 json = true
