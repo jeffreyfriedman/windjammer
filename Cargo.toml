@@ -98,7 +98,7 @@ integration_tests = []
 skip_fixtures = []
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -175,6 +175,11 @@ path = "tests/backend_conformance_test.rs"
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
 
+# Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
+[[test]]
+name = "meta_sidecar_consistency"
+path = "tests/meta_sidecar_consistency_test.rs"
+
 # ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
 [[test]]
 name = "semantic_facts_portable"
@@ -190,6 +195,18 @@ path = "tests/inference_differential_test.rs"
 [[test]]
 name = "spec_conformance"
 path = "tests/spec_conformance_test.rs"
+
+# Effects and capabilities (ADR-0021): sandbox escape suite (E1 gate: >= 60 cases, 0 escapes)
+#   cargo test --release --test effects_escape
+[[test]]
+name = "effects_escape"
+path = "tests/effects_escape_test.rs"
+
+# Effects soundness over the spec corpus: every effect performed at run time is in the inferred static set
+#   cargo test --release --test effects_soundness
+[[test]]
+name = "effects_soundness"
+path = "tests/effects_soundness_test.rs"
 
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]

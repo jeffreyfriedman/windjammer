@@ -1,7 +1,16 @@
 // spec: SPEC-LEX-009
 // expect: cost: $5
 // expect: a$b
+// expect: $$
+// expect: ${x}
+// expect: ${x}
+// expect: 7
 fn main() {
+    let x = 7
     println("cost: $$5")
     println("a$b")
+    println("$$$$")
+    println("$${x}")
+    println("$\{x}")
+    println("${x}")
 }

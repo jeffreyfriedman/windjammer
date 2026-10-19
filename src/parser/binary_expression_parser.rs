@@ -17,6 +17,32 @@ impl Parser {
         r
     }
 
+    /// `a..b` / `a..=b` / `a..`: the lowest-precedence operator (below `||`), non-associative, as in Rust.
+    /// `v[a..b]` slices are parsed by the index handler, which stops at `..` itself.
+    pub(in crate::parser) fn parse_range_expression(
+        &mut self,
+    ) -> Result<&'static Expression<'static>, String> {
+        let start = self.parse_binary_expression(0)?;
+        if !matches!(self.current_token(), Token::DotDot | Token::DotDotEq) {
+            return Ok(start);
+        }
+        if self.peek(1) == Some(&Token::RBracket) {
+            return Ok(start);
+        }
+        let inclusive = self.current_token() == &Token::DotDotEq;
+        if let Some(open) = self.try_parse_range_from(start) {
+            return Ok(open);
+        }
+        self.advance();
+        let end = self.parse_binary_expression(0)?;
+        Ok(self.alloc_expr(Expression::Range {
+            start,
+            end,
+            inclusive,
+            location: self.current_location(),
+        }))
+    }
+
     fn parse_binary_expression_inner(
         &mut self,
         min_precedence: u8,

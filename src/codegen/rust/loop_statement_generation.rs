@@ -41,7 +41,6 @@ impl<'ast> CodeGenerator<'ast> {
         body: &[&'ast Statement<'ast>],
     ) -> String {
         self.mark_usize_variables_in_condition(condition);
-        self.promote_ambiguous_int_loop_counter_in_while_condition(condition);
 
         let mut output = self.indent();
         output.push_str("while ");
@@ -76,7 +75,7 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
-        let mut condition_str = self.generate_expression(condition);
+        let mut condition_str = self.generate_value_operand(condition);
         self.assignment_int_target_type = prev_while_int;
         if let Expression::Binary {
             left, op, right, ..

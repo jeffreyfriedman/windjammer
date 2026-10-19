@@ -1394,26 +1394,11 @@ impl<'ast> CodeGenerator<'ast> {
         param_name: &str,
         analyzed: &AnalyzedFunction<'_>,
     ) -> Option<OwnershipMode> {
-        let analyzer = analyzed.inferred_ownership.get(param_name).copied();
-        let ir = self.ir_param_ownership_definitive(param_name);
-        // Mutated+returned / identity formals: Owned beats stale IR MutRef (solver lattice).
-        if analyzed.returned_parameters.contains(param_name) {
-            return Some(OwnershipMode::Owned);
-        }
-        if matches!(analyzer, Some(OwnershipMode::Owned))
-            && matches!(ir, Some(OwnershipMode::MutBorrowed) | None)
-        {
-            return analyzer;
-        }
-        match (analyzer, ir) {
-            (_, Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed)) => ir,
-            (
-                Some(OwnershipMode::Borrowed | OwnershipMode::MutBorrowed),
-                Some(OwnershipMode::Owned) | None,
-            ) => analyzer,
-            (_, Some(OwnershipMode::Owned)) => ir,
-            _ => analyzer.or_else(|| self.get_param_ownership(param_name, analyzed)),
-        }
+        // ADR-0001: the IR solver is the owner. The analyzer is consulted only when no IR exists
+        // (isolated unit tests / paths without an IR module), never to override the solver.
+        self.ir_param_ownership_definitive(param_name)
+            .or_else(|| analyzed.inferred_ownership.get(param_name).copied())
+            .or_else(|| self.get_param_ownership(param_name, analyzed))
     }
 
     /// Record a hard error for a module-qualified call with no registry signature.

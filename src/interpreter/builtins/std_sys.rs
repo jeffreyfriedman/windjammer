@@ -468,8 +468,10 @@ fn glob_match(p: &[u8], t: &[u8]) -> bool {
 }
 
 fn run_command(program: &str, args: &[String]) -> R {
-    let out = if args.is_empty() && program.contains(' ') {
-        std::process::Command::new("sh").arg("-c").arg(program).output()
+    // the same parse the capability gate used to decide which program this is (scope_match::parse_command)
+    let out = if args.is_empty() {
+        let (prog, argv) = crate::ir::effect_facts::scope_match::parse_command(program);
+        std::process::Command::new(prog).args(argv).output()
     } else {
         std::process::Command::new(program).args(args).output()
     };

@@ -1,0 +1,133 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "A",
+ "arm_name": "interpreted-first",
+ "diag_samples": [
+  "error[WJ0015]: no method named `is_ascii_alphanumeric` exists on any type in scope\n  --> <ws>/main.wj:16:22\n   |\n16 |                 if c.is_ascii_alphanumeric() {\n   |                      ^^^^^^^^^^^^^^^^^^^^^ unknown method\n  = help: check the method name; see the standard library reference\n  = explain: wj explain WJ0015\n\nError: not running <ws>/main.wj: `wj check` reports 1 error(s); the interpreter runs only programs the compiler accepts\n",
+  "error[WJ0015]: no method named `is_ascii_alphanumeric` exists on any type in scope\n  --> <ws>/main.wj:16:22\n   |\n16 |                 if c.is_ascii_alphanumeric() {\n   |                      ^^^^^^^^^^^^^^^^^^^^^ unknown method\n  = help: check the method name; see the standard library reference\n  = explain: wj explain WJ0015\n\nError: not running <ws>/main.wj: `wj check` reports 1 error(s); the interpreter runs only programs the compiler accepts\n",
+  "{\n  \"schema_version\": 2,\n  \"windjammer_version\": \"0.50.0\",\n  \"command\": \"check\",\n  \"success\": false,\n  \"summary\": {\n    \"errors\": 1,\n    \"warnings\": 0,\n    \"files_checked\": 1,\n    \"files_cached\": 0,\n    \"elapsed_ms\": 18\n  },\n  \"diagnostics\": [\n    {\n      \"code\": \"WJ0015\",\n      \"severity\": \"error\",\n      \"category\": \"name_resolution\",\n      \"origin\": \"front_end\",\n      \"message\": \"no method named `is_ascii_alphanumeric` exists on any type in scope\",\n      \"primary_span\": {\n        \"file\": \"main.wj\",\n        \"byte_start\": 453,\n        \"byte_end\": 474,\n        \"line_start\": 16,\n        \"col_sta"
+ ],
+ "diagnostic_categories": {
+  "api-misuse": 3,
+  "other": 2
+ },
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_diag": [
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:12:17\n   |\n 6 |     let mut k = 0_i32;\n   |                 ----- expected due to this value\n...\n12 |             k = line.trim().parse::<i64>().unwrap_or(0_i64);\n   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `i32`, found `i64`",
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:39:23\n   |\n39 |           if a.1 != b.1 {\n   |  _______________________^\n40 | |             b.1.cmp(&a.1);\n   | |                          - help: remove this semicolon to return this value\n41 | |         } else {\n   | |_________^ expected `Ordering`, fou",
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:41:16\n   |\n41 |           } else {\n   |  ________________^\n42 | |             a.0.cmp(&b.0);\n   | |                          - help: remove this semicolon to return this value\n43 | |         }\n   | |_________^ expected `Ordering`, found `()`\n\n"
+ ],
+ "final_build_diag_source": "regrade of final_source (backfilled)",
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 36
+ },
+ "final_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n        } else {\n            let mut cur = \"\"\n            for c in line.chars() {\n                if c.is_alphanumeric() {\n                    cur = cur + c.to_ascii_lowercase().to_string()\n                } else {\n                    if cur.len() > 0 {\n                        counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n                    }\n                    cur = \"\"\n                }\n            }\n            if cur.len() > 0 {\n                counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n            }\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for (w, n) in counts {\n        items.push((w, n))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "first_source": "use std::fs\nuse std::collections::HashMap\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut k = 0\n    let mut first = true\n    let mut counts: HashMap<string, int> = HashMap::new()\n    for line in text.lines() {\n        if first {\n            first = false\n            k = line.trim().parse::<int>().unwrap_or(0)\n        } else {\n            let mut cur = \"\"\n            for c in line.chars() {\n                if c.is_ascii_alphanumeric() {\n                    cur = cur + c.to_ascii_lowercase().to_string()\n                } else {\n                    if cur.len() > 0 {\n                        counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n                    }\n                    cur = \"\"\n                }\n            }\n            if cur.len() > 0 {\n                counts.entry(cur).and_modify(|n| *n += 1).or_insert(1)\n            }\n        }\n    }\n    let mut items: Vec<(string, int)> = []\n    for (w, n) in counts {\n        items.push((w, n))\n    }\n    items.sort_by(|a, b| {\n        if a.1 != b.1 {\n            b.1.cmp(a.1)\n        } else {\n            a.0.cmp(b.0)\n        }\n    })\n    let mut i = 0\n    for it in items {\n        if i >= k {\n            break\n        }\n        println(\"${it.0} ${it.1}\")\n        i += 1\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "invocations": [
+  {
+   "categories": [
+    "api-misuse",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.236,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "api-misuse",
+    "other"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.033,
+   "verb": "run"
+  },
+  {
+   "categories": [
+    "api-misuse"
+   ],
+   "exit": 1,
+   "mode": "interpret",
+   "secs": 0.029,
+   "verb": "check"
+  },
+  {
+   "exit": 0,
+   "mode": "n/a",
+   "secs": 0.026,
+   "verb": "docs"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.094,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.03,
+   "verb": "run"
+  }
+ ],
+ "mode_violations": 0,
+ "original_final_grade": {
+  "categories": [
+   "wrong-output"
+  ],
+  "passed": 0,
+  "status": "fail",
+  "total": 36
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 36,
+  "status": "pass",
+  "total": 36
+ },
+ "other_seconds": 16.1,
+ "pass_final": false,
+ "recorded_at": "2026-10-19T10:31:20",
+ "regraded": true,
+ "schema": 2,
+ "task": "t018_word_freq",
+ "thinking_seconds": 12.898,
+ "tool_wait_seconds": 0.45,
+ "trial": 0,
+ "usage": {
+  "api_seconds": 12.898,
+  "cost_usd": 0.0383786,
+  "denied_commands": [
+   "sed -i '' 's/is_ascii_alphanumeric/is_alphanumeric/' main.wj 2>&1 | head -2; wj docs is_alphanumeric"
+  ],
+  "is_error": false,
+  "permission_denials": 1,
+  "result_excerpt": "`main.wj` is written and gives the expected output on both examples under `wj run --interpret`. I did not run `wj build`, as instructed, so the compiled path is untested.\n\nIt reads K from the first line and splits the rest into words of letters and digits. It lower-cases each word and counts them in a `HashMap`. It then sorts by count descending, then word ascending, and prints the first K, or all",
+  "subtype": "success",
+  "tokens_in": 71992,
+  "tokens_out": 1425,
+  "turns": 7
+ },
+ "verify_calls": 5,
+ "verify_calls_to_green": 4,
+ "wall_seconds": 29.45
+}

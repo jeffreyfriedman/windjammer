@@ -1,5 +1,4 @@
 // spec: SPEC-EFF-008
-// xfail: Q-032
 // manifest: [capabilities]
 // expect: true
 // expect: true

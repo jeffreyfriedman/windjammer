@@ -10,6 +10,7 @@ pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 pub mod cargo_toml;
 pub mod check;
+pub mod reduce; // `wj reduce`: automatic test-case reducer
 pub mod diagnostics;
 pub mod cli;
 pub mod cli_execution; // CLI execution (run, interpret, REPL)

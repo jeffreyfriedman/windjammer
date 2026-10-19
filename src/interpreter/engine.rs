@@ -152,6 +152,8 @@ pub struct Interpreter {
     pub(crate) log_level: Option<i32>,
     /// How `std::http` client calls are answered (default: refuse).
     pub(crate) http: super::builtins::std_http::HttpMode,
+    /// Capability gate for sink calls (`caps.rs`); `None` = unrestricted (library and test use).
+    pub(crate) caps: Option<super::caps::CapGate>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -231,6 +233,7 @@ impl Interpreter {
             rng: None,
             log_level: None,
             http: Default::default(),
+            caps: None,
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,

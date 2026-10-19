@@ -10,6 +10,7 @@ Every definition gets a `DefId`; every call expression resolves to a `Res`: `Def
 ## Inputs / outputs
 - In: `&[ParsedFile]` (module path + parser `Program`). Pure; no IO, no globals.
 - Out: `ResolvedProgram { collected (DefTable + scopes), calls: Vec<CallResolution>, report }`.
+- Data for fact passes (ADR-0021): `fn_refs` (functions named as values), `CallResolution::{str_args, ident_args}`, `Collected::decls` (function def -> declaration).
 - `ResolveReport`: counts (resolved / method_candidates / unresolved / ambiguous, by reason) + diagnostics.
 
 ## Pipeline (files)

@@ -1,1 +1,0 @@
-{"action": "create", "reason": "Episode shows subagents briefed to port findings from a private game repo into the public compiler repo, with an explicit rule that no private names may appear in code, tests, docs, or commits. No index skill covers this cross-repo privacy handoff; wj-repro covers only single-failure test writing.", "evidence": "references/evidence-ddeeab3d.md"}

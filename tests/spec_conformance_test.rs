@@ -87,15 +87,13 @@ fn check(s: &Spec) -> Result<(), String> {
     match s.mode.as_str() {
         "check-ok" | "check-error" => return check_front_end(s),
         "simulate" => return simulate(s),
-        // ADR-0021 stage E1 wires the effect report; stage E3 the effect log.
-        "effects" => return Err("effect report not implemented (ADR-0021 stage E1)".into()),
+        "effects" => return effect_report(s),
+        // ADR-0021 stage E3 adds the effect log.
         "replay" => return Err("record/replay not implemented (ADR-0021 stage E3)".into()),
         _ => {}
     }
-    if !s.manifest.is_empty() {
-        return Err("manifest grants are not applied by the interpreter yet (ADR-0021 stage E1)".into());
-    }
     let src = s.src.clone();
+    let manifest = s.manifest.clone();
     let name = s.path.display().to_string();
     let (parsed, out, exit, err) = with_big_stack(move || {
         catch_unwind(AssertUnwindSafe(|| {
@@ -109,6 +107,12 @@ fn check(s: &Spec) -> Result<(), String> {
                 Err(e) => return (Err(e.to_string()), String::new(), 1, String::new()),
             };
             let mut it = Interpreter::new_capturing();
+            if !manifest.is_empty() {
+                match gate_from_manifest(&manifest) {
+                    Ok(g) => it.set_caps(Some(g)),
+                    Err(e) => return (Err(e), String::new(), 1, String::new()),
+                }
+            }
             match it.run_checked(&program) {
                 Ok(_) => (Ok(()), it.get_output(), 0, String::new()),
                 Err(e) => (Ok(()), it.get_output(), exit_code_for(&e), e.render()),
@@ -148,6 +152,55 @@ fn check(s: &Spec) -> Result<(), String> {
     }
 }
 
+/// The `manifest:` header lines as a `wj.toml`.
+fn manifest_text(lines: &[String]) -> String {
+    let mut toml = String::from("[package]\nname = \"spec\"\nversion = \"0.1.0\"\n");
+    for l in lines {
+        toml.push_str(l);
+        toml.push('\n');
+    }
+    toml
+}
+
+/// An enforcing capability gate from the manifest's `[capabilities]` table (relative paths anchor at the cwd).
+fn gate_from_manifest(lines: &[String]) -> Result<windjammer::interpreter::caps::CapGate, String> {
+    use windjammer::interpreter::caps::{CapGate, CapMode};
+    let root = std::env::current_dir().unwrap();
+    match windjammer::ir::effect_facts::grant_from_manifest_text(&manifest_text(lines), &root)? {
+        Some(g) => Ok(CapGate::new(g, CapMode::Enforce)),
+        None => Err("manifest has no [capabilities] table".into()),
+    }
+}
+
+/// `effects` mode: every `expect:` line (`fn: effects`) must appear in the compact effect report.
+fn effect_report(s: &Spec) -> Result<(), String> {
+    let src = s.src.clone();
+    let name = s.path.display().to_string();
+    let lines = with_big_stack(move || {
+        catch_unwind(AssertUnwindSafe(|| {
+            let mut lexer = windjammer::lexer::Lexer::new(&src);
+            let tokens = lexer.tokenize_with_locations();
+            let parser: &'static mut windjammer::parser::Parser = Box::leak(Box::new(
+                windjammer::parser::Parser::new_with_source(tokens, name.clone(), src.clone()),
+            ));
+            let program: &'static _ = Box::leak(Box::new(parser.parse().map_err(|e| e.to_string())?));
+            let files = [windjammer::resolve::ParsedFile::new(vec![], name.into(), program)];
+            let r = windjammer::resolve::resolve_program(&files);
+            let facts = windjammer::ir::effect_facts::analyze(&r);
+            Ok::<Vec<String>, String>(
+                windjammer::ir::effect_facts::report::compact_lines(&r, &facts).into_iter().map(|(f, e)| format!("{f}: {e}")).collect(),
+            )
+        }))
+        .unwrap_or_else(|_| Err("effect analysis panicked".to_string()))
+    })?;
+    let missing: Vec<&String> = s.expect.iter().filter(|w| !lines.contains(w)).collect();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("effect report lacks {missing:?}; report is {lines:?}"))
+    }
+}
+
 /// `wj check` on the example as `main.wj` in a project whose `wj.toml` is the `manifest:` lines.
 fn check_front_end(s: &Spec) -> Result<(), String> {
     let dir = std::env::temp_dir().join(format!(
@@ -156,11 +209,7 @@ fn check_front_end(s: &Spec) -> Result<(), String> {
         s.path.file_stem().unwrap().to_string_lossy()
     ));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut toml = String::from("[package]\nname = \"spec\"\nversion = \"0.1.0\"\n");
-    for l in &s.manifest {
-        toml.push_str(l);
-        toml.push('\n');
-    }
+    let toml = manifest_text(&s.manifest);
     std::fs::write(dir.join("wj.toml"), toml).map_err(|e| e.to_string())?;
     let main = dir.join("main.wj");
     std::fs::write(&main, &s.src).map_err(|e| e.to_string())?;
@@ -171,7 +220,7 @@ fn check_front_end(s: &Spec) -> Result<(), String> {
     let errors: Vec<String> = diags
         .iter()
         .filter(|d| matches!(d.severity, windjammer::diagnostics::Severity::Error))
-        .map(|d| format!("{}: {}", d.code, d.message))
+        .map(|d| format!("{}: {}\n{}\n{}", d.code, d.message, d.notes.join("\n"), d.help.join("\n")))
         .collect();
     match s.mode.as_str() {
         "check-ok" if errors.is_empty() => Ok(()),
@@ -189,9 +238,6 @@ fn check_front_end(s: &Spec) -> Result<(), String> {
 
 /// Run twice in the deterministic world with the same seed; the runs must agree and match `expect:`.
 fn simulate(s: &Spec) -> Result<(), String> {
-    if !s.manifest.is_empty() {
-        return Err("manifest grants are not applied by the interpreter yet (ADR-0021 stage E1)".into());
-    }
     let seed = s.seed.unwrap_or(1);
     let once = || {
         let src = s.src.clone();

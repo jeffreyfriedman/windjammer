@@ -138,6 +138,8 @@ pub struct Registry {
     funcs: HashMap<&'static str, FnImpl>,
     consts: HashMap<String, Value>,
     types: HashSet<&'static str>,
+    /// Field names of host struct types a program may construct with a struct literal (test requests).
+    struct_fields: HashMap<&'static str, &'static [&'static str]>,
     mutating: HashSet<&'static str>,
     natives: HashMap<&'static str, HashMap<&'static str, PureFn>>,
 }
@@ -197,6 +199,12 @@ impl Registry {
     pub fn add_const(&mut self, path: impl Into<String>, v: Value) {
         self.consts.insert(path.into(), v);
     }
+    pub fn constructible(&mut self, name: &'static str, fields: &'static [&'static str]) {
+        self.struct_fields.insert(name, fields);
+    }
+    pub fn constructible_fields(&self, name: &str) -> Option<&'static [&'static str]> {
+        self.struct_fields.get(name).copied()
+    }
     pub fn type_name(&mut self, name: &'static str) {
         self.types.insert(name);
     }
@@ -237,6 +245,12 @@ impl Registry {
                 None => return None,
             }
         }
+    }
+    /// Every registered function path, sorted (audits: `caps.rs` requires each authority-module builtin to be classified).
+    pub fn function_paths(&self) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = self.funcs.keys().copied().collect();
+        v.sort_unstable();
+        v
     }
     pub fn has_function(&self, path: &str) -> bool {
         self.function(path).is_some()

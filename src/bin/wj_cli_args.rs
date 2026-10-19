@@ -191,6 +191,21 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         mock_http: Option<PathBuf>,
 
+        /// Interpreted runs: ignore the project's grants and start from an empty one (only time, random
+        /// and console); add authority with --allow (ADR-0021)
+        #[arg(long)]
+        sandbox: bool,
+
+        /// Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`,
+        /// `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable)
+        #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
+        allow: Vec<String>,
+
+        /// Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a
+        /// warning, `enforce` stops them (exit 126), `off` disables the gate
+        #[arg(long, value_name = "MODE", env = "WJ_CAPS", default_value = "warn")]
+        caps: String,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,
@@ -281,6 +296,53 @@ pub enum Commands {
         /// Also build and run each doctest through the Rust backend (default: interpreter only)
         #[arg(long)]
         compiled: bool,
+    },
+
+    /// Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
+    Reduce {
+        /// Project directory or .wj file to reduce
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present)
+        #[arg(long, value_name = "SPEC")]
+        oracle: String,
+
+        /// Output directory for the minimal project and repro.md
+        #[arg(short, long, value_name = "DIR")]
+        output: PathBuf,
+
+        /// Candidates evaluated in parallel
+        #[arg(long, default_value_t = 2, value_name = "N")]
+        jobs: usize,
+
+        /// Seed for the deterministic candidate order
+        #[arg(long, default_value_t = 0, value_name = "N")]
+        seed: u64,
+
+        /// Maximum number of oracle runs
+        #[arg(long, default_value_t = 5000, value_name = "N")]
+        max_steps: usize,
+
+        /// Wall-clock budget for the reduction search, in seconds
+        #[arg(long, default_value_t = 3600, value_name = "SECS")]
+        time_budget: u64,
+
+        /// Timeout for a single oracle run, in seconds
+        #[arg(long, default_value_t = 300, value_name = "SECS")]
+        candidate_timeout: u64,
+
+        /// Accept a partially anonymized result when some names cannot be renamed without losing the bug
+        #[arg(long)]
+        keep_names: bool,
+
+        /// Compiler binary used by the oracles (default: this executable)
+        #[arg(long, value_name = "WJ")]
+        wj_bin: Option<PathBuf>,
+
+        /// Print progress counts to stderr (never source text)
+        #[arg(short, long)]
+        verbose: bool,
     },
 
     /// Format Windjammer code
@@ -435,6 +497,21 @@ pub enum Commands {
     ExplainOwnership {
         /// Windjammer source file
         file: PathBuf,
+
+        /// Only this function (`name` or `Type::name`)
+        #[arg(long = "fn", value_name = "NAME")]
+        function: Option<String>,
+
+        /// Machine-readable JSON output
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs
+    #[command(name = "explain-effects")]
+    ExplainEffects {
+        /// Windjammer source file or project directory
+        path: PathBuf,
 
         /// Only this function (`name` or `Type::name`)
         #[arg(long = "fn", value_name = "NAME")]

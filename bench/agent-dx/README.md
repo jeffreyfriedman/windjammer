@@ -133,6 +133,31 @@ condition). To make the "hidden oracle" meaningful, run the agent without access
 checkout that deletes `tasks/*/oracle` and `solutions/` before the run; the driver itself needs `oracle/` so keep it
 outside the agent's reachable paths). This repository's self-tests never invoke an LLM.
 
+## Loop-mode pilot (`pilot`)
+
+Question: does an interpreted-first loop (`wj check --json`, `wj run --interpret`, `wj test --interpret`) cost an agent fewer
+iterations, tokens and seconds than a compiled-first loop (`wj build`, `wj run --compiled`, `wj test`)? Arms A (interpreted-first),
+B (compiled-first) and C (interpreted-first without the context pack) get identical task prompts apart from one loop paragraph;
+A and B carry `docs/agent/WINDJAMMER_FOR_AGENTS.md` as an appended system prompt. One trial is one `claude -p` session
+(`--max-turns 25`, `--model sonnet`, `dontAsk` permissions, tools limited to Read/Edit/Write/Glob/Grep and `Bash(wj:*)`, project
+settings only, working directory = a sandbox holding `main.wj`). The harness then grades the final `main.wj` with the compiled
+hidden-vector oracle (final grade) and the interpreter (divergence).
+
+```
+python3 -m agentdx pilot --estimate-only                      # prints the cost estimate, starts nothing
+WJ_BIN=/path/to/wj python3 -m agentdx pilot --yes --budget-usd 40 --out results/pilot
+python3 -m agentdx pilot-report --trials-dir results/pilot --md results/pilot/report.md
+```
+
+Hard limits: the estimate is printed first and `--yes` is required; `budget.PILOT_MAX_TRIALS = 60` caps any run (10 tasks x 2 arms x
+3 trials); `--budget-usd` aborts before the trial that would exceed it (after 3 trials the observed mean cost replaces the
+estimate); resumed runs count earlier trials. Trials are scheduled round-robin so an abort leaves the arms balanced.
+Per trial: pass@1 (single session) and final grade, verify calls to green (shim log), turns, tokens in/out and cost (Claude Code JSON),
+wall time split into API time (thinking) and `wj` tool-wait, diagnostic categories, mode violations, and silent divergence
+(interpreter green, compiled red). The agent cannot read the oracle: it is outside the sandbox, `Read` is confined to the working
+directory, and `tests/test_pilot.py` plants a canary in the oracle and scans every agent-visible file, prompt and argument for it.
+Design and optimization loop: `docs/design/agent-preference.md`.
+
 ## Self-tests (`tests/`, `python3 -m unittest discover -s tests`)
 
 - `test_oracle.py`: vectors reproducible from seeds; samples are a subset of the hidden vectors; every task has >= 25 cases with

@@ -17,7 +17,7 @@ fn matmul(a: &Vec<Vec<i64>>, b: &Vec<Vec<i64>>) -> Vec<Vec<i64>> {
 }
 
 fn main() {
-    let c: Vec<Vec<i64>> = matmul(&[[1_i32, 2_i32], [3_i32, 4_i32]], &[[5_i32, 6_i32], [7_i32, 8_i32]]);
+    let c: Vec<Vec<i64>> = matmul(&vec![vec![1_i32, 2_i32], vec![3_i32, 4_i32]], &vec![vec![5_i32, 6_i32], vec![7_i32, 8_i32]]);
     for row in c {
         println!("{:?}", row);
     }
