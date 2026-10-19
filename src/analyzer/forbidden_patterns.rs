@@ -217,9 +217,7 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                 check_expr(value)?;
             }
             Item::Mod { items, .. } => {
-                let mod_program = Program {
-                    items: items.clone(),
-                };
+                let mod_program = Program::new(items.clone());
                 check_forbidden_rust_patterns(&mod_program)?;
             }
             _ => {}
@@ -236,9 +234,7 @@ fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), Strin
                 check_struct_decorators(&decl.name, &decl.decorators)?;
             }
             Item::Mod { items, .. } => {
-                let mod_program = Program {
-                    items: items.clone(),
-                };
+                let mod_program = Program::new(items.clone());
                 check_forbidden_decorators(&mod_program)?;
             }
             _ => {}
