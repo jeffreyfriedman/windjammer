@@ -54,12 +54,24 @@ fn a_program_proven_inside_its_grant_carries_no_guard() {
     assert!(!rs.contains("caps::install"), "zero guards for a proven program:\n{rs}");
 }
 
+/// The statically-proven case of the ADR's zero-cost criterion, as an exact statement: enforcement adds nothing to a
+/// program it can prove, so its emitted Rust is byte-identical with and without `[capabilities]`. The run time cannot
+/// differ by even a measurement error because the programs are the same.
+#[test]
+fn a_proven_program_compiles_to_the_same_rust_with_and_without_capabilities() {
+    let (a, with_caps) = emitted_rust(PROVEN, CAPS);
+    let (b, without) = emitted_rust(PROVEN, "");
+    assert!(a.status.success() && b.status.success(), "{}{}", text(&a), text(&b));
+    assert!(!with_caps.is_empty());
+    assert_eq!(with_caps, without, "enforcement must not change what is generated for a proven program");
+}
+
 #[test]
 fn a_computed_path_installs_the_grant_first_thing_in_main() {
     let (out, rs) = emitted_rust(COMPUTED, CAPS);
     assert!(out.status.success(), "{}", text(&out));
     let main = rs.split("fn main()").nth(1).expect("main in the output");
-    let first = main.lines().find(|l| !l.trim().is_empty() && !l.contains("fn main")).unwrap_or("");
+    let first = main.lines().skip(1).find(|l| !l.trim().is_empty()).unwrap_or("");
     assert!(first.contains("windjammer_runtime::caps::install(") && first.contains(r#"("fs.read", &["./data/**"])"#), "first statement of main: {first}\n{rs}");
     assert!(first.contains(r#"root: ".""#), "the root is the working directory, not a machine path: {first}");
 }
@@ -166,9 +178,12 @@ fn compiled_rust_program_enforces_the_grant_and_exits_126() {
     }
     for (main, want_code, want_out) in [(COMPUTED, 0, "hello-from-data"), (ESCAPE, 126, "capability denied: fs.read(./wj.toml)")] {
         let p = project(main, CAPS);
-        let b = wj(&["build", "-o", "outc", "."], &p);
+        // WJ_EFFECTS_COMPILED_TARGET: a warm cargo target directory for the generated crate (skips the cold build)
+        let target = std::env::var("WJ_EFFECTS_COMPILED_TARGET").map(PathBuf::from).unwrap_or_else(|_| p.join("outc/target"));
+        let b = Command::new(env!("CARGO_BIN_EXE_wj")).args(["build", "-o", "outc", "."]).env("CARGO_TARGET_DIR", &target).current_dir(&p).output().unwrap();
         assert!(b.status.success(), "{}", text(&b));
-        let bin = std::fs::read_dir(p.join("outc/target/debug")).unwrap().flatten().map(|e| e.path()).find(|f| f.file_name().is_some_and(|n| n == "p")).expect("compiled binary");
+        let bin = target.join("debug/p");
+        assert!(bin.exists(), "compiled binary at {}", bin.display());
         let run = Command::new(bin).current_dir(&p).output().unwrap();
         let t = text(&run);
         let _ = std::fs::remove_dir_all(&p);
