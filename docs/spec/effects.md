@@ -475,6 +475,10 @@ Then the run stops with exit status 126 and a message containing `capability den
 
 **SPEC-EFF-036** Dependencies are checked against their own grants (`[capabilities.dependencies.NAME]`) and against what `.wj-capabilities.lock` records for them; a dependency upgrade that adds an effect is reported (WJ0040/WJ0041 naming the dependency) until `wj caps approve` records it, and `wj caps show` lists each dependency's inferred effects. (untestable: needs a multi-package fixture; acceptance test `tests/effects_packages_test.rs`)
 
+**SPEC-EFF-037** Compile-time enforcement: with a `[capabilities]` table, `wj build` fails on the same findings `wj check` reports (WJ0040-WJ0044) before any code is generated, for every backend. A call the compiler can prove inside the grant (a literal path, host or name) carries no check: the generated code is byte-identical with and without the table. (untestable: needs a compiled backend; acceptance tests `tests/effects_compiled_test.rs`)
+
+**SPEC-EFF-038** Run-time guards: when some call cannot be proven (a computed path, host or name, or a capability value minted from a scoped grant), the generated program installs its grant as the first statement of `main` (`windjammer_runtime::caps::install` on Rust, `$caps_install` on JavaScript, `wjstd_caps_install` on Go) and the runtime's std wrappers check against it; a denial exits with status 126 and cannot be caught. Compiled programs hold the whole program to one grant, so a dependency's computed-resource use needs the same scope as the application's (or `true`), else the build says so. (untestable: needs a compiled backend; acceptance tests `tests/effects_compiled_test.rs`, `tests/effects_vectors_test.rs`)
+
 ## Durable functions
 
 **SPEC-EFF-021** [PLANNED ADR-0021] `durable fn` declares a function whose progress survives crashes. When nothing fails it behaves exactly like the same function without `durable`.

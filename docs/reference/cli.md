@@ -26,6 +26,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
+| `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -343,6 +344,20 @@ Usage: wj explain-effects [OPTIONS] <PATH>
 | `<PATH>` | PATH |  | Windjammer source file or project directory |
 | `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
 | `--json` | JSON |  | Machine-readable JSON output |
+
+## `wj caps`
+
+What the project's dependencies are known to do (per-package capabilities and the lock file)
+
+```text
+Usage: wj caps [OPTIONS] <ACTION> [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<ACTION>` | ACTION |  | `show` the effects each dependency performs and whether .wj-capabilities.lock covers them; `approve` records them in the lock file (review with `show` first) |
+| `<PATH>` | PATH |  | Project directory (default: the current directory) |
+| `--json` | JSON |  | Machine-readable JSON output (show) |
 
 ## `wj explain`
 
