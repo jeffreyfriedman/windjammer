@@ -94,20 +94,29 @@ impl<'ast> CodeGenerator<'ast> {
         !crate::codegen::rust::types::type_contains_unbound_generic_param(ty) && self.type_names_are_in_file_scope(ty)
     }
 
-    /// False when `ty` names a crate type that this file neither declares nor imports: an annotation
+    /// False when `ty` names a non-std type that this file neither declares nor imports: an annotation
     /// spelling it would not resolve (`let rules: Vec<Rule>` in a test that never imports `Rule`).
     pub(in crate::codegen::rust) fn type_names_are_in_file_scope(&self, ty: &Type) -> bool {
-        // Library modules import the types their annotations name (`format_auto_super_type_imports`).
-        if self.idiom.file_scope_is_open || self.is_module {
+        if self.idiom.file_scope_is_open {
             return true;
         }
-        let known_elsewhere = |n: &str| {
-            self.struct_field_types.contains_key(n)
-                || self.enum_variant_types.keys().any(|k| k.split("::").next() == Some(n))
-        };
         let named_ok = |n: &str| {
             let leaf = crate::type_classification::type_name_leaf(n);
-            n.contains("::") || self.idiom.file_scope_type_names.contains(leaf) || !known_elsewhere(leaf)
+            n.contains("::")
+                || self.idiom.file_scope_type_names.contains(leaf)
+                // Library modules import the crate types their annotations name (`format_auto_super_type_imports`).
+                || (self.is_module && self.type_defining_modules.contains_key(leaf))
+                || leaf.chars().count() <= 1
+                || leaf.chars().next().is_some_and(char::is_lowercase)
+                || crate::type_classification::is_set_type_name(leaf)
+                || crate::type_classification::is_map_type_name(leaf)
+                || crate::type_classification::is_single_elem_iterable_base(leaf)
+                || crate::codegen::rust::stdlib_method_traits::runtime_std_module_for_type(leaf).is_some()
+                || matches!(
+                    leaf,
+                    "String" | "Box" | "Rc" | "Arc" | "Weak" | "Mutex" | "RwLock" | "RefCell" | "Cell" | "Option"
+                        | "Result" | "Vec" | "Self" | "Duration" | "Instant"
+                )
         };
         match ty {
             Type::Vec(inner)
