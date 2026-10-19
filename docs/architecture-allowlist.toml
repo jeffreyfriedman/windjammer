@@ -82,7 +82,8 @@
 "ir->compiler src/ir/lower.rs" = 1
 "lexer->type_classification src/lexer/number_lexing.rs" = 1
 "linter->intrinsics src/linter/surface_syntax.rs" = 1
-"metadata->compiler src/metadata/mod.rs" = 1
+"metadata->compiler src/metadata/mod.rs" = 3
+"metadata->compiler src/metadata/tests.rs" = 2
 "parser->intrinsics src/parser/interpolated_string_expression_parser.rs" = 1
 "parser->intrinsics src/parser/intrinsic_lowering.rs" = 3
 "stdlib_scanner->analyzer src/stdlib_scanner.rs" = 17
@@ -101,7 +102,7 @@
 "type_inference->metadata src/type_inference/int_inference/mod.rs" = 1
 
 [get_signature_calls]
-"outside_signature_registry" = 433
+"outside_signature_registry" = 434
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2362
@@ -112,7 +113,7 @@
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4905
 "src/codegen/rust/function_generation_prepare.rs" = 13321
 "src/codegen/rust/generator.rs" = 5105
-"src/codegen/rust/int_promotion_type_inference.rs" = 2292
+"src/codegen/rust/int_promotion_type_inference.rs" = 2183
 "src/codegen/rust/ir_call_site.rs" = 10438
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2152
 "src/codegen/rust/self_analysis.rs" = 2037
