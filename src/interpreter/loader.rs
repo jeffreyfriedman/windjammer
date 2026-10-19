@@ -10,8 +10,27 @@ use std::path::{Path, PathBuf};
 
 /// Parse `source`. The returned `Program` owns its arenas (the parser can be dropped).
 pub fn parse_source(source: &str, file: &str) -> Result<Program<'static>, String> {
+    parse_source_renaming(source, file, &std::collections::HashMap::new())
+}
+
+/// [`parse_source`] with identifiers renamed token by token (`renames`: old -> new). Used to give
+/// same-name private types of different modules distinct names, since the interpreter keys types by name.
+pub fn parse_source_renaming(
+    source: &str,
+    file: &str,
+    renames: &std::collections::HashMap<String, String>,
+) -> Result<Program<'static>, String> {
     let mut lex = crate::lexer::Lexer::new(source);
-    let tokens = lex.tokenize_with_locations();
+    let mut tokens = lex.tokenize_with_locations();
+    if !renames.is_empty() {
+        for t in tokens.iter_mut() {
+            if let crate::lexer::Token::Ident(n) = &t.token {
+                if let Some(new) = renames.get(n) {
+                    t.token = crate::lexer::Token::Ident(new.clone());
+                }
+            }
+        }
+    }
     let program = crate::parser::Parser::new_with_source(tokens, file.to_string(), source.to_string()).parse()?;
     // `std::arena` (ADR-0025): same feature gate and escape check as the compiler.
     crate::analyzer::arena_escape::gate(&program)?;
