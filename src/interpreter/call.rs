@@ -55,6 +55,22 @@ impl Interpreter {
         }
     }
 
+    /// The module `crate::` names from inside `module`: its dependency crate's root, else the program root.
+    pub(crate) fn crate_root_module(&self, module: usize) -> usize {
+        let mut top = module;
+        while let Some(p) = self.modules[top].parent {
+            if p == 0 {
+                break;
+            }
+            top = p;
+        }
+        if top != 0 && self.modules[top].parent == Some(0) && self.dep_crates.contains(&self.modules[top].name) {
+            top
+        } else {
+            0
+        }
+    }
+
     pub(crate) fn resolve_in(&mut self, module: usize, segs: &[&str]) -> R<Option<Resolved>> {
         if let Some(r) = self.resolve_in_module(module, segs)? {
             return Ok(Some(r));
@@ -94,7 +110,7 @@ impl Interpreter {
                 if rest.is_empty() {
                     return Ok(None);
                 }
-                module = 0;
+                module = self.crate_root_module(module);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
             }

@@ -75,10 +75,24 @@ impl<'a> Collected<'a> {
         dedupe(found)
     }
 
+    /// The root `crate::` names from inside `module`: its dependency crate's root, else the program root.
+    pub fn crate_root_of(&self, module: DefId) -> DefId {
+        let mut cur = module;
+        loop {
+            if self.crate_roots.contains(&cur) {
+                return cur;
+            }
+            match self.parent_of(cur) {
+                Some(p) if p != cur => cur = p,
+                _ => return self.root,
+            }
+        }
+    }
+
     fn special_segment(&self, module: DefId, name: &str) -> Option<Vec<Found>> {
         let target = match name {
             "self" => Some(module),
-            "crate" => Some(self.root),
+            "crate" => Some(self.crate_root_of(module)),
             "super" => self.parent_of(module),
             _ => return None,
         };

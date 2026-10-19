@@ -85,6 +85,7 @@ fn project_build(files: &[(&str, &str)]) -> (TempDir, String) {
     (dir, text)
 }
 
+const PKG: &str = "[package]\nname = \"p\"\nversion = \"0.1.0\"\nedition = \"2025\"\n";
 const TOML: &str = "[package]\nname = \"p\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\n";
 
 // (1) An imported name shadows a language intrinsic of the same name (ADR-0014), glob imports included.
@@ -174,20 +175,75 @@ fn http_module_qualified_get_follows_runtime_argument_mode() {
     assert!(rs.contains("http::get(&req.url)"), "{rs}");
 }
 
-// (5) A never-used empty collection in a test file compiles.
+// (5) A never-used empty collection compiles: nothing fixes its element type, so it defaults to unit elements.
 #[test]
-fn unused_empty_collection_local_in_test_compiles() {
-    let dir = write_project(&[
+fn unused_empty_collection_local_gets_a_default_element_type() {
+    expect_output(
+        "use std::collections::HashMap\n\nfn main() {\n    let _empty = Vec::new()\n    let none = HashMap::new()\n    let mut used = Vec::new()\n    used.push(1)\n    println(\"${used.len()}\")\n}\n",
+        "1\n",
+    );
+}
+
+#[test]
+fn used_empty_collection_keeps_its_inferred_element_type() {
+    let rs = generated_rust("fn main() {\n    let mut names = Vec::new()\n    names.push(\"a\")\n    println(\"${names.len()}\")\n}\n");
+    assert!(!rs.contains("Vec<()>"), "{rs}");
+}
+
+// (4b) A call through an imported runtime module follows the runtime signature, in a project module whose
+// parameter is an owned struct (the std stub says `string`, the runtime function takes `&str`).
+#[test]
+fn http_module_call_in_a_project_module_borrows_the_field() {
+    let (dir, _) = project_build(&[
         ("wj.toml", TOML),
-        ("src/lib.wj", "pub fn one() -> int { 1 }\n"),
+        ("src/mod.wj", "pub mod domain\npub mod adapters\n"),
+        ("src/domain/mod.wj", "pub mod request\n\npub use request::FetchRequest\n"),
+        ("src/domain/request.wj", "pub struct FetchRequest {\n    pub url: string,\n    pub retries: int,\n}\n"),
+        ("src/adapters/mod.wj", "pub mod http_get\n\npub use http_get::fetch_url\n"),
         (
-            "tests/empty_test.wj",
-            "use std::collections::HashMap\n\n@test\nfn test_empty_is_empty() {\n    let _empty = Vec::new()\n    let _none = HashMap::new()\n    assert(true, \"unused collection\")\n}\n",
+            "src/adapters/http_get.wj",
+            "use std::http\n\nuse crate::domain::FetchRequest\n\npub fn fetch_url(req: FetchRequest) -> Result<int, string> {\n    match http.get(req.url) {\n        Ok(response) => Ok(response.status_code()),\n        Err(e) => Err(e),\n    }\n}\n",
         ),
+        ("src/main.wj", "use crate::adapters::fetch_url\nuse crate::domain::FetchRequest\n\nfn main() {\n    let r = FetchRequest { url: \"http://localhost:1\", retries: 0 }\n    match fetch_url(r) {\n        Ok(_) => println(\"ok\"),\n        Err(_) => println(\"err\"),\n    }\n}\n"),
     ]);
-    let o = Command::new(WJ).arg("test").current_dir(dir.path()).output().unwrap();
-    let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
-    assert!(o.status.success(), "wj test failed:\n{text}");
+    let rs = fs::read_to_string(dir.path().join("build/adapters/http_get.rs")).unwrap();
+    assert!(rs.contains("http::get(&req.url)"), "{rs}");
+}
+
+#[test]
+fn server_serve_in_a_project_module_passes_the_owned_address() {
+    let (dir, _) = project_build(&[
+        ("wj.toml", TOML),
+        ("src/mod.wj", "pub mod adapters\n"),
+        ("src/adapters/mod.wj", "pub mod http_server\n\npub use http_server::serve\n"),
+        (
+            "src/adapters/http_server.wj",
+            "use std::http::*\n\npub fn serve(port: int) -> Result<(), string> {\n    let bind_addr = \"0.0.0.0\"\n    match server_serve(bind_addr, port, |req| ServerResponse::ok(\"hi\")) {\n        Ok(_) => Ok(()),\n        Err(err) => Err(err),\n    }\n}\n",
+        ),
+        ("src/main.wj", "use crate::adapters::serve\n\nfn main() {\n    let _ = serve(1)\n}\n"),
+    ]);
+    let rs = fs::read_to_string(dir.path().join("build/adapters/http_server.rs")).unwrap();
+    assert!(!rs.contains("server_serve(&bind_addr"), "borrowed address passed to an owned String parameter:\n{rs}");
+}
+
+// (12) A package linked through `path = "../pkg/build"` is built before its dependent, whatever the directory order.
+#[test]
+fn path_dependencies_build_before_their_dependents() {
+    let dir = write_project(&[
+        ("app/wj.toml", &format!("{PKG}\n[dependencies]\nwj_a = {{ path = \"../a/build\" }}\n")),
+        ("app/src/main.wj", "use wj_a::two\n\nfn main() {\n    println(\"${two()}\")\n}\n"),
+        ("a/wj.toml", &format!("{PKG}\n[lib]\n\n[dependencies]\nwj_b = {{ path = \"../b/build\" }}\n")),
+        ("a/src/lib.wj", "pub fn two() -> int {\n    wj_b::one() + wj_b::one()\n}\n"),
+        ("b/wj.toml", &format!("{PKG}\n[lib]\n")),
+        ("b/src/lib.wj", "pub fn one() -> int {\n    1\n}\n"),
+    ]);
+    let o = Command::new(WJ).args(["build", "src", "--no-cargo"]).current_dir(dir.path().join("app")).output().unwrap();
+    assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(dir.path().join("a/build/Cargo.toml").is_file(), "dependency a was not built");
+    assert!(dir.path().join("b/build/Cargo.toml").is_file(), "transitive dependency b was not built");
+    let toml = fs::read_to_string(dir.path().join("a/build/Cargo.toml")).unwrap();
+    let b_dir = fs::canonicalize(dir.path().join("b/build")).unwrap();
+    assert!(toml.contains(b_dir.to_str().unwrap()), "a's Cargo.toml does not point at b/build:\n{toml}");
 }
 
 // (6) std::process::pid exists in the runtime and agrees with the interpreter.

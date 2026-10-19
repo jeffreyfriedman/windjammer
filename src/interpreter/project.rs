@@ -267,7 +267,8 @@ impl Interpreter {
             .iter()
             .map(|f| crate::resolve::ParsedFile::new(f.module_path.clone(), f.file.clone(), f.program))
             .collect();
-        let resolved = crate::resolve::resolve_program(&inputs);
+        let dep_names: Vec<String> = crate_paths.iter().filter_map(|p| p.first().cloned()).collect();
+        let resolved = crate::resolve::resolve_program_with_crates(&inputs, &dep_names);
         self.reject_shadowed_type_names(&resolved)?;
         let module_ids = self.module_ids(&resolved.collected);
         let crate_roots: HashSet<DefId> = crate_paths
