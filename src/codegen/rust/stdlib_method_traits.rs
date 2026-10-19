@@ -1334,11 +1334,7 @@ pub fn runtime_std_param_needs_auto_borrow_resolved(
     // codegen-confirmed owned emission when analyzing `std/json.wj`
     // (`is_array(value: Value) { false }` → `emitted_rust_ref_params=[false]`).
     // The real Rust API still takes `&Value`; multipass must auto-borrow.
-    let stdlib = crate::analyzer::SignatureRegistry::stdlib();
-    if let Some(baseline) = stdlib
-        .get_signature(callee_name)
-        .or_else(|| stdlib.get_fallback_signature(callee_name))
-    {
+    if let Some(baseline) = super::runtime_signatures::runtime_signature(callee_name) {
         if runtime_std_module_arg_needs_rust_borrow(baseline, arg_index) {
             // Bare user APIs with a different payload shape (`join(string, string)` vs
             // `strings::join(Vec, str)`) must not inherit the runtime baseline borrow.

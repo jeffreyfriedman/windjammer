@@ -196,9 +196,8 @@ impl<'ast> CodeGenerator<'ast> {
                     })
                 };
 
-                // TDD FIX: Suppress auto-clone for FieldAccess when method expects Borrowed
-                // Bug: ingredient.item_id generates .clone(), then & is added -> &cloned_value
-                // Fix: Suppress clone when param expects Borrowed -> just add & to field
+                // Suppress auto-clone for FieldAccess when the method expects Borrowed
+                // (`ingredient.item_id` would become `&cloned_value`): just add & to the field.
                 let param_expects_borrowed = effective_ownership
                     .is_some_and(|o| matches!(o, OwnershipMode::Borrowed))
                     || sig_for_effective.is_some_and(|sig| {
@@ -216,7 +215,6 @@ impl<'ast> CodeGenerator<'ast> {
                         &self.signature_registry,
                         i,
                     );
-
 
                 let prev_suppress = self.suppress_borrowed_clone;
                 if (param_expects_borrowed || is_auto_borrow_target || runtime_module_borrows)

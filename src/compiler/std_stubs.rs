@@ -101,14 +101,14 @@ impl StdStubs {
 /// otherwise be demoted to a borrow by bare-pass demotion. A bare name (glob import) counts when the programs define
 /// no function of that name besides the stub.
 pub(crate) fn runtime_owns_formals(callee_key: &str, sig: &FunctionSignature, programs: &[&crate::parser::Program]) -> bool {
-    let runtime = SignatureRegistry::runtime_signature(callee_key).or_else(|| {
+    let runtime = crate::codegen::rust::runtime_signatures::runtime_signature(callee_key).or_else(|| {
         let bare = !callee_key.contains("::");
         let defs = programs
             .iter()
             .flat_map(|p| p.items.iter())
             .filter(|i| matches!(i, crate::parser::Item::Function { decl, .. } if decl.name == callee_key))
             .count();
-        (bare && defs <= 1).then(|| SignatureRegistry::runtime_signature_by_bare_name(callee_key)).flatten()
+        (bare && defs <= 1).then(|| SignatureRegistry::stdlib().find_unique_signature_ending_with(callee_key)).flatten()
     });
     runtime.is_some_and(|r| sig.param_types.len() == r.param_types.len())
 }

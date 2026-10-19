@@ -118,4 +118,5 @@ pub use types::type_to_rust;
 pub mod method_call_analyzer;
 pub mod method_call_expression_generation;
 pub mod rust_stdlib_annotations;
+pub mod runtime_signatures;
 pub mod stdlib_method_traits;
