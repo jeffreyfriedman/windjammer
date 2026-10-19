@@ -2,7 +2,7 @@
 //! change is judged by these three gates before it merges:
 //!
 //!   1. **Golden emitted Rust.** Every corpus program is compiled with `wj build --no-cargo`; the
-//!      output must equal `tests/golden/rust/<path>.rs`. Refresh with `UPDATE_GOLDEN=1` and review the
+//!      output must equal `tests/golden/rust/<path>.golden` (not `.rs`: build.rs globs `*_test.rs`). Refresh with `UPDATE_GOLDEN=1` and review the
 //!      diff (each change must be explained by a divergence ID in the commit message).
 //!   2. **rustc accepts the goldens** (independent oracle): `rustc --emit=metadata` on every golden.
 //!      Files rustc rejects are listed in `tests/golden/rustc_rejects.txt`; the list may only shrink.
@@ -155,7 +155,7 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn golden_path(rel: &str) -> PathBuf {
-    root().join(GOLDEN_DIR).join(format!("{rel}.rs"))
+    root().join(GOLDEN_DIR).join(format!("{rel}.golden"))
 }
 
 /// `Ok` when rustc type/borrow-checks the golden (metadata only, no codegen).

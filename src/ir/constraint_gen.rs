@@ -800,28 +800,30 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         }
     }
 
+    /// Constraints of a literal: an unsuffixed integer is a soft class (NUM-PROPAGATE, defaulting to
+    /// `int` = i64 in the solver), everything else has its exact type.
+    fn walk_literal(&mut self, value: &Literal, location: &crate::parser::SourceLocation) -> ConstraintVar {
+        let var = self.cs.fresh_var();
+        if let Literal::Int(_) = value {
+            self.cs.add_because(
+                Constraint::IsInteger(var),
+                origin("NUM-DEFAULT-INT", "unsuffixed integer literal: width from its uses, else int (i64)", location),
+            );
+            return var;
+        }
+        let base = literal_to_base_type(value);
+        self.cs.add_because(
+            Constraint::TypeIs(var, base.clone()),
+            origin(literal_rule(value), format!("literal {:?} is {:?}", value, base), location),
+        );
+        emit_numeric_class_constraint(&mut self.cs, var, &base);
+        var
+    }
+
     /// Walk an expression, returning a constraint var representing its result type.
     fn walk_expression(&mut self, expr: &Expression<'ast>) -> ConstraintVar {
         match expr {
-            Expression::Literal { value, location } => {
-                let var = self.cs.fresh_var();
-                if let Literal::Int(_) = value {
-                    // NUM-PROPAGATE / NUM-DEFAULT-INT: an unsuffixed integer takes its class's
-                    // width; an unconstrained class resolves to `int` (i64) in the solver.
-                    self.cs.add_because(
-                        Constraint::IsInteger(var),
-                        origin("NUM-DEFAULT-INT", "unsuffixed integer literal: width from its uses, else int (i64)", location),
-                    );
-                    return var;
-                }
-                let base = literal_to_base_type(value);
-                self.cs.add_because(
-                    Constraint::TypeIs(var, base.clone()),
-                    origin(literal_rule(value), format!("literal {:?} is {:?}", value, base), location),
-                );
-                emit_numeric_class_constraint(&mut self.cs, var, &base);
-                var
-            }
+            Expression::Literal { value, location } => self.walk_literal(value, location),
 
             Expression::Identifier { name, .. } => self.resolve_var(name),
 

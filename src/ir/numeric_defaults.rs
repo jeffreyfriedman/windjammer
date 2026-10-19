@@ -325,10 +325,12 @@ impl Walker {
                     let o = self.c.opened();
                     self.expr(function, o);
                 }
-                let printing = matches!(function, Expression::Identifier { name, .. }
-                    if crate::intrinsics::Intrinsic::from_call_name(name).is_some_and(|i| i.is_print()));
+                // Interpolation (`format` macro arguments, handled below) never constrains; any other
+                // argument is used in a position this analysis does not model.
+                let printing = false;
                 for (_, a) in arguments {
-                    let c = if printing { self.c.fresh() } else { self.c.opened() };
+                    let is_format = matches!(a, Expression::MacroInvocation { name, .. } if name == "format");
+                    let c = if printing || is_format { self.c.fresh() } else { self.c.opened() };
                     self.expr(a, c);
                 }
                 self.c.open_class(sink);

@@ -197,6 +197,22 @@ pub(crate) fn write_crate_metadata_json(
     Ok(())
 }
 
+/// IR cutover: attach the solved IR module (the multipass library path does this per file).
+/// Without it codegen falls back to analyzer data and the semantic facts (NUM-DEFAULT-INT,
+/// last_use) are invisible to single-file builds.
+pub(crate) fn attach_ir_module<'ast>(
+    codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,
+    analyzed: &[crate::analyzer::AnalyzedFunction<'ast>],
+    registry: &crate::analyzer::SignatureRegistry,
+    config: &crate::compiler_config::CompilerConfig,
+) {
+    if config.ir_cutover.all_disabled() {
+        return;
+    }
+    let ir_module = crate::ir::IrPipeline::new().lower_to_ir(analyzed, registry, None);
+    codegen.set_ir_module(ir_module);
+}
+
 /// Collect inferred bounds from a program and apply them to the code generator.
 pub(crate) fn apply_inferred_bounds_to_codegen<'ast>(
     codegen: &mut crate::codegen::rust::CodeGenerator<'ast>,

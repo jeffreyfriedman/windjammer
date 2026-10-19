@@ -773,6 +773,53 @@ impl IntInference {
         self.collect_expression_constraints(expr, Some(ty));
     }
 
+    /// `for` loop: constrain the iterable and the body. NUM-PROPAGATE (D-NUM-FOR-ACC): the loop
+    /// variable has the width of the elements of a local collection literal it iterates
+    /// (`let v = [1, 2]; for x in v { acc += x }`).
+    fn collect_for_constraints<'ast>(
+        &mut self,
+        pattern: &crate::parser::ast::core::Pattern<'ast>,
+        iterable: &Expression<'ast>,
+        body: &[&'ast Statement<'ast>],
+        return_type: Option<&Type>,
+    ) {
+        self.collect_expression_constraints(iterable, return_type);
+        let coll = match iterable {
+            Expression::Identifier { name, .. } => Some(name.as_str()),
+            Expression::Unary {
+                op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
+                operand: Expression::Identifier { name, .. },
+                ..
+            } => Some(name.as_str()),
+            _ => None,
+        };
+        let loop_var = match pattern {
+            crate::parser::ast::core::Pattern::Identifier(n)
+            | crate::parser::ast::core::Pattern::MutBinding(n) => Some(n.clone()),
+            _ => None,
+        };
+        let elem_id = coll
+            .and_then(|c| self.var_collection_elements.get(c))
+            .and_then(|ids| ids.first().copied());
+        let saved = match (&loop_var, elem_id) {
+            (Some(n), Some(id)) => Some((n.clone(), self.var_assignments.insert(n.clone(), id))),
+            _ => None,
+        };
+        for s in body {
+            self.collect_statement_constraints(s, return_type);
+        }
+        if let Some((n, prev)) = saved {
+            match prev {
+                Some(p) => {
+                    self.var_assignments.insert(n, p);
+                }
+                None => {
+                    self.var_assignments.remove(&n);
+                }
+            }
+        }
+    }
+
     fn collect_statement_constraints<'ast>(
         &mut self,
         stmt: &Statement<'ast>,
@@ -907,45 +954,7 @@ impl IntInference {
                 iterable,
                 body,
                 ..
-            } => {
-                self.collect_expression_constraints(iterable, return_type);
-                // NUM-PROPAGATE (D-NUM-FOR-ACC): the loop variable has the width of the elements of
-                // a local collection literal it iterates (`let v = [1, 2]; for x in v { acc += x }`).
-                let coll = match iterable {
-                    Expression::Identifier { name, .. } => Some(name.as_str()),
-                    Expression::Unary {
-                        op: crate::parser::UnaryOp::Ref | crate::parser::UnaryOp::MutRef,
-                        operand: Expression::Identifier { name, .. },
-                        ..
-                    } => Some(name.as_str()),
-                    _ => None,
-                };
-                let loop_var = match pattern {
-                    crate::parser::ast::core::Pattern::Identifier(n)
-                    | crate::parser::ast::core::Pattern::MutBinding(n) => Some(n.clone()),
-                    _ => None,
-                };
-                let elem_id = coll
-                    .and_then(|c| self.var_collection_elements.get(c))
-                    .and_then(|ids| ids.first().copied());
-                let saved = match (&loop_var, elem_id) {
-                    (Some(n), Some(id)) => Some((n.clone(), self.var_assignments.insert(n.clone(), id))),
-                    _ => None,
-                };
-                for s in body {
-                    self.collect_statement_constraints(s, return_type);
-                }
-                if let Some((n, prev)) = saved {
-                    match prev {
-                        Some(p) => {
-                            self.var_assignments.insert(n, p);
-                        }
-                        None => {
-                            self.var_assignments.remove(&n);
-                        }
-                    }
-                }
-            }
+            } => self.collect_for_constraints(pattern, iterable, body, return_type),
             Statement::Assignment {
                 target,
                 value,
