@@ -32,7 +32,7 @@ pub(super) struct Js<'m> {
     pub ind: usize,
     pub tmp: usize,
     /// Every struct field name in the module (methods with the same name are mangled).
-    pub fields: HashSet<String>,
+    pub field_names: HashSet<String>,
     /// A `'label:` seen by `Labeled`, claimed by the next emitted `for`/`while`.
     pub pending_label: Option<String>,
     /// Locals that are `&mut` accessor cells (`x.v` reads/writes the borrowed place); see `refs.rs`.
@@ -43,10 +43,10 @@ pub(super) struct Js<'m> {
 
 /// Emit the program module (`main.mjs` / `main.ts`), importing the runtime from `./wj_core.mjs`.
 pub fn emit_module(m: &PModule, opts: &EmitOptions) -> PResult<String> {
-    let mut js = Js { m, ts: opts.typescript, out: String::new(), ind: 0, tmp: 0, fields: HashSet::new(), pending_label: None, cells: HashSet::new(), obj_aliases: HashSet::new() };
+    let mut js = Js { m, ts: opts.typescript, out: String::new(), ind: 0, tmp: 0, field_names: HashSet::new(), pending_label: None, cells: HashSet::new(), obj_aliases: HashSet::new() };
     for s in &m.structs {
         s.fields.iter().for_each(|(n, _)| {
-            js.fields.insert(n.clone());
+            js.field_names.insert(n.clone());
         });
     }
     js.module()?;
