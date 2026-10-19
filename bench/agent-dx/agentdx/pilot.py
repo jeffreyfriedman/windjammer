@@ -12,7 +12,7 @@ from . import arms as A, budget as B, diagnostics as dg, grade as G, shim as S, 
 from .runners import wj_bin
 
 SCHEMA = 2
-MAX_DENIED_TRIALS = 2   # stop the pilot when the sandbox policy, not the language, is what blocks agents
+DENIAL_MIN_TRIALS, DENIAL_MAX_SHARE = 6, 0.5   # stop when the sandbox policy, not the language, blocks most trials
 PILOT_TASKS = ["t003_prime_counts", "t006_base_convert", "t009_rpn_eval", "t011_lru_cache", "t013_bst",
                "t018_word_freq", "t022_csv_parse", "t030_bank_ledger", "t034_shapes_trait", "t050_cat_number"]
 
@@ -183,8 +183,9 @@ def run_pilot(agent, tasks, arm_ids, trials, out_dir, guard, grader=default_grad
         guard.record(tr["usage"]["cost_usd"])
         if tr["usage"].get("permission_denials"):
             denied.append(task)
-            if len(denied) >= MAX_DENIED_TRIALS:
-                reasons.append(f"{len(denied)} trials hit harness permission denials (invalid measurements): {tr['usage']['denied_commands'][:2]}")
+        n_done = len(done) + 1
+        if n_done >= DENIAL_MIN_TRIALS and len(denied) / n_done > DENIAL_MAX_SHARE:
+            reasons.append(f"{len(denied)}/{n_done} trials hit harness permission denials (invalid measurements): {tr['usage']['denied_commands'][:2]}")
         done.append(save(tr, out_dir))
         say(f"{task} arm={arm} trial={k} pass={tr['pass_final']} turns={tr['usage']['turns']} "
             f"cost={tr['usage']['cost_usd']} spent=${guard.spent:.2f}")
