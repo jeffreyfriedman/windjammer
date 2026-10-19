@@ -53,8 +53,12 @@ impl Parser {
                     // `while let P = e {` / `if let P = e {`
                     return i > 0 && matches!(self.tokens[i - 1].token, Token::If | Token::While);
                 }
+                // `if let Point { x, y } = f(a) {`: the braces of a struct pattern are part of the header.
+                Token::RBrace => match self.struct_pattern_open_brace(i) {
+                    Some(open) => i = open,
+                    None => return false,
+                },
                 Token::LBrace
-                | Token::RBrace
                 | Token::Semicolon
                 | Token::FatArrow
                 | Token::Return
@@ -65,6 +69,33 @@ impl Parser {
                 return false;
             }
             i -= 1;
+        }
+    }
+
+    /// For a `}` at `close` that ends a struct pattern or literal (`Type { .. }`, the `{` preceded by an uppercase
+    /// name), the index of its `{`; `None` for any other `}` (a block end, a statement boundary).
+    fn struct_pattern_open_brace(&self, close: usize) -> Option<usize> {
+        let mut depth = 0i32;
+        let mut j = close;
+        loop {
+            match self.tokens[j].token {
+                Token::RBrace => depth += 1,
+                Token::LBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            if j == 0 {
+                return None;
+            }
+            j -= 1;
+        }
+        match j.checked_sub(1).map(|k| &self.tokens[k].token) {
+            Some(Token::Ident(n)) if n.chars().next().is_some_and(char::is_uppercase) => Some(j),
+            _ => None,
         }
     }
 

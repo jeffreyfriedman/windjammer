@@ -58,7 +58,8 @@ impl Parser {
                         location: self.current_location(),
                     }));
                 }
-                let first_expr = self.parse_match_value()?;
+                // Inside parentheses a struct literal cannot swallow the match body's `{`: full expressions.
+                let first_expr = self.parse_expression()?;
                 if self.current_token() == &Token::Comma {
                     let mut elements = vec![first_expr];
                     while self.current_token() == &Token::Comma {
@@ -66,7 +67,7 @@ impl Parser {
                         if self.current_token() == &Token::RParen {
                             break;
                         }
-                        elements.push(self.parse_match_value()?);
+                        elements.push(self.parse_expression()?);
                     }
                     self.expect(Token::RParen)?;
                     Ok(self.alloc_expr(Expression::Tuple {
