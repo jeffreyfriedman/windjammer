@@ -195,21 +195,23 @@ fn main() {
     assert_eq!(ty(decl_line), ty(rt_line), "declared `{decl_line}` vs runtime `{rt_line}`");
 }
 
-/// E6: a string literal address for `server_serve` is passed as an owned `String`.
+/// E6: a string literal address for `server_serve` is passed as an owned `String` in a project build too
+/// (the `std/http.wj` stub's unused parameter must not turn the runtime's owned `address` into a borrow).
 #[test]
 fn server_serve_string_literal_address_is_owned() {
-    let rs = generated_rust(
-        r#"use std::http::*
-
-fn main() {
-    match server_serve("0.0.0.0", 8080, |req| ServerResponse::ok("hi")) {
-        Ok(_) => {},
-        Err(e) => eprintln("${e}"),
-    }
-}
-"#,
-    );
+    let dir = write_project(&[
+        ("wj.toml", "[package]\nname = \"srv\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\n"),
+        (
+            "src/http_server.wj",
+            "use std::http::*\n\npub fn dispatch(req: ServerRequest) -> ServerResponse {\n    ServerResponse::ok(\"hi\")\n}\n\npub fn serve(port: int) -> Result<(), string> {\n    server_serve(\"0.0.0.0\", port, |req| dispatch(req))\n}\n",
+        ),
+        ("src/main.wj", "mod http_server\n\nfn main() {\n    println(\"x\")\n}\n"),
+    ]);
+    let o = Command::new(WJ).args(["build", "--no-cargo", "src"]).current_dir(dir.path()).output().unwrap();
+    assert!(o.status.success(), "wj build failed: {}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let rs = fs::read_to_string(dir.path().join("build/http_server.rs")).unwrap();
     assert!(!rs.contains("&String::from(\"0.0.0.0\")"), "borrowed literal passed to owned String param:\n{rs}");
+    assert!(rs.contains("server_serve(\"0.0.0.0\".to_string()"), "{rs}");
 }
 
 // ------------------------------------------------------------------ type annotations
