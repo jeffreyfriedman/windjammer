@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-005
+// mode: effects
+// xfail: Q-032
+// expect: make: random
+// expect: run_job: pure + ?
+use std::random
+struct Job { run: fn() -> int }
+fn make() -> Job { Job { run: || random::range(0, 10) } }
+fn run_job(j: Job) -> int { (j.run)() }
+fn main() {
+    println("${run_job(make()) >= 0}")
+}

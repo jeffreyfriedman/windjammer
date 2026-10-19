@@ -1,0 +1,16 @@
+// spec: SPEC-EFF-022
+// mode: check-ok
+// xfail: Q-032
+use std::time
+use std::random
+use std::fs
+fn quote(n: int) -> int { n * 10 + random::range(0, 3) }
+durable fn checkout(n: int) -> string {
+    let price = quote(n)
+    let at = time::now().timestamp()
+    let note = fs::read_to_string("note.txt").unwrap_or("")
+    "${price} ${at} ${note}"
+}
+fn main() {
+    println(checkout(2))
+}

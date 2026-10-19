@@ -1,0 +1,9 @@
+// spec: SPEC-EFF-013
+// mode: check-error
+// xfail: Q-032
+// manifest: [capabilities]
+// expect-error: WJ0040: effect `process` is not granted
+use std::process
+fn main() {
+    println("${process::run("ls").is_ok()}")
+}

@@ -5,9 +5,16 @@
 //! Header comments (all `//` lines before the first non-comment line):
 //!   spec: SPEC-XXX-NNN      rule(s) this example demonstrates (required, repeatable)
 //!   mode: run | parse-ok | parse-error | panic      (default run)
+//!         | check-ok | check-error                  `wj check` front end (no run); manifest becomes wj.toml
+//!         | effects                                 `expect:` lines are `fn: effects` from the effect report (ADR-0021)
+//!         | simulate                                deterministic world (virtual clock, seeded scheduler and random):
+//!                                                   run twice with `seed:`, both runs must agree (and match `expect:`)
+//!         | replay                                  record a run, replay it from the effect log; outputs must agree
 //!   expect: TEXT            one expected stdout line, in order (run mode); oracle derived by hand
 //!   expect-error: TEXT      substring of the parse error / panic message
 //!   expect-exit: N          expected exit status for panic mode (default 101)
+//!   manifest: TOML-LINE     one line of the program's wj.toml (repeatable; ADR-0021 `[capabilities]`, `[policy]`)
+//!   seed: N                 simulation seed (simulate mode, default 1)
 //!   xfail: Q-NNN            the implementation currently contradicts the spec (docs/spec/OPEN_QUESTIONS.md);
 //!                           the example must FAIL, and the run fails if it starts passing
 //!
@@ -30,6 +37,8 @@ struct Spec {
     expect_error: Option<String>,
     expect_exit: Option<i32>,
     xfail: Option<String>,
+    manifest: Vec<String>,
+    seed: Option<u64>,
     src: String,
 }
 
@@ -65,6 +74,8 @@ fn load(path: &Path) -> Spec {
             "expect-error" => s.expect_error = Some(v.trim().to_string()),
             "expect-exit" => s.expect_exit = Some(v.trim().parse().expect("expect-exit")),
             "xfail" => s.xfail = Some(v.trim().to_string()),
+            "manifest" => s.manifest.push(v.trim().to_string()),
+            "seed" => s.seed = Some(v.trim().parse().expect("seed")),
             _ => {}
         }
     }
@@ -73,6 +84,17 @@ fn load(path: &Path) -> Spec {
 
 /// Ok(()) when the example behaves as its header says; Err(why) otherwise.
 fn check(s: &Spec) -> Result<(), String> {
+    match s.mode.as_str() {
+        "check-ok" | "check-error" => return check_front_end(s),
+        "simulate" => return simulate(s),
+        // ADR-0021 stage E1 wires the effect report; stage E3 the effect log.
+        "effects" => return Err("effect report not implemented (ADR-0021 stage E1)".into()),
+        "replay" => return Err("record/replay not implemented (ADR-0021 stage E3)".into()),
+        _ => {}
+    }
+    if !s.manifest.is_empty() {
+        return Err("manifest grants are not applied by the interpreter yet (ADR-0021 stage E1)".into());
+    }
     let src = s.src.clone();
     let name = s.path.display().to_string();
     let (parsed, out, exit, err) = with_big_stack(move || {
@@ -124,6 +146,83 @@ fn check(s: &Spec) -> Result<(), String> {
         }
         m => Err(format!("unknown mode {m}")),
     }
+}
+
+/// `wj check` on the example as `main.wj` in a project whose `wj.toml` is the `manifest:` lines.
+fn check_front_end(s: &Spec) -> Result<(), String> {
+    let dir = std::env::temp_dir().join(format!(
+        "wj-spec-check-{}-{}",
+        std::process::id(),
+        s.path.file_stem().unwrap().to_string_lossy()
+    ));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut toml = String::from("[package]\nname = \"spec\"\nversion = \"0.1.0\"\n");
+    for l in &s.manifest {
+        toml.push_str(l);
+        toml.push('\n');
+    }
+    std::fs::write(dir.join("wj.toml"), toml).map_err(|e| e.to_string())?;
+    let main = dir.join("main.wj");
+    std::fs::write(&main, &s.src).map_err(|e| e.to_string())?;
+    let sources = [(main.display().to_string(), s.src.clone())];
+    let diags = catch_unwind(AssertUnwindSafe(|| windjammer::check::check_sources(&dir, &sources)));
+    let _ = std::fs::remove_dir_all(&dir);
+    let diags = diags.map_err(|_| "wj check panicked".to_string())?;
+    let errors: Vec<String> = diags
+        .iter()
+        .filter(|d| matches!(d.severity, windjammer::diagnostics::Severity::Error))
+        .map(|d| format!("{}: {}", d.code, d.message))
+        .collect();
+    match s.mode.as_str() {
+        "check-ok" if errors.is_empty() => Ok(()),
+        "check-ok" => Err(format!("expected no errors, got {errors:?}")),
+        _ => {
+            let want = s.expect_error.as_deref().unwrap_or("");
+            if errors.iter().any(|e| e.contains(want)) {
+                Ok(())
+            } else {
+                Err(format!("expected an error containing {want:?}, got {errors:?}"))
+            }
+        }
+    }
+}
+
+/// Run twice in the deterministic world with the same seed; the runs must agree and match `expect:`.
+fn simulate(s: &Spec) -> Result<(), String> {
+    if !s.manifest.is_empty() {
+        return Err("manifest grants are not applied by the interpreter yet (ADR-0021 stage E1)".into());
+    }
+    let seed = s.seed.unwrap_or(1);
+    let once = || {
+        let src = s.src.clone();
+        let name = s.path.display().to_string();
+        with_big_stack(move || {
+            catch_unwind(AssertUnwindSafe(|| {
+                let mut lexer = windjammer::lexer::Lexer::new(&src);
+                let tokens = lexer.tokenize_with_locations();
+                let parser: &'static mut windjammer::parser::Parser = Box::leak(Box::new(
+                    windjammer::parser::Parser::new_with_source(tokens, name, src.clone()),
+                ));
+                let program = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+                let mut it = Interpreter::new_capturing();
+                it.set_deterministic_time(true);
+                it.set_sched_seed(seed);
+                it.run_checked(&program).map_err(|e| e.render())?;
+                Ok::<String, String>(it.get_output())
+            }))
+            .unwrap_or_else(|_| Err("lexer/parser/interpreter panicked".to_string()))
+        })
+    };
+    let (a, b) = (once()?, once()?);
+    if a != b {
+        return Err(format!("two runs with seed {seed} differ:\n  {a:?}\n  {b:?}"));
+    }
+    let got: Vec<&str> = a.lines().collect();
+    let want: Vec<&str> = s.expect.iter().map(|x| x.as_str()).collect();
+    if !want.is_empty() && got != want {
+        return Err(format!("stdout mismatch\n  want: {want:?}\n  got:  {got:?}"));
+    }
+    Ok(())
 }
 
 #[test]
@@ -226,7 +325,7 @@ fn rule_examples_in_chapters_match_the_test_files() {
 }
 
 fn is_header(l: &str) -> bool {
-    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail"]
+    ["spec", "mode", "expect", "expect-error", "expect-exit", "xfail", "manifest", "seed"]
         .iter()
         .any(|k| l.strip_prefix("// ").is_some_and(|r| r.starts_with(&format!("{k}:"))))
 }

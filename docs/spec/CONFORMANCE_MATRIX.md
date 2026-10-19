@@ -16,6 +16,38 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-CONC-004 | concurrency.md | `concurrency/SPEC-CONC-004.wj` |
 | SPEC-CONC-005 | concurrency.md | `concurrency/SPEC-CONC-005.wj` |
 | SPEC-CONC-006 | concurrency.md | untestable |
+| SPEC-EFF-001 | effects.md | `effects/SPEC-EFF-001.wj` (xfail Q-032) |
+| SPEC-EFF-002 | effects.md | `effects/SPEC-EFF-002.wj` (xfail Q-032) |
+| SPEC-EFF-003 | effects.md | `effects/SPEC-EFF-003.wj` (xfail Q-032) |
+| SPEC-EFF-004 | effects.md | `effects/SPEC-EFF-004.wj` (xfail Q-032) |
+| SPEC-EFF-005 | effects.md | `effects/SPEC-EFF-005.wj` (xfail Q-032) |
+| SPEC-EFF-006 | effects.md | `effects/SPEC-EFF-006.wj` (xfail Q-032) |
+| SPEC-EFF-007 | effects.md | `effects/SPEC-EFF-007.wj` (xfail Q-032) |
+| SPEC-EFF-008 | effects.md | `effects/SPEC-EFF-008.wj` (xfail Q-032) |
+| SPEC-EFF-009 | effects.md | `effects/SPEC-EFF-009.wj` (xfail Q-032) |
+| SPEC-EFF-010 | effects.md | `effects/SPEC-EFF-010.wj` (xfail Q-032) |
+| SPEC-EFF-011 | effects.md | `effects/SPEC-EFF-011.wj` (xfail Q-032) |
+| SPEC-EFF-012 | effects.md | `effects/SPEC-EFF-012.wj` (xfail Q-032) |
+| SPEC-EFF-013 | effects.md | `effects/SPEC-EFF-013.wj` (xfail Q-032) |
+| SPEC-EFF-014 | effects.md | `effects/SPEC-EFF-014.wj` (xfail Q-032) |
+| SPEC-EFF-015 | effects.md | `effects/SPEC-EFF-015.wj` (xfail Q-032) |
+| SPEC-EFF-016 | effects.md | `effects/SPEC-EFF-016.wj` (xfail Q-032) |
+| SPEC-EFF-017 | effects.md | `effects/SPEC-EFF-017.wj` |
+| SPEC-EFF-018 | effects.md | `effects/SPEC-EFF-018.wj` (xfail Q-032) |
+| SPEC-EFF-019 | effects.md | `effects/SPEC-EFF-019.wj` (xfail Q-032) |
+| SPEC-EFF-020 | effects.md | `effects/SPEC-EFF-020.wj` (xfail Q-032) |
+| SPEC-EFF-021 | effects.md | `effects/SPEC-EFF-021.wj` (xfail Q-032) |
+| SPEC-EFF-022 | effects.md | `effects/SPEC-EFF-022.wj` (xfail Q-032) |
+| SPEC-EFF-023 | effects.md | `effects/SPEC-EFF-023.wj` (xfail Q-032) |
+| SPEC-EFF-024 | effects.md | `effects/SPEC-EFF-024.wj` (xfail Q-032) |
+| SPEC-EFF-025 | effects.md | `effects/SPEC-EFF-025.wj` (xfail Q-032) |
+| SPEC-EFF-026 | effects.md | `effects/SPEC-EFF-026.wj` (xfail Q-032) |
+| SPEC-EFF-027 | effects.md | `effects/SPEC-EFF-027.wj` |
+| SPEC-EFF-028 | effects.md | `effects/SPEC-EFF-028.wj` |
+| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` (xfail Q-032) |
+| SPEC-EFF-030 | effects.md | untestable |
+| SPEC-EFF-031 | effects.md | untestable |
+| SPEC-EFF-032 | effects.md | untestable |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
 | SPEC-ERR-002 | errors.md | `errors/SPEC-ERR-002.wj` |
 | SPEC-ERR-003 | errors.md | `errors/SPEC-ERR-003.wj` |
