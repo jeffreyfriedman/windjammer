@@ -18,6 +18,7 @@ mod fast;
 mod island;
 #[cfg(feature = "jit")]
 pub(crate) mod jit;
+mod matching;
 mod method;
 mod place;
 mod typed;
