@@ -232,7 +232,14 @@ impl Walker {
             }
             Statement::Thread { body, .. } | Statement::Async { body, .. } => self.stmts(body),
             Statement::Defer { statement, .. } => self.stmt(statement),
-            Statement::Break { .. } | Statement::Continue { .. } | Statement::Use { .. } => {}
+            Statement::Break { value, .. } => {
+                // `break 'l k * 2`: the value flows to an unknown context (the loop's result).
+                if let Some(v) = value {
+                    let o = self.c.opened();
+                    self.expr(v, o);
+                }
+            }
+            Statement::Continue { .. } | Statement::Use { .. } => {}
         }
     }
 
@@ -313,6 +320,11 @@ impl Walker {
                 }
             },
             Expression::Call { function, arguments, .. } => {
+                // A callee that is not a plain name (a closure literal, a field) may use locals.
+                if !matches!(function, Expression::Identifier { .. }) {
+                    let o = self.c.opened();
+                    self.expr(function, o);
+                }
                 let printing = matches!(function, Expression::Identifier { name, .. }
                     if crate::intrinsics::Intrinsic::from_call_name(name).is_some_and(|i| i.is_print()));
                 for (_, a) in arguments {
@@ -341,8 +353,13 @@ impl Walker {
                 self.expr(expr, c);
                 self.c.open_class(sink);
             }
-            // Closure bodies are not analysed (their parameters' widths come from the caller).
-            Expression::Closure { .. } => self.c.open_class(sink),
+            // Closure parameters take their widths from the caller; locals the body mentions are
+            // used in a context this analysis does not model, so their classes open.
+            Expression::Closure { body, .. } => {
+                self.c.open_class(sink);
+                let o = self.c.opened();
+                self.expr(body, o);
+            }
             other => {
                 self.c.open_class(sink);
                 for child in children(other) {
@@ -508,6 +525,16 @@ mod tests {
         let src = "fn main() {\n let mut i = 0\n while i < 10 {\n i = i + 1\n }\n for k in 0..3 {\n println(\"${k}\")\n }\n println(\"${i}\")\n}\n";
         let (lits, _) = literals_in(src, "main");
         assert_eq!(lits, vec!["0:int", "10:int", "1:int", "0:int", "3:int"]);
+    }
+
+    #[test]
+    fn break_values_and_closure_bodies_open_the_classes_they_use() {
+        let src = "fn main() {\n let r = loop {\n let mut k = 0\n k += 1\n break k * 2\n }\n println(\"${r}\")\n}\n";
+        let (lits, _) = literals_in(src, "main");
+        assert!(lits.iter().all(|l| l.ends_with(":?")), "{lits:?}");
+        let src = "fn main() {\n let a = 5\n let f = |x: int| x + a\n println(\"${f(1)}\")\n}\n";
+        let (lits, _) = literals_in(src, "main");
+        assert_eq!(lits, vec!["5:?"]);
     }
 
     #[test]
