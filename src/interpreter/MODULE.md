@@ -14,13 +14,8 @@ Status and measurements: `docs/INTERPRETER.md`.
 ## Layout (one concern per file)
 - `value.rs`, `int.rs`, `u128ops.rs`  value model; integer widths (`IntTy`) with Rust overflow rules; u128 bit patterns
 - `engine.rs`            `Interpreter` state, public entry points (`run`, `run_checked`, `call_main`)
-- `register.rs`, `loader.rs`  definitions; `loader::program_files` picks the files of a program (a `main.wj` owns its
-  source tree, `module_system::sources`; a loose script loads what it `use`s); legacy lazy `use` for the REPL
-- `project.rs`           whole-program load: module tree from module paths, every `use` bound by the compiler's resolver
-  (`crate::resolve`), Rust privacy (E0603) on resolved defs; dependencies mounted as crates
-- `preflight.rs`         load-time detection of registry-`Unsupported` features (the `wj run` compiled-fallback trigger)
-- `deps.rs`              Windjammer dependencies as source (`package::graph`: path/git + `wj.lock`)
-- `host_bridge.rs`       `extern fn` through a cached bridge library (ADR-0023): signatures, shim source, libloading calls
+- `register.rs`, `loader.rs`, `project.rs`  definitions; program file selection; whole-program module tree bound by `crate::resolve` (E0603 privacy)
+- `preflight.rs`, `deps.rs`, `host_bridge.rs`  `Unsupported`-feature detection (compiled-fallback trigger); dependencies as source; `extern fn` bridge (ADR-0023)
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`; `moves.rs` ownership moves
@@ -40,34 +35,26 @@ Status and measurements: `docs/INTERPRETER.md`.
 - A parameter/receiver the body mutates is passed as `Value::Ref(place)` (mirrors inferred `&mut`).
 - Never wrong-but-quiet: unknown name/method => `Semantic` error; unimplemented feature => `Unsupported`
   error naming it. No silent `Nil` fallbacks.
-- No `cargo`/`rustc` spawn anywhere in this module (asserted by `tests/interpreter_cli_test.rs`); the host bridge library
-  is built by `cli::host_build`, the interpreter only loads it.
-- Names are bound by `crate::resolve`, never by a private resolver: a `use` means the same thing interpreted and compiled.
-- Every `Unsupported` registry feature has a preflight detector (gate: `interpreter_features`).
+- No `cargo`/`rustc` spawn in this module (`tests/interpreter_cli_test.rs`); `cli::host_build` builds the bridge library, the interpreter loads it.
+- Names are bound by `crate::resolve`: a `use` means the same thing interpreted and compiled. Every `Unsupported` registry feature has a preflight detector.
 
 ## Owns / never decides
 Owns evaluation semantics, value model, native stdlib registry, CLI port. Never decides compiled-path behaviour (mirrors Rust).
 
 ## Allowed imports
-`crate::parser` (AST), `crate::lexer`, `crate::source_map::Location`, `crate::resolve` + `crate::module_system`
-(the compiler's module layout and resolver: one source of truth), `crate::package` (dependency graph),
-`crate::type_display`, `crate::intrinsics` (name registry only; a ratcheted known violation like codegen/parser/linter), std, libloading. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*` and `Interpreter`.
+`crate::parser`, `crate::lexer`, `crate::source_map::Location`, `crate::resolve` + `crate::module_system`, `crate::package`,
+`crate::type_display`, `crate::intrinsics` (names only; ratcheted), std, libloading. Nothing from `codegen`, `analyzer`, `cli`, `optimizer`. CLI crates call only `runner::*`, `repl::*`, `Interpreter`.
 
 ## Entry points
 `runner::run_entry` (fallback-aware, used by `cli::run_dev`), `runner::{run_path, run_path_with, run_specs}` (test discovery is `test_runner::interpreted`), `Interpreter::load_program_at`, `repl::run_repl_stdio`, `Interpreter::{new, new_capturing, run, run_checked}`.
 
 ## Intrinsics
-Names come only from `crate::intrinsics::Intrinsic` (plain call and `name!` spelling alike); do not register them in
-`builtins/`. Panic text mirrors rustc; unmodelled shapes return `unsupported` (exit 2). A user item or local of the
-same name shadows the intrinsic. Add a new intrinsic: extend the registry, then one arm in `eval_intrinsic`.
+Names come only from `crate::intrinsics::Intrinsic`; do not register them in `builtins/`. Panic text mirrors rustc; unmodelled
+shapes return `unsupported` (exit 2). A user item or local of the same name shadows the intrinsic. New one: registry, then an arm in `eval_intrinsic`.
 
 ## Extending the stdlib: `reg.pure/mutating/place(Kind::X, "name", f)` or `reg.func("path::fn", f)` in `builtins/*.rs`.
-
 ## Test (`tests/interpreter_engine_parity_test.rs`: both engines on every corpus; `scripts/interp_bench.py`: speed ratchet)
 - `interpreter_semantics_test` hand-derived Rust semantics; `interpreter_differential_test` vs Python reference models and compiled Rust (+ harness self-tests; stdout, exit status and normalised stderr)
 - `interpreter_cli_test`, `interpreter_concurrency_test`, `interpreter_std_modules_test` (Python oracles), `interpreter_rust_parity_test` (rustc oracle)
-- `python3 scripts/interpreter_coverage.py <wj> out.json --corpus <dir> --rust-diff tests examples`
-- `cargo test --test interpreter_features` every registry entry's probe program behaves as registered (replaces the old probes script);
-  `Unsupported` ones are caught by the preflight at load, `Supported` ones are not
-- `cargo test --release --test interpreter_projects` multi-file fixtures (`tests/interpreter_projects/`) and the seeded module
-  fuzzer; `WJ_PROJECT_COMPILED=1` adds the compiled half (cargo)
+- `interpreter_features` every registry entry's probe behaves as registered; `interpreter_projects` multi-file fixtures + module fuzzer (`WJ_PROJECT_COMPILED=1` adds cargo)
+- `interpreter_hash_order_test` (`--hash-seed` gate), `interpreter_http_server_test`, `interpreter_config_db_test`
