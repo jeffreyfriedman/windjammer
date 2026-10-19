@@ -171,3 +171,121 @@ fn same_name_free_functions_keep_own_parameter_modes() {
         .unwrap();
     assert!(rustc.status.success(), "generated library does not compile:\n{}", String::from_utf8_lossy(&rustc.stderr));
 }
+
+/// C6 (found porting `wj-todo-cli`): a by-value `Store` threaded through `run_args` -> `apply` in another module
+/// stays owned at both functions. Today `apply`/`run_args` are emitted with `&mut Store`, and the callers then
+/// pass `&Store` (E0308 types differ in mutability).
+#[test]
+fn store_threaded_through_adapter_functions_stays_owned() {
+    let dir = TempDir::new().unwrap();
+    let files: [(&str, &str); 6] = [
+        ("wj.toml", "[package]\nname = \"todop\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\n"),
+        ("src/main.wj", "mod domain\nmod adapters\n\nfn main() {\n    println(\"x\")\n}\n"),
+        ("src/domain/mod.wj", "pub mod store\npub use store::Store\n"),
+        ("src/domain/store.wj", STORE),
+        ("src/adapters/mod.wj", "pub mod run\n"),
+        ("src/adapters/run.wj", RUN),
+    ];
+    for (rel, body) in files {
+        let p = dir.path().join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, body).unwrap();
+    }
+    let o = Command::new(WJ).args(["build", "--no-cargo", "src"]).current_dir(dir.path()).output().unwrap();
+    assert!(o.status.success(), "wj build failed: {}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let rs = fs::read_to_string(dir.path().join("build/adapters/run.rs")).unwrap();
+    assert!(rs.contains("fn apply(store: Store,"), "apply must take the store by value:\n{rs}");
+    assert!(rs.contains("fn run_args(store: Store,"), "run_args must take the store by value:\n{rs}");
+}
+
+const STORE: &str = r####"pub struct Store {
+    items: Vec<string>,
+}
+
+impl Store {
+    pub fn new() -> Store {
+        Store { items: Vec::new() }
+    }
+
+    pub fn add(self, title: string) -> Result<(Store, int), string> {
+        if title == "" {
+            return Err("empty")
+        }
+        let mut next = self.items
+        next.push(title)
+        let n = next.len() as int
+        Ok((Store { items: next }, n))
+    }
+
+    pub fn into_items(self) -> Vec<string> {
+        self.items
+    }
+
+    pub fn merge_from(self, imported: Vec<string>) -> (Store, int) {
+        let mut next = self.items
+        let mut added = 0
+        for x in imported {
+            if !next.contains(x) {
+                next.push(x)
+                added = added + 1
+            }
+        }
+        (Store { items: next }, added)
+    }
+
+    pub fn clear_all(self) -> Store {
+        Store { items: Vec::new() }
+    }
+}
+
+"####;
+
+const RUN: &str = r####"use crate::domain::Store
+
+fn encode(store: Store) -> string {
+    store.items.join(",")
+}
+
+fn decode(text: string) -> Result<Store, string> {
+    Ok(Store { items: text.split(",").map(|x| x.to_string()).collect() })
+}
+
+fn apply(store: Store, kind: string, title: string) -> Result<(Store, string), string> {
+    if kind == "add" {
+        match store.add(title) {
+            Ok(pair) => Ok((pair.0, "added ${pair.1}")),
+            Err(e) => Err(e),
+        }
+    } else if kind == "list" {
+        let raw = store.into_items()
+        Ok((Store { items: raw }, "listed"))
+    } else if kind == "export" {
+        let snapshot = encode(store)
+        match decode(snapshot) {
+            Ok(copy) => {
+                let raw = copy.into_items()
+                match decode(snapshot) {
+                    Ok(restored) => Ok((restored, "x ${raw.len()}")),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
+    } else if kind == "import" {
+        let imported = title.split(",").map(|x| x.to_string()).collect()
+        if title == "merge" {
+            let result = store.merge_from(imported)
+            Ok((result.0, "imported ${result.1}"))
+        } else {
+            Ok((Store { items: imported }, "imported"))
+        }
+    } else {
+        Ok((store.clear_all(), "cleared"))
+    }
+}
+
+pub fn run_args(store: Store, kind: string, title: string) -> Result<(Store, string), string> {
+    apply(store, kind, title)
+}
+
+"####;
