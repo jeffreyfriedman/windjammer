@@ -1,0 +1,12 @@
+// spec: SPEC-EFF-008
+// xfail: Q-032
+// manifest: [capabilities]
+// expect: true
+// expect: true
+use std::random
+use std::time
+fn main() {
+    let r = random::range(0, 10)
+    println("${r >= 0 && r < 10}")
+    println("${time::now().timestamp() > 0}")
+}
