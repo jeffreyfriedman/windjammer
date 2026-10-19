@@ -285,17 +285,27 @@ impl Value {
             payload,
         }))
     }
+    /// `Option`/`Result` values share interned type and variant names (no allocation per value).
+    fn std_enum(i: usize, idx: u32, payload: Payload) -> Value {
+        thread_local! {
+            static NAMES: [Rc<str>; 6] = ["Option", "Some", "None", "Result", "Ok", "Err"].map(Rc::from);
+        }
+        NAMES.with(|n| {
+            let (ty, variant) = (n[if i < 2 { 0 } else { 3 }].clone(), n[[1, 2, 4, 5][i]].clone());
+            Value::Enum(Rc::new(EnumVal { ty, variant, idx, payload }))
+        })
+    }
     pub fn some(v: Value) -> Value {
-        Value::enum_val("Option", "Some", 1, Payload::Tuple(vec![v]))
+        Value::std_enum(0, 1, Payload::Tuple(vec![v]))
     }
     pub fn none() -> Value {
-        Value::enum_val("Option", "None", 0, Payload::Unit)
+        Value::std_enum(1, 0, Payload::Unit)
     }
     pub fn ok(v: Value) -> Value {
-        Value::enum_val("Result", "Ok", 0, Payload::Tuple(vec![v]))
+        Value::std_enum(2, 0, Payload::Tuple(vec![v]))
     }
     pub fn err(v: Value) -> Value {
-        Value::enum_val("Result", "Err", 1, Payload::Tuple(vec![v]))
+        Value::std_enum(3, 1, Payload::Tuple(vec![v]))
     }
     pub fn option(v: Option<Value>) -> Value {
         match v {

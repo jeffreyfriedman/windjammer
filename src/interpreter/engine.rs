@@ -58,6 +58,9 @@ pub enum VariantKind {
 
 pub struct EnumDef {
     pub variants: Vec<VariantDef>,
+    /// The type and variant names, interned: every value built by `make_variant` shares them.
+    pub rc_name: Rc<str>,
+    pub rc_variants: Vec<Rc<str>>,
 }
 
 pub struct TraitDef {

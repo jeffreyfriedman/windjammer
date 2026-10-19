@@ -302,19 +302,8 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
             }))
         }
         Expression::Call { function, arguments, location } => call(cx, function, arguments, location.as_ref())?,
-        Expression::StructLiteral { name, fields, location } => {
-            // the walker's own construction (declaration order, coercions, `..base`), compiled fields
-            let mut codes = super::place::PlaceCode::default();
-            for (_, fe) in fields.iter() {
-                codes.add_eval(cx, fe)?;
-            }
-            let (loc, name, fields): (Loc, &'static str, &'static [(String, E)]) = (location.as_ref(), name.as_str(), fields.as_slice());
-            X::V(Box::new(move |it, b| {
-                it.mark(loc);
-                let mut env = codes.env(b);
-                it.eval_struct_literal_in(name, fields, &mut env)
-            }))
-        }
+        // the walker's construction (declaration order, coercions, `..base`), compiled fields
+        Expression::StructLiteral { name, fields, location } => X::V(super::literal::struct_literal(cx, name.as_str(), fields.as_slice(), location.as_ref())?),
         _ => return None,
     })
 }

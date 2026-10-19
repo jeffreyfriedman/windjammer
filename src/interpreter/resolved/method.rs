@@ -15,7 +15,8 @@ use super::island::Island;
 use super::Code;
 use super::CompiledFn;
 use crate::interpreter::engine::{FuncDef, Interpreter};
-use std::cell::RefCell;
+use crate::interpreter::builtins::{Kind, MethodImpl};
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use crate::interpreter::error::R;
 use crate::interpreter::place::deref_value;
@@ -122,6 +123,11 @@ pub(super) fn method_call(
                 }
                 None => it.call_user_method(&f, recv, place, vals),
             },
+            None if Interpreter::builtin_by_kind(&recv) && it.hot.is_none() => {
+                let kind = Kind::of(&recv);
+                let imp = cache.builtin(it, kind, method);
+                it.run_builtin_method(imp, kind, recv, place, method, vals)
+            }
             None => it.call_builtin_method(recv, place, method, vals),
         }
     })))
@@ -132,10 +138,23 @@ pub(super) fn method_call(
 #[derive(Default)]
 struct SiteCache {
     ty: RefCell<Option<(Rc<str>, Option<Rc<FuncDef>>)>>,
+    /// The builtin implementation for the last receiver kind (the registry is fixed once loaded).
+    builtin: Cell<Option<(Kind, Option<MethodImpl>)>>,
     compiled: RefCell<Option<(Rc<FuncDef>, Option<Rc<CompiledFn>>)>>,
 }
 
 impl SiteCache {
+    fn builtin(&self, it: &Interpreter, kind: Kind, method: &str) -> Option<MethodImpl> {
+        match self.builtin.get() {
+            Some((k, imp)) if k == kind => imp,
+            _ => {
+                let imp = it.builtins.method(kind, method);
+                self.builtin.set(Some((kind, imp)));
+                imp
+            }
+        }
+    }
+
     fn user(&self, it: &mut Interpreter, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {
         let ty = match recv {
             Value::Struct(s) => &s.name,
