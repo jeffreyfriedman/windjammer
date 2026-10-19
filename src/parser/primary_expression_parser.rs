@@ -5,6 +5,17 @@ use crate::parser::ast::*;
 use crate::parser_impl::Parser;
 
 impl Parser {
+    /// The path segment spelled by the token at `index`: an identifier, or `thread` / `async`, which are keywords
+    /// and also standard-library module names (`std::thread::spawn`).
+    fn path_segment_name_at(&self, index: usize) -> Option<String> {
+        match &self.tokens.get(index)?.token {
+            Token::Ident(name) => Some(name.clone()),
+            Token::Thread => Some("thread".to_string()),
+            Token::Async => Some("async".to_string()),
+            _ => None,
+        }
+    }
+
     pub(in crate::parser) fn parse_primary_expression(
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
@@ -214,17 +225,10 @@ impl Parser {
                 while self.current_token() == &Token::ColonColon {
                     // Look ahead to see if there's an identifier after ::
                     if self.position + 1 < self.tokens.len() {
-                        // `thread` and `async` are keywords, and also std module names (`std::thread::spawn`)
-                        let segment = match &self.tokens[self.position + 1].token {
-                            Token::Ident(next_name) => Some(next_name.as_str()),
-                            Token::Thread => Some("thread"),
-                            Token::Async => Some("async"),
-                            _ => None,
-                        };
-                        if let Some(next_name) = segment {
+                        if let Some(next_name) = self.path_segment_name_at(self.position + 1) {
                             // This is a qualified path segment
                             qualified_name.push_str("::");
-                            qualified_name.push_str(next_name);
+                            qualified_name.push_str(&next_name);
                             self.advance(); // consume ::
                             self.advance(); // consume identifier
                         } else if let Token::Lt = &self.tokens[self.position + 1].token {

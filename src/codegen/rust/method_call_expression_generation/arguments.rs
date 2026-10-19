@@ -184,32 +184,7 @@ impl<'ast> CodeGenerator<'ast> {
                     }
                 }
 
-                // `http.get(req.url)`: a call through an imported runtime module follows the runtime
-                // function's own signature (`get(url: &str)`), whatever the WJ stub declares.
-                let runtime_module_borrows = match object {
-                    Expression::Identifier { name, .. }
-                        if !self.local_var_types.contains_key(name.as_str())
-                            && !self.current_function_params.iter().any(|p| p.name == *name)
-                            && crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(name) =>
-                    {
-                        let qualified = format!("{name}::{method}");
-                        let borrows = crate::codegen::rust::stdlib_method_traits::runtime_std_param_needs_auto_borrow_resolved(
-                            &self.signature_registry,
-                            &qualified,
-                            call_site_sig.as_ref().or(method_signature.as_ref()),
-                            i,
-                        );
-                        if borrows {
-                            let stdlib = crate::analyzer::SignatureRegistry::stdlib();
-                            if let Some(runtime) = stdlib.get_signature(&qualified).or_else(|| stdlib.get_fallback_signature(&qualified)) {
-                                call_site_sig = Some(runtime.clone());
-                            }
-                        }
-                        borrows
-                    }
-                    _ => false,
-                };
-
+                let runtime_module_borrows = self.adopt_runtime_module_signature(object, method, i, &mut call_site_sig, method_signature.as_ref());
                 let sig_for_effective = call_site_sig.as_ref().or(method_signature.as_ref());
                 let effective_ownership = if external_module_mut_reborrow {
                     Some(OwnershipMode::MutBorrowed)

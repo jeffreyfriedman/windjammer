@@ -44,7 +44,7 @@ fn is_fn_import_name(name: &str) -> bool {
 
 /// Parser stores `use http::{json_cors_error, ServerResponse}` as one segment
 /// (`"http::{json_cors_error, ServerResponse}"`).
-fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
+pub(super) fn parse_braced_use_segment(seg: &str) -> Option<(&str, Vec<&str>)> {
     let (module, rest) = seg.split_once("::{")?;
     let inner = rest.strip_suffix('}')?;
     if module.is_empty() {
@@ -88,30 +88,6 @@ fn same_name_fn_imports_from_use_path(path: &[String]) -> Vec<(String, String)> 
         }
     }
     out
-}
-
-/// Standard-library functions a `use` brings into scope by name: `use std::log::debug`,
-/// `use std::log::{debug, info}` and `use std::log::*` (every intrinsic-named function the module exports).
-pub(super) fn std_fn_names_imported_by(path: &[String], out: &mut std::collections::HashSet<String>) {
-    let registry = crate::analyzer::SignatureRegistry::stdlib();
-    let exports = |module: &str, name: &str| registry.get_signature(&format!("{module}::{name}")).is_some();
-    let joined = path.join("::");
-    let Some(rest) = joined.strip_prefix("std::") else { return };
-    if let Some((module, names)) = parse_braced_use_segment(rest) {
-        for n in names.into_iter().filter(|n| exports(module, n)) {
-            out.insert(n.to_string());
-        }
-    } else if let Some(module) = rest.strip_suffix("::*") {
-        for intr in crate::intrinsics::Intrinsic::ALL {
-            if exports(module, intr.call_name()) {
-                out.insert(intr.call_name().to_string());
-            }
-        }
-    } else if let Some((module, name)) = rest.rsplit_once("::") {
-        if exports(module, name) {
-            out.insert(name.to_string());
-        }
-    }
 }
 
 /// `use dep::fn as alias` / `use dep::fn` / braced sibling `use http::{fn, Type}`

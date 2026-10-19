@@ -68,7 +68,7 @@ pub fn execute(
 
     if target_str.eq_ignore_ascii_case("rust") {
         if let Some(root) = crate::module_system::project::find_manifest_dir(path) {
-            super::path_deps::build_missing(&root)?;
+            crate::package::path_deps::build_missing(&root)?;
         }
     }
 
