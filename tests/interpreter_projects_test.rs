@@ -192,42 +192,42 @@ fn fuzz_compiled_module_trees_match_interpreter() {
     }
 }
 
-/// `wj run --hot` (ADR-0021 spike): editing a function body changes the running program's behaviour within
-/// a few loop iterations while its state (the counter) survives; the process is never restarted.
+/// `wj run --hot` (ADR-0021 spike): editing a function body changes the running program's behaviour while its
+/// state (the counter) survives; the process is never restarted. The program is paced by stdin, so the test
+/// decides exactly when each step runs (no timing assumptions about the interpreter's clock).
 #[test]
 fn hot_reload_swaps_a_body_and_keeps_state() {
-    use std::io::{BufRead, BufReader};
+    use std::io::{BufRead, BufReader, Write};
     let d = tempfile::tempdir().unwrap();
     std::fs::write(d.path().join("wj.toml"), "[package]\nname = \"hot\"\nversion = \"0.1.0\"\n").unwrap();
     std::fs::create_dir_all(d.path().join("src")).unwrap();
     std::fs::write(d.path().join("src/step.wj"), "pub fn step(n: int) -> int {\n    n + 1\n}\n").unwrap();
     std::fs::write(
         d.path().join("src/main.wj"),
-        "use std::time\nuse step\n\nfn main() {\n    let mut state = 0\n    let mut i = 0\n    while i < 4000 {\n        state = step::step(state)\n        println(\"${state}\")\n        time::sleep_millis(2)\n        i += 1\n    }\n}\n",
+        "use std::io\nuse step\n\nfn main() {\n    let mut state = 0\n    loop {\n        let mut line = String::new()\n        let n = io::stdin().read_line(&mut line).unwrap_or(0)\n        if n == 0 {\n            break\n        }\n        state = step::step(state)\n        println(\"${state}\")\n    }\n}\n",
     )
     .unwrap();
-    let mut child = Command::new(WJ).args(["run", "--hot"]).current_dir(d.path()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+    let mut child = Command::new(WJ)
+        .args(["run", "--hot"])
+        .current_dir(d.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
-    let mut before = 0i64;
-    for _ in 0..20 {
-        before = lines.next().unwrap().unwrap().trim().parse().unwrap();
-    }
-    std::thread::sleep(std::time::Duration::from_millis(30));
+    let mut tick = |stdin: &mut std::process::ChildStdin| -> i64 {
+        stdin.write_all(b"\n").unwrap();
+        stdin.flush().unwrap();
+        lines.next().unwrap().unwrap().trim().parse().unwrap()
+    };
+    let before: Vec<i64> = (0..3).map(|_| tick(&mut stdin)).collect();
+    assert_eq!(before, vec![1, 2, 3]);
     std::fs::write(d.path().join("src/step.wj"), "pub fn step(n: int) -> int {\n    n + 1000\n}\n").unwrap();
-    let mut prev = before;
-    let mut jumped = false;
-    // stdout is block-buffered, so lines printed before the edit can still arrive: read to the end
-    loop {
-        let Some(Ok(l)) = lines.next() else { break };
-        let v: i64 = l.trim().parse().unwrap();
-        assert!(v > prev, "state must keep growing (no restart): {prev} then {v}");
-        if v - prev == 1000 {
-            jumped = true;
-            break;
-        }
-        prev = v;
-    }
-    let _ = child.kill();
-    assert!(jumped, "the edited body never ran (last value {prev}, before edit {before})");
-    assert!(prev >= before, "state was reset");
+    std::thread::sleep(std::time::Duration::from_millis(300)); // > watcher poll (20 ms)
+    let after = tick(&mut stdin);
+    drop(stdin);
+    let _ = child.wait();
+    assert_eq!(after, 1003, "edited body must run with the kept state (3 + 1000)");
 }
