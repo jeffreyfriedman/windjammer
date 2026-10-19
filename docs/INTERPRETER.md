@@ -270,7 +270,8 @@ Findings from running the same programs through the compiled path (compiler bugs
   place, field reads and method calls have inline caches, and a construct it does not lower runs in the tree walker as an
   island inside the compiled function. `--engine walker` runs the tree walker alone (the reference semantics; the parity test
   compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 12x faster than in the walker,
-  faster than CPython on both; `--features jit` adds a Cranelift tier for hot integer functions. `scripts/interp_bench.py`
+  faster than CPython on both; hot functions whose values are all `int` are compiled to machine code by Cranelift
+  (`wj run --no-jit` or `WJ_JIT=0` turns that off; `fib(30)` is about 37x the walker with it). `scripts/interp_bench.py`
   is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
   `wj test --interpret` uses the same engine.
 
