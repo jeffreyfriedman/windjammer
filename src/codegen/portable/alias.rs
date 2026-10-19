@@ -16,6 +16,7 @@ struct Alias {
 }
 
 thread_local! {
+    static MODULES: RefCell<std::collections::HashSet<String>> = RefCell::new(Default::default());
     static ALIASES: RefCell<HashMap<String, Alias>> = RefCell::new(HashMap::new());
     static DEPTH: RefCell<usize> = const { RefCell::new(0) };
 }
@@ -23,12 +24,15 @@ thread_local! {
 /// Removes the installed aliases when dropped.
 pub struct AliasScope {
     previous: HashMap<String, Alias>,
+    previous_modules: std::collections::HashSet<String>,
 }
 
 impl Drop for AliasScope {
     fn drop(&mut self) {
         let prev = std::mem::take(&mut self.previous);
         ALIASES.with(|a| *a.borrow_mut() = prev);
+        let pm = std::mem::take(&mut self.previous_modules);
+        MODULES.with(|m| *m.borrow_mut() = pm);
     }
 }
 
@@ -37,7 +41,31 @@ pub fn install(program: &Program) -> AliasScope {
     let mut table = HashMap::new();
     collect(&program.items, &mut table);
     let previous = ALIASES.with(|a| std::mem::replace(&mut *a.borrow_mut(), table));
-    AliasScope { previous }
+    let mut mods = std::collections::HashSet::new();
+    collect_modules(&program.items, &mut mods);
+    let previous_modules = MODULES.with(|m| std::mem::replace(&mut *m.borrow_mut(), mods));
+    AliasScope { previous, previous_modules }
+}
+
+fn collect_modules(items: &[Item], out: &mut std::collections::HashSet<String>) {
+    for item in items {
+        if let Item::Mod { name, items, .. } = item {
+            out.insert(name.clone());
+            collect_modules(items, out);
+        }
+    }
+}
+
+/// `geo::inner::one` -> `one`, `shapes::Color::Red` -> `Color::Red`: the leading segments that
+/// name modules of the program are dropped (portable modules are flat: items of all modules share
+/// one namespace). `None` when no leading segment is a module.
+pub fn strip_modules(path: &str) -> Option<String> {
+    let segs: Vec<&str> = path.split("::").collect();
+    let n = MODULES.with(|m| {
+        let m = m.borrow();
+        segs.iter().take(segs.len().saturating_sub(1)).take_while(|s| m.contains(**s) || matches!(**s, "self" | "super" | "crate")).count()
+    });
+    (n > 0).then(|| segs[n..].join("::"))
 }
 
 fn collect(items: &[Item], out: &mut HashMap<String, Alias>) {
@@ -54,8 +82,10 @@ fn collect(items: &[Item], out: &mut HashMap<String, Alias>) {
 
 /// The alias's own generic parameters (`type Pair<T> = (T, T)`).
 fn alias_params(item: &Item) -> Vec<String> {
-    let _ = item;
-    Vec::new()
+    match item {
+        Item::TypeAlias { type_params, .. } => type_params.iter().map(|t| t.name.clone()).collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// Expand `name<args>` if it is an alias. Cyclic aliases stop at a fixed depth (`Unknown`).

@@ -92,6 +92,9 @@ impl<'e> Lowerer<'e> {
                 return self.call_value(f, args);
             }
         }
+        if let Some(last) = crate::codegen::portable::alias::strip_modules(name) {
+            return self.named_call(&last, args, want);
+        }
         if let Some((owner, member)) = name.rsplit_once("::") {
             return self.path_call(owner, member, args, want);
         }
@@ -163,6 +166,7 @@ impl<'e> Lowerer<'e> {
 
     fn path_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        let owner = crate::codegen::portable::alias::strip_modules(&owner).unwrap_or(owner);
         let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
         // `Box<T>` / `Rc<T>` / `Arc<T>` are erased to `T` (values are already heap objects or
         // copied by value semantics), so `Box::new(x)` is `x`.
@@ -357,6 +361,13 @@ impl<'e> Lowerer<'e> {
             if method == "clone" {
                 let ty = recv.ty.clone();
                 return Ok(PExpr::new(ty, PK::Copy(recv)));
+            }
+            // `t.into()` for `T: Into<string>`: the std types that convert into a string are
+            // the string types themselves (and `char`, a one-character string on JS), so it is
+            // a checked conversion of the generic value to `string`.
+            let into_string = self.bounds.get(p).is_some_and(|b| b.iter().any(|t| t.replace(' ', "") == "Into<string>" || t.replace(' ', "") == "Into<String>"));
+            if method == "into" && args.is_empty() && into_string {
+                return Ok(PExpr::new(Ty::Str, PK::Cast(self.own(recv), Ty::Str)));
             }
         }
         self.builtin_method(recv, method, turbofish, args, want)

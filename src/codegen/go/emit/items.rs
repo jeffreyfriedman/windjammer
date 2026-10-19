@@ -22,7 +22,10 @@ impl<'m> Go<'m> {
         }
         for s in &m.structs {
             for f in &s.methods {
-                self.function(f, Some((&s.name, &s.type_params, true)))?;
+                // Go methods cannot declare type parameters: a generic method is a free function
+                // `Owner_name[..](self, ..)`, like enum methods.
+                let as_method = f.type_params.is_empty();
+                self.function(f, Some((&s.name, &s.type_params, as_method)))?;
             }
         }
         for e in &m.enums {
@@ -80,7 +83,7 @@ impl<'m> Go<'m> {
     fn trait_iface(&mut self, t: &PTrait) -> PResult<()> {
         self.line(&format!("type {} interface {{", ident(&t.name)));
         self.ind += 1;
-        for m in &t.methods {
+        for m in t.methods.iter().filter(|m| m.type_params.is_empty()) {
             let ps: PResult<Vec<String>> = m.params.iter().map(|p| Ok(format!("{} {}", ident(&p.name), self.ty(&p.ty)?))).collect();
             let ret = if m.ret == Ty::Unit { String::new() } else { format!(" {}", self.ty(&m.ret)?) };
             self.line(&format!("{}({}){ret}", ident(&m.name), ps?.join(", ")));
