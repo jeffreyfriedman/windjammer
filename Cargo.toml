@@ -164,6 +164,11 @@ path = "tests/backend_conformance_test.rs"
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
 
+# ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
+[[test]]
+name = "semantic_facts_portable"
+path = "tests/semantic_facts_portable_test.rs"
+
 # Inference differential harness standalone: cargo test --release --test inference_differential
 [[test]]
 name = "inference_differential"

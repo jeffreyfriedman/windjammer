@@ -60,6 +60,8 @@ fn wrap(name: string) -> Holder {
         local_types: HashMap::new(),
         body: Vec::new(),
         ownership_trail: Default::default(),
+        default_int_literals: Default::default(),
+        last_uses: Default::default(),
     }]);
 
     let output = gen.generate_program(&program, &analyzed);

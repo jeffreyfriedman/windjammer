@@ -592,6 +592,17 @@ impl<'ast> CodeGenerator<'ast> {
                     value,
                     Expression::MethodCall { .. } | Expression::MacroInvocation { .. }
                 );
+                let solver_pins_int_init = self.solver_pins_int_literal_init(value);
+                if crate::debug_env::enabled("WJ_DEBUG_LET_WIDTH") {
+                    eprintln!(
+                        "[let-width] {:?} pins={} mutable={} counter={} ret={:?}",
+                        var_name,
+                        solver_pins_int_init,
+                        mutable,
+                        Self::mut_let_rhs_is_return_width_counter(value),
+                        self.current_function_return_type
+                    );
+                }
                 let needs_collection_ascription_sv = !type_inferred_from_context
                     && var_name.is_some_and(|vn| {
                         self.local_var_types.get(vn).is_some_and(|ty| {
@@ -608,7 +619,10 @@ impl<'ast> CodeGenerator<'ast> {
                     output.push_str(&self.type_to_rust(&ty));
                 } else if string_utilities::untyped_let_rhs_needs_string_ascription(value) {
                     output.push_str(": String");
-                } else if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
+                } else if mutable
+                    && !solver_pins_int_init
+                    && Self::mut_let_rhs_is_return_width_counter(value)
+                {
                     // later `x = u32` assign beats return-width i64 for untyped counters.
                     let later_peer = var_name
                         .and_then(|vn| self.mut_int_local_peer_width_from_later_assigns(vn));
@@ -750,7 +764,14 @@ impl<'ast> CodeGenerator<'ast> {
                         self.local_var_types.get(vn),
                         Some(Type::Reference(_) | Type::MutableReference(_))
                     );
-                    if !rhs_is_ref {
+                    if solver_pins_int_init && !rhs_is_ref {
+                        // The solver resolved this literal's class to `int`; the peer scans below
+                        // are width heuristics and must not override it (C4, D-WIDTH-OWNERS).
+                        self.assignment_int_target_type = Some(Type::Int);
+                        self.local_var_types.insert(vn.to_string(), Type::Int);
+                        self.codegen_i32_binding_names.remove(vn);
+                    }
+                    if !rhs_is_ref && !solver_pins_int_init {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
                             // `Vec<u64>` / `&Vec<u64>` is a collection formal. The integer
                             // suffix peer is the element; the binding stays `Vec<…>`.
@@ -769,7 +790,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                if mutable && Self::mut_let_rhs_is_return_width_counter(value) {
+                if mutable && !solver_pins_int_init && Self::mut_let_rhs_is_return_width_counter(value) {
                     // later u32 assign peer beats return i64 for `let mut x = 0`.
                     // P3.538: later `prev = m.version` (WJ int) beats i32 coord sentinel.
                     if let Some(vn) = var_name {
@@ -867,6 +888,13 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
+                }
+                // C4 (D-WIDTH-OWNERS): a bare integer literal init takes the width the numeric
+                // solver resolved for its class. `function_prefers_i32_coord_locals` below is a
+                // heuristic *paint* for classes nothing constrains; it must never override a solved
+                // `int` (an `int` accumulator over `int` fields was truncated to i32).
+                if self.assignment_int_target_type.is_none() && solver_pins_int_init {
+                    self.assignment_int_target_type = Some(Type::Int);
                 }
                 if self.assignment_int_target_type.is_none()
                     && self.function_prefers_i32_coord_locals()
@@ -1504,5 +1532,31 @@ impl<'ast> CodeGenerator<'ast> {
         };
         matches!((bound, init), (Some(b), Some(i)) if b == i)
             && (mutable || auto_needs_mut || matches!(pattern, Pattern::MutBinding(_)))
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// True when `value` is a bare integer literal (optionally negated) whose class the semantic
+    /// layer resolved to `int`: the numeric solver says i64 (a typed `int` field, parameter or
+    /// declared local is in its class) or NUM-DEFAULT-INT proves nothing constrains it.
+    pub(super) fn solver_pins_int_literal_init(&self, value: &Expression<'ast>) -> bool {
+        let literal = match value {
+            Expression::Literal { value: Literal::Int(_), .. } => value,
+            Expression::Unary { op: crate::parser::UnaryOp::Neg, operand, .. }
+                if matches!(&**operand, Expression::Literal { value: Literal::Int(_), .. }) =>
+            {
+                *operand
+            }
+            _ => return false,
+        };
+        let solved_i64 = self
+            .numeric_inference
+            .as_ref()
+            .is_some_and(|ni| ni.get_int_type(literal) == crate::type_inference::IntType::I64);
+        let semantic_default = self.current_ir_function.as_ref().is_some_and(|f| {
+            f.default_int_literals
+                .contains(&crate::ir::numeric_defaults::node_id(literal))
+        });
+        solved_i64 || semantic_default
     }
 }

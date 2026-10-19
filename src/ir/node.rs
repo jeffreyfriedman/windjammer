@@ -109,6 +109,14 @@ pub struct IrFunction {
     /// Never read by a decision; `wj explain-ownership` uses it to name the pass that overrode
     /// the solver, which is the deletion list for C5.
     pub ownership_trail: std::collections::BTreeMap<String, Vec<(&'static str, OwnedType)>>,
+
+    /// Semantic fact NUM-DEFAULT-INT (C4): integer literals (by AST node identity,
+    /// `numeric_defaults::node_id`) whose class no context constrains; they are `int` (i64).
+    pub default_int_literals: std::collections::BTreeSet<usize>,
+
+    /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
+    /// the binding is never read again on any path.
+    pub last_uses: std::collections::BTreeSet<usize>,
 }
 
 impl IrFunction {
@@ -337,6 +345,16 @@ impl IrFunction {
             local_types: HashMap::new(),
             body: Vec::new(),
             ownership_trail: std::collections::BTreeMap::new(),
+            default_int_literals: crate::ir::numeric_defaults::default_int_literals(&analyzed.decl.body),
+            last_uses: crate::ir::liveness::last_uses(
+                &analyzed
+                    .decl
+                    .parameters
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect::<Vec<_>>(),
+                &analyzed.decl.body,
+            ),
         }
     }
 }

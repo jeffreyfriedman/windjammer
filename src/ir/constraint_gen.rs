@@ -591,7 +591,20 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
 
     /// Walk the entire function body.
     fn walk_body(&mut self) {
-        for stmt in &self.analyzed.decl.body {
+        let body = &self.analyzed.decl.body;
+        for (i, stmt) in body.iter().enumerate() {
+            // A trailing expression is the function's value (implicit return).
+            if i + 1 == body.len() && self.analyzed.decl.return_type.is_some() {
+                if let Statement::Expression { expr, .. } = stmt {
+                    let val_var = self.walk_expression(expr);
+                    self.cs.add_because(Constraint::TypeEquals(self.return_var, val_var), tagged("TY-UNIFY"));
+                    self.cs.add_because(
+                        Constraint::UsedAs(val_var, self.return_var),
+                        origin("OWN-RETURNED", "tail expression: the function's value must be owned", &expr.location()),
+                    );
+                    continue;
+                }
+            }
             self.walk_statement(stmt);
         }
     }
@@ -792,6 +805,15 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
         match expr {
             Expression::Literal { value, location } => {
                 let var = self.cs.fresh_var();
+                if let Literal::Int(_) = value {
+                    // NUM-PROPAGATE / NUM-DEFAULT-INT: an unsuffixed integer takes its class's
+                    // width; an unconstrained class resolves to `int` (i64) in the solver.
+                    self.cs.add_because(
+                        Constraint::IsInteger(var),
+                        origin("NUM-DEFAULT-INT", "unsuffixed integer literal: width from its uses, else int (i64)", location),
+                    );
+                    return var;
+                }
                 let base = literal_to_base_type(value);
                 self.cs.add_because(
                     Constraint::TypeIs(var, base.clone()),
@@ -1415,7 +1437,8 @@ fn literal_rule(value: &Literal) -> &'static str {
 /// Map a literal value to its base type.
 fn literal_to_base_type(lit: &Literal) -> BaseType {
     match lit {
-        Literal::Int(_) => BaseType::I32,
+        // Unsuffixed integers in patterns: `int` (ADR-0015). Expressions use a soft class instead.
+        Literal::Int(_) => BaseType::I64,
         Literal::IntSuffixed(_, suffix) => match suffix.as_str() {
             "i8" => BaseType::I8,
             "i16" => BaseType::I16,
@@ -1588,11 +1611,21 @@ pub fn b(x: string) {}
         let analyzed = analyze_source("pub fn lit() -> i32 { 42 }");
         let fc = generate_constraints(&analyzed[0], None);
 
-        let has_i32 = count_constraints(&fc, |c| matches!(c, Constraint::TypeIs(_, BaseType::I32)));
+        // The literal is a soft integer class unified with the declared return type (NUM-PROPAGATE):
+        // it resolves to i32, not to the `int` default.
+        let result = crate::ir::solver::Solver::new(&fc.constraints).solve(&fc.constraints);
+        let ret = fc.var_map.return_var.0 as usize;
+        assert_eq!(result.types[ret], Some(BaseType::I32));
         assert!(
-            has_i32 >= 2,
-            "should have TypeIs(I32) for literal 42 and return type"
+            result.types.iter().filter(|t| **t == Some(BaseType::I32)).count() >= 2,
+            "the tail literal 42 must resolve to the declared i32"
         );
+        // An unconstrained literal resolves to int (i64) (ADR-0015).
+        let analyzed = analyze_source("pub fn lit2() { let x = 42 }");
+        let fc = generate_constraints(&analyzed[0], None);
+        let result = crate::ir::solver::Solver::new(&fc.constraints).solve(&fc.constraints);
+        let x = fc.var_map.locals["x"].0 as usize;
+        assert_eq!(result.types[x], Some(BaseType::I64));
     }
 
     #[test]

@@ -957,6 +957,16 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.in_index_context {
                     return crate::codegen::rust::literals::generate_literal(lit);
                 }
+                // NUM-DEFAULT-INT (ADR-0015): the semantic layer proved that nothing (no declared
+                // type, call, index, field or return) constrains this literal's class, so it is `int`.
+                // This fact wins over the legacy collector, whose answer for such classes is its own
+                // i32 default.
+                if self.current_ir_function.as_ref().is_some_and(|f| {
+                    f.default_int_literals
+                        .contains(&crate::ir::numeric_defaults::node_id(expr))
+                }) {
+                    return format!("{}_i64", i);
+                }
                 use crate::type_inference::IntType;
                 // Priority 0: explicit int/usize target from let/assign/call-arg / binary peer
                 // must beat struct-field width. Otherwise `total_triangles: (total / 3) as u64`

@@ -456,10 +456,11 @@ impl Solver {
 
         for (root, class) in root_classes {
             if self.types[root as usize].is_none() {
+                // ADR-0015 section 1: `int` = i64, `float` = f64.
                 let default = match class {
-                    NumericClass::Integer => BaseType::I32,
+                    NumericClass::Integer => BaseType::I64,
                     NumericClass::Float => BaseType::F64,
-                    NumericClass::Numeric => BaseType::I32,
+                    NumericClass::Numeric => BaseType::I64,
                 };
                 self.types[root as usize] = Some(default);
             }
@@ -781,8 +782,8 @@ mod tests {
         assert!(result.diagnostics.is_empty());
         assert_eq!(
             result.types[0],
-            Some(BaseType::I32),
-            "IsInteger should infer I32 by default"
+            Some(BaseType::I64),
+            "IsInteger should infer int (i64) by default (ADR-0015)"
         );
     }
 
@@ -805,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_numeric_infers_i32_default() {
+    fn test_is_numeric_infers_i64_default() {
         let mut cs = ConstraintSet::new();
         let a = cs.fresh_var();
 
@@ -817,8 +818,8 @@ mod tests {
         assert!(result.diagnostics.is_empty());
         assert_eq!(
             result.types[0],
-            Some(BaseType::I32),
-            "IsNumeric should default to I32"
+            Some(BaseType::I64),
+            "IsNumeric should default to int (i64) (ADR-0015)"
         );
     }
 
