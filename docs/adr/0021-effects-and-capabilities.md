@@ -406,9 +406,74 @@ Decisions taken while implementing (each enforced by a test):
 
 The same default sandbox applies to `wj test --interpret` and the REPL (their messages offer only the `wj.toml` fix: no `--allow` there). A verified example declares what it needs with `// allow:` header lines; a mocked http port (`--mock-http`) needs no network capability in the default profile, but an explicit grant keeps governing mocked calls.
 
-Not done in E2: `@uses` bounds on trait methods (the parser keeps no attributes on trait methods; SPEC-EFF-006 still uses the union of impls);
-`console` is gated at run time in the interpreter only (compiled backends reject a denied `console` at compile time, which is exact because the
+Follow-ups delivered after E2 (2026-10-19): `@uses`/`@pure` bounds on trait methods (the parser keeps attributes on trait methods; SPEC-EFF-006, 041, 042) and the per-run scratch directory
+(SPEC-EFF-043). Canonicalization caching was evaluated and **not** added: a cache keyed on the parent directory's inode and mtime does not see a symlink swapped
+higher in the path, and revalidating every ancestor costs about what `canonicalize` costs, so the strict check stays (the 6.6x on sink-dense code is the price of the guarantee).
+
+Not done in E2: `console` is gated at run time in the interpreter only (compiled backends reject a denied `console` at compile time, which is exact because the
 effect has no resource); Go/JS have no `net`/`env`/`process` std modules to guard yet.
+
+### E3 design (2026-10-19): the effect port, log v1, simulation
+
+**Where the port sits.** One struct, `EffectPort` (`src/interpreter/effect_port.rs`), reached from three choke points that already exist:
+(1) `call_builtin_fn` for every path the sink table knows (the same table the gate uses, so a new sink is recorded the moment it is gated);
+(2) the clock sources `wall_ns()` and `mono_ns()`, so every `Instant`, `SystemTime`, `DateTime` and `elapsed()` is a recorded reading and
+needs no per-type encoding; (3) the methods of the `Stdin` handle (reading input is an effect even though `io::stdin()` only mints a handle).
+A run without `--record`, `--replay` or `--simulate` has no port (`Option::None`), so the cost is one pointer test on the sink path.
+
+**Modes.**
+| Mode | Sink call | Clock reading | Random |
+|---|---|---|---|
+| Live (default) | performed | real | real |
+| Record | performed, then `{request, result}` appended | real, appended | real, appended; the run's RNG seed goes in the header |
+| Replay | request compared with the log; the logged result is returned; **nothing is performed** | from the log | from the log; RNG re-seeded from the header for any draw the table does not name |
+| Simulate | answered by the seeded world (below) | virtual clock | RNG derived from `sim_seed` |
+
+**Observed values.** Some reads are not sinks and not gated but still differ between runs: `process::pid`, `env::args`, `env::temp_dir`,
+`env::current_dir` (and the `fs::`/`path::` spellings). They go through the port as *observations* (recorded and replayed, never denied).
+This is the "find and route hidden non-determinism" half of the kill criterion; `OBSERVED` is a list next to `NOT_SINKS`, and a test requires
+every NOT_SINKS entry that reads the host to be on it or on an explicit "pure" list.
+
+**Values in the log.** Data results (unit, bool, int, float, char, string, vec, tuple, struct, enum, option/result, map, set) round-trip through a
+tagged JSON encoding (`{"i":"i64","v":5}`, `{"s":"..."}`, `{"st":"ProcessOutput","f":{...}}`). `Metadata` is encoded field by field. A sink that
+returns a live handle (`subprocess::spawn`, `http::serve`, `db::connect`, sockets) cannot be recorded: `--record` stops at that call with an error that
+names it. This is a narrowing of the claim, stated up front: E3 replays programs whose effects return data. Payloads over 64 KiB are stored once in
+`LOG.blobs/<sha256>` and referenced by hash.
+
+**Log v1** is the format in section 10, plus `"hash_seed"`, `"args"` and `"rng_seed"` in the header; events are canonical JSON, one per line, keys sorted,
+so logs diff cleanly. `seq` counts port events in the order the deterministic scheduler runs them; `task` is the scheduler's task id.
+
+**Divergence (`WJ0049`).** On replay a request is `(effect, op, args)`. A mismatch at `seq` N, a run that ends with events left over, and a run that
+asks for more events than the log has are all divergences. The error shows the logged and actual request, the source line of the call and the
+command that re-records. Exit status 1 (it is a program/log disagreement, not a capability denial).
+
+**Simulation (`wj test --interpret --simulate [--seed N | --seeds A..B] [--faults RATE]`).** The world is a value built from the seed:
+- time: virtual clock from 1_700_000_000 s (the `--deterministic-time` epoch), advanced by `sleep`, timeouts and `recv_timeout` only;
+- randomness: `StdRng` from `sim_seed`; the scheduler seed is `sim_seed` too, so one number reproduces the interleaving and the random stream;
+- filesystem: in-memory tree seeded from the test's directory when it has a `fixtures/` sibling, else empty; every `fs::` sink acts on it;
+  `env::temp_dir()` is a directory in it; writes never reach the host;
+- network: the `--mock-http` table if given, otherwise every connect fails with a simulated "no route"; a sandboxed test is never at the mercy of the network;
+- environment and processes: empty environment; `process::*` fails with "command not found" unless the grant is widened (the capability gate still runs first);
+- faults: with `--faults RATE` (default 0) each fs write, fs read and network call fails with probability RATE drawn from the seeded stream, with the messages the
+  real failure would carry (`No space left on device`, `Connection reset by peer`, a short write that keeps a prefix).
+A failing seed prints `seed N failed; reproduce: wj test --interpret --simulate --seed N FILE` and re-running it reproduces the failure exactly
+(the gate is the same property as replay: the run is a function of program, seed and fault rate).
+
+**Gates (measured, not asserted).**
+1. Replay is bit-exact (stdout, stderr, exit status) on 100% of recorded runs of a corpus of at least 40 programs (the effect corpus, the spec examples
+   that touch sinks, and the verified examples that run without a network), recorded under two different scheduler seeds and replayed on a different working directory.
+2. Simulation is a function of (program, seed, fault rate): 100% of corpus programs give identical output on two runs of the same seed; and the output changes with
+   the seed for the programs that use randomness or concurrency (so the seed is not ignored).
+3. Planted-bug study: 20 small programs, each a concurrency, timing or fault-handling bug of a kind found in public post-mortems (lost update across a yield,
+   check-then-act on a file, retry without backoff reading a stale clock, unhandled partial write, ...), each with a test that passes under the default run.
+   At least 80% (16) are found by `--seeds 1..200` within 10 minutes in total, and every found seed replays the failure.
+4. Record overhead at most 2x on the interpreter benchmark that performs sink calls (`bench/effects/sink.wj`) and at most +3% on the non-sink one.
+5. SPEC-EFF-029 (replay), 027, 028 pass without `xfail`; SPEC-EFF-031 has an acceptance test (`tests/effect_replay_test.rs`).
+
+**Kill / rethink.** Replay below 100% on the corpus after routing every source the audit finds means the port cannot see the non-determinism: either route it or
+narrow the claim in the spec (which this note already does for handles). Planted-bug study below 50% means the simulation world is too tame to be worth the
+claim: keep record/replay, drop the DST positioning. Record overhead above 4x means the log encoding is too heavy: switch events to a binary encoding with the
+JSON form as an export.
 
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).
