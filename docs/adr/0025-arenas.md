@@ -105,6 +105,17 @@ into an `Arena` needs type facts the text-level optimizer does not have; it is l
 Runners and the last recorded run (with the load average at measurement time): `benchmarks/arenas/` (`results.json`).
 This ADR does not retype numbers (docs policy); the summary of where arenas win and lose is in the next section.
 
+## Where arenas win and lose (from `benchmarks/arenas/results.json`, loadavg ~19 at measurement)
+- Win: against per-object `Box`/`String` allocation, `Arena<T>` and `Scratch` are 4x (particles, tree) and 1.8-2.1x
+  (scratch strings) faster and cut heap allocations per frame from 20,014 / 131,070 / 15,012 to 0-2.
+- No win: against a `Vec<T>` that is rebuilt every frame the typed arena is a tie (the allocator recycles the same
+  block); the arena's value there is the guaranteed zero allocations, handles, and the escape check, not speed.
+- Loss: a hand-written `bumpalo` reference (`&mut T`) matches `Arena<T>` within noise, and `Scratch::new_string` loses to a
+  single reused buffer (the hand-tuned reuse variant) by about 1.4x because each label is formatted then copied.
+  `Scratch::fmt` closes part of the gap (render once into a staging buffer, copy once).
+- Compiled Windjammer (`run_wj.py`, heavy load, indicative only): `scratch_reuse` turns a per-iteration `String::new()`
+  loop into a hoisted buffer for roughly 2.6-3.2x; `Arena` vs a fresh `Vec` per frame is again a tie.
+
 ## Kill criteria
 - If `Arena<T>` is not at least 1.5x faster than per-object `Box` allocation on the particle and tree workloads
   (release, quiet machine), or `Scratch` is not faster than `String::new()` per label, drop the runtime types and

@@ -1,0 +1,9 @@
+{
+  "note": "run_wj.py, 11 runs, compiled Windjammer (debug wj, release generated crates). Measured under heavy load: loadavg 94/73/69 before, 127/104/83 after; treat ratios as indicative.",
+  "particles_vec_median_ms": 17.0,
+  "particles_arena_median_ms": 17.7,
+  "labels_loop_median_ms": 163.3,
+  "labels_loop_auto_arena_median_ms": 50.8,
+  "labels_loop_min_ms": 116.9,
+  "labels_loop_auto_arena_min_ms": 44.3
+}
