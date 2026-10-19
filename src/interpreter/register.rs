@@ -174,6 +174,12 @@ impl Interpreter {
                     self.type_aliases.insert(name.clone(), target.clone());
                 }
                 Item::Mod { name, items, .. } => {
+                    // A bodiless `mod name` declares the file module `name.wj` / `name/mod.wj`.
+                    if items.is_empty() {
+                        if self.load_child_module(module, name)?.is_some() {
+                            continue;
+                        }
+                    }
                     let file = self.modules[module].file.clone();
                     let child = self.new_module(name, file, Some(module));
                     self.modules[module].children.insert(name.clone(), child);

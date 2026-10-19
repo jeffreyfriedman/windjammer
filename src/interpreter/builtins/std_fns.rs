@@ -53,11 +53,6 @@ pub fn register(r: &mut Registry) {
     r.func("assert_false", |_, a| {
         if matches!(arg(&a, 0, "assert_false")?, Value::Bool(false)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_false failed")) }
     });
-    r.func("assert_contains", |it, a| {
-        let items = it.to_items(arg(&a, 0, "assert_contains")?)?;
-        let x = arg(&a, 1, "assert_contains")?;
-        if items.iter().any(|y| y.structural_eq(&x)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_contains failed: item not found")) }
-    });
     r.func("assert_empty", |it, a| {
         if it.to_items(arg(&a, 0, "assert_empty")?)?.is_empty() { Ok(Value::Unit) } else { Err(panic_ctl("assert_empty failed")) }
     });
