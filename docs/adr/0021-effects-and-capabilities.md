@@ -98,6 +98,12 @@ confinement, so granted by default, but visible to `durable fn`, replay and simu
 and `ffi` are *authority* effects.
 
 ### 3. Inference by default, annotations optional (progressive disclosure)
+**Surface rule: keywords change execution; attributes make claims.** A keyword (`async fn`, `durable fn`, `spawn`,
+`scope`) changes how code runs: removing it changes behaviour. An attribute (`@uses`, `@pure`, `@effect`, `@derive`)
+states a claim the compiler checks or a name it records: removing a *true* claim never changes behaviour, and a false
+claim is a compile error. That is why `durable fn` is a keyword (it makes the runtime journal steps) and `@uses`/`@pure`
+are attributes (they only assert what inference already computes).
+
 - **Level 0, write code.** No annotations. `fs::read_to_string("cfg.toml")` performs `fs.read("cfg.toml")`; callers
   inherit it. `wj run` of a script in a directory with no manifest uses the *local profile* (decision D1).
 - **Level 1, see it.** `wj explain-effects` prints each function's effect set and the call chain to every sink. `wj check`
@@ -354,7 +360,11 @@ grant status and the check placement (`proven` / `runtime guard` / `denied`).
 - ADR-0009's choice (per-app now, per-dependency later, `unknown` for externs) is implemented by E1/E2.
 - WJ-SEC-01..04 remain as background; where they disagree with this ADR, this ADR wins.
 
-## Decisions needed from the project owner
+## Decisions (project owner, 2026-10-19)
+D1-D5, D7 and D8 are accepted as recommended; D6 is decided as written below (2026-10-18). D1 is staged: the release
+that ships E1 runs the local profile in **warn** mode (a sink outside it runs and prints `warning[WJ0040]` once,
+naming the `wj.toml` line or `--allow` flag that would grant it); the next minor release **enforces** it. A manifest
+`[capabilities]` table, `--sandbox` or `--allow` always enforces. `WJ_CAPS=enforce` previews the future default.
 - **D1. Default grant without a manifest** for `wj run --interpret`. Recommended *local profile*: fs read/write inside
   the project directory, `time`, `random`, `console`; net/env/process/ffi denied with a message naming `--allow`.
   Alternative: keep today's ambient fs/env/process (compatible, weaker).

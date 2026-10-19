@@ -114,6 +114,16 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("println", &[u(Console, Res::None)]),
     ("eprint", &[u(Console, Res::None)]),
     ("eprintln", &[u(Console, Res::None)]),
+    ("log::debug", &[u(Console, Res::None)]),
+    ("log::debug_with", &[u(Console, Res::None)]),
+    ("log::error", &[u(Console, Res::None)]),
+    ("log::error_with", &[u(Console, Res::None)]),
+    ("log::info", &[u(Console, Res::None)]),
+    ("log::info_with", &[u(Console, Res::None)]),
+    ("log::trace", &[u(Console, Res::None)]),
+    ("log::trace_with", &[u(Console, Res::None)]),
+    ("log::warn", &[u(Console, Res::None)]),
+    ("log::warn_with", &[u(Console, Res::None)]),
 ];
 
 /// Library functions in effect-relevant modules that are deliberately NOT sinks (pure string/value
@@ -129,7 +139,7 @@ pub static NOT_SINKS: &[&str] = &[
     "time::duration_hours", "time::duration_minutes", "time::duration_seconds", "subprocess::close",
     "subprocess::frames_in_agent_command", "subprocess::invalid_handle", "subprocess::is_valid", "subprocess::kill",
     "subprocess::read_agent_obs_n", "subprocess::read_line", "subprocess::read_line_until_prefix", "subprocess::wait",
-    "subprocess::write_line", "cli::app", "cli::args",
+    "subprocess::write_line", "cli::app", "cli::args", "log::debug_enabled", "log::error_enabled", "log::info_enabled", "log::trace_enabled", "log::warn_enabled", 
 ];
 
 /// Modules whose builtins carry authority and must therefore be classified one way or the other.

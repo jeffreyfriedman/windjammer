@@ -3,7 +3,7 @@
 
 mod cache;
 mod effects;
-mod files;
+pub mod files;
 mod fix;
 mod front;
 pub mod locate;

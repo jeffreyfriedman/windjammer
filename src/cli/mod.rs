@@ -9,6 +9,7 @@ pub mod cache;
 pub mod check;
 pub mod clean;
 pub mod errors;
+pub mod explain_effects;
 pub mod explain_ownership;
 pub mod fix;
 pub mod fmt;
