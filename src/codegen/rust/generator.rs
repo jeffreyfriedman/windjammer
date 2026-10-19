@@ -540,12 +540,9 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
         if callee_name.contains("::") {
-            if !callee_name.starts_with("crate::") {
-                if let Some(key) = self.same_crate_callee_key(callee_name) {
-                    if key.contains("::") {
-                        return std::borrow::Cow::Owned(key);
-                    }
-                }
+            let same_crate = self.same_crate_callee_key(callee_name).filter(|k| !callee_name.starts_with("crate::") && k.contains("::"));
+            if let Some(key) = same_crate {
+                return std::borrow::Cow::Owned(key);
             }
             return std::borrow::Cow::Borrowed(callee_name);
         }
