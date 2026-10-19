@@ -15,6 +15,7 @@
 mod compile;
 mod expr;
 mod fast;
+mod island;
 mod typed;
 
 use super::engine::{FuncDef, Interpreter, Scope};
@@ -44,6 +45,8 @@ pub(crate) struct CompiledFn {
     ret_int: Option<IntTy>,
     /// Every slot is typed: once the parameters are bound the frame holds only integers (and `Unit`).
     scalar: bool,
+    /// Replay the walker's `expect_tail_type` at entry.
+    tail_hint: bool,
     body: Body,
 }
 
@@ -74,16 +77,11 @@ impl Interpreter {
     pub(crate) fn run_compiled_at(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, bound: bool) -> R {
         let own = self.enter_compiled(f, base)?;
         let r = match if bound { Ok(true) } else { self.bind_params(f, c, base) } {
-            Ok(true) => match &c.body {
-                Body::V(code) => {
-                    let r = code(self, base);
-                    self.finish_value(f, c, r)
-                }
-                Body::I(code, u, t) => {
-                    let r = code(self, base);
-                    self.finish_int(f, r, *u, *t).map(|v| Value::Int(v as i128, *t))
-                }
-            },
+            Ok(true) if c.tail_hint => {
+                self.expect_tail_type(f);
+                self.run_body(f, c, base)
+            }
+            Ok(true) => self.run_body(f, c, base),
             Ok(false) => {
                 let args = self.deopt_args(c, base, own);
                 return self.call_func_walk(f, args, None, &[], None);
@@ -98,11 +96,29 @@ impl Interpreter {
         r
     }
 
+    #[inline(always)]
+    fn run_body(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize) -> R {
+        match &c.body {
+            Body::V(code) => {
+                let r = code(self, base);
+                self.finish_value(f, c, r)
+            }
+            Body::I(code, u, t) => {
+                let r = code(self, base);
+                self.finish_int(f, r, *u, *t).map(|v| Value::Int(v as i128, *t))
+            }
+        }
+    }
+
     /// `run_compiled_at` for a function declared to return the `small` width `t`: the result unboxed.
     pub(crate) fn run_compiled_int(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, t: IntTy, bound: bool) -> R<i64> {
         let own = self.enter_compiled(f, base)?;
         let r = match if bound { Ok(true) } else { self.bind_params(f, c, base) } {
             Ok(true) => match &c.body {
+                _ if c.tail_hint => {
+                    self.expect_tail_type(f);
+                    self.run_body(f, c, base).and_then(|v| typed::unbox(v, t))
+                }
                 Body::I(code, u, _) => {
                     let r = code(self, base);
                     self.finish_int(f, r, *u, t)

@@ -1,0 +1,52 @@
+// Walker islands inside compiled functions: block-scoped guards and Rc handles are released at
+// block exit, closures capture compiled locals, destructuring lets bind locals compiled code reads.
+use std::rc::Rc
+use std::cell::RefCell
+
+fn counts(n: int) -> int {
+    let shared = Rc::new(RefCell::new(n))
+    let mut total = 0
+    let mut i = 0
+    while i < 3 {
+        let c = Rc::clone(&shared)
+        total += Rc::strong_count(&shared)
+        {
+            let mut g = c.borrow_mut()
+            *g += 1
+        }
+        i += 1
+    }
+    let v = shared.borrow()
+    total * 100 + *v
+}
+
+fn pairs(k: int) -> int {
+    let (a, b) = (k, k * 2)
+    let mut s = 0
+    for i in 0..a {
+        s += i * b
+    }
+    s
+}
+
+fn adder(base: int) -> int {
+    let step = base * 2
+    let add = |x: int| x + step
+    let mut acc = 0
+    let mut i = 0
+    while i < 4 {
+        acc = add(acc)
+        i += 1
+    }
+    acc
+}
+
+fn main() {
+    println("${counts(5)} ${pairs(6)} ${adder(3)}")
+    let names = ["a", "bb", "ccc"]
+    let mut len = 0
+    for n in names {
+        len += n.len()
+    }
+    println("${len}")
+}
