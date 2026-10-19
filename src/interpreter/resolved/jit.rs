@@ -85,7 +85,14 @@ impl Interpreter {
     /// The machine-code form of `f` (compiled with every function it calls), or `None`.
     pub(crate) fn jitted(&mut self, f: &Rc<FuncDef>) -> Option<JitFn> {
         if self.jit.is_none() {
-            self.jit = Some(Box::new(Jit::new()?));
+            match Jit::new() {
+                Some(j) => self.jit = Some(Box::new(j)),
+                None => {
+                    // no Cranelift backend for this host: closures only, and never try again
+                    self.jit_enabled = false;
+                    return None;
+                }
+            }
         }
         if let Some(r) = self.jit.as_ref().and_then(|j| j.done.get(&key(f)).copied()) {
             return r;
@@ -495,7 +502,7 @@ impl Interpreter {
             c.calls.set(n + 1);
             return None;
         }
-        if self.hot.is_some() {
+        if self.hot.is_some() || !self.jit_enabled {
             return None;
         }
         let j = match c.jit.get() {

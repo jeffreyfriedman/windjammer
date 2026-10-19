@@ -15,6 +15,12 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
   and the runtime's public surface. Compiled: imported functions shadow same-named intrinsics (`use std::log::*` then
   `debug(x)`), runtime-module calls follow the runtime signature (`http.get(req.url)`), owned handles forwarded through generic
   wrappers stay owned, unused empty collections default to unit element types, `std::process::pid`.
+- **Faster `wj run`** (ADR-0020): the resolved engine is the default interpreter engine (closures over slot-indexed
+  locals, unboxed integers, inline caches; constructs it does not lower run in the tree walker inside the compiled
+  function), and hot integer functions are compiled to machine code by Cranelift. `fib(30)` runs about 37x and a
+  5M-iteration loop about 12x faster than in the tree walker. `--engine walker` selects the reference engine;
+  `--no-jit` / `WJ_JIT=0` keeps the resolved engine without machine code. `scripts/interp_compare.sh` compares the
+  `bench/interp` kernels with the generated Rust, Python and Node.
 - **`wj reduce`**: automatic test-case reducer. `wj reduce PROJECT --oracle <rustc-error E0308[:regex]|panic|miscompile|cmd '...'> -o OUT`
   shrinks a failing multi-file project (hierarchical delta debugging over files, items, statements, match arms, fields,
   parameters, generics, attributes; literals for expressions) while `wj check` stays in the original diagnostic class

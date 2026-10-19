@@ -1,6 +1,6 @@
 ---
 status: accepted
-last_verified: 6bc4ebf6b255
+last_verified: 9507be50c346
 ---
 # ADR-0020: Interpreter execution engine (tree walker vs resolved/bytecode tier)
 
@@ -182,7 +182,7 @@ is 7x slower than Python because every `f64` and every field read is a boxed `Va
 `typed.rs` (literals, `f64` locals, arithmetic, `as f64`, calls declared `-> f64`), then field reads typed from the
 declared struct field type behind a tag check. Kill: under 2x on `nbody`, or any parity difference.
 
-### Step 7: Cranelift tier (spike, `--features jit`)
+### Step 7: Cranelift tier (`jit`, a default feature since Oct 19)
 `resolved/jit.rs` (520 lines) compiles functions whose every value is `int` and whose body is arithmetic, comparisons, `let`,
 assignment, `if`, `while`, `return` and calls to such functions, together with their callees, after 64 calls. A jitted call
 has no side effect, so on any edge (overflow, zero divisor, `i64::MIN / -1`, recursion past 2000 jitted frames) it bails
@@ -190,8 +190,25 @@ out and the call runs again in the closure engine, which produces the panic, spa
 over milestone 1 on `fib30` (0.33 s to 0.02 s: about 16x, met), at most 3k lines (met), and either the same arithmetic
 helpers or a differential test over generated programs: `tests/interpreter_jit_differential_test.rs` runs programs whose
 `b * b` overflows only after the functions are hot under the walker and the jitting engine; a mutant without the multiply
-overflow check makes it fail. The feature stays off by default (it adds the Cranelift crates); turning it on by default is a
-separate decision (binary size and build time against the dev-loop win, which matters only for hot integer kernels).
+overflow check makes it fail.
+
+Owner decision (Oct 19): on by default. `jit` is a default feature of the CLI build (lib-only builds such as
+`--no-default-features --features cli` omit it), `wj run --no-jit` / `WJ_JIT=0` / `--jit off` turn it off at run time, and
+a host Cranelift cannot target falls back to the closures once (`Jit::new` fails, `jit_enabled` is cleared). Gates:
+- the differential generator also covers unary minus, `&&`/`||`/`!`, compound assignment, near-`i64::MAX` constants, a zero
+  divisor planted at a late iteration, 3000-deep recursion and an `i32` function (never jitted) calling jittable ones; every
+  program runs under the walker, the jitting engine and `--no-jit`. Over `120` generated ones (`29` clean, `91` panicking): no difference;
+  mutants without the overflow or the zero-divisor bail-out make 38 and 3 of them differ;
+- `tests/interpreter_jit_caps_test.rs`: a hot function that reaches a sink (`println`, `fs::exists`) only after it is hot
+  is never jitted (the jittable subset has no calls outside itself), and under `--caps enforce --sandbox` the late sink is
+  denied with exit 126 exactly as with `--no-jit`;
+- the engine parity corpus with the jit on: no difference.
+
+Cost, measured (release, `CARGO_BUILD_JOBS=2`, non-incremental, shared machine): the Cranelift crates add about 50 s wall
+/ 74 s CPU to a clean build; the `wj` binary grows from 26.1 MB to 28.5 MB (+2.3 MB, 9%); start-up is unchanged (the
+module is created on the first hot call: `wj run hello.wj` about 20 ms CPU with and without). `fib30` takes 0.027 s with the
+jit and 0.091 s with `--no-jit`; `loop5m` is unchanged (its loop is in `main`, which returns nothing and is not jitted). The
+ratchet baseline (load 13.5) now has `fib30` at 37x over the walker.
 
 ### Step 8: parse/resolve cache for startup (measured, not built)
 A generated 200-module project (4k functions) starts in about 0.9 s CPU. Profiling shows that at least 80% of it is the pre-run
