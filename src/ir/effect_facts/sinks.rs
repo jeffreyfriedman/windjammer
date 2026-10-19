@@ -50,6 +50,13 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("fs::is_dir", &[u(FsRead, P0)]),
     ("fs::canonicalize", &[u(FsRead, P0)]),
     ("fs::write", &[u(FsWrite, P0)]),
+    ("fs::write_string", &[u(FsWrite, P0)]),
+    ("fs::read_bytes", &[u(FsRead, P0)]),
+    // `path::` functions that are the `fs::` function under the runtime's name
+    ("path::exists", &[u(FsRead, P0)]),
+    ("path::is_file", &[u(FsRead, P0)]),
+    ("path::is_dir", &[u(FsRead, P0)]),
+    ("path::canonicalize", &[u(FsRead, P0)]),
     ("fs::write_bytes", &[u(FsWrite, P0)]),
     ("fs::append", &[u(FsWrite, P0)]),
     ("fs::create_dir", &[u(FsWrite, P0)]),
@@ -67,12 +74,15 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("env::get", &[u(EnvRead, P0)]),
     ("env::get_or", &[u(EnvRead, P0)]),
     ("env::set", &[u(EnvWrite, P0)]),
+    ("env::set_var", &[u(EnvWrite, P0)]),
+    ("env::remove_var", &[u(EnvWrite, P0)]),
     ("env::remove", &[u(EnvWrite, P0)]),
     ("env::home_dir", &[u(EnvRead, Res::Fixed("HOME"))]),
     ("log::init", &[u(EnvRead, Res::Fixed("RUST_LOG"))]),
     ("log::init_with_level", &[u(EnvRead, Res::Fixed("RUST_LOG"))]),
     // processes
     ("process::run", &[u(Process, Res::CmdArg(0))]),
+    ("process::run_with_output", &[u(Process, Res::CmdArg(0))]),
     ("process::run_with_args", &[u(Process, P0)]),
     ("subprocess::spawn", &[u(Process, P0)]),
     // network
@@ -109,6 +119,8 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("random::sample", &[u(Random, Res::None)]),
     ("random::shuffle", &[u(Random, Res::None)]),
     ("uuid::v4", &[u(Random, Res::None)]),
+    ("uuid::new_v4", &[u(Random, Res::None)]),
+    ("random::int_range", &[u(Random, Res::None)]),
     ("uuid::v7", &[u(Random, Res::None), u(Time, Res::None)]),
     // capability values (std::cap): minting needs the effect, the value is then checked on every use
     ("cap::net", &[u(NetConnect, Res::Scope)]),
@@ -143,6 +155,9 @@ static SINKS: &[(&str, &[SinkUse])] = &[
 /// to be either in `SINKS` or here, so a new builtin cannot silently bypass the gate.
 pub static NOT_SINKS: &[&str] = &[
     "fs::join", "fs::extension", "fs::file_name", "fs::file_stem", "fs::parent", "fs::is_absolute", "fs::is_relative",
+    "path::as_os_str", "path::components", "path::current_dir", "path::extension", "path::file_name_path", "path::file_stem",
+    "path::from_str", "path::has_extension", "path::is_absolute", "path::is_relative", "path::join_path", "path::new",
+    "path::parent", "path::strip_prefix", "path::to_string", "path::to_string_lossy",
     "fs::current_dir", "env::args", "env::current_dir", "env::temp_dir", "path::join", "path::file_name", "path::glob_match",
     "process::exit", "process::pid", "random::seeded", "uuid::v7_from_timestamp", "thread::spawn", "thread::scope",
     "thread::current", "thread::panicking", "thread::yield_now", "thread::Builder::new", "time::format", "time::parse",
