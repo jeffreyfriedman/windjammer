@@ -19,6 +19,7 @@ impl<'m> Js<'m> {
             Ty::Option(e) => format!("{{ v: {} }} | null", self.ts_type(e)),
             Ty::Result(a, b) => format!("{{ ok: true; v: {} }} | {{ ok: false; v: {} }}", self.ts_type(a), self.ts_type(b)),
             Ty::Tuple(ts) => format!("[{}]", ts.iter().map(|t| self.ts_type(t)).collect::<Vec<_>>().join(", ")),
+            Ty::Adt(..) if self.builtin_ordering(t) => "number".into(),
             Ty::Adt(n, _) => ident(n),
             Ty::Fn(p, r) => format!("({}) => {}", p.iter().enumerate().map(|(i, t)| format!("a{i}: {}", self.ts_type(t))).collect::<Vec<_>>().join(", "), self.ts_type(r)),
             Ty::Param(n) => n.clone(),

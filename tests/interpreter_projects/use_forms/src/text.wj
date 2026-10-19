@@ -1,0 +1,7 @@
+pub fn shout(s: string) -> string {
+    format!("{}!", s.to_uppercase())
+}
+
+pub fn whisper(s: string) -> string {
+    s.to_lowercase()
+}

@@ -119,79 +119,48 @@ backend = "rust"
 reason = "rust-int-literal-width-inference: a float literal is typed f32 where f64 is needed (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
 
 
-# ---- ADR-0014 format specs the portable (Go/JS/TS) emitters reject explicitly ---------------
 
-[[unsupported]]
-program = "137_intr_format_sign_alt"
-backend = "go"
-reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "137_intr_format_sign_alt"
-backend = "js"
-reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "137_intr_format_sign_alt"
-backend = "ts"
-reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "138_intr_format_pretty_debug"
-backend = "go"
-reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "138_intr_format_pretty_debug"
-backend = "js"
-reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "138_intr_format_pretty_debug"
-backend = "ts"
-reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-# `&mut int` parameters / `let r = &mut z` locals: the Go and JS backends pass integers by value
-# and the Rust backend infers the parameter as an owned i64 (E0614 on `*c`).
+# `&mut int` parameters: the Rust backend infers the parameter as an owned i64 (E0614 on `*c`).
 [[unsupported]]
 program = "159_deref_assign_ref_params"
 backend = "rust"
 reason = "mut-ref-to-int-parameters: Rust backend emits an owned i64 parameter so `*c = ..` fails with E0614"
 
 [[unsupported]]
-program = "159_deref_assign_ref_params"
-backend = "go"
-reason = "mut-ref-to-int-locals: Go backend does not alias `let r = &mut z` for integers"
+program = "170_mut_ref_value_types"
+backend = "rust"
+reason = "mut-ref-to-int-parameters: Rust backend emits owned i64/f64/bool parameters for `&mut` scalars so `*c = ..` fails with E0614"
 
 [[unsupported]]
-program = "159_deref_assign_ref_params"
-backend = "js"
-reason = "mut-ref-to-int-parameters: JavaScript backend passes integers by value so `*c = ..` does not reach the caller"
+program = "173_type_aliases"
+backend = "rust"
+reason = "rust-int-literal-width-inference: `Alias::new(3, 4)` through a `type` alias types the literals i32 against an i64 signature (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
 
 [[unsupported]]
-program = "163_trait_generics_and_aliases"
-backend = "go"
-reason = "portable-type-aliases: see docs/known-issues/portable-type-aliases.md"
+program = "174_closure_mut_capture"
+backend = "rust"
+reason = "rust-int-literal-width-inference: the `for i in 0..4` range is typed i32 while the closure parameter is i64 (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
 
 [[unsupported]]
-program = "163_trait_generics_and_aliases"
-backend = "js"
-reason = "portable-type-aliases: see docs/known-issues/portable-type-aliases.md"
+program = "175_len_and_index_as_int"
+backend = "rust"
+reason = "rust-int-literal-width-inference: `vec![5, 6, 7]` passed to a `Vec<int>` parameter is typed Vec<i32> (E0308); see docs/known-issues/rust-int-literal-width-inference.md"
+
+[[unsupported]]
+program = "178_struct_patterns_slices"
+backend = "rust"
+reason = "rust-unsized-slice-binding: `let mid = v[1..4]` is emitted without a borrow, so rustc rejects the unsized `[i32]` local (E0277); also SPEC-EXPR-018 on Rust"
 
 [[unsupported]]
 program = "164_into_bound_param_consumed"
 backend = "rust"
 reason = "rust-into-bound-param-borrowed: see docs/known-issues/rust-into-bound-param-borrowed.md"
 
-[[unsupported]]
-program = "164_into_bound_param_consumed"
-backend = "go"
-reason = "portable-generic-into: `T::into` on a bounded generic parameter is an explicit `unsupported on this backend` error"
 
 [[unsupported]]
-program = "164_into_bound_param_consumed"
-backend = "js"
-reason = "portable-generic-into: `T::into` on a bounded generic parameter is an explicit `unsupported on this backend` error"
+program = "180_modules_paths"
+backend = "rust"
+reason = "rust-module-impl-self-type: `impl Sq` inside `mod shapes` emits `fn new(..) -> Sq` where `Sq` is not in scope of the generated nested module (E0425)"
 
 # ---- ADR-0018 expressiveness programs: generic Rust closure-codegen gaps (not specific to the new syntax;
 # the explicit-closure spellings fail the same way) ------------------------------------------------------

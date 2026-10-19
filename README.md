@@ -17,8 +17,9 @@ target Go, JavaScript and WebAssembly from the same code. Designed for developer
 
 1. **Ownership, handled for you.** Parameters and `self` become `&`, `&mut` or moves automatically, and you can always
    see what was chosen: `wj build --no-cargo FILE` writes out the Rust. See the [side-by-side](#same-program-less-noise).
-2. **Instant feedback, native output.** `wj run --interpret FILE` starts in milliseconds with no build step. When you're
-   ready, the same file compiles to Rust, with Go, JavaScript and WebAssembly backends alongside.
+2. **Instant feedback, native output.** `wj run` starts a whole multi-module project in milliseconds, like `go run`:
+   it interprets by default and switches to the compiled path on its own when a program needs it. `wj build` and
+   `wj run --release` compile the same source to native Rust, with Go, JavaScript and WebAssembly backends alongside.
 3. **Made for agents.** Structured JSON diagnostics, offline docs search, an MCP server and a compact agent guide give
    coding agents a fast, reliable write-check-run loop. See [For AI agents](#for-ai-agents).
 
@@ -28,7 +29,7 @@ Windjammer is young, so start from its own docs rather than Rust or Python habit
 
 - Read [docs/agent/WINDJAMMER_FOR_AGENTS.md](docs/agent/WINDJAMMER_FOR_AGENTS.md): the loop, idioms and pitfalls; its code runs in CI.
 - Machine-readable index: [llms.txt](llms.txt). Everything inline: [llms-full.txt](llms-full.txt). Both are generated and drift-checked.
-- Check with `wj check --json FILE`, run with `wj run --interpret FILE`, look things up with `wj docs <terms>`.
+- Check with `wj check --json FILE`, run with `wj run FILE` (or `wj run` inside a project), look things up with `wj docs <terms>`.
 - MCP server: [crates/windjammer-mcp](crates/windjammer-mcp/README.md) (check, run, test, format, docs search, explain error, more).
 - Changing the compiler itself: [AGENTS.md](AGENTS.md).
 - Benchmark: [bench/agent-dx](bench/agent-dx/README.md) runs the same task suite across six languages so agent results
@@ -56,7 +57,7 @@ fn main() {
     println("Hello, ${name}!")
 }
 EOF
-$ wj run --interpret hello.wj
+$ wj run hello.wj
 Hello, World!
 $ wj check --json hello.wj
 {
@@ -72,7 +73,9 @@ println!("Hello, {}!", name);
 
 `wj check --json` prints diagnostics for tools; `wj build --no-cargo` shows the Rust the program compiles to.
 
-`wj run hello.wj` (no flag) takes the production path: transpile to Rust, then build with cargo.
+`wj run` interprets: no build step, whole projects included (`wj run` in any directory of a project finds its
+`wj.toml`; `--bin NAME` picks a binary; `--watch` re-runs on save). `wj run --release` and `wj build` take the
+production path: transpile to Rust, then build with cargo. Details: [docs/INTERPRETER.md](docs/INTERPRETER.md).
 
 ## Same program, less noise
 
@@ -240,16 +243,15 @@ Windjammer is pre-1.0 and moving quickly. Every backend runs the shared conforma
 <!-- wj:gen name=targets_summary -->
 | Backend | Conformance programs passing | Known unsupported |
 |---|---|---|
-| `rust` | 115 | 27 |
-| `go` | 137 | 5 |
-| `js` | 137 | 5 |
-| `ts` | 140 | 2 |
+| `rust` | 121 | 33 |
+| `go` | 154 | 0 |
+| `js` | 154 | 0 |
 <!-- wj:end -->
 
 | Area | Tier |
 |---|---|
 | Rust backend and ownership inference | Primary target |
-| Interpreter (`--interpret`) | Preview ([details](docs/INTERPRETER.md)) |
+| Interpreter (`wj run`, default dev path) | Preview ([details](docs/INTERPRETER.md)) |
 | Go, JavaScript, TypeScript | Preview |
 | WebAssembly | Preview |
 | WGSL shaders (`.wjsl`) | Preview |

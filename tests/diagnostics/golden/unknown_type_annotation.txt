@@ -1,0 +1,7 @@
+error[WJ0005]: cannot find type `Widget` in this scope
+  --> unknown_type_annotation.wj:3:14
+  |
+3 |     let bad: Widget = 5
+  |              ^^^^^^ not found in this scope
+  = help: define it, or import it with `use`
+  = explain: wj explain WJ0005

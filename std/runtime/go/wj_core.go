@@ -82,32 +82,28 @@ type Tuple6[A, B, C, D, E, F any] struct {
 	F5 F
 }
 
-func (o Option[T]) wjDbg() string {
+func (o Option[T]) wjDbgF(f *wjFmt) string {
 	if !o.Ok {
 		return "None"
 	}
-	return "Some(" + wjDbg(o.V) + ")"
+	return wjDbgTupleS(f, "Some", o.V)
 }
 
-func (r Result[T, E]) wjDbg() string {
+func (r Result[T, E]) wjDbgF(f *wjFmt) string {
 	if r.Ok {
-		return "Ok(" + wjDbg(r.V) + ")"
+		return wjDbgTupleS(f, "Ok", r.V)
 	}
-	return "Err(" + wjDbg(r.E) + ")"
+	return wjDbgTupleS(f, "Err", r.E)
 }
 
-func (t Tuple2[A, B]) wjDbg() string { return "(" + wjDbg(t.F0) + ", " + wjDbg(t.F1) + ")" }
-func (t Tuple3[A, B, C]) wjDbg() string {
-	return "(" + wjDbg(t.F0) + ", " + wjDbg(t.F1) + ", " + wjDbg(t.F2) + ")"
+func (t Tuple2[A, B]) wjDbgF(f *wjFmt) string       { return wjDbgTupleS(f, "", t.F0, t.F1) }
+func (t Tuple3[A, B, C]) wjDbgF(f *wjFmt) string    { return wjDbgTupleS(f, "", t.F0, t.F1, t.F2) }
+func (t Tuple4[A, B, C, D]) wjDbgF(f *wjFmt) string { return wjDbgTupleS(f, "", t.F0, t.F1, t.F2, t.F3) }
+func (t Tuple5[A, B, C, D, E]) wjDbgF(f *wjFmt) string {
+	return wjDbgTupleS(f, "", t.F0, t.F1, t.F2, t.F3, t.F4)
 }
-func (t Tuple4[A, B, C, D]) wjDbg() string {
-	return "(" + wjDbg(t.F0) + ", " + wjDbg(t.F1) + ", " + wjDbg(t.F2) + ", " + wjDbg(t.F3) + ")"
-}
-func (t Tuple5[A, B, C, D, E]) wjDbg() string {
-	return "(" + wjDbg(t.F0) + ", " + wjDbg(t.F1) + ", " + wjDbg(t.F2) + ", " + wjDbg(t.F3) + ", " + wjDbg(t.F4) + ")"
-}
-func (t Tuple6[A, B, C, D, E, F]) wjDbg() string {
-	return "(" + wjDbg(t.F0) + ", " + wjDbg(t.F1) + ", " + wjDbg(t.F2) + ", " + wjDbg(t.F3) + ", " + wjDbg(t.F4) + ", " + wjDbg(t.F5) + ")"
+func (t Tuple6[A, B, C, D, E, F]) wjDbgF(f *wjFmt) string {
+	return wjDbgTupleS(f, "", t.F0, t.F1, t.F2, t.F3, t.F4, t.F5)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -615,13 +611,83 @@ func wjTrunc(s string, p int) string {
 	return string(rs)
 }
 
-func wjPad(s string, width int, fill string, align rune, zero bool) string {
-	n := width - utf8.RuneCountInString(s)
+// wjFmt is Rust's Formatter state: width/precision (-1 = none), fill, align (0 = type default),
+// and the `0`, `+`, `#` flags. A nil *wjFmt means all defaults. Derived Debug passes it to every
+// element, as Rust does (`{:5?}` pads each number; `{:#?}` is the multi-line layout).
+type wjFmt struct {
+	W, P        int
+	Fill, Align rune
+	Zero, Plus  bool
+	Alt         bool
+}
+
+type wjDebugger interface{ wjDbgF(f *wjFmt) string }
+
+func wjIndent4(s string) string { return strings.ReplaceAll(s, "\n", "\n    ") }
+
+func wjDbgList(f *wjFmt, open, close string, items []string) string {
+	if f == nil || !f.Alt {
+		return open + strings.Join(items, ", ") + close
+	}
+	if len(items) == 0 {
+		return open + close
+	}
+	var b strings.Builder
+	b.WriteString(open + "\n")
+	for _, it := range items {
+		b.WriteString("    " + wjIndent4(it) + ",\n")
+	}
+	return b.String() + close
+}
+
+// wjDbgTupleS renders `Name(a, b)`; an empty name is a tuple (`(a,)` for one element).
+func wjDbgTupleS(f *wjFmt, name string, vals ...any) string {
+	if len(vals) == 0 {
+		if name == "" {
+			return "()"
+		}
+		return name
+	}
+	items := make([]string, len(vals))
+	for i, v := range vals {
+		items[i] = wjDbgO(v, f)
+	}
+	if name == "" && len(items) == 1 && (f == nil || !f.Alt) {
+		return "(" + items[0] + ",)"
+	}
+	return name + wjDbgList(f, "(", ")", items)
+}
+
+// wjDbgStruct renders `Name { a: 1, b: 2 }` (names and values in declaration order).
+func wjDbgStruct(f *wjFmt, name string, names []string, vals ...any) string {
+	if len(vals) == 0 {
+		return name
+	}
+	items := make([]string, len(vals))
+	for i, v := range vals {
+		items[i] = names[i] + ": " + wjDbgO(v, f)
+	}
+	if f != nil && f.Alt {
+		return name + " " + wjDbgList(f, "{", "}", items)
+	}
+	return name + " { " + strings.Join(items, ", ") + " }"
+}
+
+// wjPadText is Rust's Formatter::pad: fill/align/width only (default left).
+func wjPadText(s string, f *wjFmt, defAlign rune) string {
+	if f == nil || f.W < 0 {
+		return s
+	}
+	n := f.W - utf8.RuneCountInString(s)
 	if n <= 0 {
 		return s
 	}
-	if zero && len(s) > 0 && (s[0] == '-' || s[0] == '+') {
-		return s[:1] + strings.Repeat("0", n) + s[1:]
+	fill, align := string(f.Fill), f.Align
+	if f.Fill == 0 {
+		fill = " "
+	}
+	if align == 0 {
+		align = defAlign
 	}
 	switch align {
 	case '>':
@@ -633,7 +699,79 @@ func wjPad(s string, width int, fill string, align rune, zero bool) string {
 	return s + strings.Repeat(fill, n)
 }
 
-type wjDebugger interface{ wjDbg() string }
+func wjFmtStr(s string, f *wjFmt) string {
+	if f != nil && f.P >= 0 {
+		s = wjTrunc(s, f.P)
+	}
+	return wjPadText(s, f, '<')
+}
+
+// wjPadNum is Rust's pad_integral / pad_formatted_parts: sign, prefix, digits; `0` pads between.
+func wjPadNum(neg bool, prefix, digits string, f *wjFmt) string {
+	sign := ""
+	if neg {
+		sign = "-"
+	} else if f != nil && f.Plus {
+		sign = "+"
+	}
+	s := sign + prefix + digits
+	if f == nil || f.W < 0 {
+		return s
+	}
+	if f.Zero {
+		if n := f.W - utf8.RuneCountInString(s); n > 0 {
+			return sign + prefix + strings.Repeat("0", n) + digits
+		}
+		return s
+	}
+	return wjPadText(s, f, '>')
+}
+
+// wjFmtInt formats an integer; r is 0 (decimal) or a radix type `x X b o` (two's complement).
+func wjFmtInt[T integer](x T, r rune, f *wjFmt) string {
+	if r == 0 {
+		if isSigned[T]() && int64(x) < 0 {
+			return wjPadNum(true, "", strconv.FormatUint(-uint64(int64(x)), 10), f)
+		}
+		if isSigned[T]() {
+			return wjPadNum(false, "", strconv.FormatInt(int64(x), 10), f)
+		}
+		return wjPadNum(false, "", strconv.FormatUint(uint64(x), 10), f)
+	}
+	prefix := ""
+	if f != nil && f.Alt {
+		prefix = map[rune]string{'x': "0x", 'X': "0x", 'b': "0b", 'o': "0o"}[r]
+	}
+	return wjPadNum(false, prefix, wjRadix(x, r), f)
+}
+
+// wjFmtFloat formats a float (debug: `{:?}` digits; exp: `{:e}`); NaN never has a sign.
+func wjFmtFloat(x float64, bits int, debug, exp bool, f *wjFmt) string {
+	if x != x {
+		g := wjFmt{W: -1, P: -1}
+		if f != nil {
+			g = *f
+			g.Plus = false
+		}
+		return wjPadNum(false, "", "NaN", &g)
+	}
+	neg := math.Signbit(x)
+	a := math.Abs(x)
+	var digits string
+	switch {
+	case exp:
+		digits = wjExpFmt(a)
+	case f != nil && f.P >= 0:
+		digits = wjFixed(a, f.P)
+	case debug:
+		digits = wjDbgFloat(a, bits)
+	case bits == 32:
+		digits = wjF32(float32(a))
+	default:
+		digits = wjF64(a)
+	}
+	return wjPadNum(neg, "", digits, f)
+}
 
 func wjQuote(s string, q rune) string {
 	var b strings.Builder
@@ -662,44 +800,46 @@ func wjQuote(s string, q rune) string {
 	return b.String()
 }
 
-func wjDbg(v any) string {
+func wjDbg(v any) string { return wjDbgO(v, nil) }
+
+func wjDbgO(v any, f *wjFmt) string {
 	if d, ok := v.(wjDebugger); ok {
-		return d.wjDbg()
+		return d.wjDbgF(f)
 	}
-	return wjDbgValue(reflect.ValueOf(v))
+	return wjDbgValue(reflect.ValueOf(v), f)
 }
 
-func wjDbgValue(v reflect.Value) string {
+func wjDbgValue(v reflect.Value, f *wjFmt) string {
 	if !v.IsValid() {
-		return "()"
+		return wjPadText("()", f, '<')
 	}
 	if v.Type() == reflect.TypeOf(Char(0)) {
 		return "'" + wjQuote(string(rune(v.Int())), '\'') + "'"
 	}
 	if v.CanInterface() {
 		if d, ok := v.Interface().(wjDebugger); ok {
-			return d.wjDbg()
+			return d.wjDbgF(f)
 		}
 	}
 	switch v.Kind() {
 	case reflect.Bool:
-		return strconv.FormatBool(v.Bool())
+		return wjPadText(strconv.FormatBool(v.Bool()), f, '<')
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return strconv.FormatInt(v.Int(), 10)
+		return wjFmtInt(v.Int(), 0, f)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return strconv.FormatUint(v.Uint(), 10)
+		return wjFmtInt(v.Uint(), 0, f)
 	case reflect.Float32:
-		return wjDbgFloat(v.Float(), 32)
+		return wjFmtFloat(v.Float(), 32, true, false, f)
 	case reflect.Float64:
-		return wjDbgFloat(v.Float(), 64)
+		return wjFmtFloat(v.Float(), 64, true, false, f)
 	case reflect.String:
 		return "\"" + wjQuote(v.String(), '"') + "\""
 	case reflect.Slice, reflect.Array:
 		parts := make([]string, v.Len())
 		for i := range parts {
-			parts[i] = wjDbgValue(v.Index(i))
+			parts[i] = wjDbgValue(v.Index(i), f)
 		}
-		return "[" + strings.Join(parts, ", ") + "]"
+		return wjDbgList(f, "[", "]", parts)
 	case reflect.Map:
 		keys := v.MapKeys()
 		sort.Slice(keys, func(i, j int) bool { return fmt.Sprint(keys[i]) < fmt.Sprint(keys[j]) })
@@ -707,20 +847,20 @@ func wjDbgValue(v reflect.Value) string {
 		isSet := v.Type().Elem().Kind() == reflect.Struct && v.Type().Elem().NumField() == 0
 		for i, k := range keys {
 			if isSet {
-				parts[i] = wjDbgValue(k)
+				parts[i] = wjDbgValue(k, f)
 			} else {
-				parts[i] = wjDbgValue(k) + ": " + wjDbgValue(v.MapIndex(k))
+				parts[i] = wjDbgValue(k, f) + ": " + wjDbgValue(v.MapIndex(k), f)
 			}
 		}
-		return "{" + strings.Join(parts, ", ") + "}"
+		return wjDbgList(f, "{", "}", parts)
 	case reflect.Interface, reflect.Ptr:
 		if v.IsNil() {
 			return "None"
 		}
-		return wjDbgValue(v.Elem())
+		return wjDbgValue(v.Elem(), f)
 	case reflect.Struct:
 		if v.NumField() == 0 {
-			return "()"
+			return wjPadText("()", f, '<')
 		}
 	}
 	return fmt.Sprint(v.Interface())
@@ -1006,6 +1146,143 @@ func wjSwapRemove[T any, I integer](v *[]T, i I) T {
 
 func wjSort[T cmp.Ordered](v []T) { slices.SortStableFunc(v, cmp.Compare[T]) }
 
+// Ordering is Rust's std::cmp::Ordering: -1 (Less), 0 (Equal), 1 (Greater).
+type Ordering int
+
+func (o Ordering) wjDbgF(_ *wjFmt) string {
+	switch {
+	case o < 0:
+		return "Less"
+	case o > 0:
+		return "Greater"
+	}
+	return "Equal"
+}
+
+func wjThen(o, next Ordering) Ordering {
+	if o != 0 {
+		return o
+	}
+	return next
+}
+
+func wjThenWith(o Ordering, next func() Ordering) Ordering {
+	if o != 0 {
+		return o
+	}
+	return next()
+}
+
+// wjCmp is Rust's derived/std `Ord::cmp`: numbers, strings (bytewise), chars, bools, tuples and
+// slices (lexicographic), Option (None < Some), structs (fields in declaration order).
+func wjCmp[T any](a, b T) Ordering { return Ordering(wjCmpValue(reflect.ValueOf(a), reflect.ValueOf(b))) }
+
+func wjCmpValue(a, b reflect.Value) int {
+	if a.Type() == reflect.TypeOf(Char(0)) {
+		return cmp.Compare(a.Int(), b.Int())
+	}
+	switch a.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return cmp.Compare(a.Int(), b.Int())
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return cmp.Compare(a.Uint(), b.Uint())
+	case reflect.Float32, reflect.Float64:
+		return cmp.Compare(a.Float(), b.Float())
+	case reflect.String:
+		return strings.Compare(a.String(), b.String())
+	case reflect.Bool:
+		x, y := a.Bool(), b.Bool()
+		switch {
+		case x == y:
+			return 0
+		case !x:
+			return -1
+		}
+		return 1
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < a.Len() && i < b.Len(); i++ {
+			if c := wjCmpValue(a.Index(i), b.Index(i)); c != 0 {
+				return c
+			}
+		}
+		return cmp.Compare(a.Len(), b.Len())
+	case reflect.Struct:
+		if a.Type().Name() != "" && strings.HasPrefix(a.Type().Name(), "Option[") {
+			ao, bo := a.FieldByName("Ok").Bool(), b.FieldByName("Ok").Bool()
+			if !ao || !bo {
+				return cmp.Compare(wjB2I[int](ao), wjB2I[int](bo))
+			}
+			return wjCmpValue(a.FieldByName("V"), b.FieldByName("V"))
+		}
+		for i := 0; i < a.NumField(); i++ {
+			if c := wjCmpValue(a.Field(i), b.Field(i)); c != 0 {
+				return c
+			}
+		}
+		return 0
+	}
+	wjPanic("cmp: unsupported type " + a.Type().String())
+	return 0
+}
+
+func wjHasNaN(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Float32, reflect.Float64:
+		return v.Float() != v.Float()
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			if wjHasNaN(v.Index(i)) {
+				return true
+			}
+		}
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if wjHasNaN(v.Field(i)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// wjPartialCmp is `partial_cmp`: None when a float compared is NaN.
+func wjPartialCmp[T any](a, b T) Option[Ordering] {
+	if wjHasNaN(reflect.ValueOf(a)) || wjHasNaN(reflect.ValueOf(b)) {
+		return Option[Ordering]{}
+	}
+	return Option[Ordering]{Ok: true, V: wjCmp(a, b)}
+}
+
+// wjSortBy / wjSortByKey are Rust's stable `sort_by` / `sort_by_key`.
+func wjSortBy[T any](v []T, f func(T, T) Ordering) {
+	slices.SortStableFunc(v, func(a, b T) int { return int(f(a, b)) })
+}
+
+func wjSortAny[T any](v []T) { slices.SortStableFunc(v, func(a, b T) int { return int(wjCmp(a, b)) }) }
+
+func wjSortByKey[T, K any](v []T, f func(T) K) {
+	slices.SortStableFunc(v, func(a, b T) int { return int(wjCmp(f(a), f(b))) })
+}
+
+// wjMinMaxBy: `max_by` keeps the last maximum (dir 1), `min_by` the first minimum (dir -1).
+func wjMinMaxBy[T any](v []T, f func(T, T) Ordering, dir int) Option[T] {
+	if len(v) == 0 {
+		return Option[T]{}
+	}
+	best := v[0]
+	for _, x := range v[1:] {
+		c := f(x, best)
+		if (dir < 0 && c < 0) || (dir > 0 && c >= 0) {
+			best = x
+		}
+	}
+	return Option[T]{Ok: true, V: best}
+}
+
+func wjMinMaxByKey[T, K any](v []T, f func(T) K, dir int) Option[T] {
+	return wjMinMaxBy(v, func(a, b T) Ordering { return wjCmp(f(a), f(b)) }, dir)
+}
+
 func wjReverseInPlace[T any](v []T) { slices.Reverse(v) }
 
 func wjDedup[T any](v *[]T) {
@@ -1255,7 +1532,14 @@ func wjToMap[K comparable, V any](v []Tuple2[K, V]) map[K]V {
 func wjCollectStr[T ~int32 | ~string](v []T) string {
 	var b strings.Builder
 	for _, x := range v {
-		b.WriteString(fmt.Sprint(any(x)))
+		switch c := any(x).(type) {
+		case Char:
+			b.WriteRune(rune(c))
+		case string:
+			b.WriteString(c)
+		default:
+			b.WriteString(fmt.Sprint(c))
+		}
 	}
 	return b.String()
 }
@@ -1422,26 +1706,54 @@ func wjHas[K comparable, V any](m map[K]V, k K) bool {
 	return ok
 }
 
-func wjKeys[K comparable, V any](m map[K]V) []K {
+// Map and set iteration is in ascending key order: HashMap order is unspecified (SPEC-EXEC-005),
+// and BTreeMap/BTreeSet (which share this representation) require it.
+func wjSortedKeys[K comparable, V any](m map[K]V) []K {
 	out := make([]K, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
+	switch ks := any(out).(type) {
+	case []string:
+		slices.Sort(ks)
+	case []int64:
+		slices.Sort(ks)
+	case []int:
+		slices.Sort(ks)
+	case []int32:
+		slices.Sort(ks)
+	case []uint64:
+		slices.Sort(ks)
+	case []uint:
+		slices.Sort(ks)
+	case []uint32:
+		slices.Sort(ks)
+	case []uint8:
+		slices.Sort(ks)
+	case []Char:
+		slices.Sort(ks)
+	default:
+		slices.SortFunc(out, func(a, b K) int { return int(wjCmp(a, b)) })
+	}
 	return out
 }
 
+func wjKeys[K comparable, V any](m map[K]V) []K { return wjSortedKeys(m) }
+
 func wjValues[K comparable, V any](m map[K]V) []V {
-	out := make([]V, 0, len(m))
-	for _, v := range m {
-		out = append(out, v)
+	ks := wjSortedKeys(m)
+	out := make([]V, 0, len(ks))
+	for _, k := range ks {
+		out = append(out, m[k])
 	}
 	return out
 }
 
 func wjEntries[K comparable, V any](m map[K]V) []Tuple2[K, V] {
-	out := make([]Tuple2[K, V], 0, len(m))
-	for k, v := range m {
-		out = append(out, Tuple2[K, V]{F0: k, F1: v})
+	ks := wjSortedKeys(m)
+	out := make([]Tuple2[K, V], 0, len(ks))
+	for _, k := range ks {
+		out = append(out, Tuple2[K, V]{F0: k, F1: m[k]})
 	}
 	return out
 }

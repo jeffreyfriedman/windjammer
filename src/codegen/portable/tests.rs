@@ -138,16 +138,23 @@ fn user_function_named_like_an_intrinsic_wins() {
 
 #[test]
 fn unsupported_format_specs_are_explicit_errors() {
-    for spec in ["+", "#x", "E"] {
+    for spec in ["E", "x?", "#e"] {
         let src = format!("fn main() {{\n    let x: i64 = 5\n    println(\"${{x:{spec}}}\")\n}}\n");
         for r in try_both(&src) {
             let e = r.expect_err(&format!("spec `{spec}` must be rejected"));
             assert!(e.contains("unsupported"), "{e}");
         }
     }
+    // Sign, alternate and pretty Debug are implemented (conformance 137, 138, 171, 172).
+    for ok in ["+", "#x", "+#010b"] {
+        let src = format!("fn main() {{\n    let x: i64 = 5\n    println(\"${{x:{ok}}}\")\n}}\n");
+        for r in try_both(&src) {
+            r.unwrap_or_else(|e| panic!("spec `{ok}` must be accepted: {e}"));
+        }
+    }
     let agg = "fn main() {\n    let v = [1, 2]\n    println(\"${v:#?}\")\n}\n";
     for r in try_both(agg) {
-        assert!(r.expect_err("pretty debug of a list").contains("pretty Debug"));
+        r.expect("pretty debug of a list");
     }
 }
 

@@ -1,0 +1,9 @@
+use super::points::Point
+
+pub fn abs(v: int) -> int {
+    if v < 0 { -v } else { v }
+}
+
+pub fn origin_distance(p: Point) -> int {
+    abs(p.x) + abs(p.y)
+}

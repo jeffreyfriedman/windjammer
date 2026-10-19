@@ -1,0 +1,48 @@
+// `std::cmp::Ordering`, `cmp`/`partial_cmp`, `then`/`reverse`/`is_eq`, stable `sort_by`/`sort_by_key`,
+// `max_by_key` (last maximum) / `min_by_key` (first minimum), sorting tuples. Expected output from rustc.
+// expect: 1259
+// expect: 9521
+// expect: less equal greater
+// expect: abc
+// expect: cab
+// expect: banana fig
+// expect: Less Some(Greater)
+// expect: true true
+// expect: [(1, "z"), (2, "a"), (2, "x")]
+use std::cmp::Ordering
+
+struct Item {
+    name: string,
+    score: int,
+}
+
+fn rank(a: int, b: int) -> string {
+    match a.cmp(b) {
+        Ordering::Less => "less".to_string(),
+        Ordering::Equal => "equal".to_string(),
+        Ordering::Greater => "greater".to_string(),
+    }
+}
+
+fn main() {
+    let mut v = vec![5, 2, 9, 1]
+    v.sort()
+    println("${v[0]}${v[1]}${v[2]}${v[3]}")
+    v.sort_by(|a, b| b.cmp(a))
+    println("${v[0]}${v[1]}${v[2]}${v[3]}")
+    println("${rank(1, 2)} ${rank(2, 2)} ${rank(3, 2)}")
+    let mut items = vec![Item { name: "b".to_string(), score: 2 }, Item { name: "a".to_string(), score: 2 }, Item { name: "c".to_string(), score: 1 }]
+    items.sort_by(|x, y| y.score.cmp(x.score).then(x.name.cmp(y.name)))
+    println("${items[0].name}${items[1].name}${items[2].name}")
+    items.sort_by_key(|x| x.score)
+    println("${items[0].name}${items[1].name}${items[2].name}")
+    let words = vec!["pear", "fig", "banana", "kiwi"]
+    let longest = words.iter().max_by_key(|w| w.len()).unwrap()
+    let shortest = words.iter().min_by_key(|w| w.len()).unwrap()
+    println("${longest} ${shortest}")
+    println("{:?} {:?}", 1.cmp(2), 2.0.partial_cmp(1.0))
+    println("{} {}", 3.cmp(3).is_eq(), "b".cmp("a").reverse() == Ordering::Less)
+    let mut pairs = vec![(2, "x"), (1, "z"), (2, "a")]
+    pairs.sort()
+    println("{:?}", pairs)
+}

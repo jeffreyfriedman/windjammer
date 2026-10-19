@@ -1,0 +1,49 @@
+// Items of `mod` blocks are reachable through their module paths: functions (nested modules),
+// struct literals, associated functions, enum variants and types. Expected output computed by hand
+// from the arithmetic (and identical in Rust, where the same module layout is valid).
+// expect: 6 1
+// expect: 9 16
+// expect: warm 7
+mod geo {
+    pub fn area(w: int, h: int) -> int {
+        w * h
+    }
+    pub mod inner {
+        pub fn one() -> int {
+            1
+        }
+    }
+}
+
+mod shapes {
+    pub struct Sq {
+        pub s: int,
+    }
+    impl Sq {
+        pub fn area(self) -> int {
+            self.s * self.s
+        }
+        pub fn new(s: int) -> Sq {
+            Sq { s: s }
+        }
+    }
+    pub enum Tone {
+        Warm(int),
+        Cold,
+    }
+}
+
+fn describe(t: shapes::Tone) -> string {
+    match t {
+        shapes::Tone::Warm(n) => "warm ${n}",
+        shapes::Tone::Cold => "cold".to_string(),
+    }
+}
+
+fn main() {
+    println("${geo::area(2, 3)} ${geo::inner::one()}")
+    let q = shapes::Sq { s: 3 }
+    let r: shapes::Sq = shapes::Sq::new(4)
+    println("${q.area()} ${r.area()}")
+    println(describe(shapes::Tone::Warm(7)))
+}

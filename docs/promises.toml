@@ -9,7 +9,7 @@
 #   through the installed binary (codes: >=1 negative case whose expected output contains the code).
 # - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
 
-max_pending = 33
+max_pending = 39
 
 [[promise]]
 id = "feature ownership-inferred"
@@ -24,7 +24,7 @@ quote = "`wj build --no-cargo FILE` writes out the Rust"
 [[promise]]
 id = "feature interpret-instant"
 source = "README.md"
-quote = "`wj run --interpret FILE` starts in milliseconds with no build step"
+quote = "`wj run` starts a whole multi-module project in milliseconds"
 
 [[promise]]
 id = "feature json-diagnostics"
@@ -39,7 +39,7 @@ quote = "look things up with `wj docs <terms>`"
 [[promise]]
 id = "feature multi-backend"
 source = "README.md"
-quote = "the same file compiles to Rust, with Go, JavaScript and WebAssembly backends alongside"
+quote = "with Go, JavaScript and WebAssembly backends alongside"
 
 [[promise]]
 id = "code E0308"
@@ -549,3 +549,33 @@ id = "wj run --sched-seed"
 
 [[promise]]
 id = "wj self-install --dry-run"
+
+[[promise]]
+id = "wj run --bin"
+statement = "Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --compiled"
+statement = "Transpile to Rust and run with cargo (the release path), skipping the interpreter"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --hot"
+statement = "Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --release"
+statement = "Like --compiled, with optimizations"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --watch"
+statement = "Re-run on every source change (restarts long-running programs)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj test --watch"
+statement = "Re-run the tests on every source change"
+pending = "no acceptance cases yet"

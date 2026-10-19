@@ -67,7 +67,7 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
                 parts.push(format!("features = [{}]", feat_str.join(", ")));
             }
             if let Some(p) = path {
-                let resolved = resolve_dep_path_for_gen_manifest(p, base_dir);
+                let resolved = windjammer_package_build_dir(resolve_dep_path_for_gen_manifest(p, base_dir));
                 parts.push(format!("path = \"{}\"", resolved));
             }
             if let Some(g) = git {
@@ -82,6 +82,17 @@ pub(crate) fn dep_spec_to_cargo_line_with_base(
             format!("{} = {{ {} }}", name, parts.join(", "))
         }
     }
+}
+
+/// A path dependency on a Windjammer *source* package (`wj.toml`, no `Cargo.toml`) links its generated crate
+/// in `gen/` (written by `wj build <dep>/src -o <dep>/gen`, which `wj run --compiled` does for every
+/// Windjammer dependency first). Other paths are returned unchanged.
+pub(crate) fn windjammer_package_build_dir(resolved: String) -> String {
+    let dir = Path::new(&resolved);
+    if dir.join("wj.toml").is_file() && !dir.join("Cargo.toml").is_file() && dir.join("gen").join("Cargo.toml").is_file() {
+        return sanitize_path_for_toml(&dir.join("gen"));
+    }
+    resolved
 }
 
 /// Rewrite a path-dep string so it is valid from a generated `gen/Cargo.toml`.

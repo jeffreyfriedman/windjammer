@@ -61,7 +61,6 @@ args = ["test", "--interpret", "--allow-empty", "{w}/t"]
 [[case]]
 name = "test --json prints JSON results"
 polarity = "positive"
-xfail = "BUG: `wj test --interpret --json` prints the human report, not JSON"
 files = { "t/x_test.wj" = "@test\nfn test_one() {\n    assert(true)\n}\n" }
 args = ["test", "--interpret", "--json", "{w}/t"]
 json = true

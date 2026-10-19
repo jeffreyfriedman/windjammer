@@ -36,7 +36,7 @@ name = "run --interpret of a missing file fails"
 polarity = "negative"
 args = ["run", "--interpret", "{w}/nope.wj"]
 exit = 1
-output_has = ["File not found"]
+output_has = ["no such file or directory"]
 
 [[case]]
 name = "run --interpret propagates a panic as a failure"
