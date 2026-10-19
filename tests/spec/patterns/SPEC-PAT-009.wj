@@ -1,0 +1,13 @@
+// spec: SPEC-PAT-009
+// mode: panic
+// expect: one
+fn f(n: int) -> string {
+    match n {
+        1 => "one",
+        2 => "two",
+    }
+}
+fn main() {
+    println("${f(1)}")
+    println("${f(3)}")
+}

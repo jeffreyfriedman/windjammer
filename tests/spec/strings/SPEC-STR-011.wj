@@ -1,0 +1,5 @@
+// spec: SPEC-STR-011
+// expect: a ${
+fn main() {
+    println("a ${")
+}

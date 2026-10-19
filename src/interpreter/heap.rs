@@ -7,10 +7,8 @@
 //! explicitly (a function's return value). An `Rc` is alive while some reachable slot holds it;
 //! a struct with a destructor is dropped when a scope exit leaves it unreachable.
 //!
-//! Known limits (documented in docs/INTERPRETER.md): values held only by a pending Rust-side
-//! temporary are invisible; a value moved into a callee stays reachable from the caller's slot
-//! until that slot dies, so its destructor runs at the caller's scope exit rather than the
-//! callee's (unless the parameter is declared `owned`).
+//! Moves (`moves.rs`) take moved-out slots and fields out of the roots. Known limit (documented in
+//! docs/INTERPRETER.md): values held only by a pending Rust-side temporary are invisible.
 
 use super::engine::{Interpreter, Scope};
 use super::error::{ErrorKind, Ctl, R};
@@ -68,7 +66,8 @@ impl Walker {
                 }
             }
             Value::Ref(p) => self.walk_slot(&p.slot, f),
-            Value::Rc(slot) | Value::Cell(_, slot) => self.walk_slot(slot, f),
+            Value::Rc(slot) | Value::Cell(_, slot, _) => self.walk_slot(slot, f),
+            Value::Native(n) => n.for_each_value(&mut |x| self.walk(x, f)),
             Value::Iter(it) => {
                 if let super::iter::IterSrc::Buf { items, pos, end } = &it.src {
                     for x in &items[pos.get()..end.get()] {
@@ -87,9 +86,19 @@ impl Walker {
         }
     }
 
-    fn walk_scope(&mut self, s: &Scope, f: &mut dyn FnMut(&Value)) {
+    fn walk_scope(&mut self, s: &Scope, moves: &super::moves::Moves, f: &mut dyn FnMut(&Value)) {
         for (_, slot) in &s.vars {
-            self.walk_slot(slot, f);
+            if moves.is_moved(slot) {
+                continue; // the object is owned elsewhere (or nowhere)
+            }
+            match moves.owned_value(slot) {
+                Some(v) if moves.has_moved_fields(slot) => {
+                    if self.seen.insert(Rc::as_ptr(slot) as usize) {
+                        self.walk(&v, f);
+                    }
+                }
+                _ => self.walk_slot(slot, f),
+            }
         }
     }
 }
@@ -98,9 +107,19 @@ impl Interpreter {
     /// Visit every value reachable from the roots (plus `extra`).
     pub(crate) fn walk_roots(&self, extra: &[&Value], f: &mut dyn FnMut(&Value)) {
         let mut w = Walker::new();
-        w.walk_scope(&self.scope, f);
+        w.walk_scope(&self.scope, &self.moves, f);
         for fr in &self.frames {
-            w.walk_scope(fr, f);
+            w.walk_scope(fr, &self.moves, f);
+        }
+        let (scopes, vals) = self.sched.parked_roots();
+        for s in scopes {
+            w.walk_scope(s, &self.moves, f);
+        }
+        for v in vals {
+            w.walk(v, f);
+        }
+        for v in &self.rstack {
+            w.walk(v, f);
         }
         for slot in self.globals.values() {
             w.walk_slot(slot, f);
@@ -126,8 +145,8 @@ impl Interpreter {
     pub(crate) fn weak_count(&self, target: &Slot) -> usize {
         let mut n = 0;
         self.walk_roots(&[], &mut |v| {
-            if let Value::Weak(s) = v {
-                if Rc::ptr_eq(s, target) {
+            if let Value::Weak(w) = v {
+                if std::ptr::eq(w.as_ptr(), Rc::as_ptr(target)) {
                     n += 1;
                 }
             }
@@ -176,43 +195,48 @@ impl Interpreter {
     }
 
     /// Destructor-carrying structs inside `v`, owner before fields, in declaration/element order.
-    fn glue_order(v: &Value, out: &mut Vec<(u32, Value)>, seen: &mut HashSet<usize>) {
+    /// The flag is true for objects reached through an `Rc` (shared ownership).
+    fn glue_order(v: &Value, out: &mut Vec<(u32, Value, bool)>, seen: &mut HashSet<usize>) {
+        Self::glue_order_in(v, out, seen, false)
+    }
+
+    fn glue_order_in(v: &Value, out: &mut Vec<(u32, Value, bool)>, seen: &mut HashSet<usize>, shared: bool) {
         match v {
             Value::Struct(s) => {
                 if s.uid != 0 {
-                    out.push((s.uid, v.clone()));
+                    out.push((s.uid, v.clone(), shared));
                 }
                 for (_, x) in &s.fields {
-                    Self::glue_order(x, out, seen);
+                    Self::glue_order_in(x, out, seen, shared);
                 }
             }
             Value::Vec(xs) | Value::Tuple(xs) => {
                 for x in xs.iter() {
-                    Self::glue_order(x, out, seen);
+                    Self::glue_order_in(x, out, seen, shared);
                 }
             }
             Value::Enum(e) => match &e.payload {
                 Payload::Unit => {}
                 Payload::Tuple(xs) => {
                     for x in xs {
-                        Self::glue_order(x, out, seen);
+                        Self::glue_order_in(x, out, seen, shared);
                     }
                 }
                 Payload::Struct(fs) => {
                     for (_, x) in fs {
-                        Self::glue_order(x, out, seen);
+                        Self::glue_order_in(x, out, seen, shared);
                     }
                 }
             },
             Value::Map(m) => {
                 for x in m.values() {
-                    Self::glue_order(x, out, seen);
+                    Self::glue_order_in(x, out, seen, shared);
                 }
             }
-            Value::Rc(slot) | Value::Cell(_, slot) => {
+            Value::Rc(slot) | Value::Cell(_, slot, _) => {
                 if seen.insert(Rc::as_ptr(slot) as usize) {
                     let inner = slot.borrow().clone();
-                    Self::glue_order(&inner, out, seen);
+                    Self::glue_order_in(&inner, out, seen, true);
                 }
             }
             _ => {}
@@ -222,6 +246,11 @@ impl Interpreter {
     /// Run destructors for the destructor-carrying values in `vals` that are no longer
     /// reachable from the roots (or `extra`). `vals` is in drop order (reverse declaration).
     pub(crate) fn drop_unreachable(&mut self, vals: &[Value], extra: &[&Value]) -> R<()> {
+        self.drop_values(vals, extra, false)
+    }
+
+    /// `force`: owned objects in `vals` (not behind an `Rc`) are dropped even if still reachable.
+    pub(crate) fn drop_values(&mut self, vals: &[Value], extra: &[&Value], force: bool) -> R<()> {
         if self.drop_types.is_empty() || vals.is_empty() {
             return Ok(());
         }
@@ -242,8 +271,8 @@ impl Interpreter {
             }
         });
         let mut first_err: Option<Ctl> = None;
-        for (uid, val) in order {
-            if live.contains(&uid) || !self.dropped.insert(uid) {
+        for (uid, val, shared) in order {
+            if (live.contains(&uid) && !(force && !shared)) || !self.dropped.insert(uid) {
                 continue;
             }
             let ty = val.type_name();
@@ -262,8 +291,11 @@ impl Interpreter {
     }
 
     /// Values of the slots being popped, in drop order (last declared first).
-    pub(crate) fn slot_values_rev(slots: &[(&'static str, Slot)]) -> Vec<Value> {
-        slots.iter().rev().map(|(_, s)| s.borrow().clone()).collect()
+    /// Moved-out slots and fields are left out: their objects belong to someone else now.
+    pub(crate) fn slot_values_rev(&mut self, slots: &[(&'static str, Slot)]) -> Vec<Value> {
+        let vals = slots.iter().rev().filter_map(|(_, s)| self.moves.owned_value(s)).collect();
+        self.moves.forget(slots);
+        vals
     }
 
     /// An error that is a `process::exit`, which never unwinds (no destructors run).

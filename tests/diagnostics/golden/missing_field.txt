@@ -1,0 +1,7 @@
+error[WJ0009]: missing field `y` in initializer of `Point`
+  --> missing_field.wj:8:13
+  |
+8 |     let p = Point { x: 1 }
+  |             ^^^^^ missing `y`
+  = help: add the missing field
+  = explain: wj explain WJ0009

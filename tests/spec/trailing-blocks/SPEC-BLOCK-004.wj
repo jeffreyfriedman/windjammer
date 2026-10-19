@@ -1,0 +1,10 @@
+// spec: SPEC-BLOCK-004
+// mode: parse-error
+// expect-error: only one trailing block per call
+fn both(a: fn() -> int, b: fn() -> int) -> int {
+    a() + b()
+}
+
+fn main() {
+    println("${both() { 1 } { 2 }}")
+}

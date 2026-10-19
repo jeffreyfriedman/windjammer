@@ -1,0 +1,8 @@
+error[W0006]: string literal `.to_string()` is forbidden Rust leakage
+  --> lint_to_string.wj:3:21
+  |
+3 |     let s = "hello".to_string()
+  |                     ^^^^^^^^^
+  = help: prefer bare string literal — codegen emits `String::from("…")`
+  = note: Windjammer string literals are already `string`; `.to_string()` is a Rustism
+  = explain: wj explain W0006

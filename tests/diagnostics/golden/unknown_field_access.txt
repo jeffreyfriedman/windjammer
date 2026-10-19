@@ -1,0 +1,8 @@
+error[WJ0014]: no field `z` on type `Point`
+  --> unknown_field_access.wj:9:22
+  |
+9 |     println("${point.z}")
+  |                      ^ unknown field
+  = help: `Point` has the fields: x, y
+  = fix (suggested): rename the field to `x`
+  = explain: wj explain WJ0014

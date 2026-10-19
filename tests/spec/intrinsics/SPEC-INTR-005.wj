@@ -1,0 +1,15 @@
+// spec: SPEC-INTR-005
+// mode: panic
+// expect: 10
+// expect-error: entered unreachable code: n was 1
+fn f(n: int) -> int {
+    match n {
+        0 => 10,
+        1 => unreachable("n was ${n}"),
+        _ => todo(),
+    }
+}
+fn main() {
+    println("${f(0)}")
+    println("${f(1)}")
+}

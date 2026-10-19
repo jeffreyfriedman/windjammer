@@ -133,24 +133,69 @@ pub enum Commands {
         ir_shadow_validate: bool,
     },
 
-    /// Compile and run a Windjammer file
+    /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// Path to .wj file
-        #[arg(value_name = "FILE")]
-        path: PathBuf,
+        /// A .wj file or a directory; omitted: the project containing the current directory (wj.toml)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
 
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
 
-        /// Target platform (rust, javascript, wasm)
+        /// Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)
+        #[arg(long, value_name = "NAME")]
+        bin: Option<String>,
+
+        /// Target platform (rust, javascript, wasm); non-rust targets always compile
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
-        /// Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start.
-        /// Accepts a file or a project directory. Same source compiles with `wj build` for release.
-        #[arg(long)]
+        /// Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature)
+        #[arg(long, conflicts_with_all = ["compiled", "release"])]
         interpret: bool,
+
+        /// Transpile to Rust and run with cargo (the release path), skipping the interpreter
+        #[arg(long)]
+        compiled: bool,
+
+        /// Like --compiled, with optimizations
+        #[arg(long)]
+        release: bool,
+
+        /// Re-run on every source change (restarts long-running programs)
+        #[arg(long)]
+        watch: bool,
+
+        /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
+        #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
+        hot: bool,
+
+        /// Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another
+        /// reproducible interleaving at every synchronisation point)
+        #[arg(long, value_name = "N", default_value = "0")]
+        sched_seed: u64,
+
+        /// Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible
+        /// shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)
+        #[arg(long, value_name = "N", default_value = "0")]
+        hash_seed: u64,
+
+        /// Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020)
+        #[arg(long, value_name = "ENGINE", default_value = "walker")]
+        engine: String,
+
+        /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
+        #[arg(long)]
+        deterministic_time: bool,
+
+        /// Interpreted runs: allow plain http:// client requests (default: the http client refuses)
+        #[arg(long)]
+        allow_network: bool,
+
+        /// Interpreted runs: answer http client calls from a JSON file of canned responses
+        #[arg(long, value_name = "FILE")]
+        mock_http: Option<PathBuf>,
 
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto")]
@@ -233,6 +278,15 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// Re-run the tests on every source change
+        #[arg(long)]
+        watch: bool,
+        /// Run only the doctests (```wj examples in `///` doc comments)
+        #[arg(long)]
+        doc: bool,
+        /// Also build and run each doctest through the Rust backend (default: interpreter only)
+        #[arg(long)]
+        compiled: bool,
     },
 
     /// Format Windjammer code
@@ -282,9 +336,17 @@ pub enum Commands {
         #[arg(value_name = "PATH")]
         path: Option<PathBuf>,
 
-        /// Output diagnostics as machine-readable JSON (for agent/IDE consumption)
+        /// Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json)
         #[arg(long)]
         json: bool,
+
+        /// Re-check whenever a .wj file changes
+        #[arg(long)]
+        watch: bool,
+
+        /// Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...)
+        #[arg(long)]
+        fix: bool,
     },
 
     /// Add a dependency to wj.toml
@@ -430,7 +492,11 @@ pub enum Commands {
 
     /// Install wj and plugins to ~/.wj/bin/ and ensure PATH
     #[command(name = "self-install")]
-    SelfInstall,
+    SelfInstall {
+        /// Print what would be installed (binary, plugins, embedded std/ files) without writing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
 
     /// External plugin subcommand (e.g., wj game, wj web)
     #[command(external_subcommand)]

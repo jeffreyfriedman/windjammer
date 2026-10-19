@@ -249,7 +249,9 @@ impl<'ast> CodeGenerator<'ast> {
         for field in &s.fields {
             // Emit doc comment for field if present
             if let Some(doc) = &field.doc_comment {
-                output.push_str(&format!("    /// {}\n", doc));
+                for line in doc.lines() {
+                    output.push_str(&format!("    /// {}\n", line.trim()));
+                }
             }
 
             // Generate decorators for the field (convert to Rust attributes)
@@ -431,6 +433,18 @@ impl<'ast> CodeGenerator<'ast> {
         }
     }
 
+    /// `impl Trait for int` names a Windjammer primitive alias; Rust needs the concrete type.
+    fn rust_impl_target_name(type_name: &str) -> String {
+        match type_name {
+            "int" => "i64",
+            "uint" => "u64",
+            "float" => "f64",
+            "string" => "String",
+            other => other,
+        }
+        .to_string()
+    }
+
     pub(super) fn generate_enum(&mut self, e: &EnumDecl) -> String {
         let mut output = String::new();
 
@@ -459,7 +473,10 @@ impl<'ast> CodeGenerator<'ast> {
             traits.push("Copy".to_string());
             self.copy_types_registry.insert(e.name.clone());
         }
-        output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+        self.drop_hand_implemented_traits(&e.name, &mut traits);
+        if !traits.is_empty() {
+            output.push_str(&format!("#[derive({})]\n", traits.join(", ")));
+        }
 
         let pub_prefix = if e.is_pub { "pub " } else { "" };
         output.push_str(&format!("{}enum {}", pub_prefix, e.name));
@@ -476,7 +493,9 @@ impl<'ast> CodeGenerator<'ast> {
         for variant in &e.variants {
             // Emit doc comment for variant if present
             if let Some(doc) = &variant.doc_comment {
-                output.push_str(&format!("    /// {}\n", doc));
+                for line in doc.lines() {
+                    output.push_str(&format!("    /// {}\n", line.trim()));
+                }
             }
 
             use crate::parser::EnumVariantData;
@@ -596,8 +615,8 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push_str("async ");
             }
 
-            output.push_str("fn ");
-            output.push_str(&method.name);
+            let generics = self.angle_type_params(&method.type_params);
+            output.push_str(&format!("fn {}{}", method.name, generics));
             output.push('(');
 
             // TDD FIX: Trait Method Ownership Inference
@@ -883,10 +902,10 @@ impl<'ast> CodeGenerator<'ast> {
                 output.push('>');
             }
 
-            output.push_str(&format!(" for {}", impl_block.type_name));
+            output.push_str(&format!(" for {}", Self::rust_impl_target_name(&impl_block.type_name)));
         } else {
             // Inherent implementation: impl<T> Type<T>
-            output.push_str(&impl_block.type_name);
+            output.push_str(&Self::rust_impl_target_name(&impl_block.type_name));
         }
 
         // Generic impl header type params (for per-method where clauses).

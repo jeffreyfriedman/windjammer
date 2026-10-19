@@ -1,0 +1,14 @@
+// mutant: unknown_field of examples/verified/trait_display_to_string.wj
+struct Point { x: int, y: int }
+
+impl Point {
+    fn to_string(self) -> string {
+        "Point(${self.xx}, ${self.y})"
+    }
+}
+
+fn main() {
+    let p = Point { x: 1, y: 2 }
+    println(p.to_string())
+    println("p = ${p.to_string()}")
+}

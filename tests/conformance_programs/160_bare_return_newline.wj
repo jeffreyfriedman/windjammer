@@ -1,0 +1,20 @@
+// expect: before
+// expect: 3
+// expect: done
+fn early(flag: bool) {
+    println("before")
+    if flag {
+        return
+    }
+    println("not reached")
+}
+
+fn value() -> int {
+    return 3
+}
+
+fn main() {
+    early(true)
+    println("${value()}")
+    println("done")
+}

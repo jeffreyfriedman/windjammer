@@ -110,7 +110,7 @@ Residual risk: the code generator must never expect a private struct from file A
 be reachable from file B. Rust itself enforces this (privacy error), so a violation
 would already fail to compile.
 
-## P8 scratch_reuse (OFF; auto-arena, ADR-0016)
+## P8 scratch_reuse (OFF; auto-arena, ADR-0025)
 Rewrite: `for .. { let mut b = String::new(); <uses> }` -> `{ let mut b = String::new(); for .. { b.clear(); <uses> } }`
 (also `while`, `loop`, `Vec::new()`). Enabled by `OptimizationConfig::with_auto_arena()`.
 Why sound: (1) `b` is not mentioned in the loop header or before its `let` and has no other binding in the loop, so

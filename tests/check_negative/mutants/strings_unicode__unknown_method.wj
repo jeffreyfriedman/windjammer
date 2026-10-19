@@ -1,0 +1,8 @@
+// mutant: unknown_method of examples/verified/strings_unicode.wj
+fn main() {
+    let a = "héllo"
+    println("${a.chars().count()} ${a.length_of()}")
+    let abc = "abc"
+    println("${abc.bytes().count()}")
+    println("${a.chars().next().unwrap_or('?')}")
+}

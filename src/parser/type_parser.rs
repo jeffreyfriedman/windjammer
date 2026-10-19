@@ -77,6 +77,47 @@ impl Parser {
     }
 
     /// Parse generic type parameters: <T, U: Display, V: Clone + Send>
+    /// One trait bound: a path with optional type arguments (`Display`, `std::fmt::Debug`,
+    /// `Into<string>`, `Fn(int) -> int` is not a bound form here). Returned in Windjammer spelling;
+    /// backends map the type arguments (`CodeGenerator::bound_to_rust`).
+    pub(crate) fn parse_trait_bound(&mut self) -> Result<String, String> {
+        let Token::Ident(first) = self.current_token().clone() else {
+            return Err(format!(
+                "Expected trait bound name, got {:?} (at {})",
+                self.current_token(),
+                self.pos_desc()
+            ));
+        };
+        self.advance();
+        let mut bound = first;
+        while self.current_token() == &Token::ColonColon {
+            if let Some(Token::Ident(seg)) = self.peek(1).cloned() {
+                bound.push_str("::");
+                bound.push_str(&seg);
+                self.advance();
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        if self.current_token() == &Token::Lt {
+            self.advance();
+            let mut args = Vec::new();
+            loop {
+                let ty = self.parse_type()?;
+                args.push(self.type_to_string(&ty));
+                if self.current_token() == &Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            self.expect_gt_or_split_shr()?;
+            bound.push_str(&format!("<{}>", args.join(", ")));
+        }
+        Ok(bound)
+    }
+
     pub fn parse_type_params(&mut self) -> Result<Vec<TypeParam>, String> {
         let mut type_params = Vec::new();
         if self.current_token() == &Token::Lt {
@@ -96,12 +137,7 @@ impl Parser {
                     while self.current_token() != &Token::Comma
                         && self.current_token() != &Token::Gt
                     {
-                        if let Token::Ident(bound) = self.current_token() {
-                            bounds.push(bound.clone());
-                            self.advance();
-                        } else {
-                            return Err("Expected trait bound name".to_string());
-                        }
+                        bounds.push(self.parse_trait_bound()?);
 
                         if self.current_token() == &Token::Plus {
                             self.advance(); // Consume + for multiple bounds
@@ -162,12 +198,7 @@ impl Parser {
                 // Parse trait bounds
                 let mut bounds = Vec::new();
                 loop {
-                    if let Token::Ident(bound) = self.current_token() {
-                        bounds.push(bound.clone());
-                        self.advance();
-                    } else {
-                        return Err("Expected trait bound in where clause".to_string());
-                    }
+                    bounds.push(self.parse_trait_bound()?);
 
                     if self.current_token() == &Token::Plus {
                         self.advance(); // Consume + for multiple bounds
@@ -189,7 +220,23 @@ impl Parser {
     }
 
     /// Parse a type annotation
+    /// A type, with the ADR-0018 `T?` suffix (`T?` is exactly `Option<T>`; `T??` is rejected).
     pub fn parse_type(&mut self) -> Result<Type, String> {
+        let ty = self.parse_type_core()?;
+        if self.current_token() == &Token::QuestionQuestion {
+            return Err(format!("`{}??` is not a type: write `Option<{}?>` for a nested option (at {})", self.type_to_string(&ty), self.type_to_string(&ty), self.pos_desc()));
+        }
+        if self.current_token() == &Token::Question {
+            self.advance();
+            if self.current_token() == &Token::Question {
+                return Err(format!("`{}??` is not a type: write `Option<{}?>` for a nested option (at {})", self.type_to_string(&ty), self.type_to_string(&ty), self.pos_desc()));
+            }
+            return Ok(Type::Option(Box::new(ty)));
+        }
+        Ok(ty)
+    }
+
+    fn parse_type_core(&mut self) -> Result<Type, String> {
         // Handle raw pointer types: *const T, *mut T
         if self.current_token() == &Token::Star {
             self.advance();

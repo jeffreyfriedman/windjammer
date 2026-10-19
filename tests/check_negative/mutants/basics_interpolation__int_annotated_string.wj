@@ -1,0 +1,13 @@
+// mutant: int_annotated_string of examples/verified/basics_interpolation.wj
+fn main() {
+    let name = "Ada"
+    let age: string = 36
+    let price = 4.5
+    let n = 42
+    println("${name} is ${age} years old")
+    println("next year: ${age + 1}")
+    println("price: ${price:.2}")
+    println("padded: [${n:>5}]")
+    println("left:   [${n:<5}]")
+    println("zero:   [${n:05}]")
+}

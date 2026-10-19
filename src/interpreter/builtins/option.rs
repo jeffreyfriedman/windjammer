@@ -345,3 +345,15 @@ pub fn register(r: &mut Registry) {
     });
     r.pure(Kind::Any, "hash", |_, _, _| Ok(Value::Unit));
 }
+
+/// ADR-0018 `a?.b`: `a.__opt_chain(|_oc| _oc.b)`, an `and_then` that lifts a non-optional result into `Some`.
+pub(super) fn register_chain(r: &mut Registry) {
+    r.pure(Kind::Option, "__opt_chain", |it, v, a| {
+        if !is_some(v) {
+            return Ok(Value::none());
+        }
+        let f = arg(&a, 0, "?.")?;
+        let out = call(it, &f, vec![payload(v).unwrap()])?;
+        Ok(if out.as_option().is_some() { out } else { Value::some(out) })
+    });
+}

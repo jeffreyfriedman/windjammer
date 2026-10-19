@@ -39,6 +39,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) needs_cow_import: bool, // For Phase 9 Cow optimization
     pub(crate) needs_hashmap_import: bool, // Auto-detect HashMap usage
     pub(crate) needs_hashset_import: bool, // Auto-detect HashSet usage
+    pub(crate) uses_enumerable: bool, // ADR-0018: a surface call needs the inlined `mod wj_enumerable`
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
     source_map: crate::source_map::SourceMap,
@@ -298,11 +299,9 @@ pub struct CodeGenerator<'ast> {
     /// WJ `struct` names declared in this compilation unit. Shadows stdlib types
     /// of the same name (`use std::url` + local `struct Url`) so literals stay local.
     pub(crate) user_declared_struct_names: std::collections::HashSet<String>,
-    // TUPLE STRUCT NAMES: Track names of tuple structs (struct Point(i32, i32))
-    // Enables ownership conversion in constructor calls (Point(x, y) needs owned args)
+    // TUPLE STRUCT NAMES (struct Point(i32, i32)): ownership conversion in constructor calls needs owned args
     pub(crate) tuple_struct_names: std::collections::HashSet<String>,
-    // USER-DEFINED COPY TYPES: Registry of structs/enums with @derive(Copy)
-    // Enables is_copy_type to recognize types like VoxelType as Copy, preventing unnecessary .clone()
+    // USER-DEFINED COPY TYPES (@derive(Copy)): lets is_copy_type recognize them, preventing unnecessary .clone()
     pub(crate) copy_types_registry: std::collections::HashSet<String>,
     /// Types explicitly annotated with `@derive(Copy)` by the user.
     /// Distinguished from auto-derived Copy types to preserve `&mut` semantics
@@ -312,6 +311,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) non_copy_types_registry: std::collections::HashSet<String>,
     // Types that implement Drop - cannot derive Copy (Rust E0184)
     pub(crate) types_with_drop: std::collections::HashSet<String>,
+    pub(crate) idiom: super::program_facts::IdiomScratch, // std-idiom / closure / derive facts
     // STRUCT LITERAL CONTEXT: When generating values for struct literal fields,
     // array literals should use fixed-size [...] syntax instead of vec![...],
     // since struct fields have explicit type annotations (e.g., [f32; 3]).
@@ -663,6 +663,7 @@ impl<'ast> CodeGenerator<'ast> {
             needs_cow_import: false,
             needs_hashmap_import: false,
             needs_hashset_import: false,
+            uses_enumerable: false,
             target,
             is_module: false,
             source_map: crate::source_map::SourceMap::new(),
@@ -782,6 +783,7 @@ impl<'ast> CodeGenerator<'ast> {
             explicit_copy_types_registry: std::collections::HashSet::new(),
             non_copy_types_registry: std::collections::HashSet::new(),
             types_with_drop: std::collections::HashSet::new(),
+            idiom: Default::default(),
             in_struct_literal_field: false,
             array_literal_as_list: false,
             in_owned_value_context: false,
@@ -2424,18 +2426,11 @@ impl<'ast> CodeGenerator<'ast> {
             }
             Item::TypeAlias {
                 name,
+                type_params,
                 target,
                 is_pub,
                 ..
-            } => {
-                let pub_prefix = if *is_pub { "pub " } else { "" };
-                format!(
-                    "{}type {} = {};\n",
-                    pub_prefix,
-                    name,
-                    self.type_to_rust(target)
-                )
-            }
+            } => self.generate_type_alias(name, type_params, target, *is_pub),
             Item::Macro {
                 doc_comment, expr, ..
             } => {
@@ -2542,14 +2537,8 @@ impl<'ast> CodeGenerator<'ast> {
             ("test", _) => "test".to_string(),
             ("async", _) => "async".to_string(),
             ("ignore", _) => "ignore".to_string(),
-            ("timeout", _) => {
-                // TODO: Timeout requires special body wrapping
-                "test".to_string()
-            }
-            ("bench", _) => {
-                // TODO: Benchmark tests use criterion
-                "bench".to_string()
-            }
+            ("timeout", _) => "test".to_string(), // timeout needs body wrapping (not done)
+            ("bench", _) => "bench".to_string(),  // benchmark tests would use criterion
             // HTTP method decorators for Axum
             ("get", _) => "axum::routing::get".to_string(),
             ("post", _) => "axum::routing::post".to_string(),

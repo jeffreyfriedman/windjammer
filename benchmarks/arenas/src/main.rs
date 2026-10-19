@@ -1,4 +1,4 @@
-//! Arena benchmark suite (ADR-0016). Three workloads, each in several variants that compute the same checksum:
+//! Arena benchmark suite (ADR-0025). Three workloads, each in several variants that compute the same checksum:
 //!
 //! * particles: spawn N particles per frame, integrate, drop them all at frame end (F frames)
 //! * tree:      build a binary tree (AST-like, depth D), sum it, drop it (R rounds)

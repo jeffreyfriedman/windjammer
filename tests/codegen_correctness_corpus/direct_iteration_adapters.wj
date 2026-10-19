@@ -1,0 +1,12 @@
+// Iterator adapters are written directly on collections (`.iter()` is implicit).
+// expect: [1, 4, 9]
+// expect: 6
+// expect: true
+fn main() {
+    let v: Vec<int> = [1, 2, 3]
+    let sq: Vec<int> = v.map(|x| x * x).collect()
+    println("${sq:?}")
+    let total: int = v.sum()
+    println("${total}")
+    println("${v.any(|x| *x == 2)}")
+}

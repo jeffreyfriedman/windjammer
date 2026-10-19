@@ -1,0 +1,10 @@
+// mutant: int_annotated_string of examples/verified/basics_variables.wj
+fn main() {
+    let x: string = 10
+    println("${x}")
+    let mut y = x
+    y += 1
+    println("${y}")
+    let x = x * 3
+    println("${x}")
+}

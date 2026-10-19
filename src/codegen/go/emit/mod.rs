@@ -6,11 +6,13 @@
 //! (`Option[T]`, `Result[T, E]`, `TupleN[...]`). All helpers live in `wj_core.go`.
 
 mod builtin;
+mod enumerable;
 mod expr;
 mod fmt;
 mod items;
 mod names;
 mod num;
+mod ordering;
 mod pat;
 mod stmt;
 mod types;

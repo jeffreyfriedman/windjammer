@@ -9,6 +9,8 @@ pub mod build_utils;
 pub mod cargo_cache; // Shared Cargo target dir outside repos
 pub mod cargo_integration; // Cargo build system integration
 pub mod cargo_toml;
+pub mod check;
+pub mod diagnostics;
 pub mod cli;
 pub mod cli_execution; // CLI execution (run, interpret, REPL)
 pub mod codegen;
@@ -24,6 +26,7 @@ pub mod compiler_database;
 pub mod compiler_config;
 pub mod config;
 pub mod debug_env;
+pub mod doctest; // ADR-0018 fenced examples and doctests
 pub mod ejector;
 pub mod error_catalog; // Error catalog generation and documentation
 pub mod error_codes;
@@ -60,6 +63,7 @@ pub mod source_map; // Source map for error message translation
 pub mod source_map_cache; // Source map caching for performance
 pub mod embedded_assets;
 pub mod stdlib_scanner;
+pub mod stdlib_surface; // ADR-0018 declarative std surface tables
 pub mod syntax_highlighter;
 pub mod test_module_gate;
 pub mod test_runner; // Test framework and execution

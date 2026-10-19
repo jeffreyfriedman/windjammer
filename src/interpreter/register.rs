@@ -30,7 +30,7 @@ fn has_copy_derive(decl: &crate::parser::StructDecl<'static>) -> bool {
 }
 
 impl Interpreter {
-    fn func_from_decl(
+    pub(crate) fn func_from_decl(
         &self,
         decl: &'static FunctionDecl<'static>,
         module: usize,
@@ -88,7 +88,7 @@ impl Interpreter {
         module: usize,
         program: &'static Program<'static>,
     ) -> Result<(), RuntimeError> {
-        // `std::arena` (ADR-0016): the compiler's feature gate and escape check apply here too.
+        // `std::arena` (ADR-0025): the compiler's feature gate and escape check apply here too.
         crate::analyzer::arena_escape::gate(program).map_err(|e| RuntimeError::new(super::error::ErrorKind::Semantic, e))?;
         self.register_items(module, &program.items)?;
         self.finish_registration()?;
@@ -100,6 +100,8 @@ impl Interpreter {
         module: usize,
         items: &'static [Item<'static>],
     ) -> Result<(), RuntimeError> {
+        // definitions changed (REPL, lazily loaded modules): cached call resolutions may be stale
+        self.call_cache.clear();
         for item in items {
             match item {
                 Item::Function { decl, .. } => {
@@ -174,18 +176,43 @@ impl Interpreter {
                     self.type_aliases.insert(name.clone(), target.clone());
                 }
                 Item::Mod { name, items, .. } => {
-                    let file = self.modules[module].file.clone();
-                    let child = self.new_module(name, file, Some(module));
-                    self.modules[module].children.insert(name.clone(), child);
+                    // `mod x` (file module) reuses the module the loader created for `x.wj`;
+                    // `mod x { ... }` is an inline module of this file.
+                    let child = match self.modules[module].children.get(name) {
+                        Some(&c) => c,
+                        None if items.is_empty() => match self.load_child_module(module, name)? {
+                            Some(c) => c,
+                            None => self.inline_module(module, name),
+                        },
+                        None => self.inline_module(module, name),
+                    };
                     self.register_items(child, items)?;
                 }
                 Item::Use { path, alias, .. } => {
                     self.register_use(module, path, alias.as_deref())?;
                 }
-                Item::Macro { .. } | Item::ExternLet { .. } | Item::BoundAlias { .. } => {}
+                Item::Macro { expr, .. } => {
+                    // ADR-0014: the language has no macros; a top-level invocation is never silently skipped
+                    let name = match expr {
+                        crate::parser::Expression::MacroInvocation { name, .. } => name.as_str(),
+                        _ => "?",
+                    };
+                    return Err(RuntimeError::new(
+                        crate::interpreter::error::ErrorKind::Unsupported,
+                        format!("top-level macro invocation `{}!` (Windjammer has no macros)", name),
+                    ));
+                }
+                Item::ExternLet { .. } | Item::BoundAlias { .. } => {}
             }
         }
         Ok(())
+    }
+
+    fn inline_module(&mut self, parent: usize, name: &str) -> usize {
+        let file = self.modules[parent].file.clone();
+        let child = self.new_module(name, file, Some(parent));
+        self.modules[parent].children.insert(name.to_string(), child);
+        child
     }
 
     pub(crate) fn new_module(

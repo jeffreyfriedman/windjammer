@@ -82,6 +82,17 @@ impl Interpreter {
         self.eval_raw(e)
     }
 
+    /// Like `eval`, but a lock/borrow guard stays a guard (so it can be handed to `Condvar::wait`
+    /// or reassigned without releasing the lock).
+    pub(crate) fn eval_keep_guard(&mut self, e: &'static Expression<'static>) -> R {
+        let v = self.eval_raw(e)?;
+        match &v {
+            Value::Ref(p) if p.guard.is_some() => Ok(v),
+            Value::Ref(_) => super::place::strip_refs(v),
+            _ => Ok(v),
+        }
+    }
+
     pub(crate) fn literal(&self, l: &Literal) -> Value {
         match l {
             Literal::Int(i) => Value::Int(*i as i128, IntTy::Lit),
@@ -139,6 +150,19 @@ impl Interpreter {
             }
 
             Expression::Unary { op, operand, location } => match op {
+                // the parser reads `-2..3` as `-(2..3)`; a range cannot be negated, so this is `(-2)..3`
+                UnaryOp::Neg if matches!(operand, Expression::Range { .. }) => {
+                    let Expression::Range { start, end, inclusive, .. } = operand else { unreachable!() };
+                    let s = self.eval(start)?;
+                    let s = self.negate(s)?;
+                    let en = self.eval(end)?;
+                    match (s, en) {
+                        (Value::Int(a, at), Value::Int(b, bt)) => {
+                            Ok(Value::Range(a, if *inclusive { b + 1 } else { b }, IntTy::unify(at, bt)))
+                        }
+                        _ => Err(unsupported("range over non-integer values")),
+                    }
+                }
                 UnaryOp::Neg => {
                     let v = self.eval(operand)?;
                     self.mark(location.as_ref());
@@ -186,7 +210,9 @@ impl Interpreter {
 
             Expression::StructLiteral { name, fields, location } => {
                 self.mark(location.as_ref());
-                self.eval_struct_literal(name, fields)
+                let v = self.eval_struct_literal(name, fields)?;
+                self.note_moves(fields.iter().map(|(_, e)| *e));
+                Ok(v)
             }
 
             Expression::MapLiteral { pairs, .. } => {
@@ -196,7 +222,7 @@ impl Interpreter {
                     let v = self.eval(v)?;
                     m.insert(Key(k), v);
                 }
-                Ok(Value::Map(Rc::new(m)))
+                Ok(Value::hash_map(m))
             }
 
             Expression::Range { start, end, inclusive, .. } => {
@@ -246,6 +272,7 @@ impl Interpreter {
                 for x in elements {
                     items.push(self.eval(x)?);
                 }
+                self.note_moves(elements.iter().copied());
                 Ok(Value::tuple(items))
             }
 
@@ -254,6 +281,7 @@ impl Interpreter {
                 for x in elements {
                     items.push(self.eval(x)?);
                 }
+                self.note_moves(elements.iter().copied());
                 Ok(Value::vec(items))
             }
 
@@ -280,9 +308,13 @@ impl Interpreter {
                 self.await_value(v)
             }
 
-            Expression::AsyncCall { location, .. }
-            | Expression::SpawnCall { location, .. }
-            | Expression::ChannelSend { location, .. }
+            Expression::AsyncCall { expr, location } | Expression::SpawnCall { expr, location } => {
+                self.mark(location.as_ref());
+                let body = self.task_body(expr)?;
+                super::builtins::thread::start_task(self, body)
+            }
+
+            Expression::ChannelSend { location, .. }
             | Expression::ChannelRecv { location, .. } => {
                 self.mark(location.as_ref());
                 Err(unsupported(
@@ -290,6 +322,24 @@ impl Interpreter {
                 ))
             }
         }
+    }
+
+    /// What a `spawn`/`async` task runs: a call evaluates its callee and arguments now (as Rust
+    /// does) and runs later; any other operand (a block) becomes a closure over the current scope.
+    fn task_body(&mut self, e: &'static Expression<'static>) -> R {
+        if let Expression::Call { function, arguments, .. } = e {
+            let func = self.eval(function)?;
+            let args = self.eval_args(arguments, None, false)?;
+            return Ok(Value::Func(Rc::new(Callable::Thunk { func, args })));
+        }
+        Ok(Value::Func(Rc::new(Callable::Closure {
+            params: &[],
+            body: e,
+            env: self.scope.vars.clone(),
+            module: self.scope.module,
+            self_ty: self.scope.self_ty.clone(),
+            tparams: self.scope.tparams.clone(),
+        })))
     }
 
     fn eval_try(&mut self, v: Value) -> R {
@@ -371,18 +421,17 @@ impl Interpreter {
                 Ok(v[*i as usize].clone())
             }
             (Value::Vec(v), Value::Range(a, b, _)) => {
-                let (a, b) = (*a as usize, (*b).min(i128::MAX) as usize);
-                if a > b || b > v.len() {
-                    return Err(panic_ctl(format!("range end index {} out of range for slice of length {}", b, v.len())));
+                let (a, b) = (*a, *b);
+                if let Some(msg) = super::slicing::slice_error(a, b, v.len()) {
+                    return Err(panic_ctl(msg));
                 }
-                Ok(Value::vec(v[a..b].to_vec()))
+                Ok(Value::vec(v[a as usize..b as usize].to_vec()))
             }
             (Value::Str(s), Value::Range(a, b, _)) => {
-                let (a, b) = (*a as usize, *b as usize);
-                if a > b || b > s.len() || !s.is_char_boundary(a) || !s.is_char_boundary(b) {
-                    return Err(panic_ctl(format!("byte index {}..{} out of range or not on a char boundary for string of length {}", a, b, s.len())));
+                if let Some(msg) = super::slicing::str_slice_error(s, *a, *b) {
+                    return Err(panic_ctl(msg));
                 }
-                Ok(Value::str(s[a..b].to_string()))
+                Ok(Value::str(s[*a as usize..*b as usize].to_string()))
             }
             (Value::Map(m), k) => m
                 .get(&Key(k.clone()))

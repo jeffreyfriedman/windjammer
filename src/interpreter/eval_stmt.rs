@@ -49,7 +49,7 @@ impl Interpreter {
     pub(crate) fn exec_stmt(&mut self, s: &'static Statement<'static>) -> R {
         self.mark(stmt_loc(s));
         match s {
-            Statement::Expression { expr, .. } => self.eval(expr),
+            Statement::Expression { expr, .. } => self.eval_raw(expr),
 
             Statement::Let { pattern, type_, value, else_block, .. } => {
                 if let Some(t) = type_ {
@@ -65,6 +65,7 @@ impl Interpreter {
                         v = self.coerce(v, t)?;
                     }
                 }
+                self.note_move(value);
                 match pattern {
                     Pattern::Identifier(n) | Pattern::MutBinding(n) => {
                         self.define(n.as_str(), v);
@@ -101,6 +102,10 @@ impl Interpreter {
 
             Statement::Assignment { target, value, compound_op, .. } => {
                 self.exec_assign(target, value, *compound_op)?;
+                if compound_op.is_none() {
+                    self.note_assign(target);
+                    self.note_move(value);
+                }
                 Ok(Value::Unit)
             }
 
@@ -163,9 +168,9 @@ impl Interpreter {
                     Some(e) => self.eval(e)?,
                     None => Value::Unit,
                 };
-                Err(Ctl::Break { label: label.clone(), value: v })
+                Err(Ctl::Break(Box::new((label.clone(), v))))
             }
-            Statement::Continue { label, .. } => Err(Ctl::Continue { label: label.clone() }),
+            Statement::Continue { label, .. } => Err(Ctl::Continue(Box::new(label.clone()))),
             Statement::Defer { statement, .. } => {
                 self.scope.defers.push(statement);
                 Ok(Value::Unit)
@@ -180,7 +185,7 @@ impl Interpreter {
             return self.eval_raw(e);
         }
         // a guard/reference returned by a call (`cell.borrow_mut()`, `lock().unwrap()`) stays a reference
-        if let Expression::MethodCall { .. } = e {
+        if let Expression::MethodCall { .. } | Expression::Block { .. } | Expression::Call { .. } = e {
             return self.eval_raw(e);
         }
         self.eval(e)
@@ -192,7 +197,7 @@ impl Interpreter {
         value: &'static Expression<'static>,
         op: Option<crate::parser::CompoundOp>,
     ) -> R<()> {
-        let rhs = self.eval(value)?;
+        let rhs = self.eval_keep_guard(value)?;
         if let Expression::Identifier { name, .. } = target {
             if name == "_" {
                 return Ok(());
@@ -264,8 +269,9 @@ impl Interpreter {
                     }
                     Value::Map(m) => {
                         let items: Vec<Value> = m
-                            .keys()
-                            .map(|k| Value::tuple(vec![k.0.clone(), Value::Ref(p.proj(Proj::Key(k.0.clone())))]))
+                            .ordered_keys(self.hash_seed)
+                            .into_iter()
+                            .map(|k| Value::tuple(vec![k.clone(), Value::Ref(p.proj(Proj::Key(k)))]))
                             .collect();
                         Value::vec(items)
                     }
@@ -285,6 +291,7 @@ impl Interpreter {
             }
             return Ok(Value::Unit);
         }
+        let src = if let Value::Native(_) = &src { Value::Iter(super::iter::as_iter(self, src)?) } else { src };
         if let Value::Iter(s) = &src {
             while let Some(item) = super::iter::next(self, s)? {
                 if self.run_iteration(pattern, item, body, label)?.is_some() {
@@ -335,8 +342,12 @@ impl Interpreter {
                 Ok((a..b).map(|i| Value::Int(i, ty)).collect())
             }
             Value::Iter(s) => self.drain_iter(&s),
-            Value::Map(m) => Ok(m.iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
-            Value::Set(m) => Ok(m.keys().map(|k| k.0.clone()).collect()),
+            n @ Value::Native(_) => {
+                let s = super::iter::as_iter(self, n)?;
+                self.drain_iter(&s)
+            }
+            Value::Map(m) => Ok(m.ordered(self.hash_seed).into_iter().map(|(k, v)| Value::tuple(vec![k.0.clone(), v.clone()])).collect()),
+            Value::Set(m) => Ok(m.ordered_keys(self.hash_seed)),
             Value::Enum(e) if &*e.ty == "Option" => Ok(match &e.payload {
                 Payload::Tuple(p) => p.clone(),
                 _ => vec![],
@@ -405,7 +416,7 @@ impl Interpreter {
                         }
                     }
                 }
-                let r = self.eval(arm.body);
+                let r = self.eval_raw(arm.body);
                 return self.pop_scope(r);
             }
             let _ = self.pop_scope(Ok(Value::Unit));
@@ -446,8 +457,8 @@ pub(crate) fn loop_exit(r: R, my_label: Option<&str>) -> R<Option<Value>> {
     let mine = |l: &Option<String>| l.is_none() || l.as_deref() == my_label;
     match r {
         Ok(_) => Ok(None),
-        Err(Ctl::Continue { label }) if mine(&label) => Ok(None),
-        Err(Ctl::Break { label, value }) if mine(&label) => Ok(Some(value)),
+        Err(Ctl::Continue(label)) if mine(&label) => Ok(None),
+        Err(Ctl::Break(b)) if mine(&b.0) => Ok(Some(b.1)),
         Err(e) => Err(e),
     }
 }

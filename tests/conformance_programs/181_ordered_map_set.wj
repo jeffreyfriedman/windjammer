@@ -1,0 +1,46 @@
+// BTreeMap / BTreeSet iterate in ascending key order (for loops, keys(), values(), iter(), Debug),
+// and chars().rev().collect() builds a string. Expected output from rustc on a Rust transliteration.
+// expect: 1:one
+// expect: 2:two
+// expect: 3:three
+// expect: first=1
+// expect: 1,2,3
+// expect: one two three
+// expect: {1: "one", 2: "two", 3: "three"}
+// expect: a b c
+// expect: {"a", "b", "c"}
+// expect: olleh
+use std::collections::BTreeMap
+use std::collections::BTreeSet
+
+fn main() {
+    let mut m: BTreeMap<int, string> = BTreeMap::new()
+    m.insert(3, "three".to_string())
+    m.insert(1, "one".to_string())
+    m.insert(2, "two".to_string())
+    for (k, v) in m {
+        println("${k}:${v}")
+    }
+    match m.keys().next() {
+        Some(first) => println("first=${first}"),
+        None => println("empty"),
+    }
+    let ks: Vec<string> = m.keys().map(|k| k.to_string()).collect()
+    println(ks.join(","))
+    let vs: Vec<string> = m.values().map(|v| v.to_string()).collect()
+    println(vs.join(" "))
+    println("{:?}", m)
+    let mut s: BTreeSet<string> = BTreeSet::new()
+    s.insert("c".to_string())
+    s.insert("a".to_string())
+    s.insert("b".to_string())
+    let mut line = ""
+    for x in s {
+        line = line + x + " "
+    }
+    println(line.trim())
+    println("{:?}", s)
+    let w = "hello"
+    let rev: string = w.chars().rev().collect()
+    println(rev)
+}

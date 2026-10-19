@@ -1,0 +1,11 @@
+error[WJ0021]: the name `helper` is defined more than once in this module
+  --> duplicate_function.wj:6:4
+  |
+6 | fn helper() -> int {
+  |    ^^^^^^ redefined here
+  :::  duplicate_function.wj:2:4
+  |
+2 | fn helper() -> int {
+  |    ------ first defined here
+  = help: rename one of them or delete the duplicate
+  = explain: wj explain WJ0021

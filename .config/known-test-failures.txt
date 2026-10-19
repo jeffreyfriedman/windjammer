@@ -2,14 +2,13 @@
 #
 # Real, open compiler bugs (each one is a minimal repro of an ownership / integer-width
 # inference gap). Remove a line as soon as its test passes; never add a line for a test that
-# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail (12 after the correctness stream's fixes).
+# merely became inconvenient. As of 2026-10-10: 5532 pass / 17 fail (11 after the codegen-correctness stream).
 #
 # Classes: multi-file ownership demotion (call-site vs defining module), String move-vs-clone
 # at last use, enum payload literal width without return-type context, while-counter width.
 bug_while_literal_bound_index_must_not_be_i32_test::while_literal_bound_index_must_not_be_i32
 cross_crate_dogfooding_ownership_test::dogfood_lsm_store_apply_patch_asymmetric_coercion
 cross_crate_dogfooding_ownership_test::dogfood_wal_ffi_snapshot_and_path_borrow_at_call_sites
-integration_backend_conformance_test::test_integration_patterns
 library_multipass_map_key_codegen_test::test_library_multipass_graph_bfs_hashmap_compiles
 library_multipass_ownership_codegen_test::test_match_borrow_break_ref_binding_clones_non_copy_in_tuple
 library_multipass_ownership_codegen_test::test_match_borrow_break_self_index_clone_yields_owned_enum_bindings
@@ -26,3 +25,10 @@ inference_differential_test::corpus_closure_mutating_capture_is_mutable
 inference_differential_test::corpus_explicit_ref_pin_is_not_double_borrowed
 inference_differential_test::corpus_unsuffixed_integer_literal_defaults_to_int
 inference_differential_test::corpus_call_inside_interpolation_constrains_literal_width
+codegen_correctness_test::literal_default_through_adapters
+# Dogfooding findings (docs/known-issues/dogfood-findings.md)
+dogfood_findings_test::untyped_int_accumulator_over_fields_is_64_bit
+dogfood_findings_test::const_string_in_if_else_join_with_parameter
+dogfood_findings_test::const_string_let_mut_later_assigned_owned_string
+dogfood_findings_test::const_string_passed_where_owned_string_is_required
+dogfood_findings_test::crate_qualified_call_through_nested_modules_borrows_str_formals

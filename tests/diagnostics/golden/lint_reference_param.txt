@@ -1,0 +1,8 @@
+error[W0001]: explicit ownership annotation
+  --> lint_reference_param.wj:2:17
+  |
+2 | fn total(items: &Vec<int>) -> int {
+  |                 ^
+  = help: use inferred ownership: `items`
+  = note: Windjammer infers borrowing automatically
+  = explain: wj explain W0001

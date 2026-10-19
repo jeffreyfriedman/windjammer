@@ -1,0 +1,7 @@
+// spec: SPEC-CONC-001
+// expect: 8
+fn work(n: int) -> int { n * 2 }
+fn main() {
+    let t = spawn work(4)
+    println("${t.wait()}")
+}

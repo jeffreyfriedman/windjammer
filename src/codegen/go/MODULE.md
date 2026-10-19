@@ -21,7 +21,7 @@ Emit a ready-to-run Go module from the portable IR: `main.go`, `wj_core.go` (run
 
 ## Intrinsics
 `println`/`stderr.println`/`assert*`/`panic`/`todo`/`unreachable`/`debug` need no code here: the portable layer lowers them to `PK::Print`/`PK::Panic`
-(`wjPrint`/`wjEprint`/`wjPanic`). Format specs: `wjPad`, `wjFixed`, `wjRadix`, `wjDbg`; unsupported specs are `Unsupported` errors.
+(`wjPrint`/`wjEprint`/`wjPanic`). Format specs follow Rust's Formatter: `wjFmt` options, `wjFmtInt`/`wjFmtFloat`/`wjFmtStr`, `wjDbgO` (options reach every element of an aggregate; `#` = pretty layout); unsupported specs are `Unsupported` errors.
 
 
 ## Invariants

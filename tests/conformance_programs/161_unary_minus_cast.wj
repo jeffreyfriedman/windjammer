@@ -1,0 +1,20 @@
+// expect: 255
+// expect: 254
+// expect: -5
+// expect: 6
+// expect: 2
+fn main() {
+    let a = -1 as u8
+    println("${a}")
+    let one: i32 = 2
+    let b = -one as u8
+    println("${b}")
+    let x: i64 = 5
+    let c = -x as i32
+    println("${c}")
+    let d = -(2 as i64) * -3
+    println("${d}")
+    let v: Vec<int> = [4, 5]
+    let e = -(v.len() as i64) + 4
+    println("${e}")
+}
