@@ -2004,9 +2004,9 @@ impl<'ast> CodeGenerator<'ast> {
                 if self.expression_produces_usize(expr) {
                     return Some(Type::Custom("usize".into()));
                 }
-                return self
-                    .peer_type_for_int_literal_operand(left)
-                    .or_else(|| self.peer_type_for_int_literal_operand(right));
+                let lit = |e: &Expression<'ast>| crate::codegen::rust::type_casting::expression_is_literal_only_int(e);
+                let (l, r) = (if lit(left) { None } else { self.peer_type_for_int_literal_operand(left) }, if lit(right) { None } else { self.peer_type_for_int_literal_operand(right) });
+                return l.or(r);
             }
         }
         if self.infer_expression_type_is_usize(expr) {

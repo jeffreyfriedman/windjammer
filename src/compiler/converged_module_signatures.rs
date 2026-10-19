@@ -50,3 +50,25 @@ fn register_items(
         }
     }
 }
+
+/// Pre-codegen pass: register every file's converged free functions under their module-qualified
+/// keys; returns the authoritative key set (later stub-carrying analyses must not overwrite them).
+pub(crate) fn register_all_files<'p>(
+    registry: &mut SignatureRegistry,
+    sources: &[(std::path::PathBuf, String)],
+    src_base: &std::path::Path,
+    program: impl Fn(usize) -> &'p Program<'static>,
+    analysis: impl Fn(usize) -> Option<&'p SignatureRegistry>,
+) -> std::collections::HashSet<String> {
+    let mut authoritative = std::collections::HashSet::new();
+    for (i, (file, _)) in sources.iter().enumerate() {
+        let (Some(analysis), Some(module)) = (
+            analysis(i),
+            crate::analyzer::type_collector::wj_file_to_module_path(src_base, file),
+        ) else {
+            continue;
+        };
+        register_converged_module_qualified_signatures(registry, &module, program(i), analysis, &mut authoritative);
+    }
+    authoritative
+}
