@@ -93,6 +93,7 @@ fn pop_line(lines: &LineQueue) -> Result<String, String> {
 /// Spawn a program with piped stdin/stdout (stderr inherits to host).
 /// A background thread drains stdout so game init logs cannot deadlock the pipe.
 pub fn spawn(program: &str, args: &[String]) -> Result<SubprocessHandle, String> {
+    crate::caps::process(program);
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::piped())

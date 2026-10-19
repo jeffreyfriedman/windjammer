@@ -65,6 +65,8 @@ pub fn execute(
     if !path.exists() {
         anyhow::bail!("path not found: {}", path.display());
     }
+    // ADR-0021: capability findings stop the build; the generated main installs the grant only when needed
+    let config = config.with_capability_install(super::build_caps::prepare(path, library)?);
 
     if json_output {
         let external_metadata = parse_external_metadata_args(metadata)?;

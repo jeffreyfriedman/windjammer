@@ -6,11 +6,13 @@ use std::path::Path;
 
 /// Read entire file as a string
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String, String> {
+    crate::caps::fs_read(&path);
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
 /// Read entire file as bytes
 pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
+    crate::caps::fs_read(&path);
     std::fs::read(path).map_err(|e| e.to_string())
 }
 
@@ -21,61 +23,75 @@ pub fn read_bytes<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, String> {
 
 /// Write to file (accepts bytes or strings)
 pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     std::fs::write(path, contents).map_err(|e| e.to_string())
 }
 
 /// Write string to file (helper for common case)
 pub fn write_string<P: AsRef<Path>>(path: P, contents: &str) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     write(path, contents.as_bytes())
 }
 
 /// Check if path exists
 pub fn exists<P: AsRef<Path>>(path: P) -> bool {
+    crate::caps::fs_read(&path);
     path.as_ref().exists()
 }
 
 /// Check if path is a file
 pub fn is_file<P: AsRef<Path>>(path: P) -> bool {
+    crate::caps::fs_read(&path);
     path.as_ref().is_file()
 }
 
 /// Check if path is a directory
 pub fn is_dir<P: AsRef<Path>>(path: P) -> bool {
+    crate::caps::fs_read(&path);
     path.as_ref().is_dir()
 }
 
 /// Create a directory
 pub fn create_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     std::fs::create_dir(path).map_err(|e| e.to_string())
 }
 
 /// Create a directory and all parent directories
 pub fn create_dir_all<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     std::fs::create_dir_all(path).map_err(|e| e.to_string())
 }
 
 /// Remove a file
 pub fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     std::fs::remove_file(path).map_err(|e| e.to_string())
 }
 
 /// Remove a directory
 pub fn remove_dir<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     std::fs::remove_dir(path).map_err(|e| e.to_string())
 }
 
 /// Remove a directory and all its contents
 pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> Result<(), String> {
+    crate::caps::fs_write(&path);
     std::fs::remove_dir_all(path).map_err(|e| e.to_string())
 }
 
 /// Copy a file
 pub fn copy<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<u64, String> {
+    crate::caps::fs_read(&from);
+    crate::caps::fs_write(&to);
     std::fs::copy(from, to).map_err(|e| e.to_string())
 }
 
 /// Rename a file or directory
 pub fn rename<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), String> {
+    crate::caps::fs_write(&from);
+    crate::caps::fs_write(&to);
     std::fs::rename(from, to).map_err(|e| e.to_string())
 }
 
@@ -113,6 +129,7 @@ impl DirEntry {
 
 /// List directory entries
 pub fn read_dir<P: AsRef<Path>>(path: P) -> Result<Vec<DirEntry>, String> {
+    crate::caps::fs_read(&path);
     let entries = std::fs::read_dir(path).map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     for entry in entries {

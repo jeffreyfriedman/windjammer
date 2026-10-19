@@ -35,14 +35,14 @@ impl PackageGrants {
             Some(_) => return Err("wj.toml: [capabilities] must be a table".to_string()),
         };
         let app = match caps {
-            Some(t) => Some(Grant::from_manifest(t, root)?),
+            Some(t) => Some(super::manifest::from_table(t, root)?),
             None => None,
         };
         let mut deps: BTreeMap<String, Grant> = BTreeMap::new();
         if let Some(toml::Value::Table(dt)) = caps.and_then(|t| t.get("dependencies")) {
             for (name, v) in dt {
                 let table = v.as_table().ok_or_else(|| format!("[capabilities.dependencies.{name}] must be a table"))?;
-                deps.insert(name.replace('-', "_"), Grant::from_manifest(table, root)?);
+                deps.insert(name.replace('-', "_"), super::manifest::from_table(table, root)?);
             }
         }
         if let Some(l) = lock {
