@@ -1,0 +1,11 @@
+use a
+use b
+
+fn label() -> string {
+    "main"
+}
+
+fn main() {
+    println("${label()} ${a::label()} ${b::label()}")
+    println("${a::ping(3)}")
+}

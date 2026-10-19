@@ -54,3 +54,7 @@ tmp_*
 .agent-wip/
 **/*.wip.rs
 /.worktrees/
+
+# Claude plugin runtime state
+.claude/autoharness/
+.claude/autoharness*/

@@ -1,0 +1,13 @@
+// expect: WJ0030
+enum Shape {
+    Circle(int),
+    Square(int),
+}
+
+fn main() {
+    let s = Shape::Triangle(3)
+    match s {
+        Shape::Circle(r) => println("${r}"),
+        Shape::Square(a) => println("${a}"),
+    }
+}

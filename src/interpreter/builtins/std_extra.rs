@@ -106,10 +106,33 @@ pub fn register(r: &mut Registry) {
         })
     });
     r.func("crypto::verify_password", |_, a| {
-        Ok(match bcrypt::verify(arg_str(&a, 0, "verify_password")?.as_str(), arg_str(&a, 1, "verify_password")?.as_str()) {
+        let (password, hash) = (arg_str(&a, 0, "verify_password")?, arg_str(&a, 1, "verify_password")?);
+        if hash.starts_with("$argon2") {
+            use argon2::password_hash::{PasswordHash, PasswordVerifier};
+            return Ok(match PasswordHash::new(hash.as_str()) {
+                Err(e) => Value::err(s(&e.to_string())),
+                Ok(parsed) => match argon2::Argon2::default().verify_password(password.as_bytes(), &parsed) {
+                    Ok(()) => Value::ok(Value::Bool(true)),
+                    Err(argon2::password_hash::Error::Password) => Value::ok(Value::Bool(false)),
+                    Err(e) => Value::err(s(&e.to_string())),
+                },
+            });
+        }
+        Ok(match bcrypt::verify(password.as_str(), hash.as_str()) {
             Ok(b) => Value::ok(Value::Bool(b)),
             Err(e) => Value::err(s(&e.to_string())),
         })
+    });
+    r.func("crypto::hash_password_argon2id", |_, a| {
+        use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
+        let salt = SaltString::generate(&mut OsRng);
+        Ok(match argon2::Argon2::default().hash_password(arg_str(&a, 0, "hash_password_argon2id")?.as_bytes(), &salt) {
+            Ok(h) => Value::ok(s(&h.to_string())),
+            Err(e) => Value::err(s(&e.to_string())),
+        })
+    });
+    r.func("crypto::password_hash_is_argon2id", |_, a| {
+        Ok(Value::Bool(arg_str(&a, 0, "password_hash_is_argon2id")?.starts_with("$argon2id$")))
     });
 
     r.func("jwt::sign_hs256", |it, a| {

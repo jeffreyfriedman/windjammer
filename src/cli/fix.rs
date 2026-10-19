@@ -2,7 +2,8 @@
 //
 // Rewrites `println!("a {}", x)` -> `println("a ${x}")`, `vec![..]` -> `[..]`,
 // `eprintln!` -> `stderr.println`, `dbg!` -> `debug`, `format!` -> interpolated strings,
-// `assert!`/`assert_eq!`/`panic!`/`todo!`/`unreachable!` -> plain calls.
+// `assert!`/`assert_eq!`/`panic!`/`todo!`/`unreachable!` -> plain calls, and (ADR-0018) `Option<T>` -> `T?`,
+// `x.unwrap_or(d)` -> `x ?? d`.
 // Idempotent; a rewritten file is only written when it still parses.
 
 use anyhow::{bail, Result};
@@ -49,6 +50,11 @@ fn fix_trailing_returns(name: &str, text: String) -> String {
         Ok(Some(new_text)) => new_text,
         _ => text,
     }
+}
+
+/// ADR-0018: `Option<T>` -> `T?` and `x.unwrap_or(d)` -> `x ?? d` (conservative; see `intrinsics::option_fix`).
+fn surface_fix_options(text: String) -> String {
+    crate::intrinsics::option_fix::fix_options(&text).text
 }
 
 fn is_target(p: &Path, docs: bool) -> bool {
@@ -100,6 +106,7 @@ pub fn execute(path: &Path, check: bool, docs: bool) -> Result<FixSummary> {
         } else {
             let mut out = surface_fix::fix_source(&source);
             out.text = fix_trailing_returns(&name_of(file), out.text);
+            out.text = surface_fix_options(out.text);
             out
         };
         summary.skipped += out.skipped_count();

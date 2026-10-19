@@ -85,6 +85,14 @@ impl Interpreter {
                 module = self.modules[module].parent.unwrap_or(0);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
+                // `super::super::x`, `super::self::x`
+                while (first == "super" || first == "self") && !rest.is_empty() {
+                    if first == "super" {
+                        module = self.modules[module].parent.unwrap_or(0);
+                    }
+                    first = rest[0].to_string();
+                    rest = rest[1..].to_vec();
+                }
             }
             _ => {}
         }
@@ -318,6 +326,7 @@ impl Interpreter {
         // fast path: plain function in the current module (hot in recursion)
         if let Some(f) = self.modules[module].funcs.get(name).cloned() {
             let args = self.eval_args(arguments, Some(&f), false)?;
+            self.prepare_arg_moves(&f, arguments, 0);
             return self.call_func_g(&f, args, None, targs, expected);
         }
         if matches!(name, "drop" | "mem::drop" | "std::mem::drop") && arguments.len() == 1 && self.lookup_var(name).is_none() {
@@ -353,10 +362,13 @@ impl Interpreter {
         match self.resolve_in(module, &segs)? {
             Some(Resolved::Func(f)) => {
                 let args = self.eval_args(arguments, Some(&f), false)?;
+                let offset = usize::from(f.params.first().is_some_and(|p| p.name == "self"));
+                self.prepare_arg_moves(&f, arguments, offset);
                 self.call_func_g(&f, args, None, targs, expected)
             }
             Some(Resolved::Variant(en, idx)) => {
                 let args = self.eval_args(arguments, None, false)?;
+                self.note_moves(arguments.iter().map(|(_, e)| *e));
                 self.make_variant(&en, idx, args)
             }
             Some(Resolved::TupleStruct(n)) => {
@@ -417,6 +429,7 @@ impl Interpreter {
     /// `drop(x)`: a local argument is moved out (its slot emptied) and destructors run.
     fn explicit_drop(&mut self, arg: &'static Expression<'static>) -> R {
         let v = self.eval(arg)?;
+        self.note_move(arg);
         if let Expression::Identifier { name, .. } = arg {
             if let Some(slot) = self.lookup_var(name) {
                 *slot.borrow_mut() = Value::Unit;
@@ -552,7 +565,7 @@ impl Interpreter {
         self.define(p, a);
     }
 
-    fn depth_check(&mut self) -> R<()> {
+    pub(crate) fn depth_check(&mut self) -> R<()> {
         let over_stack = match self.stack_guard {
             Some((base, budget)) => {
                 let here = 0u8;
@@ -612,7 +625,15 @@ impl Interpreter {
         expected: Option<Type>,
     ) -> R {
         if f.is_extern {
-            return Err(unsupported(format!("extern function `{}`", f.name)));
+            return self.call_host(&f.name, args); // ADR-0023 host bridge (unsupported when none is loaded)
+        }
+        if self.hot.is_some() {
+            self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
+        }
+        if self.engine_resolved && self_val.is_none() && targs.is_empty() {
+            if let Some(c) = self.compiled_for(f) {
+                return self.run_compiled(f, &c, args);
+            }
         }
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
@@ -646,6 +667,7 @@ impl Interpreter {
                 self.define("self", v);
             }
         }
+        let first_param_var = self.scope.vars.len();
         let mut bind_err: Option<Ctl> = None;
         for p in f.params.iter().filter(|p| p.name != "self") {
             let a = it.next().unwrap_or(Value::Unit);
@@ -673,6 +695,7 @@ impl Interpreter {
             }
         }
         drop(it);
+        self.bind_links(f, first_param_var);
 
         let r = match bind_err {
             Some(e) => Err(e),
@@ -684,7 +707,7 @@ impl Interpreter {
         let r = self.run_defers(r);
         let r = match r {
             Err(Ctl::Return(v)) => Ok(v),
-            Err(Ctl::Break { .. }) | Err(Ctl::Continue { .. }) => Err(semantic("`break`/`continue` outside of a loop")),
+            Err(Ctl::Break(_)) | Err(Ctl::Continue(_)) => Err(semantic("`break`/`continue` outside of a loop")),
             other => other,
         };
         let r = match r {
@@ -751,6 +774,10 @@ impl Interpreter {
                     if self.builtins.has_function(&path) {
                         let args = self.eval_args(arguments, None, false)?;
                         self.mark(loc);
+                        if path.ends_with("json::parse_string") {
+                            let expected = self.take_expected(whole);
+                            self.type_hint = type_args.and_then(|t| t.first().cloned()).or(expected);
+                        }
                         return self.call_builtin_fn(&path, args);
                     }
                 }
@@ -776,9 +803,14 @@ impl Interpreter {
         self.mark(loc);
         self.type_hint = type_args.and_then(|t| t.first().cloned());
         if let Some(f) = user {
+            self.prepare_arg_moves(&f, arguments, 0);
             return self.call_user_method(&f, recv, place, args);
         }
-        self.call_builtin_method(recv, place, method, args)
+        let r = self.call_builtin_method(recv, place, method, args)?;
+        if matches!(method, "push" | "push_back" | "push_front" | "insert" | "send" | "try_send") {
+            self.note_moves(arguments.iter().map(|(_, e)| *e));
+        }
+        Ok(r)
     }
 
     pub(crate) fn find_user_method(&self, recv: &Value, method: &str) -> Option<Rc<FuncDef>> {
@@ -823,6 +855,11 @@ impl Interpreter {
         method: &str,
         args: Vec<Value>,
     ) -> R {
+        if let Value::Int(n, super::int::IntTy::U128) = &recv {
+            if let Some(r) = super::u128ops::method(method, *n, &args) {
+                return r;
+            }
+        }
         if let Value::Native(n) = &recv {
             if let Some(f) = self.builtins.native_method(n.type_name(), method) {
                 return f(self, &recv, args);

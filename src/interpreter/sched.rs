@@ -39,6 +39,7 @@ pub(crate) struct Ctx {
     stack_guard: Option<(usize, usize)>,
     type_hint: Option<Type>,
     expected: Option<(usize, Type)>,
+    rstack: Vec<Value>,
 }
 
 impl Ctx {
@@ -52,6 +53,7 @@ impl Ctx {
             stack_guard: None,
             type_hint: None,
             expected: None,
+            rstack: Vec::new(),
         }
     }
 }
@@ -243,6 +245,7 @@ impl Interpreter {
             stack_guard: self.stack_guard.take(),
             type_hint: self.type_hint.take(),
             expected: self.expected.take(),
+            rstack: std::mem::take(&mut self.rstack),
         }
     }
 
@@ -255,6 +258,7 @@ impl Interpreter {
         self.stack_guard = c.stack_guard;
         self.type_hint = c.type_hint;
         self.expected = c.expected;
+        self.rstack = c.rstack;
     }
 
     /// Hand the baton to `target` and wait until it comes back to the calling task.

@@ -1,6 +1,6 @@
 # Optional types and `??`
 
-`T?` and `x ?? d` ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 5), parser sugar over `Option`: `T?` is `Option<T>`, `x ?? d` is `x.unwrap_or_else(|| d)` (`unwrap_or(d)` when `d` is a literal or a variable, which is equivalent). Optional chaining `a?.b` is decided in the ADR but [PLANNED]: it needs the IR solver to choose between `map`, `and_then` and the existing `?`-then-access meaning from the receiver type; today `a?.b` keeps the Rust meaning (`(a?).b`). On a `Result`, write `r.ok() ?? d`.
+`T?` and `x ?? d` ([ADR-0018](../adr/0018-expressiveness-phase-2.md) feature 5), parser sugar over `Option`: `T?` is `Option<T>`, `x ?? d` is `x.unwrap_or_else(|| d)` (`unwrap_or(d)` when `d` is a literal or a variable, which is equivalent). Optional chaining `a?.b` is `a.__opt_chain(|_oc| _oc.b)` (parser sugar; the interpreter, Go, JS and TS implement it, the Rust backend rejects it until the IR solver supplies the receiver type). On a `Result`, write `r.ok() ?? d`.
 
 Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's executable example is the code block below it, stored in `tests/spec/optionals/`.
 
@@ -83,3 +83,63 @@ fn main() {
 }
 ```
 Error contains: `is not a type`
+
+**SPEC-OPT-005** `a?.b` reads field `b` of the value inside the optional `a` and yields an optional: `None` when `a` is `None`, else `Some(a.b)`. `a?.m(args)` calls a method the same way.
+
+<!-- example: tests/spec/optionals/SPEC-OPT-005.wj -->
+```windjammer
+struct Item {
+    qty: int,
+}
+
+fn main() {
+    let a: Item? = Some(Item { qty: 5 })
+    let b: Item? = None
+    let qa = a?.qty
+    let qb = b?.qty
+    println("${qa ?? 0} ${qa.is_some()}")
+    println("${qb ?? 0} ${qb.is_none()}")
+}
+```
+Output:
+```text
+5 true
+0 true
+```
+
+**SPEC-OPT-006** Each `?.` covers one member and the result is flattened: when the member is itself an option, `a?.b` is that option (not an option of an option), so `a?.b?.c` is a single optional that is `None` as soon as any link is `None`. `a?.m()` for a method returning a plain value is `Some(value)`.
+
+<!-- example: tests/spec/optionals/SPEC-OPT-006.wj -->
+```windjammer
+struct Profile {
+    nick: string?,
+}
+
+struct User {
+    name: string,
+    profile: Profile?,
+}
+
+impl User {
+    fn name_len(self) -> int {
+        self.name.len() as int
+    }
+}
+
+fn main() {
+    let full: User? = Some(User { name: "abc", profile: Some(Profile { nick: Some("ann") }) })
+    let no_nick: User? = Some(User { name: "bob", profile: Some(Profile { nick: None }) })
+    let no_profile: User? = Some(User { name: "cy", profile: None })
+    println(full?.profile?.nick ?? "anon")
+    println(no_nick?.profile?.nick ?? "anon")
+    println(no_profile?.profile?.nick ?? "anon")
+    println("${full?.name_len() ?? 0}")
+}
+```
+Output:
+```text
+ann
+anon
+anon
+3
+```

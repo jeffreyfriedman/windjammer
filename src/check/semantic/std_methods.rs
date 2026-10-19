@@ -66,4 +66,7 @@ pub const KNOWN_METHODS: &[&str] = &[
 
 pub fn is_known(name: &str) -> bool {
     KNOWN_METHODS.binary_search(&name).is_ok()
+        || name == crate::parser::optional_chain::OPT_CHAIN
+        // ADR-0018 enumerable surface: one table (src/stdlib_surface)
+        || crate::stdlib_surface::enumerable::is_surface_name(name)
 }

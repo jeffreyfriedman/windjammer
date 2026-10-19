@@ -327,9 +327,14 @@ digraph deps {
   "inference" -> "test_utils" [label="1"];
   "interpreter" -> "intrinsics" [label="3",color=red,fontcolor=red];
   "interpreter" -> "lexer" [label="1"];
+<<<<<<< HEAD
+  "interpreter" -> "parser" [label="71"];
+  "interpreter" -> "source_map" [label="7"];
+=======
   "interpreter" -> "parser" [label="63"];
   "interpreter" -> "source_map" [label="4"];
   "interpreter" -> "stdlib_surface" [label="1"];
+>>>>>>> next/v0.50.0
   "intrinsics" -> "error_catalog" [label="2"];
   "ir" -> "analyzer" [label="59"];
   "ir" -> "auto_clone" [label="1"];
@@ -369,8 +374,13 @@ digraph deps {
   "output_generation" -> "project_paths" [label="1"];
   "package" -> "config" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
+<<<<<<< HEAD
+  "parser" -> "lexer" [label="24"];
+  "parser" -> "parser_impl" [label="21"];
+=======
   "parser" -> "lexer" [label="27"];
   "parser" -> "parser_impl" [label="25"];
+>>>>>>> next/v0.50.0
   "parser" -> "source_map" [label="2"];
   "parser_impl" -> "lexer" [label="4"];
   "parser_impl" -> "parser" [label="4"];

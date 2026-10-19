@@ -3,7 +3,7 @@
 //! The interpreter never touches the network unless asked: the default port refuses with an error
 //! that names the flags. `--mock-http FILE` serves canned responses (deterministic tests);
 //! `--allow-network` opens plain `http://` connections (no TLS in the interpreter: `https://` is an
-//! error pointing at the mock port or `wj run`). Servers (`http::serve`) stay unsupported.
+//! error pointing at the mock port or `wj run`). Servers: `std_http_server.rs`, same port.
 
 use super::*;
 use crate::interpreter::native::{downcast, Native};
@@ -16,10 +16,17 @@ pub enum HttpMode {
     /// No network (the default): every request is an error.
     #[default]
     Deny,
-    /// Canned responses: `[{"method","url","status","headers":{..},"body"}]`.
-    Mock(Rc<Vec<MockEntry>>),
+    /// Canned responses `{"method","url","status","headers":{..},"body"}` and, for servers,
+    /// incoming requests `{"request": {"method","path","headers":{..},"body"}}`.
+    Mock(Rc<Mock>),
     /// Plain `http://` over TCP.
     Real,
+}
+
+#[derive(Default)]
+pub struct Mock {
+    entries: Vec<MockEntry>,
+    pub(crate) requests: Vec<super::std_http_server::RawRequest>,
 }
 
 #[derive(Clone)]
@@ -36,10 +43,14 @@ impl HttpMode {
         let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read mock file {}: {e}", path.display()))?;
         let j: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("bad mock file {}: {e}", path.display()))?;
         let arr = j.as_array().ok_or("mock file must be a JSON array")?;
-        let mut out = Vec::new();
+        let mut out = Mock::default();
         for e in arr {
+            if let Some(req) = e.get("request") {
+                out.requests.push(super::std_http_server::RawRequest::from_json(req)?);
+                continue;
+            }
             let get = |k: &str| e.get(k).and_then(|v| v.as_str()).map(str::to_string);
-            out.push(MockEntry {
+            out.entries.push(MockEntry {
                 method: get("method").unwrap_or_else(|| "GET".into()).to_ascii_uppercase(),
                 url: get("url").ok_or("mock entry needs a url")?,
                 status: e.get("status").and_then(|v| v.as_u64()).unwrap_or(200) as u16,
@@ -83,7 +94,8 @@ fn send(mode: &HttpMode, method: &str, url: &str, body: Option<&str>) -> Result<
         HttpMode::Deny => Err(format!(
             "network access is disabled in the interpreter: {method} {url} (use --mock-http FILE for canned responses or --allow-network for plain http://)"
         )),
-        HttpMode::Mock(entries) => entries
+        HttpMode::Mock(m) => m
+            .entries
             .iter()
             .find(|e| e.method == method && e.url == url)
             .map(|e| ResponseObj { status: e.status, headers: e.headers.clone(), body: e.body.clone() })
