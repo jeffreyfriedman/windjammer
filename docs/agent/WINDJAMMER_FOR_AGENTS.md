@@ -242,6 +242,26 @@ fn table(x: int, expected: int) {
 }
 ```
 
+## Reading input and arguments
+
+Programs that read standard input should use one spelling that behaves the same under `wj run --interpret` and `wj build`:
+
+```windjammer,parse
+use std::fs
+use std::env
+
+let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+for line in text.lines() {
+    println(line)
+}
+for a in env::args() {
+    println(a)
+}
+```
+
+`io::stdin().read_line(..)` loops forever in compiled programs and `io::read_line()` is not implemented by the interpreter, so
+prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead of slicing it.
+
 ## The 25 things agents get wrong first
 
 1. `println!("{}", x)`: macros do not exist. Write `println("${x}")` (W0007/W0008, ADR-0014).
