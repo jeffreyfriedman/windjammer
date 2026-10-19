@@ -38,7 +38,7 @@ def interp(ctx, path, src_hash, hash_seed=0):
 
 def compiled(ctx, path, src_hash):
     path = ctx.isolated(path)
-    return ctx.cached_run("r2-compiled-iso", src_hash, [ctx.wj, "run", "--compiled", path], ctx.timeouts["compiled"],
+    return ctx.cached_run("r2-compiled-tmp", src_hash, [ctx.wj, "run", "--compiled", path], ctx.timeouts["compiled"],
                           cwd=os.path.dirname(path), env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
 
 
