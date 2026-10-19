@@ -134,7 +134,7 @@ impl<'ast> CodeGenerator<'ast> {
             // An explicit `unwrap_or(&0)` keeps the reference result (`Option<&T>::unwrap_or(&T)`);
             // copying the receiver there would make the `&0` default a type error.
             let by_ref = args[0].starts_with('&');
-            if !by_ref {
+            if !by_ref && !obj_str.ends_with(".copied()") {
                 obj_str.push_str(".copied()");
             }
             let width = match pointee.as_ref() {

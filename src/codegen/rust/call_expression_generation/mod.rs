@@ -33,7 +33,8 @@ impl<'ast> CodeGenerator<'ast> {
         {
             // `reader.read_line(line)` / `read_to_string(buf)` (match scrutinee form): std fills a `&mut String`;
             // pass the buffer by mutable borrow, never a clone (a filled clone leaves `line` empty: endless loops).
-            if matches!(call_method.as_str(), "read_line" | "read_to_string") && arguments.len() == 1 {
+            let receiver_is_module = matches!(call_obj, Expression::Identifier { name, .. } if self.identifier_is_static_call_root(name));
+            if !receiver_is_module && matches!(call_method.as_str(), "read_line" | "read_to_string") && arguments.len() == 1 {
                 if let Expression::Identifier { name, .. } = arguments[0].1 {
                     let recv = self.generate_expression(call_obj);
                     return format!("{recv}.{call_method}(&mut {name})");

@@ -4608,6 +4608,10 @@ impl<'ast> CodeGenerator<'ast> {
         if expr_str.starts_with('*') || expr_str.ends_with(".clone()") {
             return;
         }
+        // `opt.copied().unwrap_or(d)`: the receiver already yields owned values, so the call result is owned.
+        if expr_str.contains(".copied().unwrap_or") || expr_str.contains(".cloned().unwrap_or") {
+            return;
+        }
         let expects_owned = !matches!(
             &self.current_function_return_type,
             Some(Type::Reference(_)) | Some(Type::MutableReference(_))

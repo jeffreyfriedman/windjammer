@@ -196,6 +196,11 @@ path = "tests/parser_arena_soundness_test.rs"
 name = "codegen_correctness"
 path = "tests/codegen_correctness_test.rs"
 
+# Ecosystem porting findings (docs/known-issues): cargo test --release --test ecosystem_findings
+[[test]]
+name = "ecosystem_findings"
+path = "tests/ecosystem_findings_test.rs"
+
 [[bench]]
 name = "string_optimization_bench"
 harness = false
