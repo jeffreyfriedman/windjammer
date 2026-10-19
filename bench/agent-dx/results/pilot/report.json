@@ -1,0 +1,403 @@
+{
+ "n_trials": 60,
+ "arms": {
+  "pass": {
+   "A": [
+    0.5666666666666667,
+    0.3,
+    0.8333333333333334
+   ],
+   "B": [
+    0.9,
+    0.7,
+    1.0
+   ]
+  },
+  "verify": {
+   "A": [
+    2.033333333333333,
+    1.4,
+    2.8333333333333335
+   ],
+   "B": [
+    2.3333333333333335,
+    1.6333333333333333,
+    3.1333333333333333
+   ]
+  },
+  "to_green": {
+   "A": [
+    1.125,
+    1.0,
+    1.5
+   ],
+   "B": [
+    2.0,
+    1.2962962962962963,
+    2.88
+   ]
+  },
+  "turns": {
+   "A": [
+    3.533333333333333,
+    3.033333333333333,
+    4.233333333333333
+   ],
+   "B": [
+    5.333333333333333,
+    3.933333333333333,
+    6.933333333333334
+   ]
+  },
+  "tok_in": {
+   "A": [
+    31754.766666666666,
+    27254.533333333333,
+    37765.13333333333
+   ],
+   "B": [
+    53623.86666666667,
+    37441.46666666667,
+    73217.66666666667
+   ]
+  },
+  "tok_out": {
+   "A": [
+    1435.2666666666667,
+    1155.3333333333333,
+    1764.4
+   ],
+   "B": [
+    1681.6,
+    1324.2666666666667,
+    2207.133333333333
+   ]
+  },
+  "cost": {
+   "A": [
+    0.02756807,
+    0.02313457,
+    0.03212938666666667
+   ],
+   "B": [
+    0.04071370333333334,
+    0.03057081,
+    0.0540645
+   ]
+  },
+  "wall": {
+   "A": [
+    20.297,
+    17.475666666666665,
+    23.554333333333332
+   ],
+   "B": [
+    96.86333333333333,
+    55.01866666666667,
+    154.69466666666668
+   ]
+  },
+  "think": {
+   "A": [
+    11.296933333333333,
+    9.575233333333333,
+    13.342666666666666
+   ],
+   "B": [
+    16.206166666666668,
+    10.867066666666666,
+    23.393333333333334
+   ]
+  },
+  "tool": {
+   "A": [
+    0.267,
+    0.09733333333333333,
+    0.48333333333333334
+   ],
+   "B": [
+    66.12966666666667,
+    32.797999999999995,
+    105.374
+   ]
+  },
+  "denied": {
+   "A": [
+    0.1,
+    0.0,
+    0.26666666666666666
+   ],
+   "B": [
+    0.16666666666666666,
+    0.03333333333333333,
+    0.36666666666666664
+   ]
+  },
+  "silent": {
+   "A": [
+    0.43333333333333335,
+    0.16666666666666666,
+    0.7
+   ],
+   "B": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "diffs": {
+  "pass": {
+   "A-B": [
+    -0.33333333333333337,
+    -0.6333333333333333,
+    -0.09999999999999998
+   ]
+  },
+  "verify": {
+   "A-B": [
+    -0.30000000000000027,
+    -1.2333333333333334,
+    0.6666666666666665
+   ]
+  },
+  "to_green": {
+   "A-B": [
+    -0.625,
+    -1.5499999999999998,
+    -0.012145748987854255
+   ]
+  },
+  "turns": {
+   "A-B": [
+    -1.7999999999999998,
+    -3.5333333333333337,
+    -0.5333333333333332
+   ]
+  },
+  "tok_in": {
+   "A-B": [
+    -21869.100000000002,
+    -42514.3,
+    -6136.0
+   ]
+  },
+  "tok_out": {
+   "A-B": [
+    -246.33333333333326,
+    -590.2666666666667,
+    32.59999999999991
+   ]
+  },
+  "cost": {
+   "A-B": [
+    -0.013145633333333337,
+    -0.024085030000000007,
+    -0.0048066199999999976
+   ]
+  },
+  "wall": {
+   "A-B": [
+    -76.56633333333333,
+    -137.526,
+    -34.056333333333335
+   ]
+  },
+  "think": {
+   "A-B": [
+    -4.909233333333335,
+    -10.694066666666666,
+    -0.4995666666666647
+   ]
+  },
+  "tool": {
+   "A-B": [
+    -65.86266666666667,
+    -109.278,
+    -32.168
+   ]
+  },
+  "denied": {
+   "A-B": [
+    -0.06666666666666665,
+    -0.3,
+    0.16666666666666666
+   ]
+  },
+  "silent": {
+   "A-B": [
+    0.43333333333333335,
+    0.16666666666666666,
+    0.7
+   ]
+  }
+ },
+ "friction": [
+  {
+   "id": "type-mismatch",
+   "title": "type mismatch (often int/float, string/&str)",
+   "fix_kind": "diagnostic text",
+   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+   "wasted_calls": 24,
+   "est_tokens": 231117,
+   "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:24:5\n   |\n22 | fn digit_char(d: i64) -> String {\n   |                          ------ expected `std::string::String` because of return type\n23 |     let digits: String = String::from(\"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\");\n24 |     digits[d as usize..(d ",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 16,
+   "n_tasks": 5,
+   "rank": 1,
+   "priority": "P0"
+  },
+  {
+   "id": "silent-divergence",
+   "title": "interpreted run passed but compiled grade failed (silent divergence)",
+   "fix_kind": "interpreter / check parity",
+   "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
+   "wasted_calls": 17,
+   "est_tokens": 160553,
+   "example": "",
+   "arms": [
+    "A"
+   ],
+   "n_trials": 13,
+   "n_tasks": 5,
+   "rank": 2,
+   "priority": "P0"
+  },
+  {
+   "id": "slow-command:run-compiled",
+   "title": "slow `wj run` (compiled) >= 30s",
+   "fix_kind": "performance",
+   "fix_location": "build cache / runtime pre-build; see wall-time table",
+   "wasted_calls": 14,
+   "est_tokens": 144692,
+   "example": "",
+   "arms": [
+    "B"
+   ],
+   "n_trials": 10,
+   "n_tasks": 7,
+   "rank": 3,
+   "priority": "P0"
+  },
+  {
+   "id": "rustc-leak",
+   "title": "raw rustc/cargo error surfaced from generated code",
+   "fix_kind": "codegen / diagnostic mapping",
+   "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
+   "wasted_calls": 14,
+   "est_tokens": 143801,
+   "example": "from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nw",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 13,
+   "n_tasks": 7,
+   "rank": 4,
+   "priority": "P1"
+  },
+  {
+   "id": "method-parity",
+   "title": "method accepted by the interpreter is missing on the compiled path",
+   "fix_kind": "stdlib parity / check",
+   "fix_location": "`wj check` must reject what rustc will (R5 check-vs-build gate); alias or implement the std method; `wj docs` entry",
+   "wasted_calls": 12,
+   "est_tokens": 116004,
+   "example": "error[WJ0015]: no method named `is_ascii_alphanumeric` exists on any type in scope\n  --> <ws>/main.wj:16:22\n   |\n16 |                 if c.is_ascii_alphanumeric() {\n   |                      ^^^^^^^^^^^^^^^^^^^^^ unknown method\n  = help: check the method name; see the standard library reference\n  = explain: wj explain WJ0015\n\nError: not running <ws>/main.wj: `wj check` reports 1 error(s); the interpreter runs only programs the compiler accepts\n",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 6,
+   "n_tasks": 1,
+   "rank": 5,
+   "priority": "P1"
+  },
+  {
+   "id": "int-width",
+   "title": "untyped integer literal emitted as i32 and mixed with int (i64)",
+   "fix_kind": "codegen (literal defaulting) + pack tip",
+   "fix_location": "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'",
+   "wasted_calls": 9,
+   "est_tokens": 87671,
+   "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:40:19\n   |\n40 |         while v > (0_i32 as i32) {\n   |               -   ^^^^^^^^^^^^^^ expected `i64`, found `i32`\n   |               |\n   |               expected because this is `i64`\n   |\nhelp: you can convert an `i32` to an `i64`\n   |\n40 |         w",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 7,
+   "n_tasks": 2,
+   "rank": 6,
+   "priority": "P1"
+  },
+  {
+   "id": "slow-command:build-compiled",
+   "title": "slow `wj build` (compiled) >= 30s",
+   "fix_kind": "performance",
+   "fix_location": "build cache / runtime pre-build; see wall-time table",
+   "wasted_calls": 5,
+   "est_tokens": 51676,
+   "example": "",
+   "arms": [
+    "B"
+   ],
+   "n_trials": 4,
+   "n_tasks": 4,
+   "rank": 7,
+   "priority": "P1"
+  },
+  {
+   "id": "collect-type",
+   "title": "collect/iterator element type mismatch in generated Rust",
+   "fix_kind": "codegen",
+   "fix_location": "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md",
+   "wasted_calls": 3,
+   "est_tokens": 29224,
+   "example": "               ^\n    |\nhelp: remove these parentheses\n    |\n125 -                                     right[(parent as usize)] = child;\n125 +                                     right[parent as usize] = child;\n    |\n\nerror[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over elements of type `&str`\n    --> main.rs:11:67\n     |\n  11 |         let parts: Vec<String> = line.trim().split(\" \").collect::<Vec<String>>();\n     |                                                         -------   ^^^^^^^^^^^ value of type `Vec<std::string::String>` cannot be built from",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 3,
+   "n_tasks": 2,
+   "rank": 8,
+   "priority": "P1"
+  },
+  {
+   "id": "lint-leakage",
+   "title": "Rust-leakage lint rejected idiomatic-looking code",
+   "fix_kind": "lint rule",
+   "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
+   "wasted_calls": 2,
+   "est_tokens": 19779,
+   "example": "warning: explicit .clone() call [W0005]\n  --> <ws>/main.wj:33:33\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .clone() and let the compiler handle it\n\nwarning: explicit .clone() call [W0005]\n  --> <ws>/main.wj:48:33\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 2,
+   "n_tasks": 1,
+   "rank": 9,
+   "priority": "P2"
+  },
+  {
+   "id": "other:.N",
+   "title": "unclassified failure: .N",
+   "fix_kind": "diagnostic text (triage)",
+   "fix_location": "inspect example, then file under a rule",
+   "wasted_calls": 1,
+   "est_tokens": 10335,
+   "example": ".0\n   Compiling tower-http v0.6.11\n   Compiling simple_asn1 v0.6.4\n   Compiling rand_chacha v0.3.1\n   Compiling rustls-pki-types v1.15.1\n   Compiling thiserror-impl v1.0.69\n   Compiling axum-macros v0.5.1\n   Compiling pem v3.0.6\n   Compiling axum-core v0.5.6\n   Compiling blake2 v0.10.6\n   Compiling serde_path_to_error v0.1.20\n   Compiling iana-time-zone v0.1.65\n   Compiling csv-core v0.1.13\n   Compiling either v1.19.0\n   Compiling matchit v0.8.4\n   Compiling unsafe-libyaml v0.2.11\n   Compiling axum v0.8.9\n   Compiling serde_yaml v0.9.34+deprecated\n   Compiling rayon v1.12.0\n   Compiling csv v1",
+   "arms": [
+    "B"
+   ],
+   "n_trials": 1,
+   "n_tasks": 1,
+   "rank": 10,
+   "priority": "P2"
+  }
+ ]
+}
