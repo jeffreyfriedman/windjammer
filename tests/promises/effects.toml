@@ -130,3 +130,47 @@ files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n\n[capabili
 args = ["check", "{w}"]
 exit = 1
 output_has = ["WJ0040", "effect `process` is not granted", "main -> run_it -> process::run"]
+
+[[case]]
+name = "caps show lists what a dependency does and whether the lock covers it"
+polarity = "positive"
+covers = ["wj caps", "wj caps --json"]
+files = { "app/wj.toml" = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n\n[capabilities]\nfs.read = [\"./**\"]\n", "app/src/main.wj" = "use lib\n\nfn main() {\n    println(\"${lib::size(\"abc\")}\")\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\nversion = \"0.1.0\"\n", "lib/src/lib.wj" = "use std::fs\n\npub fn size(s: string) -> int {\n    s.len()\n}\n\npub fn load(p: string) -> string {\n    fs::read_to_string(p).unwrap_or(\"\")\n}\n" }
+args = ["caps", "show", "{w}/app", "--json"]
+json = true
+stdout_has = ["\"package\": \"lib\"", "fs.read(*)", "no lock file"]
+
+[[case]]
+name = "caps approve writes the lock file and check then passes"
+polarity = "positive"
+covers = ["wj caps"]
+files = { "app/wj.toml" = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n\n[capabilities]\nfs.read = [\"./**\"]\n", "app/src/main.wj" = "use lib\n\nfn main() {\n    println(\"${lib::size(\"abc\")}\")\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\nversion = \"0.1.0\"\n", "lib/src/lib.wj" = "use std::fs\n\npub fn size(s: string) -> int {\n    s.len()\n}\n\npub fn load(p: string) -> string {\n    fs::read_to_string(p).unwrap_or(\"\")\n}\n" }
+args = ["caps", "approve", "{w}/app"]
+stdout_has = ["wrote", ".wj-capabilities.lock"]
+
+[[case]]
+name = "caps rejects an unknown action"
+polarity = "negative"
+covers = ["wj caps"]
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["caps", "forget", "{w}"]
+exit = 2
+output_has = ["invalid value 'forget'"]
+
+[[case]]
+name = "check names the dependency whose effect is not granted"
+polarity = "negative"
+covers = ["wj caps"]
+files = { "app/wj.toml" = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\nlib = { path = \"../lib\" }\n\n[capabilities]\nfs.read = [\"./**\"]\n", "app/src/main.wj" = "use lib\n\nfn main() {\n    println(lib::load(\"x\"))\n}\n", "lib/wj.toml" = "[package]\nname = \"lib\"\nversion = \"0.1.0\"\n", "lib/src/lib.wj" = "use std::fs\n\npub fn load(p: string) -> string {\n    fs::read_to_string(p).unwrap_or(\"\")\n}\n" }
+args = ["check", "{w}/app"]
+exit = 1
+output_has = ["not granted to dependency `lib`", "wj caps approve"]
+
+[[case]]
+name = "caps show --json of a directory with no sources fails"
+polarity = "negative"
+covers = ["wj caps --json"]
+files = { "notes.txt" = "nothing to analyze\n" }
+args = ["caps", "show", "{w}", "--json"]
+exit = 1
+output_has = ["no .wj files"]

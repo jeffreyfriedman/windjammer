@@ -39,7 +39,10 @@ impl<'m> Go<'m> {
             self.line(&format!("var {} {t} = {v}", ident(&c.name)));
         }
         if m.fns.iter().any(|f| f.name == "main") {
-            self.line("func main() { wjRun(wj_main) }");
+            match self.capability_install.clone() {
+                Some(install) => self.line(&format!("func main() {{ {install}; wjRun(wj_main) }}")),
+                None => self.line("func main() { wjRun(wj_main) }"),
+            }
         }
         Ok(())
     }

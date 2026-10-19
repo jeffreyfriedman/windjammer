@@ -82,7 +82,7 @@ impl CodegenBackend for JavaScriptBackend {
 
     fn generate(&self, program: &Program, config: &CodegenConfig) -> Result<CodegenOutput> {
         let m = self.lower(program, config)?;
-        let body = emit::emit_module(&m, &EmitOptions { typescript: self.typescript }).map_err(|e| anyhow!("{e}"))?;
+        let body = emit::emit_module(&m, &EmitOptions { typescript: self.typescript, capability_install: config.capability_install.clone() }).map_err(|e| anyhow!("{e}"))?;
         let ext = if self.typescript { "ts" } else { "mjs" };
         Ok(CodegenOutput::new(with_runtime_import(body), ext.to_string()))
     }

@@ -584,6 +584,14 @@ id = "wj explain-effects --json"
 statement = "Machine-readable JSON output"
 
 [[promise]]
+id = "wj caps"
+statement = "What the project's dependencies are known to do (per-package capabilities and the lock file)"
+
+[[promise]]
+id = "wj caps --json"
+statement = "Machine-readable JSON output (show)"
+
+[[promise]]
 id = "wj run --sandbox"
 statement = "Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021)"
 

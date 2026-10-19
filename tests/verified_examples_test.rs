@@ -88,7 +88,9 @@ fn run_example(h: &ExampleHeader, path: &Path) -> Option<String> {
         }
         return None;
     }
-    let o = Command::new(WJ).args(["run", "--interpret"]).arg(path).output().unwrap();
+    // `// allow:` lines are the capabilities the example needs (it runs under the default sandbox, ADR-0021)
+    let allow: Vec<&str> = h.allow.iter().flat_map(|a| ["--allow", a.as_str()]).collect();
+    let o = Command::new(WJ).args(["run", "--interpret"]).args(allow).arg(path).output().unwrap();
     compare(h, &lines(&o), o.status.code().unwrap_or(-1))
 }
 

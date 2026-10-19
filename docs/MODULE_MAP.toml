@@ -295,7 +295,7 @@ known_violations = ["type_classification"]
 layer = "tooling"
 owner_stage = "standalone front-end checker (wj check)"
 module_md = "src/check/MODULE.md"
-allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "diagnostics", "error", "error_codes", "error_mapper", "errors", "ffi", "fuzzy_matcher", "inference", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "stdlib_surface", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
+allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "diagnostics", "error", "error_codes", "error_mapper", "errors", "ffi", "fuzzy_matcher", "inference", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "package", "optimizer", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "stdlib_surface", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
 known_violations = []
 
 [modules.reduce]

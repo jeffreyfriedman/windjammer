@@ -299,6 +299,7 @@ impl Interpreter {
                 all.push(f);
             }
         }
+        self.dep_crates = crate_paths.iter().filter_map(|p| p.first().cloned()).collect();
         let entry = &all[0];
         self.modules[0].file = entry.file.clone();
         self.modules[0].name = entry.file.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
