@@ -385,3 +385,44 @@ fn gate3_explain_finding_counts_do_not_rise() {
     }
     assert!(updating() || rose.is_empty(), "explain finding counts rose:\n{}", rose.join("\n"));
 }
+
+/// Gate 4 (money-type invariant, ADR-0017): the compiler must not introduce narrowing integer
+/// casts the user did not write. Counted per corpus program whose source contains no `as`: any
+/// ` as i32|u32|u16|i16|u8|i8` in its emitted Rust was inserted by the compiler. The count may only fall.
+#[test]
+fn gate4_compiler_inserted_narrowing_casts_do_not_rise() {
+    const FILE: &str = "tests/golden/narrowing_casts.txt";
+    let files = corpus();
+    let re_targets = [" as i32", " as u32", " as u16", " as i16", " as u8", " as i8"];
+    let mut per_file: BTreeMap<String, usize> = BTreeMap::new();
+    for rel in &files {
+        let src = std::fs::read_to_string(root().join(rel)).unwrap_or_default();
+        // The user wrote an explicit conversion somewhere: casts in this program are not attributable.
+        if src.split_whitespace().any(|w| w == "as") {
+            continue;
+        }
+        let Ok(rust) = std::fs::read_to_string(golden_path(rel)) else { continue };
+        let n: usize = re_targets.iter().map(|t| rust.matches(t).count()).sum();
+        if n > 0 {
+            per_file.insert(rel.clone(), n);
+        }
+    }
+    if filter().is_some() {
+        return;
+    }
+    let total: usize = per_file.values().sum();
+    let path = root().join(FILE);
+    let baseline: Option<usize> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| s.lines().find(|l| !l.starts_with('#')).and_then(|l| l.trim().parse().ok()));
+    if updating() || baseline.is_none() {
+        let mut out = format!("# Compiler-inserted narrowing casts in goldens of programs without a user `as`. May only fall.\n{total}\n");
+        for (f, n) in &per_file {
+            out.push_str(&format!("# {f} {n}\n"));
+        }
+        std::fs::write(&path, out).unwrap();
+        return;
+    }
+    let b = baseline.unwrap();
+    assert!(total <= b, "compiler-inserted narrowing casts rose: {b} -> {total}\n{per_file:?}");
+}

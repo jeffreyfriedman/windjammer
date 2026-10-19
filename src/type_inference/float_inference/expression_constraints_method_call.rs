@@ -70,6 +70,39 @@ impl FloatInference {
             }
         }
 
+        // NUM-PROPAGATE: `<receiver>.min(1.0)` / `.max(0.0)` / `.clamp(..)` where the receiver's type is
+        // not known yet (an untyped local, a chain): a float *literal* argument can only be accepted
+        // by a float receiver, and these methods take and return the receiver's own type. Put the
+        // receiver, the arguments and the result in one class so the literal follows the receiver
+        // instead of defaulting (`v.min(1.0).max(0.0)` on f32 must not emit `0.0_f64`).
+        let float_literal_arg = |a: &Expression<'ast>| {
+            matches!(a, Expression::Literal { value: crate::parser::Literal::Float(_), .. })
+        };
+        if method_return_type.is_none()
+            && arguments.iter().any(|(_, a)| float_literal_arg(a))
+            && stdlib_method_traits::method_float_args_match_receiver(
+                method,
+                Some(&Type::Custom("f64".to_string())),
+                SignatureRegistry::stdlib(),
+            )
+        {
+            let receiver_id = self.get_expr_id(object);
+            let call_id = self.get_expr_id(expr);
+            self.constraints.push(Constraint::MustMatch(
+                call_id,
+                receiver_id,
+                format!(".{}() preserves the receiver's float type", method),
+            ));
+            for (_label, arg) in arguments.iter() {
+                let arg_id = self.get_expr_id(arg);
+                self.constraints.push(Constraint::MustMatch(
+                    receiver_id,
+                    arg_id,
+                    format!(".{}() argument must match receiver type", method),
+                ));
+            }
+        }
+
         // Signature-driven param constraints (includes generic substitution for HashMap/Vec).
         if let Some(param_types) =
             self.resolve_method_param_types(object, method, arguments.len(), return_type)
