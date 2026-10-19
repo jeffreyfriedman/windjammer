@@ -293,7 +293,7 @@ class Denials(unittest.TestCase):
             g = budget.BudgetGuard(100, 60, 0.3)
             r = pilot.run_pilot(FakeAgent([], denials=["cat x | wj run y"]), list(pilot.PILOT_TASKS), ["A", "B"], 3, d, g,
                                 grader(), real, say=lambda *_: None)
-            self.assertEqual(r["completed"], 2)
+            self.assertEqual(r["completed"], pilot.DENIAL_MIN_TRIALS)
             self.assertIn("permission denials", r["aborted_reason"])
             t = pilot.load_trials(d)[0]
             self.assertEqual(t["usage"]["permission_denials"], 1)
@@ -305,3 +305,14 @@ class Denials(unittest.TestCase):
             self.assertIn(ok, allowed)
         for bad in ("Bash(cat:*)", "Bash(ls:*)", "Bash(find:*)", "Bash(grep:*)", "Bash"):
             self.assertNotIn(bad, allowed)
+
+    def test_occasional_denials_do_not_stop_the_pilot(self):
+        with tempfile.TemporaryDirectory() as d:
+            real = fake_wj(d)
+            g = budget.BudgetGuard(100, 8, 0.3)
+            class Sometimes(FakeAgent):
+                def run(self, ws, shim_dir, arm, task):
+                    self.denials = ["sed -i x"] if self.n % 4 == 0 else []
+                    return super().run(ws, shim_dir, arm, task)
+            r = pilot.run_pilot(Sometimes([]), list(pilot.PILOT_TASKS), ["A", "B"], 1, d, g, grader(), real, say=lambda *_: None)
+            self.assertIsNone(r["aborted_reason"] if "permission" in (r["aborted_reason"] or "") else None)
