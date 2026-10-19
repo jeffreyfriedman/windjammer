@@ -3461,8 +3461,10 @@ fn callee_arg_is_hard_owned_uncached(
             return true;
         }
         // Custom formal: hard Owned only when the callee body consumes the binding.
+        // A generic user type (`Handle<T>`, `Receiver<int>`) is judged like a plain `Custom` one.
         if formal.is_some_and(|t| {
-            matches!(t, Type::Custom(_)) && !crate::codegen::rust::types::is_windjammer_text_type(t)
+            matches!(t, Type::Custom(_) | Type::Parameterized(..))
+                && !crate::codegen::rust::types::is_windjammer_text_type(t)
         }) {
             if let Some((pname, body)) = find_function_body_for_registry_key(programs, &key, pidx) {
                 if !param_is_readonly_custom_walk_body(body, pname) {

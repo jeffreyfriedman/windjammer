@@ -37,6 +37,11 @@ pub fn exit(code: i32) -> ! {
     std::process::exit(code);
 }
 
+/// Current process id (`int` in Windjammer).
+pub fn pid() -> i64 {
+    std::process::id() as i64
+}
+
 /// Process output
 #[derive(Debug, Clone)]
 pub struct ProcessOutput {
@@ -48,6 +53,12 @@ pub struct ProcessOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pid_is_this_process() {
+        assert_eq!(pid(), std::process::id() as i64);
+        assert!(pid() > 0);
+    }
 
     #[test]
     fn test_run_echo() {
