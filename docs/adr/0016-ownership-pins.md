@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: c7e4d01d
+---
 # ADR-0016: Pins: the surface for overriding inference
 
 - **Status:** Proposed
