@@ -18,6 +18,9 @@ pub enum Res {
     CmdArg(usize),
     /// A fixed resource (`HOME`, `RUST_LOG`).
     Fixed(&'static str),
+    /// Minting a capability value (`cap::net()`): the effect must be granted for *some* resource; the value then
+    /// carries that scope. The runtime check is the mint itself (`Interpreter::cap_mint`).
+    Scope,
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +107,13 @@ static SINKS: &[(&str, &[SinkUse])] = &[
     ("random::shuffle", &[u(Random, Res::None)]),
     ("uuid::v4", &[u(Random, Res::None)]),
     ("uuid::v7", &[u(Random, Res::None), u(Time, Res::None)]),
+    // capability values (std::cap): minting needs the effect, the value is then checked on every use
+    ("cap::net", &[u(NetConnect, Res::Scope)]),
+    ("cap::fs", &[u(FsRead, Res::Scope), u(FsWrite, Res::Scope)]),
+    ("cap::env", &[u(EnvRead, Res::Scope)]),
+    ("cap::process", &[u(Process, Res::Scope)]),
+    ("cap::clock", &[u(Time, Res::None)]),
+    ("cap::rng", &[u(Random, Res::None)]),
     // console input and output
     ("io::stdin", &[u(Console, Res::None)]),
     ("io::read_line", &[u(Console, Res::None)]),
@@ -151,7 +161,7 @@ pub fn may_be_sink(path: &str) -> bool {
         matches!(
             seg,
             "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log"
-                | "print" | "println" | "eprint" | "eprintln"
+                | "print" | "println" | "eprint" | "eprintln" | "cap"
         )
     })
 }

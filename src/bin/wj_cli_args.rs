@@ -521,6 +521,21 @@ pub enum Commands {
         json: bool,
     },
 
+    /// What the project's dependencies are known to do (per-package capabilities and the lock file)
+    Caps {
+        /// `show` the effects each dependency performs and whether .wj-capabilities.lock covers them;
+        /// `approve` records them in the lock file (review with `show` first)
+        #[arg(value_parser = ["show", "approve"])]
+        action: String,
+
+        /// Project directory (default: the current directory)
+        path: Option<PathBuf>,
+
+        /// Machine-readable JSON output (show)
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Explain an error code
     Explain {
         /// Error code to explain (e.g., WJ0001, E0425)

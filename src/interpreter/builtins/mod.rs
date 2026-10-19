@@ -20,6 +20,7 @@ mod num;
 mod option;
 mod seq;
 mod shared;
+mod std_cap;
 mod std_data;
 mod std_extra;
 mod std_fns;
@@ -159,6 +160,7 @@ impl Registry {
         shared::register(&mut r);
         arena::register(&mut r);
         std_sys::register(&mut r);
+        std_cap::register(&mut r);
         std_data::register(&mut r);
         std_proc::register(&mut r);
         std_extra::register(&mut r);

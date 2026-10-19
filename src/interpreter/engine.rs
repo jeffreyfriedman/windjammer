@@ -145,6 +145,8 @@ pub struct Interpreter {
     pub(crate) http: super::builtins::std_http::HttpMode,
     /// Capability gate for sink calls (`caps.rs`); `None` = unrestricted (library and test use).
     pub(crate) caps: Option<super::caps::CapGate>,
+    /// Crate names of Windjammer dependencies mounted as top-level modules (package attribution for grants).
+    pub(crate) dep_crates: Vec<String>,
     /// Scopes of the callers of the running function (roots for reachability, see `heap.rs`).
     pub(crate) frames: Vec<Scope>,
     /// Types with `impl Drop` and the bookkeeping for their instances.
@@ -222,6 +224,7 @@ impl Interpreter {
             log_level: None,
             http: Default::default(),
             caps: None,
+            dep_crates: Vec::new(),
             frames: Vec::new(),
             drop_types: HashSet::new(),
             next_uid: 0,

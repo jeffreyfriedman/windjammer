@@ -6,6 +6,7 @@ pub mod add;
 pub mod build;
 pub mod build_json;
 pub mod cache;
+pub mod caps;
 pub mod check;
 pub mod clean;
 pub mod errors;
