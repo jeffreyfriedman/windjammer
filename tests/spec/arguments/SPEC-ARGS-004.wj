@@ -1,0 +1,10 @@
+// spec: SPEC-ARGS-004
+// mode: parse-error
+// expect-error: has no parameter `retry`
+fn connect(host: string, timeout: int = 30, retries: int = 3) -> string {
+    "${host}:${timeout}:${retries}"
+}
+
+fn main() {
+    println(connect("db", retry: 1))
+}

@@ -6,16 +6,81 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 
 | Rule | Chapter | Examples |
 |------|---------|----------|
+| SPEC-ARGS-001 | arguments.md | `arguments/SPEC-ARGS-001.wj` |
+| SPEC-ARGS-002 | arguments.md | `arguments/SPEC-ARGS-002.wj` |
+| SPEC-ARGS-003 | arguments.md | `arguments/SPEC-ARGS-003.wj` |
+| SPEC-ARGS-004 | arguments.md | `arguments/SPEC-ARGS-004.wj` |
+| SPEC-ARGS-005 | arguments.md | `arguments/SPEC-ARGS-005.wj` |
+| SPEC-ARGS-006 | arguments.md | `arguments/SPEC-ARGS-006.wj` |
+| SPEC-ARGS-007 | arguments.md | `arguments/SPEC-ARGS-007.wj` |
+| SPEC-ARGS-008 | arguments.md | `arguments/SPEC-ARGS-008.wj` |
+| SPEC-ARGS-009 | arguments.md | `arguments/SPEC-ARGS-009.wj` |
 | SPEC-ATTR-001 | attributes.md | `attributes/SPEC-ATTR-001.wj` |
 | SPEC-ATTR-002 | attributes.md | `attributes/SPEC-ATTR-002.wj` |
 | SPEC-ATTR-003 | attributes.md | `attributes/SPEC-ATTR-003.wj` |
 | SPEC-ATTR-004 | attributes.md | `attributes/SPEC-ATTR-004.wj` |
+| SPEC-BLOCK-001 | trailing-blocks.md | `trailing-blocks/SPEC-BLOCK-001.wj` |
+| SPEC-BLOCK-002 | trailing-blocks.md | `trailing-blocks/SPEC-BLOCK-002.wj` |
+| SPEC-BLOCK-003 | trailing-blocks.md | `trailing-blocks/SPEC-BLOCK-003.wj` |
+| SPEC-BLOCK-004 | trailing-blocks.md | `trailing-blocks/SPEC-BLOCK-004.wj` |
+| SPEC-CLOS-001 | closures.md | `closures/SPEC-CLOS-001.wj` |
+| SPEC-CLOS-002 | closures.md | `closures/SPEC-CLOS-002.wj` |
+| SPEC-CLOS-003 | closures.md | `closures/SPEC-CLOS-003.wj` |
+| SPEC-CLOS-004 | closures.md | `closures/SPEC-CLOS-004.wj` |
+| SPEC-CLOS-005 | closures.md | `closures/SPEC-CLOS-005.wj` |
+| SPEC-CLOS-006 | closures.md | `closures/SPEC-CLOS-006.wj` |
+| SPEC-CLOS-007 | closures.md | `closures/SPEC-CLOS-007.wj` |
+| SPEC-COLL-001 | collections.md | `collections/SPEC-COLL-001.wj` |
+| SPEC-COLL-002 | collections.md | `collections/SPEC-COLL-002.wj` |
+| SPEC-COLL-003 | collections.md | `collections/SPEC-COLL-003.wj` |
+| SPEC-COLL-004 | collections.md | `collections/SPEC-COLL-004.wj` |
+| SPEC-COLL-005 | collections.md | `collections/SPEC-COLL-005.wj` |
+| SPEC-COLL-006 | collections.md | `collections/SPEC-COLL-006.wj` |
+| SPEC-COLL-007 | collections.md | `collections/SPEC-COLL-007.wj` |
+| SPEC-COLL-008 | collections.md | `collections/SPEC-COLL-008.wj` |
+| SPEC-COLL-009 | collections.md | `collections/SPEC-COLL-009.wj` |
+| SPEC-COLL-010 | collections.md | `collections/SPEC-COLL-010.wj` |
 | SPEC-CONC-001 | concurrency.md | `concurrency/SPEC-CONC-001.wj` |
 | SPEC-CONC-002 | concurrency.md | `concurrency/SPEC-CONC-002.wj` |
 | SPEC-CONC-003 | concurrency.md | `concurrency/SPEC-CONC-003.wj` |
 | SPEC-CONC-004 | concurrency.md | `concurrency/SPEC-CONC-004.wj` |
 | SPEC-CONC-005 | concurrency.md | `concurrency/SPEC-CONC-005.wj` |
 | SPEC-CONC-006 | concurrency.md | untestable |
+| SPEC-DOC-001 | doctests.md | `doctests/SPEC-DOC-001.wj` |
+| SPEC-DOC-002 | doctests.md | `doctests/SPEC-DOC-002.wj` |
+| SPEC-DOC-003 | doctests.md | `doctests/SPEC-DOC-003.wj` |
+| SPEC-EFF-001 | effects.md | `effects/SPEC-EFF-001.wj` (xfail Q-032) |
+| SPEC-EFF-002 | effects.md | `effects/SPEC-EFF-002.wj` (xfail Q-032) |
+| SPEC-EFF-003 | effects.md | `effects/SPEC-EFF-003.wj` (xfail Q-032) |
+| SPEC-EFF-004 | effects.md | `effects/SPEC-EFF-004.wj` (xfail Q-032) |
+| SPEC-EFF-005 | effects.md | `effects/SPEC-EFF-005.wj` (xfail Q-032) |
+| SPEC-EFF-006 | effects.md | `effects/SPEC-EFF-006.wj` (xfail Q-032) |
+| SPEC-EFF-007 | effects.md | `effects/SPEC-EFF-007.wj` (xfail Q-032) |
+| SPEC-EFF-008 | effects.md | `effects/SPEC-EFF-008.wj` (xfail Q-032) |
+| SPEC-EFF-009 | effects.md | `effects/SPEC-EFF-009.wj` (xfail Q-032) |
+| SPEC-EFF-010 | effects.md | `effects/SPEC-EFF-010.wj` (xfail Q-032) |
+| SPEC-EFF-011 | effects.md | `effects/SPEC-EFF-011.wj` (xfail Q-032) |
+| SPEC-EFF-012 | effects.md | `effects/SPEC-EFF-012.wj` (xfail Q-032) |
+| SPEC-EFF-013 | effects.md | `effects/SPEC-EFF-013.wj` (xfail Q-032) |
+| SPEC-EFF-014 | effects.md | `effects/SPEC-EFF-014.wj` (xfail Q-032) |
+| SPEC-EFF-015 | effects.md | `effects/SPEC-EFF-015.wj` (xfail Q-032) |
+| SPEC-EFF-016 | effects.md | `effects/SPEC-EFF-016.wj` (xfail Q-032) |
+| SPEC-EFF-017 | effects.md | `effects/SPEC-EFF-017.wj` |
+| SPEC-EFF-018 | effects.md | `effects/SPEC-EFF-018.wj` (xfail Q-032) |
+| SPEC-EFF-019 | effects.md | `effects/SPEC-EFF-019.wj` (xfail Q-032) |
+| SPEC-EFF-020 | effects.md | `effects/SPEC-EFF-020.wj` (xfail Q-032) |
+| SPEC-EFF-021 | effects.md | `effects/SPEC-EFF-021.wj` (xfail Q-032) |
+| SPEC-EFF-022 | effects.md | `effects/SPEC-EFF-022.wj` (xfail Q-032) |
+| SPEC-EFF-023 | effects.md | `effects/SPEC-EFF-023.wj` (xfail Q-032) |
+| SPEC-EFF-024 | effects.md | `effects/SPEC-EFF-024.wj` (xfail Q-032) |
+| SPEC-EFF-025 | effects.md | `effects/SPEC-EFF-025.wj` (xfail Q-032) |
+| SPEC-EFF-026 | effects.md | `effects/SPEC-EFF-026.wj` (xfail Q-032) |
+| SPEC-EFF-027 | effects.md | `effects/SPEC-EFF-027.wj` |
+| SPEC-EFF-028 | effects.md | `effects/SPEC-EFF-028.wj` |
+| SPEC-EFF-029 | effects.md | `effects/SPEC-EFF-029.wj` (xfail Q-032) |
+| SPEC-EFF-030 | effects.md | untestable |
+| SPEC-EFF-031 | effects.md | untestable |
+| SPEC-EFF-032 | effects.md | untestable |
 | SPEC-ERR-001 | errors.md | `errors/SPEC-ERR-001.wj` |
 | SPEC-ERR-002 | errors.md | `errors/SPEC-ERR-002.wj` |
 | SPEC-ERR-003 | errors.md | `errors/SPEC-ERR-003.wj` |
@@ -94,6 +159,10 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-LEX-013 | lexical.md | `lexical/SPEC-LEX-013.wj` |
 | SPEC-LEX-014 | lexical.md | `lexical/SPEC-LEX-014.wj` |
 | SPEC-LEX-015 | lexical.md | `lexical/SPEC-LEX-015.wj` |
+| SPEC-MATCH-001 | guard-match.md | `guard-match/SPEC-MATCH-001.wj` |
+| SPEC-MATCH-002 | guard-match.md | `guard-match/SPEC-MATCH-002.wj` |
+| SPEC-MATCH-003 | guard-match.md | `guard-match/SPEC-MATCH-003.wj` |
+| SPEC-MATCH-004 | guard-match.md | `guard-match/SPEC-MATCH-004.wj` |
 | SPEC-MOD-001 | modules.md | `modules/SPEC-MOD-001.wj` |
 | SPEC-MOD-002 | modules.md | `modules/SPEC-MOD-002.wj` |
 | SPEC-MOD-003 | modules.md | `modules/SPEC-MOD-003.wj` |
@@ -116,6 +185,10 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-NUM-015 | numeric.md | `numeric/SPEC-NUM-015.wj` |
 | SPEC-NUM-016 | numeric.md | `numeric/SPEC-NUM-016.wj` |
 | SPEC-NUM-017 | numeric.md | `numeric/SPEC-NUM-017.wj` |
+| SPEC-OPT-001 | optionals.md | `optionals/SPEC-OPT-001.wj` |
+| SPEC-OPT-002 | optionals.md | `optionals/SPEC-OPT-002.wj` |
+| SPEC-OPT-003 | optionals.md | `optionals/SPEC-OPT-003.wj` |
+| SPEC-OPT-004 | optionals.md | `optionals/SPEC-OPT-004.wj` |
 | SPEC-OWN-001 | ownership.md | `ownership/SPEC-OWN-001.wj` |
 | SPEC-OWN-002 | ownership.md | `ownership/SPEC-OWN-002.wj` |
 | SPEC-OWN-003 | ownership.md | `ownership/SPEC-OWN-003.wj` |

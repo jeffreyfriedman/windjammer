@@ -189,6 +189,9 @@ impl Parser {
 
                     self.expect(Token::Colon)?;
                     let type_ = self.parse_type()?;
+                    // ADR-0018: `name: Type = default` (parser/named_args.rs)
+                    let mut decorators = decorators.clone();
+                    self.parse_parameter_default(&params, &mut decorators)?;
 
                     // CRITICAL FIX: Determine ownership from the type annotation
                     // If the type is explicitly &T or &mut T, use that.
@@ -218,6 +221,7 @@ impl Parser {
             }
         }
 
+        self.check_default_order(&params)?;
         Ok(params)
     }
 }
