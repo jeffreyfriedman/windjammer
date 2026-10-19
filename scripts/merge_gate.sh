@@ -26,6 +26,7 @@ step() {
 t() { cargo test --release --test all -q -- "$@"; }
 
 step "build (release binaries)" cargo build --release --bins -q
+step "library builds without default features (plugins depend on it this way)" cargo check --release --lib --no-default-features --features cli -q
 step "rustfmt" cargo fmt --all -- --check
 step "test binary" cargo test --release --test all --no-run -q
 step "architecture" t architecture::
