@@ -61,7 +61,7 @@ jobs:
       working-directory: scripts
 
     - name: Run the scorecard (--full)
-      run: python3 scripts/interp_readiness.py --full --report --write --wj target/release/wj --ecosystem windjammer-ecosystem
+      run: python3 scripts/interp_readiness.py --full --warm --budget-min 240 --report --write --wj target/release/wj --ecosystem windjammer-ecosystem
 
     - name: Save readiness history (R7)
       if: always()
