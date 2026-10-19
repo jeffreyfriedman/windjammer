@@ -1,9 +1,10 @@
 // Windjammer std shims for JavaScript: the portable subset of std::{math, strings, fs, time}.
 // Signatures mirror std/<module>.wj (see src/codegen/portable/stdlib.rs). usize/i64/u64 are BigInt.
 
-import { $panic, $strSlice, $strlen, $split, $lines } from "./wj_core.mjs";
+import { $panic, $strSlice, $strlen, $split, $lines, $CapFault } from "./wj_core.mjs";
 
 const nodeFs = typeof process !== "undefined" && process.versions && process.versions.node ? await import("node:fs") : null;
+const nodePath = nodeFs ? await import("node:path") : null;
 
 // ---- math ---------------------------------------------------------------------------------
 export const $std_math_sqrt = Math.sqrt;
@@ -68,6 +69,105 @@ export const $std_strings_byte_at = (s, i) => {
   return n < b.length ? b[n] : $panic("index out of bounds");
 };
 
+// ---- capabilities (ADR-0021) ---------------------------------------------------------------
+// The program's grant, installed by generated code only when some std call cannot be proven inside it at compile
+// time. Same rules as windjammer-runtime's caps_core (the conformance vectors in tests/effects/vectors.json pin both).
+// Portable programs reach the file system only, so only fs.read / fs.write are matched here.
+let capsGrant = null;
+const capsFold = (s) => (typeof process !== "undefined" && (process.platform === "darwin" || process.platform === "win32") ? s.toLowerCase() : s);
+const capsComps = (p) => p.split(/[\\/]/).filter((c) => c !== "").map(capsFold);
+
+function capsCanonical(p, base) {
+  const lex = nodePath.resolve(base, p);
+  let existing = lex;
+  const rest = [];
+  for (;;) {
+    try {
+      let c = nodeFs.realpathSync.native(existing);
+      for (let i = rest.length - 1; i >= 0; i--) c = nodePath.join(c, rest[i]);
+      return c;
+    } catch {
+      const parent = nodePath.dirname(existing);
+      if (parent === existing) return lex;
+      rest.push(nodePath.basename(existing));
+      existing = parent;
+    }
+  }
+}
+
+const capsGlob = (pat, s) => new RegExp("^" + pat.split("*").map((x) => x.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$").test(s);
+
+function capsTail(tail, rest) {
+  if (tail.length === 0) return rest.length === 0;
+  if (tail[0] === "**") {
+    for (let j = 0; j <= rest.length; j++) if (capsTail(tail.slice(1), rest.slice(j))) return true;
+    return false;
+  }
+  return rest.length > 0 && capsGlob(capsFold(tail[0]), rest[0]) && capsTail(tail.slice(1), rest.slice(1));
+}
+
+function capsPathMatches(pat, target, root) {
+  const segs = pat.split("/").filter((s) => s !== "" && s !== ".");
+  let firstGlob = segs.findIndex((s) => s.includes("*"));
+  if (firstGlob < 0) firstGlob = segs.length;
+  const prefixStr = (pat.startsWith("/") ? "/" : "") + segs.slice(0, firstGlob).join("/");
+  const pc = capsComps(capsCanonical(prefixStr === "" ? "." : prefixStr, root));
+  const t = capsComps(target);
+  if (t.length < pc.length || pc.some((c, i) => t[i] !== c)) return false;
+  const tail = segs.slice(firstGlob);
+  const rest = t.slice(pc.length);
+  return tail.length === 0 ? rest.length === 0 : capsTail(tail, rest);
+}
+
+const capsProtected = (p) => {
+  const name = nodePath.basename(p);
+  return name === "wj.toml" || name.endsWith(".wj-capabilities.lock") || name.endsWith(".wj");
+};
+
+const CAPS_DEFAULT_GRANTED = new Set(["time", "random", "console"]);
+
+function capsDisplay(grant, res) {
+  const abs = nodePath.resolve(process.cwd(), res);
+  const rel = nodePath.relative(grant.root, abs);
+  if (rel === "") return ".";
+  return rel.startsWith("..") || nodePath.isAbsolute(rel) ? abs : "./" + rel;
+}
+
+/** Decide one use against `grant`: null = allowed, otherwise the denial text. */
+function capsDecide(grant, kind, resource) {
+  const deny = (outside, scopeText) => {
+    const shown = resource === undefined ? undefined : capsDisplay(grant, resource);
+    const subject = shown === undefined ? kind : `${kind}(${shown})`;
+    const entry = shown === undefined ? `${kind} = true` : `${kind} = ["${shown}"]`;
+    return `error: capability denied: ${subject}\n  = grant in force: ${scopeText}\n  = to allow: add \`${entry}\` under [capabilities] in wj.toml\n`;
+  };
+  if (grant.deny.includes(kind)) return deny(false, `${kind} is denied`);
+  const scope = grant.allow[kind];
+  if (scope === undefined) return CAPS_DEFAULT_GRANTED.has(kind) ? null : deny(false, `${kind} not granted`);
+  if (scope.length === 1 && scope[0] === "*") return null;
+  if (resource === undefined) return deny(true, `${kind} = [${scope.join(", ")}]`);
+  const target = capsCanonical(resource, process.cwd());
+  const inside = (pat) => capsPathMatches(pat, target, grant.root);
+  const ok = kind === "fs.write" && capsProtected(target) ? scope.some((pat) => !pat.includes("*") && inside(pat)) : scope.some(inside);
+  return ok ? null : deny(true, `${kind} = [${scope.join(", ")}]`);
+}
+
+/** Install the grant (generated code calls this once, before `main`). */
+export function $caps_install(spec) {
+  capsGrant = { root: nodePath.resolve(spec.root), allow: spec.allow, deny: spec.deny };
+}
+
+/** Conformance vectors: `"allow"` or `"deny"` for one use under `spec` (not the installed grant). */
+export function $caps_vector(spec, kind, resource) {
+  return capsDecide({ root: nodePath.resolve(spec.root), allow: spec.allow, deny: spec.deny }, kind, resource) === null ? "allow" : "deny";
+}
+
+function capsFs(kind, p) {
+  if (!capsGrant) return;
+  const d = capsDecide(capsGrant, kind, p);
+  if (d !== null) throw new $CapFault(d);
+}
+
 // ---- fs -----------------------------------------------------------------------------------
 const needFs = () => (nodeFs ? nodeFs : $panic("std::fs is not available in this JavaScript environment"));
 const attempt = (f) => {
@@ -77,15 +177,15 @@ const attempt = (f) => {
     return { ok: false, v: String((e && e.message) || e) };
   }
 };
-export const $std_fs_read_to_string = (p) => attempt(() => needFs().readFileSync(p, "utf8"));
-export const $std_fs_write = (p, c) => attempt(() => void needFs().writeFileSync(p, c));
-export const $std_fs_append = (p, c) => attempt(() => void needFs().appendFileSync(p, c));
-export const $std_fs_remove_file = (p) => attempt(() => void needFs().unlinkSync(p));
-export const $std_fs_create_dir_all = (p) => attempt(() => void needFs().mkdirSync(p, { recursive: true }));
-export const $std_fs_remove_dir_all = (p) => attempt(() => void needFs().rmSync(p, { recursive: true, force: true }));
-export const $std_fs_exists = (p) => needFs().existsSync(p);
-export const $std_fs_is_file = (p) => { try { return needFs().statSync(p).isFile(); } catch { return false; } };
-export const $std_fs_is_dir = (p) => { try { return needFs().statSync(p).isDirectory(); } catch { return false; } };
+export const $std_fs_read_to_string = (p) => { capsFs("fs.read", p); return attempt(() => needFs().readFileSync(p, "utf8")); };
+export const $std_fs_write = (p, c) => { capsFs("fs.write", p); return attempt(() => void needFs().writeFileSync(p, c)); };
+export const $std_fs_append = (p, c) => { capsFs("fs.write", p); return attempt(() => void needFs().appendFileSync(p, c)); };
+export const $std_fs_remove_file = (p) => { capsFs("fs.write", p); return attempt(() => void needFs().unlinkSync(p)); };
+export const $std_fs_create_dir_all = (p) => { capsFs("fs.write", p); return attempt(() => void needFs().mkdirSync(p, { recursive: true })); };
+export const $std_fs_remove_dir_all = (p) => { capsFs("fs.write", p); return attempt(() => void needFs().rmSync(p, { recursive: true, force: true })); };
+export const $std_fs_exists = (p) => { capsFs("fs.read", p); return needFs().existsSync(p); };
+export const $std_fs_is_file = (p) => { capsFs("fs.read", p); try { return needFs().statSync(p).isFile(); } catch { return false; } };
+export const $std_fs_is_dir = (p) => { capsFs("fs.read", p); try { return needFs().statSync(p).isDirectory(); } catch { return false; } };
 
 // ---- time ---------------------------------------------------------------------------------
 export const $std_time_now_millis = () => BigInt(Date.now());

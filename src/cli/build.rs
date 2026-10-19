@@ -96,10 +96,13 @@ pub fn execute(
         "javascript" | "js" | "typescript" | "ts" | "go" | "golang" => {
             use crate::codegen::backend::{CodegenConfig, Target};
             let target: Target = target_str.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+            // ADR-0021: capability findings stop the build; the program installs its grant only when needed
+            let flavor = if target == Target::Go { super::build_caps::Flavor::Go } else { super::build_caps::Flavor::JavaScript };
             let config = CodegenConfig {
                 target,
                 output_dir: output_dir.to_path_buf(),
                 tree_shake: options.tree_shake,
+                capability_install: super::build_caps::prepare_for(path, library, flavor)?,
                 ..Default::default()
             };
             return build_portable(path, &config, options.source_maps);

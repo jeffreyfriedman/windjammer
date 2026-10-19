@@ -65,6 +65,9 @@ export function $eprint(s) {
  * program runs on a worker thread with a Rust-like stack, so recursion as deep as a Rust program
  * allows does not overflow Node's small default stack; `entry` is the program module's URL.
  */
+/** A capability denial (ADR-0021): stops the program with exit status 126; programs cannot catch it. */
+export class $CapFault extends Error {}
+
 export function $run(main, entry) {
   if (threads && threads.isMainThread && entry) {
     const w = new threads.Worker(new URL(entry), { resourceLimits: { stackSizeMb: MAIN_STACK_MB } });
@@ -82,7 +85,10 @@ export function $run(main, entry) {
     $flush();
   } catch (e) {
     $flush();
-    if (e instanceof WjPanic) {
+    if (e instanceof $CapFault) {
+      $eprint(e.message);
+      if (typeof process !== "undefined") process.exitCode = 126;
+    } else if (e instanceof WjPanic) {
       $eprint(`thread 'main' panicked:\n${e.message}\n`);
       if (typeof process !== "undefined") process.exitCode = 101;
     } else if (e instanceof RangeError && /call stack/i.test(e.message)) {

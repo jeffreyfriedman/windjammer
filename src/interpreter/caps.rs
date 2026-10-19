@@ -214,7 +214,7 @@ impl Interpreter {
         for u in uses {
             let resource: Option<String> = match u.res {
                 // minting a capability value: `cap_mint` checks it (against the minting package's scope)
-                Res::Scope => {
+                Res::Scope | Res::ScopeOptional => {
                     if let Some(g) = self.caps.as_mut() {
                         g.seen.insert(u.effect.clone());
                     }

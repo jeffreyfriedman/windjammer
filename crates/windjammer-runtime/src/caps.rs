@@ -52,7 +52,7 @@ pub fn installed() -> Option<&'static Grant> {
 }
 
 fn fault(d: Denial) -> ! {
-    eprintln!("error: capability denied: {}\n  = grant in force: {}\n  = to allow: {}", d.subject(), d.grant, d.fix);
+    eprintln!("error: capability denied: {}\n  = grant in force: {}\n  = to allow: {}", d.subject(), d.grant, d.manifest_fix());
     std::process::exit(126)
 }
 

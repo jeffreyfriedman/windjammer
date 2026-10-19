@@ -40,6 +40,8 @@ pub fn check(r: &ResolvedProgram<'_>, facts: &EffectFacts, grants: &PackageGrant
                 };
                 // a computed resource cannot be decided statically: it gets a runtime guard (only an effect that is not granted at all is an error)
                 let verdict = match &e.resource {
+                    // a capability value for an effect the package may not have simply carries no such ability
+                    Resource::MintedOptional => Ok(()),
                     Resource::Computed => g.granted_at_all(&e.kind),
                     _ => g.check(&e.kind, res),
                 };
