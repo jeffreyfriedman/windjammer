@@ -1,4 +1,5 @@
 """Cost estimate and hard budget gate for live agent runs."""
+import threading
 
 PILOT_MAX_TRIALS = 60   # absolute ceiling for the pilot; raising it is a code change on purpose
 
@@ -36,17 +37,24 @@ class BudgetGuard:
 
     def __init__(self, budget_usd, max_trials, est_per_trial):
         self.budget, self.max_trials, self.est = budget_usd, min(max_trials, PILOT_MAX_TRIALS), est_per_trial
-        self.spent, self.count = 0.0, 0
+        self.spent, self.count, self.inflight = 0.0, 0, 0
+        self._lock = threading.Lock()
 
     def next_cost(self):
         return self.spent / self.count if self.count >= 3 else self.est
 
     def before_trial(self):
-        if self.count >= self.max_trials:
-            raise BudgetExceeded(f"trial counter {self.count} reached max-trials {self.max_trials}")
-        if self.spent + self.next_cost() > self.budget:
-            raise BudgetExceeded(f"spent ${self.spent:.2f} + next ~${self.next_cost():.2f} exceeds budget ${self.budget:.2f}")
+        """Reserve a slot for one trial (thread-safe); in-flight trials count at the projected cost."""
+        with self._lock:
+            if self.count + self.inflight >= self.max_trials:
+                raise BudgetExceeded(f"trial counter {self.count}+{self.inflight} in flight reached max-trials {self.max_trials}")
+            proj = self.spent + (self.inflight + 1) * self.next_cost()
+            if proj > self.budget:
+                raise BudgetExceeded(f"spent ${self.spent:.2f} + {self.inflight + 1} trial(s) at ~${self.next_cost():.2f} exceeds budget ${self.budget:.2f}")
+            self.inflight += 1
 
     def record(self, cost_usd):
-        self.spent += cost_usd or 0.0
-        self.count += 1
+        with self._lock:
+            self.spent += cost_usd or 0.0
+            self.count += 1
+            self.inflight = max(0, self.inflight - 1)

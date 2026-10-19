@@ -266,3 +266,20 @@ class Friction(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Parallel(unittest.TestCase):
+    def test_parallel_workers_respect_counter_and_record_each_trial_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            real = fake_wj(d)
+            g = budget.BudgetGuard(100, 5, 0.3)
+            r = pilot.run_pilot(FakeAgent([]), list(pilot.PILOT_TASKS[:5]), ["A", "B"], 1, d, g, grader(), real, say=lambda *_: None, workers=4)
+            self.assertEqual(r["completed"], 5)
+            self.assertEqual(len(pilot.load_trials(d)), 5)
+            self.assertIsNotNone(r["aborted_reason"])
+
+    def test_inflight_trials_count_against_dollar_budget(self):
+        g = budget.BudgetGuard(1.0, 60, 0.4)
+        g.before_trial(); g.before_trial()
+        with self.assertRaises(budget.BudgetExceeded):
+            g.before_trial()    # 3 x 0.4 > 1.0 although nothing has been spent yet
