@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-001
 // mode: effects
-// xfail: Q-032
 // expect: add: pure
 // expect: main: console
 fn add(a: int, b: int) -> int { a + b }

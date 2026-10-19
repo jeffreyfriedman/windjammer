@@ -98,6 +98,12 @@ confinement, so granted by default, but visible to `durable fn`, replay and simu
 and `ffi` are *authority* effects.
 
 ### 3. Inference by default, annotations optional (progressive disclosure)
+**Surface rule: keywords change execution; attributes make claims.** A keyword (`async fn`, `durable fn`, `spawn`,
+`scope`) changes how code runs: removing it changes behaviour. An attribute (`@uses`, `@pure`, `@effect`, `@derive`)
+states a claim the compiler checks or a name it records: removing a *true* claim never changes behaviour, and a false
+claim is a compile error. That is why `durable fn` is a keyword (it makes the runtime journal steps) and `@uses`/`@pure`
+are attributes (they only assert what inference already computes).
+
 - **Level 0, write code.** No annotations. `fs::read_to_string("cfg.toml")` performs `fs.read("cfg.toml")`; callers
   inherit it. `wj run` of a script in a directory with no manifest uses the *local profile* (decision D1).
 - **Level 1, see it.** `wj explain-effects` prints each function's effect set and the call chain to every sink. `wj check`
@@ -337,6 +343,26 @@ grant status and the check placement (`proven` / `runtime guard` / `denied`).
 | E6 information flow | provenance labels in the interpreter; `[policy.flows]` | E5 | an AgentDojo-style subset: attack success near 0 with utility within 10 points of undefended | utility loss above 20 points |
 | E7 compiled record/replay, OS confinement | runtime port behind `--record`; Landlock/seccomp/sandbox-exec option | E2, E3 | replay parity with the interpreter on the conformance corpus | - |
 
+### E1 status (2026-10-19): implemented, gates measured
+Where: sink table, grants and the effect pass in `src/ir/effect_facts/`; findings in `src/check/effects.rs` (WJ0040-WJ0044,
+WJ0024 stays the legacy coarse code); interpreter gate in `src/interpreter/caps.rs` (one choke point, `call_builtin_fn`, plus
+host-bridge externs); `wj explain-effects`; `wj run --sandbox/--allow/--caps`. Acceptance tests: `docs/spec/effects.md`
+(SPEC-EFF-001..011, 013..016, 018..020, 027, 028 pass; 012, 021..026, 029 stay `xfail Q-032` for E2-E4).
+
+| E1 gate | Result (evidence) |
+|---|---|
+| Soundness: dynamic effects within the static set of `main` | 0 violations over 211 corpus programs (spec examples + 15 effectful programs in `tests/effects/corpus/`), 16 of them performing gated effects; `tests/effects_soundness_test.rs`. `console` is static-only in E1 (the `println` intrinsic is not a gated builtin) |
+| Escape suite, at least 60 cases, 0 escapes | 107 cases, 0 escapes (`tests/effects_escape_test.rs`): fs (dotdot, absolute, dir and file symlinks, sibling prefix, info leaks via exists/metadata, rename/copy across the boundary, manifest and source protection), net (userinfo, fragment, query, backslash, suffix, wildcard apex, port, scheme default, IP/IPv6/localhost, trailing dot, case, every verb, listen), env, process (shell metacharacters, local-path borrowing a granted name), time/random/console revocation, closures, spawned tasks, uncatchable denial |
+| Interpreter overhead at most 5% | non-sink-heavy workload: +3.8% CPU (median of 18 interleaved runs each, output identical); **provisional, measured at load 57-65**. Sink-dense loop (`fs::exists` + `random` + `time` x 30000): about 22 microseconds per fs check (path canonicalization is a few syscalls), 6x on that microbenchmark; re-measure on a quiet machine |
+| False-positive effect errors at most 2% of the corpus with a correct manifest | 0 of 211: no program's static set names an effect kind its run never exercised (`console` aside) |
+
+Decisions taken while implementing (all enforced by tests): one URL parser (`scope_match::split_url`) serves both the check and
+the interpreter's http client, so what is checked is what is connected to; `process::run` programs are resolved by
+`parse_command` (shell syntax means `sh`, and a bare name never matches a local `./name`); a glob grant never covers
+`wj.toml`, `*.wj-capabilities.lock` or `*.wj` (only an exact pattern does); `fs::set_current_dir` is `env.write(cwd)`.
+Known limits: TOCTOU between check and open; DNS rebinding (hosts are checked by name); redirects (the interpreter
+client does not follow any); per-package grants and `std::cap` values are E2; `console` is not gated at run time.
+
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).
 - Escape suite: at least 150 cases by E5, 0 escapes (CI gate).
@@ -354,7 +380,11 @@ grant status and the check placement (`proven` / `runtime guard` / `denied`).
 - ADR-0009's choice (per-app now, per-dependency later, `unknown` for externs) is implemented by E1/E2.
 - WJ-SEC-01..04 remain as background; where they disagree with this ADR, this ADR wins.
 
-## Decisions needed from the project owner
+## Decisions (project owner, 2026-10-19)
+D1-D5, D7 and D8 are accepted as recommended; D6 is decided as written below (2026-10-18). D1 is staged: the release
+that ships E1 runs the local profile in **warn** mode (a sink outside it runs and prints `warning[WJ0040]` once,
+naming the `wj.toml` line or `--allow` flag that would grant it); the next minor release **enforces** it. A manifest
+`[capabilities]` table, `--sandbox` or `--allow` always enforces. `WJ_CAPS=enforce` previews the future default.
 - **D1. Default grant without a manifest** for `wj run --interpret`. Recommended *local profile*: fs read/write inside
   the project directory, `time`, `random`, `console`; net/env/process/ffi denied with a message naming `--allow`.
   Alternative: keep today's ambient fs/env/process (compatible, weaker).

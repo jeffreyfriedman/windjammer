@@ -25,6 +25,8 @@ pub enum ErrorKind {
     Unsupported,
     /// Name resolution / type errors the compiler would have rejected.
     Semantic,
+    /// A sink was called without the capability (ADR-0021). Not catchable; exit status 126.
+    CapabilityDenied,
     /// `std::process::exit(code)`
     Exit(i32),
 }
@@ -62,6 +64,9 @@ impl RuntimeError {
             }
             (ErrorKind::Panic, None) => {
                 out.push_str(&format!("thread 'main' panicked:\n{}", self.message))
+            }
+            (ErrorKind::CapabilityDenied, s) => {
+                out.push_str(&format!("error: {}{}", self.message, s.as_ref().map(|s| format!("\n  --> {}", s)).unwrap_or_default()))
             }
             (ErrorKind::Unsupported, s) => {
                 out.push_str(&format!(

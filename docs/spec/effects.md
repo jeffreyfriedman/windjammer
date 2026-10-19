@@ -1,11 +1,12 @@
 # Effects and capabilities
 
-[ADR-0021](../adr/0021-effects-and-capabilities.md) (accepted for design 2026-10-12; implementation staged E1-E7) decides
-this chapter. **Most of it is not implemented yet.** Rules marked [PLANNED] carry an `xfail` example: the example states the
-intended behaviour, it is expected to fail today, and the run fails if it starts passing. These examples are the
-acceptance tests of the implementation stages. What exists today: the interpreter's http client refuses the network unless
-`--allow-network` or `--mock-http` is given; `--deterministic-time` and `--sched-seed` give a virtual clock, a seeded
-random generator and reproducible interleavings (SPEC-EFF-027, SPEC-EFF-028).
+[ADR-0021](../adr/0021-effects-and-capabilities.md) (accepted 2026-10-12; implementation staged E1-E7) decides
+this chapter. **Stage E1 is implemented:** effect inference (SPEC-EFF-001..007), grants enforced in the interpreter
+(008..011), `wj check` findings (013..016, 018..020) and `wj explain-effects`. Rules marked [PLANNED] carry an `xfail`
+example: the example states the intended behaviour, it is expected to fail today, and the run fails if it starts
+passing. They are the acceptance tests of the later stages (E2 `std::cap` and per-package grants; E3 replay;
+E4 `durable fn`; E5 code mode). `--deterministic-time` and `--sched-seed` give a virtual clock, a seeded random
+generator and reproducible interleavings (SPEC-EFF-027, SPEC-EFF-028).
 
 Part of the [Windjammer language specification](README.md). Rule IDs are checked by `scripts/spec_check.sh`; each rule's
 executable example is the code block below it, stored in `tests/spec/effects/`. Example modes specific to this chapter
@@ -25,11 +26,10 @@ when it calls a function value whose effects are not declared.
 
 ## Inference
 
-**SPEC-EFF-001** [PLANNED ADR-0021] A function that calls no sink, directly or through callees, is pure; console output (`print`, `println`, `eprintln`, reading stdin) is the effect `console`.
+**SPEC-EFF-001** A function that calls no sink, directly or through callees, is pure; console output (`print`, `println`, `eprintln`, reading stdin) is the effect `console`.
 
 <!-- example: tests/spec/effects/SPEC-EFF-001.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 fn add(a: int, b: int) -> int { a + b }
 fn main() {
     println("${add(1, 2)}")
@@ -40,13 +40,11 @@ fn main() {
 add: pure
 main: console
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-002** [PLANNED ADR-0021] Each standard-library sink performs one effect: file reads `fs.read`, file writes `fs.write`, the http client and TCP connect `net.connect`, servers `net.listen`, environment reads and writes `env.read`/`env.write`, running a program `process`, clocks and sleeps `time`, `std::random` and random UUIDs `random`. The table of sinks is part of the semantic layer and is the only classification the compiler and the interpreter use.
+**SPEC-EFF-002** Each standard-library sink performs one effect: file reads `fs.read`, file writes `fs.write`, the http client and TCP connect `net.connect`, servers `net.listen`, environment reads and writes `env.read`/`env.write`, running a program `process`, clocks and sleeps `time`, `std::random` and random UUIDs `random`. The table of sinks is part of the semantic layer and is the only classification the compiler and the interpreter use.
 
 <!-- example: tests/spec/effects/SPEC-EFF-002.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 use std::http
 use std::env
@@ -54,7 +52,7 @@ use std::process
 use std::time
 use std::random
 fn load() -> string { fs::read_to_string("cfg.toml").unwrap_or("") }
-fn save(s: string) { fs::write("out.txt", s).unwrap() }
+fn save(s: string) { let _ = fs::write("out.txt", s) }
 fn fetch() -> bool { http::get("http://api.example.com/").is_ok() }
 fn home() -> bool { env::var("HOME").is_ok() }
 fn list() -> bool { process::run("ls").is_ok() }
@@ -72,13 +70,11 @@ list: process
 stamp: time
 roll: random
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-003** [PLANNED ADR-0021] A function's effects are the union of its own sink calls and the effects of every function it calls (transitively, including recursion).
+**SPEC-EFF-003** A function's effects are the union of its own sink calls and the effects of every function it calls (transitively, including recursion).
 
 <!-- example: tests/spec/effects/SPEC-EFF-003.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 use std::random
 fn read_config() -> string { fs::read_to_string("cfg.toml").unwrap_or("") }
@@ -93,13 +89,11 @@ read_config: fs.read
 settings: fs.read, random
 main: console, fs.read, random
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-004** [PLANNED ADR-0021] Calling a function-typed parameter adds no effects to the callee; the effects of the argument (a closure body or a named function) are added to the caller at the call site. `twice` and `apply` stay pure; `main` performs `random` because it passes a closure that does.
+**SPEC-EFF-004** Calling a function-typed parameter adds no effects to the callee; the effects of the argument (a closure body or a named function) are added to the caller at the call site. `twice` and `apply` stay pure; `main` performs `random` because it passes a closure that does.
 
 <!-- example: tests/spec/effects/SPEC-EFF-004.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
 fn twice(f: fn(int) -> int, x: int) -> int { apply(f, apply(f, x)) }
@@ -115,13 +109,11 @@ apply: pure + f
 twice: pure + f
 main: console, random
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-005** [PLANNED ADR-0021] A closure's effects are attributed to the function that creates it. A call through a stored function value whose type declares no effects is *effect-open* (`+ ?`): it adds nothing to the calling function's effects for grants, and it is a journaled step inside a `durable fn` (SPEC-EFF-022).
+**SPEC-EFF-005** A closure's effects are attributed to the function that creates it. A call through a stored function value whose type declares no effects is *effect-open* (`+ ?`): it adds nothing to the calling function's effects for grants, and it is a journaled step inside a `durable fn` (SPEC-EFF-022).
 
 <!-- example: tests/spec/effects/SPEC-EFF-005.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 struct Job { run: fn() -> int }
 fn make() -> Job { Job { run: || random::range(0, 10) } }
@@ -135,13 +127,11 @@ fn main() {
 make: random
 run_job: pure + ?
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-006** [PLANNED ADR-0021] A call to a trait method through a generic or `dyn` receiver performs the union of the effects of the impls of that method that reach the call in the program. A trait method may bound its impls' effects with `@uses(...)`; then the bound is used.
+**SPEC-EFF-006** A call to a trait method through a generic or `dyn` receiver performs the union of the effects of the impls of that method that reach the call in the program. A trait method may bound its impls' effects with `@uses(...)`; then the bound is used.
 
 <!-- example: tests/spec/effects/SPEC-EFF-006.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 trait Source { fn get(self) -> string }
 struct FileSource { path: string }
@@ -158,13 +148,11 @@ fn main() {
 ```text
 read_any: fs.read
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-007** [PLANNED ADR-0021] `spawn` and `async` (ADR-0004) are not effects; the effects of the spawned work are the spawning function's.
+**SPEC-EFF-007** `spawn` and `async` (ADR-0004) are not effects; the effects of the spawned work are the spawning function's.
 
 <!-- example: tests/spec/effects/SPEC-EFF-007.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 fn work() -> int { random::range(0, 5) }
 fn main() {
@@ -177,15 +165,13 @@ fn main() {
 work: random
 main: console, random
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 ## Grants and enforcement in the interpreter
 
-**SPEC-EFF-008** [PLANNED ADR-0021] `time`, `random` and `console` are granted unless the manifest denies them; a program with an empty `[capabilities]` table (the same grant as `wj run --interpret --sandbox`) can still print, read the clock and draw random numbers.
+**SPEC-EFF-008** `time`, `random` and `console` are granted unless the manifest denies them; a program with an empty `[capabilities]` table (the same grant as `wj run --interpret --sandbox`) can still print, read the clock and draw random numbers.
 
 <!-- example: tests/spec/effects/SPEC-EFF-008.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::random
 use std::time
 fn main() {
@@ -203,13 +189,11 @@ Output:
 true
 true
 ```
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-009** [PLANNED ADR-0021] When the grant in force does not include an effect, the sink call stops the program with a `capability denied` fault (exit status 126; not catchable). The message names the effect, the resource, the grant in force and the manifest line or `--allow` flag that would allow it.
+**SPEC-EFF-009** When the grant in force does not include an effect, the sink call stops the program with a `capability denied` fault (exit status 126; not catchable). The message names the effect, the resource, the grant in force and the manifest line or `--allow` flag that would allow it.
 
 <!-- example: tests/spec/effects/SPEC-EFF-009.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 fn main() {
     println("start")
@@ -226,13 +210,11 @@ Output:
 start
 ```
 Then the run stops with exit status 126 and a message containing `capability denied: fs.read`.
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-010** [PLANNED ADR-0021] `net.connect` grants list hosts (`api.example.com`), wildcard subdomains (`*.example.com`) and optional ports; a request to any other host is denied. Hosts are checked after URL parsing and again on every redirect; IP literals and private address ranges are denied unless granted literally.
+**SPEC-EFF-010** `net.connect` grants list hosts (`api.example.com`), wildcard subdomains (`*.example.com`) and optional ports; a request to any other host is denied. Hosts are checked after URL parsing and again on every redirect; IP literals and private address ranges are denied unless granted literally.
 
 <!-- example: tests/spec/effects/SPEC-EFF-010.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::http
 fn main() {
     let r = http::get("http://other.example/data")
@@ -245,13 +227,11 @@ Manifest (`wj.toml`):
 net.connect = ["api.example.com"]
 ```
 Then the run stops with exit status 126 and a message containing `capability denied: net.connect(other.example)`.
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-011** [PLANNED ADR-0021] `fs.read` and `fs.write` grants list path scopes relative to the project root (`./data/**`). A path is checked after normalization (`..` and symlinks resolved), so a path that leaves the scope is denied and reported in its normalized form.
+**SPEC-EFF-011** `fs.read` and `fs.write` grants list path scopes relative to the project root (`./data/**`). A path is checked after normalization (`..` and symlinks resolved), so a path that leaves the scope is denied and reported in its normalized form.
 
 <!-- example: tests/spec/effects/SPEC-EFF-011.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 fn main() {
     let r = fs::read_to_string("./data/../secret.txt")
@@ -264,7 +244,6 @@ Manifest (`wj.toml`):
 fs.read = ["./data/**"]
 ```
 Then the run stops with exit status 126 and a message containing `capability denied: fs.read(./secret.txt)`.
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 **SPEC-EFF-012** [PLANNED ADR-0021] `std::cap` capability values narrow a grant (`cap::net().only([...])`, `cap::fs().under(path).read_only()`); an operation through a value is checked against the value's scope. Attenuation never widens a grant, and capability values cannot be constructed outside `std::cap`.
 
@@ -288,11 +267,10 @@ Then the run stops with exit status 126 and a message containing `capability den
 
 ## Static checks (`wj check`, `wj build`)
 
-**SPEC-EFF-013** [PLANNED ADR-0021] `wj check` reports `WJ0040` when a function performs an effect that its package's grant does not include.
+**SPEC-EFF-013** `wj check` reports `WJ0040` when a function performs an effect that its package's grant does not include.
 
 <!-- example: tests/spec/effects/SPEC-EFF-013.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::process
 fn main() {
     println("${process::run("ls").is_ok()}")
@@ -303,13 +281,11 @@ Manifest (`wj.toml`):
 [capabilities]
 ```
 `wj check` reports an error containing: `WJ0040: effect `process` is not granted`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-014** [PLANNED ADR-0021] Every effect diagnostic shows the call chain from the reporting function to the sink (`main -> load -> fs::read_to_string`) and a machine-applicable fix (the manifest line).
+**SPEC-EFF-014** Every effect diagnostic shows the call chain from the reporting function to the sink (`main -> load -> fs::read_to_string`) and a machine-applicable fix (the manifest line).
 
 <!-- example: tests/spec/effects/SPEC-EFF-014.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 fn load() -> string { fs::read_to_string("/etc/passwd").unwrap_or("") }
 fn main() {
@@ -322,13 +298,11 @@ Manifest (`wj.toml`):
 fs.read = ["./config/**"]
 ```
 `wj check` reports an error containing: `main -> load -> fs::read_to_string`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-015** [PLANNED ADR-0021] A literal resource outside the grant (a host, a path) is reported at compile time as `WJ0041`; a resource computed at run time gets a runtime check instead.
+**SPEC-EFF-015** A literal resource outside the grant (a host, a path) is reported at compile time as `WJ0041`; a resource computed at run time gets a runtime check instead.
 
 <!-- example: tests/spec/effects/SPEC-EFF-015.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::http
 fn main() {
     println("${http::get("http://evil.example/").is_ok()}")
@@ -340,13 +314,11 @@ Manifest (`wj.toml`):
 net.connect = ["api.example.com"]
 ```
 `wj check` reports an error containing: `WJ0041: `net.connect(evil.example)` is outside the grant`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-016** [PLANNED ADR-0021] `@uses(effects...)` declares a function's effects and `@pure` declares none; a function whose inferred effects exceed its declaration is `WJ0042`.
+**SPEC-EFF-016** `@uses(effects...)` declares a function's effects and `@pure` declares none; a function whose inferred effects exceed its declaration is `WJ0042`.
 
 <!-- example: tests/spec/effects/SPEC-EFF-016.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::fs
 @pure
 fn parse(s: string) -> int {
@@ -358,7 +330,6 @@ fn main() {
 }
 ```
 `wj check` reports an error containing: `WJ0042: `parse` performs `fs.read``
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 **SPEC-EFF-017** A function whose inferred effects are inside its `@uses` declaration and the grant is accepted.
 
@@ -378,17 +349,16 @@ fs.read = ["./**"]
 ```
 `wj check` reports no error.
 
-**SPEC-EFF-018** [PLANNED ADR-0021] `[policy] forbid.<module> = [effects]` forbids a module's functions from performing those effects, directly or through callees (`WJ0043`).
+**SPEC-EFF-018** `[policy] forbid.<module> = [effects]` forbids a module's functions from performing those effects, directly or through callees (`WJ0043`).
 
 <!-- example: tests/spec/effects/SPEC-EFF-018.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 use std::http
 mod data {
     pub fn latest() -> bool { http::get("http://api.example.com/").is_ok() }
 }
 mod ui {
-    pub fn render() -> string { if data::latest() { "fresh" } else { "stale" } }
+    pub fn render() -> string { if super::data::latest() { "fresh" } else { "stale" } }
 }
 fn main() {
     println(ui::render())
@@ -402,22 +372,20 @@ net.connect = ["*"]
 forbid.ui = ["net"]
 ```
 `wj check` reports an error containing: `WJ0043: module `ui` may not perform `net.connect``
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-019** [PLANNED ADR-0021] `@effect("name")` declares a user-defined effect performed by calling that function. `[policy] "name" = { only_via = [modules] }` allows direct calls of its sinks only from the listed modules (`WJ0043`).
+**SPEC-EFF-019** `@effect("name")` declares a user-defined effect performed by calling that function. `[policy] "name" = { only_via = [modules] }` allows direct calls of its sinks only from the listed modules (`WJ0043`).
 
 <!-- example: tests/spec/effects/SPEC-EFF-019.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 mod ledger {
     @effect("ledger.post")
     pub fn post(amount: int) { println("posted ${amount}") }
 }
 mod billing {
-    pub fn charge(amount: int) { ledger::post(amount) }
+    pub fn charge(amount: int) { super::ledger::post(amount) }
 }
 mod reports {
-    pub fn adjust(amount: int) { ledger::post(amount) }
+    pub fn adjust(amount: int) { super::ledger::post(amount) }
 }
 fn main() {
     billing::charge(5)
@@ -432,13 +400,11 @@ effects = ["ledger.post"]
 "ledger.post" = { only_via = ["billing"] }
 ```
 `wj check` reports an error containing: `WJ0043: `ledger.post` may only be performed via `billing``
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-020** [PLANNED ADR-0021] An `extern` function must declare its effects with `@uses(...)` or `@pure`; without a declaration it performs `ffi`, which is granted only by name (`ffi = ["lib"]`), and `wj check` reports `WJ0044` when it is not granted.
+**SPEC-EFF-020** An `extern` function must declare its effects with `@uses(...)` or `@pure`; without a declaration it performs `ffi`, which is granted only by name (`ffi = ["lib"]`), and `wj check` reports `WJ0044` when it is not granted.
 
 <!-- example: tests/spec/effects/SPEC-EFF-020.wj -->
-<!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->
-```windjammer,ignore
+```windjammer
 extern fn native_open(path: string) -> int
 fn main() {
     println("${native_open("db")}")
@@ -449,7 +415,6 @@ Manifest (`wj.toml`):
 [capabilities]
 ```
 `wj check` reports an error containing: `WJ0044: extern `native_open` has no declared effects`
-> **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
 **SPEC-EFF-030** [PLANNED ADR-0021] An ambient sink call is checked against the grant of the package that contains the call site (for a closure, where the closure is written), never the grant of the dynamic caller. (untestable: needs a multi-package fixture; acceptance test `tests/effects_packages_test.rs`, stage E2)
 

@@ -2,7 +2,8 @@
 //! See `MODULE.md` and `docs/DIAGNOSTICS.md`.
 
 mod cache;
-mod files;
+pub mod effects;
+pub mod files;
 mod fix;
 mod front;
 pub mod locate;

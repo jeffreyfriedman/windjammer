@@ -4,6 +4,7 @@
 
 mod analysis;
 pub mod builtins;
+pub mod caps;
 mod call;
 mod coerce;
 mod defaults;

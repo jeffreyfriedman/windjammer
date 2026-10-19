@@ -1,0 +1,9 @@
+mod disk {
+    use std::fs
+    pub fn has(p: string) -> bool { fs::exists(p) }
+    pub mod deep {
+        use std::fs
+        pub fn is_dir_here() -> bool { fs::is_dir(".") }
+    }
+}
+fn main() { println("${disk::has(".")} ${disk::deep::is_dir_here()}") }
