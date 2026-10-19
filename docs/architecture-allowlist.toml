@@ -112,7 +112,7 @@
 "src/auto_clone.rs" = 2224
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4866
-"src/codegen/rust/function_generation_prepare.rs" = 13498
+"src/codegen/rust/function_generation_prepare.rs" = 13321
 "src/codegen/rust/generator.rs" = 5116
 "src/codegen/rust/int_promotion_type_inference.rs" = 2292
 "src/codegen/rust/ir_call_site.rs" = 10437

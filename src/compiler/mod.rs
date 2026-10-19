@@ -13,6 +13,7 @@ mod library_copy_registry;
 pub mod library_multipass;
 pub mod multipass_bare_pass_demotion;
 mod salsa_library_build;
+mod std_stubs;
 
 pub use cache_management::write_if_changed;
 pub(crate) use compilation_pipeline::load_path_dep_signatures_into_registry;

@@ -137,38 +137,6 @@ fn filter_shader_files(
     (filtered_modules_by_dir, shader_count)
 }
 
-/// Detect if source code imports from Windjammer stdlib (`std::*`)
-fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
-    crate::compiler::library_copy_registry::stdlib_modules_from_source(source)
-}
-
-/// A std stub's empty body makes analysis infer `Borrowed` for every parameter, but the runtime function takes
-/// `address: String` (`http::server_serve`) by value: keep the declared owned formal. Free functions only; methods
-/// keep the analysed receiver mode (builder methods consume `self`).
-fn restore_runtime_owned_params(
-    stub: &crate::analyzer::FunctionSignature,
-    runtime: &crate::analyzer::FunctionSignature,
-) -> crate::analyzer::FunctionSignature {
-    use crate::analyzer::OwnershipMode;
-    let mut out = stub.clone();
-    if runtime.param_ownership.len() != out.param_ownership.len() {
-        return out;
-    }
-    for (i, rt_mode) in runtime.param_ownership.iter().enumerate() {
-        let rt_formal_owned = runtime
-            .param_types
-            .get(i)
-            .is_some_and(|t| !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)));
-        if *rt_mode == OwnershipMode::Owned && rt_formal_owned && out.param_ownership[i] == OwnershipMode::Borrowed {
-            out.param_ownership[i] = OwnershipMode::Owned;
-            if let (Some(t), Some(rt_t)) = (out.param_types.get_mut(i), runtime.param_types.get(i)) {
-                *t = rt_t.clone();
-            }
-        }
-    }
-    out
-}
-
 /// Find Windjammer stdlib directory (`std/`).
 ///
 /// Shared by multipass + single-file API-type collection. Prefer env / crate
@@ -214,32 +182,13 @@ pub(crate) fn build_library_multipass(
 ) -> Result<()> {
     let phase_start = Instant::now();
 
-    // Step 0: Detect stdlib usage and prepend stdlib files
+    // Step 0: Detect stdlib usage and prepend stdlib files FIRST
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
-    let mut needed_stdlib_modules = HashSet::new();
-    let mut std_stub_files: HashSet<PathBuf> = HashSet::new();
-
-    // Quick scan: which stdlib modules does user code import?
-    for file in wj_files {
-        if let Ok(source) = std::fs::read_to_string(file) {
-            needed_stdlib_modules.extend(uses_windjammer_stdlib(&source));
-        }
-    }
-
-    // If stdlib is needed, prepend stdlib source files FIRST
-    if !needed_stdlib_modules.is_empty() {
-        if let Some(stdlib_dir) = find_stdlib_dir(config.stdlib_path.as_deref()) {
-            for module in &needed_stdlib_modules {
-                let stdlib_file = stdlib_dir.join(format!("{}.wj", module));
-                if stdlib_file.exists() {
-                    if let Ok(source) = std::fs::read_to_string(&stdlib_file) {
-                        std_stub_files.insert(stdlib_file.clone());
-                        sources.push((stdlib_file, source));
-                    }
-                }
-            }
-        }
-    }
+    let (needed_stdlib_modules, mut std_stubs) = super::std_stubs::StdStubs::prepend_sources(
+        wj_files,
+        find_stdlib_dir(config.stdlib_path.as_deref()),
+        &mut sources,
+    );
 
     // Step 1: Read all user source files (keep sources alive for lifetime safety)
     for file in wj_files {
@@ -375,13 +324,7 @@ pub(crate) fn build_library_multipass(
         );
         return Ok(());
     }
-    // Std stubs feed signature convergence (their analysis is part of what a clean build computes), so an
-    // incremental build re-analyses them too: a rebuild must reach the same registry as a clean build.
-    for (i, (file, _)) in sources.iter().enumerate() {
-        if std_stub_files.contains(file) {
-            reanalysis_set.insert(i);
-        }
-    }
+    std_stubs.mark_reanalysis(&sources, &mut reanalysis_set);
     if reanalysis_set.len() < sources.len() {
         eprintln!(
             "⚡ Incremental analysis: {}/{} files need re-analysis",
@@ -532,15 +475,7 @@ pub(crate) fn build_library_multipass(
     let struct_defining_module_paths = std::sync::Arc::new(struct_defining_module_paths);
     let global_copy_structs = std::sync::Arc::new(global_copy_structs);
 
-    // Runtime-scanned contracts: a `std/<module>.wj` stub has an empty body, so analysing it infers `Borrowed` for
-    // every parameter (`address: string` of `server_serve`, which the runtime takes by value). The runtime
-    // signature stays authoritative, exactly as in an incremental build where the unchanged stub is not re-analysed.
-    let runtime_contracts: HashMap<String, crate::analyzer::FunctionSignature> = if std_stub_files.is_empty() {
-        HashMap::new()
-    } else {
-        global_registry.signatures.clone()
-    };
-
+    std_stubs.capture_contracts(&global_registry);
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
     let step3_start = Instant::now();
@@ -613,16 +548,8 @@ pub(crate) fn build_library_multipass(
                 crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file)
                     .unwrap_or_default();
             let module_path = file_module.join("::");
-            let is_std_stub = std_stub_files.contains(file);
             for (name, sig) in &file_registry.signatures {
-                let restored;
-                let sig = match is_std_stub.then(|| runtime_contracts.get(&format!("{file_stem}::{name}"))).flatten() {
-                    Some(rt) if !name.contains("::") && !sig.has_self_receiver => {
-                        restored = restore_runtime_owned_params(sig, rt);
-                        &restored
-                    }
-                    _ => sig,
-                };
+                let sig = &*std_stubs.effective_sig(file, file_stem, name, sig);
                 // Skip passthrough entries inherited from the frozen global snapshot.
                 // analyze_program_with_global_arc clones the global registry, so
                 // file_registry contains ALL entries (global + file-specific).
