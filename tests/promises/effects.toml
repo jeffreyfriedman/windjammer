@@ -165,3 +165,12 @@ files = { "app/wj.toml" = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[de
 args = ["check", "{w}/app"]
 exit = 1
 output_has = ["not granted to dependency `lib`", "wj caps approve"]
+
+[[case]]
+name = "caps show --json of a directory with no sources fails"
+polarity = "negative"
+covers = ["wj caps --json"]
+files = { "notes.txt" = "nothing to analyze\n" }
+args = ["caps", "show", "{w}", "--json"]
+exit = 1
+output_has = ["no .wj files"]

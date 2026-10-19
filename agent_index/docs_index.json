@@ -1322,6 +1322,24 @@
     "tags": []
   },
   {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0160",
+    "signature": "Arena value escapes its arena",
+    "source": "",
+    "summary": "A value allocated in an arena (`Arena::alloc`, `Scratch::str`, `new_string`, `new_list`) is used where it would outlive the arena: returned from the function th",
+    "tags": []
+  },
+  {
+    "kind": "error",
+    "module": "",
+    "name": "WJ0161",
+    "signature": "`std::arena` is unstable",
+    "source": "",
+    "summary": "Arenas (ADR-0025) are behind the compiler feature `unstable_arenas`.",
+    "tags": []
+  },
+  {
     "kind": "example",
     "module": "",
     "name": "algo_anagram",
@@ -3645,6 +3663,15 @@
   {
     "kind": "guide",
     "module": "WINDJAMMER_FOR_AGENTS",
+    "name": "Reading input and arguments",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "summary": "Programs that read standard input should use one spelling that behaves the same under `wj run --interpret` and `wj build`:",
+    "tags": []
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_FOR_AGENTS",
     "name": "Structs, enums, traits",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
@@ -4013,6 +4040,138 @@
     "name": "test_vec_push",
     "signature": "fn test_vec_push()",
     "source": "std/basic_test.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Clock",
+    "signature": "struct Clock",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Env",
+    "signature": "struct Env",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Fs",
+    "signature": "struct Fs",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Net",
+    "signature": "struct Net",
+    "source": "std/cap.wj",
+    "summary": "std/cap - capability values (ADR-0021) Implementation: windjammer_runtime::cap (checked against the grant it was minted from) A capability value is an unforgeab",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Process",
+    "signature": "struct Process",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "Rng",
+    "signature": "struct Rng",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "clock",
+    "signature": "fn clock() -> Clock",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "env",
+    "signature": "fn env() -> Env",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "fs",
+    "signature": "fn fs() -> Fs",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "net",
+    "signature": "fn net() -> Net",
+    "source": "std/cap.wj",
+    "summary": "Minting (checked against the running program's grant)",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "process",
+    "signature": "fn process() -> Process",
+    "source": "std/cap.wj",
+    "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::cap",
+    "name": "rng",
+    "signature": "fn rng() -> Rng",
+    "source": "std/cap.wj",
     "summary": "",
     "tags": [
       "fn"
@@ -6192,6 +6351,17 @@
     "signature": "struct OrderedMap<K, V>",
     "source": "std/map.wj",
     "summary": "OrderedMap<K, V> — insertion-ordered map (Rust: BTreeMap)",
+    "tags": [
+      "struct"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::map",
+    "name": "OrderedSet",
+    "signature": "struct OrderedSet<T>",
+    "source": "std/map.wj",
+    "summary": "OrderedSet<T> — insertion-ordered set (Rust: BTreeSet)",
     "tags": [
       "struct"
     ]

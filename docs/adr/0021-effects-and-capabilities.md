@@ -336,7 +336,7 @@ grant status and the check placement (`proven` / `runtime guard` / `denied`).
 |---|---|---|---|---|
 | E0 (done with this ADR) | ADR, spec chapter `effects.md`, xfail examples `tests/spec/effects/`, harness modes | - | `scripts/spec_check.sh` green; every EFF rule has an example | - |
 | E1 MVP | sink table (incl. `time`, `random`, `console`); effect pass with provenance + `latent`; `wj explain-effects`; `wj check` vs `[capabilities]` (coarse + literal host/path); interpreter capability context: `--sandbox`, `--allow`, per-host net, fs scopes, env names, process names; denial fault | convergence C2 (provenance); C3 (DefId) for the soundness gate | (1) soundness: on the conformance and examples corpus run in record mode, every performed effect is in the static set of the enclosing function (dynamic subset of static) in 100% of runs; (2) EFF-001..012, 018-021 examples pass; (3) escape suite v1 (fs, net, env, self, attribution; at least 60 cases): 0 escapes; (4) interpreter overhead of enforcement at most 5% on the interpreter benchmark | soundness below 100% after C3 (inference cannot be trusted; stop and fix resolution); false-positive effect errors on more than 2% of corpus programs with a correct manifest (vocabulary too fine: merge effects) |
-| E2 compile-time enforcement | `wj build` uses facts (`Proven`/`Runtime`/`Denied`); guards in `windjammer-runtime` and portable wrappers; `@uses`/`@pure`; `[policy]`; per-dependency grants and lock file; `std::cap` values | E1; ADR-0010 for dependencies | (1) zero guards emitted for literal-only programs (counted in emitted code); (2) Rust benchmark suite delta at most 1% with effects on versus off (statically proven programs); (3) Go/JS conformance parity for guard behaviour; (4) EFF-013..017 pass | guards cannot be placed from facts without backend-local decisions (would violate ADR-0017): redesign the fact |
+| E2 compile-time enforcement (delivered 2026-10-19, see "E2 status") | `wj build` uses facts (`Proven`/`Runtime`/`Denied`); guards in `windjammer-runtime` and portable wrappers; `@uses`/`@pure`; `[policy]`; per-dependency grants and lock file; `std::cap` values | E1; ADR-0010 for dependencies | (1) zero guards emitted for literal-only programs (counted in emitted code); (2) Rust benchmark suite delta at most 1% with effects on versus off (statically proven programs); (3) Go/JS conformance parity for guard behaviour; (4) EFF-013..017 pass | guards cannot be placed from facts without backend-local decisions (would violate ADR-0017): redesign the fact |
 | E3 record/replay + DST (interpreter) | effect port; log v1; `--record`, `--replay`; `wj test --simulate --seed/--seeds`; fault injection | E1 | (1) replay bit-exact on 100% of recorded corpus runs; (2) planted-bug study: 20 concurrency/timing bugs in sample apps, at least 80% found within 10 minutes of seeds; (3) record overhead at most 2x | replay below 100% because of hidden non-determinism the port cannot see (then find and route it, or narrow the claim) |
 | E4 `durable fn` | parser; DUR-* checks; journal over `DurableStore` (in-memory, file); crash injection | E3; ADR-0019 D1 (store port) | (1) mutation study: inject clock/random/IO/global/HashMap-order non-determinism into 10 sample workflows (ported from public workflow samples): 100% caught at compile time or journaled; (2) crash at every step boundary: final state equals the crash-free run in 100% of cases; (3) DUR examples pass | more than 20% of sample workflows need an escape hatch (rules too strict), or journaling costs more than 2x per step over an in-memory store |
 | E5 code mode | `wj mcp bind`; `--bind`; limits (fuel, memory, wall, output, effect count); `execute` tool in `windjammer-mcp` | E1 (can run in parallel with E2-E4) | (1) red-team suite of 50 prompt-injected scripts: 0 escapes; (2) sandbox cold start under 5 ms; (3) same-model comparison against TypeScript code mode on a public task set: task success at least equal at equal or fewer tokens | worse success at equal tokens: keep the sandbox, drop the code-mode positioning |
@@ -363,6 +363,50 @@ the interpreter's http client, so what is checked is what is connected to; `proc
 Known limits: TOCTOU between check and open; DNS rebinding (hosts are checked by name); redirects (the interpreter
 client does not follow any); per-package grants and `std::cap` values are E2; `console` is not gated at run time.
 
+### E2 status (2026-10-19): implemented, gates measured
+Where: per-package grants and the lock file in `src/ir/effect_facts/{packages,lock}.rs` (`wj caps show|approve`, `src/cli/caps.rs`);
+dependency sources for the pass in `src/check/dep_sources.rs`; `std::cap` values in `src/interpreter/builtins/std_cap.rs` and
+`crates/windjammer-runtime/src/cap.rs` (declared in `std/cap.wj`); build-time enforcement and grant installation in
+`src/cli/build_caps.rs` + `src/ir/effect_facts/install.rs`; run-time guards in `crates/windjammer-runtime/src/caps.rs` (Rust),
+`std/runtime/js/wj_std.mjs` and `std/runtime/go/wj_std.go`.
+
+Decisions taken while implementing (each enforced by a test):
+* **One capability model, one source.** `crates/windjammer-runtime/src/caps_core/` (vocabulary, path/host/name matching, grants) is
+  compiled into BOTH the compiler (`#[path]`, as `ir::effect_facts::model`) and the runtime, so the interpreter, `wj check` and compiled
+  programs cannot disagree. Go and JavaScript cannot share Rust, so `tests/effects/vectors.json` (60 cases) is run against all three
+  (`tests/effects_vectors_test.rs`). The compiler's packaging already ships the runtime sources; no new crate.
+* **Proven means no code.** A call with a literal resource inside the grant, or a resource-less effect the grant allows, adds nothing: the
+  emitted Rust of a proven program is byte-identical with and without `[capabilities]` (test). Only a computed path/host/name, or a
+  capability value minted from a scoped grant, makes `main` start with `caps::install(..)` (`$caps_install` / `wjstd_caps_install`).
+  The grant is installed with root `.`: relative patterns anchor at the program's working directory, like the paths it opens.
+* **A compiled program is held to one grant at run time.** Per-package attribution needs the call stack, which compiled code does not
+  keep, so a dependency's computed-resource use must have the same scope as the application's (or `true`), else the build stops (WJ0041)
+  and says to align the entries or pass the dependency a capability value. Literal uses are still checked per package, statically.
+* **Dependencies are denied by default once the app opts in** (a `[capabilities]` table or a lock file): a dependency's effects are
+  allowed by `[capabilities.dependencies.NAME]` and by what `.wj-capabilities.lock` records; an upgrade that adds an effect is a
+  WJ0040/WJ0041 naming the dependency until `wj caps approve`.
+* **Delegation by capability value.** A package handed a `Net`/`Fs`/... needs no ambient grant of its own for what the value allows;
+  minting needs the minting package's grant; narrowing can only shrink (`derive_scope`). A closure keeps the grant of the package that
+  wrote it.
+* **JavaScript denial is an exception, not `process.exit`**: programs run in a worker with top-level `await`, and `process.exit` there
+  crashes V8; `$CapFault` propagates to `$run`, which exits 126 (programs cannot catch it).
+* Portable (Go/JS) programs can only reach `fs` and `time` today, so their guards cover `fs.read`/`fs.write`; `net`, `env`, `process`
+  appear in those backends when their std modules do (the vectors already carry the cases).
+
+| E2 gate | Result (evidence) |
+|---|---|
+| Zero guards for statically-proven programs | emitted Rust byte-identical with and without `[capabilities]` (`a_proven_program_compiles_to_the_same_rust_with_and_without_capabilities`); Rust delta is 0 by construction |
+| Every run-time sink in the Rust runtime is guarded | `tests/effects_runtime_audit_test.rs` scans fs/http/env/process/subprocess/db against OS-touching tokens, with a mutation check on the scanner itself |
+| Go/JS parity with the Rust model | 60 vectors, three implementations, one table (`tests/effects_vectors_test.rs`) |
+| Compiled enforcement end to end | Rust program built with cargo and run: allowed read prints, escape exits 126 (`WJ_EFFECTS_COMPILED=1`); JS (node) and Go programs the same, in the normal run |
+| Per-package grants, lock file, escalation | `tests/effects_packages_test.rs` (7 cases, through the `wj` binary) |
+| `std::cap` | SPEC-EFF-012, 034, 035 and 26 escape cases (narrowing never widens; delegation; symlinks and `..` through `under`; process and env values) |
+| Interpreter overhead at most 5% (re-measure at load below 20) | `scripts/bench_effects_overhead.py` refuses a verdict above load 20 and records `load_avg_1m`. The E1 figure (+3.8% CPU on the non-sink workload) was measured at load 57-65 and stays **provisional**; the machine is at load 165 as of this writing |
+
+Not done in E2: `@uses` bounds on trait methods (the parser keeps no attributes on trait methods; SPEC-EFF-006 still uses the union of impls);
+`console` is gated at run time in the interpreter only (compiled backends reject a denied `console` at compile time, which is exact because the
+effect has no resource); Go/JS have no `net`/`env`/`process` std modules to guard yet.
+
 ## Measurable success criteria (whole feature)
 - Soundness: dynamic effect trace is a subset of the inferred set, 100% of the corpus (CI gate from E1).
 - Escape suite: at least 150 cases by E5, 0 escapes (CI gate).
@@ -381,6 +425,12 @@ client does not follow any); per-package grants and `std::cap` values are E2; `c
 - WJ-SEC-01..04 remain as background; where they disagree with this ADR, this ADR wins.
 
 ## Decisions (project owner, 2026-10-19)
+Follow-up answers (2026-10-19, after E1): the local profile flips from warn to enforce at **v0.51.0**, and `gate_for_run` reads one
+constant, `LOCAL_PROFILE_MODE` (a test fails the release that reaches 0.51 without flipping it); the allowlist rebase was done by the
+integrator; **E2 gates `console` at run time** (granted in the local profile and by default, so it costs nothing, visible in
+`explain-effects`, revocable for sandboxes); `ffi` stays denied in the local profile, the WJ0040/WJ0044 fix line names exactly the
+`[capabilities] ffi = ["name"]` entry to add, and a test requires any `wj new` template that declares an `extern fn` to ship it.
+
 D1-D5, D7 and D8 are accepted as recommended; D6 is decided as written below (2026-10-18). D1 is staged: the release
 that ships E1 runs the local profile in **warn** mode (a sink outside it runs and prints `warning[WJ0040]` once,
 naming the `wj.toml` line or `--allow` flag that would grant it); the next minor release **enforces** it. A manifest
