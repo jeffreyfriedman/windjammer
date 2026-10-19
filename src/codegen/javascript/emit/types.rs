@@ -2,7 +2,7 @@
 
 use super::names::ident;
 use super::Js;
-use crate::codegen::portable::ty::{IntKind, Ty};
+use crate::codegen::portable::ty::Ty;
 
 impl<'m> Js<'m> {
     /// TypeScript spelling of a type (`any` when not expressible).
@@ -77,10 +77,4 @@ impl<'m> Js<'m> {
         matches!(t, Ty::Int(_) | Ty::F32 | Ty::F64 | Ty::Bool | Ty::Str | Ty::Char | Ty::Unit)
     }
 
-    pub fn wide_kind(&self, t: &Ty) -> Option<IntKind> {
-        match t {
-            Ty::Int(k) => Some(*k),
-            _ => None,
-        }
-    }
 }

@@ -23,6 +23,9 @@ impl<'ast> CodeGenerator<'ast> {
         type_args: &Option<Vec<Type>>,
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.unsupported_optional_chain();
+        }
         if method == "find" && arguments.len() == 1 {}
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" {
@@ -40,6 +43,10 @@ impl<'ast> CodeGenerator<'ast> {
                 .trim_end_matches(".to_string()")
                 .trim_end_matches(".to_owned()");
             return format!("{base}.to_string()");
+        }
+        // `.as_str()` is identity in Windjammer (W0012): lower exactly like the receiver alone.
+        if method == "as_str" && arguments.is_empty() {
+            return self.generate_expression(object);
         }
         if super::rust_stdlib_annotations::is_strip_redundant(method) && arguments.is_empty() {
             if let Expression::Identifier { name, .. } = object {

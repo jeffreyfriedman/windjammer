@@ -34,6 +34,11 @@ pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<Stri
     if matches!(leaf, "Map") {
         push("HashMap");
     }
+    // Fixed-size arrays and slices use the `Vec` methods (`[1, 2].contains(&1)`); without this the lookup
+    // fell through to an arbitrary homonym (`HashSet::contains`), which made codegen differ between runs.
+    if matches!(leaf, "Array" | "Slice" | "slice") {
+        push("Vec");
+    }
     out
 }
 
@@ -642,22 +647,6 @@ fn sig_is_storage_like(sig: &FunctionSignature) -> bool {
     false
 }
 
-/// When `::{method}` is registered on many types, true only if every *instance*
-/// method match is storage-like (`Vec::push`-style). Ambiguous names return false.
-pub fn consensus_storage_method(method: &str, registry: &SignatureRegistry) -> bool {
-    let mut any = false;
-    for (_key, sig) in registry.signatures_for_method_name(method) {
-        if !sig.has_self_receiver {
-            continue;
-        }
-        any = true;
-        if !sig_is_storage_like(sig) {
-            return false;
-        }
-    }
-    any
-}
-
 fn sig_is_closure_taking(sig: &FunctionSignature) -> bool {
     first_arg_type(sig).is_some_and(is_closure_type)
 }
@@ -808,25 +797,6 @@ pub fn method_is_string_runtime_qualified(
                 return true;
             }
         }
-    }
-    false
-}
-
-pub fn method_is_membership_test_qualified(
-    method: &str,
-    receiver_type: Option<&str>,
-    registry: &SignatureRegistry,
-) -> bool {
-    if method_is_string_search_qualified(method, receiver_type, registry) {
-        return true;
-    }
-    let sig = lookup_sig(method, receiver_type, registry)
-        .or_else(|| lookup_unqualified(method, registry));
-    if let Some(s) = sig {
-        return sig_is_membership_test(s);
-    }
-    if receiver_type.is_none() {
-        return consensus_membership_test_method(method, registry);
     }
     false
 }

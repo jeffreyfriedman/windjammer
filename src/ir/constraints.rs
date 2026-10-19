@@ -37,6 +37,11 @@ pub enum Constraint {
     SharesRegion(ConstraintVar, ConstraintVar),
     /// A variable needs a clone (used at multiple owned sites).
     NeedsClone(ConstraintVar),
+    /// `UsedAs(value, site)`: `value` is used at a position whose ownership requirement is
+    /// `site`'s (a callee formal, the return slot, a `let` binding that aliases it). The value's
+    /// requirement is at least the site's (OWN-CALL-FORMAL, OWN-LATTICE). Directional, unlike
+    /// `TypeEquals`: `a == b` unifies types without coupling modes.
+    UsedAs(ConstraintVar, ConstraintVar),
 
     // --- Effect constraints (Phase 3) ---
     /// A function's effect set must include these effects.
@@ -85,7 +90,9 @@ impl ConstraintSet {
         var
     }
 
-    /// Add a constraint to the set.
+    /// Add a constraint without provenance. Test-only: compiler code must say why a constraint
+    /// exists (`add_because`), so `wj explain-ownership` never reports `UNTAGGED` (plan C2).
+    #[cfg(test)]
     pub fn add(&mut self, constraint: Constraint) {
         self.constraints.push(constraint);
         self.origins.push(None);

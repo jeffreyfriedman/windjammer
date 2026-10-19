@@ -50,7 +50,11 @@ impl<'e> Lowerer<'e> {
     fn expr_inner(&mut self, e: &Expression, want: Option<&Ty>) -> PResult<PExpr> {
         match e {
             Expression::Literal { value, .. } => self.literal(value, want),
-            Expression::Identifier { name, .. } => self.identifier(name, want),
+            Expression::Identifier { name, .. } => {
+                let mut r = self.identifier(name, want)?;
+                r.last_use = self.last_uses.contains(&crate::ir::numeric_defaults::node_id(e));
+                Ok(r)
+            }
             Expression::Binary { left, op, right, .. } => self.binary(left, op, right, want),
             Expression::Unary { op, operand, .. } => self.unary(op, operand, want),
             Expression::Call { function, arguments, .. } => self.call(function, arguments, want),

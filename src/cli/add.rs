@@ -15,6 +15,12 @@ pub fn execute(
         anyhow::bail!("wj.toml not found in current directory. Are you in a Windjammer project?");
     }
 
+    if let Some(dep_path) = path {
+        if !Path::new(dep_path).exists() {
+            anyhow::bail!("--path {dep_path}: path not found");
+        }
+    }
+
     let mut config =
         WjConfig::load_from_file(wj_toml_path).map_err(|e| anyhow::anyhow!("{}", e))?;
 

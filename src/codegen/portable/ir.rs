@@ -194,6 +194,8 @@ pub struct PExpr {
     pub kind: Box<PK>,
     /// 1-based source line (0 when unknown) for diagnostics.
     pub line: u32,
+    /// The expression reads a local for the last time (semantic fact `last_use`).
+    pub last_use: bool,
 }
 
 /// Parsed `{...}` format spec: Rust's `[[fill]align][sign]['#']['0'][width]['.' precision][type]`
@@ -289,7 +291,7 @@ pub enum PK {
 
 impl PExpr {
     pub fn new(ty: Ty, kind: PK) -> PExpr {
-        PExpr { ty, kind: Box::new(kind), line: 0 }
+        PExpr { ty, kind: Box::new(kind), line: 0, last_use: false }
     }
 
     pub fn at(mut self, line: u32) -> PExpr {

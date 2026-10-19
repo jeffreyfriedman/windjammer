@@ -29,11 +29,6 @@ impl TreeShaker {
         }
     }
 
-    /// Add an entry point (function that should always be preserved)
-    pub fn add_entry_point(&mut self, name: String) {
-        self.entry_points.insert(name);
-    }
-
     /// Shake the tree - remove unused code from the program
     pub fn shake<'ast>(&mut self, program: &Program<'ast>) -> Program<'ast> {
         // Phase 1: Mark all used items starting from entry points

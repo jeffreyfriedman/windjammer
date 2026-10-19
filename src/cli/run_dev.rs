@@ -52,6 +52,11 @@ pub fn execute(opts: &RunOptions) -> i32 {
         Mode::Compiled { release } => run_compiled(&target, &opts.args, &opts.target, release),
         _ if non_rust => run_compiled(&target, &opts.args, &opts.target, false),
         Mode::Interpret | Mode::Auto => {
+            // The interpreter must not be more permissive than the compiler: same front end as `wj check`.
+            if let Err(e) = crate::cli::check::require_clean(&target.entry) {
+                eprintln!("Error: {e}");
+                return 1;
+            }
             let auto = opts.mode == Mode::Auto;
             let host = match host_bridge(&target) {
                 Ok(h) => h,

@@ -131,9 +131,11 @@ Combined with named arguments, the block binds the last *positional* parameter n
 rejected (write `Option<T?>` if you really mean it).
 
 **`a?.b`, `a?.m(..)`.** When `a: T?`: yields `U?` where `U` is the type of `.b`; if `.b` is itself an option it is
-flattened (`and_then`), so `a?.b?.c` is one optional. When `a` is a `Result`, `a?.b` keeps today's meaning (propagate
-the error with `?`, then access), so existing Rust-style code is unchanged. The choice is made by the IR solver from
-the receiver type (one decision); to propagate a `None` and then access, write `(a?).b`.
+flattened (`and_then`), so `a?.b?.c` is one optional. Each `?.` covers one member. Decision change (round 2): `a?.b`
+on a `Result` is NOT given the Rust `(a?).b` reading (the corpus has no use of it); write `a?` then `.b`, or
+`a.ok()?.b`. Lowering: the parser emits `a.__opt_chain(|_oc| _oc.b)`; the interpreter implements it as `and_then`
+that lifts non-options, Go/JS lower it with the receiver's static type, and the Rust backend rejects it until the IR
+solver supplies the receiver type (convergence C2 is on wt/convergence and not yet in next).
 
 **`x ?? d`.** `x.unwrap_or_else(|| d)`: `d` is evaluated only when `x` is `None`; `d` may itself be an option
 (`a ?? b ?? 0`). `??` is right-associative and binds looser than arithmetic and tighter than comparison (Swift,
@@ -194,9 +196,9 @@ arguments,trailing-blocks,optionals,doctests,guard-match}/`. Backends: interpret
 |---|---|---|---|---|---|---|---|
 | 1 | Collections | implemented | yes | partial | yes | yes | Rust: runtime inlined as `mod wj_enumerable`; 171 passes, 170 blocked by the generic closure-`if`-tail codegen gap; integer-width defaults (ADR-0015 #1) still bite unannotated literals |
 | 2 | `_` closures | implemented | yes | partial | yes | yes | 172 on Rust blocked by `map(\|u\| u.name)` field-move-from-borrow (same with explicit closures) |
-| 3 | Named args / defaults | implemented (same-file callees) | yes | yes | yes | yes | cross-module callees: positional only until the DefId resolver |
+| 3 | Named args / defaults | implemented (same-file callees) | yes | yes | yes | yes | cross-module callees BLOCKED on convergence C3 (DefId cutover: `src/resolve` is shadow-only in next, so not authoritative, and the parser sees one file). Until then a labelled argument to a callee outside the file is a parse error (backends used to drop it silently) |
 | 4 | Trailing blocks | implemented | yes | yes | yes | yes | header detection by backward token scan |
-| 5 | `T?`, `??` | implemented | yes | yes | yes | yes | `?.` optional chaining NOT implemented: needs the solver to pick `map`/`and_then`/try-then-access by receiver type; `.unwrap()` lint (W0002) now suggests `??`; `wj fix` rewrite not done |
+| 5 | `T?`, `??`, `?.` | implemented (Rust: `?.` rejected) | yes | `?.` no | yes | yes | `?.` is `a.__opt_chain(\|_oc\| _oc.b)`; Go/JS lower it with the receiver's static type (match + lift). Rust returns an explicit error until the IR solver supplies the receiver type (convergence C2 is on wt/convergence, not in next); conformance 177 is a ratcheted Rust failure. `?.` on a `Result` is not supported (decision change: nothing in the corpus used the Rust `(a?).b` reading; write `a?` then `.b`). `.unwrap()` lint (W0002) suggests `??`; `wj fix` migrates `Option<T>` to `T?` and `unwrap_or`/`unwrap_or_else(\|\| e)` to `??` (never `.unwrap()`) |
 | 6 | Doctests | implemented | yes | `--compiled` | n/a | n/a | `wj test` / `wj test --doc`; extractor shared with docs-truth (`src/doctest/`) |
 | 7 | Guard-only match | implemented | yes | yes | yes | yes | lowered to `match true { _ if c => .. }` |
 

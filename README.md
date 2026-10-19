@@ -61,7 +61,7 @@ $ wj run hello.wj
 Hello, World!
 $ wj check --json hello.wj
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "windjammer_version": "0.50.0",
   "success": true,
   "diagnostics": []
@@ -243,9 +243,9 @@ Windjammer is pre-1.0 and moving quickly. Every backend runs the shared conforma
 <!-- wj:gen name=targets_summary -->
 | Backend | Conformance programs passing | Known unsupported |
 |---|---|---|
-| `rust` | 125 | 29 |
-| `go` | 154 | 0 |
-| `js` | 154 | 0 |
+| `rust` | 122 | 34 |
+| `go` | 156 | 0 |
+| `js` | 156 | 0 |
 <!-- wj:end -->
 
 | Area | Tier |

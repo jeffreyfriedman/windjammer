@@ -39,7 +39,15 @@ polarity = "negative"
 covers = ["feature offline-docs"]
 args = ["docs", "zzzzqqqxx"]
 exit = 0
-output_has = ["no matches"]
+output_has = ["no matches for `zzzzqqqxx`", "try a shorter or different term"]
+
+[[case]]
+name = "docs names the term that matches nothing"
+polarity = "negative"
+covers = ["feature offline-docs"]
+args = ["docs", "hashmap", "zzzzqqqxx"]
+exit = 0
+output_has = ["no matches for `hashmap zzzzqqqxx`", "`zzzzqqqxx`: 0 entr(ies)"]
 
 [[case]]
 name = "docs with no query generates error documentation"
@@ -98,10 +106,10 @@ output_has = ["path not found"]
 [[case]]
 name = "validate-wjsl rejects a malformed shader"
 polarity = "negative"
-xfail = "BUG: `garbage {{{` passes `wj validate-wjsl` (transpile_wjsl_with_includes accepts it)"
 files = { "sh/s.wjsl" = "garbage {{{\n" }
 args = ["validate-wjsl", "{w}/sh"]
 exit = 1
+output_has = ["unexpected"]
 
 [[case]]
 name = "stats shows the statistics summary"
@@ -118,9 +126,14 @@ stdout_has = ["Statistics cleared"]
 [[case]]
 name = "stats --verbose shows more than the summary"
 polarity = "positive"
-xfail = "BUG: `--verbose` is ignored (`Commands::Stats { clear, verbose: _ }`)"
 args = ["stats", "--verbose"]
 output_has = ["details"]
+
+[[case]]
+name = "stats --verbose rejects unexpected arguments"
+polarity = "negative"
+args = ["stats", "--verbose", "bogus"]
+exit = 2
 
 [[case]]
 name = "stats rejects unexpected arguments"
@@ -208,18 +221,42 @@ args = ["cache", "prune", "--aggressive", "extra"]
 exit = 2
 
 [[case]]
-name = "errors opens the interactive navigator"
+name = "errors lists the diagnostics of a file with a per-code summary"
 polarity = "positive"
-xfail = "BUG: `wj errors` is a stub: prints `TUI mode coming soon` (src/error_tui.rs is never called)"
-files = { "m.wj" = "fn main( {\n" }
-args = ["errors", "{w}/m.wj", "--output", "{w}/out"]
+files = { "m.wj" = "fn main() {\n    println(\"${missing}\")\n}\n" }
+args = ["errors", "{w}/m.wj"]
+stdout_has = ["by code:", "WJ0001  x1", "[1] error[WJ0001]", "wj explain WJ0001"]
 output_lacks = ["coming soon"]
+
+[[case]]
+name = "errors --code narrows the list"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"${missing}\")\n}\n" }
+args = ["errors", "{w}/m.wj", "--code", "wj0001", "--severity", "error"]
+stdout_has = ["1 of 1 diagnostic(s) shown"]
+
+[[case]]
+name = "errors --code with no match says so"
+polarity = "negative"
+exit = 0
+files = { "m.wj" = "fn main() {\n    println(\"${missing}\")\n}\n" }
+args = ["errors", "{w}/m.wj", "--code", "WJ0010"]
+stdout_has = ["No diagnostics match", "0 of 1 diagnostic(s) shown"]
+
+[[case]]
+name = "errors rejects an unknown severity"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["errors", "{w}/m.wj", "--severity", "fatal"]
+exit = 1
+output_has = ["invalid --severity 'fatal'"]
 
 [[case]]
 name = "errors fails on a missing file"
 polarity = "negative"
-xfail = "BUG: `wj errors <missing>` exits 0"
-args = ["errors", "{w}/nope.wj", "-o", "{w}/out"]
+args = ["errors", "{w}/nope.wj"]
+exit = 1
+output_has = ["path not found"]
 
 [[case]]
 name = "self-install installs wj into ~/.wj/bin"

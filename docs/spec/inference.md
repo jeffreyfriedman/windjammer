@@ -205,6 +205,30 @@ captured parameter (D-CLOS-OVEROWN): `v` above is inferred `Vec<i64>` although t
 **Rule.** A closure that mutates a captured variable needs the variable and the closure binding to be mutable.
 **Status.** Diverges (D-CLOS-MUT): the generated Rust has neither `mut v` nor `let mut f` (rustc E0596).
 
+## 5b. Structural typing (provenance)
+
+These rules are not inference decisions; they name the structural constraints the solver receives so that every
+constraint carries a rule (`wj explain-ownership` never prints `UNTAGGED`).
+
+### TY-UNIFY
+Operands of a comparison or arithmetic operator, a binding and its value, an assignment target and its value, a
+returned value and the return slot, the elements of an array or the alternatives of an or-pattern have one type.
+
+### TY-BOOL
+Conditions (`if`, `while`, match guards), comparison results and logical operands are `bool`.
+
+### TY-CALL-RESULT
+A call's value has the callee's declared return type (`.to_string()`-style conversions produce `string`).
+
+### TY-ANALYZER-SEED
+Implementation seed: a parameter type the analyzer inferred (`inferred_param_types`). Not a language rule.
+
+### VAL-OWNED
+Constructed values (struct, map literals) and function results are owned values.
+
+### EFF-CALL
+Calls to effectful runtime functions contribute their effects to the caller (effect solver, not ownership).
+
 ## 6. Struct fields
 
 ### FIELD-OWNED
@@ -262,6 +286,10 @@ unimplemented; sequenced with the numeric solver.
 
 ### NUM-LITERAL
 Non-numeric literal kinds (`bool`, `char`, `string`). Listed for provenance output only.
+
+### NUM-CLASS
+A value whose width is known (declared, suffixed, cast) is in the integer or float class of that width. Provenance
+only: the class follows from the width.
 
 ### STR-OWNED
 **Rule.** `string` is an owned, growable, UTF-8 string (`String`). It is never `&str` in a signature unless the
