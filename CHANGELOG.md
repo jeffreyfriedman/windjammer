@@ -33,7 +33,22 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 - `wj new --template web` produced a project that failed `wj check` (forbidden `@derive(Serialize)`); `cli` template
   now runs under `wj run --interpret`; all templates are `wj fmt`-clean.
 
+- `wj run --interpret` runs the `wj check` front end first and refuses programs it rejects (the interpreter used to run
+  `let x: int = "s"`); `tests/interpreter_check_parity_test.rs` keeps the two in agreement.
+- `wj lint` exits non-zero when an error-level lint (W0001-W0004, W0006, ...) fires; `--strict` still also fails on warnings.
+- `wj fmt -` and `wj fmt FILE` refuse input that does not parse; `wj fmt --rust PATH` formats the crate at PATH.
+- `wj build --defer-drop` accepts only auto/always/never; `--metadata` rejects malformed `NAME=PATH` and missing paths;
+  `wj new` rejects invalid package names (with a suggestion); `wj add --path` rejects a missing path;
+  `wj validate-wjsl` rejects text that is not WJSL; `wj stats --verbose` shows per-code details; `wj docs` explains
+  which search term matched nothing.
+- `wj build --source-maps` writes `<out>/<file>.rs.map` for the Rust target (function and statement lines, aligned
+  from the generated text); `wj build --check` uses it to translate rustc errors.
+- `wj errors [PATH] [--code C] [--severity S]` is a real error browser (summary by code, filterable) instead of a stub.
+- WJ0015 no longer flags methods declared in the standard library (`status_code`, `with_header`, ...).
+
 ### Removed
+- `wj build --minify`, `--polyfills` and `--v8-optimize` (they always failed with "were removed").
+- The unused `ratatui`/`crossterm` dependencies and `src/error_tui.rs`.
 - Stale documentation, SDK/docker leftovers, committed binaries, game/UI-era examples and the per-ticket repro queue
   (2026-10-11 cleanup; history is in git).
 

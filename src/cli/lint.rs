@@ -1,7 +1,7 @@
 // wj lint - Run Windjammer Rust leakage linter on .wj files
 //
 // Detects W0001-W0004: explicit &/&mut, .unwrap(), .iter(), explicit borrows.
-// Use --strict to fail on warnings (for CI).
+// Error-level findings always exit non-zero; --strict also fails on warning-level ones (for CI).
 
 use anyhow::{bail, Result};
 use colored::*;
@@ -44,15 +44,25 @@ pub fn lint_file(path: &Path, strict: bool) -> Result<()> {
         println!("{}", warning);
     }
 
+    let errors = warnings
+        .iter()
+        .filter(|w| w.level == crate::linter::LintLevel::Error)
+        .count();
+    let others = warnings.len() - errors;
     println!(
-        "\n{} {} warning(s) found in {}",
-        "⚠".yellow().bold(),
-        warnings.len(),
+        "\n{} {} error(s), {} warning(s) found in {}",
+        if errors > 0 { "✗".red().bold() } else { "⚠".yellow().bold() },
+        errors,
+        others,
         path.display()
     );
 
+    // Error-level lints (W0001-W0004, W0006, ...) always fail; warning-level ones only with --strict.
+    if errors > 0 {
+        bail!("Linter failed: {} error(s) found", errors);
+    }
     if strict {
-        bail!("Linter failed: {} warning(s) found", warnings.len());
+        bail!("Linter failed: {} warning(s) found", others);
     }
 
     Ok(())

@@ -42,9 +42,7 @@ pub struct CodeGenerator<'ast> {
     pub(crate) uses_enumerable: bool, // ADR-0018: a surface call needs the inlined `mod wj_enumerable`
     pub(crate) target: CompilationTarget,
     pub(crate) is_module: bool, // true if generating code for a reusable module (not main file)
-    source_map: crate::source_map::SourceMap,
     pub(crate) current_output_file: std::path::PathBuf, // Path to the Rust file being generated
-    current_rust_line: usize, // Current line number in generated Rust code (1-indexed)
     pub(crate) current_wj_file: std::path::PathBuf, // Path to the Windjammer file being compiled
     pub(crate) inferred_bounds: std::collections::HashMap<String, crate::inference::InferredBounds>,
     pub(crate) needs_trait_imports: std::collections::HashSet<String>, // Tracks which traits need imports
@@ -129,7 +127,6 @@ pub struct CodeGenerator<'ast> {
     /// replace `current_function_body`; pure-forwarding refresh must not run on those.
     pub(crate) full_function_body_snapshot: Vec<&'ast Statement<'ast>>,
     // Workspace root for source maps
-    workspace_root: Option<std::path::PathBuf>,
     // BRANCH TYPE CONSISTENCY: Suppress auto string conversion when any branch uses .as_str()
     // Cell for interior mutability (needed for call-site optimization in immutable context)
     pub(crate) suppress_string_conversion: Cell<bool>,
@@ -666,9 +663,7 @@ impl<'ast> CodeGenerator<'ast> {
             uses_enumerable: false,
             target,
             is_module: false,
-            source_map: crate::source_map::SourceMap::new(),
             current_output_file: std::path::PathBuf::new(),
-            current_rust_line: 1,
             current_wj_file: std::path::PathBuf::new(),
             inferred_bounds: std::collections::HashMap::new(),
             needs_trait_imports: std::collections::HashSet::new(),
@@ -708,7 +703,6 @@ impl<'ast> CodeGenerator<'ast> {
             current_function_return_type: None,
             current_function_body: Vec::new(),
             full_function_body_snapshot: Vec::new(),
-            workspace_root: None,
             suppress_string_conversion: Cell::new(false),
             coerce_string_literals_to_owned: false,
             for_loop_borrow_needed: std::collections::HashSet::new(),
@@ -1279,13 +1273,6 @@ impl<'ast> CodeGenerator<'ast> {
         >,
     ) {
         self.analyzed_trait_methods = methods;
-    }
-
-    /// Set the workspace root for relative paths in source maps
-    pub fn set_workspace_root(&mut self, path: std::path::PathBuf) {
-        self.workspace_root = Some(path.clone());
-        // CRITICAL: Also set workspace root on the source_map for relative path conversion
-        self.source_map.set_workspace_root(path);
     }
 
     /// Set inferred trait bounds for functions
@@ -2465,52 +2452,6 @@ impl<'ast> CodeGenerator<'ast> {
     /// Set the Windjammer source file path for source mapping
     pub fn set_source_file(&mut self, path: impl Into<std::path::PathBuf>) {
         self.current_wj_file = path.into();
-    }
-
-    /// Get the current line number in the generated Rust code
-    #[allow(dead_code)]
-    fn current_rust_line(&self) -> usize {
-        self.current_rust_line
-    }
-
-    /// Increment the Rust line counter (call after generating each line)
-    #[allow(dead_code)]
-    fn increment_rust_line(&mut self) {
-        self.current_rust_line += 1;
-    }
-
-    /// Increment the Rust line counter by N lines
-    #[allow(dead_code)]
-    fn increment_rust_lines(&mut self, count: usize) {
-        self.current_rust_line += count;
-    }
-
-    /// Record a mapping from current Rust location to Windjammer location
-    pub(super) fn record_mapping(&mut self, wj_location: &crate::source_map::Location) {
-        if !self.current_output_file.as_os_str().is_empty() {
-            self.source_map.add_mapping(
-                self.current_output_file.clone(),
-                self.current_rust_line,
-                0, // column (simplified for now)
-                wj_location.file.clone(),
-                wj_location.line,
-                wj_location.column,
-            );
-        }
-    }
-
-    /// Get the source map (for saving after code generation)
-    pub fn get_source_map(&self) -> &crate::source_map::SourceMap {
-        &self.source_map
-    }
-
-    /// Count newlines in a string and increment the Rust line counter
-    #[allow(dead_code)]
-    pub(super) fn track_generated_lines(&mut self, code: &str) {
-        let newline_count = code.matches('\n').count();
-        if newline_count > 0 {
-            self.increment_rust_lines(newline_count);
-        }
     }
 
     /// Map Windjammer decorators to Rust attributes

@@ -73,7 +73,7 @@ required-features = ["cli"]
 
 [features]
 default = ["cli", "safety_typed_ir"]
-cli = ["dep:crossterm", "dep:ratatui", "dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
+cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
@@ -124,8 +124,6 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
 
 tempfile = { version = "3.10", optional = true }
-crossterm = { version = "0.28", optional = true }
-ratatui = { version = "0.28", optional = true }
 syntect = { version = "5.2", optional = true }
 salsa = { version = "0.24", optional = true }
 env_logger = { version = "0.11", optional = true }

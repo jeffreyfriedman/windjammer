@@ -32,8 +32,9 @@ absent = ["x"]
 [[case]]
 name = "new rejects a name that is not a valid package name"
 polarity = "negative"
-xfail = "BUG: `wj new \"Bad Name\"` creates a project whose package name has a space"
 args = ["new", "Bad Name"]
+exit = 1
+output_has = ["Invalid project name 'Bad Name'", "try `wj new bad-name`"]
 absent = ["Bad Name"]
 
 [[case]]
@@ -60,9 +61,10 @@ output_has = ["wj.toml not found"]
 [[case]]
 name = "add --path rejects a path that does not exist"
 polarity = "negative"
-xfail = "BUG: `wj add x --path <missing>` records a dependency on a path that does not exist"
 files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n" }
 args = ["add", "dep", "-p", "{w}/missing"]
+exit = 1
+output_has = ["path not found"]
 
 [[case]]
 name = "remove deletes a dependency"

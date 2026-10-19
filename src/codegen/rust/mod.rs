@@ -23,6 +23,7 @@ pub mod block_generation;
 pub mod call_expression_generation;
 pub mod call_signature_resolution;
 pub mod call_site_borrow;
+pub mod source_map_align;
 pub mod closure_escape;
 mod function_formal_parameter_post;
 mod int_formal_scan_extra;

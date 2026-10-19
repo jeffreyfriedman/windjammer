@@ -27,3 +27,6 @@ Contract: docs/MODULE_MAP.toml; enforced by tests/architecture.rs.
 ## Tests
 tests/codegen_*_test.rs and tests/*bug_*_test.rs regression files.
 Run: `cargo test --release --test all <filter>`; architecture rules: `cargo test --release --test all architecture`.
+
+## Source maps
+`source_map_align.rs` builds the `.wj` -> `.rs` line map by aligning the two texts (functions by name, statements level by level when the shapes agree); written as `<file>.rs.map` when `CompilerConfig::emit_source_maps` (`wj build --source-maps` / `--check`). The generator itself no longer tracks lines.

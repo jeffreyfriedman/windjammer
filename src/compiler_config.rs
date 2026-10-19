@@ -25,6 +25,9 @@ pub struct CompilerConfig {
     pub shadow_validate_strict: bool,
     /// Do not write Cargo.toml for single-file builds (`--no-generate-cargo-toml`).
     pub skip_cargo_toml_generation: bool,
+    /// Write `<out>/<file>.rs.map` (the `.wj` -> `.rs` line map) next to each generated Rust file
+    /// (`--source-maps`; `--check` turns it on because rustc error translation reads it).
+    pub emit_source_maps: bool,
     /// Override the Windjammer stdlib directory (default: `./std` / bundled).
     pub stdlib_path: Option<PathBuf>,
     /// Override the `windjammer-runtime` crate path used in generated Cargo.toml.
@@ -43,6 +46,7 @@ impl Default for CompilerConfig {
             cache_locality_json: None,
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
+            emit_source_maps: false,
             stdlib_path: None,
             runtime_path: None,
             game_path: None,
@@ -76,6 +80,7 @@ impl CompilerConfig {
             cache_locality_json: path("WJ_CACHE_LOCALITY_JSON"),
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
+            emit_source_maps: false,
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
             game_path: path("game-host_PATH"),
@@ -114,6 +119,11 @@ impl CompilerConfig {
 
     pub fn with_skip_cargo_toml_generation(mut self, on: bool) -> Self {
         self.skip_cargo_toml_generation = on;
+        self
+    }
+
+    pub fn with_emit_source_maps(mut self, on: bool) -> Self {
+        self.emit_source_maps = on;
         self
     }
 

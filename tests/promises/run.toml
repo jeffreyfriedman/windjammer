@@ -29,7 +29,7 @@ covers = ["feature interpret-instant"]
 files = { "m.wj" = "fn main( {\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
 exit = 1
-output_has = ["Expected parameter name"]
+output_has = ["expected parameter name"]
 
 [[case]]
 name = "run --interpret of a missing file fails"
@@ -49,9 +49,10 @@ output_has = ["boom"]
 [[case]]
 name = "run --interpret rejects a string assigned to an int"
 polarity = "negative"
-xfail = "BUG: the interpreter runs `let x: int = \"s\"` and prints `s` (no type check before execution)"
 files = { "m.wj" = "fn main() {\n    let x: int = \"s\"\n    println(\"${x}\")\n}\n" }
 args = ["run", "--interpret", "{w}/m.wj"]
+exit = 1
+output_has = ["WJ0003", "not running", "the interpreter runs only programs the compiler accepts"]
 output_lacks = ["\ns\n"]
 
 [[case]]
@@ -87,9 +88,10 @@ output_has = ["invalid value 'x'"]
 [[case]]
 name = "run --defer-drop rejects an unknown mode"
 polarity = "negative"
-xfail = "BUG: `--defer-drop bogus` is accepted silently"
 files = { "m.wj" = "fn main() {\n}\n" }
 args = ["run", "--interpret", "--defer-drop", "bogus", "{w}/m.wj"]
+exit = 2
+output_has = ["invalid value 'bogus'"]
 
 [[case]]
 name = "repl evaluates statements from stdin"

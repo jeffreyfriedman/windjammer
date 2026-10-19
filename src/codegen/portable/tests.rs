@@ -76,14 +76,6 @@ fn typescript_output_is_annotated() {
     assert!(out.contains("a: bigint") && out.contains("): bigint"), "{out}");
 }
 
-#[test]
-fn removed_js_scaffolding_flags_fail_loudly() {
-    let (_p, program) = crate::compiler::parse_wj_source(Path::new("t.wj"), "fn main() {\n    println(\"x\")\n}\n").unwrap();
-    let cfg = CodegenConfig { minify: true, ..Default::default() };
-    let err = JavaScriptBackend::new().generate(&program, &cfg).unwrap_err().to_string();
-    assert!(err.contains("removed"), "{err}");
-}
-
 // ---- ADR-0014 intrinsics ------------------------------------------------------------------
 
 fn try_both(src: &str) -> [Result<String, String>; 2] {
