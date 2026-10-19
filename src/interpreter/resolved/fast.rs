@@ -63,20 +63,19 @@ fn is_cmp(op: BinaryOp) -> bool {
 #[inline(always)]
 pub(super) fn int_op(op: BinaryOp, a: i128, at: IntTy, b: i128, bt: IntTy) -> R {
     let ty = IntTy::unify(at, bt);
-    if ty != IntTy::U128 && ty != IntTy::I128 {
-        if let (Ok(x), Ok(y)) = (i64::try_from(a), i64::try_from(b)) {
-            let r = match op {
-                BinaryOp::Add => x.checked_add(y),
-                BinaryOp::Sub => x.checked_sub(y),
-                BinaryOp::Mul => x.checked_mul(y),
-                BinaryOp::Div => x.checked_div(y),
-                BinaryOp::Mod => x.checked_rem(y),
-                _ => None,
-            };
-            if let Some(r) = r {
-                if ty.fits(r as i128) {
-                    return Ok(Value::Int(r as i128, ty));
-                }
+    if ty != IntTy::U128 && ty != IntTy::I128 && a as i64 as i128 == a && b as i64 as i128 == b {
+        let (x, y) = (a as i64, b as i64);
+        let r = match op {
+            BinaryOp::Add => x.checked_add(y),
+            BinaryOp::Sub => x.checked_sub(y),
+            BinaryOp::Mul => x.checked_mul(y),
+            BinaryOp::Div if y != 0 => x.checked_div(y),
+            BinaryOp::Mod if y != 0 => x.checked_rem(y),
+            _ => None,
+        };
+        if let Some(r) = r {
+            if ty.fits(r as i128) {
+                return Ok(Value::Int(r as i128, ty));
             }
         }
     }
@@ -153,9 +152,20 @@ fn truth(v: Value, what: &str) -> R<bool> {
     }
 }
 
+/// `rstack[i] = v`, skipping the destructor call when the old value owns nothing (the common case in loops).
+#[inline(always)]
+pub(super) fn set(it: &mut Interpreter, i: usize, v: Value) {
+    let slot = &mut it.rstack[i];
+    if matches!(slot, Value::Int(..) | Value::Bool(_) | Value::Unit | Value::Float(..) | Value::Char(_)) {
+        std::mem::forget(std::mem::replace(slot, v));
+    } else {
+        *slot = v;
+    }
+}
+
 /// `slot op= rhs` on an integer slot, updated in place; `None` = not two integers (caller's path).
 #[inline(always)]
 pub(super) fn compound_int(it: &mut Interpreter, b: usize, slot: usize, op: BinaryOp, rhs: &Value) -> Option<R<()>> {
     let (Value::Int(a, at), Value::Int(c, ct)) = (&it.rstack[b + slot], rhs) else { return None };
-    Some(int_op(op, *a, *at, *c, *ct).map(|v| it.rstack[b + slot] = v))
+    Some(int_op(op, *a, *at, *c, *ct).map(|v| set(it, b + slot, v)))
 }

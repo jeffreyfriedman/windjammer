@@ -67,12 +67,13 @@ fn stmts(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
     let codes: Vec<(Option<&'static crate::source_map::Location>, Code)> =
         list.iter().map(|s| Some((stmt_loc(s), stmt(cx, s)?))).collect::<Option<_>>()?;
     Some(Box::new(move |it, b| {
-        let mut last = Value::Unit;
-        for (loc, c) in &codes {
+        let Some(((lloc, lc), init)) = codes.split_last() else { return Ok(Value::Unit) };
+        for (loc, c) in init {
             it.mark(*loc);
-            last = c(it, b)?;
+            c(it, b)?;
         }
-        Ok(last)
+        it.mark(*lloc);
+        lc(it, b)
     }))
 }
 
@@ -98,7 +99,7 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
                         if let Some(t) = ty {
                             x = it.coerce(x, t)?;
                         }
-                        it.rstack[b + slot] = x;
+                        fast::set(it, b + slot, x);
                         Ok(Value::Unit)
                     })
                 }
@@ -146,7 +147,7 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
                         }
                     }
                 };
-                it.rstack[b + slot] = new;
+                fast::set(it, b + slot, new);
                 Ok(Value::Unit)
             })
         }
@@ -252,12 +253,12 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
                     Some(v) => v(it, b)?,
                     None => Value::Unit,
                 };
-                Err(Ctl::Break { label: label.clone(), value })
+                Err(Ctl::Break(Box::new((label.clone(), value))))
             })
         }
         Statement::Continue { label, .. } => {
             let label = label.clone();
-            Box::new(move |_, _| Err(Ctl::Continue { label: label.clone() }))
+            Box::new(move |_, _| Err(Ctl::Continue(Box::new(label.clone()))))
         }
         Statement::Use { .. } => Box::new(|_, _| Ok(Value::Unit)),
         _ => return None,
