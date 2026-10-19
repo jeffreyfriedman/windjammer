@@ -41,6 +41,14 @@ def compiled(ctx, path, src_hash):
                           cwd=os.path.dirname(path), env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
 
 
+def build_failed(c):
+    return c.rc != 0 and ("could not compile" in c.err or "Cargo build failed" in c.err or "error[E" in c.err)
+
+
+def build_error(c):
+    return next((l.strip() for l in c.err.splitlines() if l.startswith("error")), "compiled build failed")[:110]
+
+
 def judge_pair(name, i, c):
     """Divergence reasons between one interpreted and one compiled result (pure)."""
     if c.timed_out or i.timed_out:
@@ -75,7 +83,11 @@ def check_program(ctx, p, hash_seeds, compile_it, results):
     if compile_it:
         c = compiled(ctx, p.path, h)
         if c.timed_out:
-            results["unmeasured"].append({"program": p.name, "reason": "compiled run timed out"})
+            results["unmeasured"].append({"program": p.name, "reason": "compiled run timed out or was skipped (budget/disk)"})
+        elif build_failed(c):
+            # the Rust did not build: nothing ran, so there is no output to diverge; R5 owns this (interpreter accepts, compiled rejects)
+            results["compiled_build_failures"] += 1
+            results["build_failures"].append({"program": p.name, "reason": build_error(c)})
         else:
             results["compiled_checked"] += 1
             for kind, why in judge_pair(p.name, base, c) or []:
@@ -126,7 +138,8 @@ def check_generated(ctx, templates, hash_seeds, results):
 def measure(ctx, corpora, templates):
     hs = HASH_SEEDS_QUICK if ctx.quick else HASH_SEEDS_FULL
     limit = 1 if ctx.quick else 10**9
-    res = {"divergences": [], "unmeasured": [], "checked": 0, "compiled_checked": 0, "generated_seeds": 0}
+    res = {"divergences": [], "unmeasured": [], "checked": 0, "compiled_checked": 0, "generated_seeds": 0,
+           "compiled_build_failures": 0, "build_failures": []}
     for name, progs in corpora.items():
         for k, p in enumerate(progs):
             check_program(ctx, p, hs, k < limit and not p.interp_only, res)
@@ -146,9 +159,10 @@ def summarize(res, quick):
     progs = {d["program"] for d in div}
     ok = res["checked"] - len(progs)
     seeds_ok = res["generated_seeds"] >= (1 if quick else GEN_SEEDS_FULL)
-    status = "fail" if div else ("pass" if res["checked"] and seeds_ok and not res["unmeasured"] else "unmeasured")
+    status = "fail" if (div or res["build_failures"]) else ("pass" if res["checked"] and seeds_ok and not res["unmeasured"] else "unmeasured")
     return {"id": "R2", "title": "No silent divergence", "target": "0 divergent programs",
             "percent": pct(ok, res["checked"]), "status": status,
             "detail": {k: res[k] if not isinstance(res[k], list) else len(res[k]) for k in res} | {"hash_seeds": list(HASH_SEEDS_QUICK if quick else HASH_SEEDS_FULL)},
             "blockers": [{"program": d["program"], "reason": f"[{d['kind']}] {d['reason']}"} for d in div]
+                        + [{"program": b["program"], "reason": "[compiled-build-failed] " + b["reason"]} for b in res["build_failures"]]
                         + [{"program": u["program"], "reason": "unmeasured: " + u["reason"]} for u in res["unmeasured"]]}

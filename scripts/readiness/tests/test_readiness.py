@@ -177,6 +177,14 @@ class R2Tests(unittest.TestCase):
         self.assertEqual(res["generated_seeds"], 4)
         self.assertEqual([d["program"] for d in res["divergences"]], ["generated/t.wj@2"])
 
+    @with_fixture({"run": {"a.wj": {"interp": ["1\n", 0], "compiled": ["", 101, "error[E0423]: cannot find function `println`\nerror: could not compile `verified`\n"]}}})
+    def test_compiled_build_failure_is_not_reported_as_an_output_divergence(self, fx):
+        out = r2.measure(fx.ctx(core.FULL), corpora.load_programs(fx.root, False), [])
+        reasons = {b["program"]: b["reason"] for b in out["blockers"]}
+        self.assertTrue(reasons["verified/a.wj"].startswith("[compiled-build-failed] error[E0423]"), reasons)
+        self.assertFalse(any("compiled-stdout" in r for r in reasons.values() if "a.wj" in r))
+        self.assertEqual(out["status"], "fail")
+
     def test_panic_messages_of_both_engines_normalize_equal(self):
         self.assertEqual(r2.panic_message("panic: boom\n"), r2.panic_message("thread 'main' panicked at src/main.rs:3:5:\nboom\n"))
 
