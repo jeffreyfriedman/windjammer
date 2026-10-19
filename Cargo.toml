@@ -123,6 +123,7 @@ smallvec = "1.13"
 syn = { version = "2", default-features = false, features = ["full", "parsing", "visit", "printing", "clone-impls", "proc-macro"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
+libloading = "0.8"
 
 tempfile = { version = "3.10", optional = true }
 crossterm = { version = "0.28", optional = true }
@@ -181,6 +182,10 @@ required-features = ["cli"]
 [[test]]
 name = "interpreter_features"
 path = "tests/interpreter_features_test.rs"
+
+[[test]]
+name = "interpreter_projects"
+path = "tests/interpreter_projects_test.rs"
 
 [[test]]
 name = "parser_arena_soundness"

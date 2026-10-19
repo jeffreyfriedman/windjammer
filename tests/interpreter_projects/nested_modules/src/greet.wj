@@ -1,0 +1,3 @@
+pub fn hello(name: string) {
+    println("hello ${name}")
+}

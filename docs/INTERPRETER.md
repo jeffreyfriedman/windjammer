@@ -7,21 +7,98 @@ Module map and invariants: `src/interpreter/MODULE.md`.
 
 ## How to use it
 
+`wj run` interprets by default (ADR-0019): no cargo, no rustc, milliseconds to first output. When a program uses a
+feature listed as unsupported below, the load-time preflight detects it before `main` runs and `wj run` switches to
+the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
+
 | Command | Effect |
 |---------|--------|
-| `wj run --interpret FILE_OR_DIR [args]` | Run a file, or a project directory (`main.wj`, or `main.wj` under a `src` directory), with `use`/`mod` resolved across files. No cargo, no rustc. stdout is program output only. |
-| `wj test --interpret [PATH] [--filter S] [--list]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
-| `wj run --interpret --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
-| `wj run --interpret --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
-| `wj run --interpret --mock-http FILE` / `--allow-network` | Answer `std::http` client calls from canned responses / allow plain `http://` (default: the client refuses). |
+| `wj run` | Run the project containing the working directory: `wj.toml` is found upward, its default binary runs (`src/main.wj`, `main.wj`, the first `[[bin]]`). |
+| `wj run PATH [args]` | A `.wj` file, or a directory with `main.wj` / `src/main.wj` (`wj run ./cmd/tool`). Use `wj run . args` to pass arguments, as with `go run . args`. |
+| `wj run --bin NAME` | A `[[bin]]` entry of `wj.toml`, `cmd/NAME/main.wj` or `src/bin/NAME.wj`. |
+| `wj run --interpret ...` | Interpreter only: never fall back (an unsupported feature exits 2 naming it). |
+| `wj run --compiled ...` / `--release` | Transpile to Rust and run with cargo (`--release`: optimized). `wj build` is unchanged. |
+| `wj run --watch` | Re-run on every change to `.wj`, `.rs`, `wj.toml`, `wj.lock` under the project (restarts long-running programs). |
+| `wj run --hot` | Preview: keep the program running and swap in edited function bodies (state survives; ADR-0021). |
+| `wj test --interpret [PATH] [--filter S] [--list] [--watch]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
+| `wj run --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
+| `wj run --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
+| `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client calls from canned responses / allow plain `http://` (default: the client refuses). |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);
-N for `std::process::exit(N)`; 2 for "unsupported in the interpreter" (names the feature and points at `wj run`); 1 other.
+N for `std::process::exit(N)`; 2 for "unsupported in the interpreter" (names the feature, suggests `wj run --compiled`); 1 other.
+Arguments pass through (`std::env::args`), stdin is inherited. A test asserts the interpreter never spawns `cargo`/`rustc`
+(shims on `PATH` that leave a marker file); the one exception is the host bridge build below, done once per Rust change.
 
-Latency (same machine, heavily loaded, warm cargo cache): `wj run hello.wj` (transpile, cargo build, run) 13.9 s;
-`wj run --interpret hello.wj` 0.016 s. A test asserts the interpreter never spawns `cargo`/`rustc`
-(shims on `PATH` that leave a marker file).
+## Projects
+
+**One module system.** The interpreter loads a program with the compiler's own file walker and module paths
+(`module_system::sources`, the same walker behind the compiled build) and binds every `use` with the compiler's resolver
+(`resolve`, `DefId`s): nested modules, `mod.wj` with `pub mod`, directories without `mod.wj`, aliases, groups `{a, b}`, globs,
+`self`/`super`/`crate` paths, `pub use` re-exports, cyclic imports, and same-name functions in different modules. Visibility follows
+Rust's rule on the resolved definitions: calling or importing a private item from outside its module is
+``function `helper` is private (E0603)``, as rustc reports it for the compiled program. A `main.wj` owns its directory tree (every
+module in it is loaded, like the compiled build); a loose script loads the modules it `use`s.
+
+**Dependencies.** `wj.toml` `[dependencies]` with `path` or `git` (ADR-0010 option A) are resolved by `package::graph`: a
+Windjammer package (it has `wj.toml` or `.wj` sources) is loaded as source and mounted as a crate (`use textkit::banner`); git
+dependencies are cloned once into the wj cache and pinned in `wj.lock` (written on first resolution; later upstream commits are not
+picked up until the lock entry is removed). Rust-crate dependencies are reached through `extern fn` and the host bridge.
+
+**Rust code via the host bridge (ADR-0020).** When a project declares `extern fn`s and has hand-written Rust in `src/` or next to `wj.toml`
+(`ffi.rs`; the compiled build links it when the `extern fn`s are declared in a library module such as `native.wj`, not in `main.wj`), `wj run` compiles that Rust once into a cached dynamic library with one
+generated C-ABI shim per `extern fn`, loads it, and calls the same symbols the compiled binary calls. Integers, floats, `bool` and
+`string` cross the bridge; any other type is rejected before the program runs, naming the item, and `wj run` falls back to the
+compiled path. Measured on the `host_bridge` fixture (loaded machine): first run 214 s (cargo builds `windjammer-runtime` in release
+for the bridge crate), every later run 10 to 30 ms.
+
+**Performance** (`scripts/interpreter_project_bench.py`, median wall-clock on a loaded 10-agent machine, release `wj`):
+
+| Measurement | Time |
+|---|---|
+| `wj run hello.wj` (process start + load + run) | 30 ms |
+| `wj run` in a generated 50-file project (3 functions and a struct per module, cross-module calls), first run | 31 ms |
+| same, repeated runs | 35 ms |
+| `wj run --watch`: source edit to new output | 44 ms (poll interval 20 ms) |
+
+Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (records the keys `interpreter.run_hello_ms`,
+`interpreter.project_50_cold_ms`, `interpreter.project_50_warm_ms`, `interpreter.watch_restart_ms` in `docs/generated/measured.json`).
+
+**Parity gates** (ADR-0019; the default stays interpreted only while these are green):
+- `cargo test --release --test interpreter_features`: every registry probe behaves as registered, every `Unsupported` probe is caught
+  by the preflight at load time (so it triggers the fallback) and no `Supported` probe is.
+- `cargo test --release --test interpreter_projects`: the fixtures in `tests/interpreter_projects/` (nested modules, every `use` form,
+  same names and cycles, privacy error, binaries/args/exit codes, path dependency, host bridge) match hand-written expectations
+  interpreted and through the default `wj run` (which must not fall back); a seeded fuzzer generates 40 random module trees and
+  compares the interpreter with the generator's own model (self-test: a mutated program is detected). `WJ_PROJECT_COMPILED=1`
+  adds the compiled half for fixtures and the first fuzz seeds.
+
+**Compiled-path bugs found by the project gates** (fixed here unless marked open):
+- Fixed: `use greet` in a crate-root `src/main.wj` was emitted as `use super::greet` (E0433); it is now `crate::` (rewritten to the
+  package lib in the binary).
+- Fixed: a user module named like a runtime std module (`util::math`) also got `use windjammer_runtime::math;` (E0252).
+- Fixed: `util::math::cube(3)` or `crate::x::f()` in the binary's `main.rs` did not resolve (the modules live in the package lib);
+  the binary now names the lib for `crate::` paths and glob-imports it.
+- Fixed: `wj run` (compiled) printed build progress on stdout; it now goes to stderr so both paths print the same bytes.
+- Fixed: a path dependency on a Windjammer source package was handed to Cargo as-is; `wj run --compiled` now builds it into the
+  package's `gen/` crate first and the generated `Cargo.toml` links that.
+- Open: `wj build .` on a project root (rather than `src/`) treats `src/main.wj` as a module and drops `fn main`; `wj run` passes the
+  source root, so it is unaffected.
+- Open: module aliases and `super::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) fail with
+  `missing boundary signature for m3::f0`: the ownership boundary lookup is keyed by the written path, not the resolved definition.
+  The compiled half of the fuzzer therefore uses item aliases, globs, groups and `crate::` paths (`WJ_FUZZ_ALL_FORMS=1` compiles
+  every form); the interpreted half covers all forms.
+- Open: a binary under `cmd/<name>/main.wj` compiled on its own keeps `use crate::helper` (E0432); the package-lib rewrite needs a `wj.toml` at its source root. Interpreted `--bin` is unaffected.
+- Open: directory modules without `mod.wj` that only hold children are declared in `lib.rs` without a `mod.rs` (E0433 `cannot find net in self`); the compiled fuzz half avoids them.
+- Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.
+- Open: `env::args().skip(1).collect()` into `Vec<string>` fails in rustc (iterates `&String`).
+
+**Known gaps.** Two types with the same name in different modules are not interpreted yet (types are keyed by name in the
+engine; the preflight sends such programs to the compiled path). `crate::` inside a dependency resolves against the program
+root. Compiled runs of `src/bin/NAME.wj` are not supported yet (use `cmd/NAME/main.wj`). Hot reload (`wj run --hot`, ADR-0021) is a
+preview: edited function and method bodies with unchanged signatures are swapped in at the next call and program state is
+kept; other edits print a restart notice (use `--watch` for those).
 
 ## Measurement
 
