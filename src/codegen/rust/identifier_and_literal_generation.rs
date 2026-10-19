@@ -40,6 +40,31 @@ impl<'ast> CodeGenerator<'ast> {
         )
     }
 
+    /// The value of `expr` can be a module string constant (`let x = KIND`, `if c { KIND } else { s }`):
+    /// a `let` binding of WJ `string` type owns its text, so such a value is generated in an owned
+    /// context (the constant becomes `KIND.to_string()`).
+    pub(in crate::codegen::rust) fn expression_yields_static_str(&self, expr: &Expression<'_>) -> bool {
+        use crate::parser::Statement;
+        fn tails<'a, 'b>(stmts: &'a [&'b Statement<'b>]) -> Vec<&'a Statement<'b>> {
+            stmts.last().map(|s| vec![*s]).unwrap_or_default()
+        }
+        fn stmt_yields(this: &CodeGenerator<'_>, st: &Statement<'_>) -> bool {
+            match st {
+                Statement::Expression { expr, .. } => this.expression_yields_static_str(expr),
+                Statement::If { then_block, else_block, .. } => {
+                    tails(then_block).iter().any(|t| stmt_yields(this, t))
+                        || else_block.as_ref().is_some_and(|b| tails(b).iter().any(|t| stmt_yields(this, t)))
+                }
+                Statement::Match { arms, .. } => arms.iter().any(|a| this.expression_yields_static_str(a.body)),
+                _ => false,
+            }
+        }
+        match expr {
+            Expression::Block { statements, .. } => tails(statements).iter().any(|t| stmt_yields(self, t)),
+            other => self.expression_is_static_str_value(other),
+        }
+    }
+
     /// Copy / reborrow bindings do not need auto-clone at move+reuse sites.
     /// Shared by identifier emit and assignment so field-assign cannot re-add `.clone()`.
     pub(in crate::codegen::rust) fn ident_skips_auto_clone_as_copy(
