@@ -137,11 +137,6 @@ fn filter_shader_files(
     (filtered_modules_by_dir, shader_count)
 }
 
-/// Detect if source code imports from Windjammer stdlib (`std::*`)
-fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
-    crate::compiler::library_copy_registry::stdlib_modules_from_source(source)
-}
-
 /// Find Windjammer stdlib directory (`std/`).
 ///
 /// Shared by multipass + single-file API-type collection. Prefer env / crate
@@ -187,30 +182,13 @@ pub(crate) fn build_library_multipass(
 ) -> Result<()> {
     let phase_start = Instant::now();
 
-    // Step 0: Detect stdlib usage and prepend stdlib files
+    // Step 0: Detect stdlib usage and prepend stdlib files FIRST
     let mut sources: Vec<(PathBuf, String)> = Vec::new();
-    let mut needed_stdlib_modules = HashSet::new();
-
-    // Quick scan: which stdlib modules does user code import?
-    for file in wj_files {
-        if let Ok(source) = std::fs::read_to_string(file) {
-            needed_stdlib_modules.extend(uses_windjammer_stdlib(&source));
-        }
-    }
-
-    // If stdlib is needed, prepend stdlib source files FIRST
-    if !needed_stdlib_modules.is_empty() {
-        if let Some(stdlib_dir) = find_stdlib_dir(config.stdlib_path.as_deref()) {
-            for module in &needed_stdlib_modules {
-                let stdlib_file = stdlib_dir.join(format!("{}.wj", module));
-                if stdlib_file.exists() {
-                    if let Ok(source) = std::fs::read_to_string(&stdlib_file) {
-                        sources.push((stdlib_file, source));
-                    }
-                }
-            }
-        }
-    }
+    let (needed_stdlib_modules, mut std_stubs) = super::std_stubs::StdStubs::prepend_sources(
+        wj_files,
+        find_stdlib_dir(config.stdlib_path.as_deref()),
+        &mut sources,
+    );
 
     // Step 1: Read all user source files (keep sources alive for lifetime safety)
     for file in wj_files {
@@ -331,7 +309,7 @@ pub(crate) fn build_library_multipass(
         eprintln!("⟳ Compiler changed — re-transpiling all sources");
     }
 
-    let reanalysis_set = super::incremental::compute_reanalysis_set(
+    let mut reanalysis_set = super::incremental::compute_reanalysis_set(
         &sources,
         &src_base,
         output,
@@ -346,6 +324,7 @@ pub(crate) fn build_library_multipass(
         );
         return Ok(());
     }
+    std_stubs.mark_reanalysis(&sources, &mut reanalysis_set);
     if reanalysis_set.len() < sources.len() {
         eprintln!(
             "⚡ Incremental analysis: {}/{} files need re-analysis",
@@ -496,6 +475,7 @@ pub(crate) fn build_library_multipass(
     let struct_defining_module_paths = std::sync::Arc::new(struct_defining_module_paths);
     let global_copy_structs = std::sync::Arc::new(global_copy_structs);
 
+    std_stubs.capture_contracts(&global_registry);
     const MAX_GLOBAL_PASSES: usize = 10;
     let mut pass_number = 1;
     let step3_start = Instant::now();
@@ -569,6 +549,7 @@ pub(crate) fn build_library_multipass(
                     .unwrap_or_default();
             let module_path = file_module.join("::");
             for (name, sig) in &file_registry.signatures {
+                let sig = &*std_stubs.effective_sig(file, file_stem, name, sig);
                 // Skip passthrough entries inherited from the frozen global snapshot.
                 // analyze_program_with_global_arc clones the global registry, so
                 // file_registry contains ALL entries (global + file-specific).

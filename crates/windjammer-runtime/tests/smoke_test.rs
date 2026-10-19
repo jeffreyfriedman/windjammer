@@ -68,7 +68,7 @@ fn test_all_modules_exist_and_work() {
     testing::assert(true, "test");
 
     // std::time
-    let _timestamp = time::now(); // Returns Instant, not i64
+    let _timestamp = time::instant_now(); // Instant, not i64
                                   // assert!(timestamp > 0); // Type mismatch - Instant is not comparable to int
 }
 

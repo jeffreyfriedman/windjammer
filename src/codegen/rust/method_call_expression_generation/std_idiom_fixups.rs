@@ -14,7 +14,10 @@ impl<'ast> CodeGenerator<'ast> {
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
         obj_str: &mut String,
         args: &mut [String],
-    ) {
+    ) -> Option<String> {
+        if let Some(lowered) = self.mc_lower_string_vec_contains(object, method, arguments, obj_str, args) {
+            return Some(lowered);
+        }
         // `opt.unwrap_or(&0)`: a literal behind an explicit `&` is a reference default (`Option<&T>`
         // from `map.get(k)`); the by-value call-site rules must not strip it.
         if matches!(method, "cmp" | "partial_cmp" | "eq" | "ne" | "lt" | "le" | "gt" | "ge")
@@ -72,6 +75,42 @@ impl<'ast> CodeGenerator<'ast> {
         {
             *obj_str = format!("{}.iter()", *obj_str);
         }
+        None
+    }
+
+    /// `Vec<string>.contains(x)` with a text argument (`&str` formal, literal, `String`): `Vec<String>::contains`
+    /// only accepts `&String`, so compare elements by value: `v.iter().any(|m| *m == *x)`.
+    fn mc_lower_string_vec_contains(
+        &self,
+        object: &Expression<'ast>,
+        method: &str,
+        arguments: &[(Option<String>, &'ast Expression<'ast>)],
+        obj_str: &str,
+        args: &[String],
+    ) -> Option<String> {
+        if method != "contains" || arguments.len() != 1 || args.len() != 1 {
+            return None;
+        }
+        let recv_ty = self.infer_expression_type(object)?;
+        if !self.type_is_string_element_vec(&recv_ty) {
+            return None;
+        }
+        let arg_expr = arguments[0].1;
+        let arg_is_text = matches!(arg_expr, Expression::Literal { value: crate::parser::Literal::String(_), .. })
+            || self.infer_expression_type(arg_expr).is_some_and(|t| {
+                crate::codegen::rust::types::is_windjammer_text_type(
+                    crate::codegen::rust::collection_detection::peel_type_reference(&t),
+                )
+            });
+        if !arg_is_text {
+            return None;
+        }
+        let mut x = args[0].trim();
+        while let Some(rest) = x.strip_prefix('&') {
+            x = rest.trim_start();
+        }
+        let x = x.strip_suffix(".to_string()").unwrap_or(x);
+        Some(format!("{obj_str}.iter().any(|m| *m == *{x})"))
     }
 
     /// `x[a..b]` (desugared to `.slice(a, b)`): bounds are `usize`, so bare non-negative literals and

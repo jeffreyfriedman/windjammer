@@ -18,3 +18,5 @@ fn main() {
 `wj build` emits `match fs.read_to_string(&mut path)` (rustc `E0423: cannot find value fs`). The same shape with `fs.write`
 or `fs.is_file` is emitted correctly as `fs::write(&path, ..)`. Reproduced on next/v0.50.0 (a build after the
 ownership/`&mut self` work); the ecosystem `wj-todo-cli` adapter uses exactly this shape. Expected `fs::read_to_string(&path)`.
+
+Status: fixed. A module receiver (`fs.read_to_string(path)`) is a path call, never the `reader.read_to_string(&mut buf)` method form. Gate: `ecosystem_findings_test::fs_read_to_string_with_string_param_is_a_path_call`.
