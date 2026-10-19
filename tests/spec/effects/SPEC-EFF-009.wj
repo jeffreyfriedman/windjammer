@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-009
 // mode: panic
-// xfail: Q-032
 // manifest: [capabilities]
 // expect: start
 // expect-exit: 126

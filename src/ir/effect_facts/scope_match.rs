@@ -133,15 +133,19 @@ fn tail_matches(tail: &[&str], rest: &[String]) -> bool {
     !rest.is_empty() && component_glob(&fold_case(tail[0]), &rest[0]) && tail_matches(&tail[1..], &rest[1..])
 }
 
-/// Host and port of a URL or `host:port` address. The host is lower-cased; userinfo is dropped (the host
-/// is what follows the LAST `@` of the authority, so `http://api.example.com@evil.example/` is `evil.example`).
-pub fn host_port(url: &str) -> Option<(String, Option<u16>)> {
+/// Split a URL or `host:port` address into (host, port, path-and-query). The host is lower-cased; userinfo is
+/// dropped (the host is what follows the LAST `@` of the authority, so `http://api.example.com@evil.example/` is
+/// `evil.example`). This is the ONE URL parser: the capability check and the interpreter's http client both use it,
+/// so what is checked is what is connected to.
+pub fn split_url(url: &str) -> Option<(String, Option<u16>, String)> {
     let (scheme, rest) = match url.split_once("://") {
         Some((s, r)) => (Some(s.to_ascii_lowercase()), r),
         None => (None, url),
     };
     let end = rest.find(['/', '?', '#', '\\']).unwrap_or(rest.len());
     let authority = &rest[..end];
+    let tail = &rest[end..];
+    let path = if tail.starts_with('/') { tail.to_string() } else { format!("/{}", tail.trim_start_matches('\\')) };
     let hostport = authority.rsplit_once('@').map(|(_, h)| h).unwrap_or(authority);
     let (host, port) = if let Some(stripped) = hostport.strip_prefix('[') {
         let (h, after) = stripped.split_once(']')?;
@@ -160,7 +164,12 @@ pub fn host_port(url: &str) -> Option<(String, Option<u16>)> {
         Some("https") => Some(443),
         _ => None,
     });
-    Some((host.trim_end_matches('.').to_ascii_lowercase(), port))
+    Some((host.trim_end_matches('.').to_ascii_lowercase(), port, path))
+}
+
+/// Host and port of a URL or `host:port` address (see [`split_url`]).
+pub fn host_port(url: &str) -> Option<(String, Option<u16>)> {
+    split_url(url).map(|(h, p, _)| (h, p))
 }
 
 /// Host pattern: `host`, `host:port`, `*.suffix[:port]`, `*`. No port in the pattern = any port.
@@ -196,6 +205,23 @@ pub fn name_matches(pat: &str, name: &str) -> bool {
         Some(prefix) => name.starts_with(prefix),
         None => pat == name,
     }
+}
+
+/// How `process::run("...")` executes a command line: (program, args). A plain command (`ls -l /tmp`) runs
+/// directly; anything with shell syntax (`;`, `|`, `&`, `$`, quotes, redirects, globs, ...) runs through `sh -c`,
+/// so its program is `sh`. The capability check and the execution use this one function: a grant for `echo`
+/// must not cover `echo hi; rm -rf x`.
+pub fn parse_command(cmd: &str) -> (String, Vec<String>) {
+    const SHELL_META: &[char] = &[';', '&', '|', '<', '>', '(', ')', '$', '`', '\\', '"', '\'', '*', '?', '[', ']', '{', '}', '~', '!', '#', '\n', '\r'];
+    if !cmd.contains(char::is_whitespace) {
+        return (cmd.to_string(), Vec::new());
+    }
+    if cmd.contains(SHELL_META) {
+        return ("sh".to_string(), vec!["-c".to_string(), cmd.to_string()]);
+    }
+    let mut words = cmd.split_whitespace().map(str::to_string);
+    let prog = words.next().unwrap_or_default();
+    (prog, words.collect())
 }
 
 /// Program name for a grant: the file name of the program path (`/usr/bin/git` -> `git`).
@@ -267,6 +293,16 @@ mod tests {
     }
 
     #[test]
+    fn split_url_keeps_checked_host_and_connect_host_equal() {
+        // backslash ends the authority (browser rule): the host is what precedes it
+        assert_eq!(split_url("http://api.example.com\\@evil.example/x").unwrap().0, "api.example.com");
+        assert_eq!(split_url("http://evil.example#@api.example.com/").unwrap().0, "evil.example");
+        assert_eq!(split_url("http://evil.example?h=api.example.com").unwrap().0, "evil.example");
+        assert_eq!(split_url("http://a.example:8080/p?q=1").unwrap(), ("a.example".into(), Some(8080), "/p?q=1".into()));
+        assert_eq!(split_url("http://a.example").unwrap().2, "/");
+    }
+
+    #[test]
     fn host_patterns() {
         assert!(host_matches("api.example.com", "api.example.com", Some(443)));
         assert!(!host_matches("api.example.com", "evil.api.example.com", Some(443)));
@@ -278,6 +314,17 @@ mod tests {
         assert!(host_matches("*", "anything", None));
         assert!(host_matches("127.0.0.1", "127.0.0.1", Some(1)));
         assert!(!host_matches("127.0.0.1", "127.0.0.2", Some(1)));
+    }
+
+    #[test]
+    fn shell_syntax_means_sh() {
+        assert_eq!(parse_command("ls"), ("ls".to_string(), vec![]));
+        assert_eq!(parse_command("ls -l /tmp"), ("ls".to_string(), vec!["-l".to_string(), "/tmp".to_string()]));
+        assert_eq!(parse_command("echo hi; id").0, "sh");
+        assert_eq!(parse_command("echo $(id)").0, "sh");
+        assert_eq!(parse_command("echo hi | cat").0, "sh");
+        assert_eq!(parse_command("echo 'a b'").0, "sh");
+        assert_eq!(parse_command("echo a\nid").0, "sh");
     }
 
     #[test]

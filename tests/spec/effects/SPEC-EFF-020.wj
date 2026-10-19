@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-020
 // mode: check-error
-// xfail: Q-032
 // manifest: [capabilities]
 // expect-error: WJ0044: extern `native_open` has no declared effects
 extern fn native_open(path: string) -> int

@@ -356,7 +356,7 @@ fn sink_uses(path: &str, c: &crate::resolve::CallResolution) -> Vec<(EffectKind,
                     _ => Resource::Computed,
                 },
                 SinkRes::CmdArg(n) => match c.str_args.get(n) {
-                    Some(Some(s)) => Resource::Lit(super::scope_match::program_name(s)),
+                    Some(Some(s)) => Resource::Lit(super::scope_match::program_name(&super::scope_match::parse_command(s).0)),
                     _ => Resource::Computed,
                 },
             };

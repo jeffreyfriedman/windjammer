@@ -184,6 +184,18 @@ path = "tests/inference_differential_test.rs"
 name = "spec_conformance"
 path = "tests/spec_conformance_test.rs"
 
+# Effects and capabilities (ADR-0021): sandbox escape suite (E1 gate: >= 60 cases, 0 escapes)
+#   cargo test --release --test effects_escape
+[[test]]
+name = "effects_escape"
+path = "tests/effects_escape_test.rs"
+
+# Effects soundness over the spec corpus: every effect performed at run time is in the inferred static set
+#   cargo test --release --test effects_soundness
+[[test]]
+name = "effects_soundness"
+path = "tests/effects_soundness_test.rs"
+
 # Docs truth also runs standalone: cargo test --release --test docs_truth
 [[test]]
 name = "docs_truth"
