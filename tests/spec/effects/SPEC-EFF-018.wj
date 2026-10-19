@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-018
 // mode: check-error
-// xfail: Q-032
 // manifest: [capabilities]
 // manifest: net.connect = ["*"]
 // manifest: [policy]

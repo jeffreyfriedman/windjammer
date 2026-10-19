@@ -67,8 +67,8 @@ Every normative rule and the executable examples (under `tests/spec/`) that chec
 | SPEC-EFF-015 | effects.md | `effects/SPEC-EFF-015.wj` |
 | SPEC-EFF-016 | effects.md | `effects/SPEC-EFF-016.wj` |
 | SPEC-EFF-017 | effects.md | `effects/SPEC-EFF-017.wj` |
-| SPEC-EFF-018 | effects.md | `effects/SPEC-EFF-018.wj` (xfail Q-032) |
-| SPEC-EFF-019 | effects.md | `effects/SPEC-EFF-019.wj` (xfail Q-032) |
+| SPEC-EFF-018 | effects.md | `effects/SPEC-EFF-018.wj` |
+| SPEC-EFF-019 | effects.md | `effects/SPEC-EFF-019.wj` |
 | SPEC-EFF-020 | effects.md | `effects/SPEC-EFF-020.wj` |
 | SPEC-EFF-021 | effects.md | `effects/SPEC-EFF-021.wj` (xfail Q-032) |
 | SPEC-EFF-022 | effects.md | `effects/SPEC-EFF-022.wj` (xfail Q-032) |
