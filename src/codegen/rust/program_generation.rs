@@ -30,6 +30,14 @@ fn binds_name_locally(imports: &str, name: &str) -> bool {
     })
 }
 
+/// Does `imports` already bring `module` in scope (runtime path, `module::`, `use module`, or a local binding)?
+fn import_mentions_module(imports: &str, module: &str) -> bool {
+    imports.contains(&format!("windjammer_runtime::{module}"))
+        || imports.contains(&format!("{module}::"))
+        || imports.contains(&format!("use {module}"))
+        || binds_name_locally(imports, module)
+}
+
 fn is_fn_import_name(name: &str) -> bool {
     name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
 }
@@ -1199,11 +1207,7 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         for module in self.runtime_std_module_imports.iter() {
-            if imports.contains(&format!("windjammer_runtime::{module}"))
-                || imports.contains(&format!("{module}::"))
-                || imports.contains(&format!("use {module}"))
-                || binds_name_locally(&imports, module)
-            {
+            if import_mentions_module(&imports, module) {
                 continue;
             }
             // `std::map` / rustc std / WJ-only stubs must not invent `windjammer_runtime::{module}`.

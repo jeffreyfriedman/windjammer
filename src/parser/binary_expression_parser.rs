@@ -150,7 +150,7 @@ impl Parser {
     }
 
     /// `x ?? d` is `x.unwrap_or_else(|| d)`: `d` is evaluated only when `x` is `None`.
-    fn option_default(
+    pub(in crate::parser) fn option_default(
         &mut self,
         value: &'static Expression<'static>,
         default: &'static Expression<'static>,

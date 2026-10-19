@@ -173,19 +173,40 @@ impl Parser {
     }
 
     fn parse_match_value_inner(&mut self) -> Result<&'static Expression<'static>, String> {
-        let mut left = self.parse_match_value_atom()?;
-
-        while let Some((op, precedence)) = self.get_binary_op() {
-            self.advance();
-            let right = self.parse_binary_expression(precedence + 1)?;
-            left = self.alloc_expr(Expression::Binary {
-                left,
-                op,
-                right,
-                location: self.current_location(),
-            });
-        }
-
+        let left = self.parse_match_value_prec(0)?;
         self.parse_pipe_stages(left)
+    }
+
+    /// Binary chain of a `match` scrutinee. Every operand is a scrutinee atom, so a name followed by `{`
+    /// (`match a == b { .. }`) opens the match body, never a struct literal (as in Rust).
+    fn parse_match_value_prec(&mut self, min_precedence: u8) -> Result<&'static Expression<'static>, String> {
+        let mut left = self.parse_match_value_atom()?;
+        loop {
+            // ADR-0018 `x ?? d`: between comparison (7) and additive (8), right-associative.
+            if self.current_token() == &Token::QuestionQuestion && min_precedence <= 7 {
+                self.advance();
+                let right = self.parse_match_coalesce_rhs()?;
+                left = self.option_default(left, right);
+                continue;
+            }
+            let Some((op, precedence)) = self.get_binary_op() else { break };
+            if precedence < min_precedence {
+                break;
+            }
+            self.advance();
+            let right = self.parse_match_value_prec(precedence + 1)?;
+            left = self.alloc_expr(Expression::Binary { left, op, right, location: self.current_location() });
+        }
+        Ok(left)
+    }
+
+    fn parse_match_coalesce_rhs(&mut self) -> Result<&'static Expression<'static>, String> {
+        let right = self.parse_match_value_prec(8)?;
+        if self.current_token() == &Token::QuestionQuestion {
+            self.advance();
+            let rest = self.parse_match_coalesce_rhs()?;
+            return Ok(self.option_default(right, rest));
+        }
+        Ok(right)
     }
 }
