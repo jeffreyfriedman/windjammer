@@ -56,6 +56,6 @@ fn test_homogeneous_regions_collapse() {
     }
     let svo = voxelgrid_to_svo64_flat(grid);
     println!("[test] Homogeneous collapse: {} nodes for 8 voxels", svo.len());
-    assert!(svo.len() < 20_usize, "Homogeneous regions should collapse");
+    assert!(svo.len() < 20, "Homogeneous regions should collapse");
 }
 

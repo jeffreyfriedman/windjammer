@@ -19,7 +19,7 @@ fn main() {
     println!("{} {}", a, b);
     let t = (1_i32, "hello");
     println!("({}, {})", t.0, t.1);
-    let (lo, hi) = min_max(&[5_i64, 1_i64, 9_i64, 3_i64]);
+    let (lo, hi) = min_max(&vec![5_i64, 1_i64, 9_i64, 3_i64]);
     println!("min={} max={}", lo, hi);
 }
 

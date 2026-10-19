@@ -138,6 +138,9 @@ impl<'ast> CodeGenerator<'ast> {
                     self.emitted_rust_ref_formals.remove(&param.name);
                     return self.format_trait_impl_owned_formal(param, analyzed);
                 }
+                if let Some(formal) = self.formal_from_ir_owned(param, param_idx, func, unused_params) {
+                    return formal;
+                }
                 if param.name != "self"
                     && self.param_has_forward_ref_keep_owned(
                         func.body.as_slice(),
@@ -3831,6 +3834,42 @@ impl<'ast> CodeGenerator<'ast> {
                 }
             })
             .collect()
+    }
+
+    /// ADR-0001: when the IR solver decided a non-Copy, non-text parameter is owned, the formal is
+    /// owned. The body-walking heuristics below can only demote it to a borrow, which is wrong for
+    /// values the body moves (stored in a field, returned, passed to a consuming sink).
+    fn formal_from_ir_owned(
+        &mut self,
+        param: &crate::parser::Parameter<'ast>,
+        param_idx: usize,
+        func: &FunctionDecl<'ast>,
+        unused_params: &HashSet<String>,
+    ) -> Option<String> {
+        use crate::analyzer::OwnershipMode;
+        if param.name == "self"
+            || param.pattern.is_some()
+            || matches!(&param.type_, Type::Reference(_) | Type::MutableReference(_))
+            || self.is_type_copy(&param.type_)
+            || crate::codegen::rust::string_utilities::param_is_owned_string_type(&param.type_)
+            || self.ir_param_ownership_definitive(&param.name) != Some(OwnershipMode::Owned)
+        {
+            return None;
+        }
+        self.inferred_borrowed_params.remove(&param.name);
+        self.inferred_mut_borrowed_params.remove(&param.name);
+        self.emitted_rust_ref_formals.remove(&param.name);
+        self.str_ref_optimized_params.remove(&param.name);
+        let user_arg_idx = func
+            .parameters
+            .iter()
+            .filter(|p| p.name != "self")
+            .position(|p| p.name == param.name)
+            .unwrap_or(param_idx);
+        self.current_fn_emitted_mut_arg_indices.remove(&user_arg_idx);
+        let mut_prefix = if param.is_mutable || self.variable_needs_mut(&param.name) { "mut " } else { "" };
+        let name = if unused_params.contains(&param.name) && !func.is_pub { format!("_{}", param.name) } else { param.name.clone() };
+        Some(format!("{mut_prefix}{name}: {}", self.type_to_rust(&param.type_)))
     }
 
     /// Pub builder/setter formals that store owned WJ `string` into a custom return payload.

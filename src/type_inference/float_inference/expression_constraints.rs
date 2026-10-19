@@ -381,6 +381,26 @@ impl FloatInference {
                     }
                 }
             }
+            // A collection literal shares one float class with its elements: a constraint on the
+            // collection (`takes(vec![0.5])` with `v: Vec<f32>`) reaches every literal inside it.
+            Expression::Array { elements, .. } => {
+                let array_id = self.get_expr_id(expr);
+                for el in elements {
+                    self.collect_expression_constraints(el, return_type);
+                    let el_id = self.get_expr_id(el);
+                    self.constraints.push(Constraint::MustMatch(array_id, el_id, "array element shares the collection's float class".to_string()));
+                }
+            }
+            Expression::MacroInvocation { name, args, is_repeat, .. } if name == "vec" => {
+                let vec_id = self.get_expr_id(expr);
+                for (i, arg) in args.iter().enumerate() {
+                    self.collect_expression_constraints(arg, return_type);
+                    if !*is_repeat || i == 0 {
+                        let el_id = self.get_expr_id(arg);
+                        self.constraints.push(Constraint::MustMatch(vec_id, el_id, "vec! element shares the collection's float class".to_string()));
+                    }
+                }
+            }
             Expression::MacroInvocation { name, args, .. } => {
                 // TDD FIX: assert_eq!/assert_ne! - both args must have same type
                 // assert_eq!(transform.x, 15.0) → 15.0 should infer f32 from transform.x
