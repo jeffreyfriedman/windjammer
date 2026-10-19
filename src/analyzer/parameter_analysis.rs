@@ -11,6 +11,14 @@ use super::{Analyzer, OwnershipMode, SignatureRegistry};
 impl<'ast> Analyzer<'ast> {
     #[allow(clippy::too_many_arguments)] // Inference needs full function context
     pub(crate) fn infer_parameter_ownership(
+        &self, param_name: &str, param_type: &Type, body: &[&'ast Statement<'ast>], return_type: &Option<Type>, registry: &SignatureRegistry, current_func_name: &str, func: &FunctionDecl<'ast>,
+    ) -> Result<OwnershipMode, String> {
+        let r = self.infer_parameter_ownership_inner(param_name, param_type, body, return_type, registry, current_func_name, func);
+        if crate::debug_env::enabled("WJ_DEBUG_PARAMS") { eprintln!("[PARAM] {}::{} ({:?}) -> {:?}", current_func_name, param_name, param_type, r); }
+        r
+    }
+
+    pub(crate) fn infer_parameter_ownership_inner(
         &self,
         param_name: &str,
         param_type: &Type,
@@ -124,6 +132,14 @@ impl<'ast> Analyzer<'ast> {
 
         // 2. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
+            // `h = step(h)`: the value moves through the parameter (an owned `mut` binding), it is
+            // not written through a borrow the caller would observe.
+            if !self.is_copy_type(param_type)
+                && self.is_rebound(param_name, body)
+                && !self.is_mutated_in_place(param_name, body, registry, Some(param_type))
+            {
+                return Ok(OwnershipMode::Owned);
+            }
             // `Vox::new(self.scene)` then `self.grid = 1` is a partial
             // move of a non-Copy field plus a remaining-field write. Keep Owned
             // so the ctor can take the field; MutBorrowed would force `.clone()`.
@@ -1102,7 +1118,7 @@ impl<'ast> Analyzer<'ast> {
     /// before passthrough ownership is applied. Prevents short names like `contains` / `len`
     /// from unrelated impls forcing Owned on `str` / `string` parameters (E0382).
     pub(super) fn passthrough_types_compatible(&self, sig_ty: &Type, decl_ty: &Type) -> bool {
-        if self.types_equal(sig_ty, decl_ty) {
+        if self.types_equal(sig_ty, decl_ty) || Self::generic_instance_of(sig_ty, decl_ty) {
             return true;
         }
         // Windjammer `string` formals passthrough to extern `String` / owned string callees.
@@ -1121,6 +1137,19 @@ impl<'ast> Analyzer<'ast> {
         let decl_str = matches!(decl_ty, Type::String);
         let sig_str = matches!(sig_ty, Type::String);
         decl_str && sig_str
+    }
+
+    /// `decl` is an instance of the generic formal `sig`: `Handle<int>` for `Handle<T>`
+    /// (a callee's type parameter matches any argument; the constructor and arity must agree).
+    fn generic_instance_of(sig: &Type, decl: &Type) -> bool {
+        match (sig, decl) {
+            (x, _) if Self::is_generic_type_param(x) => true,
+            (Type::Parameterized(a, xs), Type::Parameterized(b, ys)) => {
+                a == b && xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| Self::generic_instance_of(x, y))
+            }
+            (Type::Vec(x), Type::Vec(y)) | (Type::Option(x), Type::Option(y)) => Self::generic_instance_of(x, y),
+            (x, y) => x == y,
+        }
     }
 
     pub(crate) fn types_equal(&self, a: &Type, b: &Type) -> bool {
