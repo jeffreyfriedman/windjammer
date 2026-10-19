@@ -1,44 +1,79 @@
-//! AST -> closure tree for the milestone-1 subset of `--engine=resolved`.
+//! AST -> closure tree for `--engine=resolved`: the driver, slot typing and statements
+//! (expressions are in `expr.rs`).
 //!
 //! Subset: parameters bound by name (no patterns, no `self`, no generics, not async/extern);
 //! statements `let x [: T] = e` / `let _ = e`, assignment and compound assignment to a local,
 //! `return`, `if`/`else`, `while`, `loop`, `for x in <iterable>`, `break [value]`, `continue`
-//! (labels included), expression statements; expressions: literals, locals, paths (consts,
-//! function values), unary/binary operators, `as`, indexing, field reads, tuples, arrays, ranges,
-//! blocks, `format`/interpolation, `print`/`println`/`eprint`/`eprintln`, calls to user functions
-//! and to callable locals. Anything else returns `None` and the function runs in the walker.
+//! (labels included), expression statements. Anything else returns `None` and the function runs
+//! in the walker.
+//!
+//! Slot typing: a local whose every write provably stores an integer of one `small` width `T` is a
+//! typed slot; reads of it compile to raw `i64` code (`typed.rs`). The proof is by construction:
+//! each write site checks the static width of what it stores (`assign_ok`); a write that could
+//! change the width (a literal that might not fit, another width, a non-integer) poisons the slot
+//! and the function is compiled again with that slot untyped.
 
-use super::fast::{self, Operand};
-use super::{Code, CompiledFn};
+use super::expr::{self, X};
+use super::typed::{self, small, ICode, I};
+use super::{Body, Code, CompiledFn};
 use crate::interpreter::engine::{FuncDef, Interpreter};
-use crate::interpreter::error::{semantic, unsupported, Ctl, R};
+use crate::interpreter::error::{Ctl, R};
 use crate::interpreter::eval_expr::stmt_loc;
+use crate::interpreter::eval_stmt::loop_exit;
 use crate::interpreter::int::IntTy;
-use crate::interpreter::place::{deref_value, strip_refs};
 use crate::interpreter::value::*;
-use crate::interpreter::intrinsics::Intrinsic;
-use crate::parser::{BinaryOp, Expression, Pattern, Statement, Type, UnaryOp};
+use crate::parser::{BinaryOp, CompoundOp, Expression, Pattern, Statement, Type};
+use crate::source_map::Location;
+use std::collections::HashSet;
 use std::rc::Rc;
 
-type E = &'static Expression<'static>;
+pub(super) type E = &'static Expression<'static>;
 type S = &'static Statement<'static>;
+type Loc = Option<&'static Location>;
 
-struct Cx<'a> {
-    it: &'a mut Interpreter,
-    module: usize,
+pub(super) struct Cx<'a> {
+    pub(super) it: &'a mut Interpreter,
+    pub(super) module: usize,
     scopes: Vec<Vec<(&'static str, usize)>>,
     nslots: usize,
+    /// Static width of each slot (`None`: any value).
+    slot_ty: Vec<Option<IntTy>>,
+    poison: &'a HashSet<usize>,
+    conflicts: Vec<usize>,
+    /// A `return` whose value is not a typed integer was compiled (no typed body).
+    untyped_return: bool,
 }
 
 impl Cx<'_> {
-    fn local(&self, name: &str) -> Option<usize> {
+    pub(super) fn local(&self, name: &str) -> Option<usize> {
         self.scopes.iter().rev().flat_map(|s| s.iter().rev()).find(|(n, _)| *n == name).map(|(_, i)| *i)
     }
-    fn declare(&mut self, name: &'static str) -> usize {
+    pub(super) fn slot_ty(&self, slot: usize) -> Option<IntTy> {
+        self.slot_ty[slot]
+    }
+    fn declare(&mut self, name: &'static str, ty: Option<IntTy>) -> usize {
         let i = self.nslots;
         self.nslots += 1;
+        self.slot_ty.push(ty.filter(|t| small(*t) && !self.poison.contains(&i)));
         self.scopes.last_mut().expect("scope").push((name, i));
         i
+    }
+    /// Does storing a value of static width `rhs` (`None`: not a typed integer; with its value
+    /// when constant) into typed `slot` keep the slot's width, for `=` (`op` `None`) or `op=`?
+    /// Records a conflict (the slot is untyped on the next compile) when it does not.
+    fn assign_ok(&mut self, slot: usize, rhs: Option<(IntTy, Option<i64>)>, op: Option<BinaryOp>) -> bool {
+        let Some(t) = self.slot_ty[slot] else { return false };
+        let full = t.min() <= i64::MIN as i128 && t.max() >= i64::MAX as i128;
+        let ok = match (rhs, op) {
+            (None, _) => false,
+            // `retag`: a literal adopts the slot's width when it fits
+            (Some((u, k)), None) => u == t || (u == IntTy::Lit && (full || k.is_some_and(|k| t.fits(k as i128)))),
+            (Some((u, _)), Some(op)) => typed::result_ty(op, t, u) == Some(t),
+        };
+        if !ok {
+            self.conflicts.push(slot);
+        }
+        ok
     }
 }
 
@@ -53,113 +88,138 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
     if it.param_mutation(f).iter().any(|m| *m) {
         return None;
     }
-    let mut cx = Cx { it, module: f.module, scopes: vec![Vec::new()], nslots: 0 };
-    let params = f.params.iter().map(|p| cx.declare(p.name.as_str())).collect();
-    let param_int = f.params.iter().map(|p| IntTy::from_type(&p.type_).filter(|t| *t != IntTy::Lit)).collect();
-    let ret_int = f.ret.and_then(IntTy::from_type).filter(|t| *t != IntTy::Lit);
-    let body = stmts(&mut cx, f.body)?;
-    Some(CompiledFn { nslots: cx.nslots, params, param_int, ret_int, body })
+    let mut poison = HashSet::new();
+    loop {
+        let mut cx = Cx {
+            it: &mut *it,
+            module: f.module,
+            scopes: vec![Vec::new()],
+            nslots: 0,
+            slot_ty: Vec::new(),
+            poison: &poison,
+            conflicts: Vec::new(),
+            untyped_return: false,
+        };
+        let r = compile_with(&mut cx, f);
+        let conflicts = std::mem::take(&mut cx.conflicts);
+        if conflicts.is_empty() || r.is_none() {
+            return r;
+        }
+        poison.extend(conflicts);
+    }
 }
 
-/// A statement sequence in the current name scope; the value is the last statement's.
-fn stmts(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
-    // the walker marks every statement's location before executing it
-    let codes: Vec<(Option<&'static crate::source_map::Location>, Code)> =
-        list.iter().map(|s| Some((stmt_loc(s), stmt(cx, s)?))).collect::<Option<_>>()?;
-    Some(Box::new(move |it, b| {
-        let Some(((lloc, lc), init)) = codes.split_last() else { return Ok(Value::Unit) };
-        for (loc, c) in init {
+fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
+    let param_int: Vec<Option<IntTy>> =
+        f.params.iter().map(|p| IntTy::from_type(&p.type_).filter(|t| *t != IntTy::Lit)).collect();
+    let params: Vec<usize> = f.params.iter().zip(&param_int).map(|(p, t)| cx.declare(p.name.as_str(), *t)).collect();
+    let param_typed = params.iter().map(|s| cx.slot_ty[*s].is_some()).collect();
+    let ret_int = f.ret.and_then(IntTy::from_type).filter(|t| *t != IntTy::Lit);
+    let (init, tail) = stmt_list(cx, f.body)?;
+    let body = match (ret_int.filter(|t| small(*t)), tail) {
+        (Some(t), Some((loc, Tail::Int(i, u)))) if !cx.untyped_return => Body::I(typed_seq(init, loc, i.into_code()), u, t),
+        (_, tail) => Body::V(seq(init, tail.map(|(l, t)| (l, t.code())))),
+    };
+    Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, body })
+}
+
+/// The last statement of a list: a typed integer expression, or any code.
+enum Tail {
+    Int(I, IntTy),
+    Code(Code),
+}
+
+impl Tail {
+    fn code(self) -> Code {
+        match self {
+            Tail::Int(i, t) => X::I(i, t).code(),
+            Tail::Code(c) => c,
+        }
+    }
+}
+
+type Init = Vec<(Loc, Code)>;
+
+/// Every statement of a list but the last, and the last one (in value position).
+fn stmt_list(cx: &mut Cx, list: &'static [S]) -> Option<(Init, Option<(Loc, Tail)>)> {
+    let Some((last, init)) = list.split_last() else { return Some((Vec::new(), None)) };
+    let init = init.iter().map(|s| Some((stmt_loc(s), stmt(cx, s)?))).collect::<Option<Init>>()?;
+    let tail = match last {
+        Statement::Expression { expr: e, .. } => match expr::expr(cx, e)? {
+            X::I(i, t) => Tail::Int(i, t),
+            x => Tail::Code(x.code()),
+        },
+        s => Tail::Code(stmt(cx, s)?),
+    };
+    Some((init, Some((stmt_loc(last), tail))))
+}
+
+/// The walker marks every statement's location before executing it.
+fn seq(init: Init, tail: Option<(Loc, Code)>) -> Code {
+    let Some((lloc, lc)) = tail else { return Box::new(|_, _| Ok(Value::Unit)) };
+    Box::new(move |it, b| {
+        for (loc, c) in &init {
             it.mark(*loc);
             c(it, b)?;
         }
-        it.mark(*lloc);
+        it.mark(lloc);
         lc(it, b)
-    }))
+    })
+}
+
+fn typed_seq(init: Init, lloc: Loc, lc: ICode) -> ICode {
+    Box::new(move |it, b| {
+        for (loc, c) in &init {
+            it.mark(*loc);
+            c(it, b)?;
+        }
+        it.mark(lloc);
+        lc(it, b)
+    })
 }
 
 /// A nested block: its own name scope (slots are never reused, so no runtime work).
-fn block(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
+pub(super) fn block(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
     cx.scopes.push(Vec::new());
-    let c = stmts(cx, list);
+    let c = stmt_list(cx, list).map(|(init, tail)| seq(init, tail.map(|(l, t)| (l, t.code()))));
     cx.scopes.pop();
     c
 }
 
 fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
     let code: Code = match s {
-        Statement::Expression { expr, .. } => expr_code(cx, expr)?,
+        Statement::Expression { expr: e, .. } => expr::expr(cx, e)?.code(),
         Statement::Let { pattern, type_, value, else_block: None, .. } => {
-            let v = expr_code(cx, value)?;
-            let ty: Option<&'static Type> = type_.as_ref();
-            match pattern {
-                Pattern::Identifier(n) | Pattern::MutBinding(n) => {
-                    let slot = cx.declare(n.as_str());
-                    Box::new(move |it, b| {
-                        let mut x = v(it, b)?;
-                        if let Some(t) = ty {
-                            x = it.coerce(x, t)?;
-                        }
-                        fast::set(it, b + slot, x);
-                        Ok(Value::Unit)
-                    })
-                }
-                Pattern::Wildcard => Box::new(move |it, b| {
-                    let x = v(it, b)?;
-                    if let Some(t) = ty {
-                        it.coerce(x, t)?;
-                    }
-                    Ok(Value::Unit)
-                }),
+            let name = match pattern {
+                Pattern::Identifier(n) | Pattern::MutBinding(n) => Some(n.as_str()),
+                Pattern::Wildcard => None,
                 _ => return None,
-            }
+            };
+            let v = expr::expr(cx, value)?;
+            let_stmt(cx, name, type_.as_ref(), v)
         }
         Statement::Assignment { target, value, compound_op, .. } => {
             let Expression::Identifier { name, location } = target else { return None };
             let slot = cx.local(name)?;
-            let v = expr_code(cx, value)?;
-            let op = *compound_op;
-            let tloc = location.as_ref();
-            Box::new(move |it, b| {
-                let rhs = v(it, b)?;
-                it.mark(tloc);
-                let new = match op {
-                    None => retag(&it.rstack[b + slot], rhs),
-                    Some(cop) => {
-                        let bop = crate::interpreter::ops::compound_to_binary(cop);
-                        if let Some(r) = fast::compound_int(it, b, slot, bop, &rhs) {
-                            return r.map(|_| Value::Unit);
-                        }
-                        let cur = std::mem::replace(&mut it.rstack[b + slot], Value::Unit);
-                        if let (Value::Str(_), Value::Str(add), crate::parser::CompoundOp::Add) = (&cur, &rhs, cop) {
-                            let mut cur = cur;
-                            if let Value::Str(rc) = &mut cur {
-                                Rc::make_mut(rc).push_str(add);
-                            }
-                            it.rstack[b + slot] = cur;
-                            return Ok(Value::Unit);
-                        }
-                        match it.binary(bop, cur.clone(), rhs) {
-                            Ok(x) => x,
-                            Err(e) => {
-                                it.rstack[b + slot] = cur;
-                                return Err(e);
-                            }
-                        }
-                    }
-                };
-                fast::set(it, b + slot, new);
-                Ok(Value::Unit)
-            })
+            let v = expr::expr(cx, value)?;
+            assign(cx, slot, v, *compound_op, location.as_ref())
         }
         Statement::Return { value, .. } => match value {
-            Some(e) => {
-                let v = expr_code(cx, e)?;
-                Box::new(move |it, b| Err(Ctl::Return(v(it, b)?)))
+            Some(e) => match expr::expr(cx, e)? {
+                X::I(i, t) => Box::new(move |it, b| Err(Ctl::Return(Value::Int(i.get(it, b)? as i128, t)))),
+                x => {
+                    cx.untyped_return = true;
+                    let v = x.code();
+                    Box::new(move |it, b| Err(Ctl::Return(v(it, b)?)))
+                }
+            },
+            None => {
+                cx.untyped_return = true;
+                Box::new(|_, _| Err(Ctl::Return(Value::Unit)))
             }
-            None => Box::new(|_, _| Err(Ctl::Return(Value::Unit))),
         },
         Statement::If { condition, then_block, else_block, .. } => {
-            let c = cond(cx, condition, "if", true)?;
+            let c = expr::cond(cx, condition, "if", true)?;
             let t = block(cx, then_block)?;
             let e = match else_block {
                 Some(eb) => Some(block(cx, eb)?),
@@ -174,16 +234,12 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
             })
         }
         Statement::While { condition, body, label, .. } => {
-            let c = cond(cx, condition, "while", false)?;
+            let c = expr::cond(cx, condition, "while", false)?;
             let body = block(cx, body)?;
             let label: Option<&'static str> = label.as_deref();
             Box::new(move |it, b| {
-                loop {
-                    if !c(it, b)? {
-                        break;
-                    }
-                    let r = body(it, b);
-                    if crate::interpreter::eval_stmt::loop_exit(r, label)?.is_some() {
+                while c(it, b)? {
+                    if loop_exit(body(it, b), label)?.is_some() {
                         break;
                     }
                 }
@@ -194,57 +250,15 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
             let body = block(cx, body)?;
             let label: Option<&'static str> = label.as_deref();
             Box::new(move |it, b| loop {
-                let r = body(it, b);
-                if let Some(v) = crate::interpreter::eval_stmt::loop_exit(r, label)? {
+                if let Some(v) = loop_exit(body(it, b), label)? {
                     return Ok(v);
                 }
             })
         }
-        Statement::For { pattern, iterable, body, label, .. } => {
-            let src = expr_code(cx, iterable)?;
-            cx.scopes.push(Vec::new());
-            let slot = match pattern {
-                Pattern::Identifier(n) | Pattern::MutBinding(n) => Some(cx.declare(n.as_str())),
-                Pattern::Wildcard => None,
-                _ => {
-                    cx.scopes.pop();
-                    return None;
-                }
-            };
-            let body = block(cx, body);
-            cx.scopes.pop();
-            let body = body?;
-            let label: Option<&'static str> = label.as_deref();
-            Box::new(move |it, b| {
-                let v = src(it, b)?;
-                if let Value::Range(lo, hi, ty) = v {
-                    let mut i = lo;
-                    while i < hi {
-                        if let Some(s) = slot {
-                            it.rstack[b + s] = Value::Int(i, ty);
-                        }
-                        if crate::interpreter::eval_stmt::loop_exit(body(it, b), label)?.is_some() {
-                            break;
-                        }
-                        i += 1;
-                    }
-                    return Ok(Value::Unit);
-                }
-                let iter = crate::interpreter::iter::as_iter(it, v)?;
-                while let Some(x) = crate::interpreter::iter::next(it, &iter)? {
-                    if let Some(s) = slot {
-                        it.rstack[b + s] = x;
-                    }
-                    if crate::interpreter::eval_stmt::loop_exit(body(it, b), label)?.is_some() {
-                        break;
-                    }
-                }
-                Ok(Value::Unit)
-            })
-        }
+        Statement::For { pattern, iterable, body, label, .. } => for_stmt(cx, pattern, iterable, body, label.as_deref())?,
         Statement::Break { label, value, .. } => {
             let v = match value {
-                Some(e) => Some(expr_code(cx, e)?),
+                Some(e) => Some(expr::expr(cx, e)?.code()),
                 None => None,
             };
             let label = label.clone();
@@ -266,6 +280,110 @@ fn stmt(cx: &mut Cx, s: S) -> Option<Code> {
     Some(code)
 }
 
+/// `let [name][: ty] = v`: a typed integer value (with an integer or no annotation) makes a typed slot.
+fn let_stmt(cx: &mut Cx, name: Option<&'static str>, ty: Option<&'static Type>, v: X) -> Code {
+    let width = match (&v, ty.map(IntTy::from_type)) {
+        (X::I(_, u), None) => Some(*u),
+        (X::I(..), Some(Some(t))) if small(t) => Some(t),
+        _ => None,
+    };
+    if let (Some(t), X::I(..)) = (width, &v) {
+        let X::I(i, u) = v else { unreachable!() };
+        let slot = name.map(|n| cx.declare(n, Some(t)));
+        let typed_slot = slot.is_some_and(|s| cx.slot_ty(s).is_some());
+        return Box::new(move |it, b| {
+            let mut x = i.get(it, b)?;
+            if let Some(ty) = ty {
+                x = typed::retype(it, x, u, t, ty)?;
+            }
+            match slot {
+                Some(s) if typed_slot => typed::set_int(it, b + s, x, t),
+                Some(s) => super::fast::set(it, b + s, Value::Int(x as i128, t)),
+                None => {}
+            }
+            Ok(Value::Unit)
+        });
+    }
+    let v = v.code();
+    let slot = name.map(|n| cx.declare(n, None));
+    Box::new(move |it, b| {
+        let mut x = v(it, b)?;
+        if let Some(t) = ty {
+            x = it.coerce(x, t)?;
+        }
+        if let Some(s) = slot {
+            super::fast::set(it, b + s, x);
+        }
+        Ok(Value::Unit)
+    })
+}
+
+/// `slot = v` / `slot op= v`; the walker evaluates the right side, marks the target, then stores.
+fn assign(cx: &mut Cx, slot: usize, v: X, op: Option<CompoundOp>, tloc: Loc) -> Code {
+    let bop = op.map(crate::interpreter::ops::compound_to_binary);
+    let rhs = match &v {
+        X::I(I::Const(k), u) => Some((*u, Some(*k))),
+        X::I(_, u) => Some((*u, None)),
+        _ => None,
+    };
+    if let Some(t) = cx.slot_ty(slot) {
+        if cx.assign_ok(slot, rhs, bop) {
+            let X::I(i, u) = v else { unreachable!("assign_ok accepts typed integers only") };
+            return match bop {
+                None => Box::new(move |it, b| {
+                    let x = i.get(it, b)?;
+                    it.mark(tloc);
+                    typed::set_int(it, b + slot, x, t);
+                    Ok(Value::Unit)
+                }),
+                Some(bop) => {
+                    let (code, _) = typed::arith(bop, I::Slot(slot), t, i, u, tloc).expect("integer operator");
+                    Box::new(move |it, b| {
+                        let x = code(it, b)?;
+                        typed::set_int(it, b + slot, x, t);
+                        Ok(Value::Unit)
+                    })
+                }
+            };
+        }
+    }
+    untyped_assign(slot, v.code(), op, tloc)
+}
+
+fn untyped_assign(slot: usize, v: Code, op: Option<CompoundOp>, tloc: Loc) -> Code {
+    Box::new(move |it, b| {
+        let rhs = v(it, b)?;
+        it.mark(tloc);
+        let new = match op {
+            None => retag(&it.rstack[b + slot], rhs),
+            Some(cop) => {
+                let bop = crate::interpreter::ops::compound_to_binary(cop);
+                if let Some(r) = super::fast::compound_int(it, b, slot, bop, &rhs) {
+                    return r.map(|_| Value::Unit);
+                }
+                let cur = std::mem::replace(&mut it.rstack[b + slot], Value::Unit);
+                if let (Value::Str(_), Value::Str(add), CompoundOp::Add) = (&cur, &rhs, cop) {
+                    let mut cur = cur;
+                    if let Value::Str(rc) = &mut cur {
+                        Rc::make_mut(rc).push_str(add);
+                    }
+                    it.rstack[b + slot] = cur;
+                    return Ok(Value::Unit);
+                }
+                match it.binary(bop, cur.clone(), rhs) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        it.rstack[b + slot] = cur;
+                        return Err(e);
+                    }
+                }
+            }
+        };
+        super::fast::set(it, b + slot, new);
+        Ok(Value::Unit)
+    })
+}
+
 /// The walker's `retag`: assigning a bare literal keeps the declared width of the old value.
 fn retag(old: &Value, new: Value) -> Value {
     match (old, &new) {
@@ -276,271 +394,90 @@ fn retag(old: &Value, new: Value) -> Value {
     }
 }
 
-fn operand(cx: &mut Cx, e: E) -> Option<Operand> {
-    Some(match e {
-        Expression::Identifier { name, .. } if cx.local(name).is_some() => Operand::Slot(cx.local(name)?),
-        Expression::Literal { value, .. } => Operand::Const(cx.it.literal(value)),
-        _ => Operand::Code(expr_code(cx, e)?),
-    })
-}
-
-/// A condition for `if` / `while`: comparisons are specialized, anything else must yield a bool.
-fn cond(cx: &mut Cx, e: E, what: &'static str, deref: bool) -> Option<fast::Cond> {
-    if let Expression::Binary { left, op, right, location } = e {
-        if !matches!(op, BinaryOp::And | BinaryOp::Or) {
-            let (l, r) = (operand(cx, left)?, operand(cx, right)?);
-            if let Some(c) = fast::compare(l, r, *op, location.as_ref(), what) {
-                return Some(c);
-            }
-            // not a comparison: rebuild the operands as a plain binary
-            let (l, r) = (operand(cx, left)?, operand(cx, right)?);
-            return Some(fast::general(fast::binary(l, r, *op, location.as_ref()), what, deref));
+/// The loop variable's slot (in a new scope the caller pops), or `Err(())` for an unsupported pattern.
+fn loop_var(cx: &mut Cx, pattern: &'static Pattern<'static>, ty: Option<IntTy>) -> Result<Option<usize>, ()> {
+    cx.scopes.push(Vec::new());
+    match pattern {
+        Pattern::Identifier(n) | Pattern::MutBinding(n) => Ok(Some(cx.declare(n.as_str(), ty))),
+        Pattern::Wildcard => Ok(None),
+        _ => {
+            cx.scopes.pop();
+            Err(())
         }
     }
-    Some(fast::general(expr_code(cx, e)?, what, deref))
 }
 
-fn exprs(cx: &mut Cx, list: impl IntoIterator<Item = E>) -> Option<Vec<Code>> {
-    list.into_iter().map(|e| expr_code(cx, e)).collect()
+fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: &'static [S], label: Option<&'static str>) -> Option<Code> {
+    let src = match iterable {
+        Expression::Range { start, end, inclusive, .. } => match (expr::expr(cx, start)?, expr::expr(cx, end)?) {
+            // `for i in a..b` over typed bounds: count in place, the variable is a typed slot
+            (X::I(s, st), X::I(e, et)) => return typed_for(cx, (s, e, *inclusive, IntTy::unify(st, et)), pattern, body, label),
+            (s, e) => expr::range_code(s.code(), e.code(), *inclusive),
+        },
+        _ => expr::expr(cx, iterable)?.code(),
+    };
+    let slot = loop_var(cx, pattern, None).ok()?;
+    let body = block(cx, body);
+    cx.scopes.pop();
+    let body = body?;
+    Some(Box::new(move |it, b| {
+        let v = src(it, b)?;
+        if let Value::Range(lo, hi, ty) = v {
+            let mut i = lo;
+            while i < hi {
+                if let Some(s) = slot {
+                    it.rstack[b + s] = Value::Int(i, ty);
+                }
+                if loop_exit(body(it, b), label)?.is_some() {
+                    break;
+                }
+                i += 1;
+            }
+            return Ok(Value::Unit);
+        }
+        let iter = crate::interpreter::iter::as_iter(it, v)?;
+        while let Some(x) = crate::interpreter::iter::next(it, &iter)? {
+            if let Some(s) = slot {
+                it.rstack[b + s] = x;
+            }
+            if loop_exit(body(it, b), label)?.is_some() {
+                break;
+            }
+        }
+        Ok(Value::Unit)
+    }))
 }
 
-fn run_all(it: &mut Interpreter, b: usize, codes: &[Code]) -> R<Vec<Value>> {
+fn typed_for(cx: &mut Cx, range: (I, I, bool, IntTy), pattern: &'static Pattern<'static>, body: &'static [S], label: Option<&'static str>) -> Option<Code> {
+    let (s, e, inclusive, ty) = range;
+    let slot = loop_var(cx, pattern, Some(ty)).ok()?;
+    let body = block(cx, body);
+    cx.scopes.pop();
+    let body = body?;
+    let typed_var = slot.is_some_and(|s| cx.slot_ty(s).is_some());
+    Some(Box::new(move |it, b| {
+        let lo = s.get(it, b)? as i128;
+        let hi = e.get(it, b)? as i128 + inclusive as i128;
+        let mut i = lo;
+        while i < hi {
+            match slot {
+                Some(s) if typed_var => typed::set_int(it, b + s, i as i64, ty),
+                Some(s) => super::fast::set(it, b + s, Value::Int(i, ty)),
+                None => {}
+            }
+            if loop_exit(body(it, b), label)?.is_some() {
+                break;
+            }
+            i += 1;
+        }
+        Ok(Value::Unit)
+    }))
+}
+
+pub(super) fn run_all(it: &mut Interpreter, b: usize, codes: &[Code]) -> R<Vec<Value>> {
     let mut out = Vec::with_capacity(codes.len());
     for c in codes {
         out.push(c(it, b)?);
     }
     Ok(out)
 }
-
-fn expr_code(cx: &mut Cx, e: E) -> Option<Code> {
-    Some(match e {
-        Expression::Literal { value, .. } => {
-            let v = cx.it.literal(value);
-            Box::new(move |_, _| Ok(v.clone()))
-        }
-        Expression::Identifier { name, location } => match cx.local(name) {
-            Some(slot) => Box::new(move |it, b| Ok(it.rstack[b + slot].clone())),
-            None => {
-                let loc = location.as_ref();
-                let name: &'static str = name.as_str();
-                Box::new(move |it, _| {
-                    it.mark(loc);
-                    strip_refs(it.eval_path_value(name)?)
-                })
-            }
-        },
-        Expression::Binary { left, op, right, location } if !matches!(op, BinaryOp::And | BinaryOp::Or) => {
-            let (l, r) = (operand(cx, left)?, operand(cx, right)?);
-            fast::binary(l, r, *op, location.as_ref())
-        }
-        Expression::Binary { left, op, right, location } => {
-            let (l, r) = (expr_code(cx, left)?, expr_code(cx, right)?);
-            let loc = location.as_ref();
-            match op {
-                BinaryOp::And | BinaryOp::Or => {
-                    let is_and = matches!(op, BinaryOp::And);
-                    Box::new(move |it, b| match l(it, b)? {
-                        Value::Bool(x) if x != is_and => Ok(Value::Bool(x)),
-                        Value::Bool(_) => r(it, b),
-                        _ => Err(semantic(if is_and { "`&&` needs bool operands" } else { "`||` needs bool operands" })),
-                    })
-                }
-                _ => {
-                    let op = *op;
-                    Box::new(move |it, b| {
-                        let x = l(it, b)?;
-                        let y = r(it, b)?;
-                        it.mark(loc);
-                        it.binary(op, x, y)
-                    })
-                }
-            }
-        }
-        Expression::Unary { op, operand, location } => {
-            if matches!(operand, Expression::Range { .. }) {
-                return None;
-            }
-            let v = expr_code(cx, operand)?;
-            let loc = location.as_ref();
-            match op {
-                UnaryOp::Neg => Box::new(move |it, b| {
-                    let x = v(it, b)?;
-                    it.mark(loc);
-                    it.negate(x)
-                }),
-                UnaryOp::Not => Box::new(move |it, b| {
-                    let x = v(it, b)?;
-                    it.logical_not(x)
-                }),
-                UnaryOp::Deref => Box::new(move |it, b| deref_value(v(it, b)?)),
-                UnaryOp::Ref => v,
-                UnaryOp::MutRef => return None,
-            }
-        }
-        Expression::Cast { expr, type_, location } => {
-            let v = expr_code(cx, expr)?;
-            let loc = location.as_ref();
-            let ty: &'static Type = type_;
-            Box::new(move |it, b| {
-                let x = v(it, b)?;
-                it.mark(loc);
-                it.cast(x, ty)
-            })
-        }
-        Expression::Index { object, index, location } => {
-            let (o, i) = (expr_code(cx, object)?, expr_code(cx, index)?);
-            let loc = location.as_ref();
-            Box::new(move |it, b| {
-                let obj = o(it, b)?;
-                let idx = i(it, b)?;
-                it.mark(loc);
-                it.index_value(&obj, &idx)
-            })
-        }
-        Expression::FieldAccess { object, field, location } => {
-            // `Enum.Variant` / `Type.assoc` spellings resolve as paths in the walker
-            if let Expression::Identifier { name, .. } = object {
-                if cx.local(name).is_none() {
-                    return None;
-                }
-            }
-            let o = expr_code(cx, object)?;
-            let loc = location.as_ref();
-            let field: &'static str = field.as_str();
-            Box::new(move |it, b| {
-                let obj = o(it, b)?;
-                it.mark(loc);
-                it.field_of(&obj, field)
-            })
-        }
-        Expression::Tuple { elements, .. } => {
-            let cs = exprs(cx, elements.iter().copied())?;
-            Box::new(move |it, b| Ok(Value::tuple(run_all(it, b, &cs)?)))
-        }
-        Expression::Array { elements, .. } => {
-            let cs = exprs(cx, elements.iter().copied())?;
-            Box::new(move |it, b| Ok(Value::vec(run_all(it, b, &cs)?)))
-        }
-        Expression::Range { start, end, inclusive, .. } => {
-            let (s, en) = (expr_code(cx, start)?, expr_code(cx, end)?);
-            let inclusive = *inclusive;
-            Box::new(move |it, b| {
-                let x = s(it, b)?;
-                let y = en(it, b)?;
-                match (&x, &y) {
-                    (Value::Int(a, at), Value::Int(c, ct)) => {
-                        Ok(Value::Range(*a, if inclusive { *c + 1 } else { *c }, IntTy::unify(*at, *ct)))
-                    }
-                    (Value::Char(a), Value::Char(c)) => {
-                        let hi = if inclusive { *c as u32 + 1 } else { *c as u32 };
-                        Ok(Value::vec((*a as u32..hi).filter_map(char::from_u32).map(Value::Char).collect()))
-                    }
-                    _ => Err(unsupported("range over non-integer values")),
-                }
-            })
-        }
-        Expression::Block { statements, is_unsafe: false, .. } => block(cx, statements)?,
-        Expression::MacroInvocation { name, args, is_repeat: false, location, .. } if name == "format" => {
-            let cs = exprs(cx, args.iter().copied())?;
-            let loc = location.as_ref();
-            Box::new(move |it, b| {
-                it.mark(loc);
-                let vals = run_all(it, b, &cs)?;
-                Ok(Value::str(it.format_args(&vals)?))
-            })
-        }
-        Expression::Call { function, arguments, location } => call(cx, function, arguments, location.as_ref())?,
-        _ => return None,
-    })
-}
-
-fn call(
-    cx: &mut Cx,
-    function: E,
-    arguments: &'static [(Option<String>, E)],
-    loc: Option<&'static crate::source_map::Location>,
-) -> Option<Code> {
-    let Expression::Identifier { name, .. } = function else { return None };
-    if arguments.iter().any(|(label, _)| label.is_some()) {
-        return None;
-    }
-    let arg_exprs = || arguments.iter().map(|(_, e)| *e);
-    // a callable local (closure or function value)
-    if let Some(slot) = cx.local(name) {
-        let cs = exprs(cx, arg_exprs())?;
-        return Some(Box::new(move |it, b| {
-            it.mark(loc);
-            let f = it.rstack[b + slot].clone();
-            let args = run_all(it, b, &cs)?;
-            strip_refs(it.call_value(&f, args)?)
-        }));
-    }
-    // a module function (shadows intrinsics, as in the walker)
-    if let Some(f) = cx.it.modules[cx.module].funcs.get(name.as_str()).cloned() {
-        // a parameter the callee mutates would need a reference to our slot: walker only
-        let mutated = cx.it.param_mutation(&f);
-        if mutated.iter().any(|m| *m) || !f.type_params.is_empty() || f.params.first().is_some_and(|p| p.name == "self") {
-            return None;
-        }
-        let cs = exprs(cx, arg_exprs())?;
-        // the callee's compiled form, looked up on first call (it may be the function being compiled)
-        let target: std::cell::OnceCell<Option<Rc<CompiledFn>>> = std::cell::OnceCell::new();
-        return Some(Box::new(move |it, b| {
-            it.mark(loc);
-            let compiled = match target.get() {
-                Some(c) => c.clone(),
-                None => {
-                    let c = if it.engine_resolved && !f.is_extern && !f.is_async { it.compiled_for(&f) } else { None };
-                    let _ = target.set(c.clone());
-                    c
-                }
-            };
-            match compiled {
-                Some(c) => {
-                    // evaluate the arguments into a small buffer, then straight into the callee frame
-                    let mut args: smallvec::SmallVec<[Value; 4]> = smallvec::SmallVec::new();
-                    for a in &cs {
-                        args.push(a(it, b)?);
-                    }
-                    it.run_compiled_with(&f, &c, args.len(), move |it, base, slots| {
-                        for (slot, a) in slots.iter().zip(args) {
-                            it.rstack[base + slot] = a;
-                        }
-                        Ok(())
-                    })
-                }
-                None => {
-                    let args = run_all(it, b, &cs)?;
-                    it.call_func_g(&f, args, None, &[], None)
-                }
-            }
-        }));
-    }
-    if cx.it.modules[cx.module].imports.contains_key(name.as_str()) {
-        return None;
-    }
-    let intr = Intrinsic::from_call_name(name)?;
-    if !matches!(intr, Intrinsic::Print | Intrinsic::Println | Intrinsic::Eprint | Intrinsic::Eprintln) {
-        return None;
-    }
-    let cs = exprs(cx, arg_exprs())?;
-    Some(Box::new(move |it, b| {
-        it.mark(loc);
-        let vals = run_all(it, b, &cs)?;
-        let mut s = match vals.len() {
-            0 => String::new(),
-            1 => it.display_string(&vals[0])?,
-            _ => it.format_args(&vals)?,
-        };
-        if intr.appends_newline() {
-            s.push('\n');
-        }
-        if intr.writes_to_stderr() {
-            it.write_err(&s);
-        } else {
-            it.write_out(&s);
-        }
-        Ok(Value::Unit)
-    }))
-}
-

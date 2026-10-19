@@ -619,7 +619,7 @@ impl Interpreter {
     fn call_func_run(
         &mut self,
         f: &Rc<FuncDef>,
-        mut args: Vec<Value>,
+        args: Vec<Value>,
         self_val: Option<Value>,
         targs: &[Type],
         expected: Option<Type>,
@@ -635,6 +635,18 @@ impl Interpreter {
                 return self.run_compiled(f, &c, args);
             }
         }
+        self.call_func_walk(f, args, self_val, targs, expected)
+    }
+
+    /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
+    pub(crate) fn call_func_walk(
+        &mut self,
+        f: &Rc<FuncDef>,
+        mut args: Vec<Value>,
+        self_val: Option<Value>,
+        targs: &[Type],
+        expected: Option<Type>,
+    ) -> R {
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
         let mut scope = Scope::new(f.module);
