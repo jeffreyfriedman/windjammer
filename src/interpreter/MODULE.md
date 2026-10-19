@@ -15,14 +15,14 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `value.rs`, `int.rs`, `u128ops.rs`  value model; integer widths (`IntTy`) with Rust overflow rules; u128 bit patterns
 - `engine.rs`            `Interpreter` state, public entry points (`run`, `run_checked`, `call_main`)
 - `register.rs`, `loader.rs`, `project.rs`  definitions; program file selection; whole-program module tree bound by `crate::resolve` (E0603 privacy)
-- `preflight.rs`, `deps.rs`, `host_bridge.rs`  `Unsupported`-feature detection (compiled-fallback trigger); dependencies as source; `extern fn` bridge (ADR-0023)
+- `preflight.rs`, `deps.rs`, `host_bridge.rs`  `Unsupported`-feature detection (compiled-fallback trigger); dependencies as source (transitive, each crate once; `path = "../pkg/build"` is the package `../pkg`); `extern fn` bridge (ADR-0023)
 - `eval_expr.rs`, `eval_stmt.rs`, `pattern.rs`, `place.rs`  evaluation, patterns, `&mut` places
 - `generics.rs`, `fasthash.rs`  type-parameter bindings (`T::new()`); address hasher for call-site caches
 - `iter.rs`, `builtins/{iter,shared}.rs`  lazy iterators; Rc/Weak/cells. `heap.rs` reachability: Rc counts, `impl Drop`; `moves.rs` ownership moves
 - `call.rs`, `analysis.rs`  name resolution, calls, closures, inferred-`&mut` parameter analysis
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
-- `builtins/`            native stdlib registry (`Registry`; `native(type, method)` for host objects): core types, `std_*` modules (`std_http{,_server}` port, `std_proc` subprocess/cli, `std_config`, `std_db`, `std_ordered`), `test_assert`, `thread`/`channel`/`sync`/`time`, `arena` (`std::arena`: Arena/Handle/Scratch, debug-build handle checks)
+- `builtins/`            native stdlib registry (`std_runtime_gaps.rs`: runtime-module functions a program calls qualified: `encoding.*`, `path.*`, `env.set_var`, ...) (`Registry`; `native(type, method)` for host objects): core types, `std_*` modules (`std_http{,_server}` port, `std_proc` subprocess/cli, `std_config`, `std_db`, `std_ordered`), `test_assert`, `thread`/`channel`/`sync`/`time`, `arena` (`std::arena`: Arena/Handle/Scratch, debug-build handle checks)
 - `resolved/`            `--engine=resolved` (ADR-0020): per-function closure compilation over `Interpreter::rstack` slots; `fast.rs` hot shapes; walker fallback
 - `sched.rs`, `locks.rs`, `native.rs`, `slicing.rs`  task scheduler (virtual clock), guard tokens + poisoning, host objects, panic texts `arena` (`std::arena`: Arena/Handle/Scratch with debug-build handle checks).
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
@@ -37,6 +37,9 @@ Status and measurements: `docs/INTERPRETER.md`.
   error naming it. No silent `Nil` fallbacks.
 - No `cargo`/`rustc` spawn in this module (`tests/interpreter_cli_test.rs`); `cli::host_build` builds the bridge library, the interpreter loads it.
 - Names are bound by `crate::resolve`: a `use` means the same thing interpreted and compiled. Every `Unsupported` registry feature has a preflight detector.
+
+- Names a function-body `use` binds live in an overlay module (a snapshot of the enclosing module, one per `use` statement, falling back to it for statics); the call's scope switches to it. `use std::m::*` records the module in `Module::std_globs`; bare names resolve to `m::name` builtins and shadow same-named intrinsics. Dependency crates are named from any module (`Interpreter::dep_crates`) and `crate::` inside one is that crate's root (`crate_root_module`).
+- A module re-exports the public items of its child modules (the generated `mod.rs` declares `pub use self::child::*`): `resolve::Collected::lookup_child_reexports`.
 
 ## Owns / never decides
 Owns evaluation semantics, value model, native stdlib registry, CLI port. Never decides compiled-path behaviour (mirrors Rust).
