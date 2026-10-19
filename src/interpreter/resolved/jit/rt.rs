@@ -142,11 +142,13 @@ fn store(slot: &mut Value, x: i64, t: i64) -> Option<i64> {
 
 /// `v[i]` (an element of type `want`).
 pub(crate) unsafe extern "C" fn index_get(c: *mut Ctx, slot: i64, i: i64, it: i64, want: i64) -> i64 {
+    // SAFETY: as in `with_slot`.
+    let off_by_one = unsafe { mutant(&*(*c).it, "bounds") };
     unsafe {
         with_slot(c, slot, |v| {
             let (k, want) = (index(i, it)?, from_code(want)?);
             peek(v, |v| match v {
-                Value::Vec(xs) if mutant("bounds") => bits(xs.get(k).or(xs.last())?, want),
+                Value::Vec(xs) if off_by_one => bits(xs.get(k).or(xs.last())?, want),
                 Value::Vec(xs) => bits(xs.get(k)?, want),
                 _ => None,
             })

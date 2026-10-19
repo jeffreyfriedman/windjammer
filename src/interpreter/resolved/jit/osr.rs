@@ -49,8 +49,8 @@ pub(crate) struct Units {
     list: Vec<Entry>,
 }
 
-fn debug(site: &OsrSite, what: &str) {
-    if std::env::var_os("WJ_JIT_DEBUG").is_some() {
+fn debug(it: &Interpreter, site: &OsrSite, what: &str) {
+    if it.jit_debug {
         let (Statement::While { condition: head, .. } | Statement::For { iterable: head, .. }) = site.stmt else { return };
         let at = crate::interpreter::eval_expr::expr_loc(head).map(|l| format!("{}:{}", l.file.display(), l.line)).unwrap_or_default();
         eprintln!("[jit] loop {at}: {what}");
@@ -122,11 +122,11 @@ fn unit_for(it: &mut Interpreter, b: usize, site: &OsrSite, counter: Option<IntT
             }
             let u = match compile(it, site, &reg, &refs, &sig) {
                 Ok(u) => {
-                    debug(site, "compiled");
+                    debug(it, site, "compiled");
                     Some(Rc::new(u))
                 }
                 Err(why) => {
-                    debug(site, &format!("outside the subset: {why}"));
+                    debug(it, site, &format!("outside the subset: {why}"));
                     None
                 }
             };
@@ -166,7 +166,7 @@ fn execute(it: &mut Interpreter, b: usize, site: &OsrSite, reg: &Reg, unit: &Uni
         unit.unplanned.set(n);
         if n >= MAX_UNPLANNED {
             unit.dead.set(true);
-            debug(site, "too many failed checks: back to the closures");
+            debug(it, site, "too many failed checks: back to the closures");
         }
     }
     Some((exit, buf))

@@ -175,8 +175,8 @@ digraph deps {
   "cli" -> "ir" [label="2"];
   "cli" -> "lexer" [label="5"];
   "cli" -> "linter" [label="5"];
-  "cli" -> "module_system" [label="5"];
-  "cli" -> "package" [label="4"];
+  "cli" -> "module_system" [label="6"];
+  "cli" -> "package" [label="5"];
   "cli" -> "parser" [label="7"];
   "cli" -> "reduce" [label="1"];
   "cli" -> "resolve" [label="1"];
@@ -227,7 +227,7 @@ digraph deps {
   "codegen" -> "parser" [label="665"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="1"];
-  "codegen" -> "source_map" [label="8"];
+  "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
   "codegen" -> "type_classification" [label="236"];
@@ -238,7 +238,7 @@ digraph deps {
   "compiler" -> "analyzer" [label="33"];
   "compiler" -> "build_utils" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
-  "compiler" -> "codegen" [label="43"];
+  "compiler" -> "codegen" [label="44"];
   "compiler" -> "compiler_config" [label="4"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
@@ -252,7 +252,7 @@ digraph deps {
   "compiler" -> "metadata" [label="44"];
   "compiler" -> "module_system" [label="1"];
   "compiler" -> "optimizer" [label="1"];
-  "compiler" -> "parser" [label="85"];
+  "compiler" -> "parser" [label="87"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
@@ -335,9 +335,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="5"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
-  "interpreter" -> "parser" [label="93"];
+  "interpreter" -> "parser" [label="101"];
   "interpreter" -> "resolve" [label="13"];
-  "interpreter" -> "source_map" [label="10"];
+  "interpreter" -> "source_map" [label="12"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="1"];
@@ -384,6 +384,7 @@ digraph deps {
   "output_generation" -> "parser" [label="1"];
   "output_generation" -> "project_paths" [label="1"];
   "package" -> "config" [label="1"];
+  "package" -> "module_system" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
   "parser" -> "lexer" [label="28"];
   "parser" -> "parser_impl" [label="26"];
@@ -412,6 +413,7 @@ digraph deps {
   "test_runner" -> "diagnostics" [label="1"];
   "test_runner" -> "interpreter" [label="1"];
   "test_runner" -> "lexer" [label="2"];
+  "test_runner" -> "package" [label="1"];
   "test_runner" -> "parser" [label="3"];
   "test_runner" -> "rust_integration_tests" [label="1"];
   "test_runner" -> "test_module_gate" [label="1"];
