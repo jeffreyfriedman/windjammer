@@ -85,10 +85,8 @@ Regenerate with `python3 scripts/interpreter_project_bench.py <wj> --write` (rec
   package's `gen/` crate first and the generated `Cargo.toml` links that.
 - Open: `wj build .` on a project root (rather than `src/`) treats `src/main.wj` as a module and drops `fn main`; `wj run` passes the
   source root, so it is unaffected.
-- Open: module aliases and `super::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) fail with
-  `missing boundary signature for m3::f0`: the ownership boundary lookup is keyed by the written path, not the resolved definition.
-  The compiled half of the fuzzer therefore uses item aliases, globs, groups and `crate::` paths (`WJ_FUZZ_ALL_FORMS=1` compiles
-  every form); the interpreted half covers all forms.
+- Fixed: module aliases and `super::`/`self::` paths in calls (`use crate::alpha as m3` then `m3::f0()`, `super::beta::f()`) reported
+  `missing boundary signature for m3::f0`; the callee is now resolved through `resolve::same_crate_callee_key`.
 - Open: a binary under `cmd/<name>/main.wj` compiled on its own keeps `use crate::helper` (E0432); the package-lib rewrite needs a `wj.toml` at its source root. Interpreted `--bin` is unaffected.
 - Open: directory modules without `mod.wj` that only hold children are declared in `lib.rs` without a `mod.rs` (E0433 `cannot find net in self`); the compiled fuzz half avoids them.
 - Open: items declared directly in a package's `lib.wj` are written to `_lib_items.rs`, which the generated `mod.rs` never declares, so `use pkg::item` fails (E0432) for a compiled dependency; the fixture declares its items in submodules.

@@ -772,6 +772,7 @@ impl<'ast> CodeGenerator<'ast> {
         // even if a buggy callee key looks like `local_var::method`.
         if receiver_type_name.is_none()
             && Self::is_module_boundary_callee(callee_name)
+            && self.same_crate_callee_key(callee_name).is_none()
             && !crate::codegen::rust::stdlib_method_traits::is_runtime_std_module(
                 crate::codegen::rust::stdlib_method_traits::runtime_module_segment_from_callee_path(
                     callee_name,

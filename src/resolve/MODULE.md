@@ -1,6 +1,6 @@
 # resolve
 
-Identity-based name resolution, run in **shadow mode** (additive; nothing in codegen consumes it yet).
+Identity-based name resolution, run in **shadow mode** for diagnostics; the interpreter loader binds names with it, and codegen asks it one question today: `same_crate_callee_key` (is this qualified callee a same-crate definition, through `use` aliases, `self::`, `super::`).
 
 ## Purpose
 Every definition gets a `DefId`; every call expression resolves to a `Res`: `Def(DefId)`, `Local`,

@@ -10,7 +10,7 @@ mod uses;
 mod walk;
 
 pub use collect::{Collected, ModuleScope};
-pub use uses::{Binding, UseDecl};
+pub use uses::{same_crate_callee_key, Binding, UseDecl};
 pub use def::{Def, DefId, DefKind, DefTable};
 pub use lookup::{Found, Ns};
 pub use res::{
