@@ -1,0 +1,6 @@
+// expect: WJ0003
+fn main() {
+    let mut total = 5
+    total = "five"
+    println("${total}")
+}

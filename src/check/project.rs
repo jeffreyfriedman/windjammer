@@ -64,7 +64,11 @@ fn resolve_phase(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Par
     };
     for c in &r.calls {
         match &c.res {
-            Res::Unresolved(Reason::NotFound(_)) if c.kind == resolve::CallKind::Free => {
+            // Language intrinsics (`debug`, `todo`, ...) are provided by the compiler, not the program.
+            Res::Unresolved(Reason::NotFound(_))
+                if c.kind == resolve::CallKind::Free
+                    && crate::intrinsics::Intrinsic::from_call_name(&c.callee).is_none() =>
+            {
                 let mut d = Diagnostic::error("WJ0002", format!("cannot find function `{}` in this scope", c.callee));
                 if let Some(sp) = span_for(&c.location, &c.callee) {
                     d = d.at(sp.with_label("not found in this scope"));
