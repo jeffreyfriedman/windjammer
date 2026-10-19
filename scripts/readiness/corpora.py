@@ -1,5 +1,5 @@
 """Discovery of projects (R1/R3/R4/R6) and single-file program corpora (R2/R3/R5), plus config loading."""
-import glob, os, re
+import glob, os, re, subprocess
 
 try:
     import tomllib
@@ -61,9 +61,20 @@ def has_tests(path):
     return False
 
 
+def _default_ecosystem(root):
+    """../windjammer-ecosystem next to the checkout; for a linked worktree, next to the main checkout."""
+    cands = [os.path.join(root, "..", "windjammer-ecosystem")]
+    try:
+        out = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=root, capture_output=True, text=True).stdout.strip()
+        if out:
+            cands.append(os.path.join(os.path.dirname(os.path.abspath(os.path.join(root, out))), "..", "windjammer-ecosystem"))
+    except OSError:
+        pass
+    return next((c for c in cands if os.path.isdir(c)), cands[0])
+
+
 def build_projects(root, cfg, quick, ecosystem=None):
-    eco = ecosystem or cfg.get("ecosystem") or os.path.join(root, "..", "windjammer-ecosystem")
-    eco = os.path.abspath(os.path.expanduser(eco))
+    eco = os.path.abspath(os.path.expanduser(ecosystem or cfg.get("ecosystem") or _default_ecosystem(root)))
     projects = []
     for kind in ("packages", "apps"):
         found = [d for d in sorted(glob.glob(os.path.join(eco, kind, "*"))) if os.path.isdir(d) and has_tests(d)]

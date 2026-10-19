@@ -103,6 +103,7 @@ class Ctx:
         self.timeouts = dict(interp=120, compiled=900, check=60, build=300)
         self.timeouts.update(timeouts or {})
         self.wj_hash = file_hash(wj)
+        self.cold = False
         self.quick = mode == QUICK
 
     def key(self, kind, program_hash):
@@ -120,6 +121,13 @@ class Ctx:
         if keep_timeouts or not r.timed_out:
             self.cache.put(k, r.to_json())
         return r
+
+    def target_root(self, scratch=None):
+        """Private cargo target root for compiled runs (WJ_CARGO_TARGET_ROOT): isolates them from other
+        builds on the machine; `scratch` names a throwaway root, so the run starts with a cold cache."""
+        if scratch:
+            return os.path.join(self.cache.dir, "cold-target", scratch)
+        return os.path.join(self.cache.dir, "cargo-target")
 
     def is_private(self, name):
         return any(p.private and p.name == name for p in self.projects)

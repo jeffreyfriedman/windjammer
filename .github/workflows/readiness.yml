@@ -1,0 +1,80 @@
+name: Interpreter readiness
+
+# Nightly scorecard for docs/design/interpreter-primary-readiness.md (R1-R7).
+# R7 needs history: .wj-readiness-history.json is restored from the cache below and re-saved after every run,
+# so this job must keep running nightly (and the cache must not be cleared) for the stability window to fill.
+
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: readiness
+  cancel-in-progress: false
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 40
+
+    - name: Check out the ecosystem packages
+      uses: actions/checkout@v6
+      with:
+        repository: jeffreyfriedman/windjammer-ecosystem
+        path: windjammer-ecosystem
+
+    - name: Install Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Cache cargo dependencies
+      continue-on-error: true
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-readiness-cargo-${{ hashFiles('Cargo.lock') }}
+
+    - name: Restore readiness history (R7)
+      uses: actions/cache/restore@v4
+      with:
+        path: .wj-readiness-history.json
+        key: readiness-history-${{ github.run_id }}
+        restore-keys: readiness-history-
+
+    - name: Build wj (release)
+      run: cargo build --release --bin wj
+
+    - name: Scorecard unit tests
+      run: python3 -m unittest discover -s readiness/tests -t . -p 'test_*.py'
+      working-directory: scripts
+
+    - name: Run the scorecard (--full)
+      run: python3 scripts/interp_readiness.py --full --report --write --wj target/release/wj --ecosystem windjammer-ecosystem
+
+    - name: Save readiness history (R7)
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: .wj-readiness-history.json
+        key: readiness-history-${{ github.run_id }}
+
+    - name: Upload scorecard
+      if: always()
+      uses: actions/upload-artifact@v5
+      with:
+        name: interp-readiness
+        path: |
+          docs/generated/interp_readiness.json
+          .wj-readiness-history.json
