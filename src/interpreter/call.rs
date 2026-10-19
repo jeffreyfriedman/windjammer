@@ -478,6 +478,9 @@ impl Interpreter {
     pub(crate) fn call_callable(&mut self, c: &Rc<Callable>, mut args: Vec<Value>) -> R {
         match &**c {
             Callable::Closure { params, body, env, module, self_ty, tparams } => {
+                if let Some(r) = self.call_compiled_closure(c, &mut args) {
+                    return r;
+                }
                 self.depth_check()?;
                 let mut scope = Scope::new(*module);
                 scope.vars = env.clone();

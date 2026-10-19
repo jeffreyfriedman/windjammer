@@ -81,6 +81,17 @@ impl Cx<'_> {
         self.need_box(i);
         i
     }
+    /// Declare a local (`ty`: a static integer width, if any).
+    pub(super) fn declare_local(&mut self, name: &'static str) -> usize {
+        self.declare(name, None)
+    }
+    pub(super) fn nslots(&self) -> usize {
+        self.nslots
+    }
+    /// Boxed slots of the innermost name scope (to poison on a panic).
+    pub(super) fn boxed_here(&self) -> Vec<usize> {
+        self.boxed_in_scope()
+    }
     pub(super) fn is_boxed(&self, slot: usize) -> bool {
         self.boxed.contains(&slot)
     }
@@ -144,16 +155,31 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
     // a parameter the body mutates holds a `&mut` place (inferred `&mut`): boxed. `self` (slot 0 of
     // a method) is always boxed: it may be the receiver's place.
     let mutated = it.param_mutation(f);
-    let mut poison = HashSet::new();
     let shift = has_self as usize;
     let mut boxed: HashSet<usize> = mutated.iter().enumerate().filter(|(_, m)| **m).map(|(i, _)| i + shift).collect();
     if has_self {
         boxed.insert(0);
     }
+    let unit = Unit { module: f.module, ret: f.ret, self_ty: f.self_ty.clone(), tail_hint: tail_hint(f) };
+    fixpoint(it, &unit, boxed, |cx| compile_with(cx, f))
+}
+
+/// What a compilation unit (a function or a closure body) hands its `Cx`.
+pub(super) struct Unit {
+    pub(super) module: usize,
+    pub(super) ret: Option<&'static Type>,
+    pub(super) self_ty: Option<Rc<str>>,
+    pub(super) tail_hint: bool,
+}
+
+/// Compile with `body` until slot typing and boxing are stable: a conflicting write poisons a typed
+/// slot, an island naming a local boxes it, and the unit is compiled again.
+pub(super) fn fixpoint<T>(it: &mut Interpreter, u: &Unit, mut boxed: HashSet<usize>, mut body: impl FnMut(&mut Cx) -> Option<T>) -> Option<T> {
+    let mut poison = HashSet::new();
     loop {
         let mut cx = Cx {
             it: &mut *it,
-            module: f.module,
+            module: u.module,
             scopes: vec![Vec::new()],
             nslots: 0,
             slot_ty: Vec::new(),
@@ -162,11 +188,11 @@ pub(super) fn compile_fn(it: &mut Interpreter, f: &Rc<FuncDef>) -> Option<Compil
             untyped_return: false,
             boxed: &boxed,
             need: Vec::new(),
-            ret: f.ret,
-            self_ty: f.self_ty.clone(),
-            tail_hint: tail_hint(f),
+            ret: u.ret,
+            self_ty: u.self_ty.clone(),
+            tail_hint: u.tail_hint,
         };
-        let r = compile_with(&mut cx, f);
+        let r = body(&mut cx);
         let conflicts = std::mem::take(&mut cx.conflicts);
         let need = std::mem::take(&mut cx.need);
         if (conflicts.is_empty() && need.is_empty()) || r.is_none() {
