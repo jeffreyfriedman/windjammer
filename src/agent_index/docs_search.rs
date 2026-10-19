@@ -279,7 +279,17 @@ pub fn run_cli(query: &str, limit: usize, json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(&hits).unwrap_or_else(|_| "[]".into()));
     } else if hits.is_empty() {
-        println!("no matches for `{}` (try fewer or different terms)", query);
+        println!("no matches for `{query}`");
+        let terms: Vec<&str> = query.split_whitespace().collect();
+        if terms.len() > 1 {
+            println!("all terms must match; results per term:");
+            for t in &terms {
+                println!("  `{t}`: {} entr(ies)", search(&entries, t, usize::MAX).len());
+            }
+            println!("drop the term with 0 entries, or search one term at a time.");
+        } else {
+            println!("try a shorter or different term (names, module paths and error codes are searched), or `wj docs --json <term>`.");
+        }
     } else {
         for h in hits {
             println!("{}", format_entry(h));

@@ -47,17 +47,6 @@ pub fn expression_is_negative_int_init(expr: &Expression) -> bool {
     }
 }
 
-/// Check if an expression is a usize literal
-pub fn is_usize_literal(expr: &Expression) -> bool {
-    matches!(
-        expr,
-        Expression::Literal {
-            value: Literal::Int(_),
-            ..
-        }
-    )
-}
-
 /// Generate a cast from usize to i64 if needed
 pub fn maybe_cast_usize_to_int(expr_str: String, needs_cast: bool) -> String {
     if needs_cast {

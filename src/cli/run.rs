@@ -37,7 +37,7 @@ pub fn execute_status(path: &Path, args: &[String], target_str: &str, release: b
             Some(output_dir),
             false,
             target_str,
-            crate::cli::build::BuildOptions { minify: false, tree_shake: false, source_maps: false, polyfills: false, v8_optimize: false },
+            crate::cli::build::BuildOptions { tree_shake: false, source_maps: false },
             false, // check
             false, // raw_errors
             false, // fix

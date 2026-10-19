@@ -963,12 +963,4 @@ impl Parser {
 
     // Helper: Extract a name from a pattern for backward compatibility
 
-    // Public wrapper methods for component compiler
-    pub fn parse_expression_public(&mut self) -> Result<&'static Expression<'static>, String> {
-        self.parse_expression()
-    }
-
-    pub fn parse_function_public(&mut self) -> Result<FunctionDecl<'static>, String> {
-        self.parse_function()
-    }
 }

@@ -9,7 +9,7 @@
 #   through the installed binary (codes: >=1 negative case whose expected output contains the code).
 # - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
 
-max_pending = 40
+max_pending = 39
 
 [[promise]]
 id = "feature ownership-inferred"
@@ -24,7 +24,7 @@ quote = "`wj build --no-cargo FILE` writes out the Rust"
 [[promise]]
 id = "feature interpret-instant"
 source = "README.md"
-quote = "`wj run --interpret FILE` starts in milliseconds with no build step"
+quote = "`wj run` starts a whole multi-module project in milliseconds"
 
 [[promise]]
 id = "feature json-diagnostics"
@@ -39,7 +39,7 @@ quote = "look things up with `wj docs <terms>`"
 [[promise]]
 id = "feature multi-backend"
 source = "README.md"
-quote = "the same file compiles to Rust, with Go, JavaScript and WebAssembly backends alongside"
+quote = "with Go, JavaScript and WebAssembly backends alongside"
 
 [[promise]]
 id = "code E0308"
@@ -182,12 +182,6 @@ statement = "Library mode: exclude test main() functions from output"
 [[promise]]
 id = "wj build --metadata"
 statement = "External crate metadata for cross-crate type inference (NAME=PATH, repeatable)"
-pending = "BUG: malformed NAME=PATH is accepted silently (xfail case in build.toml)"
-
-[[promise]]
-id = "wj build --minify"
-statement = "Minify JavaScript output (JS target only)"
-pending = "BUG: advertised in `wj build --help` but always fails with `were removed`: hide or delete the flag"
 
 [[promise]]
 id = "wj build --module-file"
@@ -210,11 +204,6 @@ id = "wj build --output"
 statement = "Output directory (default: ./build)"
 
 [[promise]]
-id = "wj build --polyfills"
-statement = "Include polyfills for older browsers (JS target only)"
-pending = "BUG: advertised in `wj build --help` but always fails with `were removed`: hide or delete the flag"
-
-[[promise]]
 id = "wj build --quiet"
 statement = "Show only error count (suppress detailed output)"
 pending = "needs a cargo build of the generated crate (add a needs = cargo case)"
@@ -232,7 +221,6 @@ pending = "needs a cargo build of the generated crate (add a needs = cargo case)
 [[promise]]
 id = "wj build --source-maps"
 statement = "Generate source maps"
-pending = "BUG: writes no map on the Rust target and is refused on JS (xfail case)"
 
 [[promise]]
 id = "wj build --target"
@@ -241,11 +229,6 @@ statement = "Target platform (rust, javascript, wasm)"
 [[promise]]
 id = "wj build --tree-shake"
 statement = "Enable tree shaking (dead code elimination)"
-
-[[promise]]
-id = "wj build --v8-optimize"
-statement = "Apply V8 optimizations (JS target only)"
-pending = "BUG: advertised in `wj build --help` but always fails with `were removed`: hide or delete the flag"
 
 [[promise]]
 id = "wj build --verbose"
@@ -318,13 +301,15 @@ statement = "Output directory for generated docs"
 
 [[promise]]
 id = "wj errors"
-statement = "Interactive error navigator (TUI)"
-pending = "BUG: stub that prints `TUI mode coming soon`; src/error_tui.rs is unreachable (xfail case)"
+statement = "Browse the diagnostics of a file or project (summary by code, filterable)"
 
 [[promise]]
-id = "wj errors --output"
-statement = "Output directory"
-pending = "BUG: stub that prints `TUI mode coming soon`; src/error_tui.rs is unreachable (xfail case)"
+id = "wj errors --code"
+statement = "Show only this diagnostic code (e.g. WJ0010, W0002)"
+
+[[promise]]
+id = "wj errors --severity"
+statement = "Show only this severity (error, warning)"
 
 [[promise]]
 id = "wj explain"
@@ -421,7 +406,6 @@ statement = "Clear statistics"
 [[promise]]
 id = "wj stats --verbose"
 statement = "Show detailed statistics"
-pending = "BUG: flag is ignored (`verbose: _`) (xfail case)"
 
 [[promise]]
 id = "wj test"
@@ -436,6 +420,15 @@ pending = "BUG: ignored with --interpret (xfail case); compiled mode needs cargo
 id = "wj test --copy-runtime"
 statement = "Force copying windjammer-runtime into the temp tree (overrides path-dep inference)"
 pending = "compiled-mode `wj test` flag: needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --compiled"
+statement = "Also build and run each doctest through the Rust backend (default: interpreter only)"
+pending = "needs a cargo build (add a needs = cargo case)"
+
+[[promise]]
+id = "wj test --doc"
+statement = "Run only the doctests (```wj examples in `///` doc comments)"
 
 [[promise]]
 id = "wj test --filter"
@@ -556,3 +549,33 @@ id = "wj run --sched-seed"
 
 [[promise]]
 id = "wj self-install --dry-run"
+
+[[promise]]
+id = "wj run --bin"
+statement = "Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --compiled"
+statement = "Transpile to Rust and run with cargo (the release path), skipping the interpreter"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --hot"
+statement = "Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --release"
+statement = "Like --compiled, with optimizations"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --watch"
+statement = "Re-run on every source change (restarts long-running programs)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj test --watch"
+statement = "Re-run the tests on every source change"
+pending = "no acceptance cases yet"

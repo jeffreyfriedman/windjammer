@@ -128,11 +128,6 @@ impl LintCollector {
         self.diagnostics.iter().any(|d| d.level == LintLevel::Error)
     }
 
-    pub fn has_warnings(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(|d| d.level == LintLevel::Warning)
-    }
 }
 
 /// Linter for Windjammer code
@@ -295,14 +290,6 @@ impl<'ast> Linter<'ast> {
         self.collector.diagnostics
     }
 
-    /// Get diagnostics by level
-    pub fn diagnostics_by_level(&self, level: LintLevel) -> Vec<&LintDiagnostic> {
-        self.collector
-            .diagnostics
-            .iter()
-            .filter(|d| d.level == level)
-            .collect()
-    }
 }
 
 #[cfg(test)]

@@ -6,12 +6,12 @@ last_verified: 3406ef05bb35
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** [WJ-PKG-01](../proposals/rfcs/WJ-PKG-01-package-management.md), `src/config.rs` (`DependencySpec`), `src/package/{manifest,resolver,registry}.rs`, `src/cli/{add,remove,update}.rs`
+- **Related:** [WJ-PKG-01](../proposals/rfcs/WJ-PKG-01-package-management.md), `src/config.rs` (`DependencySpec`), `src/package/manifest.rs`, `src/cli/{add,remove,update}.rs`
 
 ## Context
 `wj.toml` already parses `dependencies` with `version`, `path`, `git`, `branch`, `features`, `package` (a Cargo rename) and `registry`.
-`wj add`/`wj remove` edit that file. `src/package/` (about 550 lines) is explicit about being a stub: the resolver "accepts declared versions as-is",
-the registry client makes no HTTP calls and defaults to `wj-registry.io`, which is not a service we operate. There is no `wj.lock` or
+`wj add`/`wj remove` edit that file. `src/package/` holds only manifest parsing: an earlier resolver stub ("accepts declared versions as-is") and registry client stub
+(no HTTP calls, defaulting to `wj-registry.io`, which is not a service we operate) were removed as dead code. There is no `wj.lock` or
 `.wj-capabilities.lock` writer. Multi-package builds in practice rely on path dependencies plus `--module-file` and generated `Cargo.toml`
 (Cargo does the actual resolution). `wj publish` does not exist. Dogfood projects live in sibling repositories.
 

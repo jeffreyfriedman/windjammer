@@ -93,7 +93,7 @@ impl<'ast> CodeGenerator<'ast> {
     }
 
     /// `Option<&T>.unwrap_or(default)`: the default has the owned element type. Lookups yield `Option<&T>`; a Copy `T`
-    /// is copied out (`.copied()`) with the literal at `T`'s width, and a string-literal default stays `&str` for
+    /// is copied out (`.copied()`) when the default is by value, with the literal at `T`'s width, and a string-literal default stays `&str` for
     /// `Option<&String>`/`Option<&str>`. Also: `Ord::cmp`/`partial_cmp` take `&Self`, so the borrow is never stripped.
     pub(super) fn lower_option_default_and_cmp(
         &self,
@@ -131,16 +131,24 @@ impl<'ast> CodeGenerator<'ast> {
                 args[0] = lit.to_string();
             }
         } else if self.is_type_copy(pointee) {
-            obj_str.push_str(".copied()");
+            // An explicit `unwrap_or(&0)` keeps the reference result (`Option<&T>::unwrap_or(&T)`);
+            // copying the receiver there would make the `&0` default a type error.
+            let by_ref = args[0].starts_with('&');
+            if !by_ref {
+                obj_str.push_str(".copied()");
+            }
             let width = match pointee.as_ref() {
                 Type::Custom(w) | Type::Parameterized(w, _) => Some(w.as_str()),
                 Type::Int => Some("i64"),
                 _ => None,
             };
+            let (prefix, lit) = if by_ref { ("&", &args[0][1..]) } else { ("", &args[0][..]) };
             for suffix in ["_i32", "_i64"] {
-                if let (Some(w), Some(d)) = (width, args[0].strip_suffix(suffix)) {
+                if let (Some(w), Some(d)) = (width, lit.strip_suffix(suffix)) {
                     if !d.trim_start_matches('-').is_empty() && d.trim_start_matches('-').chars().all(|c| c.is_ascii_digit()) {
-                        args[0] = format!("{d}_{w}");
+                        let fixed = format!("{prefix}{d}_{w}");
+                        args[0] = fixed;
+                        break;
                     }
                 }
             }
