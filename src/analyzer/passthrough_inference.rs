@@ -269,7 +269,20 @@ impl<'ast> Analyzer<'ast> {
 
         let mut inferred_mode: Option<OwnershipMode> = None;
 
+        let std_collection_param = matches!(
+            Self::param_receiver_type_name(param_type),
+            Some("Vec" | "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "VecDeque")
+        );
         for (func_name, arg_position, _is_field, is_bare_fn_call) in &passthrough_calls {
+            // Iterator adapters called on a std collection borrow it (codegen inserts `.iter()`); the
+            // by-value `self` of `Iterator::sum` says nothing about the collection itself.
+            if std_collection_param
+                && !is_bare_fn_call
+                && super::stdlib_method_traits::ITERATOR_ONLY_ADAPTERS
+                    .contains(&func_name.rsplit("::").next().unwrap_or(func_name.as_str()))
+            {
+                continue;
+            }
             // Method names (`get`, `clear`, …) collide across thousands of engine metadata
             // entries — require type-qualified keys (`HashMap::get`) for method passthrough.
             // But bare function calls like `set_if(grid)` use unqualified names that are
@@ -415,6 +428,12 @@ impl<'ast> Analyzer<'ast> {
         let mut max_mode: Option<OwnershipMode> = None;
 
         for method_name in &method_calls {
+            // Iterator adapters on a std collection borrow it (see `ITERATOR_ONLY_ADAPTERS`).
+            if matches!(type_base.as_deref(), Some("Vec" | "HashMap" | "HashSet" | "BTreeMap" | "BTreeSet" | "VecDeque"))
+                && super::stdlib_method_traits::ITERATOR_ONLY_ADAPTERS.contains(&method_name.as_str())
+            {
+                continue;
+            }
             // PRIORITY: Type-qualified lookup (e.g. MannequinCache::clear)
             // prevents collision with Vec::clear, HashMap::clear, etc.
             let sig = super::stdlib_method_traits::lookup_callable_signature(

@@ -6,7 +6,7 @@ fn winner(b: &Vec<String>) -> String {
             return format!("{} wins", &b[l[0] as usize]);
         }
     }
-    if b.contains(&".") {
+    if b.iter().any(|m| *m == *".") {
         String::from("in progress")
     } else {
         String::from("draw")

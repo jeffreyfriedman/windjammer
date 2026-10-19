@@ -11,6 +11,6 @@ fn find_pair(a: &Vec<i64>, b: &Vec<i64>) -> String {
 }
 
 fn main() {
-    println!("first pair summing to 10: {}", find_pair(&[1, 3, 5], &[2, 7, 9]));
+    println!("first pair summing to 10: {}", find_pair(&vec![1_i64, 3_i64, 5_i64], &vec![2_i64, 7_i64, 9_i64]));
 }
 

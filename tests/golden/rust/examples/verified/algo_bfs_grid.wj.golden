@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-fn bfs(grid: &Vec<Vec<i64>>, n: i64) -> i64 {
+fn bfs(grid: Vec<Vec<i64>>, n: i64) -> i64 {
     let mut dist = vec![vec![-1; 5]; 5];
     let mut q: VecDeque<(i64, i64)> = VecDeque::new();
     dist[0][0] = 0_i64;
@@ -30,6 +30,6 @@ fn bfs(grid: &Vec<Vec<i64>>, n: i64) -> i64 {
 
 fn main() {
     let grid = vec![vec![0_i64, 0_i64, 0_i64, 1_i64, 0_i64], vec![1_i64, 1_i64, 0_i64, 1_i64, 0_i64], vec![0_i64, 0_i64, 0_i64, 0_i64, 0_i64], vec![0_i64, 1_i64, 1_i64, 1_i64, 1_i64], vec![0_i64, 0_i64, 0_i64, 0_i64, 0_i64]];
-    println!("shortest path: {}", bfs(&grid, 5_i64));
+    println!("shortest path: {}", bfs(grid, 5_i64));
 }
 

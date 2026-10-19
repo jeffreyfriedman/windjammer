@@ -142,6 +142,8 @@ impl<'ast> super::Analyzer<'ast> {
             Type::Custom(name) | Type::Generic(name) => Some(name.split('<').next().unwrap_or(name.as_str())),
             Type::Option(_) => Some("Option"),
             Type::Result(..) => Some("Result"),
+            Type::Vec(_) | Type::Array(..) => Some("Vec"),
+            Type::Parameterized(name, _) => Some(name.split('<').next().unwrap_or(name.as_str())),
             _ => None,
         }
     }
