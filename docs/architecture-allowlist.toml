@@ -39,12 +39,10 @@
 [env_var_reads]
 "src/cargo_cache/mod.rs" = 9
 "src/cli/self_install.rs" = 3
-"src/cli/watch.rs" = 1
 "src/compiler_config.rs" = 1
 "src/debug_env.rs" = 2
 "src/error_statistics.rs" = 1
 "src/interpreter/builtins/std_fns.rs" = 1
-"src/package/graph.rs" = 3
 "src/test_runner/mod.rs" = 2
 
 [forbidden_edges]
@@ -107,15 +105,15 @@
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2343
-"src/analyzer/signature_registry.rs" = 2500
+"src/analyzer/signature_registry.rs" = 2507
 "src/analyzer/string_optimization.rs" = 2164
 "src/auto_clone.rs" = 2224
 "src/codegen/rust/call_signature_resolution.rs" = 3294
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4866
 "src/codegen/rust/function_generation_prepare.rs" = 13498
-"src/codegen/rust/generator.rs" = 5116
+"src/codegen/rust/generator.rs" = 5120
 "src/codegen/rust/int_promotion_type_inference.rs" = 2292
-"src/codegen/rust/ir_call_site.rs" = 10437
+"src/codegen/rust/ir_call_site.rs" = 10438
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2152
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
@@ -153,8 +151,8 @@
 "src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 732
 "src/codegen/rust/function_generation_prepare.rs::refresh_method_registry_from_emitted_formals" = 373
 "src/codegen/rust/function_wrapping_generation.rs::generate_wrapped_function_body" = 383
-"src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 406
-"src/codegen/rust/ir_call_site.rs::apply_ir_call_site_coercion" = 3812
+"src/codegen/rust/import_generation/use_statement_generation.rs::generate_use" = 390
+"src/codegen/rust/ir_call_site.rs::apply_ir_call_site_coercion" = 3813
 "src/codegen/rust/ir_call_site.rs::apply_post_ir_forwarder_owned_outer_and_reuse" = 353
 "src/codegen/rust/ir_call_site.rs::apply_registry_borrow_to_call_arg" = 302
 "src/codegen/rust/ir_call_site.rs::enforce_call_site_ownership_contract" = 383
@@ -166,10 +164,10 @@
 "src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1177
 "src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1249
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
-"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 999
+"src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 993
 "src/codegen/rust/method_call_expression_generation/finalize.rs::mc_finalize_method_call_expression" = 2136
 "src/codegen/rust/method_call_expression_generation/receiver.rs::mc_build_method_receiver_string" = 329
-"src/codegen/rust/program_generation.rs::generate_program" = 1097
+"src/codegen/rust/program_generation.rs::generate_program" = 1093
 "src/codegen/rust/stdlib_method_signatures.rs::init_stdlib_method_signatures" = 345
 "src/codegen/rust/type_balancing.rs::balance_eq_operands_for_rust" = 497
 "src/codegen/rust/type_balancing.rs::promote_mixed_f32_f64_operands" = 380
@@ -182,7 +180,7 @@
 "src/ir/constraint_gen.rs::walk_expression" = 353
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 301
-"src/parser/call_expression_parser.rs::parse_postfix_chain" = 483
+"src/parser/call_expression_parser.rs::parse_postfix_chain" = 485
 "src/parser/pattern_parser.rs::parse_pattern_non_range" = 373
 "src/parser/primary_expression_parser.rs::parse_primary_expression" = 542
 "src/parser/type_parser.rs::parse_type_core" = 428
@@ -225,4 +223,3 @@
 "src/ir/constraint_gen.rs" = 1
 
 [thread_local]
-"src/codegen/portable/alias.rs" = 1

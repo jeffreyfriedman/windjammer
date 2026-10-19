@@ -204,7 +204,8 @@ postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ call_args ] "
 args         = expression { "," expression } ;
 (* Call arguments: optionally named (ADR-0018 ARGS) and possibly `_` shorthand closures (ADR-0018 CLOS) *)
 call_args    = call_arg { "," call_arg } ;
-call_arg     = [ IDENT ":" ] ( expression | shorthand ) ;
+(* Named arguments (`name: expr`, ADR-0018 ARGS) need a callee declared in the same file, which a context-free derivation cannot guarantee: they are covered by the spec examples, not generated here. *)
+call_arg     = ( expression | shorthand ) ;
 shorthand    = "_" ( "." IDENT { "." IDENT } | ( "+" | "-" | "*" | "==" | "<" ) ( "_" | INT_LIT ) ) ;
 (* ADR-0018 BLOCK: a block after a call's `)` on the same line is a trailing closure argument *)
 trailing_block = "{" [ IDENT { "," IDENT } "->" ] tail_expr "}" ;
