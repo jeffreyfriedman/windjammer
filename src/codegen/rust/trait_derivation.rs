@@ -114,13 +114,46 @@ impl CodeGenerator<'_> {
 
         // Auto-derive Serialize/Deserialize when serde is available (project uses std::json
         // or is compiled as part of a multi-file project with windjammer-runtime).
-        if !has_non_auto_debug_clone_field && (self.serde_available || self.needs_serde_imports) {
+        if !has_non_auto_debug_clone_field
+            && (self.serde_available || self.needs_serde_imports)
+            && all_types.iter().all(|t| self.type_is_serde_derivable(t, 0))
+        {
             traits.push("Serialize".to_string());
             traits.push("Deserialize".to_string());
         }
 
         self.drop_hand_implemented_traits(&struct_.name, &mut traits);
         traits
+    }
+
+    /// False when `ty` (transitively through this crate's structs) names a type imported from another crate:
+    /// that type may not implement `Serialize`, so a derive over it would break the build.
+    fn type_is_serde_derivable(&self, ty: &Type, depth: usize) -> bool {
+        if depth > 8 {
+            return true;
+        }
+        match ty {
+            Type::Vec(inner)
+            | Type::Option(inner)
+            | Type::Reference(inner)
+            | Type::MutableReference(inner) => self.type_is_serde_derivable(inner, depth),
+            Type::Tuple(items) => items.iter().all(|t| self.type_is_serde_derivable(t, depth)),
+            Type::Array(inner, _) => self.type_is_serde_derivable(inner, depth),
+            Type::Parameterized(base, args) => {
+                self.named_type_is_serde_derivable(base, depth)
+                    && args.iter().all(|a| self.type_is_serde_derivable(a, depth))
+            }
+            Type::Custom(name) => self.named_type_is_serde_derivable(name, depth),
+            _ => true,
+        }
+    }
+
+    fn named_type_is_serde_derivable(&self, name: &str, depth: usize) -> bool {
+        let leaf = crate::type_classification::type_name_leaf(name);
+        if let Some(fields) = self.lookup_struct_field_types(leaf) {
+            return fields.values().all(|t| self.type_is_serde_derivable(t, depth + 1));
+        }
+        !self.foreign_imported_types.contains(leaf)
     }
 
     /// A hand-written `impl Trait for T` replaces the auto-derive of `Trait` (a derive plus an impl is E0119).

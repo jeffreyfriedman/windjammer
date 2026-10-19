@@ -484,6 +484,11 @@ impl<'ast> CodeGenerator<'ast> {
                 } else if let Some(first) = path.first() {
                     if !matches!(first.as_str(), "crate" | "super" | "self") {
                         self.imported_path_roots.insert(first.clone());
+                        if path.len() >= 2 {
+                            if let Some(last) = path.last().filter(|l| l.chars().next().is_some_and(char::is_uppercase)) {
+                                self.foreign_imported_types.insert(alias.clone().unwrap_or_else(|| last.clone()));
+                            }
+                        }
                     }
                 }
                 // Track modules imported from `ffi` paths so calls through them

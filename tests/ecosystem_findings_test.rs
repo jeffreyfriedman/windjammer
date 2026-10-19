@@ -281,3 +281,45 @@ fn main() {
         "true false\n",
     );
 }
+
+// ------------------------------------------------------------------ crate-level dependencies
+
+fn derive_line_before<'a>(rs: &'a str, decl: &str) -> &'a str {
+    let at = rs.find(decl).unwrap_or_else(|| panic!("`{decl}` not in:\n{rs}"));
+    rs[..at].lines().rev().find(|l| l.contains("derive(")).unwrap_or("")
+}
+
+/// E8: `std::json` in a crate derives `Serialize` for structs made of serializable types only; structs holding a
+/// type imported from another crate (or holding such a struct) are left alone.
+#[test]
+fn serde_derive_skips_structs_holding_foreign_types() {
+    let rs = generated_rust(
+        r#"use std::json
+use std::collections::HashMap
+use wj_rate_limit::WindowBucket
+
+pub struct Reply {
+    pub ok: bool,
+}
+
+pub struct Limiter {
+    pub buckets: HashMap<string, WindowBucket>,
+}
+
+pub struct Wrapper {
+    pub inner: Limiter,
+}
+
+pub fn health() -> string {
+    json.to_string(Reply { ok: true }).unwrap_or("")
+}
+
+fn main() {
+    println(health())
+}
+"#,
+    );
+    assert!(derive_line_before(&rs, "struct Reply").contains("Serialize"), "{rs}");
+    assert!(!derive_line_before(&rs, "struct Limiter").contains("Serialize"), "{rs}");
+    assert!(!derive_line_before(&rs, "struct Wrapper").contains("Serialize"), "{rs}");
+}
