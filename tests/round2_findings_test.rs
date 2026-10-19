@@ -312,3 +312,66 @@ impl Loader {
     );
     assert!(rs.contains("self.check(size, &path)?"), "owned String passed to a &str formal:\n{rs}");
 }
+
+/// Acceptance test (numeric solver): untyped float literals in an array of tuples take `f32` from how
+/// the destructured values are used (`oz / sf` with `sf: f32`, assigned to an `f32` local), so the
+/// generated crate type-checks. Reduced from a 71-line function; every remaining line was needed.
+#[test]
+fn untyped_float_tuple_array_follows_f32_use_after_destructuring() {
+    let src = r#"pub struct Point {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+pub struct Grid {
+}
+impl Grid {
+    pub fn get(self, x: i32, y: i32, z: i32) -> u8 {
+        0u8
+    }
+}
+pub fn nudge(cells: Grid, pos: Point, scale: i32) {
+    let sf = scale as f32
+    let feet_y = pos.y - 0.2
+    let head_y = pos.y + 0.6
+    let cx = (pos.x * sf) as i32
+    let feet_iy = (feet_y * sf) as i32
+    let head_iy = (head_y * sf) as i32
+    let cz = (pos.z * sf) as i32
+    let blocked = cells.get(cx, feet_iy, cz) != 0u8
+    let mut best: f32 = 100.0
+    let mut push_z: f32 = 0.0
+    let offsets = [
+        (0.0, 0.0, -1.0),
+    ]
+    let check_y = if blocked { feet_iy } else { head_iy }
+    let mut i = 0
+    while i < 6 {
+        let (ox, oy, oz) = offsets[i]
+        let tx = cx + ox as i32
+        let ty = check_y + oy as i32
+        let tz = cz + oz as i32
+        if cells.get(tx, ty, tz) == 0u8 {
+            let dx_dist = (pos.x - tx as f32 / sf).abs()
+            let dy_dist = (pos.y - ty as f32 / sf).abs()
+            let dz_dist = (pos.z - tz as f32 / sf).abs()
+            let dist = dx_dist + dy_dist + dz_dist
+            if dist < best {
+                push_z = oz / sf
+            }
+        }
+    }
+}
+"#;
+    let rs = emitted(src);
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("m.rs");
+    fs::write(&file, &rs).unwrap();
+    let o = Command::new("rustc")
+        .args(["--crate-type", "lib", "--edition", "2021", "--emit", "metadata", "-A", "warnings", "-o"])
+        .arg(dir.path().join("m.rmeta"))
+        .arg(&file)
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "generated Rust does not type-check:\n{}\n--- generated\n{rs}", String::from_utf8_lossy(&o.stderr));
+}
