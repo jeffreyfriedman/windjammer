@@ -17,6 +17,7 @@ use super::expr::{self, X};
 use super::island::{self, Island};
 use super::fast::Cond;
 use super::typed::{self, small, ICode, I};
+use super::osr::{self, BlockInfo, OsrSite, Reg, SCode};
 use super::{Body, Code, CompiledFn};
 use crate::interpreter::engine::{FuncDef, Interpreter};
 use crate::interpreter::error::{Ctl, R};
@@ -53,6 +54,10 @@ pub(super) struct Cx<'a> {
     pub(super) self_ty: Option<Rc<str>>,
     /// The walker hands this function's tail an expected type at entry (see `needs_hint`).
     tail_hint: bool,
+    /// Statement codes of loop bodies, for machine-code loops to come back to (`osr.rs`).
+    pub(super) reg: Rc<Reg>,
+    /// Loops enclosing the statement being compiled.
+    loop_depth: usize,
 }
 
 impl Cx<'_> {
@@ -62,12 +67,19 @@ impl Cx<'_> {
     pub(super) fn slot_ty(&self, slot: usize) -> Option<IntTy> {
         self.slot_ty[slot]
     }
-    fn declare(&mut self, name: &'static str, ty: Option<IntTy>) -> usize {
+    pub(super) fn declare(&mut self, name: &'static str, ty: Option<IntTy>) -> usize {
         let i = self.nslots;
         self.nslots += 1;
         self.slot_ty.push(ty.filter(|t| small(*t) && !self.poison.contains(&i) && !self.boxed.contains(&i)));
         self.scopes.last_mut().expect("scope").push((name, i));
         i
+    }
+    /// Compile a loop body (its statements are registered for machine-code loops to resume at).
+    pub(super) fn in_loop<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        self.loop_depth += 1;
+        let r = f(self);
+        self.loop_depth -= 1;
+        r
     }
     /// Open / close a name scope (a `match` arm).
     pub(super) fn enter(&mut self) {
@@ -191,11 +203,18 @@ pub(super) fn fixpoint<T>(it: &mut Interpreter, u: &Unit, mut boxed: HashSet<usi
             ret: u.ret,
             self_ty: u.self_ty.clone(),
             tail_hint: u.tail_hint,
+            reg: Rc::new(Reg::default()),
+            loop_depth: 0,
         };
         let r = body(&mut cx);
+        cx.reg.finish(&cx.slot_ty, cx.boxed);
         let conflicts = std::mem::take(&mut cx.conflicts);
         let need = std::mem::take(&mut cx.need);
         if (conflicts.is_empty() && need.is_empty()) || r.is_none() {
+            let reg = cx.reg.clone();
+            if r.is_some() {
+                it.osr_regs.push(reg);
+            }
             return r;
         }
         poison.extend(conflicts);
@@ -222,7 +241,7 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
             }
             Ok(Value::Unit)
         });
-        init.insert(0, Step::Code(None, prologue));
+        init.insert(0, Step::Code(None, osr::share(prologue)));
     }
     // a panic leaving the function poisons the lock guards its variables hold (the walker's `exit_scope_vars`)
     let top = cx.boxed_in_scope();
@@ -270,17 +289,17 @@ impl Tail {
 /// A statement before the tail: code, or (in a typed body) `if c { return v }` with a typed `v`,
 /// which the typed body runs as an early exit instead of unwinding a `Ctl::Return`.
 enum Step {
-    Code(Loc, Code),
+    Code(Loc, SCode),
     Guard { loc: Loc, cond: Cond, rloc: Loc, val: I, w: IntTy },
 }
 
 impl Step {
-    fn code(self) -> (Loc, Code) {
+    fn code(self) -> (Loc, SCode) {
         match self {
             Step::Code(l, c) => (l, c),
             Step::Guard { loc, cond, rloc, val, w } => (
                 loc,
-                Box::new(move |it, b| {
+                Rc::new(move |it: &mut Interpreter, b: usize| {
                     if cond(it, b)? {
                         it.mark(rloc);
                         return Err(Ctl::Return(Value::Int(val.get(it, b)? as i128, w)));
@@ -313,7 +332,7 @@ fn guard(cx: &mut Cx, s: S) -> Option<Step> {
             let v = x.clean().code();
             Step::Code(
                 loc,
-                Box::new(move |it, b| {
+                Rc::new(move |it: &mut Interpreter, b: usize| {
                     if cond(it, b)? {
                         it.mark(rloc);
                         return Err(Ctl::Return(v(it, b)?));
@@ -358,7 +377,13 @@ fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Opt
     for s in init {
         match if guards { guard(cx, s) } else { None } {
             Some(g) => steps.push(g),
-            None => steps.push(Step::Code(stmt_loc(s), stmt(cx, s)?)),
+            None => {
+                let c = osr::share(stmt(cx, s)?);
+                if cx.loop_depth > 0 {
+                    cx.reg.record_stmt(s, &c);
+                }
+                steps.push(Step::Code(stmt_loc(s), c))
+            }
         }
     }
     let init = steps;
@@ -371,12 +396,23 @@ fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Opt
         },
         s => stmt_tail(cx, s)?,
     };
+    // inside a loop the tail is shared with the registry (its value is never used there)
+    let tail = match tail {
+        t if cx.loop_depth == 0 => t,
+        t => {
+            let raw = t.is_raw();
+            let c = osr::share(t.code());
+            cx.reg.record_stmt(last, &c);
+            let fwd: Code = Box::new(move |it, b| c(it, b));
+            if raw { Tail::Raw(fwd) } else { Tail::Code(fwd) }
+        }
+    };
     Some((init, Some((stmt_loc(last), tail))))
 }
 
 /// The walker marks every statement's location before executing it.
 fn seq(init: Init, tail: Option<(Loc, Code)>) -> Code {
-    let init: Vec<(Loc, Code)> = init.into_iter().map(Step::code).collect();
+    let init: Vec<(Loc, SCode)> = init.into_iter().map(Step::code).collect();
     let Some((lloc, lc)) = tail else { return Box::new(|_, _| Ok(Value::Unit)) };
     Box::new(move |it, b| {
         for (loc, c) in &init {
@@ -430,19 +466,27 @@ pub(super) fn block_x(cx: &mut Cx, list: &'static [S]) -> Option<X> {
         let raw = tail.as_ref().is_some_and(|(_, t)| t.is_raw());
         (seq(init, tail.map(|(l, t)| (l, t.code()))), raw)
     });
+    if cx.loop_depth > 0 {
+        cx.reg.record_block(list, BlockInfo { poison: cx.boxed_in_scope(), clear: scope_clear(cx) });
+    }
     let r = r.and_then(|(c, raw)| Some((scoped(cx, Some(c))?, raw)));
     cx.scopes.pop();
     let (c, raw) = r?;
     Some(if raw { X::R(c) } else { X::V(c) })
 }
 
+/// The untyped locals of the innermost name scope (released when it ends).
+pub(super) fn scope_clear(cx: &Cx) -> Vec<usize> {
+    cx.scopes.last().map(|s| s.iter().map(|(_, i)| *i).filter(|i| cx.slot_ty(*i).is_none()).collect()).unwrap_or_default()
+}
+
 /// The walker's `pop_scope` for the innermost name scope: a panic poisons the lock guards its boxed
 /// locals hold, then its locals are released (guards unlock, `Rc` counts drop) however it exits.
 /// Typed slots hold plain integers and are skipped.
-fn scoped(cx: &Cx, c: Option<Code>) -> Option<Code> {
+pub(super) fn scoped(cx: &Cx, c: Option<Code>) -> Option<Code> {
     let c = c?;
     let poison = cx.boxed_in_scope();
-    let clear: Vec<usize> = cx.scopes.last().map(|s| s.iter().map(|(_, i)| *i).filter(|i| cx.slot_ty(*i).is_none()).collect()).unwrap_or_default();
+    let clear = scope_clear(cx);
     if clear.is_empty() {
         return Some(c);
     }
@@ -572,6 +616,9 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             };
             let v = expr::expr(cx, value)?;
             let code = if v.is_raw() { raw_let(cx, name, type_.as_ref(), v) } else { let_stmt(cx, name, type_.as_ref(), v) };
+            if let (Some(n), true) = (name, cx.loop_depth > 0) {
+                cx.reg.record_let(s, cx.local(n)?);
+            }
             match type_ {
                 Some(t) if cx.needs_hint(value) => Box::new(move |it, b| {
                     it.expect_type_of(value, t);
@@ -637,14 +684,32 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             })
         }
         Statement::While { condition, body, label, .. } => {
+            let site = Rc::new(OsrSite::new(s, cx.all_locals(), Rc::downgrade(&cx.reg)));
             let c = expr::cond(cx, condition, "while", false)?;
-            let body = block(cx, body)?;
+            let body = cx.in_loop(|cx| block(cx, body))?;
             let label: Option<&'static str> = label.as_deref();
             Box::new(move |it, b| {
-                while c(it, b)? {
+                // a machine-code run that stopped at the head is not retried before the condition
+                let mut fresh = true;
+                loop {
+                    if fresh && site.armed(it) {
+                        match osr::enter(it, b, &site) {
+                            Ok(ran) => fresh = !ran,
+                            Err(e) => match loop_exit(Err(e), label)? {
+                                Some(_) => break,
+                                None => fresh = false,
+                            },
+                        }
+                    } else {
+                        fresh = true;
+                    }
+                    if !c(it, b)? {
+                        break;
+                    }
                     if loop_exit(body(it, b), label)?.is_some() {
                         break;
                     }
+                    site.tick();
                 }
                 Ok(Value::Unit)
             })
@@ -658,7 +723,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
                 }
             })
         }
-        Statement::For { pattern, iterable, body, label, .. } => for_stmt(cx, pattern, iterable, body, label.as_deref())?,
+        Statement::For { pattern, iterable, body, label, .. } => super::forloop::for_stmt(cx, s, pattern, iterable, body, label.as_deref())?,
         Statement::Break { label, value, .. } => {
             let v = match value {
                 Some(e) => Some(expr::expr(cx, e)?.clean().code()),
@@ -747,13 +812,13 @@ fn let_stmt(cx: &mut Cx, name: Option<&'static str>, ty: Option<&'static Type>, 
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Kind {
+pub(super) enum Kind {
     Plain,
     Typed,
     Boxed,
 }
 
-fn slot_kind(cx: &Cx, slot: Option<usize>) -> Kind {
+pub(super) fn slot_kind(cx: &Cx, slot: Option<usize>) -> Kind {
     match slot {
         Some(s) if cx.is_boxed(s) => Kind::Boxed,
         Some(s) if cx.slot_ty(s).is_some() => Kind::Typed,
@@ -764,7 +829,7 @@ fn slot_kind(cx: &Cx, slot: Option<usize>) -> Kind {
 /// A fresh binding of a slot (`let`, a loop variable): a boxed local gets a new walker slot, as the
 /// walker's `define` does (closures that captured the previous one keep it).
 #[inline(always)]
-fn store(it: &mut Interpreter, i: usize, v: Value, kind: Kind) {
+pub(super) fn store(it: &mut Interpreter, i: usize, v: Value, kind: Kind) {
     match kind {
         Kind::Boxed => super::fast::set(it, i, island::boxed(v)),
         _ => super::fast::set(it, i, v),
@@ -845,97 +910,6 @@ fn retag(old: &Value, new: Value) -> Value {
         (Value::Float(_, ot), Value::Int(n, IntTy::Lit)) => Value::Float(*n as f64, *ot),
         _ => new,
     }
-}
-
-/// The loop variable's slot (in a new scope the caller pops), or `Err(())` for an unsupported pattern.
-fn loop_var(cx: &mut Cx, pattern: &'static Pattern<'static>, ty: Option<IntTy>) -> Result<Option<usize>, ()> {
-    cx.scopes.push(Vec::new());
-    match pattern {
-        Pattern::Identifier(n) | Pattern::MutBinding(n) => Ok(Some(cx.declare(n.as_str(), ty))),
-        Pattern::Wildcard => Ok(None),
-        _ => {
-            cx.scopes.pop();
-            Err(())
-        }
-    }
-}
-
-fn for_stmt(cx: &mut Cx, pattern: &'static Pattern<'static>, iterable: E, body: &'static [S], label: Option<&'static str>) -> Option<Code> {
-    // the walker iterates a reference by reference (`for x in &mut v`, a `&mut` parameter)
-    if cx.boxed_ident(iterable) {
-        return None;
-    }
-    let src = match iterable {
-        Expression::Range { start, end, inclusive, .. } => match (expr::expr(cx, start)?, expr::expr(cx, end)?) {
-            // `for i in a..b` over typed bounds: count in place, the variable is a typed slot
-            (X::I(s, st), X::I(e, et)) => return typed_for(cx, (s, e, *inclusive, IntTy::unify(st, et)), pattern, body, label),
-            (s, e) => expr::range_code(s.clean().code(), e.clean().code(), *inclusive),
-        },
-        _ => match expr::expr(cx, iterable)? {
-            // a reference is iterated by reference: the walker's
-            X::R(_) => return None,
-            x => x.code(),
-        },
-    };
-    let slot = loop_var(cx, pattern, None).ok()?;
-    let kind = slot_kind(cx, slot);
-    let body = block(cx, body);
-    let body = scoped(cx, body);
-    cx.scopes.pop();
-    let body = body?;
-    Some(Box::new(move |it, b| {
-        let v = src(it, b)?;
-        if let Value::Range(lo, hi, ty) = v {
-            let mut i = lo;
-            while i < hi {
-                if let Some(s) = slot {
-                    store(it, b + s, Value::Int(i, ty), kind);
-                }
-                if loop_exit(body(it, b), label)?.is_some() {
-                    break;
-                }
-                i += 1;
-            }
-            return Ok(Value::Unit);
-        }
-        let iter = crate::interpreter::iter::as_iter(it, v)?;
-        while let Some(x) = crate::interpreter::iter::next(it, &iter)? {
-            if let Some(s) = slot {
-                store(it, b + s, x, kind);
-            }
-            if loop_exit(body(it, b), label)?.is_some() {
-                break;
-            }
-        }
-        Ok(Value::Unit)
-    }))
-}
-
-fn typed_for(cx: &mut Cx, range: (I, I, bool, IntTy), pattern: &'static Pattern<'static>, body: &'static [S], label: Option<&'static str>) -> Option<Code> {
-    let (s, e, inclusive, ty) = range;
-    let slot = loop_var(cx, pattern, Some(ty)).ok()?;
-    let kind = slot_kind(cx, slot);
-    let body = block(cx, body);
-    let body = scoped(cx, body);
-    cx.scopes.pop();
-    let body = body?;
-    Some(Box::new(move |it, b| {
-        let lo = s.get(it, b)? as i128;
-        let hi = e.get(it, b)? as i128 + inclusive as i128;
-        let mut i = lo;
-        while i < hi {
-            match slot {
-                Some(s) if kind == Kind::Typed => typed::set_int(it, b + s, i as i64, ty),
-                Some(s) => store(it, b + s, Value::Int(i, ty), kind),
-                None => {}
-            }
-            if loop_exit(body(it, b), label)?.is_some() {
-                break;
-            }
-            i += 1;
-        }
-        Ok(Value::Unit)
-    }))
 }
 
 pub(super) fn run_all(it: &mut Interpreter, b: usize, codes: &[Code]) -> R<Vec<Value>> {

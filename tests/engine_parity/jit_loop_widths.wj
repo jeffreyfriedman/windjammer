@@ -1,0 +1,35 @@
+// Machine-code loops (ADR-0020 round 3): integer widths, literal adoption, mixed signedness,
+// casts and `!`/`-` on every width, entered after the loops are hot.
+fn main() {
+    let v: Vec<int> = Vec::new()
+    let n = v.len() + 3000
+    let mut a: i32 = 1
+    let mut b: int = 7
+    let mut c: usize = 0
+    let mut u: u8 = 3
+    let mut w: u32 = 1
+    let mut k: i16 = -5
+    let mut i = 0
+    while i < n {
+        a = (a * 3 + i as i32) % 100003
+        b = b * 31 % 1000000007 + (i % 13)
+        c = c + (i % 5) as usize
+        u = ((u as int + i) % 250) as u8
+        w = !w & 1023
+        k = -k
+        if i as usize + 7 > c && c % 2 == 0 { b -= 1 }
+        let d = c / 3 - c / 4
+        let s = (i - 1500) as usize
+        let e = -(i % 7)
+        b += (d % 11) as int + e + (s % 3) as int
+        i += 1
+    }
+    println("${a} ${b} ${c} ${u} ${w} ${k} ${i}")
+    let mut big: i64 = 9223372036854000000
+    let mut j = 0
+    while j < 1000 {
+        big = big / 2 + j
+        j += 1
+    }
+    println("${big}")
+}
