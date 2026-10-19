@@ -224,7 +224,7 @@ digraph deps {
   "codegen" -> "ir" [label="373"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="666"];
+  "codegen" -> "parser" [label="665"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="1"];
   "codegen" -> "source_map" [label="8"];
@@ -363,9 +363,9 @@ digraph deps {
   "linter" -> "parser" [label="26"];
   "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];
-  "metadata" -> "analyzer" [label="28"];
+  "metadata" -> "analyzer" [label="29"];
   "metadata" -> "codegen" [label="5"];
-  "metadata" -> "compiler" [label="1",color=red,fontcolor=red];
+  "metadata" -> "compiler" [label="5",color=red,fontcolor=red];
   "metadata" -> "parser" [label="19"];
   "metadata" -> "type_classification" [label="2"];
   "module_system" -> "project_paths" [label="1"];
