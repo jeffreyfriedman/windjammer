@@ -1,0 +1,5 @@
+use std::random
+fn walk(n: int) -> int {
+    if n == 0 { random::range(0, 1) } else { walk(n - 1) }
+}
+fn main() { println("${walk(3)}") }

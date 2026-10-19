@@ -1,4 +1,4 @@
-// consumes: tests/spec/**/*.wj, src/ir/effect_facts
+// consumes: tests/spec/**/*.wj, tests/effects/corpus/*.wj, src/ir/effect_facts
 //! Soundness of the effect pass (ADR-0021 stage E1 gate): for every runnable spec example, each effect the
 //! interpreter performs (observed at the capability gate) is in the static effect set of `main`.
 //! Reported, not gated: precision (how often the static set names an effect the run never exercised).
@@ -61,9 +61,10 @@ fn measure(path: &Path) -> Option<(BTreeSet<EffectKind>, BTreeSet<EffectKind>)> 
 
 #[test]
 fn dynamic_effects_are_a_subset_of_the_static_effects_of_main() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/spec");
     let mut files = Vec::new();
-    collect(&root, &mut files);
+    for dir in ["tests/spec", "tests/effects/corpus"] {
+        collect(&Path::new(env!("CARGO_MANIFEST_DIR")).join(dir), &mut files);
+    }
     let (mut measured, mut with_effects, mut imprecise) = (0, 0, 0);
     let mut unsound = Vec::new();
     for f in &files {
@@ -83,6 +84,6 @@ fn dynamic_effects_are_a_subset_of_the_static_effects_of_main() {
     }
     eprintln!("effects soundness: {measured} programs measured, {with_effects} perform gated effects, {imprecise} have a static effect never exercised");
     assert!(measured >= 100, "only {measured} programs measured");
-    assert!(with_effects >= 3, "the corpus must exercise effects (found {with_effects})");
+    assert!(with_effects >= 12, "the corpus must exercise effects (found {with_effects})");
     assert!(unsound.is_empty(), "UNSOUND (dynamic effect missing from the static set):\n{}", unsound.join("\n"));
 }

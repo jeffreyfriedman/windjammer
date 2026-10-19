@@ -1,0 +1,3 @@
+use std::time
+fn stamp() -> int { time::now().timestamp() }
+fn main() { println("${stamp() > 0}") }
