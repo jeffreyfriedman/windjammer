@@ -30,3 +30,6 @@ fn test_make() {
 in this scope` (rustc suggests `use <crate>::Rule`). The source never names `Rule`, so it should not need to import it.
 Adding `use crate::Rule` to the test makes it pass, which is the only workaround. Expected: the annotation is only
 emitted when the type is in scope (or is path-qualified).
+
+The same happens in non-test code: `let rules = parse(text)` where `parse` comes from another package
+(`wj_gitignore::parse` returning `Vec<Rule>`) is emitted as `let rules: Vec<Rule>` without `use wj_gitignore::Rule`.
