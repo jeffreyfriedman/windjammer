@@ -26,7 +26,6 @@ examples/verified/prog_lru_cache.wj | error[E0308]: mismatched types
 examples/verified/result_collect_all_or_nothing.wj | error[E0282]: type annotations needed
 examples/verified/std_env_args.wj | error[E0432]: unresolved import `windjammer_runtime`
 examples/verified/std_fs_roundtrip.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-examples/verified/strings_slicing.wj | error[E0277]: the size for values of type `str` cannot be known at compilation time
 examples/verified/struct_with_vec_field.wj | error[E0282]: type annotations needed
 examples/verified/testing_basic_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 examples/verified/testing_cases_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
