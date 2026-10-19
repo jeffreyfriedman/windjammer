@@ -254,23 +254,29 @@ pub(super) fn expr(cx: &mut Cx, e: E) -> Option<X> {
                     return None;
                 }
             }
+            // a struct local is read in place: only the field is cloned
+            let local = match object {
+                Expression::Identifier { name, .. } => cx.local(name).filter(|s| cx.slot_ty(*s).is_none()),
+                _ => None,
+            };
             let o = expr_eval(cx, object)?.code();
             let loc = location.as_ref();
             let field: &'static str = field.as_str();
-            // inline cache: the field's position in the last struct read here (checked by name)
-            let at = std::cell::Cell::new(0usize);
+            // inline cache: the field's position in the last struct read here and the address of its
+            // interned name there (a hit compares addresses, a miss compares names)
+            let at = FieldCache::default();
             X::V(Box::new(move |it, b| {
+                if let Some(s) = local {
+                    if let Some(v) = field_in_place(it, b + s, field, &at) {
+                        it.mark(loc);
+                        return Ok(v);
+                    }
+                }
                 let obj = o(it, b)?;
                 it.mark(loc);
                 if let Value::Struct(s) = &obj {
-                    if let Some((n, v)) = s.fields.get(at.get()) {
-                        if &**n == field {
-                            return Ok(v.clone());
-                        }
-                    }
-                    if let Some(i) = s.fields.iter().position(|(n, _)| &**n == field) {
-                        at.set(i);
-                        return Ok(s.fields[i].1.clone());
+                    if let Some(v) = at.pick(s, field) {
+                        return Ok(v);
                     }
                 }
                 it.field_of(&obj, field)
@@ -512,4 +518,40 @@ fn fill_frame(it: &mut Interpreter, b: usize, c: &CompiledFn, args: &[X]) -> R<u
     }
     it.rstack.resize(base + c.nslots, Value::Unit);
     Ok(base)
+}
+
+/// `local.field` without cloning the struct: the local's slot (or, boxed, its walker slot) holds a
+/// struct with that field. `None`: anything else (the general path reads the local and projects).
+#[inline]
+fn field_in_place(it: &Interpreter, i: usize, field: &str, at: &FieldCache) -> Option<Value> {
+    match &it.rstack[i] {
+        Value::Struct(s) => at.pick(s, field),
+        Value::Ref(p) if p.path.is_empty() => match &*p.slot.try_borrow().ok()? {
+            Value::Struct(s) => at.pick(s, field),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A field read site's cache: position and interned name of the field last found (kept alive, so
+/// the same name object means the same field).
+#[derive(Default)]
+struct FieldCache(std::cell::RefCell<(usize, Option<Rc<str>>)>);
+
+impl FieldCache {
+    #[inline]
+    fn pick(&self, s: &StructVal, field: &str) -> Option<Value> {
+        {
+            let c = self.0.borrow();
+            if let (Some((n, v)), Some(id)) = (s.fields.get(c.0), &c.1) {
+                if Rc::ptr_eq(n, id) {
+                    return Some(v.clone());
+                }
+            }
+        }
+        let k = s.fields.iter().position(|(n, _)| &**n == field)?;
+        *self.0.borrow_mut() = (k, Some(s.fields[k].0.clone()));
+        Some(s.fields[k].1.clone())
+    }
 }
