@@ -150,6 +150,7 @@ impl Registry {
         enumerable::register(&mut r);
         map::register(&mut r);
         option::register(&mut r);
+        option::register_chain(&mut r);
         std_fns::register(&mut r);
         test_assert::register(&mut r);
         shared::register(&mut r);

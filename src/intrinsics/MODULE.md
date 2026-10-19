@@ -25,3 +25,8 @@ Layer `tooling`: `error_catalog`, `lexer`, `parser`. Contract: docs/MODULE_MAP.t
 
 ## Tests
 tests/surface_syntax_phase1_test.rs, unit tests in this module, tests/backend_conformance.rs (`*_intr_*` programs).
+
+## option_fix (ADR-0018 feature 5)
+`option_fix::fix_options` is the `wj fix` migration to optional sugar: `Option<T>` -> `T?` and `recv.unwrap_or(d)` /
+`unwrap_or_else(|| e)` -> `recv ?? d` (only for a whole operand with an effect-free default). `.unwrap()` is never
+rewritten (panic vs propagate). Token based, idempotent, kept only if the file still parses.
