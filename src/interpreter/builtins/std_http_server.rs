@@ -337,6 +337,8 @@ pub fn register(r: &mut Registry) {
     for t in ["Router", "ServerResponse", "Server", "Request", "ServerRequest", "HttpMethod"] {
         r.type_name(t);
     }
+    // `ServerRequest { method, path, query, headers, body }` is the runtime's plain struct: tests build it directly.
+    r.constructible("ServerRequest", &["method", "path", "query", "headers", "body"]);
     for (i, m) in METHODS.iter().enumerate() {
         r.add_const(format!("HttpMethod::{m}"), Value::enum_val("HttpMethod", m, i as u32, Payload::Unit));
     }

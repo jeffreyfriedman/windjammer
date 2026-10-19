@@ -45,12 +45,12 @@ fn label(&self) -> String {
 }
 
 #[inline]
-fn print_label<T: Named>(x: &T) {
+fn print_label<T: Named>(x: T) {
     println!("{}", x.label());
 }
 
 fn main() {
-    print_label(&Circle { r: 2_i64 });
-    print_label(&Square { s: 3_i64 });
+    print_label(Circle { r: 2_i64 });
+    print_label(Square { s: 3_i64 });
 }
 

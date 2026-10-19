@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-011
 // mode: panic
-// xfail: Q-032
 // manifest: [capabilities]
 // manifest: fs.read = ["./data/**"]
 // expect-exit: 126

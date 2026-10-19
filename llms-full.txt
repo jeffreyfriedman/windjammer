@@ -345,6 +345,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
 | `wj test` | Run tests |
+| `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
 | `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
 | `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
@@ -356,6 +357,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj errors` | Browse the diagnostics of a file or project (summary by code, filterable) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
+| `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -441,6 +443,9 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow plain http:// client requests (default: the http client refuses) |
 | `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
+| `--sandbox` | SANDBOX |  | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) |
+| `--allow` | EFFECT[=RESOURCE] |  | Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`, `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable) |
+| `--caps` | MODE | warn | Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -482,6 +487,28 @@ Usage: wj test [OPTIONS] [PATH]
 | `--watch` | WATCH |  | Re-run the tests on every source change |
 | `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
 | `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
+
+### `wj reduce`
+
+Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
+
+```text
+Usage: wj reduce [OPTIONS] --oracle <SPEC> --output <DIR> <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Project directory or .wj file to reduce |
+| `--oracle` | SPEC |  | Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present) |
+| `-o`, `--output` | DIR |  | Output directory for the minimal project and repro.md |
+| `--jobs` | N | 2 | Candidates evaluated in parallel |
+| `--seed` | N | 0 | Seed for the deterministic candidate order |
+| `--max-steps` | N | 5000 | Maximum number of oracle runs |
+| `--time-budget` | SECS | 3600 | Wall-clock budget for the reduction search, in seconds |
+| `--candidate-timeout` | SECS | 300 | Timeout for a single oracle run, in seconds |
+| `--keep-names` | KEEP_NAMES |  | Accept a partially anonymized result when some names cannot be renamed without losing the bug |
+| `--wj-bin` | WJ |  | Compiler binary used by the oracles (default: this executable) |
+| `-v`, `--verbose` | VERBOSE |  | Print progress counts to stderr (never source text) |
 
 ### `wj fmt`
 
@@ -632,6 +659,20 @@ Usage: wj explain-ownership [OPTIONS] <FILE>
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `<FILE>` | FILE |  | Windjammer source file |
+| `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
+| `--json` | JSON |  | Machine-readable JSON output |
+
+### `wj explain-effects`
+
+Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs
+
+```text
+Usage: wj explain-effects [OPTIONS] <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Windjammer source file or project directory |
 | `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
 | `--json` | JSON |  | Machine-readable JSON output |
 

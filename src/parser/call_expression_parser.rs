@@ -380,34 +380,8 @@ impl Parser {
                         }
                     }
                 }
-                Token::DotDot | Token::DotDotEq => {
-                    // Don't parse as range if followed by ] (that's slice syntax)
-                    if let Some(next_tok) = self.peek(1) {
-                        if next_tok == &Token::RBracket {
-                            // This is slice syntax like [1..], not a range
-                            // Let the LBracket handler deal with it
-                            break;
-                        }
-                    }
-
-                    let inclusive = self.current_token() == &Token::DotDotEq;
-                    if let Some(open) = self.try_parse_range_from(expr) {
-                        expr = open;
-                        continue;
-                    }
-                    self.advance();
-                    // P3.280: range end must be a full expression so
-                    // `(cx - 16)..(cx + 16)` and `a..b + c` parse correctly.
-                    // Previously only `parse_primary_expression` ran, dropping
-                    // binary ops on the end bound unless parenthesized.
-                    let end = self.parse_binary_expression(0)?;
-                    self.alloc_expr(Expression::Range {
-                        start: expr,
-                        end,
-                        inclusive,
-                        location: self.current_location(),
-                    })
-                }
+                // `..` / `..=` is not a postfix operator: a range has lower precedence than every
+                // binary operator (`a + 1..n` is `(a + 1)..n`) and is built in `parse_range_expression`.
                 Token::As => {
                     self.advance();
                     let type_ = self.parse_cast_type()?;

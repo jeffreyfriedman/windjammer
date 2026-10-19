@@ -1,0 +1,11 @@
+use std::env
+trait Source { fn get(self) -> bool }
+struct EnvSource { name: string }
+struct Fixed { v: bool }
+impl Source for EnvSource { fn get(self) -> bool { env::var(self.name).is_ok() } }
+impl Source for Fixed { fn get(self) -> bool { self.v } }
+fn read_any<S: Source>(s: S) -> bool { s.get() }
+fn main() {
+    println("${read_any(Fixed { v: true })}")
+    println("${read_any(EnvSource { name: "WJ_SURELY_UNSET" })}")
+}

@@ -17,6 +17,9 @@ IR node types, lowering (`lower.rs`), constraints/solver, effects, taint, capabi
 ## Semantic facts (ADR-0017)
 `liveness.rs` (`last_use`, by AST node identity) and `numeric_defaults.rs` (NUM-DEFAULT-INT, by the literal's source position) are target-independent facts stored on `IrFunction`; backends consume them and never re-decide. Both are deliberately conservative: a use they do not model opens the class / blocks the claim.
 
+## Effect facts (ADR-0021)
+`effect_facts/`: the effect vocabulary (`kind`), THE sink table (`sinks`; the interpreter gate reads it, nothing else classifies effects), grants and resource matching (`grant`, `scope_match`), the pass over `resolve` output (`analysis`: per-function effect sets with provenance, latent parameters, open calls), `[policy]` (`policy`), findings (`violations`) and the `wj explain-effects` views (`report`). Tests: unit tests inline; `tests/effects_escape_test.rs`, `tests/effects_soundness_test.rs`, `tests/spec/effects/`.
+
 ## Reporting
 `explain/` (`wj explain-ownership`) only reports: it re-reads the constraint set (with provenance rule IDs, `ConstraintOrigin`), the IR result and the emitted Rust, and shows where analyzer / solver / IR / codegen disagree. It never feeds a decision back. Rule IDs: `explain/rules.rs` <-> `docs/spec/inference.md`.
 

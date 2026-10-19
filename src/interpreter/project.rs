@@ -34,22 +34,69 @@ fn semantic_at(msg: String, loc: Option<&crate::source_map::Location>) -> Runtim
 
 /// Parse every file (parse errors name the file, like the compiler's).
 pub fn parse_files(files: &[SourceFile]) -> Result<Vec<LoadedFile>, RuntimeError> {
-    files
+    let sources: Vec<String> = files
         .iter()
         .map(|f| {
-            let src = std::fs::read_to_string(&f.file).map_err(|e| {
-                RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", f.file.display(), e))
-            })?;
-            let program = parse_source(&src, &f.file.to_string_lossy()).map_err(|e| {
-                RuntimeError::new(ErrorKind::Semantic, format!("parse error in {}: {}", f.file.display(), e))
-            })?;
-            Ok(LoadedFile {
-                module_path: f.module_path.clone(),
-                file: f.file.clone(),
-                program: Box::leak(Box::new(program)),
-            })
+            std::fs::read_to_string(&f.file)
+                .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", f.file.display(), e)))
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    let parse = |f: &SourceFile, src: &str, renames: &HashMap<String, String>| {
+        super::loader::parse_source_renaming(src, &f.file.to_string_lossy(), renames).map_err(|e| {
+            RuntimeError::new(ErrorKind::Semantic, format!("parse error in {}: {}", f.file.display(), e))
+        })
+    };
+    let mut loaded: Vec<LoadedFile> = Vec::with_capacity(files.len());
+    for (f, src) in files.iter().zip(&sources) {
+        let program = parse(f, src, &HashMap::new())?;
+        loaded.push(LoadedFile { module_path: f.module_path.clone(), file: f.file.clone(), program: Box::leak(Box::new(program)) });
+    }
+    // Types are keyed by name in the interpreter. Same-name *private* structs of different modules are
+    // legal Rust; give each a distinct name inside the files that can see it, then re-parse those files.
+    let renames = private_struct_renames(&loaded);
+    for (i, r) in renames.iter().enumerate() {
+        if !r.is_empty() {
+            let program = parse(&files[i], &sources[i], r)?;
+            loaded[i].program = Box::leak(Box::new(program));
+        }
+    }
+    Ok(loaded)
+}
+
+/// Per file: renames (`Name` -> `Name__in_<module path>`) for private structs whose name is also defined in
+/// another module. A private struct is visible in its own module and that module's descendants.
+fn private_struct_renames(files: &[LoadedFile]) -> Vec<HashMap<String, String>> {
+    let mut defs: HashMap<&str, Vec<(usize, bool)>> = HashMap::new();
+    for (i, f) in files.iter().enumerate() {
+        for item in &f.program.items {
+            if let Item::Struct { decl, .. } = item {
+                defs.entry(decl.name.as_str()).or_default().push((i, decl.is_pub));
+            }
+        }
+    }
+    let mut out: Vec<HashMap<String, String>> = vec![HashMap::new(); files.len()];
+    for (name, mut places) in defs {
+        // outer owners first: a deeper module's own definition overrides an ancestor's rename
+        places.sort_by_key(|(i, _)| files[*i].module_path.len());
+        let modules: HashSet<&Vec<String>> = places.iter().map(|(i, _)| &files[*i].module_path).collect();
+        if modules.len() < 2 {
+            continue;
+        }
+        for (owner, is_pub) in &places {
+            if *is_pub {
+                continue;
+            }
+            let base = &files[*owner].module_path;
+            let tag = if base.is_empty() { "crate".to_string() } else { base.join("_") };
+            let new = format!("{name}__in_{tag}");
+            for (j, g) in files.iter().enumerate() {
+                if g.module_path.starts_with(base) {
+                    out[j].insert(name.to_string(), new.clone());
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Files reachable from a loose script through `use` / `mod` (a script does not own its directory).

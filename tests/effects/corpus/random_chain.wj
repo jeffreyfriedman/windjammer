@@ -1,0 +1,4 @@
+use std::random
+fn die() -> int { random::range(1, 7) }
+fn two_dice() -> int { die() + die() }
+fn main() { println("${two_dice() >= 2}") }

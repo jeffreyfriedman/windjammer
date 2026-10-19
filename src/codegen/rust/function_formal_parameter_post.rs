@@ -27,6 +27,17 @@ impl<'ast> CodeGenerator<'ast> {
             return raw;
         }
         let raw = self.upgrade_std_trait_self_receiver(func, analyzed, raw);
+        // Emit truth: a formal that is not emitted as `&str` is not a `&str` binding, whatever the
+        // pre-pass decided (trait-impl formals keep the trait's owned types). Call sites into `&str`
+        // slots must borrow it.
+        for (param, text) in func.parameters.iter().zip(raw.iter()) {
+            let emitted_ref = text
+                .split_once(':')
+                .is_some_and(|(_, ty)| ty.trim_start().starts_with('&'));
+            if param.name != "self" && !emitted_ref {
+                self.str_ref_optimized_params.remove(&param.name);
+            }
+        }
         func.parameters
             .iter()
             .zip(raw)

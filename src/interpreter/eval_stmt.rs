@@ -15,6 +15,15 @@ impl Interpreter {
         let mut last = Value::Unit;
         let n = stmts.len();
         for (i, s) in stmts.iter().enumerate() {
+            // `let x = match json.parse_string(..) { Ok(v) => v, .. }` with no annotation: the target type
+            // is the formal `x` is passed to next.
+            if let Statement::Let { pattern: Pattern::Identifier(n) | Pattern::MutBinding(n), type_: None, value, .. } = s {
+                if super::generics::typed_parse_source(value).is_some() {
+                    if let Some(t) = self.type_from_later_use(n, &stmts[i + 1..]) {
+                        self.expect_type_of(value, &t);
+                    }
+                }
+            }
             let v = self.exec_stmt(s)?;
             if i + 1 == n {
                 last = v;

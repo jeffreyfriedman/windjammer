@@ -1,6 +1,5 @@
 // spec: SPEC-EFF-018
 // mode: check-error
-// xfail: Q-032
 // manifest: [capabilities]
 // manifest: net.connect = ["*"]
 // manifest: [policy]
@@ -11,7 +10,7 @@ mod data {
     pub fn latest() -> bool { http::get("http://api.example.com/").is_ok() }
 }
 mod ui {
-    pub fn render() -> string { if data::latest() { "fresh" } else { "stale" } }
+    pub fn render() -> string { if super::data::latest() { "fresh" } else { "stale" } }
 }
 fn main() {
     println(ui::render())

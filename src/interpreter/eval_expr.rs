@@ -499,6 +499,11 @@ impl Interpreter {
         if let Some(Type::Custom(n)) = self.type_aliases.get(&name) {
             name = n.clone();
         }
+        if !self.structs.contains_key(&name) {
+            if let Some(names) = self.builtins.constructible_fields(&name) {
+                return self.eval_host_struct_literal(&name, names, fields, env);
+            }
+        }
         let (decl_fields, copy, rc_name, rc_fields) = match self.structs.get(&name) {
             Some(d) => (d.fields.clone(), d.copy, d.rc_name.clone(), d.rc_fields.clone()),
             None => return Err(semantic(format!("cannot find struct `{}`", name))),
@@ -528,6 +533,31 @@ impl Interpreter {
             }
         }
         Ok(self.make_struct_named(rc_name, out, copy))
+    }
+
+    /// Struct literal of a host type with a fixed field list (`std::http::ServerRequest`): every field is
+    /// required, as in the runtime's definition.
+    fn eval_host_struct_literal(
+        &mut self,
+        name: &str,
+        names: &'static [&'static str],
+        fields: &'static [(String, &'static Expression<'static>)],
+        env: &mut dyn super::place::PlaceEnv,
+    ) -> R {
+        let mut out: Vec<(Rc<str>, Value)> = Vec::with_capacity(names.len());
+        for fname in names {
+            let (_, ex) = fields
+                .iter()
+                .find(|(n, _)| n == fname)
+                .ok_or_else(|| semantic(format!("missing field `{}` in initializer of `{}`", fname, name)))?;
+            out.push((Rc::from(*fname), env.eval(self, ex)?));
+        }
+        for (n, _) in fields {
+            if !names.contains(&n.as_str()) {
+                return Err(semantic(format!("struct `{}` has no field named `{}`", name, n)));
+            }
+        }
+        Ok(self.make_struct(name, out, false))
     }
 
     pub(crate) fn make_variant(&mut self, enum_name: &str, idx: usize, args: Vec<Value>) -> R {

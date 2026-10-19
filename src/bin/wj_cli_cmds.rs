@@ -79,6 +79,9 @@ pub fn run(cli: Cli) -> Result<()> {
             deterministic_time,
             allow_network,
             mock_http,
+            sandbox,
+            allow,
+            caps,
             defer_drop,
             defer_drop_threshold,
         } => {
@@ -102,7 +105,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 "walker" => false,
                 other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
             };
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
                 std::process::exit(code);
@@ -166,6 +169,33 @@ pub fn run(cli: Cli) -> Result<()> {
                 allow_empty,
             })?;
         }
+        Commands::Reduce {
+            path,
+            oracle,
+            output,
+            jobs,
+            seed,
+            max_steps,
+            time_budget,
+            candidate_timeout,
+            keep_names,
+            wj_bin,
+            verbose,
+        } => {
+            windjammer::cli::reduce::execute(windjammer::cli::reduce::Args {
+                path,
+                oracle,
+                output,
+                jobs,
+                seed,
+                max_steps,
+                time_budget,
+                candidate_timeout,
+                keep_names,
+                wj_bin,
+                verbose,
+            })?;
+        }
         Commands::Fmt { check, rust, paths } => {
             windjammer::cli::fmt::execute(check, &paths, rust)?;
         }
@@ -221,11 +251,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 windjammer::agent_index::docs_search::run_cli(&query.join(" "), limit, json)
             }
         }
-        Commands::ExplainOwnership {
-            file,
-            function,
-            json,
-        } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
+        Commands::ExplainOwnership { file, function, json } => windjammer::cli::explain_ownership::execute(&file, function.as_deref(), json)?,
+        Commands::ExplainEffects { path, function, json } => windjammer::cli::explain_effects::execute(&path, function.as_deref(), json)?,
         Commands::Explain { code } => cmd_explain(&code)?,
         Commands::AgentIndex { output } => {
             windjammer::agent_index::generate_agent_index(&output)?;

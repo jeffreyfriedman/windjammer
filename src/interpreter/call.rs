@@ -457,6 +457,9 @@ impl Interpreter {
     }
 
     pub(crate) fn call_builtin_fn(&mut self, path: &str, args: Vec<Value>) -> R {
+        if self.caps.is_some() {
+            self.cap_gate(path, &args)?;
+        }
         if let Some(r) = super::builtins::assoc_numeric(self, path, &args) {
             return r;
         }

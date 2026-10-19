@@ -78,7 +78,7 @@ known_violations = []
 layer = "driver"
 owner_stage = "command-line subcommands"
 module_md = "src/cli/MODULE.md"
-allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "formatter", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "rust_integration_tests", "source_map", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "check", "diagnostics", "stdlib_surface", "doctest"]
+allowed_imports = ["agent_index", "analyzer", "auto_clone", "auto_fix", "build_utils", "cargo_cache", "cargo_toml", "codegen", "compiler", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_catalog", "error_codes", "error_handling", "error_mapper", "error_statistics", "errors", "ffi", "formatter", "reduce", "fuzzy_matcher", "ide_analysis", "inference", "interpreter", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "package", "parser", "parser_impl", "plugin", "project_paths", "resolve", "rust_integration_tests", "source_map", "stdlib_scanner", "syntax_highlighter", "syntax_highlighter_stub", "test_module_gate", "test_runner", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl", "check", "diagnostics", "stdlib_surface", "doctest"]
 known_violations = []
 
 [modules.cli_args]
@@ -281,7 +281,7 @@ known_violations = ["intrinsics"]
 layer = "ir"
 owner_stage = "typed IR construction and IR-level solvers (stage 5)"
 module_md = "src/ir/MODULE.md"
-allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
+allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "lexer", "module_system", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
 known_violations = ["codegen", "compiler"]
 
 [modules.lexer]
@@ -296,6 +296,13 @@ layer = "tooling"
 owner_stage = "standalone front-end checker (wj check)"
 module_md = "src/check/MODULE.md"
 allowed_imports = ["analyzer", "auto_clone", "codegen", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "diagnostics", "error", "error_codes", "error_mapper", "errors", "ffi", "fuzzy_matcher", "inference", "intrinsics", "ir", "lexer", "linter", "metadata", "module_system", "optimizer", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "stdlib_surface", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "wjsl"]
+known_violations = []
+
+[modules.reduce]
+layer = "tooling"
+owner_stage = "automatic test-case reducer (wj reduce)"
+module_md = "src/reduce/MODULE.md"
+allowed_imports = ["check", "diagnostics", "embedded_assets", "formatter", "lexer", "module_system"]
 known_violations = []
 
 [modules.diagnostics]

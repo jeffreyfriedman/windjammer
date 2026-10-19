@@ -328,6 +328,50 @@ id = "wj fix --docs"
 statement = "Also migrate ```windjammer / ```wj code fences in .md files"
 
 [[promise]]
+id = "wj reduce"
+statement = "Shrink a failing project to a minimal, anonymized reproduction (delta debugging)"
+
+[[promise]]
+id = "wj reduce --oracle"
+statement = "Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present)"
+
+[[promise]]
+id = "wj reduce --output"
+statement = "Output directory for the minimal project and repro.md"
+
+[[promise]]
+id = "wj reduce --jobs"
+statement = "Candidates evaluated in parallel"
+
+[[promise]]
+id = "wj reduce --seed"
+statement = "Seed for the deterministic candidate order"
+
+[[promise]]
+id = "wj reduce --max-steps"
+statement = "Maximum number of oracle runs"
+
+[[promise]]
+id = "wj reduce --time-budget"
+statement = "Wall-clock budget for the reduction search, in seconds"
+
+[[promise]]
+id = "wj reduce --candidate-timeout"
+statement = "Timeout for a single oracle run, in seconds"
+
+[[promise]]
+id = "wj reduce --keep-names"
+statement = "Accept a partially anonymized result when some names cannot be renamed without losing the bug"
+
+[[promise]]
+id = "wj reduce --wj-bin"
+statement = "Compiler binary used by the oracles (default: this executable)"
+
+[[promise]]
+id = "wj reduce --verbose"
+statement = "Print progress counts to stderr (never source text)"
+
+[[promise]]
 id = "wj fmt"
 statement = "Format Windjammer code"
 
@@ -526,6 +570,30 @@ statement = "Only this function (`name` or `Type::name`)"
 [[promise]]
 id = "wj explain-ownership --json"
 statement = "Machine-readable JSON output"
+
+[[promise]]
+id = "wj explain-effects"
+statement = "Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs"
+
+[[promise]]
+id = "wj explain-effects --fn"
+statement = "Only this function (`name` or `Type::name`)"
+
+[[promise]]
+id = "wj explain-effects --json"
+statement = "Machine-readable JSON output"
+
+[[promise]]
+id = "wj run --sandbox"
+statement = "Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021)"
+
+[[promise]]
+id = "wj run --caps"
+statement = "Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate"
+
+[[promise]]
+id = "wj run --allow"
+statement = "Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`"
 
 [[promise]]
 id = "wj check --fix"

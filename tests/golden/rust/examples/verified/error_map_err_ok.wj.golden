@@ -11,7 +11,7 @@ fn pick(xs: &Vec<i64>, i: i64) -> Result<i64, String> {
 fn main() {
     println!("{:?}", parse("abc"));
     println!("{:?}", parse("5"));
-    println!("{:?}", pick(&[9], 3_i64));
-    println!("{:?}", pick(&[9], 0_i64));
+    println!("{:?}", pick(&vec![9_i64], 3_i64));
+    println!("{:?}", pick(&vec![9_i64], 0_i64));
 }
 

@@ -1,1 +1,0 @@
-The i64 default for untyped integers... `(2 * seg + 1) as u32` with `seg: i32` is emitted as `(2_i32 * seg + 1_i64) as u32`. That gives 25 E0308/E0277 sites, for example in `editor/mesh_primitives`. This is the main reason E0308 grew.
