@@ -327,13 +327,6 @@ pub struct CacheStats {
 }
 
 impl CacheStats {
-    pub fn cache_hit_rate(&self) -> f64 {
-        if self.total_queries == 0 {
-            0.0
-        } else {
-            (self.cache_hits as f64 / self.total_queries as f64) * 100.0
-        }
-    }
 }
 
 // ============================================================================

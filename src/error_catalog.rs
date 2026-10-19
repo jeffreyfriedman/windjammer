@@ -424,13 +424,6 @@ x = 20  // Works! x is mutable"#.to_string(),
         Ok(())
     }
 
-    /// Load catalog from JSON file
-    pub fn load_json(path: &Path) -> anyhow::Result<Self> {
-        let json = fs::read_to_string(path)?;
-        let catalog: ErrorCatalog = serde_json::from_str(&json)?;
-        Ok(catalog)
-    }
-
     /// Get default CSS for HTML generation
     fn get_default_css() -> &'static str {
         include_str!("../docs/error_catalog_style.css")

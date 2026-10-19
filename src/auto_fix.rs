@@ -142,23 +142,6 @@ impl FixDetector {
         Self { detectors }
     }
 
-    /// Detect fixable errors from a Rust error message
-    pub fn detect_fixes(
-        &self,
-        error_code: &str,
-        error_msg: &str,
-        file_content: &str,
-    ) -> Vec<FixType> {
-        let mut fixes = Vec::new();
-
-        if let Some(detector) = self.detectors.get(error_code) {
-            if let Some(fix) = detector(error_msg, file_content) {
-                fixes.push(fix);
-            }
-        }
-
-        fixes
-    }
 }
 
 // ============================================================================

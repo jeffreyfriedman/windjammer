@@ -5,13 +5,6 @@ use crate::parser::*;
 
 use super::Analyzer;
 impl<'ast> Analyzer<'ast> {
-    /// Check if function calls methods on self that require &mut self
-    #[allow(dead_code)]
-    pub(crate) fn function_calls_mutating_self_methods(&self, func: &FunctionDecl) -> bool {
-        let mut visited = HashSet::new();
-        self.function_calls_mutating_self_methods_with_registry(func, None, &mut visited)
-    }
-
     /// Check if function calls methods on self that require &mut self (with registry)
     pub(crate) fn function_calls_mutating_self_methods_with_registry(
         &self,

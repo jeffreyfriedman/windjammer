@@ -477,30 +477,6 @@ pub fn param_is_rust_string_ref(param_type: &Type) -> bool {
     crate::ir::formal_predicates::param_is_rust_string_ref(param_type)
 }
 
-/// Whether a call-site expression should be borrowed for runtime std `AsRef<str>` APIs.
-pub fn expression_is_owned_string_for_asref_borrow<'ast>(
-    expr: &Expression<'ast>,
-    inferred_type: Option<&Type>,
-    local_var_types: &std::collections::HashMap<String, Type>,
-    current_function_params: &[crate::parser::Parameter<'ast>],
-) -> bool {
-    if inferred_type.is_some_and(param_is_owned_string_type) {
-        return true;
-    }
-    match expr {
-        Expression::Identifier { name, .. } => {
-            local_var_types
-                .get(name)
-                .is_some_and(param_is_owned_string_type)
-                || current_function_params
-                    .iter()
-                    .any(|p| p.name == *name && param_is_owned_string_type(&p.type_))
-        }
-        Expression::FieldAccess { .. } => true,
-        _ => false,
-    }
-}
-
 /// Module-level `pub const …: string` identifiers that lower to `&'static str` in Rust.
 pub fn is_windjammer_string_const_name(name: &str) -> bool {
     name.starts_with("SCOPE_") || name.starts_with("AUDIT_") || name.starts_with("PERIOD_STATUS_")
@@ -705,31 +681,6 @@ pub fn method_call_arg_expects_pattern_str(
             arg_index,
         )
     })
-}
-
-/// Types whose read-only methods converge string keys to `&str`.
-/// Prefer [`crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified`].
-pub fn is_readonly_string_key_method(
-    method: &str,
-    arg_index: usize,
-    sig: Option<&crate::analyzer::FunctionSignature>,
-    receiver_type: Option<&str>,
-    registry: Option<&crate::analyzer::SignatureRegistry>,
-) -> bool {
-    if let Some(sig) = sig {
-        return crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_from_sig(
-            sig, arg_index,
-        );
-    }
-    if let Some(registry) = registry {
-        return crate::codegen::rust::stdlib_method_traits::method_arg_expects_rust_str_ref_qualified(
-            method,
-            receiver_type,
-            registry,
-            arg_index,
-        );
-    }
-    false
 }
 
 /// Enum variant constructor arg (e.g. `QuestReward::relationship` → `Relationship(string, i32)`).

@@ -12,7 +12,6 @@ pub mod errors;
 pub mod explain_ownership;
 pub mod fix;
 pub mod fmt;
-pub mod json_diagnostics;
 pub mod lint;
 pub mod new;
 mod new_templates;

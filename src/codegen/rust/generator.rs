@@ -592,21 +592,6 @@ impl<'ast> CodeGenerator<'ast> {
             })
     }
 
-    /// Bare `error()` after `use std::log::*` must use `log::error` / `log_mod::error`,
-    /// not a colliding runtime homonym (`http::error`, `dialog::error`).
-    pub(in crate::codegen::rust) fn imported_runtime_std_signature(
-        &self,
-        registry: &crate::analyzer::SignatureRegistry,
-        callee_name: &str,
-    ) -> Option<crate::analyzer::FunctionSignature> {
-        let key = self.imported_runtime_qualified_callee(callee_name)?;
-        registry.get_signature(&key).cloned().or_else(|| {
-            self.global_signature_registry
-                .as_ref()
-                .and_then(|g| g.get_signature(&key).cloned())
-        })
-    }
-
     /// True when `name` is a parameter, `let` binding, or match-arm binding in the current fn.
     pub(in crate::codegen::rust) fn identifier_is_local_binding(&self, name: &str) -> bool {
         self.local_var_types.contains_key(name)
@@ -891,18 +876,6 @@ impl<'ast> CodeGenerator<'ast> {
         self.explicit_copy_types_registry = registry;
     }
 
-    pub fn is_explicitly_copy_type(&self, ty: &crate::parser::ast::types::Type) -> bool {
-        if let crate::parser::ast::types::Type::Custom(name) = ty {
-            self.explicit_copy_types_registry.contains(name.as_str())
-                || name
-                    .split("::")
-                    .last()
-                    .is_some_and(|b| self.explicit_copy_types_registry.contains(b))
-        } else {
-            false
-        }
-    }
-
     pub fn set_non_copy_types_registry(&mut self, registry: std::collections::HashSet<String>) {
         self.non_copy_types_registry = registry;
     }
@@ -957,17 +930,6 @@ impl<'ast> CodeGenerator<'ast> {
         }
 
         None
-    }
-
-    /// Map `Self::method` qualifiers to the enclosing impl struct for signature lookup.
-    pub(crate) fn signature_lookup_receiver_type(&self, qualifier: &str) -> String {
-        if qualifier == "Self" {
-            self.current_struct_name
-                .clone()
-                .unwrap_or_else(|| qualifier.to_string())
-        } else {
-            qualifier.to_string()
-        }
     }
 
     /// Method signature for call-site lowering: local registry, then cross-module global.
@@ -1329,12 +1291,6 @@ impl<'ast> CodeGenerator<'ast> {
         let unified = crate::ir::numeric_bridge::UnifiedNumericInference::from_int_only(int_inf);
         self.merge_numeric_inference_const_types(&unified);
         self.numeric_inference = Some(std::sync::Arc::new(unified));
-    }
-
-    /// Set the IR function data for the current function being generated.
-    /// When IR cutover flags are enabled, codegen reads from this instead of AnalyzedFunction.
-    pub fn set_current_ir_function(&mut self, ir_fn: Option<crate::ir::IrFunction>) {
-        self.current_ir_function = ir_fn;
     }
 
     /// Set IR cutover configuration explicitly (for testing).
@@ -2901,14 +2857,6 @@ impl<'ast> CodeGenerator<'ast> {
             && self.current_fn_forward_ref_if_params.contains(param_name)
             && !self.emitted_rust_ref_formals.contains(param_name)
             && crate::codegen::rust::expression_helpers::method_receiver_is_self_or_field(receiver)
-    }
-
-    pub(crate) fn should_borrow_owned_param_in_if_condition(
-        &self,
-        param_name: &str,
-        receiver: &Expression<'ast>,
-    ) -> bool {
-        self.should_borrow_forward_ref_param_at_call(param_name, receiver)
     }
 
     pub(crate) fn caller_keeps_owned_outer_formal(&self, param_name: &str) -> bool {
