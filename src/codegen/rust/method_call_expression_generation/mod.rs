@@ -23,6 +23,9 @@ impl<'ast> CodeGenerator<'ast> {
         type_args: &Option<Vec<Type>>,
         arguments: &[(Option<String>, &'ast Expression<'ast>)],
     ) -> String {
+        if method == crate::parser::optional_chain::OPT_CHAIN {
+            return self.unsupported_optional_chain();
+        }
         if method == "find" && arguments.len() == 1 {}
         // WJ-LANG-04: `.string()` is the idiomatic Windjammer alias for string conversion.
         let method = if method == "string" {

@@ -94,6 +94,15 @@ pub fn register(r: &mut Registry) {
         let f = arg(&a, 0, "and_then")?;
         call(it, &f, vec![payload(v).unwrap()])
     });
+    // ADR-0018 `a?.b`: `a.__opt_chain(|_oc| _oc.b)` - `and_then` that lifts a non-optional result into `Some`.
+    r.pure(Kind::Option, "__opt_chain", |it, v, a| {
+        if !is_some(v) {
+            return Ok(Value::none());
+        }
+        let f = arg(&a, 0, "?.")?;
+        let out = call(it, &f, vec![payload(v).unwrap()])?;
+        Ok(if out.as_option().is_some() { out } else { Value::some(out) })
+    });
     r.pure(Kind::Option, "and", |_, v, a| if is_some(v) { arg(&a, 0, "and") } else { Ok(Value::none()) });
     r.pure(Kind::Option, "or", |_, v, a| if is_some(v) { Ok(v.clone()) } else { arg(&a, 0, "or") });
     r.pure(Kind::Option, "or_else", |it, v, a| {

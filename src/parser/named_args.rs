@@ -26,7 +26,18 @@ pub(crate) const DEFAULT_DECORATOR: &str = "__default";
 #[derive(Debug, Clone)]
 pub(crate) struct ParamSig {
     name: String,
+    ty: Type,
     default: Option<&'static Expression<'static>>,
+}
+
+/// Can a closure be passed for a parameter of this type? Only types that are certainly not callable are
+/// rejected (generics, `impl Fn`, trait objects and unknown names might be).
+fn certainly_not_callable(t: &Type) -> bool {
+    match t {
+        Type::Int | Type::Int32 | Type::Uint | Type::Float | Type::Bool | Type::String | Type::Vec(_) | Type::Array(..) | Type::Option(_) | Type::Result(..) | Type::Tuple(_) => true,
+        Type::Reference(i) | Type::MutableReference(i) => certainly_not_callable(i),
+        _ => false,
+    }
 }
 
 /// Callee key -> its parameters (receiver excluded). Keys: `f`, `Type::f`, `.method`.
@@ -40,6 +51,7 @@ fn sig_of(f: &FunctionDecl<'static>) -> Vec<ParamSig> {
         .filter(|p| p.name != "self")
         .map(|p| ParamSig {
             name: p.name.clone(),
+            ty: p.type_.clone(),
             default: p
                 .decorators
                 .iter()
@@ -148,6 +160,7 @@ impl Parser {
         let Some(params) = table.get(key) else {
             return Ok(args);
         };
+        self.check_shorthand_args(key, params, &args)?;
         let needs = args.iter().any(|(l, _)| l.is_some()) || args.len() < params.len();
         if !needs {
             return Ok(args);
@@ -206,6 +219,31 @@ impl Parser {
 }
 
 impl Parser {
+    /// A `_` shorthand closure given to a parameter that is certainly not a function: the `_` bound to the
+    /// smallest enclosing call argument (`group_by(key(_.clone()))` is `group_by(key(|x| x.clone()))`).
+    fn check_shorthand_args(&self, key: &str, params: &[ParamSig], args: &Args) -> Result<(), String> {
+        for (i, (label, e)) in args.iter().enumerate() {
+            let Expression::Closure { parameters, location, .. } = e else { continue };
+            if !parameters.first().is_some_and(|p| p.starts_with(crate::parser::shorthand_closure::HOLE_PREFIX)) {
+                continue;
+            }
+            let param = match label {
+                Some(n) => params.iter().find(|p| &p.name == n),
+                None => params.get(i),
+            };
+            let Some(p) = param.filter(|p| certainly_not_callable(&p.ty)) else { continue };
+            let at = location.as_ref().map(|l| format!("{}:{}:{}", l.file.display(), l.line, l.column)).unwrap_or_default();
+            return Err(format!(
+                "{at}: error: `_` shorthand makes a closure here, but `{}` expects a value for `{}`. \
+                 `_` belongs to the smallest enclosing call argument, so `outer(f(_ + 1))` is `outer(f(|x| x + 1))`; \
+                 write the closure around the call you mean, e.g. `outer(|x| f(x + 1))`",
+                key.trim_start_matches('.'),
+                p.name
+            ));
+        }
+        Ok(())
+    }
+
     /// The arguments of a call after its `(`, the `)`, a trailing block (parser/trailing_block.rs), then
     /// named-argument lowering against the callee `key`.
     pub(in crate::parser) fn parse_call_rest(
