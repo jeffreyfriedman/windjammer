@@ -111,7 +111,9 @@ prints exactly what the walker prints.
 46340 (compiler bug, numeric defaults; the interpreter computes in `i64` as the language specifies).
 (2) the generated Rust does not compile (`E0308`; Rust backend gaps for these iterator/map shapes).
 
-With `--features jit` (step 7) `fib30` takes 0.02 s.
+With `--features jit` (step 7) `fib30` takes 0.02 s. The ratchet baseline `bench/interp/baseline.json` (walker / resolved per
+kernel, `scripts/interp_bench.py --check` fails below it minus 15%) was recorded at a load average of 12: `fib30` 9.4x,
+`loop5m` 12.2x, `sieve` 2.4x, `structs` 1.8x, `strings` 1.7x, `hashmap` 1.3x, `nbody` 1.3x, `closures` 1.2x.
 
 Milestone 1 measured `fib30` at 0.33 s and `loop5m` at 0.75 s on the resolved engine. The calls/loops goal (at least
 Python's speed on both, then within 3-5x of Node) is met on `fib30` and `loop5m`; the other kernels are where the remaining
