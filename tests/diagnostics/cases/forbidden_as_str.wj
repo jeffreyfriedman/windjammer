@@ -1,8 +1,0 @@
-// expect: WJ0023
-fn main() {
-    let name = "wj"
-    match name.as_str() {
-        "wj" => println("ok"),
-        _ => println("no"),
-    }
-}

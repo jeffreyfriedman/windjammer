@@ -553,7 +553,6 @@ id = "wj self-install --dry-run"
 [[promise]]
 id = "wj run --bin"
 statement = "Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)"
-pending = "no acceptance cases yet"
 
 [[promise]]
 id = "wj run --compiled"
@@ -563,12 +562,10 @@ pending = "no acceptance cases yet"
 [[promise]]
 id = "wj run --engine"
 statement = "Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020)"
-pending = "no acceptance cases yet"
 
 [[promise]]
 id = "wj run --hash-seed"
 statement = "Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)"
-pending = "no acceptance cases yet"
 
 [[promise]]
 id = "wj run --hot"
@@ -583,16 +580,6 @@ pending = "no acceptance cases yet"
 [[promise]]
 id = "wj run --watch"
 statement = "Re-run on every source change (restarts long-running programs)"
-pending = "no acceptance cases yet"
-
-[[promise]]
-id = "wj test --compiled"
-statement = "Also build and run each doctest through the Rust backend (default: interpreter only)"
-pending = "no acceptance cases yet"
-
-[[promise]]
-id = "wj test --doc"
-statement = "Run only the doctests (```wj examples in `///` doc comments)"
 pending = "no acceptance cases yet"
 
 [[promise]]
