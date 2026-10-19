@@ -13,9 +13,7 @@ pub(in crate::codegen::rust) fn try_early_stdio_and_test_dispatch<'ast>(
     let func_name = ast_utilities::extract_function_name(function);
 
     // INTR-009: a user function named like an intrinsic (`fn println(..)`) shadows it, as in the interpreter.
-    let user_shadows_intrinsic = !func_name.contains("::")
-        && gen.signature_registry.get_signature(&func_name).is_some_and(|sig| !sig.is_extern)
-        && crate::analyzer::SignatureRegistry::stdlib().get_signature(&func_name).is_none();
+    let user_shadows_intrinsic = !func_name.contains("::") && gen.signature_registry.is_user_fn_shadowing_stdlib(&func_name);
     if !user_shadows_intrinsic {
         if let Some(intrinsic) = gen.try_generate_intrinsic_call(&func_name, arguments) {
             return Some(intrinsic);
