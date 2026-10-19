@@ -684,6 +684,7 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
                 let val_var = self.walk_expression(value);
                 self.cs.add_because(Constraint::TypeEquals(target_var, val_var), tagged("TY-UNIFY"));
                 self.detect_mutation_target(target);
+                self.emit_stored_by_assignment(target, value);
             }
 
             Statement::Return { value, .. } => {
@@ -1214,6 +1215,18 @@ impl<'a, 'ast> AstConstraintWalker<'a, 'ast> {
             }
             Pattern::Reference(inner) => self.bind_pattern(inner),
             Pattern::Ref(name) | Pattern::RefMut(name) => self.resolve_var(name),
+        }
+    }
+
+    /// OWN-STORED (D-OWN-STORE-ASSIGN, owner-recommended): a parameter assigned into a field or
+    /// element (`self.items = volume`) is moved there, so it is owned, exactly like `push(volume)`.
+    fn emit_stored_by_assignment(&mut self, target: &Expression<'ast>, value: &Expression<'ast>) {
+        let (Expression::FieldAccess { .. } | Expression::Index { .. }, Expression::Identifier { name, location }) = (target, value) else { return };
+        if let Some(&var) = self.param_vars.get(name) {
+            self.cs.add_because(
+                Constraint::OwnershipIs(var, OwnedType::Owned),
+                origin("OWN-STORED", format!("`{}` is moved into a field or element by assignment", name), location),
+            );
         }
     }
 

@@ -9,11 +9,11 @@ fn first_even(xs: &Vec<i64>) -> Option<i64> {
 }
 
 fn main() {
-    match first_even(&[1_i64, 3_i64, 4_i64, 6_i64]) {
+    match first_even(&vec![1_i64, 3_i64, 4_i64, 6_i64]) {
         Some(v) => println!("found {}", v - 1_i64),
         None => println!("none"),
     }
-    match first_even(&[1_i64, 3_i64]) {
+    match first_even(&vec![1_i64, 3_i64]) {
         Some(v) => println!("found {}", v),
         None => println!("none"),
     }

@@ -4,7 +4,7 @@ fn parse_all(items: &Vec<String>) -> Result<Vec<i64>, String> {
 }
 
 fn main() {
-    println!("{:?}", parse_all(&["1", "2", "3"]));
-    println!("{:?}", parse_all(&["1", "x", "3"]));
+    println!("{:?}", parse_all(&vec!["1".to_string(), "2".to_string(), "3".to_string()]));
+    println!("{:?}", parse_all(&vec!["1".to_string(), "x".to_string(), "3".to_string()]));
 }
 

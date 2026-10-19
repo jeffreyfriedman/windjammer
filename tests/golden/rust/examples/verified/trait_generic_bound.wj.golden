@@ -17,12 +17,12 @@ fn double(self) -> f64 {
 }
 
 #[inline]
-fn twice<T: Doubler>(x: &T) -> T {
+fn twice<T: Doubler>(mut x: T) -> T {
     x.double()
 }
 
 fn main() {
-    println!("{}", twice(&3));
-    println!("{}", twice(&1.75_f64));
+    println!("{}", twice(3));
+    println!("{}", twice(1.75_f64));
 }
 
