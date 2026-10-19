@@ -97,26 +97,29 @@ fn watch_loop(root: &Path, json: bool, fix: bool) -> Result<()> {
 /// Gate for `wj run --interpret`: the interpreter must not be more permissive than the compiler.
 /// Runs the same front-end checks as `wj check`; on any error-level diagnostic prints them and
 /// returns `Err` so the caller refuses to execute the program. Warnings do not block.
-pub fn require_clean(path: &Path) -> Result<()> {
+pub fn require_clean(path: &Path, lints_block: bool) -> Result<()> {
     // No cache: running a program must not write `.wj-cache` files next to it.
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
     let checked = check::check_path(path, &CheckOptions { use_cache: false });
     std::panic::set_hook(previous);
     let checked = checked?;
-    if checked.report.summary.errors == 0 {
+    // `--no-lint`: Rust-leakage lints (W####) do not stop the run; every other error does.
+    let blocks = |d: &crate::diagnostics::Diagnostic| {
+        d.severity == crate::diagnostics::Severity::Error && (lints_block || !d.code.starts_with('W'))
+    };
+    let errors = checked.report.diagnostics.iter().filter(|d| blocks(d)).count();
+    if errors == 0 {
         return Ok(());
     }
     let source_of = |f: &str| checked.sources.get(f).cloned();
-    for d in &checked.report.diagnostics {
-        if d.severity == crate::diagnostics::Severity::Error {
-            eprintln!("{}", render::render(d, &source_of));
-        }
+    for d in checked.report.diagnostics.iter().filter(|d| blocks(d)) {
+        eprintln!("{}", render::render(d, &source_of));
     }
     anyhow::bail!(
         "not running {}: `wj check` reports {} error(s); the interpreter runs only programs the compiler accepts",
         path.display(),
-        checked.report.summary.errors
+        errors
     )
 }
 

@@ -9,11 +9,6 @@ backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
 [[unsupported]]
-program = "22_vec_index_mutate"
-backend = "rust"
-reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
-
-[[unsupported]]
 program = "30_iter_map_filter"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"

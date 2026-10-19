@@ -47,7 +47,7 @@ pub fn find(source: &str) -> Vec<usize> {
             b'\'' if b.get(i + 2) == Some(&b'\'') || (b.get(i + 1) == Some(&b'\\') && b.get(i + 3) == Some(&b'\'')) => {
                 i += if b.get(i + 1) == Some(&b'\\') { 4 } else { 3 };
             }
-            _ if source[i..].starts_with(PATTERN) => {
+            _ if b[i..].starts_with(PATTERN.as_bytes()) => {
                 out.push(i);
                 i += PATTERN.len();
             }
@@ -92,5 +92,12 @@ mod tests {
     #[test]
     fn interpolation_is_text() {
         assert!(find("let a = \"${s.as_str()}\"\n").is_empty());
+    }
+
+    #[test]
+    fn non_ascii_source_does_not_split_a_character() {
+        let src = "let s = \"é\"\nlet t = x.as_str()\n//日本\nlet u = y.as_str()\n";
+        assert_eq!(find(src).len(), 2);
+        assert_eq!(fix(src), "let s = \"é\"\nlet t = x\n// 日本\nlet u = y\n");
     }
 }

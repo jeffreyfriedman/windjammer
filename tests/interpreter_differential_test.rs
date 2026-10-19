@@ -107,7 +107,7 @@ fn interpret(src: &str) -> Outcome {
     let f = dir.path().join("prog.wj");
     fs::write(&f, src).unwrap();
     let mut child = Command::new(WJ)
-        .args(["run", "--interpret"])
+        .args(["run", "--interpret", "--no-lint"])
         .arg(&f)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -446,8 +446,9 @@ fn intrinsic_stderr_has_independent_expected_text() {
 }
 
 #[test]
+// `println(a: x)` is rejected earlier, by the parser (ADR-0018 named-argument rule), with its own diagnostic.
 fn intrinsic_unsupported_shapes_exit_2_with_a_diagnostic() {
-    for body in ["let y = debug(x, x)", "assert()", "assert_eq(x)", "println(a: x)", "let y = dbg!(x, x)"] {
+    for body in ["let y = debug(x, x)", "assert()", "assert_eq(x)", "let y = dbg!(x, x)"] {
         let got = interpret(&intrinsic_program(body));
         assert_eq!(got.exit, 2, "{body}: stdout {:?} stderr {:?}", got.stdout, got.stderr);
         assert!(got.stderr.contains("unsupported in the interpreter"), "{body}: {}", got.stderr);

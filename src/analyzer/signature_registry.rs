@@ -1285,7 +1285,28 @@ impl SignatureRegistry {
         name: &str,
         arg_count: usize,
     ) -> Option<&FunctionSignature> {
-        if let Some(sig) = self.get_signature(name) {
+        self.find_signature_by_name_and_arg_count_in(name, arg_count, true)
+    }
+
+    /// Like [`Self::find_signature_by_name_and_arg_count`] over this registry's own entries only: no
+    /// runtime/stdlib fallback layer. A call with no known receiver type must not take its formals from an
+    /// unrelated std type that happens to share the method name (`tx.send(n)` is not `WebSocket::send`).
+    pub fn find_own_signature_by_name_and_arg_count(
+        &self,
+        name: &str,
+        arg_count: usize,
+    ) -> Option<&FunctionSignature> {
+        self.find_signature_by_name_and_arg_count_in(name, arg_count, false)
+    }
+
+    fn find_signature_by_name_and_arg_count_in(
+        &self,
+        name: &str,
+        arg_count: usize,
+        with_fallback: bool,
+    ) -> Option<&FunctionSignature> {
+        let direct = if with_fallback { self.get_signature(name) } else { self.signatures.get(name) };
+        if let Some(sig) = direct {
             let sig_args = if sig.has_self_receiver {
                 sig.param_ownership.len().saturating_sub(1)
             } else {
@@ -1315,6 +1336,9 @@ impl SignatureRegistry {
             if matches.len() > 1 {
                 return None;
             }
+        }
+        if !with_fallback {
+            return None;
         }
         self.global_fallback
             .as_ref()

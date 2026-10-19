@@ -150,7 +150,7 @@ digraph deps {
   "check" -> "linter" [label="1"];
   "check" -> "metadata" [label="1"];
   "check" -> "module_system" [label="1"];
-  "check" -> "parser" [label="15"];
+  "check" -> "parser" [label="16"];
   "check" -> "resolve" [label="1"];
   "check" -> "source_map" [label="2"];
   "check" -> "stdlib_surface" [label="1"];
@@ -165,7 +165,7 @@ digraph deps {
   "cli" -> "compiler_config" [label="2"];
   "cli" -> "config" [label="3"];
   "cli" -> "debug_env" [label="1"];
-  "cli" -> "diagnostics" [label="10"];
+  "cli" -> "diagnostics" [label="11"];
   "cli" -> "embedded_assets" [label="4"];
   "cli" -> "error_mapper" [label="8"];
   "cli" -> "formatter" [label="1"];

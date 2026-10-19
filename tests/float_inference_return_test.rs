@@ -39,7 +39,7 @@ pub fn foo() -> f32 {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") || output.contains("1.0f64"),
+        output.contains("1.0_f32") || output.contains("1.0f32"),
         "Explicit return 1.0 in f32 function should generate _f32, got:\n{}",
         output
     );
@@ -60,7 +60,7 @@ pub fn bar() -> f32 {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") || output.contains("1.0f64"),
+        output.contains("1.0_f32") || output.contains("1.0f32"),
         "Implicit return 1.0 in f32 function should generate _f32, got:\n{}",
         output
     );
@@ -84,7 +84,7 @@ pub fn baz(cond: bool) -> f32 {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") || output.contains("1.0f64"),
+        output.contains("1.0_f32") || output.contains("1.0f32"),
         "Early return 1.0 should generate _f32, got:\n{}",
         output
     );
@@ -115,7 +115,7 @@ pub fn qux(x: E) -> f32 {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") || output.contains("1.0f64"),
+        output.contains("1.0_f32") || output.contains("1.0f32"),
         "Match arm 1.0 should generate _f32, got:\n{}",
         output
     );
@@ -173,7 +173,7 @@ pub fn opt() -> Option<f32> {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") || output.contains("1.0f64"),
+        output.contains("1.0_f32") || output.contains("1.0f32"),
         "Literal in Option<f32> return should generate _f32, got:\n{}",
         output
     );
@@ -189,7 +189,7 @@ pub fn res() -> Result<f32, string> {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f64") || output.contains("1.0f64"),
+        output.contains("1.0_f32") || output.contains("1.0f32"),
         "Literal in Result<f32, E> return should generate _f32, got:\n{}",
         output
     );
@@ -205,7 +205,7 @@ pub fn tup() -> (f32, f32) {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        (output.contains("1.0_f64") || output.contains("1.0f64"))
+        (output.contains("1.0_f32") || output.contains("1.0f32"))
             && (output.contains("2.0_f32") || output.contains("2.0f32")),
         "Tuple elements in (f32, f32) return should generate _f32, got:\n{}",
         output

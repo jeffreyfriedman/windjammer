@@ -174,7 +174,11 @@ fn forbidden(msg: &str, ix: &SourceIndex) -> Diagnostic {
         }
         d = d.at(sp);
     }
-    d.with_help("Windjammer converts strings automatically; delete the construct")
+    d.with_help(if first.contains("derive") {
+        "the compiler derives this automatically; delete the decorator argument"
+    } else {
+        "Windjammer converts strings automatically; delete the construct"
+    })
 }
 
 

@@ -556,14 +556,14 @@ fn test_module_import_resolution() {
     // This test verifies that when multiple types are imported from the same module,
     // the compiler correctly resolves which module file each type is defined in.
     // Bug: Compiler was generating "use super::collider2d::Collider2D" when it should
-    // generate "use super::module_import_resolution::Collider2D" because Collider2D
+    // generate "use crate::module_import_resolution::Collider2D" because Collider2D
     // is defined in module_import_resolution.wj, not in a separate collider2d.wj file.
 
     compile_and_check_generated_rust(
         "module_import_resolution_user.wj",
         &[
-            "use super::module_import_resolution::RigidBody2D",
-            "use super::module_import_resolution::Collider2D", // NOT collider2d!
+            "use crate::module_import_resolution::RigidBody2D",
+            "use crate::module_import_resolution::Collider2D", // NOT collider2d!
         ],
         "module_import_resolution",
     );
