@@ -5,6 +5,7 @@ prompt; the oracle, other trials and the shim log live outside it."""
 import json
 import os
 import random
+import shutil
 import subprocess
 import time
 
@@ -126,6 +127,10 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           "mode_violations": violations(arm, an["invocations"]),
           "first_source": an["first_source"], "final_source": final,
           "diag_samples": [e["out"][:600] for e in S.read_log(log) if e["exit"] != 0 and e["verb"] in S.VERIFY_VERBS][:12]}
+    for name in os.listdir(ws):     # build outputs can be large; the record keeps first and final sources
+        if name not in ("main.wj",):
+            q = os.path.join(ws, name)
+            shutil.rmtree(q, ignore_errors=True) if os.path.isdir(q) else os.remove(q)
     return tr
 
 
