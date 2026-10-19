@@ -1,0 +1,17 @@
+// spec: SPEC-EFF-026
+// mode: check-error
+// xfail: Q-032
+// expect-error: WJ0048: iteration over `HashMap` has no stable order
+use std::collections::HashMap
+durable fn first_key(m: HashMap<string, int>) -> string {
+    let mut out = ""
+    for (k, v) in m {
+        if out == "" { out = k }
+    }
+    out
+}
+fn main() {
+    let mut m = HashMap::new()
+    m.insert("a", 1)
+    println(first_key(m))
+}
