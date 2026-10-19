@@ -190,6 +190,13 @@ args = ["run", "--interpret", "--engine", "resolved", "{w}/m.wj"]
 stdout_has = ["hello"]
 
 [[case]]
+name = "run --engine walker executes a file"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--engine", "walker", "{w}/m.wj"]
+stdout_has = ["hello"]
+
+[[case]]
 name = "run --engine rejects an unknown engine"
 polarity = "negative"
 files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
