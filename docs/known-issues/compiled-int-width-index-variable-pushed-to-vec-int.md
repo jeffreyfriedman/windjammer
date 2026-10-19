@@ -37,4 +37,4 @@ replacement ... in previous iteration of loop`. `pub fn run(cmd: Command)` is em
 body is generated as if `cmd` were a borrow: `match cmd.replace { Some(replacement) => .. }` inside `for root in &cmd.paths { for path in files { .. } }` is
 not emitted as `match &cmd.replace`. Same family as `ownership-by-value-store-threaded-through-adapter-becomes-mut-borrow.md`: the body must be generated
 against the formal that is emitted. A minimal single-file or two-module reduction did not reproduce it (they stay borrowed end to end); the full app does
-(`cd packages/..; wj build src` in `apps/wj-grep` with the compiled sweep in `docs/known-issues/` order). Handed to the convergence stream.
+(`wj build src` in the ecosystem's `apps/wj-grep`). Handed to the convergence stream.
