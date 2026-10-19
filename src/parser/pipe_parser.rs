@@ -39,7 +39,7 @@ impl Parser {
                 &format!("`{op}` needs a left-hand value (a pipe cannot start an expression)"),
             ));
         }
-        let left = self.parse_binary_expression(0)?;
+        let left = self.parse_range_expression()?;
         self.parse_pipe_stages(left)
     }
 
