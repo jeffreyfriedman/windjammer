@@ -9,7 +9,7 @@ use super::compile::{block, run_all, Cx, E};
 use super::fast::{self, Cond, Operand};
 use super::typed::{self, small, unbox, I};
 use super::{Code, CompiledFn};
-use crate::interpreter::engine::Interpreter;
+use crate::interpreter::engine::{FuncDef, Interpreter};
 use crate::interpreter::error::{semantic, unsupported, R};
 use crate::interpreter::int::IntTy;
 use crate::interpreter::intrinsics::Intrinsic;
@@ -316,42 +316,30 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
         }
         let args: Vec<X> = arg_exprs().map(|e| expr(cx, e)).collect::<Option<_>>()?;
         let ret = f.ret.and_then(IntTy::from_type).filter(|t| small(*t) && !f.is_async && !f.is_extern);
-        // the callee's compiled form, looked up on first call (it may be the function being compiled)
-        let target: std::cell::OnceCell<Option<Rc<CompiledFn>>> = std::cell::OnceCell::new();
-        let resolve = move |it: &mut Interpreter| -> Option<Rc<CompiledFn>> {
-            target
-                .get_or_init(|| if it.engine_resolved && !f.is_extern && !f.is_async { it.compiled_for(&f) } else { None })
-                .clone()
-        };
-        let f2 = cx.it.modules[cx.module].funcs.get(name.as_str()).cloned()?;
+        let widths = args.iter().map(|a| if let X::I(_, u) = a { Some(*u) } else { None }).collect();
+        let site = Site { f, args, widths, target: std::cell::OnceCell::new() };
         return Some(match ret {
             Some(t) => X::I(
                 I::Code(Box::new(move |it, b| {
                     it.mark(loc);
-                    match resolve(it) {
-                        Some(c) => {
-                            let base = fill_frame(it, b, &c, &args)?;
-                            it.run_compiled_int(&f2, &c, base, t)
+                    match site.target(it) {
+                        Some((c, bound)) => {
+                            let base = fill_frame(it, b, c, &site.args)?;
+                            it.run_compiled_int(&site.f, c, base, t, *bound)
                         }
-                        None => {
-                            let vals = args.iter().map(|a| a.eval(it, b)).collect::<R<Vec<_>>>()?;
-                            unbox(it.call_func_g(&f2, vals, None, &[], None)?, t)
-                        }
+                        None => unbox(site.walk(it, b)?, t),
                     }
                 })),
                 t,
             ),
             None => X::V(Box::new(move |it, b| {
                 it.mark(loc);
-                match resolve(it) {
-                    Some(c) => {
-                        let base = fill_frame(it, b, &c, &args)?;
-                        it.run_compiled_at(&f2, &c, base)
+                match site.target(it) {
+                    Some((c, bound)) => {
+                        let base = fill_frame(it, b, c, &site.args)?;
+                        it.run_compiled_at(&site.f, c, base, *bound)
                     }
-                    None => {
-                        let vals = args.iter().map(|a| a.eval(it, b)).collect::<R<Vec<_>>>()?;
-                        it.call_func_g(&f2, vals, None, &[], None)
-                    }
+                    None => site.walk(it, b),
                 }
             })),
         });
@@ -384,24 +372,54 @@ fn call(cx: &mut Cx, function: E, arguments: &'static [(Option<String>, E)], loc
     })))
 }
 
-/// Open the callee's frame on `rstack` and evaluate the arguments (left to right, all of them, as
-/// the walker) straight into its parameter slots. Returns the frame base.
+/// A call site of a module function.
+struct Site {
+    f: Rc<FuncDef>,
+    args: Vec<X>,
+    /// Static width of each argument (`None`: not a typed integer).
+    widths: Vec<Option<IntTy>>,
+    /// The callee's compiled form, looked up on first call (it may be the function being compiled),
+    /// and whether these arguments always arrive with the declared widths (no binding needed).
+    target: std::cell::OnceCell<Option<(Rc<CompiledFn>, bool)>>,
+}
+
+impl Site {
+    #[inline(always)]
+    fn target(&self, it: &mut Interpreter) -> Option<&(Rc<CompiledFn>, bool)> {
+        self.target
+            .get_or_init(|| {
+                let f = &self.f;
+                let c = if it.engine_resolved && !f.is_extern && !f.is_async { it.compiled_for(f)? } else { return None };
+                let bound = self.widths.len() == c.params.len() && self.widths.iter().zip(&c.param_int).all(|(w, p)| w.is_some() && w == p);
+                Some((c, bound))
+            })
+            .as_ref()
+    }
+
+    /// The walker's call (the callee is not compiled).
+    fn walk(&self, it: &mut Interpreter, b: usize) -> R {
+        let vals = self.args.iter().map(|a| a.eval(it, b)).collect::<R<Vec<_>>>()?;
+        it.call_func_g(&self.f, vals, None, &[], None)
+    }
+}
+
+/// Open the callee's frame on `rstack`: the arguments are evaluated left to right (all of them, as
+/// in the walker) and pushed as its first slots (the parameters), then the other slots are added.
+/// Calls made while evaluating an argument use (and release) the stack above. Returns the base.
 #[inline(always)]
 fn fill_frame(it: &mut Interpreter, b: usize, c: &CompiledFn, args: &[X]) -> R<usize> {
     let base = it.rstack.len();
-    it.rstack.resize(base + c.nslots, Value::Unit);
+    let np = c.params.len();
     for (k, a) in args.iter().enumerate() {
         match a.eval(it, b) {
-            Ok(v) => {
-                if let Some(s) = c.params.get(k) {
-                    it.rstack[base + s] = v;
-                }
-            }
+            Ok(v) if k < np => it.rstack.push(v),
+            Ok(_) => {}
             Err(e) => {
                 it.rstack.truncate(base);
                 return Err(e);
             }
         }
     }
+    it.rstack.resize(base + c.nslots, Value::Unit);
     Ok(base)
 }

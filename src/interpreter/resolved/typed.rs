@@ -118,18 +118,74 @@ pub(super) fn result_ty(op: BinaryOp, lt: IntTy, rt: IntTy) -> Option<IntTy> {
     }
 }
 
-macro_rules! checked {
-    ($l:ident, $r:ident, $lt:ident, $rt:ident, $op:ident, $loc:ident, $range:ident, $f:expr) => {
-        Box::new(move |it, b| {
-            let x = $l.get(it, b)?;
-            let y = $r.get(it, b)?;
-            it.mark($loc);
-            match $f(x, y) {
-                Some(v) if $range.map_or(true, |(lo, hi)| v >= lo && v <= hi) => Ok(v),
-                _ => slow($op, x, $lt, y, $rt),
+/// An operand shape. Hot operators are monomorphized per shape (`shapes!`) so a slot or a
+/// constant operand is read inline instead of through `I::get`'s match.
+pub(super) trait Get: 'static {
+    fn get(&self, it: &mut Interpreter, b: usize) -> R<i64>;
+}
+struct SlotOp(usize);
+struct ConstOp(i64);
+impl Get for SlotOp {
+    #[inline(always)]
+    fn get(&self, it: &mut Interpreter, b: usize) -> R<i64> {
+        Ok(slot_int(it, b + self.0))
+    }
+}
+impl Get for ConstOp {
+    #[inline(always)]
+    fn get(&self, _: &mut Interpreter, _: usize) -> R<i64> {
+        Ok(self.0)
+    }
+}
+impl Get for I {
+    #[inline(always)]
+    fn get(&self, it: &mut Interpreter, b: usize) -> R<i64> {
+        I::get(self, it, b)
+    }
+}
+
+macro_rules! shapes {
+    ($l:expr, $r:expr, |$a:ident, $b:ident| $body:expr) => {
+        match ($l, $r) {
+            (I::Slot(x), I::Const(y)) => {
+                let ($a, $b) = (SlotOp(x), ConstOp(y));
+                $body
             }
-        })
+            (I::Slot(x), I::Slot(y)) => {
+                let ($a, $b) = (SlotOp(x), SlotOp(y));
+                $body
+            }
+            (l, I::Const(y)) => {
+                let ($a, $b) = (l, ConstOp(y));
+                $body
+            }
+            (l, r) => {
+                let ($a, $b) = (l, r);
+                $body
+            }
+        }
     };
+}
+
+/// A checked operator: `f` on the fast path, the walker's `int_binary` on any edge.
+fn checked<A: Get, B: Get, F: Fn(i64, i64) -> Option<i64> + 'static>(
+    a: A,
+    b: B,
+    f: F,
+    range: Option<(i64, i64)>,
+    op: BinaryOp,
+    (lt, rt): (IntTy, IntTy),
+    loc: Loc,
+) -> ICode {
+    Box::new(move |it, base| {
+        let x = a.get(it, base)?;
+        let y = b.get(it, base)?;
+        it.mark(loc);
+        match f(x, y) {
+            Some(v) if range.map_or(true, |(lo, hi)| v >= lo && v <= hi) => Ok(v),
+            _ => slow(op, x, lt, y, rt),
+        }
+    })
 }
 
 /// `l op r` on typed integers (operands left to right, then the operator at `loc`, as the walker).
@@ -137,46 +193,40 @@ pub(super) fn arith(op: BinaryOp, l: I, lt: IntTy, r: I, rt: IntTy, loc: Loc) ->
     use BinaryOp::*;
     let ty = result_ty(op, lt, rt)?;
     let range = bounds(ty);
-    let whole: Option<(i64, i64)> = None;
+    let w = (lt, rt);
     let code: ICode = match op {
-        Add => checked!(l, r, lt, rt, op, loc, range, i64::checked_add),
-        Sub => checked!(l, r, lt, rt, op, loc, range, i64::checked_sub),
-        Mul => checked!(l, r, lt, rt, op, loc, range, i64::checked_mul),
-        Div => checked!(l, r, lt, rt, op, loc, range, |x: i64, y: i64| if y == 0 { None } else { x.checked_div(y) }),
-        Mod => checked!(l, r, lt, rt, op, loc, range, |x: i64, y: i64| if y == 0 { None } else { x.checked_rem(y) }),
-        BitAnd => checked!(l, r, lt, rt, op, loc, whole, |x: i64, y: i64| Some(x & y)),
-        BitOr => checked!(l, r, lt, rt, op, loc, whole, |x: i64, y: i64| Some(x | y)),
-        BitXor => checked!(l, r, lt, rt, op, loc, whole, |x: i64, y: i64| Some(x ^ y)),
-        _ => Box::new(move |it, b| {
-            let x = l.get(it, b)?;
-            let y = r.get(it, b)?;
-            it.mark(loc);
-            slow(op, x, lt, y, rt)
-        }),
+        Add => shapes!(l, r, |a, b| checked(a, b, i64::checked_add, range, op, w, loc)),
+        Sub => shapes!(l, r, |a, b| checked(a, b, i64::checked_sub, range, op, w, loc)),
+        Mul => shapes!(l, r, |a, b| checked(a, b, i64::checked_mul, range, op, w, loc)),
+        Div => checked(l, r, |x: i64, y: i64| if y == 0 { None } else { x.checked_div(y) }, range, op, w, loc),
+        Mod => shapes!(l, r, |a, b| checked(a, b, |x: i64, y: i64| if y == 0 { None } else { x.checked_rem(y) }, range, op, w, loc)),
+        BitAnd => checked(l, r, |x: i64, y: i64| Some(x & y), None, op, w, loc),
+        BitOr => checked(l, r, |x: i64, y: i64| Some(x | y), None, op, w, loc),
+        BitXor => checked(l, r, |x: i64, y: i64| Some(x ^ y), None, op, w, loc),
+        _ => checked(l, r, |_, _| None, None, op, w, loc),
     };
     Some((code, ty))
+}
+
+fn cmp<A: Get, B: Get, F: Fn(&i64, &i64) -> bool + 'static>(a: A, b: B, f: F, loc: Loc) -> super::fast::Cond {
+    Box::new(move |it, base| {
+        let x = a.get(it, base)?;
+        let y = b.get(it, base)?;
+        it.mark(loc);
+        Ok(f(&x, &y))
+    })
 }
 
 /// `l op r` for a comparison of typed integers (never fails once the operands are evaluated).
 pub(super) fn compare(op: BinaryOp, l: I, r: I, loc: Loc) -> Option<super::fast::Cond> {
     use BinaryOp::*;
-    macro_rules! cmp {
-        ($f:expr) => {
-            Box::new(move |it: &mut Interpreter, b: usize| {
-                let x = l.get(it, b)?;
-                let y = r.get(it, b)?;
-                it.mark(loc);
-                Ok($f(&x, &y))
-            })
-        };
-    }
     Some(match op {
-        Eq => cmp!(i64::eq),
-        Ne => cmp!(i64::ne),
-        Lt => cmp!(i64::lt),
-        Le => cmp!(i64::le),
-        Gt => cmp!(i64::gt),
-        Ge => cmp!(i64::ge),
+        Eq => shapes!(l, r, |a, b| cmp(a, b, i64::eq, loc)),
+        Ne => shapes!(l, r, |a, b| cmp(a, b, i64::ne, loc)),
+        Lt => shapes!(l, r, |a, b| cmp(a, b, i64::lt, loc)),
+        Le => shapes!(l, r, |a, b| cmp(a, b, i64::le, loc)),
+        Gt => shapes!(l, r, |a, b| cmp(a, b, i64::gt, loc)),
+        Ge => shapes!(l, r, |a, b| cmp(a, b, i64::ge, loc)),
         _ => return None,
     })
 }

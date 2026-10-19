@@ -14,6 +14,7 @@
 //! and the function is compiled again with that slot untyped.
 
 use super::expr::{self, X};
+use super::fast::Cond;
 use super::typed::{self, small, ICode, I};
 use super::{Body, Code, CompiledFn};
 use crate::interpreter::engine::{FuncDef, Interpreter};
@@ -115,12 +116,14 @@ fn compile_with(cx: &mut Cx, f: &Rc<FuncDef>) -> Option<CompiledFn> {
     let params: Vec<usize> = f.params.iter().zip(&param_int).map(|(p, t)| cx.declare(p.name.as_str(), *t)).collect();
     let param_typed = params.iter().map(|s| cx.slot_ty[*s].is_some()).collect();
     let ret_int = f.ret.and_then(IntTy::from_type).filter(|t| *t != IntTy::Lit);
-    let (init, tail) = stmt_list(cx, f.body)?;
-    let body = match (ret_int.filter(|t| small(*t)), tail) {
-        (Some(t), Some((loc, Tail::Int(i, u)))) if !cx.untyped_return => Body::I(typed_seq(init, loc, i.into_code()), u, t),
+    let typed_ret = ret_int.filter(|t| small(*t));
+    let (init, tail) = stmt_list(cx, f.body, typed_ret.is_some())?;
+    let body = match (typed_ret, tail) {
+        (Some(t), Some((loc, Tail::Int(i, u)))) if !cx.untyped_return => Body::I(typed_seq(init, u, loc, i.into_code()), u, t),
         (_, tail) => Body::V(seq(init, tail.map(|(l, t)| (l, t.code())))),
     };
-    Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, body })
+    let scalar = cx.slot_ty.iter().all(|t| t.is_some());
+    Some(CompiledFn { nslots: cx.nslots, params, param_int, param_typed, ret_int, scalar, body })
 }
 
 /// The last statement of a list: a typed integer expression, or any code.
@@ -138,12 +141,72 @@ impl Tail {
     }
 }
 
-type Init = Vec<(Loc, Code)>;
+/// A statement before the tail: code, or (in a typed body) `if c { return v }` with a typed `v`,
+/// which the typed body runs as an early exit instead of unwinding a `Ctl::Return`.
+enum Step {
+    Code(Loc, Code),
+    Guard { loc: Loc, cond: Cond, rloc: Loc, val: I, w: IntTy },
+}
+
+impl Step {
+    fn code(self) -> (Loc, Code) {
+        match self {
+            Step::Code(l, c) => (l, c),
+            Step::Guard { loc, cond, rloc, val, w } => (
+                loc,
+                Box::new(move |it, b| {
+                    if cond(it, b)? {
+                        it.mark(rloc);
+                        return Err(Ctl::Return(Value::Int(val.get(it, b)? as i128, w)));
+                    }
+                    Ok(Value::Unit)
+                }),
+            ),
+        }
+    }
+}
+
+type Init = Vec<Step>;
+
+/// `if c { return e }` (no `else`) as a `Step::Guard` when `e` is a typed integer.
+fn guard(cx: &mut Cx, s: S) -> Option<Option<Step>> {
+    let Statement::If { condition, then_block, else_block: None, .. } = s else { return Some(None) };
+    let [r @ Statement::Return { value: Some(e), .. }] = then_block.as_slice() else { return Some(None) };
+    let cond = expr::cond(cx, condition, "if", true)?;
+    cx.scopes.push(Vec::new());
+    let v = expr::expr(cx, e);
+    cx.scopes.pop();
+    let (loc, rloc) = (stmt_loc(s), stmt_loc(r));
+    Some(Some(match v? {
+        X::I(val, w) => Step::Guard { loc, cond, rloc, val, w },
+        x => {
+            cx.untyped_return = true;
+            let v = x.code();
+            Step::Code(
+                loc,
+                Box::new(move |it, b| {
+                    if cond(it, b)? {
+                        it.mark(rloc);
+                        return Err(Ctl::Return(v(it, b)?));
+                    }
+                    Ok(Value::Unit)
+                }),
+            )
+        }
+    }))
+}
 
 /// Every statement of a list but the last, and the last one (in value position).
-fn stmt_list(cx: &mut Cx, list: &'static [S]) -> Option<(Init, Option<(Loc, Tail)>)> {
+fn stmt_list(cx: &mut Cx, list: &'static [S], guards: bool) -> Option<(Init, Option<(Loc, Tail)>)> {
     let Some((last, init)) = list.split_last() else { return Some((Vec::new(), None)) };
-    let init = init.iter().map(|s| Some((stmt_loc(s), stmt(cx, s)?))).collect::<Option<Init>>()?;
+    let mut steps = Vec::with_capacity(init.len());
+    for s in init {
+        match if guards { guard(cx, s)? } else { None } {
+            Some(g) => steps.push(g),
+            None => steps.push(Step::Code(stmt_loc(s), stmt(cx, s)?)),
+        }
+    }
+    let init = steps;
     let tail = match last {
         Statement::Expression { expr: e, .. } => match expr::expr(cx, e)? {
             X::I(i, t) => Tail::Int(i, t),
@@ -156,6 +219,7 @@ fn stmt_list(cx: &mut Cx, list: &'static [S]) -> Option<(Init, Option<(Loc, Tail
 
 /// The walker marks every statement's location before executing it.
 fn seq(init: Init, tail: Option<(Loc, Code)>) -> Code {
+    let init: Vec<(Loc, Code)> = init.into_iter().map(Step::code).collect();
     let Some((lloc, lc)) = tail else { return Box::new(|_, _| Ok(Value::Unit)) };
     Box::new(move |it, b| {
         for (loc, c) in &init {
@@ -167,11 +231,30 @@ fn seq(init: Init, tail: Option<(Loc, Code)>) -> Code {
     })
 }
 
-fn typed_seq(init: Init, lloc: Loc, lc: ICode) -> ICode {
+/// A typed body; guards returning the tail's width `u` exit with their value directly.
+fn typed_seq(init: Init, u: IntTy, lloc: Loc, lc: ICode) -> ICode {
+    let init: Vec<Step> = init.into_iter().map(|s| match s {
+        Step::Guard { w, .. } if w == u => s,
+        s => {
+            let (l, c) = s.code();
+            Step::Code(l, c)
+        }
+    }).collect();
     Box::new(move |it, b| {
-        for (loc, c) in &init {
-            it.mark(*loc);
-            c(it, b)?;
+        for s in &init {
+            match s {
+                Step::Code(loc, c) => {
+                    it.mark(*loc);
+                    c(it, b)?;
+                }
+                Step::Guard { loc, cond, rloc, val, .. } => {
+                    it.mark(*loc);
+                    if cond(it, b)? {
+                        it.mark(*rloc);
+                        return val.get(it, b);
+                    }
+                }
+            }
         }
         it.mark(lloc);
         lc(it, b)
@@ -181,7 +264,7 @@ fn typed_seq(init: Init, lloc: Loc, lc: ICode) -> ICode {
 /// A nested block: its own name scope (slots are never reused, so no runtime work).
 pub(super) fn block(cx: &mut Cx, list: &'static [S]) -> Option<Code> {
     cx.scopes.push(Vec::new());
-    let c = stmt_list(cx, list).map(|(init, tail)| seq(init, tail.map(|(l, t)| (l, t.code()))));
+    let c = stmt_list(cx, list, false).map(|(init, tail)| seq(init, tail.map(|(l, t)| (l, t.code()))));
     cx.scopes.pop();
     c
 }
