@@ -174,6 +174,15 @@ pub enum Commands {
         #[arg(long, value_name = "ENGINE", default_value = "resolved")]
         engine: String,
 
+        /// Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as
+        /// `WJ_JIT=0`); they run in the resolved engine's closures
+        #[arg(long)]
+        no_jit: bool,
+
+        /// Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020)
+        #[arg(long, value_name = "on|off", env = "WJ_JIT", default_value = "on", hide = true)]
+        jit: String,
+
         /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
         /// compile errors still refuse it
         #[arg(long)]

@@ -190,6 +190,28 @@ args = ["run", "--interpret", "--engine", "resolved", "{w}/m.wj"]
 stdout_has = ["hello"]
 
 [[case]]
+name = "run --no-jit runs hot integer functions as closures"
+polarity = "positive"
+files = { "m.wj" = "fn sq(n: int) -> int {\n    n * n\n}\nfn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 200 {\n        t += sq(i)\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--no-jit", "{w}/m.wj"]
+stdout_has = ["2646700"]
+
+[[case]]
+name = "run --jit off is the same as --no-jit"
+polarity = "positive"
+files = { "m.wj" = "fn sq(n: int) -> int {\n    n * n\n}\nfn main() {\n    let mut t = 0\n    let mut i = 0\n    while i < 200 {\n        t += sq(i)\n        i += 1\n    }\n    println(\"${t}\")\n}\n" }
+args = ["run", "--interpret", "--jit", "off", "{w}/m.wj"]
+stdout_has = ["2646700"]
+
+[[case]]
+name = "run --jit rejects an unknown value"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }
+args = ["run", "--interpret", "--jit", "maybe", "{w}/m.wj"]
+exit = 1
+output_has = ["unknown WJ_JIT / --jit value"]
+
+[[case]]
 name = "run --engine walker executes a file"
 polarity = "positive"
 files = { "m.wj" = "fn main() {\n    println(\"hello\")\n}\n" }

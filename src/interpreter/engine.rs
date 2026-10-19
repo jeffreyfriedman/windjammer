@@ -137,6 +137,8 @@ pub struct Interpreter {
     pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
+    /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
+    pub(crate) jit_enabled: bool,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
     #[cfg(feature = "jit")]
     pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
@@ -224,6 +226,7 @@ impl Interpreter {
             compiled: HashMap::default(),
             compiled_closures: HashMap::default(),
             rstack: Vec::new(),
+            jit_enabled: true,
             #[cfg(feature = "jit")]
             jit: None,
             subprocesses: HashMap::new(),
@@ -297,6 +300,11 @@ impl Interpreter {
     /// Select the resolved (compiled closure) engine for compilable functions.
     pub fn set_engine_resolved(&mut self, on: bool) {
         self.engine_resolved = on;
+    }
+
+    /// Allow machine code for hot integer functions (on by default; a no-op without the `jit` feature).
+    pub fn set_jit(&mut self, on: bool) {
+        self.jit_enabled = on;
     }
 
     pub fn set_args(&mut self, args: Vec<String>) {

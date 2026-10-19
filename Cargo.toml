@@ -72,11 +72,12 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli", "safety_typed_ir"]
+default = ["cli", "safety_typed_ir", "jit"]
 cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
-# Interpreter: Cranelift tier for hot integer functions (ADR-0020 step 7 spike).
+# Interpreter: Cranelift tier for hot integer functions (ADR-0020 step 7; on by default, `wj run --no-jit`
+# or WJ_JIT=0 turns it off at run time; lib-only builds such as `--no-default-features --features cli` omit it).
 jit = ["dep:cranelift-codegen", "dep:cranelift-frontend", "dep:cranelift-jit", "dep:cranelift-module", "dep:cranelift-native"]
 # std::arena (ADR-0016): arena types, escape check, interpreter support. Unstable surface.
 unstable_arenas = []
