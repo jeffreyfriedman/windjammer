@@ -1,5 +1,5 @@
 """Process runner, resumable result cache, and the context every criterion shares."""
-import hashlib, json, os, re, resource, shutil, subprocess, time
+import hashlib, json, os, re, resource, shutil, subprocess, tempfile, time
 
 QUICK, FULL = "quick", "full"
 
@@ -143,7 +143,7 @@ class Ctx:
     def isolated(self, path):
         """A private one-file directory holding `path`: compiled runs of a loose file would otherwise treat its whole
         directory (examples/verified, tests/spec/...) as one project, which is not what a user's `wj run FILE` does."""
-        d = os.path.join(self.cache.dir, "iso", sha(path, file_hash(path))[:16])
+        d = os.path.join(tempfile.gettempdir(), "wj-readiness-iso", sha(path, file_hash(path))[:16])  # outside any checkout: project-root detection must not climb into the repo
         os.makedirs(d, exist_ok=True)
         dst = os.path.join(d, os.path.basename(path))
         try:
