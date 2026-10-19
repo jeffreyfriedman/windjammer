@@ -1,13 +1,13 @@
 #[inline]
 fn test_if_else() {
-    let x = 10_i32;
-    if x > 5_i32 {
+    let x = 10_i64;
+    if x > 5_i64 {
         println!("[if_true] branch: yes");
     } else {
         println!("[if_true] branch: no");
     }
-    let y = 2_i32;
-    if y > 5_i32 {
+    let y = 2_i64;
+    if y > 5_i64 {
         println!("[if_false] branch: yes");
     } else {
         println!("[if_false] branch: no");
@@ -55,29 +55,29 @@ fn test_if_chain() {
 }
 
 fn test_while() {
-    let mut count: i32 = 0_i32;
-    while count < 5_i32 {
+    let mut count = 0_i64;
+    while count < 5_i64 {
         count += 1;
     }
     println!("[while] count to 5: {}", count);
     let mut sum = 0_i64;
-    let mut i: i32 = 1_i32;
-    while i <= 5_i32 {
-        sum += i as i64;
+    let mut i = 1_i64;
+    while i <= 5_i64 {
+        sum += i;
         i += 1;
     }
     println!("[while] sum 1..5: {}", sum);
 }
 
 fn test_for_range() {
-    let mut sum = 0_i32;
-    for i in 0_i32..5_i32 {
-        sum += i;
+    let mut sum = 0_i64;
+    for i in 0_i64..5_i64 {
+        sum += i as i64;
     }
     println!("[for_range] sum 0..5: {}", sum);
-    let mut sum2 = 0_i32;
-    for i in 1_i32..=5_i32 {
-        sum2 += i;
+    let mut sum2 = 0_i64;
+    for i in 1_i64..=5_i64 {
+        sum2 += i as i64;
     }
     println!("[for_range] sum 1..=5: {}", sum2);
 }
@@ -99,9 +99,9 @@ fn test_for_vec() {
 fn test_for_index() {
     let letters = vec!["a".to_string(), "b".to_string(), "c".to_string()];
     let mut result = String::new();
-    let mut idx: i32 = 0_i32;
+    let mut idx = 0_i64;
     for letter in letters {
-        if idx > 0_i32 {
+        if idx > 0_i64 {
             { use std::fmt::Write as _; write!(result, "{}", " ").expect("a formatting trait implementation returned an error"); };
         }
         result = result + &format!("{}:{}", idx, letter);
@@ -112,9 +112,9 @@ fn test_for_index() {
 
 #[inline]
 fn test_loop_break() {
-    let mut i = 0_i32;
+    let mut i = 0_i64;
     loop {
-        if i >= 3_i32 {
+        if i >= 3_i64 {
             break;
         }
         i += 1;
@@ -125,8 +125,8 @@ fn test_loop_break() {
 #[inline]
 fn test_continue() {
     let mut result = String::new();
-    for i in 0_i32..10_i32 {
-        if i % 2_i32 == 0_i32 {
+    for i in 0_i64..10_i64 {
+        if i % 2_i64 == 0_i64 {
             continue;
         }
         if !result.is_empty() {
@@ -140,8 +140,8 @@ fn test_continue() {
 #[inline]
 fn test_nested() {
     let mut result = String::new();
-    for i in 0_i32..3_i32 {
-        for j in 0_i32..2_i32 {
+    for i in 0_i64..3_i64 {
+        for j in 0_i64..2_i64 {
             if !result.is_empty() {
                 { use std::fmt::Write as _; write!(result, "{}", " ").expect("a formatting trait implementation returned an error"); };
             }

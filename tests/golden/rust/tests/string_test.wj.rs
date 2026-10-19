@@ -26,7 +26,7 @@ fn test_string_interpolation() {
 #[test]
 
 fn test_string_interpolation_numbers() {
-    let count = 42_i32;
+    let count = 42_i64;
     let message = format!("The answer is {}", count);
     assert!(message == "The answer is 42");
 }

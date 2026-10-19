@@ -46,13 +46,13 @@ enum SimpleEnum {
 #[inline]
 fn test_number_literals() -> i64 {
     let hex1 = 255;
-    let _hex2 = 3735928559;
-    let _hex3 = 4294967295;
+    let _hex2 = 3735928559_i64;
+    let _hex3 = 4294967295_i64;
     let bin1 = 10;
-    let _bin2 = 240;
+    let _bin2 = 240_i64;
     let oct1 = 493_i64;
-    let _oct2 = 420;
-    let _dec = 1000000;
+    let _oct2 = 420_i64;
+    let _dec = 1000000_i64;
     hex1 + bin1 + oct1
 }
 

@@ -962,8 +962,8 @@ impl<'ast> CodeGenerator<'ast> {
                 // This fact wins over the legacy collector, whose answer for such classes is its own
                 // i32 default.
                 if self.current_ir_function.as_ref().is_some_and(|f| {
-                    f.default_int_literals
-                        .contains(&crate::ir::numeric_defaults::node_id(expr))
+                    crate::ir::numeric_defaults::literal_key(expr)
+                        .is_some_and(|k| f.default_int_literals.contains(&k))
                 }) {
                     return format!("{}_i64", i);
                 }

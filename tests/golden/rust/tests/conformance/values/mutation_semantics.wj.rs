@@ -29,15 +29,15 @@ fn heal(&mut self, amount: i64) {
 
 #[inline]
 fn test_mut_basic() {
-    let mut x = 10_i32;
+    let mut x = 10_i64;
     println!("[mut_basic] before: x={}", x);
-    x = 20_i32;
+    x = 20_i64;
     println!("[mut_basic] after: x={}", x);
 }
 
 #[inline]
 fn test_mut_compound() {
-    let mut x = 10_i32;
+    let mut x = 10_i64;
     println!("[mut_compound] x={}", x);
     x += 5;
     println!("[mut_compound] after +=5: x={}", x);

@@ -1,6 +1,6 @@
 #[inline]
 fn test_basic_array_literal() {
-    let numbers = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
+    let numbers = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
     assert!(numbers.len() == 5_usize, "Array should have 5 elements");
     println!("✅ Integer array literal works");
     let floats = vec![1.0_f64, 2.0_f64, 3.0_f64];
@@ -17,7 +17,7 @@ fn test_vertex_data_array() {
 
 #[inline]
 fn test_index_buffer_array() {
-    let indices = vec![0_i32, 1_i32, 2_i32, 2_i32, 3_i32, 0_i32];
+    let indices = vec![0_i64, 1_i64, 2_i64, 2_i64, 3_i64, 0_i64];
     assert!(indices.len() == 6_usize, "Should have 6 indices");
     println!("✅ Index buffer array literal works");
 }

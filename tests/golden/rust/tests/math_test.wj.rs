@@ -3,35 +3,35 @@ use windjammer_runtime::test::*;
 
 fn test_addition() {
     let result = 4_i32;
-    assert!(result == 4_i32);
+    assert!(result == 4_i64);
 }
 
 #[test]
 
 fn test_subtraction() {
     let result = 7_i32;
-    assert!(result == 7_i32);
+    assert!(result == 7_i64);
 }
 
 #[test]
 
 fn test_multiplication() {
     let result = 12_i32;
-    assert!(result == 12_i32);
+    assert!(result == 12_i64);
 }
 
 #[test]
 
 fn test_division() {
     let result = 5_i32;
-    assert!(result == 5_i32);
+    assert!(result == 5_i64);
 }
 
 #[test]
 
 fn test_modulo() {
     let result = 1_i32;
-    assert!(result == 1_i32);
+    assert!(result == 1_i64);
 }
 
 #[test]

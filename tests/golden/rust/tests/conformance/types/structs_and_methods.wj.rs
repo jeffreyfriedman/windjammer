@@ -111,9 +111,9 @@ fn test_basic_struct() {
 
 #[inline]
 fn test_struct_shorthand() {
-    let x = 5_i32;
-    let y = 10_i32;
-    let p = Point { x: (x as i64), y: (y as i64) };
+    let x = 5_i64;
+    let y = 10_i64;
+    let p = Point { x, y };
     println!("[struct_shorthand] x={}, y={}", p.x, p.y);
 }
 

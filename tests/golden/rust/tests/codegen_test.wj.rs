@@ -15,7 +15,7 @@ fn test_print_with_interpolation() {
 #[test]
 
 fn test_print_with_number_interpolation() {
-    let port = 8080_i32;
+    let port = 8080_i64;
     print!("Port: {}", port);
 }
 
@@ -43,7 +43,7 @@ fn test_empty_vec_with_type() {
 #[test]
 
 fn test_vec_with_elements() {
-    let v = vec![1_i32, 2_i32, 3_i32];
+    let v = vec![1_i64, 2_i64, 3_i64];
     assert!(v.len() == 3_usize);
 }
 
