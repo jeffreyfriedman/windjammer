@@ -1,0 +1,1 @@
+{"action": "create", "reason": "A writer of Windjammer code expected `group_by(key(_.clone()))` to call key on each element. The `_` placeholder binds to the smallest enclosing call argument, so it wrapped the inner call and the program failed at runtime. A rule for nested calls prevents the trap.", "evidence": "references/evidence-37cbfa30.md"}

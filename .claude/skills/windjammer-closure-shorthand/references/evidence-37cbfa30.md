@@ -1,0 +1,1 @@
+Handback report: "Smallest enclosing call argument; a bare `_` stays the pipe placeholder in a `\|>` stage and is an error elsewhere." Assistant summary: "`group_by(key(_.clone()))` wraps the inner call in a closure, as the documented `_` rule says, but a first-draft writer won't expect that. It fails at runtime."

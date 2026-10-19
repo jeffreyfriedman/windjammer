@@ -3,6 +3,7 @@
 //! Provides manifest parsing, dependency resolution stubs, and registry client
 //! interfaces for the Windjammer package ecosystem.
 
+pub mod graph;
 pub mod manifest;
 pub mod registry;
 pub mod resolver;

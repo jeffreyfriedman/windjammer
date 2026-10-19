@@ -1,0 +1,6 @@
+// spec: SPEC-CLOS-006
+// mode: parse-error
+// expect-error: only valid inside a call argument
+fn main() {
+    let f = _ + 1
+}

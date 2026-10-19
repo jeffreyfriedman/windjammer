@@ -1,0 +1,10 @@
+// spec: SPEC-ARGS-009
+// mode: parse-error
+// expect-error: cannot refer to parameter `s`
+fn pad(s: string, width: int = s.len()) -> int {
+    width
+}
+
+fn main() {
+    println("${pad("ab")}")
+}

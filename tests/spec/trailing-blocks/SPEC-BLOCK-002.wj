@@ -1,0 +1,11 @@
+// spec: SPEC-BLOCK-002
+// expect: 30 6
+fn apply_to(x: int, f: fn(int) -> int) -> int {
+    f(x)
+}
+
+fn main() {
+    let xs: Vec<int> = [1, 2, 3]
+    let ys: Vec<int> = xs.map() { v -> v * 10 }.collect()
+    println("${ys[2]} ${apply_to(3) { n: int -> n * 2 }}")
+}

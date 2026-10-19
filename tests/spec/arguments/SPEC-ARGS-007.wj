@@ -1,0 +1,10 @@
+// spec: SPEC-ARGS-007
+// mode: parse-error
+// expect-error: missing argument `host`
+fn connect(host: string, timeout: int = 30, retries: int = 3) -> string {
+    "${host}:${timeout}:${retries}"
+}
+
+fn main() {
+    println(connect(timeout: 1))
+}

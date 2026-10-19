@@ -33,8 +33,14 @@ fn iter_elem(recv: &Ty) -> Option<Ty> {
 }
 
 pub fn arg_want(recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
+    if let Some(t) = super::ordering::arg_want(recv, iter_elem(recv).as_ref(), name, i) {
+        return Some(t);
+    }
+    if let Some(t) = super::enumerable::arg_want(recv, name, i, prev) {
+        return Some(t);
+    }
     match recv {
-        Ty::Vec(t) => vec_arg_want(t, name, i),
+        Ty::Vec(t) => vec_arg_want(t, name, i, prev),
         Ty::Iter(_) | Ty::Range(_) => iter_arg_want(&iter_elem(recv)?, name, i, prev),
         Ty::Str => str_arg_want(name, i),
         Ty::Map(k, v) => match (name, i) {
@@ -50,17 +56,17 @@ pub fn arg_want(recv: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
     }
 }
 
-fn vec_arg_want(t: &Ty, name: &str, i: usize) -> Option<Ty> {
+fn vec_arg_want(t: &Ty, name: &str, i: usize, prev: &[PExpr]) -> Option<Ty> {
     match (name, i) {
         ("push", 0) | ("contains", 0) | ("push_front", 0) | ("push_back", 0) | ("fill", 0) => Some(t.clone()),
         ("insert", 0) | ("remove", 0) | ("get", 0) | ("swap", _) | ("truncate", 0) | ("windows", 0) | ("chunks", 0) | ("swap_remove", 0) | ("split_at", 0) => Some(Ty::usize()),
         ("insert", 1) => Some(t.clone()),
         ("extend", 0) | ("append", 0) | ("extend_from_slice", 0) => Some(Ty::Vec(b(t.clone()))),
-        ("sort_by", 0) | ("sort_by_key", 0) => Some(fnty(vec![t.clone(), t.clone()], Ty::Adt("Ordering".into(), vec![]))),
         ("retain", 0) => Some(fnty(vec![t.clone()], Ty::Bool)),
         ("join", 0) => Some(Ty::Str),
         ("binary_search", 0) => Some(t.clone()),
-        _ => None,
+        // W0003: iterator methods on lists (`xs.filter(f)`) type their closures like `xs.iter().filter(f)`.
+        _ => iter_arg_want(t, name, i, prev),
     }
 }
 
@@ -121,6 +127,12 @@ pub fn ret_ty(recv: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Optio
         "to_string" => return Some(Ty::Str),
         _ => {}
     }
+    if let Some(t) = super::ordering::ret_ty(recv, iter_elem(recv).as_ref(), name) {
+        return Some(t);
+    }
+    if let Some(t) = super::enumerable::ret_ty(recv, name, args) {
+        return Some(t);
+    }
     match recv {
         Ty::Vec(t) => vec_ret(t, name, args, want),
         Ty::Iter(_) | Ty::Range(_) => iter_ret(&iter_elem(recv)?, name, args, want),
@@ -152,7 +164,8 @@ fn vec_ret(t: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty> 
         "binary_search" => Ty::Result(b(Ty::usize()), b(Ty::usize())),
         "split_at" => pair(Ty::Vec(b(t.clone())), Ty::Vec(b(t.clone()))),
         "min" | "max" => Ty::Option(b(t.clone())),
-        _ => return iter_ret(t, name, args, want).filter(|_| matches!(name, "sum" | "product")),
+        // W0003: iterator methods are called on lists directly (`xs.map(f)`), so they type like `xs.iter().map(f)`.
+        _ => return iter_ret(t, name, args, want),
     })
 }
 
@@ -188,7 +201,6 @@ fn iter_ret(e: &Ty, name: &str, args: &[PExpr], want: Option<&Ty>) -> Option<Ty>
         "fold" => args.first()?.ty.clone(),
         "any" | "all" => Ty::Bool,
         "min" | "max" | "last" | "next" | "find" | "nth" => Ty::Option(b(e.clone())),
-        "min_by_key" | "max_by_key" => Ty::Option(b(e.clone())),
         "position" => Ty::Option(b(Ty::usize())),
         "for_each" => Ty::Unit,
         _ => return None,
@@ -323,6 +335,7 @@ pub fn static_ret(owner: &str, name: &str, args: &[PExpr], want: Option<&Ty>) ->
         }
         ("f64", "from") => Ty::F64,
         ("char", "from_u32") => Ty::Option(b(Ty::Char)),
+        (o, v) if super::ordering::is_path(o) && super::ordering::variant_value(v).is_some() => super::ordering::ty(),
         _ => return None,
     })
 }

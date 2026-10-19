@@ -172,6 +172,13 @@ pub struct Interpreter {
     pub(crate) expected: Option<(usize, Type)>,
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
+    /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items
+    /// are then bound after every module is registered, instead of one at a time.
+    pub(crate) project_loading: bool,
+    /// Bridge library for `extern fn` (ADR-0020), when the project provides Rust code.
+    pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
+    /// `wj run --hot`: pending file edits applied at function entry (`hot.rs`).
+    pub(crate) hot: Option<Box<super::hot::HotState>>,
 }
 
 impl Default for Interpreter {
@@ -227,6 +234,9 @@ impl Interpreter {
             type_hint: None,
             expected: None,
             missing_modules: HashSet::new(),
+            project_loading: false,
+            host: None,
+            hot: None,
         };
         s.modules.push(Module::new("main", PathBuf::from("main.wj"), None));
         if std::thread::current().name() == Some(super::runner::BIG_STACK_THREAD) {

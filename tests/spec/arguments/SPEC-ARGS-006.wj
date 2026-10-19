@@ -1,0 +1,10 @@
+// spec: SPEC-ARGS-006
+// mode: parse-error
+// expect-error: positional argument after a named one
+fn connect(host: string, timeout: int = 30, retries: int = 3) -> string {
+    "${host}:${timeout}:${retries}"
+}
+
+fn main() {
+    println(connect(timeout: 1, "db"))
+}

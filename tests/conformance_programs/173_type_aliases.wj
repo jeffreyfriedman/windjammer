@@ -1,0 +1,70 @@
+// `type` aliases (struct, enum, generic std containers, integer widths, tuples) are expanded on every
+// backend, including `Alias { .. }`, `Alias::assoc()` and `Alias::Variant`. Expected output from rustc
+// on a line-by-line Rust transliteration.
+// expect: 5
+// expect: 7
+// expect: 3
+// expect: line 7
+// expect: 4
+// expect: x
+use std::collections::HashMap
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+impl Point {
+    fn new(x: int, y: int) -> Point {
+        Point { x: x, y: y }
+    }
+}
+
+enum Shape {
+    Dot,
+    Line(int),
+}
+
+type Pt = Point
+type Counts = HashMap<string, int>
+type Grid = Vec<Vec<i32>>
+type Kind = Shape
+type Score = u8
+type Pairs = Vec<(int, string)>
+
+fn total(c: Counts) -> int {
+    let mut t = 0
+    for (_, v) in c {
+        t += v
+    }
+    t
+}
+
+fn width(g: Grid) -> usize {
+    g[0].len()
+}
+
+fn bump(s: Score) -> Score {
+    s.wrapping_add(250)
+}
+
+fn main() {
+    let p: Pt = Pt { x: 1, y: 2 }
+    let q = Pt::new(3, 4)
+    println("${p.x + q.y}")
+    let mut c: Counts = HashMap::new()
+    c.insert("a".to_string(), 2)
+    c.insert("b".to_string(), 5)
+    println("${total(c)}")
+    let g: Grid = vec![vec![1, 2, 3]]
+    println("${width(g)}")
+    let k: Kind = Kind::Line(7)
+    match k {
+        Shape::Dot => println("dot"),
+        Shape::Line(n) => println("line {}", n),
+    }
+    let s: Score = 10
+    println("${bump(s)}")
+    let ps: Pairs = vec![(1, "x".to_string())]
+    println("${ps[0].1}")
+}
