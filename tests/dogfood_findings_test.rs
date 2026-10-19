@@ -498,3 +498,54 @@ fn test_discovery_agrees_between_interpreted_and_compiled_listing() {
     assert!(a.iter().any(|l| l.contains("result_assertions")), "{a:?}");
     assert_eq!(a, b);
 }
+
+// ------------------------------------------------------------------ stdlib: argon2id
+
+const PASSWORD_PROGRAM: &str = r#"use std::crypto
+
+fn show(r: Result<bool, string>) {
+    match r {
+        Ok(b) => println(b),
+        Err(e) => println(e),
+    }
+}
+
+fn main() {
+    let reference = "$argon2id$v=19$m=19456,t=2,p=1$MDEyMzQ1Njc4OWFiY2RlZg$nUxirfVK2I/vOT6f2ly2wSgjwZ1oqwTLCmrcpDyjicA"
+    show(crypto.verify_password("hunter2", reference))
+    show(crypto.verify_password("hunter3", reference))
+    let h = match crypto.hash_password_argon2id("pw") {
+        Ok(v) => v,
+        Err(e) => e,
+    }
+    println(crypto.password_hash_is_argon2id(h))
+    show(crypto.verify_password("pw", h))
+    show(crypto.verify_password("px", h))
+    let legacy = match crypto.hash_password("pw") {
+        Ok(v) => v,
+        Err(e) => e,
+    }
+    println(crypto.password_hash_is_argon2id(legacy))
+    show(crypto.verify_password("pw", legacy))
+}
+"#;
+
+/// The reference hash comes from the reference C implementation; the expectation is independent of
+/// the Rust argon2 crate. RFC 9106 vectors are checked in the runtime crate's unit tests.
+#[test]
+fn interpreter_argon2id_hash_verify_and_bcrypt_migration() {
+    let out = interpret(PASSWORD_PROGRAM).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(out, "true\nfalse\ntrue\ntrue\nfalse\nfalse\ntrue\n");
+}
+
+#[test]
+fn compiled_argon2id_calls_the_runtime_crypto_module() {
+    let dir = write_project(&[("main.wj", PASSWORD_PROGRAM)]);
+    let out = dir.path().join("gen");
+    let b = Command::new(WJ).arg("build").arg(dir.path().join("main.wj")).arg("--output").arg(&out).arg("--no-cargo").output().unwrap();
+    assert!(b.status.success(), "{}{}", String::from_utf8_lossy(&b.stdout), String::from_utf8_lossy(&b.stderr));
+    let rs = fs::read_to_string(out.join("main.rs")).unwrap();
+    for needle in ["crypto::hash_password_argon2id(", "crypto::password_hash_is_argon2id(", "crypto::verify_password("] {
+        assert!(rs.contains(needle), "missing `{needle}` in:\n{rs}");
+    }
+}
