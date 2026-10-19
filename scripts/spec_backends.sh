@@ -4,7 +4,7 @@
 #   scripts/spec_backends.sh <path-to-wj> rust|go|js|ts [out.tsv]
 #
 # Needs rustc (rust), go (go: `go vet` must be clean too) or node >= 22.6 (js, ts: type stripping). Sequential on purpose (shared machines). Examples in
-# `parse-ok` / `parse-error` mode are skipped: the compiled backends have no front-end-only mode.
+# any mode other than `run` / `panic` (parse-*, check-*) are skipped: the compiled backends have no front-end-only mode.
 # Result per example: PASS, FAIL (built, wrong output or status), BUILD (wj or the toolchain rejected it).
 set -uo pipefail
 WJ="${1:?usage: spec_backends.sh <wj> rust|go|js|ts [out.tsv]}"; BACKEND="${2:?backend}"; OUT="${3:-/dev/stdout}"
@@ -15,7 +15,7 @@ if [ -n "${SPEC_WORK:-}" ]; then W="$SPEC_WORK"; mkdir -p "$W"; else W="$(mktemp
 pass=0; fail=0; build=0
 while IFS= read -r f; do
   mode=$(sed -n 's#^// mode: *##p' "$f" | head -1); mode="${mode:-run}"
-  case "$mode" in parse-ok|parse-error) continue;; esac
+  case "$mode" in run|panic) ;; *) continue;; esac
   id=$(sed -n 's#^// spec: *##p' "$f" | head -1)
   xf=$(sed -n 's#^// xfail: *##p' "$f" | head -1)
   want_exit=0; [ "$mode" = panic ] && { want_exit=$(sed -n 's#^// expect-exit: *##p' "$f" | head -1); want_exit="${want_exit:-101}"; }
