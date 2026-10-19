@@ -105,7 +105,9 @@ fn generate_with(seed: u64, forms: &[u64]) -> Project {
         let mut path = mods[parent].path.clone();
         path.push(name);
         let is_dir = r.chance(40);
-        mods.push(Mod { path, is_dir, has_mod_wj: is_dir && r.chance(60), parent: Some(parent) });
+        let bare_dirs_ok = forms.contains(&0);
+        let has_mod_wj = is_dir && (!bare_dirs_ok || r.chance(60));
+        mods.push(Mod { path, is_dir, has_mod_wj, parent: Some(parent) });
     }
     // functions: same names (f0, f1) recur across modules; `u_<module>` is unique (for globs)
     let mut funcs: Vec<Func> = Vec::new();
