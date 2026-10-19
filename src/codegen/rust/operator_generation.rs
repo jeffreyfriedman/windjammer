@@ -170,6 +170,13 @@ impl<'ast> CodeGenerator<'ast> {
             }
         }
 
+        // `&v[a..b]`: the desugared slice already generates `&v[a..b]`.
+        if matches!(op, crate::parser::UnaryOp::Ref)
+            && matches!(operand, Expression::MethodCall { method, arguments, .. } if method == "slice" && arguments.len() == 2)
+        {
+            return self.generate_expression(operand);
+        }
+
         let op_str = operators::unary_op_to_rust(op);
 
         // BORROW CONTEXT: When generating &expr or &mut expr, suppress Vec index
