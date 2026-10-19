@@ -1,0 +1,7 @@
+error[WJ0020]: operator `+` cannot be applied to `string` and `int`
+  --> string_plus_int.wj:8:15
+  |
+8 |     let bad = label + 5
+  |               ^^^^^ operand here
+  = help: parse the string first, for example `s.parse::<int>()`
+  = explain: wj explain WJ0020
