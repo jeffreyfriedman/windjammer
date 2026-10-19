@@ -1,0 +1,13 @@
+// spec: SPEC-ARGS-001
+// expect: db:30:3
+// expect: db:30:5
+// expect: h:30:9
+fn connect(host: string, timeout: int = 30, retries: int = 3) -> string {
+    "${host}:${timeout}:${retries}"
+}
+
+fn main() {
+    println(connect("db"))
+    println(connect("db", retries: 5))
+    println(connect(retries: 9, host: "h"))
+}

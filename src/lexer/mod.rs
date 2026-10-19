@@ -425,10 +425,7 @@ impl Lexer {
                 self.advance();
                 Token::Semicolon
             }
-            Some('?') => {
-                self.advance();
-                Token::Question
-            }
+            Some('?') => self.question(),
             Some(ch) => {
                 self.advance();
                 Token::Invalid(Self::unexpected_char_message(ch))
@@ -447,6 +444,16 @@ impl Lexer {
             '`' => "unexpected character '`': use \"...\" for strings".to_string(),
             _ => format!("unexpected character {:?}", ch),
         }
+    }
+
+    /// `?` or `??` (ADR-0018 option default); the cursor is on the first `?`.
+    fn question(&mut self) -> Token {
+        self.advance();
+        if self.peek(0) != Some('?') {
+            return Token::Question;
+        }
+        self.advance();
+        Token::QuestionQuestion
     }
 
     /// `|>` or `|>?` (the cursor is on the `|`).

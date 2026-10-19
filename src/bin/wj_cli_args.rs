@@ -272,6 +272,12 @@ pub enum Commands {
         /// Re-run the tests on every source change
         #[arg(long)]
         watch: bool,
+        /// Run only the doctests (```wj examples in `///` doc comments)
+        #[arg(long)]
+        doc: bool,
+        /// Also build and run each doctest through the Rust backend (default: interpreter only)
+        #[arg(long)]
+        compiled: bool,
     },
 
     /// Format Windjammer code

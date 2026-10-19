@@ -1,0 +1,11 @@
+// spec: SPEC-COLL-008
+// expect: at 1
+// expect: true
+fn main() {
+    let xs = [5, 7, 9, 7]
+    match xs.index_of(7) {
+        Some(i) => println("at ${i}"),
+        None => println("absent"),
+    }
+    println("${xs.index_of(4).is_none()}")
+}

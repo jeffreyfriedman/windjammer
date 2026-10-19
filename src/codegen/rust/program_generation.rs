@@ -1176,8 +1176,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
         }
-        // Cross-crate return types / ascriptions may emit `HashMap<...>` without a local
-        // `use std::collections::HashMap` in the .wj source — detect from generated body.
+        // Cross-crate types may emit `HashMap<..>` with no `use` in the .wj source: detect from the body.
         if !self.needs_hashmap_import
             && (body.contains("HashMap<") || body.contains("HashMap::"))
             && !imports.contains("std::collections::HashMap")
@@ -1300,6 +1299,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 "#);
         }
 
+        let body = self.with_enumerable_runtime(body, &mut implicit_imports);
         // Combine: implicit imports + explicit imports + tauri helper + body
         let mut combined_imports = String::new();
         if !implicit_imports.is_empty() {

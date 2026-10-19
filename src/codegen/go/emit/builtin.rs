@@ -15,6 +15,9 @@ impl<'m> Go<'m> {
             return self.display(recv, &FmtSpec::default());
         }
         let a: Vec<String> = args.iter().map(|e| self.expr(e)).collect::<PResult<_>>()?;
+        if let Some(go) = self.enumerable_method(recv, name, &a)? {
+            return Ok(go);
+        }
         match &recv.ty {
             Ty::Vec(_) | Ty::Iter(_) | Ty::Range(_) => self.vec_method(recv, name, &a, args, ty),
             Ty::Str => self.str_method(recv, name, &a, args, ty),

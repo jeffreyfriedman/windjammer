@@ -61,6 +61,9 @@ pub fn execute(
         .with_shadow_validate_strict(ir_shadow_validate)
         .with_skip_cargo_toml_generation(no_generate_cargo_toml);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
+    if !path.exists() {
+        anyhow::bail!("path not found: {}", path.display());
+    }
 
     if json_output {
         let external_metadata = parse_external_metadata_args(metadata);
