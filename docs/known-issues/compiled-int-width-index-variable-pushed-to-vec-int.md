@@ -29,3 +29,5 @@ fn main() {
 function returns `Vec<int>`); `total` fails the same way (`n += s.len()` where `n` is inferred `i64` but `len()` is `usize`).
 `int` is the language integer, so `.len()` and loop counters used as `int` should be converted (or inferred as `int`)
 consistently. See also `ownership-and-width-ratchet-residue.md`.
+
+Status: handed to the convergence / numeric-solver stream. Ratchet: `ecosystem_findings_handoff_test::index_counter_pushed_to_vec_int_keeps_one_width` and `len_into_int_field_converts`, listed in `.config/known-test-failures.txt`. Blocks the ecosystem `wj-grep` app (`out.push(i + 1_usize)` into `Vec<int>`).

@@ -142,6 +142,33 @@ fn uses_windjammer_stdlib(source: &str) -> HashSet<String> {
     crate::compiler::library_copy_registry::stdlib_modules_from_source(source)
 }
 
+/// A std stub's empty body makes analysis infer `Borrowed` for every parameter, but the runtime function takes
+/// `address: String` (`http::server_serve`) by value: keep the declared owned formal. Free functions only; methods
+/// keep the analysed receiver mode (builder methods consume `self`).
+fn restore_runtime_owned_params(
+    stub: &crate::analyzer::FunctionSignature,
+    runtime: &crate::analyzer::FunctionSignature,
+) -> crate::analyzer::FunctionSignature {
+    use crate::analyzer::OwnershipMode;
+    let mut out = stub.clone();
+    if runtime.param_ownership.len() != out.param_ownership.len() {
+        return out;
+    }
+    for (i, rt_mode) in runtime.param_ownership.iter().enumerate() {
+        let rt_formal_owned = runtime
+            .param_types
+            .get(i)
+            .is_some_and(|t| !matches!(t, crate::parser::Type::Reference(_) | crate::parser::Type::MutableReference(_)));
+        if *rt_mode == OwnershipMode::Owned && rt_formal_owned && out.param_ownership[i] == OwnershipMode::Borrowed {
+            out.param_ownership[i] = OwnershipMode::Owned;
+            if let (Some(t), Some(rt_t)) = (out.param_types.get_mut(i), runtime.param_types.get(i)) {
+                *t = rt_t.clone();
+            }
+        }
+    }
+    out
+}
+
 /// Find Windjammer stdlib directory (`std/`).
 ///
 /// Shared by multipass + single-file API-type collection. Prefer env / crate
@@ -333,7 +360,7 @@ pub(crate) fn build_library_multipass(
         eprintln!("⟳ Compiler changed — re-transpiling all sources");
     }
 
-    let reanalysis_set = super::incremental::compute_reanalysis_set(
+    let mut reanalysis_set = super::incremental::compute_reanalysis_set(
         &sources,
         &src_base,
         output,
@@ -347,6 +374,13 @@ pub(crate) fn build_library_multipass(
             phase_start.elapsed().as_secs_f64()
         );
         return Ok(());
+    }
+    // Std stubs feed signature convergence (their analysis is part of what a clean build computes), so an
+    // incremental build re-analyses them too: a rebuild must reach the same registry as a clean build.
+    for (i, (file, _)) in sources.iter().enumerate() {
+        if std_stub_files.contains(file) {
+            reanalysis_set.insert(i);
+        }
     }
     if reanalysis_set.len() < sources.len() {
         eprintln!(
@@ -581,14 +615,10 @@ pub(crate) fn build_library_multipass(
             let module_path = file_module.join("::");
             let is_std_stub = std_stub_files.contains(file);
             for (name, sig) in &file_registry.signatures {
-                let runtime_key = if name.contains("::") { name.clone() } else { format!("{file_stem}::{name}") };
-                let runtime_sig = if is_std_stub { runtime_contracts.get(&runtime_key) } else { None };
                 let restored;
-                let sig = match runtime_sig {
-                    Some(rt) if rt.param_ownership.len() == sig.param_ownership.len() => {
-                        let mut r = rt.clone();
-                        r.name = sig.name.clone();
-                        restored = r;
+                let sig = match is_std_stub.then(|| runtime_contracts.get(&format!("{file_stem}::{name}"))).flatten() {
+                    Some(rt) if !name.contains("::") && !sig.has_self_receiver => {
+                        restored = restore_runtime_owned_params(sig, rt);
                         &restored
                     }
                     _ => sig,

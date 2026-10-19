@@ -30,3 +30,5 @@ with the callees (`E0277: cannot add &mut i64 to i64`, `E0308`). Renaming one fu
 so the signature registry is keyed by the bare function name rather than by module path / `DefId`. A real app hits this
 with `list`, `show`, `create`, `remove` in several handler modules. Related: the comment in `wj-notes-api` about
 `query_get` stealing ownership metadata.
+
+Status: handed to the convergence stream (registry keyed by bare function name). Ratchet: `ecosystem_findings_handoff_test::same_name_free_functions_keep_own_parameter_modes`, listed in `.config/known-test-failures.txt`.

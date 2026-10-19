@@ -92,7 +92,8 @@ impl<'ast> CodeGenerator<'ast> {
     /// False when `ty` names a crate type that this file neither declares nor imports: an annotation
     /// spelling it would not resolve (`let rules: Vec<Rule>` in a test that never imports `Rule`).
     pub(in crate::codegen::rust) fn type_names_are_in_file_scope(&self, ty: &Type) -> bool {
-        if self.file_scope_is_open {
+        // Library modules import the types their annotations name (`format_auto_super_type_imports`).
+        if self.file_scope_is_open || self.is_module {
             return true;
         }
         let known_elsewhere = |n: &str| {

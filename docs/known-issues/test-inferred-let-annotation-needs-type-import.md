@@ -33,3 +33,5 @@ emitted when the type is in scope (or is path-qualified).
 
 The same happens in non-test code: `let rules = parse(text)` where `parse` comes from another package
 (`wj_gitignore::parse` returning `Vec<Rule>`) is emitted as `let rules: Vec<Rule>` without `use wj_gitignore::Rule`.
+
+Status: fixed for `wj test` files and any file: a collection `let` annotation is emitted only when every crate type it names is declared or imported in that file. Gate: `ecosystem_findings_test::test_file_let_annotation_does_not_need_type_import`.
