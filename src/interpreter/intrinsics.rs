@@ -39,6 +39,7 @@ impl Interpreter {
     pub(crate) fn eval_intrinsic(&mut self, intr: Intrinsic, whole: Expr, args: &[Expr], is_repeat: bool) -> R {
         match intr {
             Intrinsic::Print | Intrinsic::Println | Intrinsic::Eprint | Intrinsic::Eprintln => {
+                self.cap_gate_console()?;
                 let mut s = self.message_text(args, 0)?.unwrap_or_default();
                 if intr.appends_newline() {
                     s.push('\n');

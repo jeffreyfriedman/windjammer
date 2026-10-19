@@ -105,6 +105,10 @@ pub struct CodegenConfig {
 
     /// Enable tree shaking (dead code elimination)
     pub tree_shake: bool,
+
+    /// Statement installing the program's capability grant before `main` (ADR-0021); `None` when every sink call
+    /// was proven inside the grant at compile time.
+    pub capability_install: Option<String>,
 }
 
 impl Default for CodegenConfig {
@@ -119,6 +123,7 @@ impl Default for CodegenConfig {
             pretty_print: true,
             include_comments: false,
             tree_shake: false,
+            capability_install: None,
         }
     }
 }

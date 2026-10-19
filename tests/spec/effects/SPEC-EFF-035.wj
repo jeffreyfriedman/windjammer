@@ -1,0 +1,15 @@
+// spec: SPEC-EFF-035
+// mode: panic
+// manifest: [capabilities]
+// manifest: fs.read = ["/etc/**"]
+// manifest: fs.write = ["/etc/**"]
+// expect: start
+// expect-exit: 126
+// expect-error: capability denied: fs.write(/etc/wj_never_written)
+use std::cap
+fn main() {
+    let files = cap::fs().under("/etc").read_only()
+    println("start")
+    let r = files.write("/etc/wj_never_written", "x")
+    println("not reached")
+}

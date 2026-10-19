@@ -1,0 +1,9 @@
+// spec: SPEC-EFF-033
+// mode: panic
+// manifest: [capabilities]
+// manifest: deny = ["console"]
+// expect-exit: 126
+// expect-error: capability denied: console
+fn main() {
+    println("this line is never printed")
+}

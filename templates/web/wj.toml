@@ -20,3 +20,10 @@ edition = "2025"
 opt-level = 3
 lto = true
 
+# Capabilities (ADR-0021): what this program may reach. The template calls one API and (commented out) serves
+# on a port; `wj run` stops anything else with exit status 126 and prints the line to add.
+[capabilities]
+fs.read = ["./**"]
+fs.write = ["./**"]
+net.connect = ["jsonplaceholder.typicode.com"]
+# net.listen = ["0.0.0.0:8080"]

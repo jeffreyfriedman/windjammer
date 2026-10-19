@@ -302,7 +302,8 @@ fn main() {{
 }}
 "##
     );
-    let (out, err, code) = run(&src);
+    let grant_fs = ["--allow".to_string(), format!("fs.read={root}/**"), "--allow".to_string(), format!("fs.write={root}/**")];
+    let (out, err, code) = run_with(&src, &grant_fs.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(code, 0, "{err}");
     let want = "[\"a.txt:false\", \"d.bin:false\", \"sub:true\"]\n[1, 2, 3, 255]\n5 true\ngz y.tar y.tar.gz\nx/y true false\nNo such file or directory (os error 2)\nfalse\n";
     assert_eq!(out, want, "{err}");
@@ -370,11 +371,11 @@ fn run_with(src: &str, flags: &[&str]) -> (String, String, i32) {
 fn http_client_is_off_by_default_mockable_and_real_only_when_allowed() {
     use std::io::{Read, Write};
     let src = HTTP_PROG.replace("PORT", "9");
-    // 1. default: refuses, naming the flags
-    let (out, _, code) = run_with(&src, &[]);
-    assert_eq!(code, 0);
-    assert!(out.starts_with("ERR network access is disabled"), "{out}");
-    assert!(out.contains("--mock-http") && out.contains("--allow-network"), "{out}");
+    // 1. default: the capability gate stops the call (exit 126) and the message carries the fix
+    let (out, err, code) = run_with(&src, &[]);
+    assert_eq!(code, 126, "{err}");
+    assert!(out.is_empty(), "{out}");
+    assert!(err.contains("capability denied: net.connect(127.0.0.1)") && err.contains("--allow net.connect=127.0.0.1"), "{err}");
     // 2. mock port
     let dir = TempDir::new().unwrap();
     let mock = dir.path().join("mock.json");

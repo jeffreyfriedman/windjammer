@@ -6,7 +6,6 @@
 "src/cli_commands.rs" = "legacy `windjammer` binary dispatch (WP13)"
 "src/ejector.rs" = "only the legacy `windjammer eject` reaches it; wt/eject restores `wj eject`"
 "src/error_handling.rs" = "legacy `windjammer lint` path (WP13); `wj lint` uses src/cli/lint.rs"
-"src/ir/capability_lock.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
 "src/main.rs" = "legacy `windjammer` binary (WP13: single driver; retire after `wj` covers eject)"
 
 [dead_pub_fns]
@@ -48,6 +47,7 @@
 "src/file_compilation_pipeline.rs" = 1
 "src/inference.rs" = 1
 "src/interpreter/builtins/mod.rs" = 1
+"src/interpreter/caps.rs" = 1
 "src/interpreter/eval_expr.rs" = 1
 "src/interpreter/loader.rs" = 1
 "src/interpreter/runner.rs" = 3

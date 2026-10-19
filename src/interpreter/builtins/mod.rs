@@ -20,6 +20,7 @@ mod num;
 mod option;
 mod seq;
 mod shared;
+mod std_cap;
 mod std_data;
 mod std_extra;
 mod std_fns;
@@ -160,6 +161,7 @@ impl Registry {
         shared::register(&mut r);
         arena::register(&mut r);
         std_sys::register(&mut r);
+        std_cap::register(&mut r);
         std_data::register(&mut r);
         std_proc::register(&mut r);
         std_runtime_gaps::register(&mut r);
@@ -249,6 +251,7 @@ impl Registry {
         }
     }
     /// Every registered function path, sorted (audits: `caps.rs` requires each authority-module builtin to be classified).
+    #[cfg(test)]
     pub fn function_paths(&self) -> Vec<&'static str> {
         let mut v: Vec<&'static str> = self.funcs.keys().copied().collect();
         v.sort_unstable();

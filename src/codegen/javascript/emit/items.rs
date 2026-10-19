@@ -23,6 +23,9 @@ impl<'m> Js<'m> {
             self.line(&format!("export const {}{ann} = {v};", ident(&c.name)));
         }
         if m.fns.iter().any(|f| f.name == "main") {
+            if let Some(install) = self.capability_install.clone() {
+                self.line(&format!("{install};"));
+            }
             self.line("$run(main, import.meta.url);");
         }
         Ok(())
