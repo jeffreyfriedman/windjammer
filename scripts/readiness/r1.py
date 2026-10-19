@@ -1,5 +1,5 @@
 """R1: per-test pass/fail sets under `wj test --interpret` vs compiled `wj test`, per project."""
-import json, os, re
+import json, os, re, shutil
 from .core import pct, scrub, tree_hash, sha
 
 TARGET = 99.0
@@ -39,16 +39,20 @@ def run_project(ctx, proj):
     t = ctx.timeouts
     i = ctx.cached_run("r1-interp", sha(ph, proj.label), [ctx.wj, "test", "--interpret", "--json", proj.path],
                        t["interp"], cwd=proj.path)
-    c = ctx.cached_run("r1-compiled", sha(ph, proj.label), [ctx.wj, "test", "--json", proj.path], t["compiled"],
-                       cwd=proj.path)
+    scratch = sha(proj.label, ph)[:12] if ctx.cold else None
+    root = ctx.target_root(scratch)
+    c = ctx.cached_run("r1-compiled" + ("-cold" if ctx.cold else "-warm"), sha(ph, proj.label), [ctx.wj, "test", "--json", proj.path],
+                       t["compiled"], cwd=proj.path, env={"WJ_CARGO_TARGET_ROOT": root})
+    if scratch:
+        shutil.rmtree(root, ignore_errors=True)  # a cold build leaves gigabytes behind
     return i, c
 
 
-def evaluate(proj, interp, comp, paths):
+def evaluate(proj, interp, comp, paths, cold=False):
     """Pure scorecard logic: compare the two result sets of one project."""
     ti, tc = parse_tests(interp.out, proj.path), parse_tests(comp.out, proj.path)
     row = {"project": proj.label, "interp_secs": round(interp.secs, 1), "compiled_secs": round(comp.secs, 1),
-           "measured": True}
+           "measured": True, "compiled_cache": "cold" if cold else "warm"}
     if tc is not None and not any(tc.values()) and comp.rc != 0 and '"status": "unknown"' in comp.out:
         tc = None  # every test unknown: the compiled test crate did not build or run, so there is nothing to compare with
         broke = "compiled test run failed before reporting results (build error in the generated test crate)"
@@ -65,12 +69,12 @@ def evaluate(proj, interp, comp, paths):
     ipass = {k for k, v in ti.items() if v}
     bad = sorted(cpass - ipass)                # passes compiled, not interpreted
     extra = sorted(ipass - cpass)              # passes interpreted, fails/absent compiled (suspicious)
-    why = scrub(interp.err or _first_failure(interp.out), paths) if bad else ""
-    if ti == {} and cpass:
-        why = "interpreted run produced no test list: " + scrub(interp.err or interp.out, paths)
+    msgs = _messages(interp.out, proj.path)
+    no_list = ti == {} and cpass
+    why = "interpreted run produced no test list: " + scrub(interp.err or interp.out, paths) if no_list else ""
     unsup = _unsupported(interp.out, proj)
     row.update(status="ok", sets_equal=set(ti) == set(tc), unsupported=unsup, compiled_total=len(tc), compiled_pass=len(cpass), both_pass=len(cpass & ipass),
-               interp_pass=len(ipass), mismatches=[{"program": f"{proj.label}:{_anon(proj, b)}", "reason": why or "fails interpreted, passes compiled"} for b in bad],
+               interp_pass=len(ipass), mismatches=[{"program": f"{proj.label}:{_anon(proj, b)}", "reason": why or scrub(msgs.get(b, ""), paths) or "fails interpreted, passes compiled"} for b in bad],
                interp_only_pass=[_anon(proj, e) for e in extra])
     return row
 
@@ -97,9 +101,13 @@ def _anon(proj, tid):
     return sha(tid)[:10] if proj.private else tid
 
 
-def _first_failure(out):
-    m = re.search(r'"message":\s*"([^"]+)"', out)
-    return m.group(1) if m else ""
+def _messages(out, project_path):
+    """{test id: failure message} from the interpreted JSON document."""
+    try:
+        doc = json.loads(out[out.find("{"):out.rindex("}") + 1])
+        return {_tid(project_path, t.get("file", ""), t["name"]): t.get("message", "") for t in doc.get("tests", [])}
+    except (ValueError, KeyError):
+        return {}
 
 
 def measure(ctx):
@@ -107,7 +115,7 @@ def measure(ctx):
     rows = []
     for proj in ctx.projects:
         i, c = run_project(ctx, proj)
-        rows.append(evaluate(proj, i, c, paths))
+        rows.append(evaluate(proj, i, c, paths, ctx.cold))
     return summarize(rows)
 
 

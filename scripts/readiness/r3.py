@@ -28,7 +28,8 @@ def measure(ctx, corpora, r1_rows):
     for name, progs in corpora.items():
         for p in progs[:limit]:
             r = ctx.cached_run("r3-run", file_hash(p.path), [ctx.wj, "run", p.path], ctx.timeouts["interp"],
-                               keep_timeouts=True, cwd=os.path.dirname(p.path))
+                               keep_timeouts=True, cwd=os.path.dirname(p.path),
+                               env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
             runs += 1
             fb, why, loud = parse_notice(r.err)
             if fb:

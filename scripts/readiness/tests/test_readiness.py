@@ -112,6 +112,37 @@ class R1Tests(unittest.TestCase):
         self.assertFalse(row["measured"])
 
 
+    def test_mismatch_reason_is_the_first_line_of_the_failure_message_without_paths(self):
+        comp = core.Res(0, json.dumps({"tests": [{"name": "a", "file": "./t.wj", "status": "passed"}]}), "", 1.0)
+        msg = "error: no method named `f`\n  --> /home/someone/proj/src/lib.wj:6:14"
+        interp = core.Res(1, json.dumps({"tests": [{"file": "./t.wj", "name": "a", "passed": False, "message": msg}]}), "", 1.0)
+        row = r1.evaluate(corpora.Project("p", "/home/someone/proj"), interp, comp, [("/home/someone/proj", "<p>")])
+        self.assertEqual(row["mismatches"][0]["reason"], "error: no method named `f`")
+
+    def test_compiled_runs_get_a_private_cargo_target_root_and_cold_runs_a_fresh_one(self):
+        seen = []
+
+        def runner(cmd, timeout=1, env=None, **kw):
+            seen.append((cmd[1:3], (env or {}).get("WJ_CARGO_TARGET_ROOT")))
+            return core.Res(0, "{}", "", 0.1)
+
+        d = tempfile.mkdtemp()
+        try:
+            c = core.Ctx(SHIM, d, core.QUICK, core.Cache(os.path.join(d, "c")), [], runner=runner)
+            p = corpora.Project("p", d)
+            r1.run_project(c, p)
+            c.cold = True
+            c.cache.enabled = False
+            r1.run_project(c, p)
+            roots = {r for cmd, r in seen if cmd[0] == "test" and "--interpret" not in cmd}
+            self.assertEqual(len(roots), 2)
+            self.assertTrue(all(r and r.startswith(c.cache.dir) for r in roots))
+            self.assertIn("cold-target", [r for r in roots if "cold" in r][0])
+            self.assertFalse(os.path.exists([r for r in roots if "cold" in r][0]))   # removed after the cold run
+        finally:
+            shutil.rmtree(d)
+
+
 class R2Tests(unittest.TestCase):
     SPEC = {"run": {
         "a.wj": {"interp": ["1\n", 0], "compiled": ["1\n", 0]},

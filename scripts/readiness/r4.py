@@ -88,13 +88,13 @@ def measure(ctx, r1_rows):
         if not loop_met:
             blockers.append({"program": loop["project"], "reason": f"warm edit-run loop {loop['median_s']}s > {LOOP_TARGET_S}s ({loop['files']} files)"})
     checks = [r["met"] for r in prow] + [r["met"] for r in krows] + [loop_met]
-    return summarize(prow, loop, krows, checks, blockers)
+    return summarize(prow, loop, krows, checks, blockers, ctx.cold)
 
 
-def summarize(prow, loop, krows, checks, blockers):
+def summarize(prow, loop, krows, checks, blockers, cold=False):
     known = [c for c in checks if c is not None]
     status = "unmeasured" if not known else ("pass" if all(known) and len(known) == len(checks) else ("fail" if not all(known) else "unmeasured"))
     return {"id": "R4", "title": "Fast enough", "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
             "percent": pct(sum(known), len(known)), "status": status,
-            "detail": {"projects": prow, "warm_loop": loop, "kernels": krows, "compiled_cache": "as found (not cleared)"},
+            "detail": {"projects": prow, "warm_loop": loop, "kernels": krows, "compiled_cache": "cold (fresh target dir per project)" if cold else "warm (private target dir, reused across projects)"},
             "blockers": blockers}
