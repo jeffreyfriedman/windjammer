@@ -1,0 +1,24 @@
+// spec: SPEC-EFF-002
+// mode: effects
+// xfail: Q-032
+// expect: load: fs.read
+// expect: save: fs.write
+// expect: fetch: net.connect
+// expect: home: env.read
+// expect: list: process
+// expect: stamp: time
+// expect: roll: random
+use std::fs
+use std::http
+use std::env
+use std::process
+use std::time
+use std::random
+fn load() -> string { fs::read_to_string("cfg.toml").unwrap_or("") }
+fn save(s: string) { fs::write("out.txt", s).unwrap() }
+fn fetch() -> bool { http::get("http://api.example.com/").is_ok() }
+fn home() -> bool { env::var("HOME").is_ok() }
+fn list() -> bool { process::run("ls").is_ok() }
+fn stamp() -> int { time::now().timestamp() }
+fn roll() -> int { random::range(1, 7) }
+fn main() {}

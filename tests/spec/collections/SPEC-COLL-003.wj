@@ -1,0 +1,6 @@
+// spec: SPEC-COLL-003
+// expect: 30
+fn main() {
+    let xs = [1, 2, 3, 4]
+    println("${xs.sum_by(|x| x * x)}")
+}

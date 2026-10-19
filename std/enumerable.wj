@@ -1,0 +1,100 @@
+// std/enumerable - the enumerable collection methods (ADR-0018 feature 1, spec: docs/spec/collections.md).
+//
+// These methods are built in: every List, Set, Map (as (key, value) pairs), range and iterator has them, with no
+// import. This file declares their signatures for readers and agents; the single machine-readable table is
+// src/stdlib_surface/enumerable.rs and tests/enumerable_surface_test.rs keeps the two in sync. The examples are
+// doctests (`wj test --doc std/enumerable.wj`).
+
+/// Enumerable methods of a sequence of `T`.
+pub trait Enumerable<T> {
+    /// Groups the elements by key, keeping their order within each group.
+    ///
+    /// ```wj
+    /// let g = [1, 2, 3, 4, 5].group_by(_ % 2)
+    /// println("${g[&1].len()} ${g[&0].len()}")
+    /// // expect: 3 2
+    /// ```
+    fn group_by(self, key: fn(T) -> K) -> Map<K, List<T>>;
+
+    /// Counts the elements per key.
+    ///
+    /// ```wj
+    /// let c = ["a", "bb", "cc"].count_by(_.len())
+    /// println("${c[&2]}")
+    /// // expect: 2
+    /// ```
+    fn count_by(self, key: fn(T) -> K) -> Map<K, int>;
+
+    /// Counts each distinct element (alias: `frequencies`).
+    ///
+    /// ```wj
+    /// println("${[7, 7, 8].tally()[&7]}")
+    /// // expect: 2
+    /// ```
+    fn tally(self) -> Map<T, int>;
+
+    /// Same as `tally`.
+    fn frequencies(self) -> Map<T, int>;
+
+    /// Sum of `f(x)` over the elements.
+    ///
+    /// ```wj
+    /// println("${[1, 2, 3].sum_by(_ * 10)}")
+    /// // expect: 60
+    /// ```
+    fn sum_by(self, f: fn(T) -> N) -> N;
+
+    /// The first occurrence of each distinct element, in order.
+    ///
+    /// ```wj
+    /// println("${[2, 2, 1].unique().len()}")
+    /// // expect: 2
+    /// ```
+    fn unique(self) -> List<T>;
+
+    /// The first element of each distinct key, in order.
+    fn unique_by(self, key: fn(T) -> K) -> List<T>;
+
+    /// Maximal runs of consecutive elements with equal keys.
+    ///
+    /// ```wj
+    /// println("${[1, 1, 2, 1].chunk_by(_ + 0).len()}")
+    /// // expect: 3
+    /// ```
+    fn chunk_by(self, key: fn(T) -> K) -> List<List<T>>;
+
+    /// Lists of `n` elements (the last may be shorter); panics when `n` is 0.
+    fn each_slice(self, n: int) -> List<List<T>>;
+
+    /// `(matching, rest)`, each in order.
+    fn partition_by(self, pred: fn(T) -> bool) -> (List<T>, List<T>);
+
+    /// `sep` between consecutive elements.
+    fn intersperse(self, sep: T) -> List<T>;
+
+    /// `[f(x0, y0), f(x1, y1), ..]` up to the shorter length.
+    fn zip_with(self, other: List<U>, f: fn(T, U) -> R) -> List<R>;
+
+    /// Index of the first element equal to `x`.
+    ///
+    /// ```wj
+    /// println("${[4, 5].index_of(5).unwrap_or(9)}")
+    /// // expect: 1
+    /// ```
+    fn index_of(self, x: T) -> Option<int>;
+
+    /// A sorted copy.
+    fn sorted(self) -> List<T>;
+
+    /// A copy sorted by key (stable).
+    fn sorted_by_key(self, key: fn(T) -> K) -> List<T>;
+
+    /// A copy sorted by key, largest first (stable).
+    fn sorted_by_key_desc(self, key: fn(T) -> K) -> List<T>;
+
+    /// Sorts in place by key, largest first (stable).
+    fn sort_by_key_desc(self, key: fn(T) -> K);
+
+    /// The elements as a list.
+    fn to_list(self) -> List<T>;
+}

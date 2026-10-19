@@ -1,0 +1,14 @@
+// spec: SPEC-MATCH-002
+// expect: 4
+fn main() {
+    let mut n = 0
+    for x in 0..10 {
+        match {
+            x % 3 == 0 => {
+                n = n + 1
+            }
+            _ => {}
+        }
+    }
+    println("${n}")
+}

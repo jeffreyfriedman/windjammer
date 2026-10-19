@@ -1,0 +1,9 @@
+// spec: SPEC-CLOS-002
+// expect: 10
+// expect: 10 40
+fn main() {
+    let xs = [1, 2, 3, 4]
+    println("${xs.fold(0, _ + _)}")
+    let z = [1, 2].zip_with([10, 20], _ * _)
+    println("${z[0]} ${z[1]}")
+}
