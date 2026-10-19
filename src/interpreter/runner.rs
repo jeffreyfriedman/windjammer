@@ -186,6 +186,8 @@ pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
         for spec in specs {
             let mut it = Interpreter::new_capturing();
             it.guard_stack();
+            // the resolved engine, as `wj run` (ADR-0020); the walker runs what it does not compile
+            it.set_engine_resolved(true);
             let outcome = match it.load_test_program(&spec.file) {
                 Ok(mut path) => {
                     path.extend(spec.mods.iter().cloned());
