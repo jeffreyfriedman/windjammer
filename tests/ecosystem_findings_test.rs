@@ -394,3 +394,36 @@ fn interpreted_package_test_imports_from_lib() {
     let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     assert!(o.status.success() && text.contains("1 passed"), "interpreted wj test failed:\n{text}");
 }
+
+/// E7b: a non-returned `Vec::new()` local in a method is not turbofished with the return element type.
+#[test]
+fn unreturned_empty_vec_local_has_no_return_type_turbofish() {
+    expect_output(
+        r#"struct Conn {
+    rooms: Vec<string>,
+}
+
+struct Item {
+    n: int,
+}
+
+fn without(c: Conn, room: string) -> Vec<Item> {
+    let mut kept = Vec::new()
+    for r in c.rooms {
+        if r != room {
+            kept.push(r.clone())
+        }
+    }
+    let mut out = Vec::new()
+    out.push(Item { n: kept.len() as int })
+    out
+}
+
+fn main() {
+    let c = Conn { rooms: ["a", "b", "c"] }
+    println("${without(c, "b")[0].n}")
+}
+"#,
+        "2\n",
+    );
+}
