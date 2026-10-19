@@ -62,7 +62,7 @@ pub struct RunOptions {
     pub sandbox: bool,
     /// `--allow EFFECT[=RESOURCE]` (repeatable).
     pub allow: Vec<String>,
-    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given.
+    /// `--caps enforce|warn|off` (env `WJ_CAPS`): what the local profile does when no grant is given (default: enforce).
     pub caps_mode: String,
 }
 

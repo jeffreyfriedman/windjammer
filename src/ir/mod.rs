@@ -17,7 +17,6 @@
 //! See `docs/IR_SOLVER_CODEGEN_ARCHITECTURE.md` for the full migration plan.
 
 pub mod annotations;
-pub mod capability_lock;
 pub mod capability_profiles;
 pub mod coercion;
 pub mod constraint_gen;

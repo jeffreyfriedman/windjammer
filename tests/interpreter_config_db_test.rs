@@ -25,10 +25,14 @@ use tempfile::TempDir;
 const WJ: &str = env!("CARGO_BIN_EXE_wj");
 
 fn run(src: &str) -> (String, String, i32) {
+    run_with(src, &[])
+}
+
+fn run_with(src: &str, flags: &[&str]) -> (String, String, i32) {
     let dir = TempDir::new().unwrap();
     let f = dir.path().join("prog.wj");
     fs::write(&f, src).unwrap();
-    let o = Command::new(WJ).args(["run", "--interpret"]).arg(&f).current_dir(dir.path()).output().unwrap();
+    let o = Command::new(WJ).args(["run", "--interpret"]).args(flags).arg(&f).current_dir(dir.path()).output().unwrap();
     (String::from_utf8_lossy(&o.stdout).to_string(), String::from_utf8_lossy(&o.stderr).to_string(), o.status.code().unwrap_or(-1))
 }
 
@@ -182,7 +186,8 @@ except sqlite3.OperationalError as e:
 fn db_sqlite_matches_python_sqlite3() {
     let Ok(o) = Command::new("python3").arg("-I").arg("-c").arg(DB_ORACLE).output() else { return };
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
-    let (out, err, code) = run(DB);
+    // the program opens a database under a directory that does not exist, to show the error: grant that one path
+    let (out, err, code) = run_with(DB, &["--allow", "fs.write=/nonexistent/**"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(out, String::from_utf8_lossy(&o.stdout));
 }

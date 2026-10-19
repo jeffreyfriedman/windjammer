@@ -426,16 +426,19 @@ effect has no resource); Go/JS have no `net`/`env`/`process` std modules to guar
 - WJ-SEC-01..04 remain as background; where they disagree with this ADR, this ADR wins.
 
 ## Decisions (project owner, 2026-10-19)
-Follow-up answers (2026-10-19, after E1): the local profile flips from warn to enforce at **v0.51.0**, and `gate_for_run` reads one
-constant, `LOCAL_PROFILE_MODE` (a test fails the release that reaches 0.51 without flipping it); the allowlist rebase was done by the
-integrator; **E2 gates `console` at run time** (granted in the local profile and by default, so it costs nothing, visible in
+Follow-up answers (2026-10-19, after E1): the local profile was staged as warn-then-enforce at v0.51.0, and the owner then decided to
+**enforce it from this release on** (the staging is dropped): `gate_for_run` reads one constant, `LOCAL_PROFILE_MODE = Enforce`, and
+`WJ_CAPS=warn|off` (`--caps`) stay as explicit opt-outs; a denial in the local profile prints why, the one-shot `--allow` flag and the
+copy-paste `[capabilities]` block (including the project-directory `fs` lines, because a `[capabilities]` table is the whole grant);
+standard devices are not files (`/dev/stdin`, `/dev/stdout`, `/dev/stderr` are the console, `/dev/urandom` is randomness, `/dev/null`
+is free), so reading stdin never needs a grant; the allowlist rebase was done by the integrator; **E2 gates `console` at run time** (granted in the local profile and by default, so it costs nothing, visible in
 `explain-effects`, revocable for sandboxes); `ffi` stays denied in the local profile, the WJ0040/WJ0044 fix line names exactly the
 `[capabilities] ffi = ["name"]` entry to add, and a test requires any `wj new` template that declares an `extern fn` to ship it.
 
 D1-D5, D7 and D8 are accepted as recommended; D6 is decided as written below (2026-10-18). D1 is staged: the release
-that ships E1 runs the local profile in **warn** mode (a sink outside it runs and prints `warning[WJ0040]` once,
-naming the `wj.toml` line or `--allow` flag that would grant it); the next minor release **enforces** it. A manifest
-`[capabilities]` table, `--sandbox` or `--allow` always enforces. `WJ_CAPS=enforce` previews the future default.
+that ships E1 first ran the local profile in **warn** mode; as of the follow-up decision above it **enforces**. A manifest
+`[capabilities]` table, `--sandbox` or `--allow` always enforced. `WJ_CAPS=warn` (a sink outside the profile runs and prints
+`warning[WJ0040]` once) and `WJ_CAPS=off` are the opt-outs.
 - **D1. Default grant without a manifest** for `wj run --interpret`. Recommended *local profile*: fs read/write inside
   the project directory, `time`, `random`, `console`; net/env/process/ffi denied with a message naming `--allow`.
   Alternative: keep today's ambient fs/env/process (compatible, weaker).

@@ -23,7 +23,8 @@ the compiled path with one line on stderr (`wj: running compiled (cargo): ...`).
 | `wj test --interpret [PATH] [--filter S] [--list] [--watch]` | Run exactly the tests `wj test` discovers (shared discovery: `@test`, `@test_cases`, `test_*` at top level, in inline `mod`s and receiver-less `impl` functions, in any `.wj` file). cargo-test-like report, exit 1 on failure. |
 | `wj run --sched-seed N` | Run threads/tasks with schedule seed N (0 = FIFO run-to-block; other seeds reproducibly explore interleavings at every synchronisation point). |
 | `wj run --deterministic-time` | No real clock: time starts at a fixed instant and only `sleep` moves it; the global RNG is seeded. |
-| `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client calls from canned responses / allow plain `http://` (default: the client refuses). |
+| `wj run --mock-http FILE` / `--allow-network` | Answer `std::http` client and server calls from canned responses (no network capability needed) / allow network access, plain `http://` (default: denied with exit status 126). |
+| `wj run --sandbox` / `--allow EFFECT[=RESOURCE]` / `--caps enforce\|warn\|off` | Capabilities (ADR-0021): with no `[capabilities]` in `wj.toml` a run may use files inside the project directory, time, random and console, and nothing else; a denied call stops with exit status 126 and a message that contains the `--allow` flag and the `[capabilities]` block to add. `WJ_CAPS=warn` (run, warn once) and `WJ_CAPS=off` are explicit opt-outs. |
 | `wj repl` | Persistent session: `let`, `fn`, `struct`, `enum`, `impl`, `use` survive between inputs; the value of an expression is printed. `:reset`, `:help`, `exit`. |
 
 Exit status: 0 ok; 101 panic (Rust's code; message `panicked at file:line:col`, backtrace of Windjammer frames);

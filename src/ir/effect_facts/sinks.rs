@@ -157,16 +157,23 @@ pub static NOT_SINKS: &[&str] = &[
 pub static AUTHORITY_MODULES: &[&str] =
     &["fs", "env", "process", "subprocess", "http", "net", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime"];
 
-/// Cheap pre-filter for hot paths: can `path` possibly be a sink? (a segment names a sink module, or the path is a
-/// console intrinsic). No hashing, no allocation; `lookup` decides.
+/// Cheap pre-filter for hot paths: can `path` possibly be a sink? Every row is `module::function` (or a bare console
+/// intrinsic), and lookup only drops LEADING segments, so the module is always the second-to-last segment: two steps
+/// from the end, no allocation, no hashing. `lookup` decides.
 pub fn may_be_sink(path: &str) -> bool {
-    path.split("::").any(|seg| {
-        matches!(
-            seg,
-            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log"
-                | "print" | "println" | "eprint" | "eprintln" | "cap"
-        )
-    })
+    let mut from_end = path.rsplit("::");
+    let last = from_end.next().unwrap_or(path);
+    // console intrinsics are single-segment rows: `lookup` finds them after dropping any leading segments
+    if matches!(last, "print" | "println" | "eprint" | "eprintln") {
+        return true;
+    }
+    match from_end.next() {
+        Some(module) => matches!(
+            module,
+            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log" | "cap"
+        ),
+        None => false,
+    }
 }
 
 /// Find the sink row for a call path, dropping leading segments (`std::fs::read` finds `fs::read`).
@@ -183,6 +190,7 @@ pub fn lookup(path: &str) -> Option<&'static [SinkUse]> {
     }
 }
 
+#[cfg(test)]
 pub fn is_not_sink(path: &str) -> bool {
     let mut p = path;
     loop {
@@ -196,6 +204,7 @@ pub fn is_not_sink(path: &str) -> bool {
     }
 }
 
+#[cfg(test)]
 pub fn all_paths() -> impl Iterator<Item = &'static str> {
     SINKS.iter().map(|(n, _)| *n)
 }

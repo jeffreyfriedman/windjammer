@@ -135,6 +135,13 @@ function capsDisplay(grant, res) {
 
 /** Decide one use against `grant`: null = allowed, otherwise the denial text. */
 function capsDecide(grant, kind, resource) {
+  // standard devices are the console / the entropy source, not files
+  if ((kind === "fs.read" || kind === "fs.write") && resource !== undefined) {
+    const reading = kind === "fs.read";
+    if (resource === "/dev/null") return null;
+    if ((resource === "/dev/stdin" && reading) || ((resource === "/dev/stdout" || resource === "/dev/stderr") && !reading)) return capsDecide(grant, "console", undefined);
+    if ((resource === "/dev/urandom" || resource === "/dev/random") && reading) return capsDecide(grant, "random", undefined);
+  }
   const deny = (outside, scopeText) => {
     const shown = resource === undefined ? undefined : capsDisplay(grant, resource);
     const subject = shown === undefined ? kind : `${kind}(${shown})`;

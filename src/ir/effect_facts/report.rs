@@ -75,11 +75,12 @@ pub fn to_text(r: &ResolvedProgram<'_>, facts: &EffectFacts, only: Option<&str>,
     let mut out = String::new();
     let mut fns: Vec<&FnEffects> = facts.fns.values().filter(|f| reported(r, f)).collect();
     fns.sort_by(|a, b| a.path.cmp(&b.path));
+    let headers: std::collections::HashMap<String, String> = compact_lines(r, facts).into_iter().collect();
     for f in fns {
         if only.is_some_and(|o| f.path != o && !f.path.ends_with(&format!("::{o}"))) {
             continue;
         }
-        out.push_str(&format!("{}: {}\n", f.path, compact(f)));
+        out.push_str(&format!("{}: {}\n", f.path, headers.get(&f.path).cloned().unwrap_or_else(|| compact(f))));
         for (e, o) in &f.effects {
             let chain = facts.chain(f.def, e);
             let hops: Vec<String> = chain.iter().map(|(p, _, _)| p.clone()).chain(chain.last().map(|(_, _, c)| c.clone())).collect();
