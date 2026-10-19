@@ -1,0 +1,20 @@
+#[inline]
+fn roman(n: i64) -> String {
+    let table = vec![(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")];
+    let mut left = n;
+    let mut out = String::new();
+    for (value, symbol) in table {
+        while left >= value {
+            out = out + &symbol;
+            left -= value;
+        }
+    }
+    out
+}
+
+fn main() {
+    for n in [4, 9, 14, 1994, 2024] {
+        println!("{} = {}", n, roman(n));
+    }
+}
+
