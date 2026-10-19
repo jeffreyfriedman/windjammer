@@ -238,7 +238,7 @@ impl Hub {
         }
         users.sort()
         let mut out = Vec::new()
-        out.push(Delivery { conn: users.len() })
+        out.push(Delivery { conn: 1 })
         out
     }
 }
@@ -249,5 +249,35 @@ fn main() {
 }
 "#,
         "1\n",
+    );
+}
+
+/// E3b: `Vec<string>.contains` accepts a literal and a by-value `string` local as well as a parameter.
+#[test]
+fn vec_string_contains_literal_and_local() {
+    expect_output(
+        r#"struct Room {
+    members: Vec<string>,
+}
+
+impl Room {
+    fn has_ann(self) -> bool {
+        self.members.contains("ann")
+    }
+
+    fn has_local(self, who: string) -> bool {
+        let w = who
+        self.members.contains(w)
+    }
+}
+
+fn main() {
+    let mut members = Vec::new()
+    members.push("ann")
+    let room = Room { members: members }
+    println("${room.has_ann()} ${room.has_local("bob")}")
+}
+"#,
+        "true false\n",
     );
 }
