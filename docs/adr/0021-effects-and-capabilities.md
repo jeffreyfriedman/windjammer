@@ -404,6 +404,8 @@ Decisions taken while implementing (each enforced by a test):
 | `std::cap` | SPEC-EFF-012, 034, 035 and 23 of the 130 escape cases (narrowing never widens; delegation; symlinks and `..` through `under`; process and env values) |
 | Interpreter overhead at most 5% (re-measured at load below 20) | **Met: +3.5% CPU** on the non-sink workload (median of 10 interleaved runs per arm, identical output, load average 17.4 before and 19.2 after: `scripts/bench_effects_overhead.py`, which refuses a verdict above load 20). The sink-dense microbenchmark (`fs::exists` + `random` + `time`, 30k iterations) is about 6.6x slower, roughly 18 microseconds per file-system check, because every fs resource is canonicalized (a few syscalls) so symlinks cannot escape; it is outside the gate's scope (general programs) and reported so nobody is surprised |
 
+The same default sandbox applies to `wj test --interpret` and the REPL (their messages offer only the `wj.toml` fix: no `--allow` there). A verified example declares what it needs with `// allow:` header lines; a mocked http port (`--mock-http`) needs no network capability in the default profile, but an explicit grant keeps governing mocked calls.
+
 Not done in E2: `@uses` bounds on trait methods (the parser keeps no attributes on trait methods; SPEC-EFF-006 still uses the union of impls);
 `console` is gated at run time in the interpreter only (compiled backends reject a denied `console` at compile time, which is exact because the
 effect has no resource); Go/JS have no `net`/`env`/`process` std modules to guard yet.
