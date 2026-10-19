@@ -373,6 +373,10 @@ pub struct CodeGenerator<'ast> {
     /// First segment of non-`std`/`crate`/`super`/`self` `use` paths (`tokio`, `axum`, `serde`).
     /// MethodCall on these identifiers uses `::`, not a hardcoded crate-name list.
     pub(crate) imported_path_roots: std::collections::HashSet<String>,
+    /// Names a type annotation in this file can refer to: items declared here and `use` imports.
+    pub(crate) file_scope_type_names: std::collections::HashSet<String>,
+    /// True when the file has a glob import or nested `mod` (name scope is not tracked precisely).
+    pub(crate) file_scope_is_open: bool,
     /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
     pub(crate) foreign_imported_types: std::collections::HashSet<String>,
     /// Simple names of all extern (FFI) functions across all modules.
@@ -796,6 +800,8 @@ impl<'ast> CodeGenerator<'ast> {
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),
             foreign_imported_types: std::collections::HashSet::new(),
+            file_scope_type_names: std::collections::HashSet::new(),
+            file_scope_is_open: false,
             extern_function_names: extern_fn_names,
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),

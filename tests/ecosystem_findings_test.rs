@@ -360,3 +360,22 @@ fn test_parse() {
     let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     assert!(o.status.success(), "wj test failed:\n{text}");
 }
+
+/// E10: an un-annotated `let` in a test file is not given a type annotation naming a type the file never imported.
+#[test]
+fn test_file_let_annotation_does_not_need_type_import() {
+    let dir = write_project(&[
+        ("wj.toml", "[package]\nname = \"letpkg\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\n"),
+        (
+            "src/lib.wj",
+            "pub struct Rule {\n    pub name: string,\n}\n\npub fn make() -> Vec<Rule> {\n    let mut out = Vec::new()\n    out.push(Rule { name: \"a\" })\n    out\n}\n",
+        ),
+        (
+            "tests/rules_test.wj",
+            "use crate::make\n\n@test\nfn test_make() {\n    let rules = make()\n    assert_eq(rules.len(), 1)\n}\n",
+        ),
+    ]);
+    let o = Command::new(WJ).arg("test").current_dir(dir.path()).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(o.status.success(), "wj test failed:\n{text}");
+}
