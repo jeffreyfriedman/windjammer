@@ -3663,6 +3663,15 @@
   {
     "kind": "guide",
     "module": "WINDJAMMER_FOR_AGENTS",
+    "name": "Permissions: exit 126 and the fix line",
+    "signature": "",
+    "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
+    "summary": "`wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,",
+    "tags": []
+  },
+  {
+    "kind": "guide",
+    "module": "WINDJAMMER_FOR_AGENTS",
     "name": "Reading input and arguments",
     "signature": "",
     "source": "docs/agent/WINDJAMMER_FOR_AGENTS.md",
