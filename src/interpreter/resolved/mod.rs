@@ -12,6 +12,7 @@
 //! (`impl Drop`) are not compiled: scope-exit drops need the walker's slots. Integer expressions of a
 //! statically known width run unboxed (`typed.rs`).
 
+mod closure;
 mod compile;
 mod expr;
 mod fast;
@@ -32,6 +33,8 @@ use std::rc::Rc;
 
 /// Compiled code: runs against the interpreter and the base index of its frame in `rstack`.
 pub(crate) type Code = Box<dyn Fn(&mut Interpreter, usize) -> R>;
+
+pub(crate) use closure::CompiledClosure;
 
 pub(crate) enum Body {
     V(Code),

@@ -133,6 +133,8 @@ pub struct Interpreter {
     /// Compiled forms by `FuncDef` address (`None` = not compilable).
     /// The `FuncDef` is kept alive with its entry so its address is never reused (hot reload replaces bodies).
     pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Compiled closure bodies by body address (`None` = run in the walker).
+    pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
@@ -218,6 +220,7 @@ impl Interpreter {
             vec_pool: Vec::new(),
             engine_resolved: false,
             compiled: HashMap::default(),
+            compiled_closures: HashMap::default(),
             rstack: Vec::new(),
             #[cfg(feature = "jit")]
             jit: None,
