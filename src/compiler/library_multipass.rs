@@ -1277,6 +1277,28 @@ pub(crate) fn build_library_multipass(
         std::collections::HashSet<usize>,
     > = std::collections::HashMap::new();
 
+    // C3: module-qualified keys must carry the converged signature, not the declaration stub.
+    let mut converged_qualified_keys: std::collections::HashSet<String> = std::collections::HashSet::new();
+    {
+        let reg = std::sync::Arc::make_mut(&mut final_global_registry);
+        for (i, (file, _)) in sources.iter().enumerate() {
+            let (Some(analysis), Some(module)) = (
+                step4b_analyses[i].as_ref(),
+                crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file),
+            ) else {
+                continue;
+            };
+            let program = stripped_programs[i].as_ref().unwrap_or(&parsed_programs[i]);
+            super::converged_module_signatures::register_converged_module_qualified_signatures(
+                reg,
+                &module,
+                program,
+                &analysis.registry,
+                &mut converged_qualified_keys,
+            );
+        }
+    }
+
     for batch_start in (0..total_codegen).step_by(CODEGEN_BATCH_SIZE) {
         let batch_end = (batch_start + CODEGEN_BATCH_SIZE).min(total_codegen);
         let batch = &codegen_indices[batch_start..batch_end];
@@ -1324,6 +1346,9 @@ pub(crate) fn build_library_multipass(
                 std::sync::Arc::clone(&final_global_registry),
             );
             for (name, sig) in analysis.registry.signatures.iter() {
+                if converged_qualified_keys.contains(name) {
+                    continue;
+                }
                 if let Some(existing) = full_registry.get_signature(name) {
                     if crate::codegen::rust::signature_promotion::defining_mixed_owned_emission_beats(
                         existing, sig,
@@ -1452,6 +1477,17 @@ pub(crate) fn build_library_multipass(
 
             let reg = std::sync::Arc::make_mut(&mut final_global_registry);
             reg.merge(&codegen.signature_registry);
+            // C3: codegen refreshed this file's formals (`emitted_rust_ref_params`); publish them
+            // under the module-qualified keys call sites in later files resolve.
+            if let Some(module) = crate::analyzer::type_collector::wj_file_to_module_path(&src_base, file) {
+                super::converged_module_signatures::register_converged_module_qualified_signatures(
+                    reg,
+                    &module,
+                    program,
+                    &codegen.signature_registry,
+                    &mut converged_qualified_keys,
+                );
+            }
             for (name, indices) in &codegen.function_emitted_mut_arg_indices {
                 accumulated_emitted_mut_arg_indices
                     .entry(name.clone())

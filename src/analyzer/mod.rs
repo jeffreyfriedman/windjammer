@@ -313,6 +313,9 @@ pub struct Analyzer<'ast> {
     // Track analyzed trait methods (trait_name -> method_name -> AnalyzedFunction)
     // PUBLIC: The generator needs this for trait signature inference
     pub analyzed_trait_methods: HashMap<String, HashMap<String, AnalyzedFunction<'ast>>>,
+    /// `(trait, method)` whose `&mut self` receiver was required by some impl seen so far. A later
+    /// program whose impls only read must not downgrade it (the receiver is the join over ALL impls).
+    pub(crate) trait_receiver_widened_by_impl: std::collections::HashSet<(String, String)>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
     // Track functions in the current impl block (for cross-method analysis)
@@ -352,6 +355,7 @@ impl<'ast> Analyzer<'ast> {
             explicit_copy_structs: Arc::new(HashSet::new()),
             trait_definitions: HashMap::new(),
             analyzed_trait_methods: HashMap::new(),
+            trait_receiver_widened_by_impl: std::collections::HashSet::new(),
             mutated_variables: HashSet::new(),
             current_impl_functions: None,
             self_impl_context: None,
