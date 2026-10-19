@@ -40,7 +40,7 @@ fn interp(src: &str) -> Out {
     let d = TempDir::new().unwrap();
     let f = d.path().join("p.wj");
     fs::write(&f, src).unwrap();
-    let o = Command::new(WJ).args(["run", "--interpret"]).arg(&f).output().unwrap();
+    let o = Command::new(WJ).args(["run", "--interpret", "--no-lint"]).arg(&f).output().unwrap();
     let err = String::from_utf8_lossy(&o.stderr).to_string();
     Out { stdout: String::from_utf8_lossy(&o.stdout).to_string(), code: o.status.code().unwrap_or(-1), panic: panic_line(&err) }
 }
@@ -356,7 +356,7 @@ fn main() {
     fs::write(&f, src2).unwrap();
     let run = |args: &[&str]| {
         // program arguments follow `--` (otherwise `wj` parses them as its own options)
-        let o = Command::new(WJ).args(["run", "--interpret"]).arg(&f).arg("--").args(args).output().unwrap();
+        let o = Command::new(WJ).args(["run", "--interpret", "--no-lint"]).arg(&f).arg("--").args(args).output().unwrap();
         (String::from_utf8_lossy(&o.stdout).to_string(), String::from_utf8_lossy(&o.stderr).to_string(), o.status.code())
     };
     let (out, err, code) = run(&["--name", "bob", "-v"]);

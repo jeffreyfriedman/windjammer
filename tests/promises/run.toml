@@ -226,3 +226,18 @@ files = { "wj.toml" = "[package]\nname = \"p\"\nversion = \"0.1.0\"\n", "src/mai
 args = ["run", "--interpret", "--bin", "nope", "{w}"]
 exit = 1
 output_has = ["no binary named `nope`"]
+
+[[case]]
+name = "run --interpret refuses a Rust-leakage lint error"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n    let v: Option<int> = Some(1)\n    println(\"${v.unwrap()}\")\n}\n" }
+args = ["run", "--interpret", "{w}/m.wj"]
+exit = 1
+output_has = ["W0002", "not running"]
+
+[[case]]
+name = "run --no-lint runs a program despite a lint"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n    let v: Option<int> = Some(1)\n    println(\"${v.unwrap()}\")\n}\n" }
+args = ["run", "--interpret", "--no-lint", "{w}/m.wj"]
+stdout_has = ["1"]

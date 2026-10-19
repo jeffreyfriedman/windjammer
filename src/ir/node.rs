@@ -211,10 +211,10 @@ pub fn parser_type_to_base_type(ty: &Type) -> BaseType {
         Type::Tuple(elems) => BaseType::Tuple(elems.iter().map(parser_type_to_base_type).collect()),
         Type::Infer => BaseType::Inferred,
         Type::FunctionPointer {
-            params,
+            params: fn_params,
             return_type,
         } => BaseType::FunctionPointer {
-            params: params.iter().map(parser_type_to_base_type).collect(),
+            params: fn_params.iter().map(parser_type_to_base_type).collect(),
             return_type: Box::new(
                 return_type
                     .as_ref()

@@ -173,6 +173,11 @@ pub enum Commands {
         #[arg(long, value_name = "ENGINE", default_value = "walker")]
         engine: String,
 
+        /// Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real
+        /// compile errors still refuse it
+        #[arg(long)]
+        no_lint: bool,
+
         /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
         deterministic_time: bool,
