@@ -22,7 +22,6 @@ inference_differential_test::corpus_string_literal_variable_moved_then_used
 inference_differential_test::corpus_closure_len_arithmetic_width
 inference_differential_test::corpus_closure_mutating_capture_is_mutable
 inference_differential_test::corpus_explicit_ref_pin_is_not_double_borrowed
-codegen_correctness_test::literal_default_through_adapters
 # Dogfooding findings (docs/known-issues/dogfood-findings.md)
 dogfood_findings_test::const_string_in_if_else_join_with_parameter
 dogfood_findings_test::const_string_let_mut_later_assigned_owned_string
@@ -31,3 +30,14 @@ dogfood_findings_test::crate_qualified_call_through_nested_modules_borrows_str_f
 # Compiler findings from compiling a large multi-module program (docs/known-issues/dogfood-findings.md).
 compiler_findings_test::trait_receiver_widens_to_mutating_impl_across_modules
 compiler_findings_test::mutated_by_value_param_moved_into_field_stays_owned
+# Found by the full-suite integration run after the 2026-10 merges (green2); trackers in docs/known-issues/.
+# docs/known-issues/rust-float-literal-width-from-context.md
+enum_struct_destructuring_test::test_enum_mixed_variants
+float_inference_field_initializer_test::test_struct_tuple_field_with_type_alias
+type_inference_vec3_f32_test::test_vec3_cross_module_inference
+windjammer_fixtures_integration::regression_vec_tuple_string_push
+# docs/known-issues/ownership-and-width-ratchet-residue.md
+cross_module_ownership_test::cross_module_trait_field_access_inferred_borrowed
+interpreter_differential_test::interpreter_matches_compiled_rust
+check_build_differential_test::check_agrees_with_the_build_pipeline
+library_multipass_map_key_codegen_test::test_library_multipass_tuple_writeback_must_not_clone

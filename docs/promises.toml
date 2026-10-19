@@ -9,7 +9,7 @@
 #   through the installed binary (codes: >=1 negative case whose expected output contains the code).
 # - `pending = "reason"` marks a promise without tests yet. `max_pending` is a ratchet: it only shrinks.
 
-max_pending = 39
+max_pending = 38
 
 [[promise]]
 id = "feature ownership-inferred"

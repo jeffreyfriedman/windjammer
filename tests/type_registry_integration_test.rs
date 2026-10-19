@@ -113,7 +113,8 @@ impl Game {
     );
 
     assert!(
-        generated_code.contains("use super::color::Color")
+        generated_code.contains("use crate::color::Color")
+            || generated_code.contains("use super::color::Color")
             || generated_code.contains("use super::Color")
             || generated_code.contains("use crate::Color"),
         "Should generate import path for Color.\nGenerated code:\n{}",

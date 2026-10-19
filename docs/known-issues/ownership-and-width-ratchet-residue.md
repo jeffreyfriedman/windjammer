@@ -121,3 +121,35 @@ pub fn login(deps: AppDeps, token: string) -> Result<string, string> {
 receiver mode is unknown and the conservative answer is "owned". Same class as the multi-file ownership demotion
 entries above: the call-site and defining-module analyses need the trait method receiver modes before parameter
 ownership is decided.
+
+## An untyped counter compared with a literal is painted `i32` after an `==` against a declared `int` (`interpreter_differential_test::interpreter_matches_compiled_rust`, `check_build_differential_test::check_agrees_with_the_build_pipeline`)
+
+```windjammer
+fn main() {
+    let seed: int = 1
+    let mut i = 0
+    while i < 6 {
+        let b = i == seed
+        i += 1
+    }
+}
+```
+
+The numeric solver resolves every integer in this program to `i64` (`WJ_DEBUG_INT_CONSTRAINTS=1` shows `4:15 -> I64`),
+but the Rust backend emits `while i < (6_i32 as i32)` (rustc: expected `i64`, found `i32`). Without the `==` line it is
+`6_i64`. The width is re-decided downstream of the solver by the same let/while heuristics as section 1
+(`function_prefers_i32_coord_locals`, `codegen_i32_binding_names`, comparison balancing in `type_balancing.rs`).
+Convergence C4 made `int` default to `i64` in the solver; deleting those heuristics so the solver is the only width
+owner closes this and section 1 together. The interpreter corpus program `result_chain` hits it (seeds 1 and 4).
+
+## Tuple write-back after a by-value call clones the heap vectors (`library_multipass_map_key_codegen_test::test_library_multipass_tuple_writeback_must_not_clone`)
+
+```windjammer
+let pushed = push_pair(costs, verts, i as f64, i as i64)
+costs = pushed.0
+verts = pushed.1
+```
+
+emits `push_pair(costs.clone(), verts.clone(), ..)`. Both bindings are overwritten from the result before they are read
+again, so the clones are dead copies (rustc accepts the program). The last-use fact (C6, `ir::liveness`) does not model
+"reassigned before the next read" for tuple projections of the call result.

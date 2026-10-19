@@ -96,10 +96,6 @@ impl AstOwner {
         }
         AstOwner(all)
     }
-
-    pub fn arena_count(&self) -> usize {
-        self.0.len()
-    }
 }
 
 // An owner is storage, not value: it never participates in AST equality, hashing or printing.
