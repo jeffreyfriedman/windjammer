@@ -165,6 +165,33 @@ pub fn run(cli: Cli) -> Result<()> {
                 allow_empty,
             })?;
         }
+        Commands::Reduce {
+            path,
+            oracle,
+            output,
+            jobs,
+            seed,
+            max_steps,
+            time_budget,
+            candidate_timeout,
+            keep_names,
+            wj_bin,
+            verbose,
+        } => {
+            windjammer::cli::reduce::execute(windjammer::cli::reduce::Args {
+                path,
+                oracle,
+                output,
+                jobs,
+                seed,
+                max_steps,
+                time_budget,
+                candidate_timeout,
+                keep_names,
+                wj_bin,
+                verbose,
+            })?;
+        }
         Commands::Fmt { check, rust, paths } => {
             windjammer::cli::fmt::execute(check, &paths, rust)?;
         }
