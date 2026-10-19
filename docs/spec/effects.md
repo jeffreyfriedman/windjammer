@@ -52,7 +52,7 @@ use std::process
 use std::time
 use std::random
 fn load() -> string { fs::read_to_string("cfg.toml").unwrap_or("") }
-fn save(s: string) { fs::write("out.txt", s).unwrap() }
+fn save(s: string) { let _ = fs::write("out.txt", s) }
 fn fetch() -> bool { http::get("http://api.example.com/").is_ok() }
 fn home() -> bool { env::var("HOME").is_ok() }
 fn list() -> bool { process::run("ls").is_ok() }
