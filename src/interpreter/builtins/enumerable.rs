@@ -15,7 +15,7 @@ fn count(n: i128) -> Value {
 }
 
 fn map_of(m: BTreeMap<Key, Value>) -> Value {
-    Value::Map(Rc::new(m))
+    Value::btree_map(m)
 }
 
 /// Calls the key closure on every item, in order.
