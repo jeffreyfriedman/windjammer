@@ -29,6 +29,7 @@ mod function_formal_parameter_post;
 mod int_formal_scan_extra;
 mod let_statement_context;
 mod program_facts;
+mod same_crate_callee;
 mod type_balancing_fixups;
 pub mod closure_generation;
 pub mod codegen_helpers;
