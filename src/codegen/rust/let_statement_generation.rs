@@ -593,19 +593,6 @@ impl<'ast> CodeGenerator<'ast> {
                     Expression::MethodCall { .. } | Expression::MacroInvocation { .. }
                 );
                 let solver_pins_int_init = self.solver_pins_int_literal_init(value);
-                if crate::debug_env::enabled("WJ_DEBUG_LET_WIDTH") {
-                    eprintln!(
-                        "[let-width] {:?} pins={} mutable={} counter={} ret={:?} ir_fn={:?} facts={:?} key={:?}",
-                        var_name,
-                        solver_pins_int_init,
-                        mutable,
-                        Self::mut_let_rhs_is_return_width_counter(value),
-                        self.current_function_return_type,
-                        self.current_ir_function.as_ref().map(|f| f.name.clone()),
-                        self.current_ir_function.as_ref().map(|f| f.default_int_literals.clone()),
-                        crate::ir::numeric_defaults::literal_key(value)
-                    );
-                }
                 let needs_collection_ascription_sv = !type_inferred_from_context
                     && var_name.is_some_and(|vn| {
                         self.local_var_types.get(vn).is_some_and(|ty| {
@@ -768,15 +755,7 @@ impl<'ast> CodeGenerator<'ast> {
                         Some(Type::Reference(_) | Type::MutableReference(_))
                     );
                     if solver_pins_int_init && !rhs_is_ref {
-                        // The solver resolved this literal's class to `int`; the peer scans below
-                        // are width heuristics and must not override it (C4, D-WIDTH-OWNERS).
-                        self.assignment_int_target_type = Some(Type::Int);
-                        // Only a scalar binding *is* an `int`; a collection literal's elements are.
-                        let scalar_init = matches!(value, Expression::Literal { .. } | Expression::Unary { .. });
-                        if scalar_init {
-                            self.local_var_types.insert(vn.to_string(), Type::Int);
-                            self.codegen_i32_binding_names.remove(vn);
-                        }
+                        self.stamp_solver_int_binding(vn, value);
                     }
                     if !rhs_is_ref && !solver_pins_int_init {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
@@ -896,10 +875,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                 }
-                // C4 (D-WIDTH-OWNERS): a bare integer literal init takes the width the numeric
-                // solver resolved for its class. `function_prefers_i32_coord_locals` below is a
-                // heuristic *paint* for classes nothing constrains; it must never override a solved
-                // `int` (an `int` accumulator over `int` fields was truncated to i32).
+                // C4: a solver-resolved `int` literal init is never repainted by the i32 coord paint.
                 if self.assignment_int_target_type.is_none() && solver_pins_int_init {
                     self.assignment_int_target_type = Some(Type::Int);
                 }
@@ -1575,5 +1551,18 @@ impl<'ast> CodeGenerator<'ast> {
                 .is_some_and(|k| f.default_int_literals.contains(&k))
         });
         solved_i64 || semantic_default
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// The solver resolved this literal init to `int`: the peer scans are width heuristics and must
+    /// not override it (C4, D-WIDTH-OWNERS). A scalar binding *is* an `int`; for a collection
+    /// literal only its elements are.
+    fn stamp_solver_int_binding(&mut self, name: &str, value: &Expression<'ast>) {
+        self.assignment_int_target_type = Some(Type::Int);
+        if matches!(value, Expression::Literal { .. } | Expression::Unary { .. }) {
+            self.local_var_types.insert(name.to_string(), Type::Int);
+            self.codegen_i32_binding_names.remove(name);
+        }
     }
 }

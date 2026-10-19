@@ -283,25 +283,7 @@ impl IrPipeline {
             }
         }
 
-        let record = |functions: &mut [IrFunction], stage: &'static str| {
-            for f in functions.iter_mut() {
-                f.record_ownership_stage(stage);
-            }
-        };
-        apply_analyzer_readonly_string_params_to_ir(&mut functions, analyzed);
-        record(&mut functions, "apply_analyzer_readonly_string_params_to_ir");
-        clear_str_ref_for_owned_or_stored_params(&mut functions, analyzed);
-        restore_owned_string_params_after_str_ref(&mut functions, analyzed);
-        record(&mut functions, "restore_owned_string_params_after_str_ref");
-        converge_impl_param_ownership(&mut functions, analyzed);
-        record(&mut functions, "converge_impl_param_ownership");
-        finalize_ir_param_ownership_from_analyzer(&mut functions, analyzed);
-        record(&mut functions, "finalize_ir_param_ownership_from_analyzer");
-        propagate_delegation_ownership(&mut functions, analyzed, registry, &struct_field_types);
-        record(&mut functions, "propagate_delegation_ownership");
-        // Delegation may force Owned on wrappers; mutated non-returned params stay MutRef.
-        restore_mutated_param_mutrefs(&mut functions, analyzed);
-        record(&mut functions, "restore_mutated_param_mutrefs");
+        run_ownership_post_passes(&mut functions, analyzed, registry, &struct_field_types);
 
         diagnostics.push(IrDiagnostic {
             severity: DiagnosticSeverity::Info,
@@ -568,6 +550,35 @@ impl Default for IrPipeline {
 #[inline]
 pub fn ir_pipeline_available() -> bool {
     true
+}
+
+/// The seven legacy passes that re-apply analyzer data after the solver (convergence plan C5
+/// deletes them one rule category at a time). Each pass records its stage in the ownership trail.
+fn run_ownership_post_passes(
+    functions: &mut [IrFunction],
+    analyzed: &[crate::analyzer::AnalyzedFunction],
+    registry: &crate::analyzer::SignatureRegistry,
+    struct_field_types: &HashMap<String, HashMap<String, crate::parser::Type>>,
+) {
+        let record = |functions: &mut [IrFunction], stage: &'static str| {
+            for f in functions.iter_mut() {
+                f.record_ownership_stage(stage);
+            }
+        };
+        apply_analyzer_readonly_string_params_to_ir(functions, analyzed);
+        record(functions, "apply_analyzer_readonly_string_params_to_ir");
+        clear_str_ref_for_owned_or_stored_params(functions, analyzed);
+        restore_owned_string_params_after_str_ref(functions, analyzed);
+        record(functions, "restore_owned_string_params_after_str_ref");
+        converge_impl_param_ownership(functions, analyzed);
+        record(functions, "converge_impl_param_ownership");
+        finalize_ir_param_ownership_from_analyzer(functions, analyzed);
+        record(functions, "finalize_ir_param_ownership_from_analyzer");
+        propagate_delegation_ownership(functions, analyzed, registry, struct_field_types);
+        record(functions, "propagate_delegation_ownership");
+        // Delegation may force Owned on wrappers; mutated non-returned params stay MutRef.
+        restore_mutated_param_mutrefs(functions, analyzed);
+        record(functions, "restore_mutated_param_mutrefs");
 }
 
 /// Sync IR param ownership with converged analyzer body inference.
