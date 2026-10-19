@@ -15,7 +15,7 @@ measurements in [inference-divergences.md](inference-divergences.md). The WP num
   `compiler/multipass_bare_pass_demotion.rs` 4.7k, `codegen/rust/signature_promotion.rs` 4.5k, `type_inference/` 7k.
 
 ## C0. Gates (do first; nothing below merges without them)
-1. **Golden emitted-Rust corpus (WP 0).** Script `scripts/golden-rust.sh`: `wj build --no-cargo` every `tests/**/*.wj`
+1. **Golden emitted-Rust corpus (WP 0).** A golden-rust script (to be added under scripts/): `wj build --no-cargo` every `tests/**/*.wj`
    in the corpus list of `tests/wj_corpus_test.rs` plus `examples/`, store `tests/golden/rust/<path>.rs`. Test fails on any
    diff; updating is `UPDATE_GOLDEN=1` and the diff is reviewed. Expected: every step below changes goldens; each
    change must be explained by a divergence ID in the commit message.
@@ -24,7 +24,7 @@ measurements in [inference-divergences.md](inference-divergences.md). The WP num
 3. **Differential harness at depth.** `WJ_INFER_SEEDS=300 cargo test --release --test all inference_differential`
    (seeded, shrinking; `tests/inference_differential_test.rs`). Run per step; seeds must stay green. Add templates
    to the generator for each rule you touch (the generator is the executable form of `inference.md`).
-4. **Explain ratchet.** Add `tests/explain_ratchet_test.rs`: run `explain_source` (with emitted Rust) over the corpus and
+4. **Explain ratchet.** Add an explain-ratchet test (to be added under tests/): run `explain_source` (with emitted Rust) over the corpus and
    count findings by ID (`D-OWN-STAGES`, `D-CLONE-OUTSIDE-SOLVER`, `D-WIDTH-OWNERS`, `D-CLONE-LASTUSE`, `D-SOLVER-UNION`,
    `D-PIN-NOT-HONORED`). Commit the counts; the test fails if any count rises. Each step below names which count must fall.
    This is the progress meter; "0 findings" is the exit of WP 9.

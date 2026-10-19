@@ -1,3 +1,7 @@
+---
+status: proposed
+last_verified: 5809fb56e863
+---
 # ADR-0023: Interpreter host bridge for Rust code and Rust-crate dependencies
 
 - **Status:** Proposed (spike landed)

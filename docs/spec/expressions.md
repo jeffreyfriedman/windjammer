@@ -20,11 +20,11 @@ Part of the [Windjammer language specification](README.md). Rule IDs are checked
 | 12 | `\|\|` | left |
 | 13 | `\|>` (pipe) | left |
 
-Source: `get_binary_op` in `src/parser/binary_expression_parser.rs`. Differences from Rust: shifts bind tighter than `+` (DB-153), and the bitwise operators bind looser than comparisons (like C). Both are surprising to Rust programmers; see Q-004 for `as` and unary minus.
+Source: `get_binary_op` in `src/parser/binary_expression_parser.rs`. Differences from Rust: shifts bind tighter than `+`, and the bitwise operators bind looser than comparisons (like C). Both are surprising to Rust programmers; see Q-004 for `as` and unary minus.
 
 ## Operator precedence
 
-**SPEC-EXPR-001** Binary operators bind, from tightest to loosest: `* / %`; `<< >>`; `+ -`; `< <= > >=`; `== !=`; `&`; `^`; `|`; `&&`; `||`. All are left-associative. Unlike Rust and C, shifts bind TIGHTER than `+ -` (DB-153): `1 << 2 + 1` is `(1 << 2) + 1`.
+**SPEC-EXPR-001** Binary operators bind, from tightest to loosest: `* / %`; `<< >>`; `+ -`; `< <= > >=`; `== !=`; `&`; `^`; `|`; `&&`; `||`. All are left-associative. Unlike Rust and C, shifts bind TIGHTER than `+ -`: `1 << 2 + 1` is `(1 << 2) + 1`.
 
 <!-- example: tests/spec/expressions/SPEC-EXPR-001.wj -->
 ```windjammer

@@ -185,6 +185,7 @@ range_pattern = INT_LIT ( ".." | "..=" ) INT_LIT | CHAR_LIT "..=" CHAR_LIT ;
 (*@ctx fn main() { let _v = $$ } *)
 expression   = pipe_expr ;
 pipe_expr    = or_expr { "|>" stage } ;
+(*@ctx fn main() { let _v = x |> $$ } *)
 stage        = IDENT | IDENT "(" [ args ] ")" | "." IDENT "(" [ args ] ")" ;
 or_expr      = and_expr { "||" and_expr } ;
 and_expr     = bitor_expr { "&&" bitor_expr } ;
@@ -203,10 +204,11 @@ postfix_expr = primary { "." IDENT | "." INT_LIT | "." IDENT "(" [ call_args ] "
 args         = expression { "," expression } ;
 (* Call arguments: optionally named (ADR-0018 ARGS) and possibly `_` shorthand closures (ADR-0018 CLOS) *)
 call_args    = call_arg { "," call_arg } ;
-call_arg     = [ IDENT ":" ] ( expression | shorthand ) ;
+(* Named arguments (`name: expr`, ADR-0018 ARGS) need a callee declared in the same file, which a context-free derivation cannot guarantee: they are covered by the spec examples, not generated here. *)
+call_arg     = ( expression | shorthand ) ;
 shorthand    = "_" ( "." IDENT { "." IDENT } | ( "+" | "-" | "*" | "==" | "<" ) ( "_" | INT_LIT ) ) ;
 (* ADR-0018 BLOCK: a block after a call's `)` on the same line is a trailing closure argument *)
-trailing_block = "{" [ IDENT { "," IDENT } "->" ] expression "}" ;
+trailing_block = "{" [ IDENT { "," IDENT } "->" ] tail_expr "}" ;
 call_expr    = IDENT "(" [ args ] ")" ;
 method_call  = IDENT "." IDENT "(" [ args ] ")" ;
 primary      = INT_LIT | FLOAT_LIT | STRING_LIT | CHAR_LIT | "true" | "false" | IDENT
@@ -225,7 +227,7 @@ struct_lit   = TYPE_IDENT "{" [ field_init { "," field_init } [ "," ] ] "}" ;
 field_init   = IDENT [ ":" expression ] ;
 if_expr      = "if" cond block "else" block ;
 match_expr   = "match" cond_expr "{" match_arm { match_arm } "}" ;
-match_arm    = or_pattern [ "if" expression ] "=>" ( expression "," | block ) ;
+match_arm    = or_pattern [ "if" cond_expr ] "=>" ( expression "," | block ) ;
 closure      = "|" [ IDENT { "," IDENT } ] "|" ( expression | block ) ;
 (* ADR-0018 MATCH: `match` without a scrutinee; the last arm must be `_` *)
 guard_match  = "match" "{" { or_expr "=>" expression "," } "_" "=>" expression [ "," ] "}" ;

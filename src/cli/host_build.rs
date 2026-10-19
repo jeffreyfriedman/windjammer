@@ -38,7 +38,7 @@ fn fnv(h: &mut u64, bytes: &[u8]) {
 }
 
 fn cache_root() -> PathBuf {
-    crate::package::graph::git_cache_dir().parent().map(|p| p.join("host")).unwrap_or_else(|| std::env::temp_dir().join("wj-host"))
+    crate::cargo_cache::cache_root().join("host")
 }
 
 fn dylib_name(stem: &str) -> String {

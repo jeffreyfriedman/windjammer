@@ -199,7 +199,7 @@ fn spec_examples_conform_on_every_backend() {
             let line = format!("{id} [{c}]: {old} -> {st}");
             if st == "WRONG" {
                 wrong.push(line);
-            } else if old == "NEW" || rank(st) < rank(&old) {
+            } else if old != "NEW" && rank(st) < rank(&old) {
                 worse.push(line);
             } else {
                 better.push(line);
@@ -233,7 +233,7 @@ fn spec_examples_conform_on_every_backend() {
         msg.push_str(&format!("regressions:\n  {}\n", worse.join("\n  ")));
     }
     if !better.is_empty() {
-        msg.push_str(&format!("improvements (record with SPEC_BLESS=1):\n  {}\n", better.join("\n  ")));
+        msg.push_str(&format!("improvements and new examples (record with SPEC_BLESS=1):\n  {}\n", better.join("\n  ")));
     }
     assert!(msg.is_empty(), "{msg}");
 }

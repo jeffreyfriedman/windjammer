@@ -21,10 +21,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn wj_binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj")
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"))
 }
 
 fn build_wj_to_rust(test_name: &str, wj_source: &str) -> String {

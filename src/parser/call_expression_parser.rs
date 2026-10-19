@@ -410,7 +410,7 @@ impl Parser {
                 }
                 Token::As => {
                     self.advance();
-                    let type_ = self.parse_type()?;
+                    let type_ = self.parse_cast_type()?;
                     self.alloc_expr(Expression::Cast {
                         expr,
                         type_,

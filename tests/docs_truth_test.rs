@@ -136,6 +136,14 @@ impl Scratch {
         for f in ["src/bin/wj_cli_args.rs", "src/error_codes.rs", "src/error_catalog.rs", "src/linter/codes.rs", "src/intrinsics/mod.rs", "src/lexer/keywords.rs", "docs/adr/0014-surface.md"] {
             s.write(f, "");
         }
+        // the llms.txt generators' declared inputs: link targets must exist, inlined documents must have a body
+        let generated = |f: &str| genfiles::FILES.iter().any(|(p, _)| *p == f);
+        for f in docs_truth::gen_llms::link_targets().filter(|f| !generated(f)) {
+            s.write(f, "");
+        }
+        for f in docs_truth::gen_llms::inlined_sources().filter(|f| !generated(f)) {
+            s.write(f, if f.ends_with(".json") { "{\"tools\": []}\n" } else { "# Stub\n" });
+        }
         let ctx = s.ctx();
         genfiles::write_all(&ctx).unwrap();
         s

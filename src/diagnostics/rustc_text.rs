@@ -87,7 +87,12 @@ pub fn translate(rust_code: Option<&str>, msg: &str, label: Option<&str>) -> Tra
         Some("E0382") => t(
             "WJ0007",
             format!("value `{name}` is used after it was moved"),
-            Some("use the new owner, or use `{name}` before it is passed on"),
+            Some("use the new owner, use the value before it is passed on, or pass a copy with `.clone()`"),
+        ),
+        Some("E0507") => t(
+            "WJ0016",
+            format!("cannot move `{name}` out of a borrow (ownership: it is only borrowed here)"),
+            Some("copy it with `.clone()`, or take the value by ownership"),
         ),
         Some("E0499") | Some("E0502") | Some("E0505") | Some("E0506") => t(
             "WJ0016",

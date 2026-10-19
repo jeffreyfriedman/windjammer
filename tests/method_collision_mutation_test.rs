@@ -33,7 +33,7 @@ fn compile_wj_to_rust(source: &str) -> String {
     std::fs::write(&wj_file, source).unwrap();
 
     let wj = std::env::var("WJ_BINARY").unwrap_or_else(|_| {
-        let dev = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/release/wj");
+        let dev = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
         if dev.exists() {
             return dev.to_string_lossy().to_string();
         }

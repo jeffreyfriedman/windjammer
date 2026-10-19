@@ -9,7 +9,7 @@ backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
 [[unsupported]]
-program = "17_closure_counter_capture"
+program = "22_vec_index_mutate"
 backend = "rust"
 reason = "rust-int-literal-width-inference: see docs/known-issues/rust-int-literal-width-inference.md"
 
@@ -59,11 +59,6 @@ backend = "rust"
 reason = "rust-tail-none-cast: see docs/known-issues/rust-tail-none-cast.md"
 
 [[unsupported]]
-program = "63_closures_capture"
-backend = "rust"
-reason = "rust-closure-returned-as-fn-pointer: see docs/known-issues/rust-closure-returned-as-fn-pointer.md"
-
-[[unsupported]]
 program = "61_string_split_trim"
 backend = "rust"
 reason = "rust-str-vs-string-in-collect-and-concat: see docs/known-issues/rust-str-vs-string-in-collect-and-concat.md"
@@ -92,8 +87,6 @@ reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std
 program = "113_std_time_monotonic"
 backend = "rust"
 reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
-
-
 
 # `&mut int` parameters: the Rust backend infers the parameter as an owned i64 (E0614 on `*c`).
 [[unsupported]]

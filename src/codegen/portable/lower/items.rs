@@ -11,14 +11,12 @@ use std::collections::HashMap;
 
 /// Lower a whole program. `reg` supplies analyzer-inferred parameter ownership.
 pub fn lower_program(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
-    let _aliases = crate::codegen::portable::alias::install(program);
     lower_with_env(program, ItemEnv::build(program, reg))
 }
 
 /// [`lower_program`] ignoring the semantic layer's facts (defensive copy at every owned use).
 /// Used to measure what the facts save; never used to emit code.
 pub fn lower_program_without_facts(program: &Program, reg: Option<&SignatureRegistry>) -> PResult<PModule> {
-    let _aliases = crate::codegen::portable::alias::install(program);
     let mut env = ItemEnv::build(program, reg);
     env.without_facts = true;
     lower_with_env(program, env)
@@ -84,7 +82,7 @@ fn lower_item(env: &ItemEnv, item: &Item, defaults: &Defaults, m: &mut PModule) 
             m.traits.push(PTrait { name: decl.name.clone(), methods });
         }
         Item::Const { name, type_, value, .. } | Item::Static { name, type_, value, .. } => {
-            let ty = from_ast(type_, &[]);
+            let ty = from_ast(type_, &[], &env.aliases);
             let mut lw = Lowerer::new(env);
             let mut e = lw.expr(value, Some(&ty))?;
             visit::types_in_expr(&mut e, &mut |t| *t = lw.resolve_final(t));
@@ -105,7 +103,7 @@ fn attach_impl(env: &ItemEnv, block: &ImplBlock, defaults: &Defaults, m: &mut PM
     let owner = crate::codegen::portable::env::base_name(&block.type_name).to_string();
     let mut methods = Vec::new();
     for f in &block.functions {
-        let name = crate::codegen::portable::env::impl_method_name(block, &f.name);
+        let name = crate::codegen::portable::env::impl_method_name(block, &f.name, &env.aliases);
         let sig = &env.methods[&(owner.clone(), name.clone())];
         let mut fx = lower_fn(env, f, sig, Some(&owner), &outer)?;
         fx.name = name;
@@ -186,7 +184,7 @@ pub(super) fn lower_fn(env: &ItemEnv, decl: &FunctionDecl, sig: &crate::codegen:
             lw.declare("self", st, sig.recv != Some(ParamMode::Value));
             continue;
         }
-        let (_, pty, mode) = sig.params.iter().find(|(n, _, _)| *n == p.name).cloned().unwrap_or((p.name.clone(), fix_self(from_ast(&p.type_, &lw.generics), self_ty.as_ref()), ParamMode::Value));
+        let (_, pty, mode) = sig.params.iter().find(|(n, _, _)| *n == p.name).cloned().unwrap_or((p.name.clone(), fix_self(from_ast(&p.type_, &lw.generics, &env.aliases), self_ty.as_ref()), ParamMode::Value));
         let _ = i;
         let out = lw.declare(&p.name, pty.clone(), mode != ParamMode::Value);
         if mode == ParamMode::Value {

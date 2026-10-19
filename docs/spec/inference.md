@@ -195,10 +195,11 @@ must outlive the call is cloned (CLONE-BORROWED-TO-OWNED).
 ## 5. Closures
 
 ### CLOS-MOVE-CAPTURE
-**Rule.** A closure captures by move every variable it names. A captured parameter is therefore owned.
-**Example.** `fn f(v: Vec<int>) -> int { let g = |i: int| v[i]; g(0) }` emits `v: Vec<i64>` and `move |i| ..`.
-**Status.** Implementation-defined (no ADR). It over-owns read-only captures (D-CLOS-OVEROWN): the closure could
-borrow. Proposed: capture read-only variables by `&`, and only move when the closure escapes the function.
+**Rule.** A closure that escapes the function (returned, stored, passed to a thread) captures by move every variable
+it names. A let-bound closure that never leaves the function borrows its captures (no `move`).
+**Example.** `fn f(v: Vec<int>) -> int { let g = |i: int| v[i]; g(0) }` emits `let g = |i: i64| v[i as usize]`.
+**Status.** Implementation-defined (no ADR); the escape test is `codegen/rust/closure_escape.rs`. Still over-owns the
+captured parameter (D-CLOS-OVEROWN): `v` above is inferred `Vec<i64>` although the non-escaping closure only reads it.
 
 ### CLOS-MUT-CAPTURE
 **Rule.** A closure that mutates a captured variable needs the variable and the closure binding to be mutable.

@@ -101,11 +101,16 @@ pub fn measure(root: &Path) -> BTreeMap<String, usize> {
     for d in DIRS {
         walk(&root.join(d), &mut files);
     }
-    // Fields are often declared in `mod.rs` and iterated in a sibling file: share `self.<field>` names.
-    let fields: BTreeSet<String> = files.iter().flat_map(|f| field_names(&std::fs::read_to_string(f).unwrap())).collect();
+    // Fields are often declared in `mod.rs` and iterated in a sibling file: share `self.<field>` names, but only
+    // within one directory. Sharing across the whole tree flagged every `Vec` that happens to be called `fields`,
+    // `params` or `enums` in an unrelated module as soon as any file declared a hash container with that name.
+    let mut by_dir: BTreeMap<std::path::PathBuf, BTreeSet<String>> = BTreeMap::new();
+    for f in &files {
+        by_dir.entry(f.parent().unwrap().to_path_buf()).or_default().extend(field_names(&std::fs::read_to_string(f).unwrap()));
+    }
     let mut out = BTreeMap::new();
     for f in &files {
-        let n = scan_with(&std::fs::read_to_string(f).unwrap(), &fields).len();
+        let n = scan_with(&std::fs::read_to_string(f).unwrap(), &by_dir[f.parent().unwrap()]).len();
         if n > 0 {
             out.insert(f.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"), n);
         }
@@ -134,7 +139,7 @@ pub fn check_ratchet(root: &Path) {
     let detail: Vec<String> = grew
         .iter()
         .map(|(f, n)| {
-            let sites = scan_with(&std::fs::read_to_string(root.join(f)).unwrap(), &BTreeSet::new()).into_iter().map(|(l, t)| format!("    {f}:{l}: {t}")).collect::<Vec<_>>().join("\n");
+            let sites = scan(&std::fs::read_to_string(root.join(f)).unwrap()).into_iter().map(|(l, t)| format!("    {f}:{l}: {t}")).collect::<Vec<_>>().join("\n");
             format!("{f}: {n} (allowed {}):\n{sites}", allowed.get(*f).copied().unwrap_or(0))
         })
         .collect();

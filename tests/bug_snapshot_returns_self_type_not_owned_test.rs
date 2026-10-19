@@ -99,8 +99,7 @@ pub fn main() {
     let wj_path = test_dir.join("snapshot_test.wj");
     fs::write(&wj_path, wj_source).unwrap();
 
-    let wj_binary = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target/release/wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let output_dir = test_dir.join("out");
     fs::create_dir_all(&output_dir).unwrap();

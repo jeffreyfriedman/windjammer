@@ -76,19 +76,10 @@ fn write_lock(root: &Path, entries: &BTreeMap<String, LockEntry>) -> std::io::Re
     std::fs::write(root.join(LOCKFILE), s)
 }
 
-/// Cache directory for git checkouts (`$WJ_HOME/git` or the platform cache dir).
-pub fn git_cache_dir() -> PathBuf {
-    if let Ok(h) = std::env::var("WJ_HOME") {
-        return PathBuf::from(h).join("git");
-    }
-    let base = std::env::var("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|_| std::env::var("HOME").map(|h| {
-            let mac = PathBuf::from(&h).join("Library/Caches");
-            if mac.is_dir() { mac } else { PathBuf::from(h).join(".cache") }
-        }))
-        .unwrap_or_else(|_| std::env::temp_dir());
-    base.join("windjammer").join("git")
+/// Cache directory for git checkouts: `<project>/.wj-cache/git` (the project-local cache that is already
+/// gitignored). Project-scoped, so resolution never reads the environment or the user's home directory.
+pub fn git_cache_dir(project_root: &Path) -> PathBuf {
+    project_root.join(".wj-cache").join("git")
 }
 
 fn git(args: &[&str], dir: Option<&Path>) -> Result<String, String> {
@@ -113,8 +104,8 @@ fn cache_key(url: &str) -> String {
 }
 
 /// Check out `url` at `rev` (or `branch`/default HEAD when unlocked) in the cache; returns (dir, commit).
-fn checkout(url: &str, branch: Option<&str>, rev: Option<&str>) -> Result<(PathBuf, String), String> {
-    let base = git_cache_dir().join(cache_key(url));
+fn checkout(root: &Path, url: &str, branch: Option<&str>, rev: Option<&str>) -> Result<(PathBuf, String), String> {
+    let base = git_cache_dir(root).join(cache_key(url));
     std::fs::create_dir_all(base.parent().unwrap()).map_err(|e| e.to_string())?;
     if !base.join(".git").is_dir() {
         git(&["clone", "--quiet", url, &base.to_string_lossy()], None)?;
@@ -172,7 +163,7 @@ pub fn resolve(root: &Path) -> Result<Vec<DepNode>, String> {
             out.push(DepNode { name: name.clone(), kind: classify(&dir), root: Some(dir), rev: None, source: format!("path+{p}") });
         } else if let Some(url) = s("git") {
             let pinned = s("rev").or_else(|| lock.get(name).filter(|e| e.source == format!("git+{url}")).map(|e| e.rev.clone()));
-            let (dir, commit) = checkout(&url, s("branch").as_deref(), pinned.as_deref())
+            let (dir, commit) = checkout(root, &url, s("branch").as_deref(), pinned.as_deref())
                 .map_err(|e| format!("dependency `{name}`: {e}"))?;
             let entry = LockEntry { source: format!("git+{url}"), rev: commit.clone() };
             if lock.get(name) != Some(&entry) {

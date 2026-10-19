@@ -18,10 +18,7 @@ use std::process::Command;
 #[test]
 #[cfg_attr(tarpaulin, ignore)]
 fn test_import_with_as_alias() {
-    let wj_binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("target")
-        .join("release")
-        .join("wj");
+    let wj_binary = std::path::PathBuf::from(env!("CARGO_BIN_EXE_wj"));
 
     let test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
