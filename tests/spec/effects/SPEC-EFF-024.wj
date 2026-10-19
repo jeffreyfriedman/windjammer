@@ -1,0 +1,14 @@
+// spec: SPEC-EFF-024
+// mode: check-error
+// xfail: Q-032
+// expect-error: WJ0046: step `add_noise` mutates `acc`
+use std::random
+fn add_noise(acc: Vec<int>) { acc.push(random::range(0, 9)) }
+durable fn sample() -> int {
+    let mut acc = []
+    add_noise(acc)
+    acc.len()
+}
+fn main() {
+    println("${sample()}")
+}
