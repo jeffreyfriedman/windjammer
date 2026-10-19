@@ -1,13 +1,14 @@
 # src/cli/
 
 ## Purpose
-Subcommand implementations of the `wj` binary: build, run, test, check (in-process parse + lint + transpile, `--json` report; no cargo for `.wj` input), fmt, lint, new, add/remove, update, cache, clean, self-install, JSON diagnostics.
+Subcommand implementations of the `wj` binary: build, run, test, check (in-process parse + lint + transpile, `--json` report; no cargo for `.wj` input), fmt, lint, errors (non-interactive diagnostics browser over `wj check`), new, add/remove, update, cache, clean, self-install, JSON diagnostics.
 
 ## Inputs/Outputs
 In: parsed CLI args. Out: process side effects and exit status.
 
 ## Invariants
 - Offline subcommands are cwd-independent: no runtime reads of templates/std/runtime relative to the cwd or the build checkout (templates in `new_templates.rs`, assets via `crate::embedded_assets`). Gate: tests/installed_binary_smoke_test.rs.
+- `wj run --interpret` calls `check::require_clean` first: the interpreter never runs a program `wj check` rejects (gate: tests/interpreter_check_parity_test.rs).
 - Thin: delegate to `compiler`, `test_runner`, `cargo_cache`.
 - Driver layer: may read env vars and print (ratcheted).
 

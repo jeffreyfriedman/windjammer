@@ -87,3 +87,18 @@ polarity = "negative"
 files = { "t/a_test.wj" = "@test\nfn test_a() {\n    assert(true)\n}\n\n@test\nfn test_b() {\n    assert(false)\n}\n" }
 args = ["test", "--interpret", "--parallel", "{w}/t"]
 exit = 1
+
+[[case]]
+name = "test --doc runs the examples in doc comments"
+polarity = "positive"
+files = { "t/lib.wj" = "/// Doubles.\n///\n/// ```wj\n/// println(\"${double(21)}\")\n/// // expect: 42\n/// ```\nfn double(x: int) -> int {\n    x * 2\n}\n" }
+args = ["test", "--doc", "{w}/t"]
+stdout_has = ["(fn double) ... ok", "doctests: 1 passed, 0 failed"]
+
+[[case]]
+name = "test --doc fails when an example's expectation does not hold"
+polarity = "negative"
+files = { "t/lib.wj" = "/// Doubles.\n///\n/// ```wj\n/// println(\"${double(21)}\")\n/// // expect: 41\n/// ```\nfn double(x: int) -> int {\n    x * 2\n}\n" }
+args = ["test", "--doc", "{w}/t"]
+exit = 1
+output_has = ["FAILED", "41"]

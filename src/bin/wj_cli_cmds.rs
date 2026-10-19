@@ -16,11 +16,8 @@ pub fn run(cli: Cli) -> Result<()> {
             target,
             defer_drop,
             defer_drop_threshold,
-            minify,
             tree_shake,
             source_maps,
-            polyfills,
-            v8_optimize,
             check,
             raw_errors,
             fix,
@@ -45,11 +42,8 @@ pub fn run(cli: Cli) -> Result<()> {
                 release,
                 &target,
                 windjammer::cli::build::BuildOptions {
-                    minify,
                     tree_shake,
                     source_maps,
-                    polyfills,
-                    v8_optimize,
                 },
                 check,
                 raw_errors,
@@ -177,7 +171,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Update { check, force } => {
             windjammer::cli::update::execute(check, force)?;
         }
-        Commands::Stats { clear, verbose: _ } => {
+        Commands::Stats { clear, verbose } => {
             if clear {
                 let mut stats = windjammer::error_statistics::load_or_create_stats();
                 stats.clear();
@@ -185,7 +179,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 println!("Statistics cleared!");
             } else {
                 let stats = windjammer::error_statistics::load_or_create_stats();
-                println!("{}", stats.format());
+                println!("{}", if verbose { stats.format_verbose() } else { stats.format() });
             }
         }
         Commands::Docs { query, limit, json, output, format } => {
@@ -205,7 +199,9 @@ pub fn run(cli: Cli) -> Result<()> {
             windjammer::agent_index::generate_agent_index(&output)?;
         }
         Commands::ShaderCompile { input, output } => cmd_shader_compile(&input, output.as_deref())?,
-        Commands::Errors { file, output } => cmd_errors_tui(&file, &output)?,
+        Commands::Errors { path, code, severity } => {
+            windjammer::cli::errors::execute(path.as_deref().unwrap_or_else(|| std::path::Path::new(".")), code.as_deref(), severity.as_deref())?
+        }
         Commands::ValidateWjsl { path } => cmd_validate_wjsl(&path)?,
         Commands::Clean { all } => {
             windjammer::cli::clean::execute(all)?;
@@ -350,55 +346,6 @@ fn cmd_shader_compile(input: &std::path::Path, output: Option<&std::path::Path>)
     Ok(())
 }
 
-fn cmd_errors_tui(file: &std::path::Path, output: &std::path::Path) -> Result<()> {
-    use colored::*;
-
-    println!("Building and checking {}...", file.display());
-
-    let build_options = windjammer::cli::build::BuildOptions {
-        minify: false,
-        tree_shake: false,
-        source_maps: true,
-        polyfills: false,
-        v8_optimize: false,
-    };
-
-    windjammer::cli::build::execute(
-        file,
-        Some(output),
-        false,
-        "rust",
-        build_options,
-        true,
-        false,
-        false,
-        false,
-        true,
-        None,
-        None,
-        false,
-        false,
-        false,
-        true,
-        false,
-        &[],
-        false,
-        false,
-    )
-    .ok();
-
-    println!(
-        "{}",
-        "✓ TUI mode coming soon! Use 'wj build --check' for now.".yellow()
-    );
-    println!(
-        "{}",
-        "  The TUI infrastructure is ready, just needs diagnostics API.".dimmed()
-    );
-
-    Ok(())
-}
-
 fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
     use colored::*;
     use std::path::Path;
@@ -475,6 +422,9 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
 
 /// Interpret a .wj file or project directory directly (no cargo, no rustc).
 fn interpret_file(file: &std::path::Path, args: Vec<String>, opts: windjammer::interpreter::runner::RunOptions) -> Result<()> {
+    if file.exists() {
+        windjammer::cli::check::require_clean(file)?;
+    }
     windjammer::cli_execution::report_build_lints(file);
     let code = windjammer::interpreter::runner::run_path_with(file, args, opts);
     if code != 0 {

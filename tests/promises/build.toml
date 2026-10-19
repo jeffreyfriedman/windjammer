@@ -148,9 +148,10 @@ output_has = ["invalid value 'abc'"]
 [[case]]
 name = "build --defer-drop rejects an unknown mode"
 polarity = "negative"
-xfail = "BUG: `--defer-drop bogus` is accepted silently (documented modes: auto, always, never)"
 files = { "m.wj" = "fn main() {\n}\n" }
 args = ["build", "{w}/m.wj", "--no-cargo", "--defer-drop", "bogus", "-o", "{w}/out"]
+exit = 2
+output_has = ["invalid value 'bogus'"]
 
 [[case]]
 name = "build --ir-shadow-validate passes a clean program"
@@ -176,38 +177,33 @@ output_has = ["--source-maps is not supported"]
 [[case]]
 name = "build --source-maps writes a source map for Rust"
 polarity = "positive"
-xfail = "BUG: `--source-maps` on the Rust target writes no map file"
 files = { "m.wj" = "fn main() {\n}\n" }
 args = ["build", "{w}/m.wj", "--no-cargo", "--source-maps", "-o", "{w}/out"]
 creates = ["out/m.rs.map"]
+file_has = { "out/m.rs.map" = "\"wj_line\": 1" }
 
 [[case]]
 name = "build --metadata rejects a malformed NAME=PATH"
 polarity = "negative"
-xfail = "BUG: `--metadata bad` and `--metadata x=/missing` are accepted silently"
 files = { "m.wj" = "fn main() {\n}\n" }
 args = ["build", "{w}/m.wj", "--no-cargo", "--metadata", "bad", "-o", "{w}/out"]
+exit = 1
+output_has = ["invalid --metadata 'bad'", "NAME=PATH"]
 
 [[case]]
-name = "build --minify was removed but is still advertised"
-polarity = "negative"
-files = { "m.wj" = "fn main() {\n}\n" }
-args = ["build", "{w}/m.wj", "--no-cargo", "-t", "javascript", "--minify", "-o", "{w}/out"]
-output_has = ["were removed"]
+name = "build --metadata accepts NAME=PATH for an existing file"
+polarity = "positive"
+files = { "m.wj" = "fn main() {\n}\n", "dep/metadata.json" = "{}" }
+args = ["build", "{w}/m.wj", "--no-cargo", "--metadata", "dep={w}/dep/metadata.json", "-o", "{w}/out"]
+creates = ["out/m.rs"]
 
 [[case]]
-name = "build --polyfills was removed but is still advertised"
+name = "build --metadata rejects a path that does not exist"
 polarity = "negative"
 files = { "m.wj" = "fn main() {\n}\n" }
-args = ["build", "{w}/m.wj", "--no-cargo", "-t", "javascript", "--polyfills", "-o", "{w}/out"]
-output_has = ["were removed"]
-
-[[case]]
-name = "build --v8-optimize was removed but is still advertised"
-polarity = "negative"
-files = { "m.wj" = "fn main() {\n}\n" }
-args = ["build", "{w}/m.wj", "--no-cargo", "-t", "javascript", "--v8-optimize", "-o", "{w}/out"]
-output_has = ["were removed"]
+args = ["build", "{w}/m.wj", "--no-cargo", "--metadata", "dep={w}/missing.json", "-o", "{w}/out"]
+exit = 1
+output_has = ["path not found"]
 
 [[case]]
 name = "inferred ownership: a read-only parameter becomes a borrow in the emitted Rust"
@@ -221,7 +217,7 @@ file_has = { "out/m.rs" = "fn count(b: &Big)" }
 name = "inferred ownership: spelling the borrow yourself is flagged (W0001)"
 polarity = "negative"
 covers = ["feature ownership-inferred", "feature ownership-visible"]
-exit = 0
+exit = 1
 files = { "m.wj" = "fn count(v: &Vec<int>) -> int {\n    v.len() as int\n}\n\nfn main() {\n    println(\"${count([1])}\")\n}\n" }
 args = ["lint", "{w}/m.wj"]
 output_has = ["[W0001]"]

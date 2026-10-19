@@ -169,6 +169,13 @@ pub(crate) fn write_generated_rust_and_meta<'ast>(
     cache_management::write_if_changed(output_file, &rust_code)?;
     if target == crate::CompilationTarget::Rust {
         let source = std::fs::read_to_string(source_file)?;
+        crate::codegen::rust::source_map_align::write_if_enabled(
+            codegen.config().emit_source_maps,
+            source_file,
+            &source,
+            output_file,
+            &rust_code,
+        );
         let fingerprint = Some(if let Some(epoch) = dep_epoch {
             incremental::compute_fingerprint_with_dep_epoch_and_output(&source, epoch, &rust_code)
                 .into()

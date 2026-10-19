@@ -10,7 +10,7 @@ output_has = ["No issues found"]
 [[case]]
 name = "lint reports every Rust-leakage code"
 polarity = "negative"
-exit = 0
+exit = 1
 files = { "m.wj" = "fn total(v: Vec<int>) -> int {\n    let mut s = 0\n    for x in v.iter() {\n        s = s + x\n    }\n    s\n}\nfn show(s: string) {\n    println(s)\n}\nfn first(x: &string) -> int {\n    let n = Some(1).unwrap()\n    n\n}\nfn main() {\n    let v = [1, 2]\n    let w = v.clone()\n    let t = \"hi\".to_string()\n    show(&t)\n    println(\"${total(w)}\")\n}\n" }
 args = ["lint", "{w}/m.wj"]
 output_has = ["[W0001]", "[W0002]", "[W0003]", "[W0004]", "[W0005]", "[W0006]"]
@@ -38,7 +38,6 @@ output_has = ["Path does not exist"]
 [[case]]
 name = "lint fails on error-level findings without --strict"
 polarity = "negative"
-xfail = "BUG: W0001/W0002 are printed as `error:` (default level error) but `wj lint` exits 0 and calls them warnings"
 files = { "m.wj" = "fn main() {\n    let n = Some(1).unwrap()\n    println(\"${n}\")\n}\n" }
 args = ["lint", "{w}/m.wj"]
 exit = 1
@@ -47,7 +46,7 @@ exit = 1
 name = "lint reports the line of an unwrap"
 polarity = "negative"
 xfail = "BUG: W0002 is reported one line below the `.unwrap()` call"
-exit = 0
+exit = 1
 files = { "m.wj" = "fn main() {\n    let n = Some(1).unwrap()\n    println(\"${n}\")\n}\n" }
 args = ["lint", "{w}/m.wj"]
 output_has = ["m.wj:2:"]

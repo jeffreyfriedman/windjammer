@@ -358,11 +358,6 @@ impl<'ast> CodeGenerator<'ast> {
             return format!("/* {} */", e);
         }
 
-        // Record source mapping if location info is available
-        if let Some(location) = codegen_helpers::get_statement_location(stmt) {
-            self.record_mapping(&location);
-        }
-
         let result = self.generate_statement_impl(stmt);
         self.exit_recursion();
         result

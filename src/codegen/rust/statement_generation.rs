@@ -578,14 +578,6 @@ impl<'ast> CodeGenerator<'ast> {
             .and_then(Self::int_rust_type_name)
     }
 
-    /// Generate a statement with automatic source tracking
-    #[allow(dead_code)]
-    pub(super) fn generate_statement_tracked(&mut self, stmt: &Statement<'ast>) -> String {
-        let code = self.generate_statement(stmt);
-        self.track_generated_lines(&code);
-        code
-    }
-
     /// Whether an expression's value should be treated as owned `String` for if/else branch coercion.
     pub(in crate::codegen::rust) fn expr_suggests_owned_string_coercion(
         &self,
