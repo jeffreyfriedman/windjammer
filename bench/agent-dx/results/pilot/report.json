@@ -3,9 +3,9 @@
  "arms": {
   "pass": {
    "A": [
-    0.43333333333333335,
-    0.2,
-    0.7
+    0.5666666666666667,
+    0.3,
+    0.8333333333333334
    ],
    "B": [
     0.9,
@@ -27,9 +27,9 @@
   },
   "to_green": {
    "A": [
+    1.125,
     1.0,
-    1.0,
-    1.0
+    1.5
    ],
    "B": [
     2.0,
@@ -135,9 +135,9 @@
   },
   "silent": {
    "A": [
-    0.5666666666666667,
-    0.3,
-    0.8
+    0.43333333333333335,
+    0.16666666666666666,
+    0.7
    ],
    "B": [
     0.0,
@@ -149,9 +149,9 @@
  "diffs": {
   "pass": {
    "A-B": [
-    -0.4666666666666667,
-    -0.7,
-    -0.23333333333333328
+    -0.33333333333333337,
+    -0.6333333333333333,
+    -0.09999999999999998
    ]
   },
   "verify": {
@@ -163,9 +163,9 @@
   },
   "to_green": {
    "A-B": [
-    -0.75,
-    -1.75,
-    -0.09523809523809534
+    -0.625,
+    -1.5499999999999998,
+    -0.012145748987854255
    ]
   },
   "turns": {
@@ -226,27 +226,44 @@
   },
   "silent": {
    "A-B": [
-    0.5666666666666667,
-    0.3333333333333333,
-    0.8
+    0.43333333333333335,
+    0.16666666666666666,
+    0.7
    ]
   }
  },
  "friction": [
   {
+   "id": "type-mismatch",
+   "title": "type mismatch (often int/float, string/&str)",
+   "fix_kind": "diagnostic text",
+   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
+   "wasted_calls": 24,
+   "est_tokens": 231117,
+   "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:24:5\n   |\n22 | fn digit_char(d: i64) -> String {\n   |                          ------ expected `std::string::String` because of return type\n23 |     let digits: String = String::from(\"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\");\n24 |     digits[d as usize..(d ",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 16,
+   "n_tasks": 5,
+   "rank": 1,
+   "priority": "P0"
+  },
+  {
    "id": "silent-divergence",
    "title": "interpreted run passed but compiled grade failed (silent divergence)",
    "fix_kind": "interpreter / check parity",
    "fix_location": "R2/R5 gates in docs/design/interpreter-primary-readiness.md; add the program to the differential corpus",
-   "wasted_calls": 21,
-   "est_tokens": 198330,
+   "wasted_calls": 17,
+   "est_tokens": 160553,
    "example": "",
    "arms": [
     "A"
    ],
-   "n_trials": 17,
-   "n_tasks": 9,
-   "rank": 1,
+   "n_trials": 13,
+   "n_tasks": 5,
+   "rank": 2,
    "priority": "P0"
   },
   {
@@ -262,23 +279,6 @@
    ],
    "n_trials": 10,
    "n_tasks": 7,
-   "rank": 2,
-   "priority": "P0"
-  },
-  {
-   "id": "type-mismatch",
-   "title": "type mismatch (often int/float, string/&str)",
-   "fix_kind": "diagnostic text",
-   "fix_location": "show both types and the conversion (`as`, `.to_string()`); error-code explain entry",
-   "wasted_calls": 14,
-   "est_tokens": 136674,
-   "example": "error[E0308]: mismatched types\n  --> main.rs:24:5\n   |\n22 | fn digit_char(d: i64) -> String {\n   |                          ------ expected `std::string::String` because of return type\n23 |     let digits: String = String::from(\"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\");\n24 |     digits[d as usize..(d as usize) + 1]\n   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `String`, found `str`\n   |\nhel",
-   "arms": [
-    "A",
-    "B"
-   ],
-   "n_trials": 12,
-   "n_tasks": 4,
    "rank": 3,
    "priority": "P0"
   },
@@ -287,32 +287,16 @@
    "title": "raw rustc/cargo error surfaced from generated code",
    "fix_kind": "codegen / diagnostic mapping",
    "fix_location": "map rustc codes back to .wj spans; fix codegen so check-vs-build parity holds (R5)",
-   "wasted_calls": 13,
-   "est_tokens": 134357,
-   "example": "from \"/private/tmp/claude-501/ap-pilot/work/t003_prime_counts.B.0/ws\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nw",
-   "arms": [
-    "B"
-   ],
-   "n_trials": 12,
-   "n_tasks": 6,
-   "rank": 4,
-   "priority": "P1"
-  },
-  {
-   "id": "int-width",
-   "title": "untyped integer literal emitted as i32 and mixed with int (i64)",
-   "fix_kind": "codegen (literal defaulting) + pack tip",
-   "fix_location": "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'",
-   "wasted_calls": 13,
-   "est_tokens": 125448,
-   "example": "error[E0308]: mismatched types\n  --> main.rs:40:19\n   |\n40 |         while v > (0_i32 as i32) {\n   |               -   ^^^^^^^^^^^^^^ expected `i64`, found `i32`\n   |               |\n   |               expected because this is `i64`\n   |\nhelp: you can convert an `i32` to an `i64`\n   |\n40 |         while v > ((0_i32 as i32)).into() {\n   |                   +              ++++++++\n\n",
+   "wasted_calls": 14,
+   "est_tokens": 143801,
+   "example": "from \"<ws>\" (target: rust)\nOutput: \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\"\n\nSuccess! Transpilation complete!\n\nSuccess! Transpilation complete (cargo build skipped)!\nRun cargo build manually:\n  cd \"/var/folders/k8/29syjv_n2255wky6v42379lw0000gn/T/.tmpPyuvN7\" && cargo build\nwarning: unused import: `windjammer_runtime::fs::DirEntry`\n --> main.rs:2:5\n  |\n2 | use windjammer_runtime::fs::DirEntry;\n  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default\n\nw",
    "arms": [
     "A",
     "B"
    ],
-   "n_trials": 11,
-   "n_tasks": 3,
-   "rank": 5,
+   "n_trials": 13,
+   "n_tasks": 7,
+   "rank": 4,
    "priority": "P1"
   },
   {
@@ -322,13 +306,30 @@
    "fix_location": "`wj check` must reject what rustc will (R5 check-vs-build gate); alias or implement the std method; `wj docs` entry",
    "wasted_calls": 12,
    "est_tokens": 116004,
-   "example": "error[WJ0015]: no method named `is_ascii_alphanumeric` exists on any type in scope\n  --> /private/tmp/claude-501/ap-pilot/work/t018_word_freq.A.0/ws/main.wj:16:22\n   |\n16 |                 if c.is_ascii_alphanumeric() {\n   |                      ^^^^^^^^^^^^^^^^^^^^^ unknown method\n  = help: check the method name; see the standard library reference\n  = explain: wj explain WJ0015\n\nError: not running /private/tmp/claude-501/ap-pilot/work/t018_word_freq.A.0/ws/main.wj: `wj check` reports 1 error(s); the interpreter runs only programs the compiler accepts\n",
+   "example": "error[WJ0015]: no method named `is_ascii_alphanumeric` exists on any type in scope\n  --> <ws>/main.wj:16:22\n   |\n16 |                 if c.is_ascii_alphanumeric() {\n   |                      ^^^^^^^^^^^^^^^^^^^^^ unknown method\n  = help: check the method name; see the standard library reference\n  = explain: wj explain WJ0015\n\nError: not running <ws>/main.wj: `wj check` reports 1 error(s); the interpreter runs only programs the compiler accepts\n",
    "arms": [
     "A",
     "B"
    ],
    "n_trials": 6,
    "n_tasks": 1,
+   "rank": 5,
+   "priority": "P1"
+  },
+  {
+   "id": "int-width",
+   "title": "untyped integer literal emitted as i32 and mixed with int (i64)",
+   "fix_kind": "codegen (literal defaulting) + pack tip",
+   "fix_location": "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'",
+   "wasted_calls": 9,
+   "est_tokens": 87671,
+   "example": "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:40:19\n   |\n40 |         while v > (0_i32 as i32) {\n   |               -   ^^^^^^^^^^^^^^ expected `i64`, found `i32`\n   |               |\n   |               expected because this is `i64`\n   |\nhelp: you can convert an `i32` to an `i64`\n   |\n40 |         w",
+   "arms": [
+    "A",
+    "B"
+   ],
+   "n_trials": 7,
+   "n_tasks": 2,
    "rank": 6,
    "priority": "P1"
   },
@@ -372,7 +373,7 @@
    "fix_location": "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'",
    "wasted_calls": 2,
    "est_tokens": 19779,
-   "example": "warning: explicit .clone() call [W0005]\n  --> /private/tmp/claude-501/ap-pilot/work/t011_lru_cache.A.1/ws/main.wj:33:33\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .clone() and let the compiler handle it\n\nwarning: explicit .clone() call [W0005]\n  --> /private/tmp/claude-501/ap-pilot/work/t011_lru_cache.A.1/ws/main.wj:48:33\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .",
+   "example": "warning: explicit .clone() call [W0005]\n  --> <ws>/main.wj:33:33\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .clone() and let the compiler handle it\n\nwarning: explicit .clone() call [W0005]\n  --> <ws>/main.wj:48:33\n  = note: Windjammer auto-clones values when moved and used again\n  = help: remove .clone() - the compiler infers cloning automatically\n  = suggestion: remove .",
    "arms": [
     "A",
     "B"
