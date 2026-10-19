@@ -38,7 +38,14 @@ Python and TypeScript, using identical tasks and one language-neutral oracle. No
 | `metrics.py` | pass@1, pass within k iterations, unbiased pass@k estimator, iterations-to-green, first-error-to-fix distance, categories, tokens, wall time. |
 | `replay.py` | Deterministic replay of recorded transcripts (re-grade, or metrics-only with no toolchains). |
 | `report.py` | Markdown + JSON report. |
-| `cli.py` | `python3 -m agentdx <toolchains|gen|baseline|run|replay|report|check-workspace>`. |
+| `arms.py` | Loop-mode arms (A interpreted-first, B compiled-first, C no-pack): prompt, tool policy, `claude -p` argv. |
+| `shim.py` | `wj` shim on the agent PATH; logs each invocation (verb, mode, exit, seconds, output, source) outside the sandbox. |
+| `budget.py` | Cost estimate, `BudgetGuard` (dollar budget, trial counter, `PILOT_MAX_TRIALS = 60` ceiling). |
+| `pilot.py` | One-session-per-trial pilot runner, schema-2 records, divergence (interpreted vs compiled hidden grade), resume. |
+| `stats.py` | Task-clustered bootstrap CIs and task-paired differences. |
+| `friction.py` | Friction list: rules + unclassified grouping, fix location, priority by estimated tokens. |
+| `pilot_report.py` | Pilot report (arm means, paired diffs, per-task, categories, divergence, friction). |
+| `cli.py` | `python3 -m agentdx <toolchains|gen|baseline|run|pilot|pilot-report|replay|report|check-workspace>`. |
 
 ## Invariants
 

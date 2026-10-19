@@ -1,0 +1,89 @@
+{
+ "agent_exit": 0,
+ "agent_log": "",
+ "arm": "A",
+ "arm_name": "interpreted-first",
+ "diag_samples": [],
+ "diagnostic_categories": {},
+ "divergence": {
+  "compiled_pass": false,
+  "diverged": true,
+  "interp_pass": true,
+  "silent": true
+ },
+ "final_build_diag": [
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:35:25\n   |\n35 |             self.root = id;\n   |             ---------   ^^ expected `i64`, found `usize`\n   |             |\n   |             expected due to the type of this binding\n\n",
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:42:48\n   |\n42 |                     self.lefts[cur as usize] = id;\n   |                     ------------------------   ^^ expected `i64`, found `usize`\n   |                     |\n   |                     expected due to the type of this binding\n\n",
+  "mismatched types\nerror[E0308]: mismatched types\n  --> main.rs:48:49\n   |\n48 |                     self.rights[cur as usize] = id;\n   |                     -------------------------   ^^ expected `i64`, found `usize`\n   |                     |\n   |                     expected due to the type of this binding\n\n"
+ ],
+ "final_build_diag_source": "regrade of final_source (backfilled)",
+ "final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 34
+ },
+ "final_source": "use std::fs\n\nstruct Tree {\n    keys: Vec<int>,\n    lefts: Vec<int>,\n    rights: Vec<int>,\n    root: int,\n}\n\nimpl Tree {\n    fn contains(self, x: int) -> bool {\n        let mut cur = self.root\n        while cur != -1 {\n            let k = self.keys[cur]\n            if x == k {\n                return true\n            }\n            if x < k { cur = self.lefts[cur] } else { cur = self.rights[cur] }\n        }\n        false\n    }\n\n    fn insert(self, x: int) {\n        let id = self.keys.len()\n        self.keys.push(x)\n        self.lefts.push(-1)\n        self.rights.push(-1)\n        if self.root == -1 {\n            self.root = id\n            return\n        }\n        let mut cur = self.root\n        loop {\n            if x < self.keys[cur] {\n                if self.lefts[cur] == -1 {\n                    self.lefts[cur] = id\n                    return\n                }\n                cur = self.lefts[cur]\n            } else {\n                if self.rights[cur] == -1 {\n                    self.rights[cur] = id\n                    return\n                }\n                cur = self.rights[cur]\n            }\n        }\n    }\n\n    fn remove(self, x: int) {\n        let mut p = -1\n        let mut n = self.root\n        while n != -1 && self.keys[n] != x {\n            p = n\n            if x < self.keys[n] { n = self.lefts[n] } else { n = self.rights[n] }\n        }\n        if self.lefts[n] != -1 && self.rights[n] != -1 {\n            let mut sp = n\n            let mut s = self.rights[n]\n            while self.lefts[s] != -1 {\n                sp = s\n                s = self.lefts[s]\n            }\n            self.keys[n] = self.keys[s]\n            if sp == n {\n                self.rights[sp] = self.rights[s]\n            } else {\n                self.lefts[sp] = self.rights[s]\n            }\n        } else {\n            let c = if self.lefts[n] != -1 { self.lefts[n] } else { self.rights[n] }\n            if p == -1 {\n                self.root = c\n            } else if self.lefts[p] == n {\n                self.lefts[p] = c\n            } else {\n                self.rights[p] = c\n            }\n        }\n    }\n\n    fn inorder(self) -> Vec<int> {\n        let mut out: Vec<int> = []\n        let mut stack: Vec<int> = []\n        let mut cur = self.root\n        while cur != -1 || stack.len() > 0 {\n            while cur != -1 {\n                stack.push(cur)\n                cur = self.lefts[cur]\n            }\n            let top = stack.pop().unwrap_or(-1)\n            out.push(self.keys[top])\n            cur = self.rights[top]\n        }\n        out\n    }\n\n    fn height(self) -> int {\n        if self.root == -1 {\n            return 0\n        }\n        let mut best = 0\n        let mut nodes: Vec<int> = [self.root]\n        let mut depths: Vec<int> = [1]\n        while nodes.len() > 0 {\n            let n = nodes.pop().unwrap_or(-1)\n            let d = depths.pop().unwrap_or(0)\n            if d > best { best = d }\n            if self.lefts[n] != -1 {\n                nodes.push(self.lefts[n])\n                depths.push(d + 1)\n            }\n            if self.rights[n] != -1 {\n                nodes.push(self.rights[n])\n                depths.push(d + 1)\n            }\n        }\n        best\n    }\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut t = Tree { keys: [], lefts: [], rights: [], root: -1 }\n    for line in text.lines() {\n        let parts: Vec<string> = line.trim().split(\" \").collect()\n        let cmd = parts[0]\n        if cmd == \"insert\" {\n            let x = parts[1].parse::<int>().unwrap_or(0)\n            if t.contains(x) {\n                println(\"dup\")\n            } else {\n                t.insert(x)\n                println(\"ok\")\n            }\n        } else if cmd == \"contains\" {\n            let x = parts[1].parse::<int>().unwrap_or(0)\n            if t.contains(x) { println(\"yes\") } else { println(\"no\") }\n        } else if cmd == \"delete\" {\n            let x = parts[1].parse::<int>().unwrap_or(0)\n            if t.contains(x) {\n                t.remove(x)\n                println(\"ok\")\n            } else {\n                println(\"missing\")\n            }\n        } else if cmd == \"inorder\" {\n            let v = t.inorder()\n            if v.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let strs: Vec<string> = v.map(|k| \"${k}\").collect()\n                println(strs.join(\" \"))\n            }\n        } else if cmd == \"height\" {\n            println(\"${t.height()}\")\n        } else if cmd == \"min\" {\n            let v = t.inorder()\n            if v.len() == 0 { println(\"empty\") } else { println(\"${v[0]}\") }\n        } else if cmd == \"max\" {\n            let v = t.inorder()\n            if v.len() == 0 { println(\"empty\") } else { println(\"${v[v.len() - 1]}\") }\n        }\n    }\n}\n",
+ "first_source": "use std::fs\n\nstruct Tree {\n    keys: Vec<int>,\n    lefts: Vec<int>,\n    rights: Vec<int>,\n    root: int,\n}\n\nimpl Tree {\n    fn contains(self, x: int) -> bool {\n        let mut cur = self.root\n        while cur != -1 {\n            let k = self.keys[cur]\n            if x == k {\n                return true\n            }\n            if x < k { cur = self.lefts[cur] } else { cur = self.rights[cur] }\n        }\n        false\n    }\n\n    fn insert(self, x: int) {\n        let id = self.keys.len()\n        self.keys.push(x)\n        self.lefts.push(-1)\n        self.rights.push(-1)\n        if self.root == -1 {\n            self.root = id\n            return\n        }\n        let mut cur = self.root\n        loop {\n            if x < self.keys[cur] {\n                if self.lefts[cur] == -1 {\n                    self.lefts[cur] = id\n                    return\n                }\n                cur = self.lefts[cur]\n            } else {\n                if self.rights[cur] == -1 {\n                    self.rights[cur] = id\n                    return\n                }\n                cur = self.rights[cur]\n            }\n        }\n    }\n\n    fn remove(self, x: int) {\n        let mut p = -1\n        let mut n = self.root\n        while n != -1 && self.keys[n] != x {\n            p = n\n            if x < self.keys[n] { n = self.lefts[n] } else { n = self.rights[n] }\n        }\n        if self.lefts[n] != -1 && self.rights[n] != -1 {\n            let mut sp = n\n            let mut s = self.rights[n]\n            while self.lefts[s] != -1 {\n                sp = s\n                s = self.lefts[s]\n            }\n            self.keys[n] = self.keys[s]\n            if sp == n {\n                self.rights[sp] = self.rights[s]\n            } else {\n                self.lefts[sp] = self.rights[s]\n            }\n        } else {\n            let c = if self.lefts[n] != -1 { self.lefts[n] } else { self.rights[n] }\n            if p == -1 {\n                self.root = c\n            } else if self.lefts[p] == n {\n                self.lefts[p] = c\n            } else {\n                self.rights[p] = c\n            }\n        }\n    }\n\n    fn inorder(self) -> Vec<int> {\n        let mut out: Vec<int> = []\n        let mut stack: Vec<int> = []\n        let mut cur = self.root\n        while cur != -1 || stack.len() > 0 {\n            while cur != -1 {\n                stack.push(cur)\n                cur = self.lefts[cur]\n            }\n            let top = stack.pop().unwrap_or(-1)\n            out.push(self.keys[top])\n            cur = self.rights[top]\n        }\n        out\n    }\n\n    fn height(self) -> int {\n        if self.root == -1 {\n            return 0\n        }\n        let mut best = 0\n        let mut nodes: Vec<int> = [self.root]\n        let mut depths: Vec<int> = [1]\n        while nodes.len() > 0 {\n            let n = nodes.pop().unwrap_or(-1)\n            let d = depths.pop().unwrap_or(0)\n            if d > best { best = d }\n            if self.lefts[n] != -1 {\n                nodes.push(self.lefts[n])\n                depths.push(d + 1)\n            }\n            if self.rights[n] != -1 {\n                nodes.push(self.rights[n])\n                depths.push(d + 1)\n            }\n        }\n        best\n    }\n}\n\nfn main() {\n    let text = fs::read_to_string(\"/dev/stdin\").unwrap_or(\"\")\n    let mut t = Tree { keys: [], lefts: [], rights: [], root: -1 }\n    for line in text.lines() {\n        let parts: Vec<string> = line.trim().split(\" \").collect()\n        let cmd = parts[0]\n        if cmd == \"insert\" {\n            let x = parts[1].parse::<int>().unwrap_or(0)\n            if t.contains(x) {\n                println(\"dup\")\n            } else {\n                t.insert(x)\n                println(\"ok\")\n            }\n        } else if cmd == \"contains\" {\n            let x = parts[1].parse::<int>().unwrap_or(0)\n            if t.contains(x) { println(\"yes\") } else { println(\"no\") }\n        } else if cmd == \"delete\" {\n            let x = parts[1].parse::<int>().unwrap_or(0)\n            if t.contains(x) {\n                t.remove(x)\n                println(\"ok\")\n            } else {\n                println(\"missing\")\n            }\n        } else if cmd == \"inorder\" {\n            let v = t.inorder()\n            if v.len() == 0 {\n                println(\"<empty>\")\n            } else {\n                let strs: Vec<string> = v.map(|k| \"${k}\").collect()\n                println(strs.join(\" \"))\n            }\n        } else if cmd == \"height\" {\n            println(\"${t.height()}\")\n        } else if cmd == \"min\" {\n            let v = t.inorder()\n            if v.len() == 0 { println(\"empty\") } else { println(\"${v[0]}\") }\n        } else if cmd == \"max\" {\n            let v = t.inorder()\n            if v.len() == 0 { println(\"empty\") } else { println(\"${v[v.len() - 1]}\") }\n        }\n    }\n}\n",
+ "interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "invocations": [
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.029,
+   "verb": "run"
+  },
+  {
+   "exit": 0,
+   "mode": "interpret",
+   "secs": 0.025,
+   "verb": "check"
+  }
+ ],
+ "mode_violations": 0,
+ "original_final_grade": {
+  "categories": [
+   "toolchain-bug"
+  ],
+  "passed": 0,
+  "status": "build_error",
+  "total": 34
+ },
+ "original_interp_grade": {
+  "categories": [],
+  "passed": 34,
+  "status": "pass",
+  "total": 34
+ },
+ "other_seconds": 7.7,
+ "pass_final": false,
+ "recorded_at": "2026-10-19T10:47:36",
+ "regraded": true,
+ "schema": 2,
+ "task": "t013_bst",
+ "thinking_seconds": 18.548,
+ "tool_wait_seconds": 0.05,
+ "trial": 1,
+ "usage": {
+  "api_seconds": 18.548,
+  "cost_usd": 0.042935799999999996,
+  "denied_commands": [],
+  "is_error": false,
+  "permission_denials": 0,
+  "result_excerpt": "I wrote the binary search tree in `main.wj`. It passes `wj check` with no diagnostics. Under `wj run --interpret` it printed the expected output for Example 1. I also ran a delete of the root (5) followed by `inorder`, which gave `3 8`, and a delete of a missing key, which gave `missing`.\n\nExample 2 (the empty-tree commands) was not run. I didn't run `wj build`, as instructed, so I haven't confirm",
+  "subtype": "success",
+  "tokens_in": 28174,
+  "tokens_out": 2774,
+  "turns": 3
+ },
+ "verify_calls": 2,
+ "verify_calls_to_green": 1,
+ "wall_seconds": 26.3
+}
