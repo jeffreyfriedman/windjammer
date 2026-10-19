@@ -1,0 +1,16 @@
+// spec: SPEC-CLOS-001
+// expect: 2 6
+// expect: ann
+struct User {
+    name: string,
+    active: bool,
+}
+
+fn main() {
+    let xs = [1, 2, 3]
+    let doubled: Vec<int> = xs.map(_ * 2).collect()
+    println("${doubled[0]} ${doubled[2]}")
+    let users = [User { name: "ann", active: true }, User { name: "bob", active: false }]
+    let names: Vec<string> = users.filter(_.active).map(_.name).collect()
+    println(names.join(","))
+}

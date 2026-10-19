@@ -123,6 +123,7 @@ pub enum Token {
     ColonColon, // :: (for turbofish and paths)
     Semicolon,
     Question,
+    QuestionQuestion, // ?? (option default, ADR-0018: `x ?? d`)
     Ampersand,  // &
     Pipe,       // |
     PipeOp,     // |> (pipe operator)

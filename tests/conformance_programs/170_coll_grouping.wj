@@ -1,0 +1,29 @@
+// expect: 0: 2 9
+// expect: 1: 3 12
+// expect: 2: 2 7
+// expect: 2 2 1
+// expect: 30
+// expect: 3 3 1 2
+// expect: 3 2 3
+// expect: 2 3 5
+fn main() {
+    let xs: Vec<int> = [1, 2, 3, 4, 5, 6, 7]
+    let g = xs.group_by(|x| x % 3)
+    let mut keys: Vec<int> = g.keys().cloned().collect()
+    keys.sort()
+    for k in keys {
+        let bucket = g[&k]
+        let sum: int = bucket.sum()
+        println("${k}: ${bucket.len()} ${sum}")
+    }
+    let words = ["a", "bb", "cc", "d", "eee"]
+    let by_len = words.count_by(|w| w.len())
+    println("${by_len[&1]} ${by_len[&2]} ${by_len[&3]}")
+    println("${xs.sum_by(|x| if x <= 4 { x * x } else { 0 })}")
+    let u = [3, 1, 3, 2, 1].unique()
+    println("${u.len()} ${u[0]} ${u[1]} ${u[2]}")
+    let runs = [1, 1, 2, 3, 3, 3].chunk_by(|x| *x)
+    println("${runs.len()} ${runs[0].len()} ${runs[2].len()}")
+    let (even, odd) = [1, 2, 3, 4, 5].partition_by(|x| x % 2 == 0)
+    println("${even.len()} ${odd.len()} ${odd[2]}")
+}

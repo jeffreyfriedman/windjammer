@@ -1,0 +1,7 @@
+// spec: SPEC-CLOS-007
+// mode: parse-error
+// expect-error: inside an explicit closure
+fn main() {
+    let xs = [1, 2]
+    let ys: Vec<int> = xs.map(|x| x + _).collect()
+}

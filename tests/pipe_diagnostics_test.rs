@@ -49,13 +49,18 @@ fn nested_placeholder_is_reported_at_that_underscore() {
 
 #[test]
 fn placeholder_outside_a_stage_is_reported_at_the_underscore() {
-    for x in ["f(_)", "_ + 1", "a + _"] {
+    // ADR-0018: `_` inside a larger call argument is a shorthand closure; a bare `_` argument outside a stage
+    // and a `_` outside any call argument are errors.
+    let x = "f(_)";
+    let e = err(x);
+    assert!(reported_at(&e, x, "_", 0, "`_` alone is not a function"), "{x}: {e}");
+    for x in ["_ + 1", "a + _"] {
         let e = err(x);
-        assert!(reported_at(&e, x, "_", 0, "placeholder `_` is only valid as a direct argument of a `|>` stage"), "{x}: {e}");
+        assert!(reported_at(&e, x, "_", 0, "`_` is only valid inside a call argument"), "{x}: {e}");
     }
     // The left-hand side of a pipe is not a stage.
     let x = "_ |> f";
-    assert!(reported_at(&err(x), x, "_", 0, "placeholder `_` is only valid"));
+    assert!(reported_at(&err(x), x, "_", 0, "`_` is only valid inside a call argument"));
 }
 
 #[test]
