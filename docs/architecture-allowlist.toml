@@ -145,7 +145,7 @@
 "src/codegen/rust/data_structure_generation.rs::generate_struct_literal" = 378
 "src/codegen/rust/data_structure_generation.rs::generate_tuple" = 317
 "src/codegen/rust/expression_generation.rs::generate_expression_immut" = 454
-"src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 653
+"src/codegen/rust/expression_type_inference.rs::infer_expression_type" = 649
 "src/codegen/rust/for_statement_generation.rs::generate_for_statement" = 565
 "src/codegen/rust/function_formal_parameter_generation.rs::collect_additional_formal_parameter_strings" = 3773
 "src/codegen/rust/function_generation_prepare.rs::prepare_codegen_environment_for_regular_function" = 732

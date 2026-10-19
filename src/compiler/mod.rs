@@ -6,6 +6,7 @@
 
 pub mod cache_management;
 mod compilation_pipeline;
+mod converged_module_signatures;
 mod declaration_stub_registry;
 mod dependency_resolution;
 pub mod incremental;

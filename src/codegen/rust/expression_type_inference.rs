@@ -594,14 +594,10 @@ impl<'ast> CodeGenerator<'ast> {
                 let l = self.infer_expression_type(left);
                 let r = self.infer_expression_type(right);
                 let untyped_int_lit = |e: &Expression<'_>| {
-                    matches!(
-                        e,
-                        Expression::Literal {
-                            value: Literal::Int(_),
-                            ..
-                        }
-                    )
+                    crate::codegen::rust::type_casting::expression_is_literal_only_int(e)
                 };
+                if untyped_int_lit(left) && r.is_some() { return r; } // a literal-only operand takes its typed peer's type
+                if untyped_int_lit(right) && l.is_some() { return l; }
                 match (l, r) {
                     (Some(a), Some(b)) if a != b => {
                         let is_u32 = |t: &Type| {
