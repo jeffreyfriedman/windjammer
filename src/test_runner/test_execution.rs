@@ -954,6 +954,52 @@ fn locate_compiled_test(build_dir: &Path, stem: &str) -> PathBuf {
     flat
 }
 
+/// Crates named by the generated test modules (`use serde::..`, `use wj_regex::..`) that the harness `Cargo.toml`
+/// does not declare: `serde` gets the derive feature, other crates are copied from the library's dependencies.
+fn test_crate_import_dependency_lines(
+    output_dir: &Path,
+    module_names: &[String],
+    lib_dir: Option<&Path>,
+    lib_crate: Option<&str>,
+) -> Vec<String> {
+    let mut roots = std::collections::BTreeSet::new();
+    for module in module_names {
+        let Ok(code) = std::fs::read_to_string(output_dir.join(format!("{module}.rs"))) else {
+            continue;
+        };
+        for line in code.lines() {
+            let rest = line.trim().strip_prefix("pub use ").or_else(|| line.trim().strip_prefix("use "));
+            let Some(root) = rest.and_then(|r| r.split(|c: char| !(c.is_alphanumeric() || c == '_')).next()) else {
+                continue;
+            };
+            if !root.is_empty() {
+                roots.insert(root.to_string());
+            }
+        }
+    }
+    let builtin = ["std", "core", "alloc", "crate", "self", "super", "windjammer_runtime", "smallvec", "windjammer_tests"];
+    let lib_deps: Option<toml::value::Table> = lib_dir
+        .and_then(|d| std::fs::read_to_string(d.join("Cargo.toml")).ok())
+        .and_then(|c| toml::from_str::<toml::Value>(&c).ok())
+        .and_then(|v| v.get("dependencies").and_then(|d| d.as_table()).cloned());
+    let mut lines = Vec::new();
+    for root in roots {
+        if builtin.contains(&root.as_str()) || lib_crate == Some(root.as_str()) || module_names.contains(&root) {
+            continue;
+        }
+        if root == "serde" {
+            lines.push("serde = { version = \"1\", features = [\"derive\"] }".to_string());
+            continue;
+        }
+        if let (Some(deps), Some(dir)) = (&lib_deps, lib_dir) {
+            if let Some((name, spec)) = deps.iter().find(|(k, _)| k.replace('-', "_") == root) {
+                lines.push(format_dependency_line(name, spec, dir));
+            }
+        }
+    }
+    lines
+}
+
 /// Generate Rust test harness from Windjammer tests (`files` are already filter-selected).
 pub(crate) fn generate_test_harness(
     output_dir: &Path,
@@ -1053,7 +1099,7 @@ pub(crate) fn generate_test_harness(
     };
 
     let library_dep_str =
-        if let Some((lib_crate_name, lib_package_name, lib_path, _)) = library_dependency {
+        if let Some((lib_crate_name, lib_package_name, lib_path, _)) = library_dependency.clone() {
             format!(
                 "\n{} = {{ path = \"{}\", package = \"{}\" }}",
                 lib_crate_name,
@@ -1080,6 +1126,13 @@ path = "lib.rs"
 "#,
         runtime_dep_line, library_dep_str
     );
+
+    let mut cargo_toml = cargo_toml;
+    let lib_dir = library_dependency.as_ref().map(|(_, _, p, _)| p.as_path());
+    let lib_crate = library_dependency.as_ref().map(|(n, _, _, _)| n.as_str());
+    for dep_line in test_crate_import_dependency_lines(output_dir, &module_names, lib_dir, lib_crate) {
+        insert_dependency_line(&mut cargo_toml, &dep_line);
+    }
 
     fs::write(output_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -1114,5 +1167,37 @@ mod rewrite_import_tests {
         let input = "use windjammer_runtime::test;\nuse std::collections::HashMap;";
         let out = rewrite_test_crate_imports(input, "foobar_api");
         assert_eq!(out, input);
+    }
+}
+
+#[cfg(test)]
+mod test_crate_dependency_tests {
+    use super::test_crate_import_dependency_lines;
+
+    #[test]
+    fn serde_import_adds_serde_with_derive() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a_test.rs"), "use serde::{Serialize, Deserialize};\nuse std::fs;\n").unwrap();
+        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None);
+        assert_eq!(lines, vec!["serde = { version = \"1\", features = [\"derive\"] }".to_string()]);
+    }
+
+    #[test]
+    fn library_dependency_is_copied_with_absolute_path() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let lib = dir.path().join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(lib.join("Cargo.toml"), "[package]\nname=\"app\"\n[dependencies]\nwj_regex = { path = \"../dep\" }\n").unwrap();
+        std::fs::write(dir.path().join("a_test.rs"), "use wj_regex::compile;\nuse app::run;\nuse windjammer_runtime::test;\n").unwrap();
+        let lines = test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], Some(&lib), Some("app"));
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("wj_regex = { path = \"") && lines[0].contains("/dep\""), "{lines:?}");
+    }
+
+    #[test]
+    fn std_and_harness_crates_add_nothing() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a_test.rs"), "use std::collections::HashMap;\nuse crate::x;\nuse smallvec::SmallVec;\n").unwrap();
+        assert!(test_crate_import_dependency_lines(dir.path(), &["a_test".to_string()], None, None).is_empty());
     }
 }

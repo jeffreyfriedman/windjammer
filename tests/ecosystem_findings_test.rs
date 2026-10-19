@@ -323,3 +323,30 @@ fn main() {
     assert!(!derive_line_before(&rs, "struct Limiter").contains("Serialize"), "{rs}");
     assert!(!derive_line_before(&rs, "struct Wrapper").contains("Serialize"), "{rs}");
 }
+
+/// E9: `wj test` on a package whose test file uses `std::json` builds a test crate with `serde`.
+#[test]
+fn package_test_using_json_has_serde_in_test_crate() {
+    let dir = write_project(&[
+        ("wj.toml", "[package]\nname = \"jsonpkg\"\nversion = \"0.1.0\"\nedition = \"2025\"\n\n[dependencies]\n"),
+        ("src/lib.wj", "pub fn one() -> int { 1 }\n"),
+        (
+            "tests/x_test.wj",
+            r#"use std::json
+
+struct Body {
+    token: string,
+}
+
+@test
+fn test_parse() {
+    let b: Body = json.parse_string("{\"token\":\"t\"}").unwrap()
+    assert_eq(b.token, "t")
+}
+"#,
+        ),
+    ]);
+    let o = Command::new(WJ).arg("test").current_dir(dir.path()).output().unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(o.status.success(), "wj test failed:\n{text}");
+}
