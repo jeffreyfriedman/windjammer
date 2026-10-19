@@ -14,6 +14,22 @@ fn use_path_first_segment_is_lang_root(seg: &str) -> bool {
     matches!(seg, "std" | "crate" | "super" | "self")
 }
 
+/// True when an emitted `use` line already binds `name` (`use crate::util::math;`, `use x as math;`):
+/// a user module must shadow the runtime std module of the same name, never collide with it (E0252).
+fn binds_name_locally(imports: &str, name: &str) -> bool {
+    imports.lines().map(str::trim).any(|l| {
+        let Some(path) = l.strip_prefix("pub use ").or_else(|| l.strip_prefix("use ")) else {
+            return false;
+        };
+        let path = path.trim_end_matches(';').trim();
+        let bound = match path.rsplit_once(" as ") {
+            Some((_, alias)) => alias.trim(),
+            None => path.rsplit("::").next().unwrap_or(path),
+        };
+        bound == name && !path.starts_with("windjammer_runtime::")
+    })
+}
+
 fn is_fn_import_name(name: &str) -> bool {
     name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
 }
@@ -1160,8 +1176,7 @@ impl<'ast> CodeGenerator<'ast> {
         if self.needs_write_import {
             implicit_imports.push_str("use std::fmt::Write;\n");
         }
-        // Cross-crate return types / ascriptions may emit `HashMap<...>` without a local
-        // `use std::collections::HashMap` in the .wj source — detect from generated body.
+        // Cross-crate types may emit `HashMap<..>` with no `use` in the .wj source: detect from the body.
         if !self.needs_hashmap_import
             && (body.contains("HashMap<") || body.contains("HashMap::"))
             && !imports.contains("std::collections::HashMap")
@@ -1187,6 +1202,7 @@ impl<'ast> CodeGenerator<'ast> {
             if imports.contains(&format!("windjammer_runtime::{module}"))
                 || imports.contains(&format!("{module}::"))
                 || imports.contains(&format!("use {module}"))
+                || binds_name_locally(&imports, module)
             {
                 continue;
             }
@@ -1283,6 +1299,7 @@ async fn tauri_invoke<T: serde::de::DeserializeOwned>(cmd: &str, args: serde_jso
 "#);
         }
 
+        let body = self.with_enumerable_runtime(body, &mut implicit_imports);
         // Combine: implicit imports + explicit imports + tauri helper + body
         let mut combined_imports = String::new();
         if !implicit_imports.is_empty() {

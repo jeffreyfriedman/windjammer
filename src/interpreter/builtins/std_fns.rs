@@ -53,11 +53,6 @@ pub fn register(r: &mut Registry) {
     r.func("assert_false", |_, a| {
         if matches!(arg(&a, 0, "assert_false")?, Value::Bool(false)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_false failed")) }
     });
-    r.func("assert_contains", |it, a| {
-        let items = it.to_items(arg(&a, 0, "assert_contains")?)?;
-        let x = arg(&a, 1, "assert_contains")?;
-        if items.iter().any(|y| y.structural_eq(&x)) { Ok(Value::Unit) } else { Err(panic_ctl("assert_contains failed: item not found")) }
-    });
     r.func("assert_empty", |it, a| {
         if it.to_items(arg(&a, 0, "assert_empty")?)?.is_empty() { Ok(Value::Unit) } else { Err(panic_ctl("assert_empty failed")) }
     });
@@ -263,10 +258,12 @@ pub fn register(r: &mut Registry) {
             Err(e) => io_err(e),
         })
     });
-    r.pure(Kind::Struct, "read_line", |_, v, a| {
+    r.pure(Kind::Struct, "read_line", |it, v, a| {
         if !matches!(v, Value::Struct(s) if &*s.name == "Stdin") {
             return Err(semantic("`read_line` is only available on stdin"));
         }
+        // like a terminal-attached Rust program: a prompt printed before reading must be visible
+        it.flush();
         let mut line = String::new();
         let n = std::io::stdin().read_line(&mut line).map_err(|e| semantic(e.to_string()))?;
         if let Some(Value::Ref(p)) = a.first() {

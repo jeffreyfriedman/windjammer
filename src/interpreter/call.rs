@@ -85,6 +85,14 @@ impl Interpreter {
                 module = self.modules[module].parent.unwrap_or(0);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
+                // `super::super::x`, `super::self::x`
+                while (first == "super" || first == "self") && !rest.is_empty() {
+                    if first == "super" {
+                        module = self.modules[module].parent.unwrap_or(0);
+                    }
+                    first = rest[0].to_string();
+                    rest = rest[1..].to_vec();
+                }
             }
             _ => {}
         }
@@ -617,7 +625,10 @@ impl Interpreter {
         expected: Option<Type>,
     ) -> R {
         if f.is_extern {
-            return Err(unsupported(format!("extern function `{}`", f.name)));
+            return self.call_host(&f.name, args); // ADR-0023 host bridge (unsupported when none is loaded)
+        }
+        if self.hot.is_some() {
+            self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
         if self.engine_resolved && self_val.is_none() && targs.is_empty() {
             if let Some(c) = self.compiled_for(f) {
@@ -763,6 +774,10 @@ impl Interpreter {
                     if self.builtins.has_function(&path) {
                         let args = self.eval_args(arguments, None, false)?;
                         self.mark(loc);
+                        if path.ends_with("json::parse_string") {
+                            let expected = self.take_expected(whole);
+                            self.type_hint = type_args.and_then(|t| t.first().cloned()).or(expected);
+                        }
                         return self.call_builtin_fn(&path, args);
                     }
                 }

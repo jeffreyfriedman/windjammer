@@ -1,0 +1,7 @@
+pub fn double(x: int) -> int {
+    helper(x)
+}
+
+fn helper(x: int) -> int {
+    x * 2
+}

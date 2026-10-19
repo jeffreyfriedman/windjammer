@@ -1,0 +1,13 @@
+// spec: SPEC-MATCH-001
+// expect: negative zero positive
+fn sign(x: int) -> string {
+    match {
+        x < 0 => "negative",
+        x == 0 => "zero",
+        _ => "positive",
+    }
+}
+
+fn main() {
+    println("${sign(-3)} ${sign(0)} ${sign(8)}")
+}

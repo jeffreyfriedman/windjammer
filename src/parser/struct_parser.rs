@@ -66,13 +66,7 @@ impl Parser {
             let mut fields = Vec::new();
             while self.current_token() != &Token::RBrace {
                 // Collect doc comment for field (if any)
-                let field_doc_comment = if let Token::DocComment(comment) = self.current_token() {
-                    let doc = comment.clone();
-                    self.advance();
-                    Some(doc)
-                } else {
-                    None
-                };
+                let field_doc_comment = self.collect_doc_comments();
 
                 // Parse decorators on fields
                 let mut field_decorators = Vec::new();

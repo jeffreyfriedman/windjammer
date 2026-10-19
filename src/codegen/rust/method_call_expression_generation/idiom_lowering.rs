@@ -69,7 +69,7 @@ pub(super) fn usize_bound(b: &str) -> String {
 
 impl<'ast> CodeGenerator<'ast> {
     /// Does the receiver's (user) type define `method`? Then the call is not the stdlib one of that name.
-    pub(super) fn receiver_defines_method(&self, receiver_type: Option<&str>, method: &str) -> bool {
+    pub(in crate::codegen::rust) fn receiver_defines_method(&self, receiver_type: Option<&str>, method: &str) -> bool {
         receiver_type.is_some_and(|rt| self.method_exists_on_type_name(rt, method))
     }
 

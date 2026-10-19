@@ -557,7 +557,7 @@ fn main() {
 `wj check` reports an error containing: `WJ0047: durable fn `consume` receives from a channel`
 > **Known divergence:** the implementation does not do this yet; see [Q-032](OPEN_QUESTIONS.md). The example is marked `xfail`.
 
-**SPEC-EFF-026** [PLANNED ADR-0021] A durable body may not iterate a `HashMap` or `HashSet` outside a step, because the order is not stable across backends and runs (`WJ0048`). [OPEN ADR-0021 D6: removed if every backend adopts insertion order.]
+**SPEC-EFF-026** [PLANNED ADR-0021] A durable body may not iterate a `HashMap` or `HashSet` outside a step, because the order is not stable across backends and runs (`WJ0048`). [ADR-0021 D6 decided: `HashMap` keeps Rust's unspecified order; use `OrderedMap`/`OrderedSet` or `BTreeMap` in durable code.]
 
 <!-- example: tests/spec/effects/SPEC-EFF-026.wj -->
 <!-- ignore: known divergence Q-032; the example shows the specified behaviour, which the implementation does not have yet -->

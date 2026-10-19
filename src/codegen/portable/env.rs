@@ -45,6 +45,26 @@ pub struct ItemEnv {
     pub consts: HashMap<String, Ty>,
     /// Trait name -> names of methods that have a default body.
     pub trait_defaults: HashMap<String, Vec<String>>,
+    /// Methods of generic-trait impls (`impl From<X> for E`), which may coexist under one name:
+    /// (owner, method) -> [(trait type arguments, emitted name)].
+    pub trait_impls: HashMap<(String, String), Vec<(Vec<Ty>, String)>>,
+}
+
+/// Emitted name of a method of a generic-trait impl: `from` in `impl From<string> for E` is
+/// `from__string`, so several `From` impls of one type coexist. Other methods keep their name.
+pub fn impl_method_name(block: &crate::parser::ImplBlock, method: &str) -> String {
+    match &block.trait_type_args {
+        Some(args) if !args.is_empty() => {
+            let outer: Vec<String> = block.type_params.iter().map(|t| t.name.clone()).collect();
+            let tags: Vec<String> = args.iter().map(|t| ty_tag(&from_ast(t, &outer))).collect();
+            format!("{method}__{}", tags.join("_"))
+        }
+        _ => method.to_string(),
+    }
+}
+
+fn ty_tag(t: &Ty) -> String {
+    t.describe().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
 }
 
 /// `Stack<T>` -> `Stack`.
@@ -169,9 +189,14 @@ impl ItemEnv {
             self.impl_traits.entry(owner.clone()).or_default().push(t.clone());
         }
         let self_ty = Ty::Adt(owner.clone(), outer.iter().map(|n| Ty::Param(n.clone())).collect());
+        let trait_args: Option<Vec<Ty>> = block.trait_type_args.as_ref().filter(|a| !a.is_empty()).map(|a| a.iter().map(|t| from_ast(t, &outer)).collect());
         for f in &block.functions {
             let key = format!("{}::{}", block.type_name, f.name);
-            self.methods.insert((owner.clone(), f.name.clone()), sig_of(f, &key, reg, &outer, Some(&self_ty)));
+            let name = impl_method_name(block, &f.name);
+            self.methods.insert((owner.clone(), name.clone()), sig_of(f, &key, reg, &outer, Some(&self_ty)));
+            if let Some(args) = &trait_args {
+                self.trait_impls.entry((owner.clone(), f.name.clone())).or_default().push((args.clone(), name));
+            }
         }
         if let Some(t) = &block.trait_name {
             for d in self.trait_defaults.get(t).cloned().unwrap_or_default() {

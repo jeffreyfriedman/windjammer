@@ -65,7 +65,7 @@ impl RuntimeError {
             }
             (ErrorKind::Unsupported, s) => {
                 out.push_str(&format!(
-                    "error: unsupported in the interpreter: {}{}\n  = help: use `wj run` (compiled) for this program",
+                    "error: unsupported in the interpreter: {}{}\n  = help: run it compiled with `wj run --compiled`",
                     self.message,
                     s.as_ref().map(|s| format!("\n  --> {}", s)).unwrap_or_default()
                 ));

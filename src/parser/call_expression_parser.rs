@@ -100,8 +100,7 @@ impl Parser {
                                 } else {
                                     // Method call (possibly with turbofish)
                                     self.advance();
-                                    let arguments = self.parse_arguments()?;
-                                    self.expect(Token::RParen)?;
+                                    let arguments = self.parse_call_rest(Some(format!(".{field}")))?;
                                     if let Some(lowered) =
                                         self.lower_stream_method_call(expr, &field, &arguments)
                                     {
@@ -254,8 +253,8 @@ impl Parser {
 
                         if self.current_token() == &Token::LParen {
                             self.advance();
-                            let arguments = self.parse_arguments()?;
-                            self.expect(Token::RParen)?;
+                            let key = crate::parser::named_args::call_key(expr).map(|t| format!("{t}::{method}"));
+                            let arguments = self.parse_call_rest(key)?;
                             self.alloc_expr(Expression::MethodCall {
                                 object: expr,
                                 method,
@@ -275,14 +274,14 @@ impl Parser {
                 }
                 Token::LParen => {
                     self.advance();
-                    let arguments = self.parse_arguments()?;
-                    self.expect(Token::RParen)?;
+                    let arguments = self.parse_call_rest(crate::parser::named_args::call_key(expr))?;
                     self.alloc_expr(Expression::Call {
                         function: expr,
                         arguments,
                         location: self.current_location(),
                     })
                 }
+                Token::QuestionQuestion if self.double_try_follows() => self.double_try(expr),
                 Token::Question => {
                     // TryOp: expr?
                     // No ambiguity since we removed ternary operator

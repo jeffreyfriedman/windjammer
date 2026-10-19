@@ -30,7 +30,7 @@ impl<'m> Go<'m> {
             PK::Local(n) if self.ptr_locals.contains_key(n) => Ok(ident(n)),
             PK::Local(n) => Ok(format!("&{}", ident(n))),
             PK::Field(..) | PK::TupleIdx(..) | PK::Index(..) => Ok(format!("&{}", self.expr(e)?)),
-            PK::Copy(inner) => self.addr(inner),
+            PK::Copy(inner) | PK::BorrowMut(inner) => self.addr(inner),
             _ => Ok(format!("wjPtr({})", self.expr(e)?)),
         }
     }
@@ -115,11 +115,13 @@ impl<'m> Go<'m> {
                 let parts: PResult<Vec<String>> = es.iter().enumerate().map(|(i, x)| Ok(format!("F{i}: {}", self.expr(x)?))).collect();
                 Ok(format!("{}{{{}}}", self.ty(&e.ty)?, parts?.join(", ")))
             }
-            PK::Closure { params, ret, body, captures } => self.closure_snapshot(params, ret, body, captures, &e.ty),
+            PK::Closure { params, ret, body } => self.closure(params, ret, body),
             PK::Copy(a) => {
                 let v = self.expr(a)?;
                 self.clone_go(&a.ty, &v)
             }
+            // Only reference types (maps, sets) reach here: the alias is the value itself.
+            PK::BorrowMut(a) => self.expr(a),
             PK::Format(pieces) => self.format(pieces),
             PK::Print { newline, to_stderr, pieces } => {
                 let s = self.format(pieces)?;
@@ -223,22 +225,6 @@ impl<'m> Go<'m> {
         let targs = self.targs(ty)?;
         let vals: PResult<Vec<String>> = fields.iter().map(|(n, v)| Ok(format!("{}: {}", field(n), self.expr(v)?))).collect();
         Ok(format!("{}{targs}{{{}}}", ident(name), vals?.join(", ")))
-    }
-
-    fn closure_snapshot(&mut self, params: &[(String, Ty)], ret: &Ty, body: &PBlock, captures: &[(String, Ty)], fn_ty: &Ty) -> PResult<String> {
-        let lit = self.closure(params, ret, body)?;
-        if captures.is_empty() {
-            return Ok(lit);
-        }
-        let decl: PResult<Vec<String>> = captures.iter().map(|(n, t)| Ok(format!("{} {}", ident(n), self.ty(t)?))).collect();
-        let vals: PResult<Vec<String>> = captures
-            .iter()
-            .map(|(n, t)| {
-                let v = if self.ptr_locals.contains_key(n) { format!("(*{})", ident(n)) } else { ident(n) };
-                self.clone_go(t, &v)
-            })
-            .collect();
-        Ok(format!("(func({}) {} {{ return {lit} }})({})", decl?.join(", "), self.ty(fn_ty)?, vals?.join(", ")))
     }
 
     fn closure(&mut self, params: &[(String, Ty)], ret: &Ty, body: &PBlock) -> PResult<String> {

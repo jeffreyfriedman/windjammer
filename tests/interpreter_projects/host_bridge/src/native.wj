@@ -1,0 +1,15 @@
+extern fn host_add(a: int, b: int) -> int
+extern fn host_greet(name: string) -> string
+extern fn host_scale(x: f64, on: bool) -> f64
+
+pub fn add(a: int, b: int) -> int {
+    host_add(a, b)
+}
+
+pub fn greet(name: string) -> string {
+    host_greet(name)
+}
+
+pub fn scale(x: f64, on: bool) -> f64 {
+    host_scale(x, on)
+}
