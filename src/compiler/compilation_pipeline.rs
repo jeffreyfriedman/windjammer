@@ -296,7 +296,6 @@ pub fn build_project_with_config(
         codegen.set_copy_types_registry(copy_registry);
         codegen.set_explicit_copy_types_registry(explicit_copy);
         codegen.set_numeric_inference(numeric_inference);
-        super::attach_ir_module(&mut codegen, &analyzed_functions, &registry, &config);
         super::apply_inferred_bounds_to_codegen(&mut codegen, &program);
         if !cross_crate_field_types.is_empty() {
             codegen.set_global_struct_field_types(cross_crate_field_types);

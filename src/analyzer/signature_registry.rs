@@ -802,16 +802,11 @@ impl SignatureRegistry {
         self.signatures.insert(name, sig);
     }
 
-    /// Record `name` (`Type::method`) under its bare method name. Each bucket is kept sorted and
-    /// deduplicated, so "first candidate" lookups do not depend on registration order (which
-    /// follows `HashMap` iteration in several callers and made emission nondeterministic).
+    /// Index `Type::method` under `method`; buckets stay sorted so "first homonym" is deterministic.
     fn index_method_key(&mut self, name: &str) {
-        if let Some((_, suffix)) = name.rsplit_once("::") {
-            let bucket = self.method_index.entry(suffix.to_string()).or_default();
-            if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) {
-                bucket.insert(pos, name.to_string());
-            }
-        }
+        let Some((_, suffix)) = name.rsplit_once("::") else { return };
+        let bucket = self.method_index.entry(suffix.to_string()).or_default();
+        if let Err(pos) = bucket.binary_search_by(|k| k.as_str().cmp(name)) { bucket.insert(pos, name.to_string()); }
     }
 
     pub fn get_signature(&self, name: &str) -> Option<&FunctionSignature> {
