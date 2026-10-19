@@ -51,6 +51,12 @@ impl<'ast> CodeGenerator<'ast> {
         func: &FunctionDecl<'ast>,
         params: &mut Vec<String>,
     ) {
+        // A free function has no receiver, whatever the analyzer's per-name bookkeeping says: a bare
+        // `register` free function shares its name with `Port::register`, and a method's `self` slot must
+        // never leak onto it (emitting `pub fn register(&self, ..)` at module level).
+        if !self.in_impl_block && !self.in_trait_impl {
+            return;
+        }
         // Add implicit &self or &mut self for impl block methods that access fields
         // THE WINDJAMMER WAY: Constructors (associated functions) should NOT get self added!
         let has_explicit_self = func.parameters.iter().any(|p| p.name == "self");

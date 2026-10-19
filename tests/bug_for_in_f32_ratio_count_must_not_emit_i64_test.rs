@@ -21,10 +21,14 @@ mod integration_test_helpers;
 
 use integration_test_helpers::MultiFileTest;
 
+#[allow(dead_code)]
 fn bad_i64_count(body: &str) -> bool {
     body.contains("count = 0_i64") || body.contains("count: i64")
 }
 
+// Width is the unified solver's since ADR-0015 (`int` is i64, and an untyped literal follows its peers), so the old
+// text assertions about i32 vs i64 no longer describe the contract. The property that mattered in the dogfood
+// code is that the emitted Rust has no mixed-width arithmetic: it compiles (`cargo check`).
 #[test]
 fn for_in_f32_ratio_count_must_not_emit_i64() {
     let mut test = MultiFileTest::new();
@@ -53,11 +57,6 @@ pub fn ratio(self, threshold: f32) -> f32 {
     let map = test
         .compile()
         .expect("for-in f32 ratio fixture must transpile");
-    let body = map
-        .get("mod.rs")
-        .unwrap_or_else(|| panic!("mod.rs missing; keys={:?}", map.keys().collect::<Vec<_>>()));
-    assert!(
-        !bad_i64_count(body),
-        "for-in counter cast to f32 must not be i64; got:\n{body}"
-    );
+    assert!(map.contains_key("mod.rs"), "mod.rs missing; keys={:?}", map.keys().collect::<Vec<_>>());
+    test.cargo_check().expect("for-in f32 ratio fixture must cargo-check");
 }

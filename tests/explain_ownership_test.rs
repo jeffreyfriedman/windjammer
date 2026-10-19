@@ -61,13 +61,15 @@ fn unknown_function_is_an_error() {
 }
 
 #[test]
-fn call_argument_dropped_by_solver_is_flagged() {
-    // OWN-CALL-FORMAL is generated but never reaches the solver result (D-SOLVER-UNION).
+fn call_argument_reaches_the_solver() {
+    // OWN-CALL-FORMAL used to be generated but dropped before the solver result (D-SOLVER-UNION); the
+    // convergence stage C2 made the solver consume it, so the reason is live and nothing is flagged as dropped.
     let src = "struct B { items: Vec<string> }\nfn ro(b: B) -> int { b.items.len() }\nfn w(b: B) -> int { ro(b) }\n";
     let r = explain(src);
     let p = param(&r, "w", "b");
-    assert!(p.reasons.iter().any(|x| x.rule == "OWN-CALL-FORMAL" && x.dropped), "{:?}", p.reasons);
-    assert!(p.findings.iter().any(|f| f.id == "D-SOLVER-UNION"));
+    assert!(p.reasons.iter().any(|x| x.rule == "OWN-CALL-FORMAL" && !x.dropped), "{:?}", p.reasons);
+    assert!(!p.reasons.iter().any(|x| x.dropped), "{:?}", p.reasons);
+    assert!(!p.findings.iter().any(|f| f.id == "D-SOLVER-UNION"), "{:?}", p.findings);
 }
 
 #[test]
