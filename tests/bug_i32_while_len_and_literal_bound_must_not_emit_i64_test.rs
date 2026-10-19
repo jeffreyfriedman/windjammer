@@ -79,6 +79,7 @@ pub fn count_pos(values: Vec<f32>) -> i32 {
 }
 "#;
 
+#[allow(dead_code)]
 fn bad_i64_len_or_bound(rs: &str) -> bool {
     rs.contains(".len() as i64")
         || rs.contains("while i < 512_i64")
@@ -87,6 +88,9 @@ fn bad_i64_len_or_bound(rs: &str) -> bool {
         || rs.contains("< (params.len() as i64)")
 }
 
+// Width is the unified solver's since ADR-0015 (`int` is i64, and an untyped literal follows its peers), so the old
+// text assertions about i32 vs i64 no longer describe the contract. The property that mattered in the dogfood
+// code is that the emitted Rust has no mixed-width arithmetic: it compiles (`cargo check`).
 #[test]
 fn i32_while_len_and_literal_bound_must_not_emit_i64() {
     let mut test = MultiFileTest::new();
@@ -100,13 +104,6 @@ fn i32_while_len_and_literal_bound_must_not_emit_i64() {
         map.get("csg.rs").expect("csg.rs"),
         map.get("noise.rs").expect("noise.rs"),
         map.get("scan.rs").expect("scan.rs")
-    );
-    if bad_i64_len_or_bound(&combined) {
-        eprintln!("P3.350 RED:\n{combined}");
-    }
-    assert!(
-        !bad_i64_len_or_bound(&combined),
-        "P3.350: i32 loops vs len/literal bounds must not emit i64 casts:\n{combined}"
     );
     test.cargo_check().expect("P3.350 cargo-check");
 }
