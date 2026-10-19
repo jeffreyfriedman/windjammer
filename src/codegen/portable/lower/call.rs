@@ -348,6 +348,13 @@ impl<'e> Lowerer<'e> {
         };
         let builtin_ordering = crate::codegen::portable::ordering::is_ordering(&recv.ty) && !self.env.enums.contains_key(crate::codegen::portable::ordering::NAME);
         if let Some((owner, targs)) = owner_ty.filter(|_| !builtin_ordering) {
+            // `Scratch::new_list()` is `Vec::new()` (Go cannot infer a type argument that only the return type mentions).
+            if method == "new_list" && args.is_empty() && super::arena::is_prelude_scratch(&self.env, &owner) {
+                return self.path_call("Vec", "new", args, want);
+            }
+            if method == "get_mut" && args.len() == 1 && super::arena::is_prelude_arena(&self.env, &owner) {
+                return self.arena_slot(recv, &targs, args);
+            }
             if let Some(sig) = self.env.method(&owner, method).cloned() {
                 return self.user_method(recv, &owner, &targs, method, &sig, args, want);
             }

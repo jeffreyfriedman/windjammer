@@ -82,3 +82,17 @@ fn wj_build_rejects_an_escaping_arena_value() {
     assert!(!st.status.success(), "must not compile: {err}");
     assert!(err.contains("WJ0160") && err.contains("arena `s`"), "{err}");
 }
+
+#[test]
+fn stale_handle_panics_in_a_debug_build_on_the_rust_backend() {
+    let dir = work("stale");
+    let p = dir.join("stale.wj");
+    std::fs::write(&p, "use std::arena::Arena\nstruct P { x: int }\nfn main() {\n    let mut a = Arena::new()\n    let h = a.alloc(P { x: 1 })\n    let mut hs = Vec::new()\n    hs.push(h)\n    println(\"before\")\n    a.reset()\n    a.alloc(P { x: 2 })\n    println(\"${a.get(hs[0]).x}\")\n}\n").unwrap();
+    let out = dir.join("out");
+    let st = Command::new(env!("CARGO_BIN_EXE_wj")).args(["build", "--no-cargo", "--no-lint", "-o"]).arg(&out).arg(&p).output().unwrap();
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    let run = Command::new("cargo").args(["run", "-q"]).current_dir(&out).env("CARGO_TARGET_DIR", shared_target()).output().unwrap();
+    assert!(!run.status.success());
+    assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "before");
+    assert!(String::from_utf8_lossy(&run.stderr).contains("stale arena handle"), "{}", String::from_utf8_lossy(&run.stderr));
+}

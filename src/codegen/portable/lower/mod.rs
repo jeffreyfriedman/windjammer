@@ -1,5 +1,6 @@
 //! AST -> portable IR lowering (typing, ownership/copy insertion, desugaring).
 
+mod arena;
 mod call;
 mod chain;
 mod expr;

@@ -39,6 +39,8 @@ impl CodegenBackend for GoBackend {
     }
 
     fn generate(&self, program: &Program, _config: &CodegenConfig) -> Result<CodegenOutput> {
+        let merged = portable::prelude::with_arena_prelude(program);
+        let program = merged.as_ref().unwrap_or(program);
         let ctx = crate::ir::analyze_and_lower(program)?;
         let mut m = portable::lower::lower_program(program, Some(&ctx.registry)).map_err(|e| anyhow!("{e}"))?;
         flatten::flatten_module(&mut m);

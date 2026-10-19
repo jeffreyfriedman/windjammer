@@ -37,9 +37,13 @@ so it can offer the same performance with the lifetime reasoning done by the com
 6. **Backends:** Rust uses the runtime types. Go/JS/WASM fall back to their GC heap with identical semantics
    (an `Arena<T>` is a growable array plus a generation counter; `Scratch` values are plain strings/lists). The
    interpreter implements the debug-build semantics, including handle checks and the escape check.
-   *Current state:* Rust and the interpreter are implemented and tested; Go/JS do not lower `std::arena` yet (the
-   module is not in the portable stdlib table, so a Go/JS build fails with "unsupported on this backend: unknown associated function `Arena::new`" instead of
-   emitting placeholder code). The GC lowering is mechanical and listed under follow-ups.
+   *Current state:* all four are implemented and run the same conformance programs (`tests/arena_backends_test.rs`,
+   `tests/arena_rust_backend_test.rs`, `tests/arena_capability_test.rs`). Go and JS/TS compile a Windjammer-source
+   prelude (`src/codegen/portable/prelude/arena.wj`, merged into any program that imports `std::arena`): handles are
+   `{index, generation, arena_id}` structs, `reset` clears the slice and bumps the generation, and the checked
+   accessors panic with the Rust runtime's messages. `arena.get_mut(h)` is lowered to the place
+   `items[checked(h)]` (`portable/lower/arena.rs`), so `let p = arena.get_mut(h); p.x = ..` aliases the slot
+   (pointer on Go, shared object on JS).
 
 ## Options
 
@@ -115,6 +119,12 @@ This ADR does not retype numbers (docs policy); the summary of where arenas win 
   `Scratch::fmt` closes part of the gap (render once into a staging buffer, copy once).
 - Compiled Windjammer (`run_wj.py`, heavy load, indicative only): `scratch_reuse` turns a per-iteration `String::new()`
   loop into a hoisted buffer for roughly 2.6-3.2x; `Arena` vs a fresh `Vec` per frame is again a tie.
+
+## Follow-up: the escape check as an IR rule
+`arena_escape.rs` is an AST fact pass today. Once the IR convergence work (C5: one solver owning ownership facts)
+lands, WJ0160/WJ0161 should become a rule in `src/ir` with provenance (which allocation, which arena, which escaping
+use), so that arenas passed through calls and nested arenas are tracked by the same region facts as borrows. Until
+then the AST pass is the single implementation, shared by the compiler, the IDE path and the interpreter loader.
 
 ## Kill criteria
 - If `Arena<T>` is not at least 1.5x faster than per-object `Box` allocation on the particle and tree workloads
