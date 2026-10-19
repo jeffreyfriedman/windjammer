@@ -1,23 +1,23 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-19T14:43:42Z",
- "commit": "cc46ae4ebc86902148a99fb3415c82ff9e939242",
- "mode": "quick",
- "load_avg_1m": 110.9,
+ "generated_at": "2026-10-19T20:34:35Z",
+ "commit": "730f4fb0bc2afc422d9f6f9039c9b44002a058c1",
+ "mode": "full",
+ "load_avg_1m": 19.4,
  "wj_profile": "release",
  "criteria": [
   {
    "id": "R1",
    "title": "Test suites pass interpreted",
    "target": ">= 99.0% of compiled-passing tests",
-   "percent": 68.4,
+   "percent": 85.0,
    "status": "fail",
    "detail": {
     "projects": [
      {
       "project": "wj-base64",
       "interp_secs": 0.4,
-      "compiled_secs": 133.0,
+      "compiled_secs": 31.4,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -81,8 +81,8 @@
      },
      {
       "project": "wj-cli-args",
-      "interp_secs": 0.1,
-      "compiled_secs": 69.1,
+      "interp_secs": 0.0,
+      "compiled_secs": 32.7,
       "measured": true,
       "compiled_cache": "warm",
       "status": "ok",
@@ -96,13 +96,1016 @@
       "interp_only_pass": []
      },
      {
-      "project": "wj-auth-api",
-      "interp_secs": 0.3,
-      "compiled_secs": 6.7,
+      "project": "wj-compress",
+      "interp_secs": 0.0,
+      "compiled_secs": 33.8,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 21,
+      "compiled_pass": 21,
+      "both_pass": 21,
+      "interp_pass": 21,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-config",
+      "interp_secs": 0.0,
+      "compiled_secs": 34.6,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 19,
+      "compiled_pass": 19,
+      "both_pass": 19,
+      "interp_pass": 19,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-cookie",
+      "interp_secs": 0.0,
+      "compiled_secs": 35.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 20,
+      "compiled_pass": 20,
+      "both_pass": 20,
+      "interp_pass": 20,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-cors",
+      "interp_secs": 0.0,
+      "compiled_secs": 50.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 17,
+      "compiled_pass": 17,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-cron",
+      "interp_secs": 0.1,
+      "compiled_secs": 56.7,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 34,
+      "compiled_pass": 34,
+      "both_pass": 34,
+      "interp_pass": 34,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-csv",
+      "interp_secs": 0.0,
+      "compiled_secs": 42.2,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 16,
+      "compiled_pass": 16,
+      "both_pass": 15,
+      "interp_pass": 15,
+      "mismatches": [
+       {
+        "program": "wj-csv:tests/csv_test.wj::test_last_row_and_rectangular",
+        "reason": "error: cannot find function `is_rectangular` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-dotenv",
+      "interp_secs": 0.0,
+      "compiled_secs": 58.6,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 18,
+      "compiled_pass": 18,
+      "both_pass": 18,
+      "interp_pass": 18,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-duration",
+      "interp_secs": 0.0,
+      "compiled_secs": 3.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 25,
+      "compiled_pass": 25,
+      "both_pass": 24,
+      "interp_pass": 24,
+      "mismatches": [
+       {
+        "program": "wj-duration:tests/duration_test.wj::test_bounds_and_require_nonneg",
+        "reason": "error: cannot find function `is_at_least` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-event",
+      "interp_secs": 0.1,
+      "compiled_secs": 4.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 22,
+      "compiled_pass": 22,
+      "both_pass": 22,
+      "interp_pass": 22,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-fs-walk",
+      "interp_secs": 0.1,
+      "compiled_secs": 20.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 18,
+      "compiled_pass": 18,
+      "both_pass": 18,
+      "interp_pass": 18,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-gitignore",
+      "interp_secs": 0.0,
+      "compiled_secs": 34.4,
       "measured": false,
       "compiled_cache": "warm",
       "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results (build error in the generated test crate)",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-glob",
+      "interp_secs": 0.1,
+      "compiled_secs": 41.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 28,
+      "compiled_pass": 28,
+      "both_pass": 20,
+      "interp_pass": 20,
+      "mismatches": [
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_double_star_crosses_segments",
+        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:73:11:"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_double_star_prefix",
+        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:81:11:"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_double_star_suffix_glob",
+        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:89:11:"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_filter_with_double_star",
+        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:108:14:"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_multi_segment_stars",
+        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:58:11:"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_require_exact",
+        "reason": "error: cannot find function `require_exact` in this scope"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_require_match_and_has_meta",
+        "reason": "error: cannot find function `has_meta` in this scope"
+       },
+       {
+        "program": "wj-glob:tests/glob_test.wj::test_star_does_not_cross_slash",
+        "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:46:11:"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-hash",
+      "interp_secs": 2.6,
+      "compiled_secs": 55.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 10,
+      "compiled_pass": 10,
+      "both_pass": 10,
+      "interp_pass": 10,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-headers",
+      "interp_secs": 0.1,
+      "compiled_secs": 52.7,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 20,
+      "compiled_pass": 20,
+      "both_pass": 20,
+      "interp_pass": 20,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-http-client",
+      "interp_secs": 0.1,
+      "compiled_secs": 54.2,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 13,
+      "compiled_pass": 13,
+      "both_pass": 13,
+      "interp_pass": 13,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-inflect",
+      "interp_secs": 0.0,
+      "compiled_secs": 55.0,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 22,
+      "compiled_pass": 22,
+      "both_pass": 22,
+      "interp_pass": 22,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-json-util",
+      "interp_secs": 0.1,
+      "compiled_secs": 92.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 23,
+      "compiled_pass": 23,
+      "both_pass": 23,
+      "interp_pass": 23,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-jwt",
+      "interp_secs": 0.1,
+      "compiled_secs": 94.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 12,
+      "compiled_pass": 12,
+      "both_pass": 12,
+      "interp_pass": 12,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-log",
+      "interp_secs": 0.0,
+      "compiled_secs": 75.9,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error[E0308]: mismatched types",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-migrate",
+      "interp_secs": 0.1,
+      "compiled_secs": 42.8,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 25,
+      "compiled_pass": 25,
+      "both_pass": 24,
+      "interp_pass": 24,
+      "mismatches": [
+       {
+        "program": "wj-migrate:tests/migrate_test.wj::test_require_name",
+        "reason": "error: cannot find function `require_name` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-mime",
+      "interp_secs": 0.0,
+      "compiled_secs": 19.5,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 24,
+      "compiled_pass": 24,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_content_type_header",
+        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+       },
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_content_type_json_and_html",
+        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+       },
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_html_constant",
+        "reason": "error: no field `TEXT_HTML` on value of type `fn`"
+       },
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_is_octet_stream",
+        "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
+       },
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_json_constant",
+        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+       },
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_octet_stream_constant",
+        "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
+       },
+       {
+        "program": "wj-mime:tests/mime_test.wj::test_require_plain",
+        "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-multipart",
+      "interp_secs": 0.1,
+      "compiled_secs": 41.7,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error[E0282]: type annotations needed for `Vec<_>`",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-path",
+      "interp_secs": 0.0,
+      "compiled_secs": 9.0,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 20,
+      "compiled_pass": 20,
+      "both_pass": 20,
+      "interp_pass": 20,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-querystring",
+      "interp_secs": 0.3,
+      "compiled_secs": 83.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 29,
+      "compiled_pass": 29,
+      "both_pass": 0,
+      "interp_pass": 0,
+      "mismatches": [
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_append_keeps_existing",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_get_all_repeated_keys",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_get_first_value",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_get_or_default",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_has_true_false",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_is_empty_and_pair_count",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_keys_unique_in_order",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_last_key_and_is_singleton",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_last_value_and_require_singleton",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_parse_empty",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_parse_key_without_value",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_parse_percent_encoded_value",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_parse_plus_as_space",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_parse_simple_pairs",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_parse_strips_leading_question",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_remove_drops_all_matching_keys",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_count",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_empty",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_first_key",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_last_key",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_last_value",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_pair_count",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_require_unique",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_set_replaces_existing_key",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_ampersand_in_value",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_spaces",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_stringify_roundtrip",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       },
+       {
+        "program": "wj-querystring:tests/querystring_test.wj::test_unique_key_count_and_value_count",
+        "reason": "error: no method named `form_parse` found for value of type `fn`"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-rate-limit",
+      "interp_secs": 0.0,
+      "compiled_secs": 100.7,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 17,
+      "compiled_pass": 17,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-regex",
+      "interp_secs": 0.0,
+      "compiled_secs": 55.2,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 16,
+      "compiled_pass": 16,
+      "both_pass": 8,
+      "interp_pass": 8,
+      "mismatches": [
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_escape_specials",
+        "reason": "error: no method named `escape` found for value of type `fn`"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_find_all",
+        "reason": "error: no method named `find_all` found for value of type `fn`"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_has_matches_and_none_match",
+        "reason": "error: no method named `find_all` found for value of type `fn`"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_match_count",
+        "reason": "error: no method named `find_all` found for value of type `fn`"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_require_at_least",
+        "reason": "error: no method named `find_all` found for value of type `fn`"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_require_exact_count",
+        "reason": "error: cannot find function `require_exact_count` in this scope"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_require_matches",
+        "reason": "error: no method named `find_all` found for value of type `fn`"
+       },
+       {
+        "program": "wj-regex:tests/regex_test.wj::test_require_none",
+        "reason": "error: no method named `find_all` found for value of type `fn`"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-retry",
+      "interp_secs": 0.0,
+      "compiled_secs": 53.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 26,
+      "compiled_pass": 26,
+      "both_pass": 25,
+      "interp_pass": 25,
+      "mismatches": [
+       {
+        "program": "wj-retry:tests/retry_test.wj::test_require_retry",
+        "reason": "error: cannot find function `require_retry` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-router",
+      "interp_secs": 0.0,
+      "compiled_secs": 127.8,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 13,
+      "compiled_pass": 13,
+      "both_pass": 13,
+      "interp_pass": 13,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-semver",
+      "interp_secs": 0.0,
+      "compiled_secs": 55.1,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 17,
+      "compiled_pass": 17,
+      "both_pass": 17,
+      "interp_pass": 17,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-sha",
+      "interp_secs": 0.0,
+      "compiled_secs": 67.8,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 11,
+      "compiled_pass": 11,
+      "both_pass": 11,
+      "interp_pass": 11,
+      "mismatches": [],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-sync",
+      "interp_secs": 0.6,
+      "compiled_secs": 76.8,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 50,
+      "compiled_pass": 50,
+      "both_pass": 26,
+      "interp_pass": 26,
+      "mismatches": [
+       {
+        "program": "wj-sync:tests/bench_smoke_test.wj::test_pool_sum_double_bench_smoke",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/bench_throughput_test.wj::test_bench_pool_shared_inbox_5k",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/bounded_test.wj::test_bounded_capacity_two",
+        "reason": "error: no method named `sync_channel` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/bounded_test.wj::test_bounded_send_recv",
+        "reason": "error: no method named `sync_channel` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_generic_test.wj::test_generic_clone_sender_fanout",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_generic_test.wj::test_generic_int_roundtrip",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_generic_test.wj::test_generic_try_recv_empty",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_test.wj::test_clone_sender_fan_in",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_test.wj::test_try_recv_after_send",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_test.wj::test_try_recv_empty",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/channel_test.wj::test_unbounded_send_recv",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/pending_generic_test.wj::test_parallel_add_compat",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pending_generic_test.wj::test_pending_wait_option",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pending_generic_test.wj::test_task_int_alias",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pending_test.wj::test_parallel_add_waits_for_result",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pending_test.wj::test_parallel_shared_add",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pipeline_test.wj::test_drain_empty_sentinel_only",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/pipeline_test.wj::test_send_recv_api_drain_sum",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/pool_shutdown_test.wj::test_pool_sum_still_works_before_shutdown",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pool_test.wj::test_pool_doubles_jobs",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pool_test.wj::test_pool_shared_inbox_sum",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/pool_test.wj::test_pool_sum_double",
+        "reason": "error: cannot find value `std` in this scope"
+       },
+       {
+        "program": "wj-sync:tests/stress_test.wj::test_fan_in_three_senders",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       },
+       {
+        "program": "wj-sync:tests/stress_test.wj::test_try_recv_drain_until_empty",
+        "reason": "error: no method named `unbounded` found for value of type `fn`"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-template",
+      "interp_secs": 0.1,
+      "compiled_secs": 40.0,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error[E0282]: type annotations needed for `HashMap<_, _>`",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-timefmt",
+      "interp_secs": 0.2,
+      "compiled_secs": 160.4,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 27,
+      "compiled_pass": 27,
+      "both_pass": 26,
+      "interp_pass": 26,
+      "mismatches": [
+       {
+        "program": "wj-timefmt:tests/timefmt_test.wj::test_minute_second_and_midnight",
+        "reason": "error: cannot find function `minute_of` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-toml",
+      "interp_secs": 0.2,
+      "compiled_secs": 90.9,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 30,
+      "compiled_pass": 30,
+      "both_pass": 29,
+      "interp_pass": 29,
+      "mismatches": [
+       {
+        "program": "wj-toml:tests/toml_test.wj::test_require_nonblank",
+        "reason": "error: cannot find function `require_nonblank` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-url",
+      "interp_secs": 0.1,
+      "compiled_secs": 76.5,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 22,
+      "compiled_pass": 22,
+      "both_pass": 13,
+      "interp_pass": 13,
+      "mismatches": [
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_get_decodes_percent_and_plus",
+        "reason": "error: no method named `url_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_get_finds_key",
+        "reason": "error: no method named `url_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_get_missing_key",
+        "reason": "error: no method named `url_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_get_or",
+        "reason": "error: no method named `url_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_has",
+        "reason": "error: no method named `url_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_remove_drops_key",
+        "reason": "error: no method named `url_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_set_adds_and_replaces",
+        "reason": "error: no method named `url_encode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_query_set_encodes_spaces_and_ampersand",
+        "reason": "error: no method named `url_encode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-url:tests/url_test.wj::test_scheme_host_and_require_https",
+        "reason": "error: cannot find function `scheme_of` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-uuid",
+      "interp_secs": 0.1,
+      "compiled_secs": 97.0,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 24,
+      "compiled_pass": 24,
+      "both_pass": 19,
+      "interp_pass": 19,
+      "mismatches": [
+       {
+        "program": "wj-uuid:tests/uuid_test.wj::test_v1_from_timestamp_known_vector",
+        "reason": "error: no method named `hex_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-uuid:tests/uuid_test.wj::test_v1_now_has_version_one",
+        "reason": "error: no method named `hex_encode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-uuid:tests/uuid_test.wj::test_v5_dns_rfc4122_vector",
+        "reason": "error: no method named `hex_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-uuid:tests/uuid_test.wj::test_v5_is_deterministic",
+        "reason": "error: no method named `hex_decode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-uuid:tests/uuid_test.wj::test_v5_url_rfc4122_vector",
+        "reason": "error: no method named `hex_decode` found for value of type `fn`"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-validate",
+      "interp_secs": 0.1,
+      "compiled_secs": 102.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 36,
+      "compiled_pass": 36,
+      "both_pass": 34,
+      "interp_pass": 34,
+      "mismatches": [
+       {
+        "program": "wj-validate:tests/validate_test.wj::test_last_error_and_require_clean",
+        "reason": "error: cannot find function `last_error` in this scope"
+       },
+       {
+        "program": "wj-validate:tests/validate_test.wj::test_only_error",
+        "reason": "error: cannot find function `only_error` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-yaml",
+      "interp_secs": 0.0,
+      "compiled_secs": 51.3,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 26,
+      "compiled_pass": 26,
+      "both_pass": 25,
+      "interp_pass": 25,
+      "mismatches": [
+       {
+        "program": "wj-yaml:tests/yaml_test.wj::test_require_valid",
+        "reason": "error: cannot find function `require_valid` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-auth-api",
+      "interp_secs": 0.3,
+      "compiled_secs": 30.1,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
       "compiled_pass": 0,
       "both_pass": 0,
       "mismatches": []
@@ -110,18 +1113,244 @@
      {
       "project": "wj-chat",
       "interp_secs": 0.1,
-      "compiled_secs": 5.0,
+      "compiled_secs": 22.7,
       "measured": false,
       "compiled_cache": "warm",
       "status": "unmeasured",
-      "reason": "compiled test run failed before reporting results (build error in the generated test crate)",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-fetch",
+      "interp_secs": 0.2,
+      "compiled_secs": 4.5,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-find",
+      "interp_secs": 0.0,
+      "compiled_secs": 0.9,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-first-hour",
+      "interp_secs": 0.0,
+      "compiled_secs": 35.8,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 4,
+      "compiled_pass": 4,
+      "both_pass": 1,
+      "interp_pass": 1,
+      "mismatches": [
+       {
+        "program": "wj-first-hour:tests/card_test.wj::test_build_card_ok",
+        "reason": "error: no method named `url_encode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-first-hour:tests/card_test.wj::test_build_card_query_is_urlencoded",
+        "reason": "error: no method named `url_encode` found for value of type `fn`"
+       },
+       {
+        "program": "wj-first-hour:tests/card_test.wj::test_card_id_path_query_and_has_id",
+        "reason": "error: no method named `url_encode` found for value of type `fn`"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-form-parse",
+      "interp_secs": 0.0,
+      "compiled_secs": 1.9,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-grep",
+      "interp_secs": 0.1,
+      "compiled_secs": 1.8,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-hello",
+      "interp_secs": 0.0,
+      "compiled_secs": 49.2,
+      "measured": true,
+      "compiled_cache": "warm",
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 8,
+      "compiled_pass": 8,
+      "both_pass": 2,
+      "interp_pass": 2,
+      "mismatches": [
+       {
+        "program": "wj-hello:tests/version_test.wj::test_crate_name_and_semver",
+        "reason": "error: cannot find function `version` in this scope"
+       },
+       {
+        "program": "wj-hello:tests/version_test.wj::test_is_zero_major_and_matches_identity",
+        "reason": "error: cannot find function `is_zero_major` in this scope"
+       },
+       {
+        "program": "wj-hello:tests/version_test.wj::test_require_crate",
+        "reason": "error: cannot find function `require_crate` in this scope"
+       },
+       {
+        "program": "wj-hello:tests/version_test.wj::test_require_semver_and_is_smoke_identity",
+        "reason": "error: cannot find function `require_semver` in this scope"
+       },
+       {
+        "program": "wj-hello:tests/version_test.wj::test_version_is_non_empty",
+        "reason": "error: cannot find function `version` in this scope"
+       },
+       {
+        "program": "wj-hello:tests/version_test.wj::test_version_string",
+        "reason": "error: cannot find function `version` in this scope"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-migrate-cli",
+      "interp_secs": 0.1,
+      "compiled_secs": 4.3,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-notes-api",
+      "interp_secs": 0.4,
+      "compiled_secs": 3.7,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-pipeline",
+      "interp_secs": 0.0,
+      "compiled_secs": 9.5,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-proxy",
+      "interp_secs": 0.1,
+      "compiled_secs": 3.5,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-scheduler",
+      "interp_secs": 0.2,
+      "compiled_secs": 3.9,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-sitegen",
+      "interp_secs": 0.1,
+      "compiled_secs": 14.1,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-taskflow",
+      "interp_secs": 0.2,
+      "compiled_secs": 15.6,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-todo-cli",
+      "interp_secs": 0.2,
+      "compiled_secs": 5.7,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-webhook",
+      "interp_secs": 0.1,
+      "compiled_secs": 20.0,
+      "measured": false,
+      "compiled_cache": "warm",
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v",
       "compiled_pass": 0,
       "both_pass": 0,
       "mismatches": []
      }
     ],
-    "tests_compared": 38,
-    "tests_agree": 26
+    "tests_compared": 801,
+    "tests_agree": 681
    },
    "blockers": [
     {
@@ -173,12 +1402,512 @@
      "reason": "error: no method named `base64_encode_string` found for value of type `fn`"
     },
     {
+     "program": "wj-csv:tests/csv_test.wj::test_last_row_and_rectangular",
+     "reason": "error: cannot find function `is_rectangular` in this scope"
+    },
+    {
+     "program": "wj-duration:tests/duration_test.wj::test_bounds_and_require_nonneg",
+     "reason": "error: cannot find function `is_at_least` in this scope"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_double_star_crosses_segments",
+     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:73:11:"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_double_star_prefix",
+     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:81:11:"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_double_star_suffix_glob",
+     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:89:11:"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_filter_with_double_star",
+     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:108:14:"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_multi_segment_stars",
+     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:58:11:"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_require_exact",
+     "reason": "error: cannot find function `require_exact` in this scope"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_require_match_and_has_meta",
+     "reason": "error: cannot find function `has_meta` in this scope"
+    },
+    {
+     "program": "wj-glob:tests/glob_test.wj::test_star_does_not_cross_slash",
+     "reason": "thread 'main' panicked at <wj-glob>/tests/glob_test.wj:46:11:"
+    },
+    {
+     "program": "wj-migrate:tests/migrate_test.wj::test_require_name",
+     "reason": "error: cannot find function `require_name` in this scope"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_content_type_header",
+     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_content_type_json_and_html",
+     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_html_constant",
+     "reason": "error: no field `TEXT_HTML` on value of type `fn`"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_is_octet_stream",
+     "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_json_constant",
+     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_octet_stream_constant",
+     "reason": "error: no field `APPLICATION_OCTET_STREAM` on value of type `fn`"
+    },
+    {
+     "program": "wj-mime:tests/mime_test.wj::test_require_plain",
+     "reason": "error: no field `APPLICATION_JSON` on value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_append_keeps_existing",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_get_all_repeated_keys",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_get_first_value",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_get_or_default",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_has_true_false",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_is_empty_and_pair_count",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_keys_unique_in_order",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_last_key_and_is_singleton",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_last_value_and_require_singleton",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_parse_empty",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_parse_key_without_value",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_parse_percent_encoded_value",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_parse_plus_as_space",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_parse_simple_pairs",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_parse_strips_leading_question",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_remove_drops_all_matching_keys",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_count",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_empty",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_first_key",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_last_key",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_last_value",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_pair_count",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_require_unique",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_set_replaces_existing_key",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_ampersand_in_value",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_stringify_encodes_spaces",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_stringify_roundtrip",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-querystring:tests/querystring_test.wj::test_unique_key_count_and_value_count",
+     "reason": "error: no method named `form_parse` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_escape_specials",
+     "reason": "error: no method named `escape` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_find_all",
+     "reason": "error: no method named `find_all` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_has_matches_and_none_match",
+     "reason": "error: no method named `find_all` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_match_count",
+     "reason": "error: no method named `find_all` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_require_at_least",
+     "reason": "error: no method named `find_all` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_require_exact_count",
+     "reason": "error: cannot find function `require_exact_count` in this scope"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_require_matches",
+     "reason": "error: no method named `find_all` found for value of type `fn`"
+    },
+    {
+     "program": "wj-regex:tests/regex_test.wj::test_require_none",
+     "reason": "error: no method named `find_all` found for value of type `fn`"
+    },
+    {
+     "program": "wj-retry:tests/retry_test.wj::test_require_retry",
+     "reason": "error: cannot find function `require_retry` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/bench_smoke_test.wj::test_pool_sum_double_bench_smoke",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/bench_throughput_test.wj::test_bench_pool_shared_inbox_5k",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/bounded_test.wj::test_bounded_capacity_two",
+     "reason": "error: no method named `sync_channel` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/bounded_test.wj::test_bounded_send_recv",
+     "reason": "error: no method named `sync_channel` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_generic_test.wj::test_generic_clone_sender_fanout",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_generic_test.wj::test_generic_int_roundtrip",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_generic_test.wj::test_generic_try_recv_empty",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_test.wj::test_clone_sender_fan_in",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_test.wj::test_try_recv_after_send",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_test.wj::test_try_recv_empty",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/channel_test.wj::test_unbounded_send_recv",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/pending_generic_test.wj::test_parallel_add_compat",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pending_generic_test.wj::test_pending_wait_option",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pending_generic_test.wj::test_task_int_alias",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pending_test.wj::test_parallel_add_waits_for_result",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pending_test.wj::test_parallel_shared_add",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pipeline_test.wj::test_drain_empty_sentinel_only",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/pipeline_test.wj::test_send_recv_api_drain_sum",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/pool_shutdown_test.wj::test_pool_sum_still_works_before_shutdown",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pool_test.wj::test_pool_doubles_jobs",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pool_test.wj::test_pool_shared_inbox_sum",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/pool_test.wj::test_pool_sum_double",
+     "reason": "error: cannot find value `std` in this scope"
+    },
+    {
+     "program": "wj-sync:tests/stress_test.wj::test_fan_in_three_senders",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-sync:tests/stress_test.wj::test_try_recv_drain_until_empty",
+     "reason": "error: no method named `unbounded` found for value of type `fn`"
+    },
+    {
+     "program": "wj-timefmt:tests/timefmt_test.wj::test_minute_second_and_midnight",
+     "reason": "error: cannot find function `minute_of` in this scope"
+    },
+    {
+     "program": "wj-toml:tests/toml_test.wj::test_require_nonblank",
+     "reason": "error: cannot find function `require_nonblank` in this scope"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_get_decodes_percent_and_plus",
+     "reason": "error: no method named `url_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_get_finds_key",
+     "reason": "error: no method named `url_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_get_missing_key",
+     "reason": "error: no method named `url_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_get_or",
+     "reason": "error: no method named `url_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_has",
+     "reason": "error: no method named `url_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_remove_drops_key",
+     "reason": "error: no method named `url_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_set_adds_and_replaces",
+     "reason": "error: no method named `url_encode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_query_set_encodes_spaces_and_ampersand",
+     "reason": "error: no method named `url_encode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-url:tests/url_test.wj::test_scheme_host_and_require_https",
+     "reason": "error: cannot find function `scheme_of` in this scope"
+    },
+    {
+     "program": "wj-uuid:tests/uuid_test.wj::test_v1_from_timestamp_known_vector",
+     "reason": "error: no method named `hex_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-uuid:tests/uuid_test.wj::test_v1_now_has_version_one",
+     "reason": "error: no method named `hex_encode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-uuid:tests/uuid_test.wj::test_v5_dns_rfc4122_vector",
+     "reason": "error: no method named `hex_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-uuid:tests/uuid_test.wj::test_v5_is_deterministic",
+     "reason": "error: no method named `hex_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-uuid:tests/uuid_test.wj::test_v5_url_rfc4122_vector",
+     "reason": "error: no method named `hex_decode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-validate:tests/validate_test.wj::test_last_error_and_require_clean",
+     "reason": "error: cannot find function `last_error` in this scope"
+    },
+    {
+     "program": "wj-validate:tests/validate_test.wj::test_only_error",
+     "reason": "error: cannot find function `only_error` in this scope"
+    },
+    {
+     "program": "wj-yaml:tests/yaml_test.wj::test_require_valid",
+     "reason": "error: cannot find function `require_valid` in this scope"
+    },
+    {
+     "program": "wj-first-hour:tests/card_test.wj::test_build_card_ok",
+     "reason": "error: no method named `url_encode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-first-hour:tests/card_test.wj::test_build_card_query_is_urlencoded",
+     "reason": "error: no method named `url_encode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-first-hour:tests/card_test.wj::test_card_id_path_query_and_has_id",
+     "reason": "error: no method named `url_encode` found for value of type `fn`"
+    },
+    {
+     "program": "wj-hello:tests/version_test.wj::test_crate_name_and_semver",
+     "reason": "error: cannot find function `version` in this scope"
+    },
+    {
+     "program": "wj-hello:tests/version_test.wj::test_is_zero_major_and_matches_identity",
+     "reason": "error: cannot find function `is_zero_major` in this scope"
+    },
+    {
+     "program": "wj-hello:tests/version_test.wj::test_require_crate",
+     "reason": "error: cannot find function `require_crate` in this scope"
+    },
+    {
+     "program": "wj-hello:tests/version_test.wj::test_require_semver_and_is_smoke_identity",
+     "reason": "error: cannot find function `require_semver` in this scope"
+    },
+    {
+     "program": "wj-hello:tests/version_test.wj::test_version_is_non_empty",
+     "reason": "error: cannot find function `version` in this scope"
+    },
+    {
+     "program": "wj-hello:tests/version_test.wj::test_version_string",
+     "reason": "error: cannot find function `version` in this scope"
+    },
+    {
+     "program": "wj-gitignore",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-log",
+     "reason": "unmeasured: compiled test run failed before reporting results: error[E0308]: mismatched types"
+    },
+    {
+     "program": "wj-multipart",
+     "reason": "unmeasured: compiled test run failed before reporting results: error[E0282]: type annotations needed for `Vec<_>`"
+    },
+    {
+     "program": "wj-template",
+     "reason": "unmeasured: compiled test run failed before reporting results: error[E0282]: type annotations needed for `HashMap<_, _>`"
+    },
+    {
      "program": "wj-auth-api",
-     "reason": "unmeasured: compiled test run failed before reporting results (build error in the generated test crate)"
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
     },
     {
      "program": "wj-chat",
-     "reason": "unmeasured: compiled test run failed before reporting results (build error in the generated test crate)"
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-fetch",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-find",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found"
+    },
+    {
+     "program": "wj-form-parse",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-grep",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: no matching package named `wj_gitignore` found"
+    },
+    {
+     "program": "wj-migrate-cli",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-notes-api",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-pipeline",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-proxy",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-scheduler",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-sitegen",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-taskflow",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-todo-cli",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
+    },
+    {
+     "program": "wj-webhook",
+     "reason": "unmeasured: compiled test run failed before reporting results: error: package collision in the lockfile: packages windjammer-runtime v0.50.0 (<path>) and windjammer-runtime v0.50.0 (/private/var/folders/k8/29syjv_n2255wky6v"
     }
    ]
   },
@@ -186,20 +1915,2032 @@
    "id": "R2",
    "title": "No silent divergence",
    "target": "0 divergent programs",
-   "percent": 100.0,
-   "status": "pass",
+   "percent": 94.9,
+   "status": "fail",
    "detail": {
-    "divergences": 0,
-    "unmeasured": 0,
-    "checked": 48,
-    "compiled_checked": 3,
-    "generated_seeds": 24,
+    "divergences": 56,
+    "unmeasured": 282,
+    "checked": 861,
+    "compiled_checked": 76,
+    "generated_seeds": 312,
+    "compiled_build_failures": 161,
+    "build_failures": 161,
     "hash_seeds": [
      0,
-     1
-    ]
+     1,
+     2,
+     3
+    ],
+    "agent_pilot": {
+     "programs": 30,
+     "interpreter_green": 30,
+     "silent_divergences_recorded": 13,
+     "silent_divergence_rate": 0.433,
+     "rechecked": 30,
+     "compiled_error_classes": {
+      "other": 13
+     },
+     "check_misses": 13
+    }
    },
-   "blockers": []
+   "blockers": [
+    {
+     "program": "verified/testing_basic_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_basic_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_cases_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_cases_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_collections_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_collections_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_failure_reported_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_naming_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_naming_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_option_result_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_option_result_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_panics_helper_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_panics_helper_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "verified/testing_struct_methods_test.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "verified/testing_struct_methods_test.wj",
+     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
+    },
+    {
+     "program": "conformance/103_xorshift_reference.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/122_intr_format_seeded.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/136_intr_mixed_seeded.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/155_interp_string_first.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '3' vs expected '<end>'"
+    },
+    {
+     "program": "conformance/155_interp_string_first.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "conformance/157_match_turbofish_scrutinee.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '42' vs expected '<end>'"
+    },
+    {
+     "program": "conformance/157_match_turbofish_scrutinee.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "conformance/159_deref_assign_ref_params.wj",
+     "reason": "[compiled-stdout] line 1: interpreted '5' vs expected '<end>'"
+    },
+    {
+     "program": "conformance/159_deref_assign_ref_params.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "conformance/170_mut_ref_value_types.wj",
+     "reason": "[compiled-stdout] line 1: interpreted 'a!' vs expected '<end>'"
+    },
+    {
+     "program": "conformance/170_mut_ref_value_types.wj",
+     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
+    },
+    {
+     "program": "conformance/171_format_flags_padding.wj",
+     "reason": "[oracle] line 1: interpreted '[5    ] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [' vs expected '[00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] ['"
+    },
+    {
+     "program": "conformance/172_pretty_debug_aggregates.wj",
+     "reason": "[oracle] line 55: interpreted '    1,' vs expected '        1,'"
+    },
+    {
+     "program": "conformance/176_from_conversions.wj",
+     "reason": "[oracle] line 2: interpreted 'parse: 70' vs expected 'code 70'"
+    },
+    {
+     "program": "conformance/176_from_conversions.wj",
+     "reason": "[oracle] exit 101, expected 0"
+    },
+    {
+     "program": "conformance/40_prng_fnv_checksum.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/41_i32_wrapping_lcg.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/42_sort_checksum.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/43_struct_value_semantics.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/44_hashmap_counts.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/45_string_ops.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/46_modpow_i64.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/47_sieve.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/48_matrix_det.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/49_closures_fold.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/50_enum_state_machine.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/51_result_question_chain.wj",
+     "reason": "[oracle] exit 1, expected 0"
+    },
+    {
+     "program": "conformance/58_parse_numbers.wj",
+     "reason": "[oracle] line 4: interpreted 'number too large or too small to fit in target typ' vs expected 'number too large to fit in target type'"
+    },
+    {
+     "program": "pilot/t006_base_convert.A.0",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t006_base_convert.A.1",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t006_base_convert.A.2",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t011_lru_cache.A.0",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t011_lru_cache.A.1",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t011_lru_cache.A.2",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t013_bst.A.0",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t013_bst.A.1",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t018_word_freq.A.0",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t018_word_freq.A.1",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t018_word_freq.A.2",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t030_bank_ledger.A.1",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t030_bank_ledger.A.2",
+     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "verified/algo_binary_tree.wj",
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "verified/algo_lcs.wj",
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "verified/algo_matrix_multiply.wj",
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "verified/algo_stack_calculator.wj",
+     "reason": "[compiled-build-failed] error[E0658]: use of unstable library feature `str_as_str`"
+    },
+    {
+     "program": "verified/algo_state_machine.wj",
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "verified/algo_word_frequency.wj",
+     "reason": "[compiled-build-failed] error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&S"
+    },
+    {
+     "program": "verified/basics_arithmetic.wj",
+     "reason": "[compiled-build-failed] error[E0689]: can't call method `pow` on ambiguous numeric type `{integer}`"
+    },
+    {
+     "program": "verified/enum_methods.wj",
+     "reason": "[compiled-build-failed] error[E0308]: arguments to this enum variant are incorrect"
+    },
+    {
+     "program": "verified/generics_function.wj",
+     "reason": "[compiled-build-failed] error[E0599]: no method named `clone` found for type parameter `T` in the current scope"
+    },
+    {
+     "program": "verified/hashset_basics.wj",
+     "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "verified/iter_any_all_count.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_collect_hashmap.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_enumerate_zip.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_filter_map_flat.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_flat_map_chain.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_fold_sum.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_group_by_manual.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_map_filter.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_min_max_by.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_partition_unzip.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_scan_running_total.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_sort_by_float.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/iter_take_skip_rev.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/let_else_pattern.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/loops_labeled_nested.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/match_patterns.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/match_tuple_destructure.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/match_while_let.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/mem_swap_replace_take.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/module_inline.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/module_nested_pub_mod.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/modules_trait_static.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_bitwise.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_conversions.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_float_rounding.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_float_special.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_integer_widths.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_min_max_abs.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/numbers_overflow_checked.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/operators_overload.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/option_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/option_combinators.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/option_filter_zip_flatten.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/option_take_replace.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/pipe_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/pipe_method_stage.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/pipe_result_question.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_bit_counting.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_csv_parse.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_event_handlers.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_game_of_life.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_lru_cache.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_matrix_transpose.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_priority_scheduler.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_queue_simulation.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_run_length_encoding.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_shapes_report.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_text_wrap.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/prog_tictactoe_winner.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/recursion_hanoi_ackermann.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/result_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/result_collect_all_or_nothing.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/result_question_mark.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/sort_stability_keys.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/std_cmp_ordering.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/std_env_args.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/std_fs_roundtrip.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/std_math_functions.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_build.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_chars.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_compare_sort.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_format_specs.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_parse.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_slicing.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_split_join.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/strings_unicode.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_default_builder.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_derive_debug_eq.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_method_chain_mut.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_nested.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_update_copy.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/struct_with_vec_field.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/trait_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/trait_default_and_override.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/trait_display_to_string.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/trait_dyn_dispatch.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/trait_generic_bound.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_2d_grid.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_basics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_contains_position.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_insert_remove.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_of_structs.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_slices_windows.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vec_sort_dedup.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "verified/vecdeque_queue.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/01_arith_i32.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/02_arith_i64.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/03_arith_f64.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/04_int_overflow_i64_large.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/05_string_concat.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/06_string_interp.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/07_string_methods.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/08_struct_basic.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/09_struct_mutate_method.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/100_determinant_known.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/101_float_summation_known.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/102_sort_stability.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/103_xorshift_reference.wj",
+     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
+    },
+    {
+     "program": "conformance/10_struct_copy_semantics.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/110_std_math.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/111_std_strings.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/112_std_fs_roundtrip.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/113_std_time_monotonic.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/114_hashmap_entry_counting.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/115_clone_vec_field.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/11_struct_clone_independent.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/120_intr_streams.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/121_intr_format_known.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/122_intr_format_seeded.wj",
+     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
+    },
+    {
+     "program": "conformance/123_intr_debug.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/124_intr_assert_ok.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/125_intr_assert_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/126_intr_assert_eq_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/127_intr_assert_eq_msg_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/128_intr_assert_ne_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/129_intr_todo_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/12_struct_pass_mutable.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/130_intr_todo_msg_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/131_intr_unreachable_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/132_intr_unreachable_msg_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/133_intr_panic_fmt_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/134_intr_panic_bare_fail.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/135_intr_list_literal.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/136_intr_mixed_seeded.wj",
+     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
+    },
+    {
+     "program": "conformance/137_intr_format_sign_alt.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/138_intr_format_pretty_debug.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/13_enum_unit_match.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/140_float_format_spec.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/141_f32_format_widen.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/142_parse_radix.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/143_float_consts.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/14_enum_data_match.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/150_pipe_forms_mixed.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/151_pipe_try.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/152_range_patterns.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/153_labeled_loops.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/154_u64_literals_fnv.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/156_deref_assign_after_call.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/158_self_path_vs_method.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/15_match_guard_or.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/160_bare_return_newline.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/161_unary_minus_cast.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/162_block_comments.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/163_trait_generics_and_aliases.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/164_into_bound_param_consumed.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/16_closure_basic.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/170_coll_grouping.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/171_coll_reshape_order.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/171_format_flags_padding.wj",
+     "reason": "[compiled-build-failed] error[E0423]: cannot find function `println` in this scope"
+    },
+    {
+     "program": "conformance/172_clos_shorthand.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/172_pretty_debug_aggregates.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/173_match_guard_only.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/173_type_aliases.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/174_args_named_defaults.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/174_closure_mut_capture.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/175_block_trailing.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/175_len_and_index_as_int.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/176_from_conversions.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/176_opt_default.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/177_deep_recursion.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/177_opt_chain.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/178_struct_patterns_slices.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/179_ordering_sort.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/17_closure_counter_capture.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/180_modules_paths.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/181_ordered_map_set.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/18_option_match.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/19_result_match.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/20_result_question.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/21_vec_ops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/22_vec_index_mutate.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/23_hashmap_ops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/24_hashmap_sorted_iter.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/25_loops_ranges.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/26_break_continue.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/27_trait_impl.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/28_generic_fn.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/29_recursion_fib.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/30_iter_map_filter.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/31_bool_logic.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/32_struct_nested_fields.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/33_shadow_and_blocks.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/34_method_chain_builder.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/35_vec_of_structs.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/40_prng_fnv_checksum.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/41_i32_wrapping_lcg.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/42_sort_checksum.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/43_struct_value_semantics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/44_hashmap_counts.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/45_string_ops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/46_modpow_i64.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/47_sieve.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/48_matrix_det.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/49_closures_fold.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/50_enum_state_machine.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/51_result_question_chain.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/52_int_casts.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/53_div_mod_signs.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/54_shifts_bitops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/55_float_format.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/56_float_math.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/57_checked_ops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/58_parse_numbers.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/59_string_unicode.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/60_overflow_panics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/61_string_split_trim.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/62_vec_alias_semantics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/63_closures_capture.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/64_enum_match_guards.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/65_option_combinators.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/66_result_propagation.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/68_unwrap_none_panics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/69_index_oob_panics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/70_div_zero_panics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/71_explicit_panic.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/72_hashmap_ops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/73_hashset_ops.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/74_vec_algorithms.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/75_iterators.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/76_loops_ranges.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/77_shadowing_blocks.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/78_tuples_destructuring.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/79_trait_dispatch.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/80_generic_struct.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/81_recursion_depth.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/82_consts_statics.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/83_builder_chain.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/90_crc32_known_answer.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/91_fnv1a_known_answers.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/92_minstd_known_answer.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/93_pcg32_known_answer.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/94_sha256_known_answer.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/95_base64_rfc4648_vectors.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/96_utf8_encode_decode.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/97_rational_harmonic.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/98_bignum_factorial.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "conformance/99_collatz_longest.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ARGS-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ARGS-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ARGS-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ATTR-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ATTR-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ATTR-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ATTR-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CLOS-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CLOS-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CLOS-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CLOS-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-COLL-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CONC-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CONC-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CONC-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CONC-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-CONC-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ERR-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ERR-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ERR-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ERR-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ERR-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ERR-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXEC-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-011.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-012.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-013.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-014.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-015.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-016.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-EXPR-018.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-GRAM-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-MATCH-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-MATCH-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-INTR-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-ITEM-011.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-011.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-012.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-013.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-014.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-LEX-015.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-MOD-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-MOD-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-MOD-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-MOD-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-012.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-013.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-014.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-015.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-016.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-NUM-017.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OPT-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OPT-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OPT-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OPT-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OPT-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-OWN-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PAT-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PIPE-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PIPE-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PIPE-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PIPE-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PIPE-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-PIPE-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STMT-011.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STD-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STD-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STD-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STD-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STD-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-STR-011.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-BLOCK-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-BLOCK-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-BLOCK-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-003.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TRT-009.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-001.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-002.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-004.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-005.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-006.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-007.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-008.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    },
+    {
+     "program": "spec/SPEC-TYP-010.wj",
+     "reason": "unmeasured: compiled run timed out or was skipped (budget/disk)"
+    }
+   ]
   },
   {
    "id": "R3",
@@ -208,7 +3949,7 @@
    "percent": 100.0,
    "status": "pass",
    "detail": {
-    "invocations": 44,
+    "invocations": 1200,
     "fallbacks": 0,
     "fallback_rate_pct": 0.0,
     "silent": [],
@@ -220,20 +3961,240 @@
    "id": "R4",
    "title": "Fast enough",
    "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
-   "percent": 60.0,
+   "percent": 87.5,
    "status": "fail",
    "detail": {
     "projects": [
      {
       "project": "wj-base64",
       "interp_s": 0.4,
-      "compiled_s": 133.0,
+      "compiled_s": 31.4,
       "met": true
      },
      {
       "project": "wj-cli-args",
+      "interp_s": 0.0,
+      "compiled_s": 32.7,
+      "met": true
+     },
+     {
+      "project": "wj-compress",
+      "interp_s": 0.0,
+      "compiled_s": 33.8,
+      "met": true
+     },
+     {
+      "project": "wj-config",
+      "interp_s": 0.0,
+      "compiled_s": 34.6,
+      "met": true
+     },
+     {
+      "project": "wj-cookie",
+      "interp_s": 0.0,
+      "compiled_s": 35.3,
+      "met": true
+     },
+     {
+      "project": "wj-cors",
+      "interp_s": 0.0,
+      "compiled_s": 50.1,
+      "met": true
+     },
+     {
+      "project": "wj-cron",
       "interp_s": 0.1,
-      "compiled_s": 69.1,
+      "compiled_s": 56.7,
+      "met": true
+     },
+     {
+      "project": "wj-csv",
+      "interp_s": 0.0,
+      "compiled_s": 42.2,
+      "met": true
+     },
+     {
+      "project": "wj-dotenv",
+      "interp_s": 0.0,
+      "compiled_s": 58.6,
+      "met": true
+     },
+     {
+      "project": "wj-duration",
+      "interp_s": 0.0,
+      "compiled_s": 3.3,
+      "met": true
+     },
+     {
+      "project": "wj-event",
+      "interp_s": 0.1,
+      "compiled_s": 4.1,
+      "met": true
+     },
+     {
+      "project": "wj-fs-walk",
+      "interp_s": 0.1,
+      "compiled_s": 20.1,
+      "met": true
+     },
+     {
+      "project": "wj-gitignore",
+      "met": null
+     },
+     {
+      "project": "wj-glob",
+      "interp_s": 0.1,
+      "compiled_s": 41.1,
+      "met": true
+     },
+     {
+      "project": "wj-hash",
+      "interp_s": 2.6,
+      "compiled_s": 55.1,
+      "met": true
+     },
+     {
+      "project": "wj-headers",
+      "interp_s": 0.1,
+      "compiled_s": 52.7,
+      "met": true
+     },
+     {
+      "project": "wj-http-client",
+      "interp_s": 0.1,
+      "compiled_s": 54.2,
+      "met": true
+     },
+     {
+      "project": "wj-inflect",
+      "interp_s": 0.0,
+      "compiled_s": 55.0,
+      "met": true
+     },
+     {
+      "project": "wj-json-util",
+      "interp_s": 0.1,
+      "compiled_s": 92.3,
+      "met": true
+     },
+     {
+      "project": "wj-jwt",
+      "interp_s": 0.1,
+      "compiled_s": 94.3,
+      "met": true
+     },
+     {
+      "project": "wj-log",
+      "met": null
+     },
+     {
+      "project": "wj-migrate",
+      "interp_s": 0.1,
+      "compiled_s": 42.8,
+      "met": true
+     },
+     {
+      "project": "wj-mime",
+      "interp_s": 0.0,
+      "compiled_s": 19.5,
+      "met": true
+     },
+     {
+      "project": "wj-multipart",
+      "met": null
+     },
+     {
+      "project": "wj-path",
+      "interp_s": 0.0,
+      "compiled_s": 9.0,
+      "met": true
+     },
+     {
+      "project": "wj-querystring",
+      "interp_s": 0.3,
+      "compiled_s": 83.3,
+      "met": true
+     },
+     {
+      "project": "wj-rate-limit",
+      "interp_s": 0.0,
+      "compiled_s": 100.7,
+      "met": true
+     },
+     {
+      "project": "wj-regex",
+      "interp_s": 0.0,
+      "compiled_s": 55.2,
+      "met": true
+     },
+     {
+      "project": "wj-retry",
+      "interp_s": 0.0,
+      "compiled_s": 53.3,
+      "met": true
+     },
+     {
+      "project": "wj-router",
+      "interp_s": 0.0,
+      "compiled_s": 127.8,
+      "met": true
+     },
+     {
+      "project": "wj-semver",
+      "interp_s": 0.0,
+      "compiled_s": 55.1,
+      "met": true
+     },
+     {
+      "project": "wj-sha",
+      "interp_s": 0.0,
+      "compiled_s": 67.8,
+      "met": true
+     },
+     {
+      "project": "wj-sync",
+      "interp_s": 0.6,
+      "compiled_s": 76.8,
+      "met": true
+     },
+     {
+      "project": "wj-template",
+      "met": null
+     },
+     {
+      "project": "wj-timefmt",
+      "interp_s": 0.2,
+      "compiled_s": 160.4,
+      "met": true
+     },
+     {
+      "project": "wj-toml",
+      "interp_s": 0.2,
+      "compiled_s": 90.9,
+      "met": true
+     },
+     {
+      "project": "wj-url",
+      "interp_s": 0.1,
+      "compiled_s": 76.5,
+      "met": true
+     },
+     {
+      "project": "wj-uuid",
+      "interp_s": 0.1,
+      "compiled_s": 97.0,
+      "met": true
+     },
+     {
+      "project": "wj-validate",
+      "interp_s": 0.1,
+      "compiled_s": 102.3,
+      "met": true
+     },
+     {
+      "project": "wj-yaml",
+      "interp_s": 0.0,
+      "compiled_s": 51.3,
       "met": true
      },
      {
@@ -243,27 +4204,148 @@
      {
       "project": "wj-chat",
       "met": null
+     },
+     {
+      "project": "wj-fetch",
+      "met": null
+     },
+     {
+      "project": "wj-find",
+      "met": null
+     },
+     {
+      "project": "wj-first-hour",
+      "interp_s": 0.0,
+      "compiled_s": 35.8,
+      "met": true
+     },
+     {
+      "project": "wj-form-parse",
+      "met": null
+     },
+     {
+      "project": "wj-grep",
+      "met": null
+     },
+     {
+      "project": "wj-hello",
+      "interp_s": 0.0,
+      "compiled_s": 49.2,
+      "met": true
+     },
+     {
+      "project": "wj-migrate-cli",
+      "met": null
+     },
+     {
+      "project": "wj-notes-api",
+      "met": null
+     },
+     {
+      "project": "wj-pipeline",
+      "met": null
+     },
+     {
+      "project": "wj-proxy",
+      "met": null
+     },
+     {
+      "project": "wj-scheduler",
+      "met": null
+     },
+     {
+      "project": "wj-sitegen",
+      "met": null
+     },
+     {
+      "project": "wj-taskflow",
+      "met": null
+     },
+     {
+      "project": "wj-todo-cli",
+      "met": null
+     },
+     {
+      "project": "wj-webhook",
+      "met": null
      }
     ],
     "warm_loop": {
-     "project": "wj-chat",
-     "files": 11,
-     "median_s": 0.08
+     "project": "wj-sync",
+     "files": 24,
+     "median_s": 0.86
+    },
+    "startup": {
+     "hello_s": 0.034,
+     "target_s": 0.25,
+     "project": "wj-sync",
+     "files": 24,
+     "check_s": 0.015,
+     "interp_test_s": 0.873,
+     "check_share": 0.02
     },
     "kernels": [
      {
+      "kernel": "closures.wj",
+      "interp_cpu_s": 0.16,
+      "python_cpu_s": 0.05,
+      "ratio": 3.1,
+      "outputs_match": true,
+      "met": false
+     },
+     {
       "kernel": "fib30.wj",
-      "interp_cpu_s": 0.85,
+      "interp_cpu_s": 0.09,
       "python_cpu_s": 0.15,
-      "ratio": 5.7,
+      "ratio": 0.6,
+      "outputs_match": true,
+      "met": true
+     },
+     {
+      "kernel": "hashmap.wj",
+      "interp_cpu_s": 0.21,
+      "python_cpu_s": 0.06,
+      "ratio": 3.7,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "loop5m.wj",
-      "interp_cpu_s": 2.65,
-      "python_cpu_s": 0.64,
-      "ratio": 4.1,
+      "interp_cpu_s": 0.19,
+      "python_cpu_s": 1.04,
+      "ratio": 0.2,
+      "outputs_match": true,
+      "met": true
+     },
+     {
+      "kernel": "nbody.wj",
+      "interp_cpu_s": 0.93,
+      "python_cpu_s": 0.14,
+      "ratio": 6.8,
+      "outputs_match": true,
+      "met": false
+     },
+     {
+      "kernel": "sieve.wj",
+      "interp_cpu_s": 0.59,
+      "python_cpu_s": 0.43,
+      "ratio": 1.3,
+      "outputs_match": true,
+      "met": false
+     },
+     {
+      "kernel": "strings.wj",
+      "interp_cpu_s": 0.11,
+      "python_cpu_s": 0.07,
+      "ratio": 1.6,
+      "outputs_match": true,
+      "met": false
+     },
+     {
+      "kernel": "structs.wj",
+      "interp_cpu_s": 0.38,
+      "python_cpu_s": 0.18,
+      "ratio": 2.0,
       "outputs_match": true,
       "met": false
      }
@@ -271,6 +4353,22 @@
     "compiled_cache": "warm (private target dir, reused across projects)"
    },
    "blockers": [
+    {
+     "program": "wj-gitignore",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-log",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-multipart",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-template",
+     "reason": "unmeasured: compiled run unavailable"
+    },
     {
      "program": "wj-auth-api",
      "reason": "unmeasured: compiled run unavailable"
@@ -280,12 +4378,80 @@
      "reason": "unmeasured: compiled run unavailable"
     },
     {
-     "program": "bench/fib30.wj",
-     "reason": "interpreter 0.85s vs python 0.15s CPU (5.7x slower)"
+     "program": "wj-fetch",
+     "reason": "unmeasured: compiled run unavailable"
     },
     {
-     "program": "bench/loop5m.wj",
-     "reason": "interpreter 2.65s vs python 0.64s CPU (4.1x slower)"
+     "program": "wj-find",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-form-parse",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-grep",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-migrate-cli",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-notes-api",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-pipeline",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-proxy",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-scheduler",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-sitegen",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-taskflow",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-todo-cli",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-webhook",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "bench/closures.wj",
+     "reason": "interpreter 0.16s vs python 0.05s CPU (3.1x slower)"
+    },
+    {
+     "program": "bench/hashmap.wj",
+     "reason": "interpreter 0.21s vs python 0.06s CPU (3.7x slower)"
+    },
+    {
+     "program": "bench/nbody.wj",
+     "reason": "interpreter 0.93s vs python 0.14s CPU (6.8x slower)"
+    },
+    {
+     "program": "bench/sieve.wj",
+     "reason": "interpreter 0.59s vs python 0.43s CPU (1.3x slower)"
+    },
+    {
+     "program": "bench/strings.wj",
+     "reason": "interpreter 0.11s vs python 0.07s CPU (1.6x slower)"
+    },
+    {
+     "program": "bench/structs.wj",
+     "reason": "interpreter 0.38s vs python 0.18s CPU (2.0x slower)"
     }
    ]
   },
@@ -293,24 +4459,741 @@
    "id": "R5",
    "title": "Diagnostics agree",
    "target": "0 check/interpreter/build disagreements",
-   "percent": 92.9,
+   "percent": 64.2,
    "status": "fail",
    "detail": {
-    "parity_checked": 19,
-    "parity_agree": 19,
-    "build_checked": 9,
-    "negative_programs": 10,
-    "gap_headers_now_accepted": 2,
-    "cargo_gates": null
+    "parity_checked": 300,
+    "parity_agree": 300,
+    "build_checked": 169,
+    "negative_programs": 131,
+    "gap_headers_now_accepted": 0,
+    "cargo_gates": null,
+    "agent_pilot_check_misses": 13
    },
    "blockers": [
+    {
+     "program": "examples/verified/algo_anagram.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_bank_account.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_bfs_grid.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_binary_search.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
     {
      "program": "examples/verified/algo_binary_tree.wj",
      "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
     },
     {
+     "program": "examples/verified/algo_bubble_sort.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/algo_caesar_cipher.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_collatz.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_digits.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_fibonacci.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_fizzbuzz.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_gcd_lcm.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_inventory.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_knapsack_dp.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: arguments to this function are incorrect)"
+    },
+    {
+     "program": "examples/verified/algo_lcs.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: wj build: t: must be U32 (max() return) but was I64 Error: Numeric typ)"
+    },
+    {
+     "program": "examples/verified/algo_linked_list_enum.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_matrix_multiply.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: arguments to this function are incorrect)"
+    },
+    {
+     "program": "examples/verified/algo_palindrome.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_pascal_triangle.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_perfect_numbers.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_primes_sieve.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_roman_numerals.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_stack_calculator.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0277]: can't compare 'str' with '&str')"
+    },
+    {
+     "program": "examples/verified/algo_state_machine.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/algo_statistics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_temperature_table.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/algo_tokenizer.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/algo_word_frequency.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'map' found for struct 'HashMap<String, )"
+    },
+    {
      "program": "examples/verified/basics_arithmetic.wj",
      "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0689]: can't call method 'pow' on ambiguous numeric type '{inte)"
+    },
+    {
+     "program": "examples/verified/basics_bool_logic.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_const.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_float_math.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_for_range.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_functions.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_hello.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_if_else.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_if_expression.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_interpolation.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_loop_break.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_main_exit_code.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0433]: cannot find module or crate 'windjammer_runtime' in this)"
+    },
+    {
+     "program": "examples/verified/basics_shadowing_blocks.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_tuples.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/basics_variables.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/basics_while.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/btreemap_ordered.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/chars_ascii_arith.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/chars_classify.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/closures_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/closures_counter.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/closures_return_fn.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/defer_cleanup.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/defer_panic_lifo.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/display_to_string.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/enum_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/enum_data.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/enum_methods.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: arguments to this enum variant are incorrect)"
+    },
+    {
+     "program": "examples/verified/enum_option_like_generic.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/error_assert_eq_fails.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/error_assert_ok.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/error_custom_enum.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/error_map_err_ok.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/error_panic_exit_code.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/error_unwrap_or_expect.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/from_conversion.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/generics_function.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'clone' found for type parameter 'T' in )"
+    },
+    {
+     "program": "examples/verified/generics_struct.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/hashmap_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/hashmap_iterate_sorted.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/hashmap_remove_update.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/hashmap_word_count.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/hashset_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/idiom_agentdx_regressions.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/if_let_chain.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/iter_any_all_count.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'any' found for struct 'Vec<i32>' in the)"
+    },
+    {
+     "program": "examples/verified/iter_collect_hashmap.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<String>' in )"
+    },
+    {
+     "program": "examples/verified/iter_enumerate_zip.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/iter_filter_map_flat.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/iter_flat_map_chain.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'flat_map' found for struct 'Vec<i32>' i)"
+    },
+    {
+     "program": "examples/verified/iter_fold_sum.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'sum' found for struct 'Vec<i32>' in the)"
+    },
+    {
+     "program": "examples/verified/iter_group_by_manual.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/iter_map_filter.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'map' found for struct 'Vec<i32>' in the)"
+    },
+    {
+     "program": "examples/verified/iter_min_max_by.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0061]: this method takes 1 argument but 0 arguments were suppli)"
+    },
+    {
+     "program": "examples/verified/iter_partition_unzip.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'partition' found for struct 'Vec<i32>' )"
+    },
+    {
+     "program": "examples/verified/iter_scan_running_total.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/iter_sort_by_float.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/iter_take_skip_rev.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'take' found for struct 'Vec<i32>' in th)"
+    },
+    {
+     "program": "examples/verified/let_else_pattern.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/loops_labeled_nested.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: arguments to this function are incorrect)"
+    },
+    {
+     "program": "examples/verified/match_patterns.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/match_tuple_destructure.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/match_while_let.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/mem_swap_replace_take.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/module_inline.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0255]: the name 'rect_area' is defined multiple times)"
+    },
+    {
+     "program": "examples/verified/module_nested_pub_mod.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/modules_trait_static.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/numbers_bitwise.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/numbers_conversions.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/numbers_float_rounding.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/numbers_float_special.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/numbers_integer_widths.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/numbers_min_max_abs.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0689]: can't call method 'abs' on ambiguous numeric type '{inte)"
+    },
+    {
+     "program": "examples/verified/numbers_overflow_checked.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/operators_overload.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0119]: conflicting implementations of trait 'PartialEq' for typ)"
+    },
+    {
+     "program": "examples/verified/option_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/option_combinators.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/option_filter_zip_flatten.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/option_take_replace.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/pipe_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/pipe_method_stage.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/pipe_result_question.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_bit_counting.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_csv_parse.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_event_handlers.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/prog_game_of_life.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/prog_lru_cache.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/prog_matrix_transpose.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/prog_priority_scheduler.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_queue_simulation.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_run_length_encoding.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_shapes_report.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_text_wrap.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/prog_tictactoe_winner.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/recursion_hanoi_ackermann.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/result_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/result_collect_all_or_nothing.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0282]: type annotations needed)"
+    },
+    {
+     "program": "examples/verified/result_question_mark.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/sort_stability_keys.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/std_cmp_ordering.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/std_env_args.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0432]: unresolved import 'windjammer_runtime')"
+    },
+    {
+     "program": "examples/verified/std_fs_roundtrip.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0433]: cannot find module or crate 'windjammer_runtime' in this)"
+    },
+    {
+     "program": "examples/verified/std_math_functions.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_build.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_chars.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_compare_sort.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_format_specs.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_parse.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_slicing.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0277]: the size for values of type 'str' cannot be known at com)"
+    },
+    {
+     "program": "examples/verified/strings_split_join.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/strings_unicode.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_default_builder.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_derive_debug_eq.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_method_chain_mut.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_nested.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_update_copy.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/struct_with_vec_field.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0282]: type annotations needed)"
+    },
+    {
+     "program": "examples/verified/testing_basic_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_cases_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_collections_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_failure_reported_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_naming_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_option_result_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_panics_helper_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/testing_struct_methods_test.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/trait_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/trait_default_and_override.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/trait_display_to_string.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/trait_dyn_dispatch.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/trait_generic_bound.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0425]: cannot find type 'int' in this scope)"
+    },
+    {
+     "program": "examples/verified/vec_2d_grid.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0277]: the trait bound 'Vec<i32>: Copy' is not satisfied)"
+    },
+    {
+     "program": "examples/verified/vec_basics.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/vec_contains_position.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: v.position(|x| *x == 15) emits 15_i64 against an i32 array (literal wi)"
+    },
+    {
+     "program": "examples/verified/vec_insert_remove.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0308]: mismatched types)"
+    },
+    {
+     "program": "examples/verified/vec_of_structs.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0599]: no method named 'max_by_key' found for struct 'Vec<Perso)"
+    },
+    {
+     "program": "examples/verified/vec_slices_windows.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (documented gap: error[E0277]: a value of type 'Vec<i64>' cannot be built from an itera)"
+    },
+    {
+     "program": "examples/verified/vec_sort_dedup.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "examples/verified/vecdeque_queue.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it (not a documented gap)"
+    },
+    {
+     "program": "pilot/t006_base_convert.A.0",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t006_base_convert.A.1",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t006_base_convert.A.2",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t011_lru_cache.A.0",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t011_lru_cache.A.1",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t011_lru_cache.A.2",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t013_bst.A.0",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t013_bst.A.1",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t018_word_freq.A.0",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t018_word_freq.A.1",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t018_word_freq.A.2",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t030_bank_ledger.A.1",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
+    },
+    {
+     "program": "pilot/t030_bank_ledger.A.2",
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: readiness time budget exhausted"
     }
    ]
   },
@@ -328,8 +5211,8 @@
      "concurrency.thread_block",
      "ffi.extern_fn"
     ],
-    "crate_dependency_projects": 0,
-    "crate_projects_uncovered": 0
+    "crate_dependency_projects": 1,
+    "crate_projects_uncovered": 1
    },
    "blockers": [
     {
@@ -343,6 +5226,10 @@
     {
      "program": "feature:ffi.extern_fn",
      "reason": "unsupported: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds "
+    },
+    {
+     "program": "wj-sync",
+     "reason": "Rust-crate dependency project not fully passing interpreted"
     }
    ]
   },
@@ -356,87 +5243,87 @@
     "window": 20,
     "commits_in_window": 20,
     "commits_passing": 0,
-    "commits_recorded": 0
+    "commits_recorded": 1
    },
    "blockers": [
     {
-     "program": "cc46ae4ebc",
+     "program": "730f4fb0bc",
+     "reason": "failed R1,R2,R4,R5,R6"
+    },
+    {
+     "program": "078d738e01",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "0a899289c9",
+     "program": "56961cd722",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "95d86fedce",
+     "program": "2f2f13b9d3",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "fb601b6b0f",
+     "program": "b2781a2fba",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "cbba095740",
+     "program": "e6af2c79d4",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "c6c8f5f7ee",
+     "program": "77f7dfafe7",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "034e0b4e0a",
+     "program": "11ef184bf4",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "d3a549c0b4",
+     "program": "9347d60dc6",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "9e6bff4078",
+     "program": "c50c3aa234",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "b9435ab440",
+     "program": "f1ba91a728",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "364bbee4b6",
+     "program": "8f70969ec0",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "b1ca261bcc",
+     "program": "4bfe547107",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "ccaf1840fd",
+     "program": "af4f375465",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "f61635c9b9",
+     "program": "c57b15bc74",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "38d8b1fc34",
+     "program": "7f9afe1f5f",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "2867b2a537",
+     "program": "0634ac951a",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "6a748f8e80",
+     "program": "6f9b2b3d3c",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "256ea2c392",
+     "program": "6b0cb01077",
      "reason": "no full readiness run recorded for this commit"
     },
     {
-     "program": "aba2d2f625",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "12f39a3a82",
+     "program": "a52a35982d",
      "reason": "no full readiness run recorded for this commit"
     }
    ]

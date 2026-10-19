@@ -355,7 +355,7 @@ class CacheTests(unittest.TestCase):
             c.wj_hash = "different-binary"
             c.cached_run("k", "h", ["a"], 1)
             self.assertEqual(len(calls), 3)
-            c.commit = "y"
+            c.cache_id = "y"
             c.cached_run("k", "h", ["a"], 1)
             self.assertEqual(len(calls), 4)
         finally:
@@ -401,6 +401,34 @@ class CacheTests(unittest.TestCase):
             cache.put("k", {"a": 1})
             self.assertFalse(cache.enabled)
             self.assertIsNone(cache.get("k"))
+        finally:
+            shutil.rmtree(d)
+
+    def test_cache_id_not_the_commit_keys_results(self):
+        d = tempfile.mkdtemp()
+        n = []
+        runner = lambda *a, **k: n.append(1) or core.Res(0, "", "", 0)
+        try:
+            c = core.Ctx(SHIM, d, core.QUICK, core.Cache(os.path.join(d, "c")), [], commit="docs-only-commit", runner=runner)
+            c.cache_id = "src-tree-1"
+            c.cached_run("k", "h", ["a"], 1)
+            c.commit = "another-docs-commit"                      # a commit that does not touch the compiler hits the cache
+            c.cached_run("k", "h", ["a"], 1)
+            self.assertEqual(len(n), 1)
+            c.cache_id = "src-tree-2"
+            c.cached_run("k", "h", ["a"], 1)
+            self.assertEqual(len(n), 2)
+        finally:
+            shutil.rmtree(d)
+
+    def test_isolated_copies_a_program_into_its_own_directory(self):
+        d = tempfile.mkdtemp()
+        try:
+            write(os.path.join(d, "ex", "a.wj"), "fn main() {}\n")
+            write(os.path.join(d, "ex", "b.wj"), "fn main() {}\n")
+            c = core.Ctx(SHIM, d, core.QUICK, core.Cache(os.path.join(d, "c")), [])
+            iso = c.isolated(os.path.join(d, "ex", "a.wj"))
+            self.assertEqual(os.listdir(os.path.dirname(iso)), ["a.wj"])
         finally:
             shutil.rmtree(d)
 

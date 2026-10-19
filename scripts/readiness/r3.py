@@ -27,7 +27,7 @@ def measure(ctx, corpora, r1_rows):
     limit = 6 if ctx.quick else 10**9
     for name, progs in corpora.items():
         for p in progs[:limit]:
-            r = ctx.cached_run("r3-run", file_hash(p.path), [ctx.wj, "run", p.path], ctx.timeouts["interp"],
+            r = ctx.cached_run("r3-run", file_hash(p.path), [ctx.wj, "run", ctx.isolated(p.path)], ctx.timeouts["interp"],
                                keep_timeouts=True, cwd=os.path.dirname(p.path),
                                env={"WJ_CARGO_TARGET_ROOT": ctx.target_root()})
             runs += 1
