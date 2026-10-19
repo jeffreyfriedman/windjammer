@@ -2701,6 +2701,8 @@ impl SceneManager {
 
     assert!(
         rs.contains("contains(&name)")
+            // element comparison by value: no borrow of an owned String, no allocation
+            || rs.contains("iter().any(|m| *m == *name)")
             || rs.contains("contains(name.as_str())")
             || (rs.contains("contains(name)")
                 && (rs.contains("name: &String") || rs.contains("name: &str"))),
