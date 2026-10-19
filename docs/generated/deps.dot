@@ -92,6 +92,7 @@ digraph deps {
     "metadata";
     "package";
     "plugin";
+    "reduce";
     "rust_integration_tests";
     "syntax_highlighter";
     "syntax_highlighter_stub";
@@ -157,7 +158,7 @@ digraph deps {
   "check" -> "type_classification" [label="3"];
   "cli" -> "auto_fix" [label="1"];
   "cli" -> "build_utils" [label="1"];
-  "cli" -> "cargo_cache" [label="8"];
+  "cli" -> "cargo_cache" [label="9"];
   "cli" -> "cargo_toml" [label="2"];
   "cli" -> "check" [label="2"];
   "cli" -> "codegen" [label="7"];
@@ -174,9 +175,10 @@ digraph deps {
   "cli" -> "ir" [label="1"];
   "cli" -> "lexer" [label="4"];
   "cli" -> "linter" [label="5"];
-  "cli" -> "module_system" [label="5"];
-  "cli" -> "package" [label="4"];
+  "cli" -> "module_system" [label="6"];
+  "cli" -> "package" [label="5"];
   "cli" -> "parser" [label="5"];
+  "cli" -> "reduce" [label="1"];
   "cli" -> "source_map" [label="4"];
   "cli" -> "test_runner" [label="1"];
   "cli" -> "wjsl" [label="1"];
@@ -221,10 +223,10 @@ digraph deps {
   "codegen" -> "ir" [label="373"];
   "codegen" -> "lexer" [label="24"];
   "codegen" -> "linter" [label="2",color=red,fontcolor=red];
-  "codegen" -> "parser" [label="663"];
+  "codegen" -> "parser" [label="664"];
   "codegen" -> "parser_impl" [label="2"];
   "codegen" -> "resolve" [label="1"];
-  "codegen" -> "source_map" [label="8"];
+  "codegen" -> "source_map" [label="9"];
   "codegen" -> "stdlib_surface" [label="4"];
   "codegen" -> "test_utils" [label="7"];
   "codegen" -> "type_classification" [label="236"];
@@ -232,10 +234,10 @@ digraph deps {
   "codegen" -> "wjsl" [label="3",color=red,fontcolor=red];
   "compilation_error_handling" -> "errors" [label="1"];
   "compilation_error_handling" -> "parser" [label="1"];
-  "compiler" -> "analyzer" [label="30"];
+  "compiler" -> "analyzer" [label="33"];
   "compiler" -> "build_utils" [label="3"];
   "compiler" -> "cargo_toml" [label="4"];
-  "compiler" -> "codegen" [label="43"];
+  "compiler" -> "codegen" [label="44"];
   "compiler" -> "compiler_config" [label="4"];
   "compiler" -> "compiler_database" [label="1"];
   "compiler" -> "config" [label="2"];
@@ -249,7 +251,7 @@ digraph deps {
   "compiler" -> "metadata" [label="44"];
   "compiler" -> "module_system" [label="1"];
   "compiler" -> "optimizer" [label="1"];
-  "compiler" -> "parser" [label="84"];
+  "compiler" -> "parser" [label="87"];
   "compiler" -> "project_paths" [label="9"];
   "compiler" -> "resolve" [label="4",color=red,fontcolor=red];
   "compiler" -> "rust_integration_tests" [label="2"];
@@ -331,7 +333,7 @@ digraph deps {
   "interpreter" -> "lexer" [label="3"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
-  "interpreter" -> "parser" [label="79"];
+  "interpreter" -> "parser" [label="80"];
   "interpreter" -> "resolve" [label="13"];
   "interpreter" -> "source_map" [label="8"];
   "interpreter" -> "stdlib_surface" [label="1"];
@@ -378,6 +380,7 @@ digraph deps {
   "output_generation" -> "parser" [label="1"];
   "output_generation" -> "project_paths" [label="1"];
   "package" -> "config" [label="1"];
+  "package" -> "module_system" [label="1"];
   "parser" -> "intrinsics" [label="4",color=red,fontcolor=red];
   "parser" -> "lexer" [label="28"];
   "parser" -> "parser_impl" [label="26"];
@@ -385,6 +388,11 @@ digraph deps {
   "parser_impl" -> "lexer" [label="5"];
   "parser_impl" -> "parser" [label="4"];
   "parser_impl" -> "source_map" [label="2"];
+  "reduce" -> "check" [label="1"];
+  "reduce" -> "embedded_assets" [label="1"];
+  "reduce" -> "formatter" [label="7"];
+  "reduce" -> "lexer" [label="1"];
+  "reduce" -> "module_system" [label="1"];
   "resolve" -> "parser" [label="5"];
   "resolve" -> "source_map" [label="6"];
   "stdlib_scanner" -> "analyzer" [label="17",color=red,fontcolor=red];
@@ -401,6 +409,7 @@ digraph deps {
   "test_runner" -> "diagnostics" [label="1"];
   "test_runner" -> "interpreter" [label="1"];
   "test_runner" -> "lexer" [label="2"];
+  "test_runner" -> "package" [label="1"];
   "test_runner" -> "parser" [label="3"];
   "test_runner" -> "rust_integration_tests" [label="1"];
   "test_runner" -> "test_module_gate" [label="1"];
@@ -413,7 +422,7 @@ digraph deps {
   "type_inference" -> "debug_env" [label="5"];
   "type_inference" -> "lexer" [label="2"];
   "type_inference" -> "metadata" [label="5",color=red,fontcolor=red];
-  "type_inference" -> "parser" [label="42"];
+  "type_inference" -> "parser" [label="45"];
   "type_inference" -> "parser_impl" [label="2"];
   "type_inference" -> "source_map" [label="1"];
   "type_inference" -> "type_classification" [label="18"];

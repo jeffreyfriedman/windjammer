@@ -32,7 +32,7 @@ impl<'ast> CodeGenerator<'ast> {
             arg_index,
         );
         if borrows {
-            if let Some(runtime) = crate::analyzer::SignatureRegistry::runtime_signature(&qualified) {
+            if let Some(runtime) = crate::codegen::rust::runtime_signatures::runtime_signature(&qualified) {
                 *call_site_sig = Some(runtime.clone());
             }
         }

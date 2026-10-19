@@ -13,7 +13,7 @@ use super::CodeGenerator;
 /// Standard-library functions a `use` brings into scope by name: `use std::log::debug`,
 /// `use std::log::{debug, info}` and `use std::log::*` (every intrinsic-named function the module exports).
 pub(super) fn std_fn_names_imported_by(path: &[String], out: &mut std::collections::HashSet<String>) {
-    let exports = |module: &str, name: &str| crate::analyzer::SignatureRegistry::runtime_signature(&format!("{module}::{name}")).is_some();
+    let exports = |module: &str, name: &str| super::runtime_signatures::runtime_signature(&format!("{module}::{name}")).is_some();
     let joined = path.join("::");
     let Some(rest) = joined.strip_prefix("std::") else { return };
     if let Some((module, names)) = super::program_generation::parse_braced_use_segment(rest) {
