@@ -1,5 +1,4 @@
 // Struct method calls on a small Copy struct.
-@derive(Copy, Clone)
 struct V2 {
     x: int,
     y: int,
