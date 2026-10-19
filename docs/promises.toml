@@ -584,6 +584,14 @@ id = "wj explain-effects --json"
 statement = "Machine-readable JSON output"
 
 [[promise]]
+id = "wj caps"
+statement = "What the project's dependencies are known to do (per-package capabilities and the lock file)"
+
+[[promise]]
+id = "wj caps --json"
+statement = "Machine-readable JSON output (show)"
+
+[[promise]]
 id = "wj run --sandbox"
 statement = "Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021)"
 
@@ -628,8 +636,16 @@ statement = "Transpile to Rust and run with cargo (the release path), skipping t
 pending = "no acceptance cases yet"
 
 [[promise]]
+id = "wj run --no-jit"
+statement = "Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as `WJ_JIT=0`); they run in the resolved engine's closures"
+
+[[promise]]
+id = "wj run --jit"
+statement = "Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020)"
+
+[[promise]]
 id = "wj run --engine"
-statement = "Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020)"
+statement = "Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics)"
 
 [[promise]]
 id = "wj run --hash-seed"

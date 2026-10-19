@@ -140,6 +140,41 @@ impl<'ast> CodeGenerator<'ast> {
             && crate::codegen::rust::call_site_borrow::expression_is_stdlib_empty_default_constructor(value)
     }
 
+    /// `let _empty = Vec::new()` that nothing reads has no element type to infer (E0282): `Some(Some(Vec<()>))`
+    /// defaults it. `None` when the binding has a type, is read, or is not an empty-collection constructor.
+    fn unused_empty_collection_default(
+        &self,
+        type_: &Option<Type>,
+        value: &Expression<'ast>,
+        location: &Option<crate::source_map::Location>,
+    ) -> Option<Option<Type>> {
+        let unused = location.as_ref().is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+        (type_.is_none() && unused).then(|| Self::unused_empty_collection_default_type(value)).filter(Option::is_some)
+    }
+
+    /// `Vec<()>` / `HashMap<(), ()>` for an empty-collection constructor call (`Vec::new()`, `HashMap::new()`, ...).
+    fn unused_empty_collection_default_type(value: &Expression<'ast>) -> Option<Type> {
+        let Expression::Call { function, arguments, .. } = value else { return None };
+        if !arguments.is_empty() {
+            return None;
+        }
+        let name = match &**function {
+            Expression::FieldAccess { object, .. } => match &**object {
+                Expression::Identifier { name, .. } => name.as_str(),
+                _ => return None,
+            },
+            Expression::Identifier { name, .. } => name.rsplit_once("::")?.0,
+            _ => return None,
+        };
+        let unit = || Type::Tuple(Vec::new());
+        match name {
+            "Vec" => Some(Type::Vec(Box::new(unit()))),
+            "HashMap" | "BTreeMap" => Some(Type::Parameterized(name.to_string(), vec![unit(), unit()])),
+            "HashSet" | "BTreeSet" | "VecDeque" => Some(Type::Parameterized(name.to_string(), vec![unit()])),
+            _ => None,
+        }
+    }
+
     /// True when `name` is the tail expression of the current function body or the value of a `return`.
     fn local_is_returned(&self, name: &str) -> bool {
         fn is_name(e: &Expression<'_>, name: &str) -> bool {
@@ -178,6 +213,9 @@ impl<'ast> CodeGenerator<'ast> {
     ) -> String {
         let mut output = self.indent();
         output.push_str("let ");
+
+        let defaulted_type = self.unused_empty_collection_default(type_, value, location);
+        let type_ = defaulted_type.as_ref().unwrap_or(type_);
 
         // Check if we need &mut for index access on borrowed fields
         // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
@@ -648,12 +686,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
+                    self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
                 if let Some(vn) = var_name {
                     self.reconcile_ambiguous_int_local_after_let(vn, value, &value_str);
@@ -1106,12 +1139,7 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // P3.325: demoted `&str` formal `.clone()` is still `&str` — own it.
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
+                    self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
@@ -1295,12 +1323,7 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
+                    self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
 
                 value_str = self.let_rhs_clone_if_mut_from_non_copy_ref(
@@ -1632,6 +1655,40 @@ impl<'ast> CodeGenerator<'ast> {
         if let (Some(name), true) = (name, matches!(value, Expression::Literal { .. } | Expression::Unary { .. })) {
             self.local_var_types.insert(name.to_string(), Type::Int);
             self.codegen_i32_binding_names.remove(name);
+        }
+    }
+}
+
+impl<'ast> CodeGenerator<'ast> {
+    /// `let mut body = line` where `line` is a `string` parameter emitted as `&str`: the local is
+    /// assigned owned strings later, so it must be an owned `String` at the binding (`line.to_string()`).
+    /// `.clone()` of such a parameter is still a `&str`, so it is converted for every binding.
+    pub(in crate::codegen::rust) fn own_borrowed_text_param_binding(
+        &self,
+        value_str: &mut String,
+        value: &Expression<'ast>,
+        is_mut: bool,
+    ) {
+        string_utilities::rewrite_borrowed_str_clone_to_to_string(
+            value_str,
+            value,
+            &self.emitted_rust_ref_formals,
+            &self.current_function_params,
+        );
+        let Expression::Identifier { name, .. } = value else { return };
+        if !string_utilities::demoted_wj_text_param_emits_rust_str_ref_extended(
+            name,
+            &self.emitted_rust_ref_formals,
+            Some(&self.str_ref_optimized_params),
+            Some(&self.inferred_borrowed_params),
+            &self.current_function_params,
+        ) {
+            return;
+        }
+        if value_str.ends_with(".clone()") {
+            *value_str = value_str.replacen(".clone()", ".to_string()", 1);
+        } else if is_mut && value_str.as_str() == name.as_str() {
+            *value_str = format!("{name}.to_string()");
         }
     }
 }

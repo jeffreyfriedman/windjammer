@@ -9,12 +9,20 @@
       "path": "std/test_simple.wj"
     },
     {
+      "module": "cap",
+      "path": "std/cap.wj"
+    },
+    {
       "module": "subprocess",
       "path": "std/subprocess.wj"
     },
     {
       "module": "log",
       "path": "std/log.wj"
+    },
+    {
+      "module": "config",
+      "path": "std/config.wj"
     },
     {
       "module": "mime",
@@ -29,6 +37,18 @@
       "path": "std/time.wj"
     },
     {
+      "module": "enumerable",
+      "path": "std/enumerable.wj"
+    },
+    {
+      "module": "sync",
+      "path": "std/sync.wj"
+    },
+    {
+      "module": "jwt",
+      "path": "std/jwt.wj"
+    },
+    {
       "module": "basic_test",
       "path": "std/basic_test.wj"
     },
@@ -41,8 +61,16 @@
       "path": "std/strings.wj"
     },
     {
+      "module": "uuid",
+      "path": "std/uuid.wj"
+    },
+    {
       "module": "json",
       "path": "std/json.wj"
+    },
+    {
+      "module": "path",
+      "path": "std/path.wj"
     },
     {
       "module": "testing",
@@ -73,8 +101,8 @@
       "path": "std/fs.wj"
     },
     {
-      "module": "map",
-      "path": "std/map.wj"
+      "module": "compress",
+      "path": "std/compress.wj"
     },
     {
       "module": "collections",
@@ -87,6 +115,18 @@
     {
       "module": "crypto",
       "path": "std/crypto.wj"
+    },
+    {
+      "module": "yaml",
+      "path": "std/yaml.wj"
+    },
+    {
+      "module": "map",
+      "path": "std/map.wj"
+    },
+    {
+      "module": "url",
+      "path": "std/url.wj"
     }
   ],
   "readme": "std/README.md"

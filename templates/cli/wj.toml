@@ -14,3 +14,13 @@ edition = "2025"
 [profile.release]
 opt-level = 3
 lto = true
+
+# Capabilities (ADR-0021): without this table `wj run` lets the program use files inside the project directory
+# (plus time, random and console) and nothing else. Grant more here, for example:
+#
+# [capabilities]
+# fs.read = ["./**"]
+# fs.write = ["./**"]
+# net.connect = ["api.example.com"]
+# env.read = ["HOME"]
+# process = ["git"]

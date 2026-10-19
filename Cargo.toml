@@ -72,10 +72,13 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli", "safety_typed_ir"]
+default = ["cli", "safety_typed_ir", "jit"]
 cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
+# Interpreter: Cranelift tier for hot integer functions (ADR-0020 step 7; on by default, `wj run --no-jit`
+# or WJ_JIT=0 turns it off at run time; lib-only builds such as `--no-default-features --features cli` omit it).
+jit = ["dep:cranelift-codegen", "dep:cranelift-frontend", "dep:cranelift-jit", "dep:cranelift-module", "dep:cranelift-native"]
 # std::arena (ADR-0016): arena types, escape check, interpreter support. Unstable surface.
 unstable_arenas = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
@@ -128,6 +131,11 @@ syn = { version = "2", default-features = false, features = ["full", "parsing", 
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
 libloading = "0.8"
+cranelift-codegen = { version = "0.130", optional = true }
+cranelift-frontend = { version = "0.130", optional = true }
+cranelift-jit = { version = "0.130", optional = true }
+cranelift-module = { version = "0.130", optional = true }
+cranelift-native = { version = "0.130", optional = true }
 
 tempfile = { version = "3.10", optional = true }
 syntect = { version = "5.2", optional = true }
@@ -194,6 +202,30 @@ path = "tests/spec_conformance_test.rs"
 [[test]]
 name = "effects_escape"
 path = "tests/effects_escape_test.rs"
+
+# Compile-time enforcement and run-time guards in the compiled/portable backends (ADR-0021 E2)
+#   cargo test --release --test effects_compiled   (WJ_EFFECTS_COMPILED=1 also builds and runs the Rust program)
+[[test]]
+name = "effects_compiled"
+path = "tests/effects_compiled_test.rs"
+
+# Every OS-touching runtime function reaches a capability check (ADR-0021)
+#   cargo test --release --test effects_runtime_audit
+[[test]]
+name = "effects_runtime_audit"
+path = "tests/effects_runtime_audit_test.rs"
+
+# One table of capability vectors, every implementation (Rust model, JS runtime, Go runtime)
+#   cargo test --release --test effects_vectors
+[[test]]
+name = "effects_vectors"
+path = "tests/effects_vectors_test.rs"
+
+# Per-package grants and the lock file (ADR-0021 E2), through the wj binary
+#   cargo test --release --test effects_packages
+[[test]]
+name = "effects_packages"
+path = "tests/effects_packages_test.rs"
 
 # Effects soundness over the spec corpus: every effect performed at run time is in the inferred static set
 #   cargo test --release --test effects_soundness
@@ -266,6 +298,18 @@ path = "tests/codegen_correctness_test.rs"
 [[test]]
 name = "ecosystem_findings"
 path = "tests/ecosystem_findings_test.rs"
+
+[[test]]
+name = "std_interpreter_agreement"
+path = "tests/std_interpreter_agreement_test.rs"
+
+[[test]]
+name = "ecosystem_findings2_interp"
+path = "tests/ecosystem_findings2_interp_test.rs"
+
+[[test]]
+name = "ecosystem_findings2"
+path = "tests/ecosystem_findings2_test.rs"
 
 [[test]]
 name = "ecosystem_findings_handoff"

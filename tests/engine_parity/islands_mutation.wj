@@ -1,0 +1,41 @@
+// A function mutating its parameter (inferred `&mut`) is compiled with that parameter boxed; the
+// writes are walker islands through the caller's place.
+struct P {
+    x: int,
+    y: int,
+}
+
+fn bump(v: Vec<int>, by: int) {
+    let n = v.len()
+    let mut i = 0
+    while i < n {
+        v[i] += by
+        i += 1
+    }
+}
+
+fn shift(p: P, d: int) {
+    p.x += d
+    p.y -= d
+}
+
+fn sum(v: Vec<int>) -> int {
+    let mut s = 0
+    for x in v {
+        s += x
+    }
+    s
+}
+
+fn main() {
+    let mut v = [1, 2, 3]
+    bump(v, 10)
+    bump(v, 1)
+    let mut p = P { x: 1, y: 1 }
+    let mut k = 0
+    while k < 3 {
+        shift(p, k)
+        k += 1
+    }
+    println("${sum(v)} ${p.x} ${p.y}")
+}

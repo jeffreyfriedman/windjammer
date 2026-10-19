@@ -82,7 +82,8 @@
 "ir->compiler src/ir/lower.rs" = 1
 "lexer->type_classification src/lexer/number_lexing.rs" = 1
 "linter->intrinsics src/linter/surface_syntax.rs" = 1
-"metadata->compiler src/metadata/mod.rs" = 1
+"metadata->compiler src/metadata/mod.rs" = 3
+"metadata->compiler src/metadata/tests.rs" = 2
 "parser->intrinsics src/parser/interpolated_string_expression_parser.rs" = 1
 "parser->intrinsics src/parser/intrinsic_lowering.rs" = 3
 "stdlib_scanner->analyzer src/stdlib_scanner.rs" = 17
@@ -101,7 +102,7 @@
 "type_inference->metadata src/type_inference/int_inference/mod.rs" = 1
 
 [get_signature_calls]
-"outside_signature_registry" = 433
+"outside_signature_registry" = 434
 
 [long_files]
 "src/analyzer/passthrough_inference.rs" = 2362
@@ -112,22 +113,22 @@
 "src/codegen/rust/function_formal_parameter_generation.rs" = 4905
 "src/codegen/rust/function_generation_prepare.rs" = 13321
 "src/codegen/rust/generator.rs" = 5105
-"src/codegen/rust/int_promotion_type_inference.rs" = 2292
+"src/codegen/rust/int_promotion_type_inference.rs" = 2183
 "src/codegen/rust/ir_call_site.rs" = 10438
 "src/codegen/rust/method_call_expression_generation/finalize.rs" = 2152
 "src/codegen/rust/self_analysis.rs" = 2037
 "src/codegen/rust/signature_promotion.rs" = 4519
 "src/codegen/rust/statement_generation.rs" = 2520
-"src/codegen/rust/stdlib_method_traits.rs" = 2441
+"src/codegen/rust/stdlib_method_traits.rs" = 2437
 "src/codegen/rust/string_utilities.rs" = 2044
-"src/compiler/multipass_bare_pass_demotion.rs" = 4676
+"src/compiler/multipass_bare_pass_demotion.rs" = 4674
 "src/stdlib_scanner.rs" = 2156
 
 [long_functions]
 "src/analyzer/function_analysis.rs::analyze_function" = 682
 "src/analyzer/function_analysis.rs::build_signature" = 499
 "src/analyzer/module_analysis.rs::analyze_program_pass" = 477
-"src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 519
+"src/analyzer/parameter_analysis.rs::infer_parameter_ownership" = 514
 "src/analyzer/string_optimization.rs::expr_uses_param_in_string_ref_context" = 373
 "src/auto_clone.rs::collect_usages_from_expression" = 394
 "src/build_utils/module_generation.rs::generate_mod_file_recursive" = 504
@@ -161,7 +162,7 @@
 "src/codegen/rust/ir_call_site.rs::reconcile_post_ir_mut_borrow_and_owned_peel" = 1236
 "src/codegen/rust/item_generation.rs::generate_impl" = 401
 "src/codegen/rust/item_generation.rs::generate_trait_with_analysis" = 308
-"src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1175
+"src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1163
 "src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1249
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
 "src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 993

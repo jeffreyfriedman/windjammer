@@ -185,6 +185,7 @@ fn sqlite_cell_to_string(row: &sqlx::sqlite::SqliteRow, idx: usize) -> String {
 
 /// Connect to Postgres or SQLite from a URL / path string.
 pub fn connect(url: impl AsRef<str>) -> Result<Connection, String> {
+    crate::caps::db_open(url.as_ref());
     let url = url.as_ref();
     if url.starts_with("postgres://") || url.starts_with("postgresql://") {
         open_postgres(url)
@@ -194,10 +195,12 @@ pub fn connect(url: impl AsRef<str>) -> Result<Connection, String> {
 }
 
 pub fn open(connection_string: &str) -> Result<Connection, String> {
+    crate::caps::db_open(connection_string);
     connect(connection_string)
 }
 
 pub fn open_postgres(connection_string: &str) -> Result<Connection, String> {
+    crate::caps::net_connect(connection_string);
     if !connection_string.starts_with("postgres://")
         && !connection_string.starts_with("postgresql://")
     {
@@ -213,6 +216,7 @@ pub fn open_postgres(connection_string: &str) -> Result<Connection, String> {
 }
 
 pub fn open_sqlite(path: &str) -> Result<Connection, String> {
+    crate::caps::db_open(path);
     let url = if path == ":memory:" {
         "sqlite::memory:".to_string()
     } else if path.starts_with("sqlite:") {

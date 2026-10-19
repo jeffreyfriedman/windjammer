@@ -253,6 +253,47 @@ fn table(x: int, expected: int) {
 }
 ```
 
+### Reading input and arguments
+
+Programs that read standard input should use one spelling that behaves the same under `wj run --interpret` and `wj build`:
+
+```windjammer,parse
+use std::fs
+use std::env
+
+let text = fs::read_to_string("/dev/stdin").unwrap_or("")
+for line in text.lines() {
+    println(line)
+}
+for a in env::args() {
+    println(a)
+}
+```
+
+`io::stdin().read_line(..)` loops forever in compiled programs and `io::read_line()` is not implemented by the interpreter, so
+prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead of slicing it.
+
+### Permissions: exit 126 and the fix line
+
+`wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,
+console) and nothing else. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
+message that already contains the fix:
+
+```text
+error: capability denied: net.connect(api.example.com)
+  = to allow just this once: run with `--allow net.connect=api.example.com`
+  = to allow it for good, put this in wj.toml:
+        [capabilities]
+        fs.read = ["./**"]
+        fs.write = ["./**"]
+        net.connect = ["api.example.com"]
+```
+
+Copy that block into `wj.toml` (a `[capabilities]` table is the whole grant, so keep the two `fs` lines), or pass `--allow`. Do not catch it
+or work around it; 126 is a policy fault, not an error value. `wj explain-effects FILE` lists what a program will need, `wj check`
+reports it before running (WJ0040-WJ0044), `--sandbox` starts from nothing, `WJ_CAPS=warn|off` is the explicit opt-out. Hand untrusted
+helpers a `cap::Net`/`cap::Fs` value (`cap::net().only(["host"])`) instead of a grant.
+
 ### The 25 things agents get wrong first
 
 1. `println!("{}", x)`: macros do not exist. Write `println("${x}")` (W0007/W0008, ADR-0014).
@@ -318,8 +359,9 @@ fn main() {
 `examples/verified` compiles and matches (`// rust: ok`); the rest carry a recorded `// rust: gap` reason in the
 header. Known classes: adapter chains on a collection without `.iter()` (emitted as `v.map(..)` on a `Vec`),
 integer-width inference between `i32` and `i64` in mixed expressions, `HashMap` indexing with `&str` keys,
-inline `mod` plus `use` duplicates. If `wj build` fails on code the interpreter runs, report it with the
-smallest repro; do not contort the source.
+inline `mod` plus `use` duplicates. Annotate numeric accumulators that start as a bare literal and later mix with `int` values (`let mut v: int = 0`, `let mut n: int = 0`): an
+unannotated `let mut v = 0` can be emitted as `i32` and fail `wj build` with `mismatched types ... expected i64, found i32` while the
+interpreter runs it. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
 
 ### Where to look next
 
@@ -358,6 +400,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain-effects` | Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs |
+| `wj caps` | What the project's dependencies are known to do (per-package capabilities and the lock file) |
 | `wj explain` | Explain an error code |
 | `wj agent-index` | Generate agent index artifacts for MCP (errors, stdlib, spec JSON) |
 | `wj shader-compile` | Compile .wjsl shader to WGSL (with type checking) |
@@ -438,14 +481,16 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
 | `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
-| `--engine` | ENGINE | walker | Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020) |
+| `--engine` | ENGINE | resolved | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) |
+| `--no-jit` | NO_JIT |  | Interpreted runs: do not compile hot integer functions to machine code (ADR-0020; the same as `WJ_JIT=0`); they run in the resolved engine's closures |
+| `--jit` | on\|off | on | Interpreted runs: `on` (default) or `off`: machine code for hot integer functions (ADR-0020) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
-| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow plain http:// client requests (default: the http client refuses) |
+| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`) |
 | `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
 | `--sandbox` | SANDBOX |  | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) |
 | `--allow` | EFFECT[=RESOURCE] |  | Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`, `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable) |
-| `--caps` | MODE | warn | Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate |
+| `--caps` | MODE | enforce | Interpreted runs without a [capabilities] table: `enforce` (default) stops calls outside the project directory with exit status 126 and prints the exact fix, `warn` runs them with a warning, `off` disables the gate |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -675,6 +720,20 @@ Usage: wj explain-effects [OPTIONS] <PATH>
 | `<PATH>` | PATH |  | Windjammer source file or project directory |
 | `--fn` | NAME |  | Only this function (`name` or `Type::name`) |
 | `--json` | JSON |  | Machine-readable JSON output |
+
+### `wj caps`
+
+What the project's dependencies are known to do (per-package capabilities and the lock file)
+
+```text
+Usage: wj caps [OPTIONS] <ACTION> [PATH]
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<ACTION>` | ACTION |  | `show` the effects each dependency performs and whether .wj-capabilities.lock covers them; `approve` records them in the lock file (review with `show` first) |
+| `<PATH>` | PATH |  | Project directory (default: the current directory) |
+| `--json` | JSON |  | Machine-readable JSON output (show) |
 
 ### `wj explain`
 
@@ -1013,8 +1072,8 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | 4 | Dependencies: path/git build in dependency order, lock file; registry deferred | Partial | `DependencySpec` has path/git; `src/package/` has manifest parsing only; no `wj.lock` | [ADR-0010](adr/0010-package-source-of-truth.md), [WJ-PKG-01](proposals/rfcs/WJ-PKG-01-package-management.md) |
 | 5 | Concurrency: one coherent surface across backends; `async expr`/`spawn expr` do not parse; `go`/`chan::new()` were advertised but never existed | Decision needed | `AsyncCall`/`SpawnCall` never constructed; `thread {}`, `async fn`, `<-` do parse | [ADR-0004](adr/0004-concurrency-surface.md), [WJ-CONC-01](proposals/rfcs/WJ-CONC-01-async-concurrency.md) |
 | 6a | Taint errors do not fail the build | Partial | Only `src/diagnostics/` consumes `taint_errors` | [ADR-0009](adr/0009-security-enforcement.md) |
-| 6b | `.wj-capabilities.lock` not wired | Open | `src/ir/capability_lock.rs` unused by the CLI | ADR-0009, ADR-0010 |
-| 6c | Unknown external calls have no effect classification; effects checked only with `[app_capabilities]` | Partial | `src/output_generation.rs` | ADR-0009, ADR-0012 |
+| 6b | `.wj-capabilities.lock` | Closed | Wired by `wj caps show|approve`, `wj check`, `wj build` and the interpreter (`src/ir/effect_facts/lock.rs`, `src/cli/caps.rs`); the unused legacy module is deleted | ADR-0021 |
+| 6c | Unknown external calls have no effect classification | Closed for std and `extern fn` (an undeclared extern performs `ffi`, WJ0044); effects are checked against `[capabilities]` by `wj check`, `wj build` and `wj run` | `src/ir/effect_facts/`, `src/check/effects.rs` | ADR-0021 |
 | 7a | Go and JavaScript backends do not consume the IR | Open | `let _ir = ...prepare_ir_context(...)` in both generators | Plan WP 11; [ADR-0007](adr/0007-target-tiers-conformance.md) |
 | 7b | Conformance suite runs only the Rust path | Partial | `tests/conformance/run_conformance_tests.sh` | ADR-0007 |
 | 7c | Stdlib is Rust-host-only; no portability tags | Open | `std/*.wj` over `windjammer-runtime` | [ADR-0008](adr/0008-stdlib-portability.md) |

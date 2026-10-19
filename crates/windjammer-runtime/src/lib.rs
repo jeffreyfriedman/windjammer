@@ -11,6 +11,9 @@ pub use rand;
 pub mod platform;
 
 // Core modules (fully implemented)
+pub mod cap;
+pub mod caps;
+pub mod caps_core;
 pub mod fs;
 pub mod http;
 pub mod json;
