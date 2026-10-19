@@ -1,5 +1,5 @@
 """Process runner, resumable result cache, and the context every criterion shares."""
-import hashlib, json, os, re, resource, subprocess, time
+import hashlib, json, os, re, resource, shutil, subprocess, time
 
 QUICK, FULL = "quick", "full"
 
@@ -90,9 +90,13 @@ class Cache:
     def put(self, key, value):
         if self.enabled:
             tmp = self._path(key) + ".tmp"
-            with open(tmp, "w") as f:
-                json.dump(value, f)
-            os.replace(tmp, self._path(key))
+            try:
+                with open(tmp, "w") as f:
+                    json.dump(value, f)
+                os.replace(tmp, self._path(key))
+            except OSError:
+                # a full disk must not abort a long run: carry on uncached (it just will not resume)
+                self.enabled = False
 
 
 class Ctx:
@@ -118,12 +122,22 @@ class Ctx:
             return Res.from_json(hit)
         if self.deadline is not None and "compiled" in kind and time.monotonic() > self.deadline:
             return Res(-9, "", "readiness time budget exhausted", 0.0, timed_out=True)
+        if "compiled" in kind and self.low_disk():
+            return Res(-9, "", "skipped: free disk space below the readiness minimum", 0.0, timed_out=True)
         self.log("run: " + kind)
         r = self.runner(cmd, timeout=timeout, **kw)
         # timeouts are environmental (machine load): never cached, so a quieter rerun can succeed
         if keep_timeouts or not r.timed_out:
             self.cache.put(k, r.to_json())
         return r
+
+    def low_disk(self):
+        """Compiled builds fill the disk; below WJ_READINESS_MIN_FREE_GIB (default 3) they are skipped as unmeasured."""
+        need = float(os.environ.get("WJ_READINESS_MIN_FREE_GIB", "3")) * 2**30
+        try:
+            return shutil.disk_usage(self.cache.dir).free < need
+        except OSError:
+            return False
 
     def target_root(self, scratch=None):
         """Private cargo target root for compiled runs (WJ_CARGO_TARGET_ROOT): isolates them from other
