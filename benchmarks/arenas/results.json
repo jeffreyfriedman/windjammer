@@ -1,0 +1,14 @@
+{
+  "particles/box (Vec<Box<P>>)": {"best_ms": 29.892, "allocs_per_frame": 20014.0},
+  "particles/vec-new (Vec<P>/frame)": {"best_ms": 7.352, "allocs_per_frame": 14.0},
+  "particles/wj-arena (Arena<P>)": {"best_ms": 7.207, "allocs_per_frame": 0.5},
+  "particles/bumpalo (&mut P)": {"best_ms": 8.714, "allocs_per_frame": 0.2},
+  "tree/box (Box<Node>)": {"best_ms": 20.098, "allocs_per_frame": 131070.0},
+  "tree/wj-arena (Handle<Node>)": {"best_ms": 4.637, "allocs_per_frame": 2.0},
+  "tree/bumpalo (&Node)": {"best_ms": 4.657, "allocs_per_frame": 1.8},
+  "scratch/string-new (String/label)": {"best_ms": 34.905, "allocs_per_frame": 15012.0},
+  "scratch/wj-scratch (Scratch string)": {"best_ms": 19.249, "allocs_per_frame": 0.2},
+  "scratch/wj-scratch fmt (Scratch::fmt)": {"best_ms": 16.365, "allocs_per_frame": 0.2},
+  "scratch/reuse (1 buffer, hand-tuned)": {"best_ms": 13.737, "allocs_per_frame": 0.5},
+  "meta": {"reps": 25, "loadavg": "{ 18.94 43.97 56.11 }"}
+}
