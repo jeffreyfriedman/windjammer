@@ -1,0 +1,442 @@
+{
+ "schema_version": 1,
+ "generated_at": "2026-10-19T14:26:31Z",
+ "commit": "fb601b6b0f53739c5f480775b6e2b7c0dd9b3587",
+ "mode": "quick",
+ "load_avg_1m": 111.7,
+ "wj_profile": "debug",
+ "criteria": [
+  {
+   "id": "R1",
+   "title": "Test suites pass interpreted",
+   "target": ">= 99.0% of compiled-passing tests",
+   "percent": 14.3,
+   "status": "fail",
+   "detail": {
+    "projects": [
+     {
+      "project": "wj-base64",
+      "interp_secs": 0.1,
+      "compiled_secs": 226.2,
+      "measured": true,
+      "status": "ok",
+      "sets_equal": true,
+      "unsupported": [],
+      "compiled_total": 14,
+      "compiled_pass": 14,
+      "both_pass": 2,
+      "interp_pass": 2,
+      "mismatches": [
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_basic_auth_header",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_bearer_auth_header",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_decode_hello",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_decode_or",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_decode_rejects_garbage",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_encode_bytes_roundtrip",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_encode_hello",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_is_basic_auth_header",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_looks_like_base64_and_is_encoded",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_require_bearer",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_roundtrip_empty",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       },
+       {
+        "program": "wj-base64:tests/base64_test.wj::test_roundtrip_punctuation",
+        "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+       }
+      ],
+      "interp_only_pass": []
+     },
+     {
+      "project": "wj-cli-args",
+      "interp_secs": 1.0,
+      "compiled_secs": 36.8,
+      "measured": false,
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results (build error in the generated test crate)",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-auth-api",
+      "interp_secs": 3.1,
+      "compiled_secs": 33.4,
+      "measured": false,
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results (build error in the generated test crate)",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     },
+     {
+      "project": "wj-chat",
+      "interp_secs": 0.9,
+      "compiled_secs": 34.1,
+      "measured": false,
+      "status": "unmeasured",
+      "reason": "compiled test run failed before reporting results (build error in the generated test crate)",
+      "compiled_pass": 0,
+      "both_pass": 0,
+      "mismatches": []
+     }
+    ],
+    "tests_compared": 14,
+    "tests_agree": 2
+   },
+   "blockers": [
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_basic_auth_header",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_bearer_auth_header",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_decode_hello",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_decode_or",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_decode_rejects_garbage",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_encode_bytes_roundtrip",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_encode_hello",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_is_basic_auth_header",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_looks_like_base64_and_is_encoded",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_require_bearer",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_roundtrip_empty",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-base64:tests/base64_test.wj::test_roundtrip_punctuation",
+     "reason": "error: no method named `base64_encode_string` found for value of type `fn`\\n  --> <wj-base64>/src/lib.wj:6:14\\nstack backtrace:\\n  0: encode\\n        at <wj-bas"
+    },
+    {
+     "program": "wj-cli-args",
+     "reason": "unmeasured: compiled test run failed before reporting results (build error in the generated test crate)"
+    },
+    {
+     "program": "wj-auth-api",
+     "reason": "unmeasured: compiled test run failed before reporting results (build error in the generated test crate)"
+    },
+    {
+     "program": "wj-chat",
+     "reason": "unmeasured: compiled test run failed before reporting results (build error in the generated test crate)"
+    }
+   ]
+  },
+  {
+   "id": "R2",
+   "title": "No silent divergence",
+   "target": "0 divergent programs",
+   "percent": 100.0,
+   "status": "pass",
+   "detail": {
+    "divergences": 0,
+    "unmeasured": 0,
+    "checked": 48,
+    "compiled_checked": 3,
+    "generated_seeds": 24,
+    "hash_seeds": [
+     0,
+     1
+    ]
+   },
+   "blockers": []
+  },
+  {
+   "id": "R3",
+   "title": "Fallback is rare and loud",
+   "target": "<= 2.0% of invocations fall back",
+   "percent": 100.0,
+   "status": "pass",
+   "detail": {
+    "invocations": 20,
+    "fallbacks": 0,
+    "fallback_rate_pct": 0.0,
+    "silent": [],
+    "reasons": {}
+   },
+   "blockers": []
+  },
+  {
+   "id": "R4",
+   "title": "Fast enough",
+   "target": "interpreted <= compiled build+test; warm loop <= 1s; kernels >= python",
+   "percent": 50.0,
+   "status": "fail",
+   "detail": {
+    "projects": [
+     {
+      "project": "wj-base64",
+      "interp_s": 0.1,
+      "compiled_s": 226.2,
+      "met": true
+     },
+     {
+      "project": "wj-cli-args",
+      "met": null
+     },
+     {
+      "project": "wj-auth-api",
+      "met": null
+     },
+     {
+      "project": "wj-chat",
+      "met": null
+     }
+    ],
+    "warm_loop": {
+     "project": "wj-chat",
+     "files": 11,
+     "median_s": 0.72
+    },
+    "kernels": [
+     {
+      "kernel": "fib30.wj",
+      "interp_cpu_s": 6.16,
+      "python_cpu_s": 0.15,
+      "ratio": 42.1,
+      "outputs_match": true,
+      "met": false
+     },
+     {
+      "kernel": "loop5m.wj",
+      "interp_cpu_s": 16.13,
+      "python_cpu_s": 0.62,
+      "ratio": 25.9,
+      "outputs_match": true,
+      "met": false
+     }
+    ],
+    "compiled_cache": "as found (not cleared)"
+   },
+   "blockers": [
+    {
+     "program": "wj-cli-args",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-auth-api",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "wj-chat",
+     "reason": "unmeasured: compiled run unavailable"
+    },
+    {
+     "program": "bench/fib30.wj",
+     "reason": "interpreter 6.16s vs python 0.15s CPU (42.1x slower)"
+    },
+    {
+     "program": "bench/loop5m.wj",
+     "reason": "interpreter 16.13s vs python 0.62s CPU (25.9x slower)"
+    }
+   ]
+  },
+  {
+   "id": "R5",
+   "title": "Diagnostics agree",
+   "target": "0 check/interpreter/build disagreements",
+   "percent": 100.0,
+   "status": "fail",
+   "detail": {
+    "parity_checked": 16,
+    "parity_agree": 16,
+    "build_checked": 6,
+    "negative_programs": 10,
+    "cargo_gates": null
+   },
+   "blockers": [
+    {
+     "program": "examples/verified/basics_arithmetic.wj",
+     "reason": "[check-vs-build] interpreter accepts it, build + rustc rejects it"
+    }
+   ]
+  },
+  {
+   "id": "R6",
+   "title": "Stdlib and project coverage",
+   "target": "0 std items without builtin/refusal; crate deps run via host bridge",
+   "percent": 100.0,
+   "status": "fail",
+   "detail": {
+    "std_declared": 252,
+    "std_missing": 0,
+    "unsupported_features": [
+     "modules.same_name_types",
+     "concurrency.thread_block",
+     "ffi.extern_fn"
+    ],
+    "crate_dependency_projects": 0,
+    "crate_projects_uncovered": 0
+   },
+   "blockers": [
+    {
+     "program": "feature:modules.same_name_types",
+     "reason": "unsupported: two types with the same name in different modules (the interpreter keys types by name)"
+    },
+    {
+     "program": "feature:concurrency.thread_block",
+     "reason": "unsupported: `thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.a"
+    },
+    {
+     "program": "feature:ffi.extern_fn",
+     "reason": "unsupported: calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds "
+    }
+   ]
+  },
+  {
+   "id": "R7",
+   "title": "Stability",
+   "target": "R1-R6 hold on the last 20 commits",
+   "percent": 0.0,
+   "status": "fail",
+   "detail": {
+    "window": 20,
+    "commits_in_window": 20,
+    "commits_passing": 0,
+    "commits_recorded": 0
+   },
+   "blockers": [
+    {
+     "program": "fb601b6b0f",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "cbba095740",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "c6c8f5f7ee",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "034e0b4e0a",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "d3a549c0b4",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "9e6bff4078",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "b9435ab440",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "364bbee4b6",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "b1ca261bcc",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "ccaf1840fd",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "f61635c9b9",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "38d8b1fc34",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "2867b2a537",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "6a748f8e80",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "256ea2c392",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "aba2d2f625",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "12f39a3a82",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "2d5921a290",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "a1fae25996",
+     "reason": "no full readiness run recorded for this commit"
+    },
+    {
+     "program": "5a98b81337",
+     "reason": "no full readiness run recorded for this commit"
+    }
+   ]
+  }
+ ],
+ "selfcheck": {
+  "issues": []
+ },
+ "verdict": "NOT READY"
+}

@@ -104,6 +104,7 @@ class Ctx:
         self.timeouts.update(timeouts or {})
         self.wj_hash = file_hash(wj)
         self.cold = False
+        self.deadline = None  # monotonic time after which compiled (heavy) runs are skipped as unmeasured
         self.quick = mode == QUICK
 
     def key(self, kind, program_hash):
@@ -115,6 +116,8 @@ class Ctx:
         hit = self.cache.get(k)
         if hit is not None:
             return Res.from_json(hit)
+        if self.deadline is not None and "compiled" in kind and time.monotonic() > self.deadline:
+            return Res(-9, "", "readiness time budget exhausted", 0.0, timed_out=True)
         self.log("run: " + kind)
         r = self.runner(cmd, timeout=timeout, **kw)
         # timeouts are environmental (machine load): never cached, so a quieter rerun can succeed

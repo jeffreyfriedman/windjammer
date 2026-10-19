@@ -48,6 +48,7 @@ def main(argv=None, runner=core.run):
     ap.add_argument("--no-history", action="store_true", help="do not append this run to the history file")
     ap.add_argument("--cold", action="store_true", help="compiled runs start from an empty cargo target dir (default with --full)")
     ap.add_argument("--warm", action="store_true", help="compiled runs share one private target dir (default with --quick)")
+    ap.add_argument("--budget-min", type=float, help="stop starting compiled runs after this many minutes (they report as unmeasured)")
     ap.add_argument("--cargo-gates", action="store_true", help="also run the real cargo gates for R5 (heavy)")
     ap.add_argument("--only", help="comma list of criteria to measure, e.g. R2,R5 (others reported unmeasured)")
     ap.add_argument("--json-out")
@@ -64,6 +65,8 @@ def main(argv=None, runner=core.run):
     commit = git(root, "rev-parse", "HEAD") or "unknown"
     ctx = core.Ctx(os.path.abspath(a.wj) if os.sep in a.wj else a.wj, root, mode, core.Cache(a.cache_dir, not a.no_cache),
                    projects, commit=commit, runner=runner, log=lambda m: print("  " + m, file=sys.stderr))
+    if a.budget_min:
+        ctx.deadline = time.monotonic() + 60 * a.budget_min
     ctx.cold = a.cold or (a.full and not a.warm)
     want = set(a.only.split(",")) if a.only else set(report.ORDER)
     unmeasured = lambda i, t: {"id": i, "title": t, "target": "", "percent": None, "status": "unmeasured", "detail": {}, "blockers": []}

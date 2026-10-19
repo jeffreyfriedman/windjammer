@@ -321,6 +321,24 @@ class CacheTests(unittest.TestCase):
         finally:
             shutil.rmtree(d)
 
+    def test_budget_skips_compiled_runs_only_and_reports_them_unmeasured(self):
+        d = tempfile.mkdtemp()
+        n = []
+
+        def runner(cmd, timeout=1, **kw):
+            n.append(1)
+            return core.Res(0, "o", "", 0.1)
+
+        try:
+            c = core.Ctx(SHIM, d, core.QUICK, core.Cache(os.path.join(d, "c")), [], runner=runner)
+            c.deadline = -1.0
+            slow = c.cached_run("r2-compiled", "h", ["a"], 1)
+            fast = c.cached_run("r2-interp-h0", "h", ["a"], 1)
+            self.assertTrue(slow.timed_out and not fast.timed_out)
+            self.assertEqual(len(n), 1)
+        finally:
+            shutil.rmtree(d)
+
     def test_timeouts_are_not_cached(self):
         d = tempfile.mkdtemp()
         n = []
