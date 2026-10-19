@@ -1,0 +1,31 @@
+# Compiled: an index variable used for `v[i]` is inferred `usize` even when `i + 1` is pushed into a `Vec<int>` or added to an `int`
+
+```windjammer
+fn line_numbers(lines: Vec<string>) -> Vec<int> {
+    let mut out = Vec::new()
+    let mut i = 0
+    while i < lines.len() {
+        out.push(i + 1)
+        i = i + 1
+    }
+    out
+}
+
+fn total(a: Vec<string>) -> int {
+    let mut n = 0
+    for s in a {
+        n = n + s.len()
+    }
+    n
+}
+
+fn main() {
+    let v = ["a", "b"]
+    println("${line_numbers(v).len()} ${total(v)}")
+}
+```
+
+`wj build` emits `let mut i = 0_usize` and `out.push(i + 1_usize)` (rustc `E0308: expected i64, found usize` because the
+function returns `Vec<int>`); `total` fails the same way (`n += s.len()` where `n` is inferred `i64` but `len()` is `usize`).
+`int` is the language integer, so `.len()` and loop counters used as `int` should be converted (or inferred as `int`)
+consistently. See also `ownership-and-width-ratchet-residue.md`.
