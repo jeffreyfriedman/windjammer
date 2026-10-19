@@ -43,11 +43,14 @@ def compiled(ctx, path, src_hash):
 
 
 def build_failed(c):
-    return c.rc != 0 and ("could not compile" in c.err or "Cargo build failed" in c.err or "error[E" in c.err)
+    return c.rc != 0 and not c.out and ("could not compile" in c.err or "Cargo build failed" in c.err or "error[E" in c.err
+                                        or "error: build failed" in c.err or "Rust leakage" in c.err)
 
 
 def build_error(c):
-    return next((l.strip() for l in c.err.splitlines() if l.startswith("error")), "compiled build failed")[:110]
+    lines = c.err.splitlines()
+    pick = next((l.strip() for l in lines if l.startswith("error[")), None) or next((l.strip() for l in lines if "Rust leakage" in l), None)
+    return (pick or next((l.strip() for l in lines if l.startswith("error")), "compiled build failed"))[:110]
 
 
 def judge_pair(name, i, c):
