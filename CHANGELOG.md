@@ -7,6 +7,14 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ## [Unreleased]
 
 ### Added
+- **Packages that link through `path = "../pkg/build"`**: the interpreter loads the Windjammer package `../pkg` (and its own
+  dependencies; `crate::` names the package's root), so apps interpret and `wj run` no longer falls back to cargo; `wj build` and
+  `wj test` build such a dependency first, in any directory order. Interpreter: `use` inside function bodies, `use std::m::*`,
+  module re-exports of child items, `std::thread::spawn(..)` paths, `mime.APPLICATION_JSON`-style constants, and the runtime's
+  `encoding`, `regex`, `path`, `sync`, `math` functions; the std/interpreter agreement gate checks the registry, qualified forms
+  and the runtime's public surface. Compiled: imported functions shadow same-named intrinsics (`use std::log::*` then
+  `debug(x)`), runtime-module calls follow the runtime signature (`http.get(req.url)`), owned handles forwarded through generic
+  wrappers stay owned, unused empty collections default to unit element types, `std::process::pid`.
 - **`wj reduce`**: automatic test-case reducer. `wj reduce PROJECT --oracle <rustc-error E0308[:regex]|panic|miscompile|cmd '...'> -o OUT`
   shrinks a failing multi-file project (hierarchical delta debugging over files, items, statements, match arms, fields,
   parameters, generics, attributes; literals for expressions) while `wj check` stays in the original diagnostic class
