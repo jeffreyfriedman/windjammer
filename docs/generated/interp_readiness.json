@@ -1,9 +1,9 @@
 {
  "schema_version": 1,
- "generated_at": "2026-10-19T23:17:24Z",
- "commit": "fab6f0580f4d0329d04b4177ad2d66ab366cec82",
+ "generated_at": "2026-10-19T23:38:16Z",
+ "commit": "ceeebb2da7efa2ce1973adb4e5e060c5e0ec6f9a",
  "mode": "full",
- "load_avg_1m": 48.7,
+ "load_avg_1m": 100.3,
  "wj_profile": "release",
  "criteria": [
   {
@@ -1915,16 +1915,16 @@
    "id": "R2",
    "title": "No silent divergence",
    "target": "0 divergent programs",
-   "percent": 92.6,
+   "percent": 97.8,
    "status": "fail",
    "detail": {
-    "divergences": 104,
+    "divergences": 21,
     "unmeasured": 0,
-    "checked": 861,
-    "compiled_checked": 426,
+    "checked": 837,
+    "compiled_checked": 393,
     "generated_seeds": 312,
-    "compiled_build_failures": 93,
-    "build_failures": 93,
+    "compiled_build_failures": 102,
+    "build_failures": 102,
     "hash_seeds": [
      0,
      1,
@@ -1938,117 +1938,14 @@
      "silent_divergence_rate": 0.433,
      "rechecked": 30,
      "compiled_error_classes": {
-      "other": 3,
-      "[E0308]": 10
+      "other": 1,
+      "[E0308]": 10,
+      "[E0277]": 2
      },
      "check_misses": 13
     }
    },
    "blockers": [
-    {
-     "program": "verified/testing_basic_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_basic_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_cases_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_cases_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_collections_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_collections_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_failure_reported_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_naming_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_naming_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_option_result_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_option_result_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_panics_helper_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_panics_helper_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "verified/testing_struct_methods_test.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "verified/testing_struct_methods_test.wj",
-     "reason": "[compiled-exit] exit 1 interpreted vs 101 compiled"
-    },
-    {
-     "program": "conformance/103_xorshift_reference.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/122_intr_format_seeded.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/136_intr_mixed_seeded.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/155_interp_string_first.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '3' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/155_interp_string_first.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/157_match_turbofish_scrutinee.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '42' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/157_match_turbofish_scrutinee.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/159_deref_assign_ref_params.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '5' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/159_deref_assign_ref_params.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/170_mut_ref_value_types.wj",
-     "reason": "[compiled-stdout] line 1: interpreted 'a!' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/170_mut_ref_value_types.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
     {
      "program": "conformance/171_format_flags_padding.wj",
      "reason": "[oracle] line 1: interpreted '[5    ] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [' vs expected '[00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] ['"
@@ -2062,136 +1959,12 @@
      "reason": "[oracle] line 55: interpreted '    1,' vs expected '        1,'"
     },
     {
-     "program": "conformance/172_pretty_debug_aggregates.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '[' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/172_pretty_debug_aggregates.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/173_type_aliases.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '5' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/173_type_aliases.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/174_closure_mut_capture.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/174_closure_mut_capture.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
      "program": "conformance/176_from_conversions.wj",
      "reason": "[oracle] line 2: interpreted 'parse: 70' vs expected 'code 70'"
     },
     {
      "program": "conformance/176_from_conversions.wj",
      "reason": "[oracle] exit 101, expected 0"
-    },
-    {
-     "program": "conformance/176_from_conversions.wj",
-     "reason": "[compiled-stdout] line 1: interpreted 'parse: not a number' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/176_from_conversions.wj",
-     "reason": "[compiled-exit] exit 101 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/176_from_conversions.wj",
-     "reason": "[compiled-stderr] panic message 'no match arm matched value of type `Result`' vs ''"
-    },
-    {
-     "program": "conformance/178_struct_patterns_slices.wj",
-     "reason": "[compiled-stdout] line 1: interpreted 'x is zero' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/178_struct_patterns_slices.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/179_ordering_sort.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '1259' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/179_ordering_sort.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/180_modules_paths.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '6 1' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/180_modules_paths.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/181_ordered_map_set.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '1:one' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/181_ordered_map_set.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/30_iter_map_filter.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2 4 6' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/30_iter_map_filter.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/40_prng_fnv_checksum.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/41_i32_wrapping_lcg.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/42_sort_checksum.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/43_struct_value_semantics.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/44_hashmap_counts.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/45_string_ops.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/46_modpow_i64.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/47_sieve.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/48_matrix_det.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/49_closures_fold.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/50_enum_state_machine.wj",
-     "reason": "[oracle] exit 1, expected 0"
-    },
-    {
-     "program": "conformance/51_result_question_chain.wj",
-     "reason": "[oracle] exit 1, expected 0"
     },
     {
      "program": "conformance/58_parse_numbers.wj",
@@ -2202,112 +1975,8 @@
      "reason": "[compiled-stdout] line 4: interpreted 'number too large or too small to fit in target typ' vs expected 'number too large to fit in target type'"
     },
     {
-     "program": "conformance/63_closures_capture.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '6' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/63_closures_capture.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/68_unwrap_none_panics.wj",
-     "reason": "[compiled-stdout] line 1: interpreted 'before' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/68_unwrap_none_panics.wj",
-     "reason": "[compiled-exit] exit 101 interpreted vs 1 compiled"
-    },
-    {
-     "program": "conformance/68_unwrap_none_panics.wj",
-     "reason": "[compiled-stderr] panic message 'called `Option::unwrap()` on a `None` value' vs ''"
-    },
-    {
      "program": "conformance/71_explicit_panic.wj",
      "reason": "[compiled-stderr] panic message 'value too large: 5' vs 'value too large: {}'"
-    },
-    {
-     "program": "conformance/75_iterators.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2 4 6' vs expected '<end>'"
-    },
-    {
-     "program": "conformance/75_iterators.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-ERR-002.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-ERR-002.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-ERR-005.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '1' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-ERR-005.wj",
-     "reason": "[compiled-exit] exit 101 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-ERR-005.wj",
-     "reason": "[compiled-stderr] panic message 'wanted ok: \"bad\"' vs ''"
-    },
-    {
-     "program": "spec/SPEC-EXEC-005.wj",
-     "reason": "[compiled-stdout] line 1: interpreted 'abc' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-EXEC-005.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-MOD-005.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2 1 false' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-MOD-005.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-PIPE-006.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-PIPE-006.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-STMT-005.wj",
-     "reason": "[compiled-stdout] line 1: interpreted 'abc0120a1b2c' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-STMT-005.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-STD-001.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '0123 4 true' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-STD-001.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-STD-002.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '2 a 20 false' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-STD-002.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
-    },
-    {
-     "program": "spec/SPEC-STD-003.wj",
-     "reason": "[compiled-stdout] line 1: interpreted '3 20 60' vs expected '<end>'"
-    },
-    {
-     "program": "spec/SPEC-STD-003.wj",
-     "reason": "[compiled-exit] exit 0 interpreted vs 1 compiled"
     },
     {
      "program": "pilot/t006_base_convert.A.0",
@@ -2355,11 +2024,11 @@
     },
     {
      "program": "pilot/t030_bank_ledger.A.1",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over eleme"
     },
     {
      "program": "pilot/t030_bank_ledger.A.2",
-     "reason": "[agent-pilot] interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
+     "reason": "[agent-pilot] interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator over eleme"
     },
     {
      "program": "verified/algo_binary_tree.wj",
@@ -2470,10 +2139,6 @@
      "reason": "[compiled-build-failed] error[E0599]: no method named `max_by_key` found for struct `Vec<Person>` in the current scope"
     },
     {
-     "program": "conformance/103_xorshift_reference.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
      "program": "conformance/110_std_math.wj",
      "reason": "[compiled-build-failed] error[E0425]: cannot find function `pow` in module `math`"
     },
@@ -2482,88 +2147,80 @@
      "reason": "[compiled-build-failed] error[E0425]: cannot find function `repeat` in module `strings`"
     },
     {
-     "program": "conformance/112_std_fs_roundtrip.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find function `append` in module `fs`"
-    },
-    {
      "program": "conformance/114_hashmap_entry_counting.wj",
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
-     "program": "conformance/122_intr_format_seeded.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
+     "program": "conformance/155_interp_string_first.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
-     "program": "conformance/136_intr_mixed_seeded.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
+     "program": "conformance/157_match_turbofish_scrutinee.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "conformance/159_deref_assign_ref_params.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "conformance/170_coll_grouping.wj",
      "reason": "[compiled-build-failed] error[E0277]: a value of type `()` cannot be made by summing an iterator over elements of type `()`"
     },
     {
+     "program": "conformance/170_mut_ref_value_types.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
      "program": "conformance/172_clos_shorthand.wj",
      "reason": "[compiled-build-failed] error[E0507]: cannot move out of `_it0.name` which is behind a shared reference"
+    },
+    {
+     "program": "conformance/172_pretty_debug_aggregates.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
+     "program": "conformance/173_type_aliases.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
+     "program": "conformance/174_closure_mut_capture.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
      "program": "conformance/175_len_and_index_as_int.wj",
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
+     "program": "conformance/176_from_conversions.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
      "program": "conformance/177_opt_chain.wj",
-     "reason": "[compiled-build-failed] error: optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `unwrap_or` found for type `!` in the current scope"
+    },
+    {
+     "program": "conformance/178_struct_patterns_slices.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
+     "program": "conformance/179_ordering_sort.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
+     "program": "conformance/180_modules_paths.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
+    },
+    {
+     "program": "conformance/181_ordered_map_set.wj",
+     "reason": "[compiled-build-failed] error: string literal `.to_string()` is forbidden Rust leakage [W0006]"
     },
     {
      "program": "conformance/18_option_match.wj",
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
-     "program": "conformance/40_prng_fnv_checksum.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/41_i32_wrapping_lcg.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/42_sort_checksum.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/43_struct_value_semantics.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/44_hashmap_counts.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/45_string_ops.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/46_modpow_i64.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/47_sieve.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/48_matrix_det.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/49_closures_fold.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/50_enum_state_machine.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
-    },
-    {
-     "program": "conformance/51_result_question_chain.wj",
-     "reason": "[compiled-build-failed] error[E0425]: cannot find value `__SEED__` in this scope"
+     "program": "conformance/30_iter_map_filter.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "conformance/54_shifts_bitops.wj",
@@ -2578,12 +2235,24 @@
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
     },
     {
+     "program": "conformance/63_closures_capture.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "conformance/68_unwrap_none_panics.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
      "program": "conformance/72_hashmap_ops.wj",
      "reason": "[compiled-build-failed] error[E0308]: `match` arms have incompatible types"
     },
     {
      "program": "conformance/74_vec_algorithms.wj",
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "conformance/75_iterators.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "conformance/98_bignum_factorial.wj",
@@ -2630,8 +2299,20 @@
      "reason": "[compiled-build-failed] error[E0277]: `Result<{integer}, RecvError>` doesn't implement `std::fmt::Display`"
     },
     {
+     "program": "spec/SPEC-ERR-002.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
      "program": "spec/SPEC-ERR-003.wj",
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "spec/SPEC-ERR-005.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "spec/SPEC-EXEC-005.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "spec/SPEC-EXPR-011.wj",
@@ -2662,6 +2343,10 @@
      "reason": "[compiled-build-failed] error: `self` parameter is only allowed in associated functions"
     },
     {
+     "program": "spec/SPEC-MOD-005.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
      "program": "spec/SPEC-NUM-001.wj",
      "reason": "[compiled-build-failed] error: literal out of range for `i32`"
     },
@@ -2687,11 +2372,11 @@
     },
     {
      "program": "spec/SPEC-OPT-005.wj",
-     "reason": "[compiled-build-failed] error: optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `unwrap_or` found for type `!` in the current scope"
     },
     {
      "program": "spec/SPEC-OPT-006.wj",
-     "reason": "[compiled-build-failed] error: optional chaining `?.` is not supported by the Rust backend yet (it needs the IR solver's receiver type"
+     "reason": "[compiled-build-failed] error[E0599]: no method named `unwrap_or` found for type `!` in the current scope"
     },
     {
      "program": "spec/SPEC-PAT-001.wj",
@@ -2706,8 +2391,28 @@
      "reason": "[compiled-build-failed] error[E0004]: non-exhaustive patterns: `i64::MIN..=0_i64` and `3_i64..=i64::MAX` not covered"
     },
     {
+     "program": "spec/SPEC-PIPE-006.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "spec/SPEC-STMT-005.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
      "program": "spec/SPEC-STMT-009.wj",
      "reason": "[compiled-build-failed] error[E0308]: mismatched types"
+    },
+    {
+     "program": "spec/SPEC-STD-001.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "spec/SPEC-STD-002.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
+    },
+    {
+     "program": "spec/SPEC-STD-003.wj",
+     "reason": "[compiled-build-failed] Error: Rust leakage errors:"
     },
     {
      "program": "spec/SPEC-STD-005.wj",
@@ -2742,7 +2447,7 @@
    "percent": 100.0,
    "status": "pass",
    "detail": {
-    "invocations": 1200,
+    "invocations": 1176,
     "fallbacks": 0,
     "fallback_rate_pct": 0.0,
     "silent": [],
@@ -3066,23 +2771,23 @@
     "warm_loop": {
      "project": "wj-sync",
      "files": 24,
-     "median_s": 2.08
+     "median_s": 2.07
     },
     "startup": {
-     "hello_s": 0.048,
+     "hello_s": 0.033,
      "target_s": 0.25,
      "project": "wj-sync",
      "files": 24,
-     "check_s": 0.025,
-     "interp_test_s": 1.395,
-     "check_share": 0.02
+     "check_s": 0.017,
+     "interp_test_s": 1.409,
+     "check_share": 0.01
     },
     "kernels": [
      {
       "kernel": "closures.wj",
-      "interp_cpu_s": 0.17,
-      "python_cpu_s": 0.06,
-      "ratio": 3.0,
+      "interp_cpu_s": 0.16,
+      "python_cpu_s": 0.05,
+      "ratio": 3.1,
       "outputs_match": true,
       "met": false
      },
@@ -3096,23 +2801,23 @@
      },
      {
       "kernel": "hashmap.wj",
-      "interp_cpu_s": 0.23,
-      "python_cpu_s": 0.05,
-      "ratio": 4.1,
+      "interp_cpu_s": 0.21,
+      "python_cpu_s": 0.06,
+      "ratio": 3.8,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "loop5m.wj",
-      "interp_cpu_s": 0.22,
-      "python_cpu_s": 1.08,
+      "interp_cpu_s": 0.2,
+      "python_cpu_s": 1.04,
       "ratio": 0.2,
       "outputs_match": true,
       "met": true
      },
      {
       "kernel": "nbody.wj",
-      "interp_cpu_s": 0.96,
+      "interp_cpu_s": 0.92,
       "python_cpu_s": 0.13,
       "ratio": 7.3,
       "outputs_match": true,
@@ -3120,17 +2825,17 @@
      },
      {
       "kernel": "sieve.wj",
-      "interp_cpu_s": 0.6,
-      "python_cpu_s": 0.42,
+      "interp_cpu_s": 0.58,
+      "python_cpu_s": 0.4,
       "ratio": 1.4,
       "outputs_match": true,
       "met": false
      },
      {
       "kernel": "strings.wj",
-      "interp_cpu_s": 0.11,
+      "interp_cpu_s": 0.12,
       "python_cpu_s": 0.08,
-      "ratio": 1.4,
+      "ratio": 1.5,
       "outputs_match": true,
       "met": false
      },
@@ -3224,23 +2929,23 @@
     },
     {
      "program": "bench/closures.wj",
-     "reason": "interpreter 0.17s vs python 0.06s CPU (3.0x slower)"
+     "reason": "interpreter 0.16s vs python 0.05s CPU (3.1x slower)"
     },
     {
      "program": "bench/hashmap.wj",
-     "reason": "interpreter 0.23s vs python 0.05s CPU (4.1x slower)"
+     "reason": "interpreter 0.21s vs python 0.06s CPU (3.8x slower)"
     },
     {
      "program": "bench/nbody.wj",
-     "reason": "interpreter 0.96s vs python 0.13s CPU (7.3x slower)"
+     "reason": "interpreter 0.92s vs python 0.13s CPU (7.3x slower)"
     },
     {
      "program": "bench/sieve.wj",
-     "reason": "interpreter 0.60s vs python 0.42s CPU (1.4x slower)"
+     "reason": "interpreter 0.58s vs python 0.40s CPU (1.4x slower)"
     },
     {
      "program": "bench/strings.wj",
-     "reason": "interpreter 0.11s vs python 0.08s CPU (1.4x slower)"
+     "reason": "interpreter 0.12s vs python 0.08s CPU (1.5x slower)"
     },
     {
      "program": "bench/structs.wj",
@@ -3248,7 +2953,7 @@
     },
     {
      "program": "wj-sync",
-     "reason": "warm edit-run loop 2.08s > 1.0s (24 files)"
+     "reason": "warm edit-run loop 2.07s > 1.0s (24 files)"
     }
    ]
   },
@@ -3422,11 +3127,11 @@
     },
     {
      "program": "pilot/t030_bank_ledger.A.1",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator "
     },
     {
      "program": "pilot/t030_bank_ledger.A.2",
-     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: unmeasured: skipped: free disk space below the readiness minimum"
+     "reason": "[agent-pilot check-miss] `wj check` accepts it, interpreter-green, compiled fails: error[E0277]: a value of type `Vec<std::string::String>` cannot be built from an iterator "
     }
    ]
   },
@@ -3476,9 +3181,17 @@
     "window": 20,
     "commits_in_window": 20,
     "commits_passing": 0,
-    "commits_recorded": 3
+    "commits_recorded": 5
    },
    "blockers": [
+    {
+     "program": "ceeebb2da7",
+     "reason": "failed R1,R2,R4,R5,R6"
+    },
+    {
+     "program": "52ae8d1fa2",
+     "reason": "failed R1,R2,R4,R5,R6"
+    },
     {
      "program": "fab6f0580f",
      "reason": "failed R1,R2,R4,R5,R6"
@@ -3549,14 +3262,6 @@
     },
     {
      "program": "c57b15bc74",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "7f9afe1f5f",
-     "reason": "no full readiness run recorded for this commit"
-    },
-    {
-     "program": "0634ac951a",
      "reason": "no full readiness run recorded for this commit"
     }
    ]
