@@ -43,6 +43,11 @@ def run_project(ctx, proj):
     root = ctx.target_root(scratch)
     c = ctx.cached_run("r1-compiled" + ("-cold" if ctx.cold else "-warm"), sha(ph, proj.label), [ctx.wj, "test", "--json", proj.path],
                        t["compiled"], cwd=proj.path, env={"WJ_CARGO_TARGET_ROOT": root})
+    if '"status": "unknown"' in c.out and c.rc != 0 and not c.timed_out:
+        # --json hides cargo's diagnostics; replay once (plain output) to learn why the test crate did not build
+        d = ctx.cached_run("r1-compiled-why", sha(ph, proj.label), [ctx.wj, "test", proj.path], t["compiled"], cwd=proj.path,
+                           env={"WJ_CARGO_TARGET_ROOT": root})
+        c.why = next((l.strip() for l in (d.out + "\n" + d.err).splitlines() if l.startswith("error")), "")
     if scratch:
         shutil.rmtree(root, ignore_errors=True)  # a cold build leaves gigabytes behind
     return i, c
@@ -55,7 +60,7 @@ def evaluate(proj, interp, comp, paths, cold=False):
            "measured": True, "compiled_cache": "cold" if cold else "warm"}
     if tc is not None and not any(tc.values()) and comp.rc != 0 and '"status": "unknown"' in comp.out:
         tc = None  # every test unknown: the compiled test crate did not build or run, so there is nothing to compare with
-        broke = "compiled test run failed before reporting results (build error in the generated test crate)"
+        broke = "compiled test run failed before reporting results: " + (scrub(getattr(comp, "why", ""), paths) or "build error in the generated test crate")
     else:
         broke = None
     if tc is None:
