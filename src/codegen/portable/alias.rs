@@ -56,6 +56,10 @@ fn collect_modules(items: &[Item], out: &mut std::collections::HashSet<String>) 
     }
 }
 
+pub fn is_module(name: &str) -> bool {
+    MODULES.with(|m| m.borrow().contains(name))
+}
+
 /// `geo::inner::one` -> `one`, `shapes::Color::Red` -> `Color::Red`: the leading segments that
 /// name modules of the program are dropped (portable modules are flat: items of all modules share
 /// one namespace). `None` when no leading segment is a module.

@@ -166,6 +166,9 @@ impl<'e> Lowerer<'e> {
 
     fn path_call(&mut self, owner: &str, name: &str, args: &Args, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        if crate::codegen::portable::alias::is_module(&owner) {
+            return self.named_call(name, args, want);
+        }
         let owner = crate::codegen::portable::alias::strip_modules(&owner).unwrap_or(owner);
         let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
         // `Box<T>` / `Rc<T>` / `Arc<T>` are erased to `T` (values are already heap objects or

@@ -156,3 +156,8 @@ program = "164_into_bound_param_consumed"
 backend = "rust"
 reason = "rust-into-bound-param-borrowed: see docs/known-issues/rust-into-bound-param-borrowed.md"
 
+
+[[unsupported]]
+program = "180_modules_paths"
+backend = "rust"
+reason = "rust-module-impl-self-type: `impl Sq` inside `mod shapes` emits `fn new(..) -> Sq` where `Sq` is not in scope of the generated nested module (E0425)"
