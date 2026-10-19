@@ -13,6 +13,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
 | `wj test` | Run tests |
+| `wj reduce` | Shrink a failing project to a minimal, anonymized reproduction (delta debugging) |
 | `wj fmt` | Format Windjammer code |
 | `wj fix` | Migrate deprecated surface syntax (`println!`, `vec![]`, `format!`, ...) to Windjammer forms |
 | `wj lint` | Run Rust leakage linter on .wj files (W0001-W0004) |
@@ -150,6 +151,28 @@ Usage: wj test [OPTIONS] [PATH]
 | `--watch` | WATCH |  | Re-run the tests on every source change |
 | `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
 | `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
+
+## `wj reduce`
+
+Shrink a failing project to a minimal, anonymized reproduction (delta debugging)
+
+```text
+Usage: wj reduce [OPTIONS] --oracle <SPEC> --output <DIR> <PATH>
+```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `<PATH>` | PATH |  | Project directory or .wj file to reduce |
+| `--oracle` | SPEC |  | Bug oracle: `rustc-error E0308[:regex]`, `panic` (alias `crash`), `miscompile`, or `cmd '<shell>'` (exit 0 = bug present) |
+| `-o`, `--output` | DIR |  | Output directory for the minimal project and repro.md |
+| `--jobs` | N | 2 | Candidates evaluated in parallel |
+| `--seed` | N | 0 | Seed for the deterministic candidate order |
+| `--max-steps` | N | 5000 | Maximum number of oracle runs |
+| `--time-budget` | SECS | 3600 | Wall-clock budget for the reduction search, in seconds |
+| `--candidate-timeout` | SECS | 300 | Timeout for a single oracle run, in seconds |
+| `--keep-names` | KEEP_NAMES |  | Accept a partially anonymized result when some names cannot be renamed without losing the bug |
+| `--wj-bin` | WJ |  | Compiler binary used by the oracles (default: this executable) |
+| `-v`, `--verbose` | VERBOSE |  | Print progress counts to stderr (never source text) |
 
 ## `wj fmt`
 
