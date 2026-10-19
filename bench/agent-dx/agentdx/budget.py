@@ -6,14 +6,14 @@ PILOT_MAX_TRIALS = 60   # absolute ceiling for the pilot; raising it is a code c
 # USD per million tokens. Assumed Sonnet-class list pricing; the live per-trial cost comes from the
 # Claude Code JSON (`total_cost_usd`), and the guard projects from observed cost once trials complete.
 PRICE = {"input": 3.0, "cache_write": 3.75, "cache_read": 0.30, "output": 15.0}
-BASE_CONTEXT_TOKENS = 20000   # Claude Code system prompt + tool schemas (assumed)
+BASE_CONTEXT_TOKENS = 8000    # Claude Code prompt + restricted tool set; calibrated on 2 smoke trials (~8-9k tokens per turn)
 
 
 class BudgetExceeded(Exception):
     pass
 
 
-def estimate_trial(pack_chars, max_turns, expected_turn_fraction=0.6, out_tokens_per_turn=700, growth_per_turn=1500):
+def estimate_trial(pack_chars, max_turns, expected_turn_fraction=0.6, out_tokens_per_turn=400, growth_per_turn=1500):
     """-> {"expected": usd, "worst": usd}; worst assumes every turn is used."""
     ctx0 = BASE_CONTEXT_TOKENS + pack_chars / 3.5 + 1200
 
