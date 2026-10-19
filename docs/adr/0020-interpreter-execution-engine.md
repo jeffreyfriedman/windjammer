@@ -1,6 +1,6 @@
 ---
 status: accepted
-last_verified: d45cde56a728
+last_verified: 0ad66981d7b3
 ---
 # ADR-0020: Interpreter execution engine (tree walker vs resolved/bytecode tier)
 
