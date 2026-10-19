@@ -76,12 +76,15 @@ pub(super) fn method_call(
                 };
                 let slot = boxed.slot.clone();
                 let v = slot.borrow().clone();
-                let place = match v {
-                    Value::Ref(p) => it.chase(p)?,
-                    _ => Place::of_slot(slot),
-                };
-                let recv = place.read()?;
-                (Some(place), recv)
+                match v {
+                    Value::Ref(p) => {
+                        let place = it.chase(p)?;
+                        let recv = place.read()?;
+                        (Some(place), recv)
+                    }
+                    // the walker slot itself is the place: reading it again would give `v`
+                    v => (Some(Place::of_slot(slot)), v),
+                }
             }
             Recv::Value(c) => {
                 let v = c(it, b)?;
