@@ -95,3 +95,26 @@ Rule of thumb: every claim an agent will act on has an executable witness.
 
 Prerequisites already tracked: interpreter-primary readiness (`docs/design/interpreter-primary-readiness.md`, R1-R7) decides how
 much of the loop can be interpreted; compiled-path codegen fixes from `docs/known-issues/agent-dx-*.md` decide the final grade.
+
+## First pilot (Oct 2026, wj 0.50.0 tree, model `sonnet`, 10 tasks x arms A/B x 3 trials = 60 trials)
+
+Raw records and report: `bench/agent-dx/results/pilot/`. Total spend about $2 (the pre-run estimate was $24, expected, from
+conservative per-turn assumptions; the calibrated estimate is $14). Intervals are 95% task-clustered bootstrap CIs; N is small.
+
+| | A interpreted-first | B compiled-first | A - B (paired, CI) |
+|---|---|---|---|
+| pass@1 on the compiled hidden oracle | 0.57 [0.30, 0.83] | 0.90 [0.70, 1.00] | -0.33 [-0.63, -0.10] |
+| agent turns | 3.5 | 5.3 | -1.8 [-3.5, -0.5] |
+| tokens in (incl. cache) | 31.8k | 53.6k | -21.9k [-42.5k, -6.1k] |
+| cost per trial | $0.028 | $0.041 | -$0.013 [-0.024, -0.005] |
+| wall seconds (3 parallel workers, loaded machine) | 20 | 97 | -77 [-138, -34] |
+| silent divergence (interpreter green, compiled red) | 0.43 | 0 | 0.43 [0.17, 0.70] |
+
+Reading: H1 holds for speed and tokens (about 40% fewer input tokens, a quarter of the wall time) and fails for correctness
+as the compiler and interpreter stand today: 13 of 30 interpreted-first programs ran correctly in the interpreter and did not
+build, mostly from integer-width literal typing (`docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md`) and a method
+the interpreter accepts but rustc lacks (t018 fails in both arms). The path to H1 is therefore R2/R5 of
+`interpreter-primary-readiness.md` (check-vs-build parity), plus a third arm A' (interpreted-first with one `wj build` before
+finishing) that this pilot did not run. Agents iterate very little (3-5 turns): pass@1 and the first-draft failure classes dominate.
+Harness notes: concurrent compiled grading briefly shared one binary name and produced 4 false failures; fixed by serialising
+build+copy and re-grading every failed trial from its recorded source (`agentdx pilot-regrade`).
