@@ -519,6 +519,9 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             }
         }
         Statement::Assignment { target, value, compound_op, .. } => {
+            if let Some(c) = super::place::assign(cx, target, value, *compound_op) {
+                return Some(c);
+            }
             let Expression::Identifier { name, location } = target else { return None };
             let slot = cx.local(name)?;
             // boxed locals may hold `&mut` places / guards: assignments to or from them are the walker's

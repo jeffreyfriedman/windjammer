@@ -17,6 +17,7 @@ mod expr;
 mod fast;
 mod island;
 mod method;
+mod place;
 mod typed;
 
 use super::engine::{FuncDef, Interpreter, Scope};
