@@ -140,7 +140,7 @@ pub const FEATURES: &[Feature] = &[
        "use std::http\nfn main() {\n    match http::serve_fn(\"127.0.0.1:0\", |r| r) { Ok(_) => println(\"x\"), Err(e) => println(e) }\n}\n", "serve_fn` is not implemented"),
     no("concurrency.thread_block", "Concurrency", "`thread { }` and `async { }` blocks (ADR-0004: surface not settled; use `async fn` and `.await`)",
        "fn main() {\n    thread {\n        println(\"x\")\n    }\n}\n", "thread {}"),
-    no("ffi.extern_fn", "FFI", "calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0020)",
+    no("ffi.extern_fn", "FFI", "calls to `extern fn` without Rust sources for the host bridge (with them, `wj run` builds a cached bridge library: ADR-0023)",
        "extern fn c_abs(x: int) -> int\nfn main() {\n    println(\"${c_abs(-1)}\")\n}\n", "`extern fn c_abs`"),
 ];
 

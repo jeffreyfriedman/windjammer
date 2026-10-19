@@ -1,15 +1,15 @@
-# ADR-0020: Interpreter host bridge for Rust code and Rust-crate dependencies
+# ADR-0023: Interpreter host bridge for Rust code and Rust-crate dependencies
 
 - **Status:** Proposed (spike landed)
 - **Date:** 2026-10-11
-- **Related:** [ADR-0012](0012-rust-interop-boundary.md), [ADR-0019](0019-interpret-by-default.md), `src/interpreter/host_bridge.rs`, `src/cli/host_build.rs`, `src/package/graph.rs`
+- **Related:** [ADR-0012](0012-rust-interop-boundary.md), [ADR-0022](0022-interpret-by-default.md), `src/interpreter/host_bridge.rs`, `src/cli/host_build.rs`, `src/package/graph.rs`
 
 ## Context
 Windjammer reaches Rust through `extern fn` declarations (ADR-0012 option A). The compiled path emits them as
 `extern "C" { fn f(a: i64, s: FfiString) -> FfiString; }` and links the project's hand-written Rust (`ffi.rs`
 next to `wj.toml` or in `src/`) plus the `wj.toml` Rust dependencies through Cargo. The interpreter cannot compile
 Rust, so before this ADR every `extern fn` call was "unsupported", and any project touching a Rust crate could only
-run compiled. For `wj run` to be the default dev loop (ADR-0019), those projects must run interpreted too.
+run compiled. For `wj run` to be the default dev loop (ADR-0022), those projects must run interpreted too.
 
 ## Decision (spike implemented)
 Compile the project's Rust **once** into a cached dynamic library and call it from the interpreter through
@@ -26,7 +26,7 @@ generated C-ABI shims:
    path and content. Hit: one `stat`, the library is `dlopen`ed (libloading). Miss: one `cargo build --release`.
 4. Types that cannot cross the bridge are rejected before anything runs, naming the item:
    ``extern fn `f`: parameter `v: Vec<int>` cannot cross the host bridge (supported: integers, floats, bool, string)``.
-   `wj run` then falls back to the compiled path (ADR-0019); `wj run --interpret` exits 2 with that message.
+   `wj run` then falls back to the compiled path (ADR-0022); `wj run --interpret` exits 2 with that message.
 5. Calls into a Rust-crate dependency that are *not* wrapped by an `extern fn` (`serde_json::to_string(x)`) are
    reported by the preflight (`deps.rust_crate`) and run compiled.
 

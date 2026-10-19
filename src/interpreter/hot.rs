@@ -1,4 +1,4 @@
-//! Hot reload of function bodies for long-running programs (`wj run --hot`, ADR-0021 spike).
+//! Hot reload of function bodies for long-running programs (`wj run --hot`, ADR-0024 spike).
 //!
 //! A watcher thread polls the program's files; the interpreter applies changes at a safe point (function
 //! entry), so no running frame is touched: frames already executing keep the body they started with.

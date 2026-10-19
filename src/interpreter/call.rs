@@ -620,10 +620,10 @@ impl Interpreter {
         expected: Option<Type>,
     ) -> R {
         if f.is_extern {
-            return self.call_host(&f.name, args); // ADR-0020 host bridge (unsupported when none is loaded)
+            return self.call_host(&f.name, args); // ADR-0023 host bridge (unsupported when none is loaded)
         }
         if self.hot.is_some() {
-            self.hot_safe_point(); // ADR-0021: edits land between calls; this call keeps the body it resolved
+            self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));

@@ -89,9 +89,9 @@ pub enum RunOutcome {
 pub struct EntryOptions {
     /// Return [`RunOutcome::NeedsCompiled`] on a preflight hit instead of printing the error.
     pub fallback: bool,
-    /// Bridge library and the `extern fn`s it provides (ADR-0020), built by the CLI.
+    /// Bridge library and the `extern fn`s it provides (ADR-0023), built by the CLI.
     pub host: Option<(PathBuf, Vec<super::host_bridge::ExternSig>)>,
-    /// Apply source edits to the running program (ADR-0021).
+    /// Apply source edits to the running program (ADR-0024).
     pub hot: bool,
     /// Scheduler seed, deterministic time, network policy.
     pub run: RunOptions,
