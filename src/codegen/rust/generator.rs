@@ -1447,13 +1447,6 @@ impl<'ast> CodeGenerator<'ast> {
             .is_some_and(|c| c.is_ascii_lowercase() || c == '_') && !crate::type_classification::is_primitive_type_name(last)
     }
 
-    /// Crate-relative registry key (`mod::fn`) when `callee_name` names a same-crate definition through
-    /// a module alias (`use crate::m as low`), `self::` or `super::`; resolved by `resolve`, the one
-    /// path resolver. `None` for external or unqualified callees.
-    pub(crate) fn same_crate_callee_key(&self, callee_name: &str) -> Option<String> {
-        crate::resolve::same_crate_callee_key(&self.import_fn_alias_map, callee_name)
-    }
-
     pub fn ir_cutover_call_sites_enabled(&self) -> bool {
         self.ir_cutover.call_sites
     }

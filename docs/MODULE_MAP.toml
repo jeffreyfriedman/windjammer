@@ -120,7 +120,7 @@ known_violations = []
 layer = "backend"
 owner_stage = "code emission to target languages (stage 6)"
 module_md = "src/codegen/MODULE.md"
-allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "parser", "parser_impl", "project_paths", "source_map", "stdlib_scanner", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry", "stdlib_surface"]
+allowed_imports = ["analyzer", "auto_clone", "compiler_config", "component_analyzer", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "inference", "ir", "lexer", "module_system", "parser", "parser_impl", "project_paths", "resolve", "source_map", "stdlib_scanner", "stdlib_surface", "test_module_gate", "test_utils", "type_classification", "type_display", "type_inference", "type_registry"]
 known_violations = ["compiler", "intrinsics", "linter", "wjsl"]
 
 [modules.compilation_error_handling]
