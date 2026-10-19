@@ -10,6 +10,18 @@ pub fn collect(path: &Path) -> Result<Vec<PathBuf>> {
     if !path.exists() {
         bail!("Path does not exist: {}", path.display());
     }
+    // A crate root (`main.wj` / `lib.wj`) is checked as the whole program it starts: its bodiless `mod x`
+    // declarations load sibling files, exactly as the interpreter and the compiler see them.
+    if path.is_file() && path.file_name().is_some_and(|n| n == "main.wj" || n == "lib.wj") {
+        use crate::module_system::{project, sources};
+        let root = project::source_root_for(path, project::find_manifest_dir(path).as_deref());
+        if let Ok(files) = sources::program_sources(&root, path) {
+            let mut out: Vec<PathBuf> = files.into_iter().map(|f| f.file).collect();
+            out.sort();
+            out.dedup();
+            return Ok(out);
+        }
+    }
     let mut out = Vec::new();
     walk(path, &mut out)?;
     out.sort();
