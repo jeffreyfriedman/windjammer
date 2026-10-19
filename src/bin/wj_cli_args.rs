@@ -195,6 +195,11 @@ pub enum Commands {
         #[arg(long = "allow", value_name = "EFFECT[=RESOURCE]")]
         allow: Vec<String>,
 
+        /// Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a
+        /// warning, `enforce` stops them (exit 126), `off` disables the gate
+        #[arg(long, value_name = "MODE", env = "WJ_CAPS", default_value = "warn")]
+        caps: String,
+
         /// Defer drop optimization mode (auto, always, never)
         #[arg(long, value_name = "MODE", default_value = "auto", value_parser = ["auto", "always", "never"])]
         defer_drop: String,

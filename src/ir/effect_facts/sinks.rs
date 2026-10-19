@@ -151,6 +151,18 @@ fn index() -> &'static HashMap<&'static str, &'static [SinkUse]> {
     INDEX.get_or_init(|| SINKS.iter().map(|(n, u)| (*n, *u)).collect())
 }
 
+/// Cheap pre-filter for hot paths: can `path` possibly be a sink? (a segment names a sink module, or the path is a
+/// console intrinsic). No hashing, no allocation; `lookup` decides.
+pub fn may_be_sink(path: &str) -> bool {
+    path.split("::").any(|seg| {
+        matches!(
+            seg,
+            "fs" | "env" | "process" | "subprocess" | "http" | "db" | "time" | "Instant" | "SystemTime" | "thread" | "random" | "uuid" | "io" | "log"
+                | "print" | "println" | "eprint" | "eprintln"
+        )
+    })
+}
+
 /// Find the sink row for a call path, dropping leading segments (`std::fs::read` finds `fs::read`).
 pub fn lookup(path: &str) -> Option<&'static [SinkUse]> {
     let idx = index();
@@ -193,6 +205,15 @@ mod tests {
         assert!(lookup("fs::read_to_string").is_some());
         assert!(lookup("read_to_string").is_none());
         assert!(lookup("mymod::fs::read_to_string").is_some(), "leading segments are ignored");
+    }
+
+    #[test]
+    fn prefilter_never_hides_a_sink() {
+        for p in all_paths() {
+            assert!(may_be_sink(p), "{p} would be skipped by the gate");
+            assert!(may_be_sink(&format!("std::{p}")));
+        }
+        assert!(!may_be_sink("HashMap::new"));
     }
 
     #[test]

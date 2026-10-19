@@ -43,12 +43,14 @@ pub struct Grant {
     deny: BTreeSet<EffectKind>,
     /// Directory that relative patterns are anchored to (the project directory).
     root: PathBuf,
+    /// Canonical form of each pattern's literal prefix (patterns do not change, so symlink resolution is done once).
+    prefix_cache: std::cell::RefCell<std::collections::HashMap<String, PathBuf>>,
 }
 
 impl Grant {
     /// Nothing but the default-granted determinism effects.
     pub fn sandbox(root: &Path) -> Grant {
-        Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: root.to_path_buf() }
+        Grant { allow: BTreeMap::new(), deny: BTreeSet::new(), root: root.to_path_buf(), prefix_cache: Default::default() }
     }
 
     /// Everything allowed (a trusted run).
@@ -199,7 +201,11 @@ impl Grant {
         let ok = match kind {
             EffectKind::FsRead | EffectKind::FsWrite => {
                 let p = m::canonical_abs(res, &Self::cwd());
-                let inside = |pat: &String| m::path_matches(pat, &p, &self.root);
+                let inside = |pat: &String| {
+                    m::path_matches_cached(pat, &p, &self.root, &mut |prefix, base| {
+                        self.prefix_cache.borrow_mut().entry(prefix.to_string()).or_insert_with(|| m::canonical_abs(prefix, base)).clone()
+                    })
+                };
                 if *kind == EffectKind::FsWrite && is_protected(&p) {
                     // the manifest, the lock file and program sources can be written only when a pattern names them exactly
                     pats.iter().any(|pat| !pat.contains('*') && inside(pat))

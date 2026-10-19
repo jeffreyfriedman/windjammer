@@ -48,9 +48,9 @@ fn manifest_dir(start: &Path) -> Option<PathBuf> {
 /// What a run of `entry` may do:
 /// * `--sandbox` / `--allow` / a `[capabilities]` table: exactly that grant, enforced;
 /// * otherwise the local profile (project directory + `time`/`random`/`console`): warn now, enforce later
-///   (set `WJ_CAPS=enforce` to try the future default, `WJ_CAPS=off` to disable the gate).
-pub fn gate_for_run(entry: &Path, sandbox: bool, allow: &[String], allow_network: bool) -> Result<Option<CapGate>, String> {
-    let env_mode = std::env::var("WJ_CAPS").unwrap_or_default();
+///   (`--caps enforce` / `WJ_CAPS=enforce` tries the future default, `off` disables the gate).
+pub fn gate_for_run(entry: &Path, sandbox: bool, allow: &[String], allow_network: bool, caps_mode: &str) -> Result<Option<CapGate>, String> {
+    let env_mode = caps_mode;
     if env_mode == "off" && !sandbox && allow.is_empty() {
         return Ok(None);
     }
@@ -103,6 +103,9 @@ impl Interpreter {
 
     /// Gate one builtin call. Cheap for non-sinks: one hash lookup.
     pub(crate) fn cap_gate(&mut self, path: &str, args: &[Value]) -> R<()> {
+        if !sinks::may_be_sink(path) {
+            return Ok(());
+        }
         let Some(uses) = sinks::lookup(path) else { return Ok(()) };
         for u in uses {
             let resource: Option<String> = match u.res {

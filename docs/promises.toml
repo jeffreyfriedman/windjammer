@@ -528,6 +528,26 @@ id = "wj explain-ownership --json"
 statement = "Machine-readable JSON output"
 
 [[promise]]
+id = "wj explain-effects"
+statement = "Explain the effects (files, network, environment, processes, time, randomness, FFI) each function performs"
+
+[[promise]]
+id = "wj explain-effects --fn"
+statement = "Only this function (`name` or `Type::name`)"
+
+[[promise]]
+id = "wj explain-effects --json"
+statement = "Machine-readable JSON output"
+
+[[promise]]
+id = "wj run --sandbox"
+statement = "Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021)"
+
+[[promise]]
+id = "wj run --allow"
+statement = "Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`"
+
+[[promise]]
 id = "wj check --fix"
 
 [[promise]]

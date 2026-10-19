@@ -82,13 +82,10 @@ pub fn run(root: &Path, parsed: &[&Parsed], by_file: &HashMap<String, &Parsed>, 
                 d = d.with_note(format!("reached through: {}", chain.join(" -> "))).with_note(format!("grant in force: {}", denial.grant));
                 out.push(d.with_help(denial.fix.clone()));
             }
-            Finding::Undeclared { function, effect, chain, site, def_site } => {
+            Finding::Undeclared { function, effect, chain, site, def_site: _ } => {
                 let mut d = Diagnostic::error("WJ0042", format!("`{function}` performs `{effect}`, which its @uses/@pure declaration does not allow"));
                 if let Some(sp) = span_for(&site, &chain.last().map(|c| last(&c.2)).unwrap_or_default()) {
                     d = d.at(sp.with_label(format!("performs {effect}")));
-                }
-                if let Some(l) = def_site {
-                    d = d.with_note(format!("declared at {}:{}", l.file.display(), l.line));
                 }
                 let via: Vec<String> = chain.iter().map(|c| c.0.clone()).chain(chain.last().map(|c| c.2.clone())).collect();
                 out.push(d.with_note(format!("reached through: {}", via.join(" -> "))).with_help(format!("add `{effect}` to @uses(..), or remove the call")));
