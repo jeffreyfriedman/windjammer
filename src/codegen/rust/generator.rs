@@ -373,6 +373,8 @@ pub struct CodeGenerator<'ast> {
     /// First segment of non-`std`/`crate`/`super`/`self` `use` paths (`tokio`, `axum`, `serde`).
     /// MethodCall on these identifiers uses `::`, not a hardcoded crate-name list.
     pub(crate) imported_path_roots: std::collections::HashSet<String>,
+    /// Type names imported from another crate (`use dep::Type`); whether they implement `Serialize` is unknown.
+    pub(crate) foreign_imported_types: std::collections::HashSet<String>,
     /// Simple names of all extern (FFI) functions across all modules.
     /// Used by codegen to wrap calls in `unsafe {}` even when signature lookup fails.
     pub(crate) extern_function_names: std::collections::HashSet<String>,
@@ -793,6 +795,7 @@ impl<'ast> CodeGenerator<'ast> {
             import_fn_alias_map: std::collections::HashMap::new(),
             runtime_std_module_imports: std::collections::HashSet::new(),
             imported_path_roots: std::collections::HashSet::new(),
+            foreign_imported_types: std::collections::HashSet::new(),
             extern_function_names: extern_fn_names,
             ffi_module_aliases: std::collections::HashSet::new(),
             inline_module_names: std::collections::HashSet::new(),
