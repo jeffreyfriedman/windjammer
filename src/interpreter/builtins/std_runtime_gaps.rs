@@ -122,6 +122,8 @@ fn register_path_and_aliases(r: &mut Registry) {
             Err(e) => Value::err(s(&format!("Failed to get current directory: {e}"))),
         })
     });
+    alias!(r, "env::set_var" => "env::set");
+    alias!(r, "env::remove_var" => "env::remove");
     alias!(r, "random::int_range" => "random::range");
     alias!(r, "uuid::new_v4" => "uuid::v4");
     alias!(r, "crypto::sha256_string" => "crypto::sha256");
@@ -225,24 +227,6 @@ fn register_misc(r: &mut Registry) {
             Some(v) => Ok(Value::Int(v as i128, IntTy::I32)),
             None => Err(panic_ctl("attempt to multiply with overflow")),
         }
-    });
-
-    r.func("env::set_var", |_, a| {
-        std::env::set_var(arg_str(&a, 0, "set_var")?.as_str(), arg_str(&a, 1, "set_var")?.as_str());
-        Ok(Value::Unit)
-    });
-    r.func("env::remove_var", |_, a| {
-        std::env::remove_var(arg_str(&a, 0, "remove_var")?.as_str());
-        Ok(Value::Unit)
-    });
-    r.func("env::vars", |_, _| {
-        Ok(Value::vec(std::env::vars().map(|(k, v)| Value::tuple(vec![s(&k), s(&v)])).collect()))
-    });
-    r.func("env::current_exe", |_, _| {
-        Ok(match std::env::current_exe() {
-            Ok(p) => Value::ok(s(&p.to_string_lossy())),
-            Err(e) => Value::err(s(&e.to_string())),
-        })
     });
 
     r.func("fs::read_bytes", |_, a| {

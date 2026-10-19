@@ -219,6 +219,18 @@ impl SignatureRegistry {
         Self::stdlib().clone()
     }
 
+    /// The runtime's own signature of a standard-library function (`http::get`): the scanned Rust API, which is
+    /// authoritative over the `std/<mod>.wj` stub's declaration.
+    pub fn runtime_signature(qualified: &str) -> Option<&'static FunctionSignature> {
+        let stdlib = Self::stdlib();
+        stdlib.get_signature(qualified).or_else(|| stdlib.get_fallback_signature(qualified))
+    }
+
+    /// Same, for a name written bare (`server_serve` after `use std::http::*`) when exactly one runtime function has it.
+    pub fn runtime_signature_by_bare_name(name: &str) -> Option<&'static FunctionSignature> {
+        Self::stdlib().find_unique_signature_ending_with(name)
+    }
+
     /// Lightweight empty registry (no stdlib) for building deltas.
     pub fn empty() -> Self {
         SignatureRegistry {

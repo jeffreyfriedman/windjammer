@@ -124,12 +124,7 @@ impl<'ast> Analyzer<'ast> {
 
         // 2. Check if parameter is mutated (uses registry for method call detection)
         if self.is_mutated(param_name, body, registry, Some(param_type)) {
-            // `h = step(h)`: the value moves through the parameter (an owned `mut` binding), it is
-            // not written through a borrow the caller would observe.
-            if !self.is_copy_type(param_type)
-                && self.is_rebound(param_name, body)
-                && !self.is_mutated_in_place(param_name, body, registry, Some(param_type))
-            {
+            if self.param_is_moved_through_rebinding(param_name, param_type, body, registry) {
                 return Ok(OwnershipMode::Owned);
             }
             // `Vox::new(self.scene)` then `self.grid = 1` is a partial
@@ -171,14 +166,6 @@ impl<'ast> Analyzer<'ast> {
         {
             return Ok(OwnershipMode::Owned);
         }
-
-        // THE WINDJAMMER WAY: Removed aggressive string optimization
-        // When a user writes `text: string`, they mean `String` (owned), period.
-        // Do NOT auto-convert to `&str` just because it's "only passed to read-only functions".
-        // That breaks API contracts and causes confusing type errors.
-        //
-        // Smart inference is OFF for explicit type annotations.
-        // (Future: Could add #[optimize] annotation for user-requested optimization)
 
         // THE WINDJAMMER WAY: Removed aggressive string optimization
         // When a user writes `text: string`, they mean `String` (owned), period.
@@ -1129,6 +1116,20 @@ impl<'ast> Analyzer<'ast> {
         let decl_str = matches!(decl_ty, Type::String);
         let sig_str = matches!(sig_ty, Type::String);
         decl_str && sig_str
+    }
+
+    /// `h = step(h)`: the value moves through the parameter (an owned `mut` binding), it is not written through a
+    /// borrow the caller would observe. Copy parameters keep their existing handling.
+    fn param_is_moved_through_rebinding(
+        &self,
+        param_name: &str,
+        param_type: &Type,
+        body: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+    ) -> bool {
+        !self.is_copy_type(param_type)
+            && self.is_rebound(param_name, body)
+            && !self.is_mutated_in_place(param_name, body, registry, Some(param_type))
     }
 
     /// `decl` is an instance of the generic formal `sig`: `Handle<int>` for `Handle<T>`

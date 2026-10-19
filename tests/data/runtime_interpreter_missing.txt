@@ -51,6 +51,8 @@ crypto::argon2id_raw
 db::open
 db::open_postgres
 db::open_sqlite
+env::current_exe
+env::vars
 http::parse_query_string
 http::post_json
 io::buf_reader

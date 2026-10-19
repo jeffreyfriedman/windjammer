@@ -140,6 +140,18 @@ impl<'ast> CodeGenerator<'ast> {
             && crate::codegen::rust::call_site_borrow::expression_is_stdlib_empty_default_constructor(value)
     }
 
+    /// `let _empty = Vec::new()` that nothing reads has no element type to infer (E0282): `Some(Some(Vec<()>))`
+    /// defaults it. `None` when the binding has a type, is read, or is not an empty-collection constructor.
+    fn unused_empty_collection_default(
+        &self,
+        type_: &Option<Type>,
+        value: &Expression<'ast>,
+        location: &Option<crate::source_map::Location>,
+    ) -> Option<Option<Type>> {
+        let unused = location.as_ref().is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column)));
+        (type_.is_none() && unused).then(|| Self::unused_empty_collection_default_type(value)).filter(Option::is_some)
+    }
+
     /// `Vec<()>` / `HashMap<(), ()>` for an empty-collection constructor call (`Vec::new()`, `HashMap::new()`, ...).
     fn unused_empty_collection_default_type(value: &Expression<'ast>) -> Option<Type> {
         let Expression::Call { function, arguments, .. } = value else { return None };
@@ -202,15 +214,8 @@ impl<'ast> CodeGenerator<'ast> {
         let mut output = self.indent();
         output.push_str("let ");
 
-        // `let _empty = Vec::new()` that nothing reads has no element type to infer (E0282): default it.
-        let defaulted_type: Option<Option<Type>> = (type_.is_none()
-            && location.as_ref().is_some_and(|loc| self.unused_let_bindings.contains(&(loc.line, loc.column))))
-        .then(|| Self::unused_empty_collection_default_type(value))
-        .filter(Option::is_some);
-        let type_ = match &defaulted_type {
-            Some(t) => t,
-            None => type_,
-        };
+        let defaulted_type = self.unused_empty_collection_default(type_, value, location);
+        let type_ = defaulted_type.as_ref().unwrap_or(type_);
 
         // Check if we need &mut for index access on borrowed fields
         // e.g., let enemy = self.enemies[i] should be let enemy = &mut self.enemies[i]
@@ -681,12 +686,6 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
                     self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
                 if let Some(vn) = var_name {
@@ -1137,12 +1136,6 @@ impl<'ast> CodeGenerator<'ast> {
                         }
                     }
                     // P3.325: demoted `&str` formal `.clone()` is still `&str` — own it.
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
                     self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
 
@@ -1327,12 +1320,6 @@ impl<'ast> CodeGenerator<'ast> {
                             }
                         }
                     }
-                    string_utilities::rewrite_borrowed_str_clone_to_to_string(
-                        &mut value_str,
-                        value,
-                        &self.emitted_rust_ref_formals,
-                        &self.current_function_params,
-                    );
                     self.own_borrowed_text_param_binding(&mut value_str, value, mutable || matches!(pattern, Pattern::MutBinding(_)));
                 }
 
@@ -1679,6 +1666,12 @@ impl<'ast> CodeGenerator<'ast> {
         value: &Expression<'ast>,
         is_mut: bool,
     ) {
+        string_utilities::rewrite_borrowed_str_clone_to_to_string(
+            value_str,
+            value,
+            &self.emitted_rust_ref_formals,
+            &self.current_function_params,
+        );
         let Expression::Identifier { name, .. } = value else { return };
         if !string_utilities::demoted_wj_text_param_emits_rust_str_ref_extended(
             name,

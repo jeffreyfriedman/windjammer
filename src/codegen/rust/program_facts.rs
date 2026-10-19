@@ -55,7 +55,7 @@ impl<'ast> CodeGenerator<'ast> {
         idiom.imported_std_fn_names.clear();
         for item in &program.items {
             if let Item::Use { path, alias: None, .. } = item {
-                super::program_generation::std_fn_names_imported_by(path, &mut idiom.imported_std_fn_names);
+                super::intrinsic_lowering::std_fn_names_imported_by(path, &mut idiom.imported_std_fn_names);
             }
         }
         for item in &program.items {

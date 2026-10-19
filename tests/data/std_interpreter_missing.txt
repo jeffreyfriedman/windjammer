@@ -15,6 +15,7 @@ dialog::show_message
 encoding::json_decode
 encoding::json_encode
 encoding::json_encode_pretty
+env::vars
 fs::create_directory
 fs::delete_file
 fs::file_exists

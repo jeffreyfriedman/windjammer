@@ -10,6 +10,23 @@ use crate::parser::{Expression, Literal, Type};
 
 use super::CodeGenerator;
 
+/// Standard-library functions a `use` brings into scope by name: `use std::log::debug`,
+/// `use std::log::{debug, info}` and `use std::log::*` (every intrinsic-named function the module exports).
+pub(super) fn std_fn_names_imported_by(path: &[String], out: &mut std::collections::HashSet<String>) {
+    let exports = |module: &str, name: &str| crate::analyzer::SignatureRegistry::runtime_signature(&format!("{module}::{name}")).is_some();
+    let joined = path.join("::");
+    let Some(rest) = joined.strip_prefix("std::") else { return };
+    if let Some((module, names)) = super::program_generation::parse_braced_use_segment(rest) {
+        out.extend(names.into_iter().filter(|n| exports(module, n)).map(str::to_string));
+    } else if let Some(module) = rest.strip_suffix("::*") {
+        out.extend(Intrinsic::ALL.iter().map(|i| i.call_name()).filter(|n| exports(module, n)).map(str::to_string));
+    } else if let Some((module, name)) = rest.rsplit_once("::") {
+        if exports(module, name) {
+            out.insert(name.to_string());
+        }
+    }
+}
+
 fn escape_format_braces(rust_literal: &str) -> String {
     rust_literal.replace('{', "{{").replace('}', "}}")
 }
