@@ -50,7 +50,7 @@ fn resolved_engine_matches_the_walker_on_every_corpus() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let tmp = tempfile::TempDir::new().unwrap();
     let mut programs = Vec::new();
-    for d in ["tests/conformance_programs", "examples/verified", "tests/spec"] {
+    for d in ["tests/conformance_programs", "examples/verified", "tests/spec", "tests/engine_parity"] {
         wj_files(&root.join(d), &mut programs);
     }
     // the interpreter corpus is seeded: instantiate every seed
@@ -90,4 +90,17 @@ fn resolved_engine_matches_the_walker_on_every_corpus() {
     }
     assert!(compared > 300, "too few programs compared: {compared}");
     assert!(diffs.is_empty(), "{} of {} programs differ between engines:\n{}", diffs.len(), compared, diffs.join("\n=====\n"));
+}
+
+/// The one documented difference (ADR-0020, step 1): in a program rustc rejects, a function declared to
+/// return an integer that returns something else. The walker carries the wrong-typed value on; a typed
+/// call site of the resolved engine reports the mismatch.
+#[test]
+fn resolved_engine_reports_an_ill_typed_integer_result() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let p = tmp.path().join("ill_typed.wj");
+    fs::write(&p, "fn twice(x: int) -> int {\n    x + x\n}\nfn main() {\n    let s = \"ab\"\n    println(\"${twice(s)}\")\n}\n").unwrap();
+    let (out, err, code) = run(&p, "resolved", tmp.path());
+    assert_eq!(code, Some(1), "stdout: {}", String::from_utf8_lossy(&out));
+    assert!(String::from_utf8_lossy(&err).contains("mismatched types: expected `i64`, found `String`"));
 }

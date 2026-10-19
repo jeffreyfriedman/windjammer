@@ -155,13 +155,18 @@ impl Interpreter {
     }
 
     pub(crate) fn make_struct(&mut self, name: &str, fields: Vec<(Rc<str>, Value)>, copy: bool) -> Value {
-        let uid = if self.drop_types.contains(name) {
+        self.make_struct_named(Rc::from(name), fields, copy)
+    }
+
+    /// `make_struct` with an already interned name (`StructDef::rc_name`).
+    pub(crate) fn make_struct_named(&mut self, name: Rc<str>, fields: Vec<(Rc<str>, Value)>, copy: bool) -> Value {
+        let uid = if !self.drop_types.is_empty() && self.drop_types.contains(&*name) {
             self.next_uid += 1;
             self.next_uid
         } else {
             0
         };
-        Value::Struct(Rc::new(StructVal { name: Rc::from(name), fields, copy, uid }))
+        Value::Struct(Rc::new(StructVal { name, fields, copy, uid }))
     }
 
     /// Give every destructor-carrying struct inside `v` a fresh identity (`.clone()` makes new objects).

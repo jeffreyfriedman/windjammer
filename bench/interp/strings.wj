@@ -1,0 +1,15 @@
+// String building: interpolation, push_str and length checks in a loop.
+fn main() {
+    let mut s = String::new()
+    let mut total = 0
+    let mut i = 0
+    while i < 200000 {
+        s.push_str("${i % 10},")
+        if s.len() > 1000 {
+            total += s.len()
+            s = String::new()
+        }
+        i += 1
+    }
+    println("${total} ${s.len()}")
+}
