@@ -23,7 +23,7 @@ Status and measurements: `docs/INTERPRETER.md`.
 - `ops.rs`, `coerce.rs`, `format.rs`, `defaults.rs`  operators, `as`/binding coercions, `format!`, `Default`
 - `intrinsics.rs`        ADR-0014 intrinsics (print/panic/assert/debug/list) driven by `crate::intrinsics::Intrinsic`
 - `builtins/`            native stdlib registry (`Registry`; `native(type, method)` for host objects): core types, `std_*` modules (`std_http{,_server}` port, `std_proc` subprocess/cli, `std_config`, `std_db`, `std_ordered`), `test_assert`, `thread`/`channel`/`sync`/`time`, `arena` (`std::arena`: Arena/Handle/Scratch, debug-build handle checks)
-- `resolved/`            `--engine=resolved` (ADR-0020): per-function closure compilation over `Interpreter::rstack` slots; `fast.rs` hot shapes; walker fallback
+- `resolved/`            default engine of `wj run` (ADR-0020): closures over `rstack` slots; `typed.rs` unboxed ints, `island.rs` walker islands, `method.rs`/`place.rs` via the walker's own routines, `jit.rs` (feature `jit`)
 - `sched.rs`, `locks.rs`, `native.rs`, `slicing.rs`  task scheduler (virtual clock), guard tokens + poisoning, host objects, panic texts `arena` (`std::arena`: Arena/Handle/Scratch with debug-build handle checks).
 - `runner.rs`, `repl.rs` CLI port: run/test/REPL, exit codes, big-stack thread; only place with process I/O policy
 - `error.rs`, `features.rs`  `RuntimeError`, `Ctl` (break/continue/return/error), spans, backtraces; `features.rs` = executable feature registry that generates the INTERPRETER.md lists

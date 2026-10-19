@@ -69,7 +69,14 @@ impl Cx<'_> {
         self.scopes.last_mut().expect("scope").push((name, i));
         i
     }
-    fn declare_boxed(&mut self, name: &'static str) -> usize {
+    /// Open / close a name scope (a `match` arm).
+    pub(super) fn enter(&mut self) {
+        self.scopes.push(Vec::new());
+    }
+    pub(super) fn leave(&mut self) {
+        self.scopes.pop();
+    }
+    pub(super) fn declare_boxed(&mut self, name: &'static str) -> usize {
         let i = self.declare(name, None);
         self.need_box(i);
         i
@@ -495,7 +502,9 @@ fn stmt_tail(cx: &mut Cx, s: S) -> Option<Tail> {
         None => stmt_island(cx, s)?,
     };
     let valued = matches!(s, Statement::Expression { .. } | Statement::If { .. } | Statement::Match { .. } | Statement::Loop { .. });
-    Some(if island && valued { Tail::Raw(code) } else { Tail::Code(code) })
+    // a lowered `match` yields its arm body's `eval_raw` value
+    let raw = (island && valued) || matches!(s, Statement::Match { .. });
+    Some(if raw { Tail::Raw(code) } else { Tail::Code(code) })
 }
 
 /// A statement: lowered when the compiler can, else a walker island (`island.rs`). Only `defer`
@@ -643,6 +652,7 @@ fn stmt_native(cx: &mut Cx, s: S) -> Option<Code> {
             Box::new(move |_, _| Err(Ctl::Continue(Box::new(label.clone()))))
         }
         Statement::Use { .. } => Box::new(|_, _| Ok(Value::Unit)),
+        Statement::Match { value, arms, .. } => super::matching::match_stmt(cx, value, arms)?,
         _ => return None,
     };
     Some(code)
