@@ -116,6 +116,15 @@ pub(super) fn read_boxed(it: &mut Interpreter, i: usize, name: &'static str) -> 
     }
 }
 
+/// Read a boxed local as the walker's `eval_raw` of a variable (references kept).
+#[inline]
+pub(super) fn read_boxed_raw(it: &mut Interpreter, i: usize, name: &'static str) -> R {
+    match &it.rstack[i] {
+        Value::Ref(p) => Ok(p.slot.borrow().clone()),
+        _ => it.eval_path_value(name),
+    }
+}
+
 /// Read a boxed local as a call argument (`eval_keep_guard`: a guard stays a guard).
 #[inline]
 pub(super) fn read_boxed_arg(it: &mut Interpreter, i: usize, name: &'static str) -> R {

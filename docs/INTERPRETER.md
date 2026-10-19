@@ -269,9 +269,10 @@ Findings from running the same programs through the compiled path (compiler bugs
   locals the first time it is called, integer code with a statically known width runs unboxed, calls pass arguments in
   place, field reads and method calls have inline caches, and a construct it does not lower runs in the tree walker as an
   island inside the compiled function. `--engine walker` runs the tree walker alone (the reference semantics; the parity test
-  compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 10x faster than in the walker,
+  compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 12x faster than in the walker,
   faster than CPython on both; `--features jit` adds a Cranelift tier for hot integer functions. `scripts/interp_bench.py`
   is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
+  `wj test --interpret` uses the same engine.
 
 Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
 (first interp-gaps measurement: 222 of 382 on the smaller tree then). Of the 138 that do not: 40 are `__SEED__` corpus templates,

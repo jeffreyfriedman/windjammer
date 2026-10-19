@@ -1,0 +1,66 @@
+// Regression (from interpreter_concurrency_test): `ready = match cv.wait(ready) { Ok(g) => g, .. }`
+// keeps the guard: a match arm body reads a boxed local as is.
+use std::sync::{Arc, Mutex, Condvar, Barrier}
+use std::sync::mpsc
+use std::thread
+use std::thread::JoinHandle
+
+fn main() {
+    let pair = Arc::new((Mutex::new(false), Condvar::new()))
+    let p2 = pair.clone()
+    let h = thread::spawn(move || {
+        let (lock, cv) = &*p2
+        match lock.lock() {
+            Ok(mut g) => { *g = true }
+            Err(_) => {}
+        }
+        cv.notify_one()
+        return 1
+    })
+    let (lock, cv) = &*pair
+    let mut ready = match lock.lock() { Ok(g) => g, Err(_) => return }
+    while !*ready {
+        ready = match cv.wait(ready) { Ok(g) => g, Err(_) => return }
+    }
+    println("ready {}", *ready)
+    h.join()
+
+    let (stx, srx) = mpsc::sync_channel(1)
+    let prod = thread::spawn(move || {
+        let mut i: i64 = 0
+        while i < 4 {
+            stx.send(i)
+            i += 1
+        }
+        return 0
+    })
+    let mut got: Vec<i64> = Vec::new()
+    for v in srx { got.push(v) }
+    println("bounded {:?}", got)
+    prod.join()
+
+    let barrier = Arc::new(Barrier::new(3))
+    let log = Arc::new(Mutex::new(Vec::new()))
+    let mut hs: Vec<JoinHandle<i64>> = Vec::new()
+    let mut i: i64 = 0
+    while i < 3 {
+        let b = barrier.clone()
+        let l = log.clone()
+        let id = i
+        hs.push(thread::spawn(move || {
+            match l.lock() { Ok(mut g) => { g.push(id) } Err(_) => {} }
+            b.wait()
+            match l.lock() { Ok(mut g) => { g.push(id + 10) } Err(_) => {} }
+            return 0
+        }))
+        i += 1
+    }
+    for h in hs { h.join() }
+    let order = match log.lock() { Ok(g) => g.clone(), Err(_) => Vec::new() }
+    // every "before" entry (0..3) precedes every "after" entry (10..13)
+    let mut ok = true
+    let mut k: usize = 0
+    while k < 3 { if order[k] >= 10 { ok = false } k += 1 }
+    while k < 6 { if order[k] < 10 { ok = false } k += 1 }
+    println("barrier {} {}", ok, order.len())
+}

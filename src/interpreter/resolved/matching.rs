@@ -25,6 +25,13 @@ struct Arm {
 
 /// `e` as the walker's `eval_raw`: lowered, else an island.
 fn raw(cx: &mut Cx, e: E) -> Option<Code> {
+    // a boxed local as is (a lock guard stays a guard), as the walker reads a variable
+    if let Expression::Identifier { name, .. } = e {
+        if let Some(slot) = cx.local(name).filter(|s| cx.is_boxed(*s)) {
+            let name: &'static str = name.as_str();
+            return Some(Box::new(move |it, b| island::read_boxed_raw(it, b + slot, name)));
+        }
+    }
     if let Some(x) = expr(cx, e) {
         return Some(x.code());
     }

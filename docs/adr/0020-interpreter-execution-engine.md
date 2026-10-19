@@ -91,21 +91,21 @@ and returning it through `Result<Value, Ctl>`.
 
 ## Steps 1-8 (Oct 2026): from opt-in to default
 
-Measured with `scripts/interp_compare.sh` (child CPU seconds, median of 3, release `wj`; the shared machine had a load
-average of about 135, so read ratios, not absolutes). Rust is the program the Windjammer compiler generates from the same
-file (`rustc -O`); Python and Node are hand-written twins in `bench/interp/twins/`; every column prints exactly what the
-walker prints.
+Measured with `scripts/interp_compare.sh` (child CPU seconds, median of 3, release `wj`, at the end of the work; the shared
+machine had a load average of about 43, so read ratios, not absolutes). Rust is the program the Windjammer compiler
+generates from the same file (`rustc -O`); Python and Node are hand-written twins in `bench/interp/twins/`; every column
+prints exactly what the walker prints.
 
 | kernel | walker | resolved | Rust | Python 3.13 | Node 24 | walker / resolved | resolved / Python |
 |--------|--------|----------|------|-------------|---------|-------------------|-------------------|
-| `fib30` | 0.753 | 0.094 | 0.004 | 0.139 | 0.041 | 8.0x | 0.68 |
-| `loop5m` | 1.982 | 0.188 | 0.004 | 1.021 | 0.055 | 10.5x | 0.18 |
-| `structs` (method calls) | 0.678 | 0.360 | 0.002 | 0.178 | 0.048 | 1.9x | 2.0 |
-| `strings` | 0.185 | 0.116 | 0.009 | 0.072 | 0.042 | 1.6x | 1.6 |
-| `sieve` | 1.361 | 0.572 | (1) | 0.407 | 0.057 | 2.4x | 1.4 |
-| `hashmap` | 0.274 | 0.218 | (2) | 0.052 | 0.039 | 1.3x | 4.2 |
-| `closures` (iterator chains) | 0.182 | 0.177 | (2) | 0.044 | 0.036 | 1.0x | 4.0 |
-| `nbody` (floats in structs) | 1.163 | 0.854 | 0.002 | 0.121 | 0.046 | 1.4x | 7.1 |
+| `fib30` | 0.894 | 0.107 | 0.005 | 0.160 | 0.051 | 8.3x | 0.67 |
+| `loop5m` | 2.319 | 0.190 | 0.003 | 1.038 | 0.049 | 12.2x | 0.18 |
+| `structs` (method calls) | 0.675 | 0.393 | 0.005 | 0.185 | 0.054 | 1.7x | 2.1 |
+| `strings` | 0.201 | 0.114 | 0.011 | 0.075 | 0.040 | 1.8x | 1.5 |
+| `sieve` | 1.351 | 0.599 | (1) | 0.405 | 0.057 | 2.3x | 1.5 |
+| `hashmap` | 0.308 | 0.218 | (2) | 0.059 | 0.045 | 1.4x | 3.7 |
+| `closures` (iterator chains) | 0.195 | 0.173 | (2) | 0.052 | 0.049 | 1.1x | 3.4 |
+| `nbody` (floats in structs) | 1.193 | 0.888 | 0.003 | 0.136 | 0.054 | 1.3x | 6.5 |
 
 (1) the generated Rust panics: unannotated integer locals used as indices are emitted as `i32`, so `i * i` overflows past
 46340 (compiler bug, numeric defaults; the interpreter computes in `i64` as the language specifies).
@@ -147,7 +147,7 @@ longer allocates its names. `structs` 0.64 to 0.34 s. The kill criterion (10% on
 
 ### Step 5: default engine and coverage
 The criteria held, so `--engine=resolved` is the default for `wj run`:
-- speed: 8.0x (`fib30`) and 10.5x (`loop5m`) over the walker (criterion: 3x on both);
+- speed: 8.3x (`fib30`) and 12.2x (`loop5m`) over the walker (criterion: 3x on both);
 - no divergence: `tests/interpreter_engine_parity_test.rs` (conformance programs, `examples/verified`, `tests/spec`, every
   seed of the interpreter corpus, and `tests/engine_parity/`, programs aimed at typed paths, islands, method calls and
   deopt) shows no difference in stdout, stderr or exit status; mutants that skip a range check or keep block locals alive
