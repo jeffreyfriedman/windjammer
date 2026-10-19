@@ -384,7 +384,16 @@ pub fn is_sanitizer_callee(qualified_name: &str) -> bool {
 }
 
 /// Standard library taint source declarations from scanned runtime signatures.
+///
+/// Memoized per process: the result is a function of the stdlib registry only (itself a process-wide
+/// `OnceLock`), and the IR pipeline asks for it once per checked file.
 pub fn stdlib_taint_sources() -> Vec<TaintConstraint> {
+    static MEMO: std::sync::OnceLock<Vec<TaintConstraint>> = std::sync::OnceLock::new();
+    MEMO.get_or_init(compute_stdlib_taint_sources).clone()
+}
+
+/// The unmemoized computation behind [`stdlib_taint_sources`] (kept callable for the equivalence test).
+pub fn compute_stdlib_taint_sources() -> Vec<TaintConstraint> {
     let registry = SignatureRegistry::stdlib();
     let mut out = Vec::new();
     for (name, _sig) in registry.all_signatures_for_suffix_search() {
@@ -404,8 +413,14 @@ pub fn stdlib_taint_sources() -> Vec<TaintConstraint> {
     out
 }
 
-/// Standard library dangerous sink declarations (effect-driven).
+/// Standard library dangerous sink declarations (effect-driven). Memoized like [`stdlib_taint_sources`].
 pub fn stdlib_sinks() -> Vec<TaintConstraint> {
+    static MEMO: std::sync::OnceLock<Vec<TaintConstraint>> = std::sync::OnceLock::new();
+    MEMO.get_or_init(compute_stdlib_sinks).clone()
+}
+
+/// The unmemoized computation behind [`stdlib_sinks`].
+pub fn compute_stdlib_sinks() -> Vec<TaintConstraint> {
     let registry = SignatureRegistry::stdlib();
     let mut out = Vec::new();
     for (name, _sig) in registry.all_signatures_for_suffix_search() {
