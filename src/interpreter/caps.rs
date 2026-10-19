@@ -251,7 +251,7 @@ impl Interpreter {
             return Ok(());
         }
         let package = self.cap_package();
-        // a mocked http port (--mock-http) never touches the network, so it needs no network capability
+        // a mocked http port (--mock-http) never touches the network, so the default profile lets it through
         let mocked_net = matches!(effect, EffectKind::NetConnect | EffectKind::NetListen) && matches!(self.http, super::builtins::std_http::HttpMode::Mock(_));
         let Some(gate) = self.caps.as_mut() else { return Ok(()) };
         if !gate.seen.contains(effect) {
@@ -260,7 +260,8 @@ impl Interpreter {
         if gate.bypass > 0 {
             return Ok(());
         }
-        if mocked_net {
+        // only in the default local profile: an explicit grant (a [capabilities] table, --allow) keeps governing mocked calls too
+        if mocked_net && gate.local_profile {
             return Ok(());
         }
         if let Err(d) = gate.grant_for(package.as_deref()).check(effect, resource) {
@@ -280,7 +281,7 @@ impl Interpreter {
                 CapMode::Warn => {
                     if gate.warned.insert(d.subject()) {
                         eprintln!(
-                            "warning[WJ0040]: {} is not in this project's capabilities; it will be denied in a future release\n  = to allow: {}",
+                            "warning[WJ0040]: {} is outside this project's capabilities (running anyway because capability enforcement is set to warn)\n  = to allow: {}",
                             d.subject(),
                             d.fix
                         );
