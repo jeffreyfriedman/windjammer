@@ -145,6 +145,9 @@ impl Interpreter {
                 Value::Float(f, _) => {
                     if f.is_nan() {
                         0
+                    } else if target == IntTy::U128 {
+                        // saturating float -> u128 over the full range (bit pattern storage)
+                        f.trunc().max(0.0).min(u128::MAX as f64) as u128 as i128
                     } else {
                         let t = f.trunc();
                         let (lo, hi) = (target.min() as f64, target.max() as f64);
@@ -166,6 +169,7 @@ impl Interpreter {
         }
         if let Some(ft) = type_is_float(ty) {
             let f = match &v {
+                Value::Int(i, IntTy::U128) => *i as u128 as f64,
                 Value::Int(i, _) => *i as f64,
                 Value::Float(f, _) => *f,
                 other => return Err(unsupported(format!("cast of {} to float", other.type_name()))),

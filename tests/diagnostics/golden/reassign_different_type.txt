@@ -1,0 +1,7 @@
+error[WJ0003]: mismatched types: expected `int`, found `string` in assignment to `total`
+  --> reassign_different_type.wj:4:13
+  |
+4 |     total = "five"
+  |             ^^^^^^ expected `int`, found `string`
+  = help: make the value a `int`, or change the declaration
+  = explain: wj explain WJ0003

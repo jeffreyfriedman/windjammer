@@ -71,9 +71,16 @@ pub fn run(cli: Cli) -> Result<()> {
         Commands::Run {
             path,
             args,
+            bin,
             target,
             interpret,
+            compiled,
+            release,
+            watch,
+            hot,
             sched_seed,
+            hash_seed,
+            engine,
             deterministic_time,
             allow_network,
             mock_http,
@@ -81,11 +88,29 @@ pub fn run(cli: Cli) -> Result<()> {
             defer_drop_threshold,
         } => {
             let _ = (defer_drop, defer_drop_threshold);
-            if interpret {
-                let opts = windjammer::interpreter::runner::RunOptions { sched_seed, deterministic_time, allow_network, mock_http };
-                interpret_file(&path, args, opts)?;
+            use windjammer::cli::run_dev::{execute, Mode, RunOptions};
+            if watch {
+                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+                let root = windjammer::cli::watch::watch_root(path.as_deref());
+                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            }
+            let mode = if compiled || release {
+                Mode::Compiled { release }
+            } else if interpret || hot {
+                Mode::Interpret
             } else {
-                windjammer::cli::run::execute(&path, &args, &target)?;
+                Mode::Auto
+            };
+            let lint = windjammer::cli_execution::report_build_lints;
+            let engine_resolved = match engine.as_str() {
+                "resolved" => true,
+                "walker" => false,
+                other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
+            };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved };
+            let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint) });
+            if code != 0 {
+                std::process::exit(code);
             }
         }
         Commands::Repl {} => {
@@ -109,9 +134,15 @@ pub fn run(cli: Cli) -> Result<()> {
             list,
             allow_empty,
             interpret,
+            watch,
             doc,
             compiled,
         } => {
+            if watch {
+                let child_args: Vec<String> = std::env::args().skip(1).filter(|a| a != "--watch").collect();
+                let root = windjammer::cli::watch::watch_root(path.as_deref());
+                std::process::exit(windjammer::cli::watch::watch(&root, child_args, None));
+            }
             // ADR-0018: doctests run first (interpreter; `--compiled` also through Rust). Not in `--list`/`--json`.
             let doc_count = if list || json { 0 } else { run_doctests(path.as_deref(), filter.as_deref(), compiled)? };
             if doc {
@@ -470,16 +501,6 @@ fn cmd_validate_wjsl(path: &std::path::Path) -> Result<()> {
         );
     }
 
-    Ok(())
-}
-
-/// Interpret a .wj file or project directory directly (no cargo, no rustc).
-fn interpret_file(file: &std::path::Path, args: Vec<String>, opts: windjammer::interpreter::runner::RunOptions) -> Result<()> {
-    windjammer::cli_execution::report_build_lints(file);
-    let code = windjammer::interpreter::runner::run_path_with(file, args, opts);
-    if code != 0 {
-        std::process::exit(code);
-    }
     Ok(())
 }
 

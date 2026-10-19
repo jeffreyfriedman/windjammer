@@ -1,0 +1,13 @@
+pub fn title(s: string) -> string {
+    let mut out = String::new()
+    let mut up = true
+    for c in s.chars() {
+        if up {
+            out.push(c.to_ascii_uppercase())
+        } else {
+            out.push(c)
+        }
+        up = c == ' '
+    }
+    out
+}
