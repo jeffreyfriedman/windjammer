@@ -1,0 +1,19 @@
+fn connect(host: string, timeout: int=30) -> string {
+    "${host}:${timeout}"
+}
+
+fn main() {
+    let xs: Vec<int> = [1, 2, 3]
+    let ys: Vec<int> = xs.map(_*2).collect()
+    let g = xs.group_by(_ % 2)
+    let a: int? = None
+    let v = a??0
+    let w = [1, 2] |>.zip_with([3, 4], _ + _)
+    let r = run_with("job") {40 + 2}
+    let zs: Vec<int> = xs.map() { v ->  v * 10 }.collect()
+    let s = match {
+        v > 0 => "pos",
+        _ => "other",
+    }
+    println(connect("db", timeout:5))
+}

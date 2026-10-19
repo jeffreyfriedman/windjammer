@@ -751,6 +751,10 @@ impl Interpreter {
                     if self.builtins.has_function(&path) {
                         let args = self.eval_args(arguments, None, false)?;
                         self.mark(loc);
+                        if path.ends_with("json::parse_string") {
+                            let expected = self.take_expected(whole);
+                            self.type_hint = type_args.and_then(|t| t.first().cloned()).or(expected);
+                        }
                         return self.call_builtin_fn(&path, args);
                     }
                 }

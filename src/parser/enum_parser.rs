@@ -24,13 +24,7 @@ impl Parser {
         let mut variants = Vec::new();
         while self.current_token() != &Token::RBrace {
             // Collect doc comment for variant (if any)
-            let doc_comment = if let Token::DocComment(comment) = self.current_token() {
-                let doc = comment.clone();
-                self.advance();
-                Some(doc)
-            } else {
-                None
-            };
+            let doc_comment = self.collect_doc_comments();
 
             let variant_name = match self.current_token() {
                 Token::Ident(n) => {

@@ -210,12 +210,12 @@ impl Flatten {
                     None => PExpr::unit(),
                 }
             }
-            PK::Try { expr, fn_ret } => self.try_expr(expr, fn_ret, &ty, pre),
+            PK::Try { expr, fn_ret, conv } => self.try_expr(expr, fn_ret, conv, &ty, pre),
             PK::Binary(op @ (BinKind::And | BinKind::Or), l, r) => self.short_circuit(op, l, r, pre),
-            PK::Closure { params, ret, body, captures } => {
+            PK::Closure { params, ret, body } => {
                 let sink = if ret == Ty::Unit { Sink::Discard } else { Sink::Return };
                 let stmts = self.block(body, sink);
-                PExpr::new(ty, PK::Closure { params, ret, body: PBlock { stmts, tail: None }, captures }).at(line)
+                PExpr::new(ty, PK::Closure { params, ret, body: PBlock { stmts, tail: None } }).at(line)
             }
             mut other => {
                 let kids = children_mut(&mut other);
@@ -267,7 +267,7 @@ impl Flatten {
         local(&t, &Ty::Bool)
     }
 
-    fn try_expr(&mut self, inner: PExpr, fn_ret: Ty, ty: &Ty, pre: &mut Vec<PStmt>) -> PExpr {
+    fn try_expr(&mut self, inner: PExpr, fn_ret: Ty, conv: Option<(String, String)>, ty: &Ty, pre: &mut Vec<PStmt>) -> PExpr {
         let v = self.expr(inner, pre);
         let t = self.fresh("q");
         let vty = v.ty.clone();
@@ -276,7 +276,10 @@ impl Flatten {
         let (pat, ret) = match &vty {
             Ty::Option(_) => (PPat::None, PExpr::new(fn_ret.clone(), PK::None)),
             Ty::Result(_, et) => {
-                let e = local(&err_name, et);
+                let mut e = local(&err_name, et);
+                if let (Some((owner, name)), Ty::Result(_, to)) = (conv, &fn_ret) {
+                    e = PExpr::new((**to).clone(), PK::StaticCall { owner, name, args: vec![e] });
+                }
                 (PPat::Err(Box::new(PPat::Bind { name: err_name.clone(), mutable: false })), PExpr::new(fn_ret.clone(), PK::Err(e)))
             }
             _ => (PPat::Wild, PExpr::unit()),

@@ -79,6 +79,34 @@ impl<'e> Lowerer<'e> {
         }
     }
 
+    /// `P { x, y: 2, .. }` / `P(a, b)` on a struct.
+    fn struct_pattern(&mut self, name: &str, binding: &EnumPatternBinding, ty: &Ty) -> PResult<PPat> {
+        let info = self.env.structs[name].clone();
+        let args: Vec<Ty> = match ty {
+            Ty::Adt(n, a) if n == name => a.clone(),
+            _ => vec![Ty::Unknown; info.type_params.len()],
+        };
+        let ftys: Vec<(String, Ty)> = info.fields.iter().map(|(n, t)| (n.clone(), t.subst(&info.type_params, &args))).collect();
+        let mut fields = Vec::new();
+        match binding {
+            EnumPatternBinding::Struct(named, _) => {
+                for (fname, p) in named {
+                    let Some((_, t)) = ftys.iter().find(|(n, _)| n == fname).cloned() else { return self.err(format!("no field `{fname}` on `{name}`")) };
+                    let pp = self.pattern(p, &t)?;
+                    fields.push((fname.clone(), t, pp));
+                }
+            }
+            other => {
+                let tys: Vec<Ty> = ftys.iter().map(|(_, t)| t.clone()).collect();
+                for (i, pp) in self.payload_pattern(other, &tys)?.into_iter().enumerate() {
+                    let (n, t) = ftys.get(i).cloned().unwrap_or((i.to_string(), Ty::Unknown));
+                    fields.push((n, t, pp));
+                }
+            }
+        }
+        Ok(PPat::Struct { name: name.to_string(), fields })
+    }
+
     fn variant_pattern(&mut self, name: &str, binding: &EnumPatternBinding, ty: &Ty) -> PResult<PPat> {
         let first = |v: Vec<PPat>| v.into_iter().next().unwrap_or(PPat::Wild);
         match (name, ty) {
@@ -95,6 +123,19 @@ impl<'e> Lowerer<'e> {
                 });
             }
             _ => {}
+        }
+        let name = &crate::codegen::portable::alias::strip_modules(name).unwrap_or_else(|| name.to_string());
+        let nominal = crate::codegen::portable::alias::nominal(name).unwrap_or_else(|| if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() });
+        if self.env.structs.contains_key(&nominal) {
+            return self.struct_pattern(&nominal, binding, ty);
+        }
+        if let Some((owner, var)) = name.rsplit_once("::") {
+            if crate::codegen::portable::ordering::is_path(owner) && !self.env.enums.contains_key(crate::codegen::portable::ordering::NAME) {
+                if crate::codegen::portable::ordering::variant_value(var).is_some() {
+                    let t = crate::codegen::portable::ordering::ty();
+                    return Ok(PPat::Lit(PExpr::new(t, PK::StaticCall { owner: "Ordering".into(), name: var.to_string(), args: vec![] })));
+                }
+            }
         }
         let (en, var) = match name.rsplit_once("::") {
             Some((e, v)) => (if e == "Self" { self.owner.clone().unwrap_or_default() } else { e.to_string() }, v.to_string()),

@@ -1,0 +1,6 @@
+// spec: SPEC-COLL-006
+// expect: 2 3 5
+fn main() {
+    let (even, odd) = [1, 2, 3, 4, 5].partition_by(|x| x % 2 == 0)
+    println("${even.len()} ${odd.len()} ${odd[2]}")
+}
