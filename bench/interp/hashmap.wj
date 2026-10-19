@@ -1,0 +1,30 @@
+// HashMap-heavy: counting keys, then lookups.
+use std::collections::HashMap
+
+fn main() {
+    let mut m: HashMap<int, int> = HashMap::new()
+    let mut i = 0
+    while i < 200000 {
+        let k = (i * 7919) % 10007
+        let c = match m.get(&k) {
+            Some(v) => *v,
+            None => 0,
+        }
+        m.insert(k, c + 1)
+        i += 1
+    }
+    let mut best = 0
+    let mut j = 0
+    while j < 10007 {
+        match m.get(&j) {
+            Some(v) => {
+                if *v > best {
+                    best = *v
+                }
+            }
+            None => {}
+        }
+        j += 1
+    }
+    println("${m.len()} ${best}")
+}
