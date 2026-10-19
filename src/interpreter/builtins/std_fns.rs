@@ -256,10 +256,12 @@ pub fn register(r: &mut Registry) {
             Err(e) => io_err(e),
         })
     });
-    r.pure(Kind::Struct, "read_line", |_, v, a| {
+    r.pure(Kind::Struct, "read_line", |it, v, a| {
         if !matches!(v, Value::Struct(s) if &*s.name == "Stdin") {
             return Err(semantic("`read_line` is only available on stdin"));
         }
+        // like a terminal-attached Rust program: a prompt printed before reading must be visible
+        it.flush();
         let mut line = String::new();
         let n = std::io::stdin().read_line(&mut line).map_err(|e| semantic(e.to_string()))?;
         if let Some(Value::Ref(p)) = a.first() {

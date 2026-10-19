@@ -14,6 +14,22 @@ fn use_path_first_segment_is_lang_root(seg: &str) -> bool {
     matches!(seg, "std" | "crate" | "super" | "self")
 }
 
+/// True when an emitted `use` line already binds `name` (`use crate::util::math;`, `use x as math;`):
+/// a user module must shadow the runtime std module of the same name, never collide with it (E0252).
+fn binds_name_locally(imports: &str, name: &str) -> bool {
+    imports.lines().map(str::trim).any(|l| {
+        let Some(path) = l.strip_prefix("pub use ").or_else(|| l.strip_prefix("use ")) else {
+            return false;
+        };
+        let path = path.trim_end_matches(';').trim();
+        let bound = match path.rsplit_once(" as ") {
+            Some((_, alias)) => alias.trim(),
+            None => path.rsplit("::").next().unwrap_or(path),
+        };
+        bound == name && !path.starts_with("windjammer_runtime::")
+    })
+}
+
 fn is_fn_import_name(name: &str) -> bool {
     name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
 }
@@ -1186,6 +1202,7 @@ impl<'ast> CodeGenerator<'ast> {
             if imports.contains(&format!("windjammer_runtime::{module}"))
                 || imports.contains(&format!("{module}::"))
                 || imports.contains(&format!("use {module}"))
+                || binds_name_locally(&imports, module)
             {
                 continue;
             }

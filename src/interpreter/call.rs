@@ -85,6 +85,14 @@ impl Interpreter {
                 module = self.modules[module].parent.unwrap_or(0);
                 first = rest[0].to_string();
                 rest = rest[1..].to_vec();
+                // `super::super::x`, `super::self::x`
+                while (first == "super" || first == "self") && !rest.is_empty() {
+                    if first == "super" {
+                        module = self.modules[module].parent.unwrap_or(0);
+                    }
+                    first = rest[0].to_string();
+                    rest = rest[1..].to_vec();
+                }
             }
             _ => {}
         }
@@ -612,7 +620,10 @@ impl Interpreter {
         expected: Option<Type>,
     ) -> R {
         if f.is_extern {
-            return Err(unsupported(format!("extern function `{}`", f.name)));
+            return self.call_host(&f.name, args); // ADR-0020 host bridge (unsupported when none is loaded)
+        }
+        if self.hot.is_some() {
+            self.hot_safe_point(); // ADR-0021: edits land between calls; this call keeps the body it resolved
         }
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));

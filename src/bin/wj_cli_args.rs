@@ -133,39 +133,58 @@ pub enum Commands {
         ir_shadow_validate: bool,
     },
 
-    /// Compile and run a Windjammer file
+    /// Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
     Run {
-        /// Path to .wj file
-        #[arg(value_name = "FILE")]
-        path: PathBuf,
+        /// A .wj file or a directory; omitted: the project containing the current directory (wj.toml)
+        #[arg(value_name = "PATH")]
+        path: Option<PathBuf>,
 
         /// Arguments to pass to the program
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
 
-        /// Target platform (rust, javascript, wasm)
+        /// Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj)
+        #[arg(long, value_name = "NAME")]
+        bin: Option<String>,
+
+        /// Target platform (rust, javascript, wasm); non-rust targets always compile
         #[arg(short, long, value_name = "TARGET", default_value = "rust")]
         target: String,
 
-        /// Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start.
-        /// Accepts a file or a project directory. Same source compiles with `wj build` for release.
-        #[arg(long)]
+        /// Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature)
+        #[arg(long, conflicts_with_all = ["compiled", "release"])]
         interpret: bool,
 
-        /// With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another
+        /// Transpile to Rust and run with cargo (the release path), skipping the interpreter
+        #[arg(long)]
+        compiled: bool,
+
+        /// Like --compiled, with optimizations
+        #[arg(long)]
+        release: bool,
+
+        /// Re-run on every source change (restarts long-running programs)
+        #[arg(long)]
+        watch: bool,
+
+        /// Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)
+        #[arg(long, conflicts_with_all = ["compiled", "release", "watch"])]
+        hot: bool,
+
+        /// Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another
         /// reproducible interleaving at every synchronisation point)
         #[arg(long, value_name = "N", default_value = "0")]
         sched_seed: u64,
 
-        /// With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it
+        /// Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it
         #[arg(long)]
         deterministic_time: bool,
 
-        /// With --interpret: allow plain http:// client requests (default: the http client refuses)
+        /// Interpreted runs: allow plain http:// client requests (default: the http client refuses)
         #[arg(long)]
         allow_network: bool,
 
-        /// With --interpret: answer http client calls from a JSON file of canned responses
+        /// Interpreted runs: answer http client calls from a JSON file of canned responses
         #[arg(long, value_name = "FILE")]
         mock_http: Option<PathBuf>,
 
@@ -250,6 +269,9 @@ pub enum Commands {
         /// Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc
         #[arg(long)]
         interpret: bool,
+        /// Re-run the tests on every source change
+        #[arg(long)]
+        watch: bool,
         /// Run only the doctests (```wj examples in `///` doc comments)
         #[arg(long)]
         doc: bool,
