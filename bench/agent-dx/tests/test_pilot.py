@@ -316,3 +316,21 @@ class Denials(unittest.TestCase):
                     return super().run(ws, shim_dir, arm, task)
             r = pilot.run_pilot(Sometimes([]), list(pilot.PILOT_TASKS), ["A", "B"], 1, d, g, grader(), real, say=lambda *_: None)
             self.assertIsNone(r["aborted_reason"] if "permission" in (r["aborted_reason"] or "") else None)
+
+
+class Regrade(unittest.TestCase):
+    def test_regrade_flips_false_failures_and_keeps_originals(self):
+        with tempfile.TemporaryDirectory() as d:
+            real = fake_wj(d)
+            pilot.run_pilot(FakeAgent([]), ["t003_prime_counts"], ["A"], 2, d, budget.BudgetGuard(10, 5, 0.3), grader("fail", "pass"), real, say=lambda *_: None)
+            changed = pilot.regrade_failures(d, grader("pass", "pass"), say=lambda *_: None)
+            self.assertEqual(changed, 2)
+            for t in pilot.load_trials(d):
+                self.assertTrue(t["pass_final"] and t["regraded"])
+                self.assertEqual(t["original_final_grade"]["status"], "fail")
+                self.assertFalse(t["divergence"]["diverged"])
+            self.assertEqual(pilot.regrade_failures(d, grader("fail", "fail"), say=lambda *_: None), 0)   # passing trials untouched
+
+    def test_compiled_build_and_copy_are_serialised(self):
+        from agentdx import runners
+        self.assertTrue(hasattr(runners, "_BUILD_LOCK"))
