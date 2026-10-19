@@ -2,10 +2,10 @@ use windjammer_runtime::test::*;
 #[test]
 
 fn test_math() {
-    let x = 5_i32;
-    let y = 10_i32;
+    let x = 5_i64;
+    let y = 10_i64;
     let sum = x + y;
-    assert!(sum == 15_i32);
+    assert!(sum == 15_i64);
 }
 
 #[test]

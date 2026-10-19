@@ -26,9 +26,9 @@ fn tokenize(src: &str) -> Vec<Token> {
     while i < chars.len() {
         let mut c = chars[i];
         if c.is_numeric() {
-            let mut n: i32 = 0_i32;
+            let mut n = 0_i64;
             while i < chars.len() && chars[i].is_numeric() {
-                n = n * 10_i32 + (chars[i].to_digit(10).unwrap_or(0) as i64) as i32;
+                n = n * 10_i64 + chars[i].to_digit(10).unwrap_or(0) as i64;
                 i += 1;
             }
             let _ = toks.push(Token::Num(n));

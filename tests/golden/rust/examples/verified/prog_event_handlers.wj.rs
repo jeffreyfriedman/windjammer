@@ -9,7 +9,7 @@ fn main() {
     { bus.handlers.push(|e| format!("log: {}", e)) };
     { bus.handlers.push(|e| format!("log: {} 3", e)) };
     let events = vec!["started".to_string(), "clicked".to_string()];
-    let mut handled = 0_i32;
+    let mut handled = 0_i64;
     for (i, h) in bus.handlers.iter().enumerate() {
         println!("{}", h(events[i as usize].clone()));
         handled += 1;

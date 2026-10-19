@@ -12,7 +12,7 @@ pub fn test_integer_comparison_before_indexing() {
 
 #[inline]
 pub fn test_integer_arithmetic_then_indexing() {
-    let nums = vec![10_i32, 20_i32, 30_i32, 40_i32, 50_i32];
+    let nums = vec![10_i64, 20_i64, 30_i64, 40_i64, 50_i64];
     let count = nums.len() as i32;
     let offset = count / 2_i32;
     let adjusted = offset + 1_i32;
@@ -24,7 +24,7 @@ pub fn test_integer_arithmetic_then_indexing() {
 
 #[inline]
 pub fn test_percentage_calculation_then_indexing() {
-    let values = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32, 6_i32, 7_i32, 8_i32, 9_i32, 10_i32];
+    let values = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64, 6_i64, 7_i64, 8_i64, 9_i64, 10_i64];
     let n = values.len() as i32;
     let pct = 50_i32;
     let numer = n * pct;

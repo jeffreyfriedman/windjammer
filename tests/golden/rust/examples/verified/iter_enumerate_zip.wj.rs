@@ -5,7 +5,7 @@ fn main() {
         s = s + &format!("{}:{} ", i, l);
     }
     println!("{}", s.trim());
-    let nums = vec![1_i32, 2_i32, 3_i32];
+    let nums = vec![1_i64, 2_i64, 3_i64];
     let mut t = String::new();
     for (l, n) in letters.iter().zip(nums) {
         t = t + &format!("{}={} ", l, n);

@@ -71,7 +71,7 @@ pub fn test_loop_index_usize_inference() {
 
 #[inline]
 pub fn test_direct_loop_assignment() {
-    let items = vec![10_i32, 20_i32, 30_i32, 40_i32, 50_i32];
+    let items = vec![10_i64, 20_i64, 30_i64, 40_i64, 50_i64];
     let mut found_idx = items.len();
     for i in 0_usize..items.len() {
         if items[i] > 25_i64 {
@@ -85,7 +85,7 @@ pub fn test_direct_loop_assignment() {
 
 #[inline]
 pub fn test_loop_arithmetic_usize() {
-    let data = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
+    let data = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
     let mut next_idx = data.len();
     for i in 0_usize..data.len() - 1_usize {
         if data[i] == 3_i64 {

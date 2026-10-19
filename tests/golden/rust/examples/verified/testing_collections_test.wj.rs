@@ -22,7 +22,7 @@ fn counts_repeats() {
 
 #[test]
 fn sorts_and_dedups() {
-    let mut v = vec![3_i32, 1_i32, 3_i32, 2_i32, 1_i32];
+    let mut v = vec![3_i64, 1_i64, 3_i64, 2_i64, 1_i64];
     v.sort();
     v.dedup();
     assert_eq!(v, [1_i64, 2_i64, 3_i64]);

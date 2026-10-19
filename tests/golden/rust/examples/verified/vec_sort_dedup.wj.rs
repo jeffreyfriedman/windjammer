@@ -1,5 +1,5 @@
 fn main() {
-    let mut v = vec![5_i32, 3_i32, 8_i32, 1_i32, 3_i32, 2_i32, 1_i32];
+    let mut v = vec![5_i64, 3_i64, 8_i64, 1_i64, 3_i64, 2_i64, 1_i64];
     v.sort();
     println!("{:?}", v);
     v.dedup();

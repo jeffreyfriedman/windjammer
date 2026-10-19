@@ -296,6 +296,14 @@ pub fn build_project_with_config(
         codegen.set_copy_types_registry(copy_registry);
         codegen.set_explicit_copy_types_registry(explicit_copy);
         codegen.set_numeric_inference(numeric_inference);
+        // IR cutover: attach the solved IR module (the multipass library path does this per file).
+        // Without it codegen falls back to analyzer data and the semantic facts
+        // (NUM-DEFAULT-INT, last_use) are invisible to single-file builds.
+        if !config.ir_cutover.all_disabled() {
+            let mut ir_pipeline = crate::ir::IrPipeline::new();
+            let ir_module = ir_pipeline.lower_to_ir(&analyzed_functions, &registry, None);
+            codegen.set_ir_module(ir_module);
+        }
         super::apply_inferred_bounds_to_codegen(&mut codegen, &program);
         if !cross_crate_field_types.is_empty() {
             codegen.set_global_struct_field_types(cross_crate_field_types);

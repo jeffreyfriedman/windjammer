@@ -1,5 +1,5 @@
 fn main() {
-    let mut count = 0_i32;
+    let mut count = 0_i64;
     let mut inc = || {
         count += 1;
         count

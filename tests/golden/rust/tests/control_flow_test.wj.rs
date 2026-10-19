@@ -2,9 +2,9 @@ use windjammer_runtime::test::*;
 #[test]
 
 fn test_if_statement() {
-    let x = 5_i32;
+    let x = 5_i64;
     let result: String = {
-        if x > 3_i32 {
+        if x > 3_i64 {
             String::from("greater")
         } else {
             String::from("less")
@@ -16,9 +16,9 @@ fn test_if_statement() {
 #[test]
 
 fn test_if_else() {
-    let x = 2_i32;
+    let x = 2_i64;
     let result: String = {
-        if x > 3_i32 {
+        if x > 3_i64 {
             String::from("greater")
         } else {
             String::from("less")
@@ -30,18 +30,18 @@ fn test_if_else() {
 #[test]
 
 fn test_while_loop() {
-    let mut count: i32 = 0_i32;
-    while count < 5_i32 {
+    let mut count = 0_i64;
+    while count < 5_i64 {
         count += 1;
     }
-    assert!(count == 5_i32);
+    assert!(count == 5_i64);
 }
 
 #[test]
 
 fn test_for_loop() {
     let mut sum = 0_i64;
-    for i in 0_i32..5_i32 {
+    for i in 0_i64..5_i64 {
         sum += i as i64;
     }
     assert!(sum == 10_i64);
@@ -75,11 +75,11 @@ fn test_match_with_default() {
 #[test]
 
 fn test_nested_if() {
-    let x = 5_i32;
-    let y = 10_i32;
+    let x = 5_i64;
+    let y = 10_i64;
     let result: String = {
-        if x > 3_i32 {
-            if y > 8_i32 {
+        if x > 3_i64 {
+            if y > 8_i64 {
                 String::from("both")
             } else {
                 String::from("x only")

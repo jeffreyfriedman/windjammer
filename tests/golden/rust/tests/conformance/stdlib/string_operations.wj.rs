@@ -28,10 +28,10 @@ fn test_str_concat() {
 #[inline]
 fn test_str_interpolation() {
     let name: String = String::from("Alice");
-    let age = 30_i32;
+    let age = 30_i64;
     println!("[str_interp] name={}, age={}", name, age);
-    let x = 2_i32;
-    let y = 3_i32;
+    let x = 2_i64;
+    let y = 3_i64;
     let sum = x + y;
     println!("[str_interp] result: {} + {} = {}", x, y, sum);
 }

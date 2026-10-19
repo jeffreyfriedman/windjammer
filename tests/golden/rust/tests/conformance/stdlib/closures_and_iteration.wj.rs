@@ -30,14 +30,14 @@ fn test_closure_capture() {
     let name: String = String::from("World");
     let greeting = format!("{}{}{}{}", prefix, ", ", name, "!");
     println!("[closure_capture] greeting: {}", greeting);
-    let factor = 3_i32;
-    let x = 5_i32;
+    let factor = 3_i64;
+    let x = 5_i64;
     let result = x * factor;
     println!("[closure_capture] multiplied: {}", result);
 }
 
 fn test_closure_map() {
-    let numbers = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
+    let numbers = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
     let mut doubled: Vec<i64> = vec![];
     for n in numbers {
         doubled.push(n * 2_i64);
@@ -53,7 +53,7 @@ fn test_closure_map() {
 }
 
 fn test_closure_filter() {
-    let numbers = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32, 6_i32, 7_i32, 8_i32, 9_i32, 10_i32];
+    let numbers = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64, 6_i64, 7_i64, 8_i64, 9_i64, 10_i64];
     let mut evens: Vec<i64> = vec![];
     for n in numbers {
         if n % 2_i64 == 0_i64 {
@@ -72,16 +72,16 @@ fn test_closure_filter() {
 
 #[inline]
 fn test_closure_fold() {
-    let numbers = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
-    let mut sum = 0_i32;
+    let numbers = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
+    let mut sum = 0_i64;
     for n in numbers {
-        sum += n as i32;
+        sum += n;
     }
     println!("[closure_fold] sum: {}", sum);
 }
 
 fn test_closure_chain() {
-    let numbers = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
+    let numbers = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
     let mut result_vec: Vec<i64> = vec![];
     for n in numbers {
         if n % 2_i64 == 0_i64 {
@@ -110,9 +110,9 @@ fn test_closure_counter() {
 fn test_enumerate() {
     let fruits = vec!["apple".to_string(), "banana".to_string(), "cherry".to_string()];
     let mut result = String::new();
-    let mut idx: i32 = 0_i32;
+    let mut idx = 0_i64;
     for fruit in fruits {
-        if idx > 0_i32 {
+        if idx > 0_i64 {
             { use std::fmt::Write as _; write!(result, "{}", " ").expect("a formatting trait implementation returned an error"); };
         }
         result = result + &format!("{}:{}", idx, fruit);

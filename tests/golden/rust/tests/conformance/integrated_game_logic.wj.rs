@@ -110,8 +110,8 @@ fn main() {
     println!("[game] Created {} enemies", enemies.len());
     let mut round = 1_i64;
     let mut enemy_idx: usize = 0_usize;
-    let max_rounds = 5_i32;
-    while round <= max_rounds as i64 && enemy_idx < enemies.len() {
+    let max_rounds = 5_i64;
+    while round <= max_rounds && enemy_idx < enemies.len() {
         let defeated = do_combat_round(&mut player, &mut enemies[enemy_idx], round);
         if defeated {
             enemy_idx += 1;

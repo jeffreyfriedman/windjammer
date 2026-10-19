@@ -4,7 +4,7 @@ fn main() {
     println!("{}", d);
     println!("{}", 'z' as i64 - 'a' as i64);
     let mut s = String::new();
-    for i in 0_i32..3_i32 {
+    for i in 0_i64..3_i64 {
         s.push(('A' as u8 + i as u8) as char);
     }
     println!("{}", s);

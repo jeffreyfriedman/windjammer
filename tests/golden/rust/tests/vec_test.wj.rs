@@ -2,7 +2,7 @@ use windjammer_runtime::test::*;
 #[test]
 
 fn test_vec_creation() {
-    let v = vec![1_i32, 2_i32, 3_i32];
+    let v = vec![1_i64, 2_i64, 3_i64];
     assert!(v.len() == 3_usize);
 }
 
@@ -17,7 +17,7 @@ fn test_vec_push() {
 #[test]
 
 fn test_vec_access() {
-    let v = vec![10_i32, 20_i32, 30_i32];
+    let v = vec![10_i64, 20_i64, 30_i64];
     assert!(v[0] == 10_i64);
     assert!(v[1] == 20_i64);
     assert!(v[2] == 30_i64);
@@ -33,7 +33,7 @@ fn test_vec_empty() {
 #[test]
 
 fn test_vec_iteration() {
-    let v = vec![1_i32, 2_i32, 3_i32];
+    let v = vec![1_i64, 2_i64, 3_i64];
     let mut sum = 0_i64;
     for item in v {
         sum += item;

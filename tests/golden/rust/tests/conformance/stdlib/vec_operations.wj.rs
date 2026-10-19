@@ -2,7 +2,7 @@
 fn test_vec_create() {
     let empty: Vec<i64> = vec![];
     println!("[vec_create] empty len={}", empty.len());
-    let v = vec![10_i32, 20_i32, 30_i32];
+    let v = vec![10_i64, 20_i64, 30_i64];
     println!("[vec_create] with elements len={}", v.len());
     let mut elems = String::new();
     for item in v {
@@ -24,7 +24,7 @@ fn test_vec_push() {
 
 #[inline]
 fn test_vec_pop() {
-    let mut v = vec![10_i32, 20_i32, 30_i32];
+    let mut v = vec![10_i64, 20_i64, 30_i64];
     let popped = v.pop();
     match popped {
         Some(val) => println!("[vec_pop] popped: {}", val),
@@ -35,16 +35,16 @@ fn test_vec_pop() {
 
 #[inline]
 fn test_vec_index() {
-    let mut v = vec![10_i32, 20_i32, 30_i32];
+    let mut v = vec![10_i64, 20_i64, 30_i64];
     println!("[vec_index] v[0]={}, v[1]={}, v[2]={}", v[0], v[1], v[2]);
 }
 
 #[inline]
 fn test_vec_iterate() {
-    let v = vec![10_i32, 20_i32, 30_i32];
-    let mut sum = 0_i32;
+    let v = vec![10_i64, 20_i64, 30_i64];
+    let mut sum = 0_i64;
     for item in v {
-        sum += item as i32;
+        sum += item;
     }
     println!("[vec_iterate] sum={}", sum);
 }

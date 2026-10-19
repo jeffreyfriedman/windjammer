@@ -595,12 +595,15 @@ impl<'ast> CodeGenerator<'ast> {
                 let solver_pins_int_init = self.solver_pins_int_literal_init(value);
                 if crate::debug_env::enabled("WJ_DEBUG_LET_WIDTH") {
                     eprintln!(
-                        "[let-width] {:?} pins={} mutable={} counter={} ret={:?}",
+                        "[let-width] {:?} pins={} mutable={} counter={} ret={:?} ir_fn={:?} facts={:?} key={:?}",
                         var_name,
                         solver_pins_int_init,
                         mutable,
                         Self::mut_let_rhs_is_return_width_counter(value),
-                        self.current_function_return_type
+                        self.current_function_return_type,
+                        self.current_ir_function.as_ref().map(|f| f.name.clone()),
+                        self.current_ir_function.as_ref().map(|f| f.default_int_literals.clone()),
+                        crate::ir::numeric_defaults::literal_key(value)
                     );
                 }
                 let needs_collection_ascription_sv = !type_inferred_from_context
@@ -768,8 +771,12 @@ impl<'ast> CodeGenerator<'ast> {
                         // The solver resolved this literal's class to `int`; the peer scans below
                         // are width heuristics and must not override it (C4, D-WIDTH-OWNERS).
                         self.assignment_int_target_type = Some(Type::Int);
-                        self.local_var_types.insert(vn.to_string(), Type::Int);
-                        self.codegen_i32_binding_names.remove(vn);
+                        // Only a scalar binding *is* an `int`; a collection literal's elements are.
+                        let scalar_init = matches!(value, Expression::Literal { .. } | Expression::Unary { .. });
+                        if scalar_init {
+                            self.local_var_types.insert(vn.to_string(), Type::Int);
+                            self.codegen_i32_binding_names.remove(vn);
+                        }
                     }
                     if !rhs_is_ref && !solver_pins_int_init {
                         if let Some(peer) = self.let_binding_int_width_from_later_call_formals(vn) {
@@ -1540,6 +1547,16 @@ impl<'ast> CodeGenerator<'ast> {
     /// layer resolved to `int`: the numeric solver says i64 (a typed `int` field, parameter or
     /// declared local is in its class) or NUM-DEFAULT-INT proves nothing constrains it.
     pub(super) fn solver_pins_int_literal_init(&self, value: &Expression<'ast>) -> bool {
+        // `vec![1, 2, 3]` / `[1, 2, 3]`: the elements share one class; ask about the first.
+        let value = match value {
+            Expression::MacroInvocation { name, args, is_repeat: false, .. }
+                if name == "vec" && !args.is_empty() =>
+            {
+                args[0]
+            }
+            Expression::Array { elements, .. } if !elements.is_empty() => elements[0],
+            other => other,
+        };
         let literal = match value {
             Expression::Literal { value: Literal::Int(_), .. } => value,
             Expression::Unary { op: crate::parser::UnaryOp::Neg, operand, .. }
@@ -1554,8 +1571,8 @@ impl<'ast> CodeGenerator<'ast> {
             .as_ref()
             .is_some_and(|ni| ni.get_int_type(literal) == crate::type_inference::IntType::I64);
         let semantic_default = self.current_ir_function.as_ref().is_some_and(|f| {
-            f.default_int_literals
-                .contains(&crate::ir::numeric_defaults::node_id(literal))
+            crate::ir::numeric_defaults::literal_key(literal)
+                .is_some_and(|k| f.default_int_literals.contains(&k))
         });
         solved_i64 || semantic_default
     }

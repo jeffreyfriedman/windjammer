@@ -1,7 +1,7 @@
 fn main() {
-    let x = 1_i32;
+    let x = 1_i64;
     {
-        let x = 2_i32;
+        let x = 2_i64;
         println!("inner {}", x)
     };
     println!("outer {}", x);

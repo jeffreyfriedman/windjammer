@@ -84,7 +84,7 @@ fn test_basic_assertions() {
 
 #[test]
 fn test_advanced_assertions() {
-    let nums = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
+    let nums = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
     let empty: Vec<i64> = vec![];
     windjammer_runtime::test::assert_contains(&nums, &3);
     windjammer_runtime::test::assert_not_empty(&nums);
@@ -236,7 +236,7 @@ fn test_with_fixture() {
 
 #[test]
 fn test_with_setup() {
-    let data = vec![1_i32, 2_i32, 3_i32, 4_i32, 5_i32];
+    let data = vec![1_i64, 2_i64, 3_i64, 4_i64, 5_i64];
     assert_eq!(data.len(), 5_usize);
     windjammer_runtime::test::assert_contains(&data, &3);
 }

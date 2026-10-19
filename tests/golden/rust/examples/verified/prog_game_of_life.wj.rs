@@ -40,7 +40,7 @@ fn main() {
     g[1][2] = true;
     g[2][2] = true;
     g[3][2] = true;
-    for gen in 0_i32..3_i32 {
+    for gen in 0_i64..3_i64 {
         println!("gen {}: {}", gen, render(&g));
         g = step(&g);
     }

@@ -39,7 +39,7 @@ fn double_amount(s: String) -> Result<i64, ParseError> {
 
 fn main() {
     for input in ["10", "", "x1", "5000"] {
-        match double_amount(input) {
+        match double_amount(input.to_string()) {
             Ok(v) => println!("ok: {}", v),
             Err(e) => println!("error: {}", describe(e)),
         }

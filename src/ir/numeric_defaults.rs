@@ -25,12 +25,19 @@ pub fn node_id(expr: &Expression<'_>) -> usize {
     expr as *const Expression<'_> as usize
 }
 
+/// Key of a literal that survives AST re-allocation between the analyzer and codegen: the
+/// literal's own source position (unique among literals, unlike the position *after* an
+/// expression that numeric inference uses).
+pub fn literal_key(expr: &Expression<'_>) -> Option<(usize, usize)> {
+    expr.location().as_ref().map(|l| (l.line, l.column))
+}
+
 #[derive(Default)]
 struct Classes {
     parent: Vec<usize>,
     open: Vec<bool>,
     locals: BTreeMap<String, usize>,
-    literals: Vec<(usize, usize)>, // (node id, class)
+    literals: Vec<((usize, usize), usize)>, // (literal key, class)
 }
 
 impl Classes {
@@ -235,7 +242,9 @@ impl Walker {
             Expression::Literal { value, .. } => match value {
                 Literal::Int(_) => {
                     let c = self.c.fresh();
-                    self.c.literals.push((node_id(e), c));
+                    if let Some(k) = literal_key(e) {
+                        self.c.literals.push((k, c));
+                    }
                     self.c.union(c, sink);
                 }
                 // A suffixed or non-integer literal fixes (or contradicts) the width.
@@ -383,8 +392,8 @@ fn children<'a, 'ast>(e: &'a Expression<'ast>) -> Vec<&'a Expression<'ast>> {
     }
 }
 
-/// Integer literals of `body` that NUM-DEFAULT-INT makes `int` (i64), by [`node_id`].
-pub fn default_int_literals(body: &[&Statement<'_>]) -> BTreeSet<usize> {
+/// Integer literals of `body` that NUM-DEFAULT-INT makes `int` (i64), by [`literal_key`].
+pub fn default_int_literals(body: &[&Statement<'_>]) -> BTreeSet<(usize, usize)> {
     let mut w = Walker { c: Classes::default(), bound: BTreeSet::new() };
     // Pre-pass: names bound anywhere in the body, so a use before the binding (in a loop) is
     // still recognised as a local.
@@ -430,7 +439,7 @@ fn collect_bound(body: &[&Statement<'_>], out: &mut BTreeSet<String>) {
 mod tests {
     use super::*;
 
-    fn literals_in(src: &str, f: &str) -> (Vec<String>, BTreeSet<usize>) {
+    fn literals_in(src: &str, f: &str) -> (Vec<String>, BTreeSet<(usize, usize)>) {
         let mut lexer = crate::lexer::Lexer::new(src);
         let tokens = lexer.tokenize_with_locations();
         let parser = Box::leak(Box::new(crate::parser::Parser::new(tokens)));
@@ -446,7 +455,7 @@ mod tests {
         let set = default_int_literals(&decl.body);
         // Render every int literal with a mark when it is defaulted, in source order.
         let mut all = Vec::new();
-        fn walk_s(s: &Statement<'_>, set: &BTreeSet<usize>, out: &mut Vec<String>) {
+        fn walk_s(s: &Statement<'_>, set: &BTreeSet<(usize, usize)>, out: &mut Vec<String>) {
             match s {
                 Statement::Let { value, .. } | Statement::Assignment { value, .. } => walk_e(value, set, out),
                 Statement::Expression { expr, .. } => walk_e(expr, set, out),
@@ -462,9 +471,9 @@ mod tests {
                 _ => {}
             }
         }
-        fn walk_e(e: &Expression<'_>, set: &BTreeSet<usize>, out: &mut Vec<String>) {
+        fn walk_e(e: &Expression<'_>, set: &BTreeSet<(usize, usize)>, out: &mut Vec<String>) {
             if let Expression::Literal { value: Literal::Int(i), .. } = e {
-                out.push(format!("{}{}", i, if set.contains(&node_id(e)) { ":int" } else { ":?" }));
+                out.push(format!("{}{}", i, if literal_key(e).is_some_and(|k| set.contains(&k)) { ":int" } else { ":?" }));
                 return;
             }
             for c in children(e) {

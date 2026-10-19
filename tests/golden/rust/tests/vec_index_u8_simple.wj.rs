@@ -1,6 +1,6 @@
 #[inline]
 pub fn test_u8_indexing() {
-    let mask = vec![1_i32, 2_i32, 3_i32, 4_i32];
+    let mask = vec![1_i64, 2_i64, 3_i64, 4_i64];
     let color_id = mask[0];
     if color_id == 0_i64 {
         return;

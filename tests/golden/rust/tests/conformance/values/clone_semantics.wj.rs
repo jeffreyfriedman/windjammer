@@ -17,7 +17,7 @@ fn test_clone_string() {
 
 #[inline]
 fn test_clone_vec() {
-    let original = vec![1_i32, 2_i32, 3_i32];
+    let original = vec![1_i64, 2_i64, 3_i64];
     let mut cloned = original.clone();
     println!("[clone_vec] original len={}", original.len());
     println!("[clone_vec] cloned len={}", cloned.len());

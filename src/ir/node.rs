@@ -110,9 +110,9 @@ pub struct IrFunction {
     /// the solver, which is the deletion list for C5.
     pub ownership_trail: std::collections::BTreeMap<String, Vec<(&'static str, OwnedType)>>,
 
-    /// Semantic fact NUM-DEFAULT-INT (C4): integer literals (by AST node identity,
-    /// `numeric_defaults::node_id`) whose class no context constrains; they are `int` (i64).
-    pub default_int_literals: std::collections::BTreeSet<usize>,
+    /// Semantic fact NUM-DEFAULT-INT (C4): integer literals (by the literal's own source position,
+    /// `numeric_defaults::literal_key`) whose class no context constrains; they are `int` (i64).
+    pub default_int_literals: std::collections::BTreeSet<(usize, usize)>,
 
     /// Semantic fact `last_use` (C6, ADR-0017): identifier reads (by node identity) after which
     /// the binding is never read again on any path.

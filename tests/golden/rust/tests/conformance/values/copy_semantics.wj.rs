@@ -16,11 +16,11 @@ struct Point {
 
 #[inline]
 fn test_copy_int() {
-    let a = 42_i32;
+    let a = 42_i64;
     let mut b = a;
     println!("[copy_int] a={}, b={}", a, b);
     let mut b = a;
-    b = 99_i32;
+    b = 99_i64;
     println!("[copy_int] after b=99: a={}, b={}", a, b);
 }
 

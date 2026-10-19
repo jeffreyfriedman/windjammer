@@ -33,7 +33,7 @@ pub fn test_format_in_error_enum() {
 
 #[inline]
 pub fn test_format_in_function_arg() {
-    let code = 404_i32;
+    let code = 404_i64;
     let path: String = String::from("/api/users");
     { let _temp0 = format!("HTTP {} for path {}", code, path); log_error(&_temp0) };
     println!("✅ format! in function args works correctly");

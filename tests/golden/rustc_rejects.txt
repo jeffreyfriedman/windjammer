@@ -7,28 +7,25 @@ examples/verified/algo_lcs.wj | error[E0308]: mismatched types
 examples/verified/algo_matrix_multiply.wj | error[E0308]: arguments to this function are incorrect
 examples/verified/algo_stack_calculator.wj | error[E0658]: use of unstable library feature `str_as_str`
 examples/verified/algo_state_machine.wj | error[E0308]: mismatched types
-examples/verified/algo_tokenizer.wj | error[E0308]: mismatched types
 examples/verified/algo_word_frequency.wj | error[E0277]: a value of type `Vec<(String, i64)>` cannot be built from an iterator over elements of type `(&String, i64)`
 examples/verified/basics_arithmetic.wj | error[E0689]: can't call method `pow` on ambiguous numeric type `{integer}`
 examples/verified/basics_main_exit_code.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 examples/verified/basics_tuples.wj | error[E0308]: mismatched types
 examples/verified/enum_methods.wj | error[E0308]: arguments to this enum variant are incorrect
-examples/verified/error_custom_enum.wj | error[E0308]: mismatched types
 examples/verified/error_map_err_ok.wj | error[E0308]: mismatched types
 examples/verified/generics_function.wj | error[E0599]: no method named `clone` found for type parameter `T` in the current scope
 examples/verified/hashset_basics.wj | error[E0308]: mismatched types
 examples/verified/idiom_agentdx_regressions.wj | error[E0599]: no method named `copied` found for enum `Option<i64>` in the current scope
 examples/verified/iter_any_all_count.wj | error[E0308]: mismatched types
 examples/verified/iter_collect_hashmap.wj | error[E0277]: a value of type `HashMap<String, i64>` cannot be built from an iterator over elements of type `(String, usize)`
-examples/verified/iter_flat_map_chain.wj | error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `i32`
-examples/verified/iter_fold_sum.wj | error[E0277]: a value of type `i64` cannot be made by summing an iterator over elements of type `&i32`
-examples/verified/iter_map_filter.wj | error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `i32`
+examples/verified/iter_flat_map_chain.wj | error[E0271]: type mismatch resolving `<[i64; 2] as IntoIterator>::Item == &i64`
+examples/verified/iter_fold_sum.wj | error[E0308]: mismatched types
 examples/verified/iter_min_max_by.wj | error[E0061]: this method takes 1 argument but 0 arguments were supplied
-examples/verified/iter_partition_unzip.wj | error[E0308]: mismatched types
+examples/verified/iter_partition_unzip.wj | error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not satisfied
 examples/verified/iter_take_skip_rev.wj | error[E0308]: mismatched types
 examples/verified/loops_labeled_nested.wj | error[E0308]: arguments to this function are incorrect
 examples/verified/module_inline.wj | error: missing boundary signature for `geometry::circle::half`
-examples/verified/numbers_min_max_abs.wj | error[E0689]: can't call method `abs` on ambiguous numeric type `{integer}`
+examples/verified/numbers_min_max_abs.wj | error[E0308]: mismatched types
 examples/verified/operators_overload.wj | error[E0046]: not all trait items implemented, missing: `Output`
 examples/verified/option_basics.wj | error[E0308]: mismatched types
 examples/verified/prog_event_handlers.wj | error[E0308]: mismatched types
@@ -55,10 +52,8 @@ examples/verified/vec_2d_grid.wj | error[E0277]: the trait bound `Vec<i32>: Copy
 examples/verified/vec_contains_position.wj | error[E0308]: mismatched types
 examples/verified/vec_insert_remove.wj | error[E0308]: mismatched types
 examples/verified/vec_of_structs.wj | error[E0599]: no method named `max_by_key` found for struct `Vec<Person>` in the current scope
-examples/verified/vec_slices_windows.wj | error[E0277]: a value of type `Vec<i64>` cannot be built from an iterator over elements of type `i32`
 tests/asi_paren_expression_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/basic_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/bug_loop_index_usize_inference.wj | error[E0308]: mismatched types
 tests/bug_newtype_wrapper_inference.wj | error[E0277]: can't compare `String` with `&String`
 tests/bug_vec_index_passed_to_function.wj | error[E0063]: missing field `data` in initializer of `Node`
 tests/codegen_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
@@ -79,8 +74,6 @@ tests/hashmap_test.wj | error[E0433]: cannot find module or crate `windjammer_ru
 tests/imported_type_qualified_call.wj | error[E0432]: unresolved import `crate::math`
 tests/inference_corpus/closure_len_width.wj | error[E0308]: mismatched types
 tests/inference_corpus/closure_mut_capture.wj | error[E0596]: cannot borrow `*v` as mutable, as it is behind a `&` reference
-tests/inference_corpus/default_int_literal.wj | error: literal out of range for `i32`
-tests/inference_corpus/for_accumulator_width.wj | error[E0308]: mismatched types
 tests/inference_corpus/pin_ref_vec.wj | error[E0308]: mismatched types
 tests/inference_corpus/string_literal_move_then_use.wj | error[E0382]: borrow of moved value: `s`
 tests/inline_mod_extern_fn_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
@@ -90,7 +83,6 @@ tests/int_inference_hashmap_test.wj | error[E0433]: cannot find module or crate 
 tests/int_inference_i32_array_index_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/int_inference_inventory_pattern_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/int_inference_vec_remove_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
-tests/integer_inference_indexing.wj | error[E0308]: mismatched types
 tests/let_patterns.wj | wj build failed
 tests/loop_index_type_inference.wj | error[E0308]: mismatched types
 tests/math_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
@@ -112,9 +104,7 @@ tests/tuple_enum_variants.wj | error[E0308]: mismatched types
 tests/type_alias_test.wj | error[E0308]: mismatched types
 tests/type_registry_imports_test.wj | wj build failed
 tests/use_crate_path_test.wj | error[E0432]: unresolved import `crate::ffi`
-tests/vec_index_copy_types.wj | error[E0308]: mismatched types
 tests/vec_index_local_var.wj | error[E0382]: use of partially moved value: `node`
-tests/vec_index_u8_simple.wj | error[E0308]: mismatched types
 tests/vec_new_then_method.wj | error[E0282]: type annotations needed
 tests/vec_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/wjsl_let_mut_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
