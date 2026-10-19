@@ -20,6 +20,7 @@ mod forloop;
 mod island;
 #[cfg(feature = "jit")]
 pub(crate) mod jit;
+mod literal;
 mod matching;
 mod method;
 pub(crate) mod osr;
