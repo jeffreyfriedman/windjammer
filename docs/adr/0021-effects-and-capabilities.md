@@ -434,7 +434,7 @@ Follow-up answers (2026-10-19, after E1): the local profile was staged as warn-t
 copy-paste `[capabilities]` block (including the project-directory `fs` lines, because a `[capabilities]` table is the whole grant);
 standard devices are not files (`/dev/stdin`, `/dev/stdout`, `/dev/stderr` are the console, `/dev/urandom` is randomness, `/dev/null`
 is free), so reading stdin never needs a grant; the allowlist rebase was done by the integrator; **E2 gates `console` at run time** (granted in the local profile and by default, so it costs nothing, visible in
-`explain-effects`, revocable for sandboxes); `ffi` stays denied in the local profile, the WJ0040/WJ0044 fix line names exactly the
+`explain-effects`, revocable for sandboxes); tests and the REPL get a per-run private scratch directory as `env::temp_dir()` (SPEC-EFF-043; env and network stay opt-in); `ffi` stays denied in the local profile, the WJ0040/WJ0044 fix line names exactly the
 `[capabilities] ffi = ["name"]` entry to add, and a test requires any `wj new` template that declares an `extern fn` to ship it.
 
 D1-D5, D7 and D8 are accepted as recommended; D6 is decided as written below (2026-10-18). D1 is staged: the release

@@ -221,6 +221,12 @@ path = "tests/effects_runtime_audit_test.rs"
 name = "effects_vectors"
 path = "tests/effects_vectors_test.rs"
 
+# Tests and the REPL get a private scratch directory (ADR-0021)
+#   cargo test --release --test effects_scratch
+[[test]]
+name = "effects_scratch"
+path = "tests/effects_scratch_test.rs"
+
 # Per-package grants and the lock file (ADR-0021 E2), through the wj binary
 #   cargo test --release --test effects_packages
 [[test]]

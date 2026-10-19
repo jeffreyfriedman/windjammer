@@ -168,9 +168,16 @@ pub struct Scratch(PathBuf);
 
 impl Scratch {
     pub fn new() -> Option<Scratch> {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!("wj-scratch-{}-{}", std::process::id(), N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
-        std::fs::create_dir_all(&dir).ok()?;
+        // `create_dir` fails when the name exists, so a clash retries with another name; no shared counter needed
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+        let dir = (0..32u32)
+            .map(|i| std::env::temp_dir().join(format!("wj-scratch-{}-{:x}", std::process::id(), nanos.wrapping_add(i.wrapping_mul(7919)))))
+            .find(|d| std::fs::create_dir(d).is_ok())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        }
         // the canonical form: grants compare canonical paths (macOS /var is /private/var)
         Some(Scratch(std::fs::canonicalize(&dir).unwrap_or(dir)))
     }

@@ -479,7 +479,7 @@ Then the run stops with exit status 126 and a message containing `capability den
 
 **SPEC-EFF-038** Run-time guards: when some call cannot be proven (a computed path, host or name, or a capability value minted from a scoped grant), the generated program installs its grant as the first statement of `main` (`windjammer_runtime::caps::install` on Rust, `$caps_install` on JavaScript, `wjstd_caps_install` on Go) and the runtime's std wrappers check against it; a denial exits with status 126 and cannot be caught. Compiled programs hold the whole program to one grant, so a dependency's computed-resource use needs the same scope as the application's (or `true`), else the build says so. (untestable: needs a compiled backend; acceptance tests `tests/effects_compiled_test.rs`, `tests/effects_vectors_test.rs`)
 
-**SPEC-EFF-039** Without a `[capabilities]` table (and without `--sandbox` or `--allow`) `wj run` enforces the local profile: files inside the project directory, plus `time`, `random` and `console`. Anything else stops the run with exit status 126; the message says why, offers the one-shot `--allow` flag and a copy-paste `[capabilities]` block that keeps the project-directory lines. `WJ_CAPS=warn` (run it, warn once) and `WJ_CAPS=off` are the explicit opt-outs. `wj test --interpret` and the REPL run under the same default (a project's `[capabilities]` is the way to grant them more).
+**SPEC-EFF-039** Without a `[capabilities]` table (and without `--sandbox` or `--allow`) `wj run` enforces the local profile: files inside the project directory, plus `time`, `random` and `console`. Anything else stops the run with exit status 126; the message says why, offers the one-shot `--allow` flag and a copy-paste `[capabilities]` block that keeps the project-directory lines. `WJ_CAPS=warn` (run it, warn once) and `WJ_CAPS=off` are the explicit opt-outs. `wj test --interpret` and the REPL run under the same default (a project's `[capabilities]` is the way to grant them more). Tests and the REPL also get a private scratch directory (SPEC-EFF-043).
 
 <!-- example: tests/spec/effects/SPEC-EFF-039.wj -->
 ```windjammer
@@ -739,3 +739,5 @@ fn main() {
 }
 ```
 `wj check` reports an error containing: `as Source>::get` performs `fs.read``
+
+**SPEC-EFF-043** `wj test --interpret` and the REPL give each run a private scratch directory. `env::temp_dir()` returns it, it is granted for `fs.read` and `fs.write` even when the project has a `[capabilities]` table, and it is removed when the run ends. The rest of the system temp directory is not granted, and `env` and network stay opt-in through `[capabilities]`. (untestable: needs a `wj test` run; acceptance test `tests/effects_scratch_test.rs`)

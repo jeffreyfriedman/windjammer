@@ -265,7 +265,7 @@ prefer the `/dev/stdin` form. `env::args()` is an iterator: loop over it instead
 ## Permissions: exit 126 and the fix line
 
 `wj run` is sandboxed. With no `[capabilities]` in `wj.toml` a program may use files inside its project directory (plus time, random,
-console) and nothing else. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
+console) and nothing else. `wj test` and the REPL also get a private scratch directory: write temporary files under `env::temp_dir()`. Anything more (network, env vars, programs, files elsewhere) stops the run with **exit status 126** and a
 message that already contains the fix:
 
 ```text
