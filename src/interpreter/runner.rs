@@ -85,7 +85,7 @@ pub fn run_path_with(path: &Path, args: Vec<String>, opts: RunOptions) -> i32 {
     with_big_stack(move || {
         let mut it = Interpreter::new();
         it.guard_stack();
-        super::value::HASH_SEED.store(opts.hash_seed, std::sync::atomic::Ordering::Relaxed);
+        it.hash_seed = opts.hash_seed;
         it.set_sched_seed(opts.sched_seed);
         it.set_deterministic_time(opts.deterministic_time);
         it.set_engine_resolved(opts.engine_resolved);
