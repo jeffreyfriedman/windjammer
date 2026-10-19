@@ -20,6 +20,8 @@ type Loc = Option<&'static Location>;
 pub(super) enum Operand {
     Slot(usize),
     Const(Value),
+    /// A typed integer expression (`typed.rs`).
+    Int(super::typed::ICode, IntTy),
     Code(Code),
 }
 
@@ -47,6 +49,7 @@ fn get(it: &mut Interpreter, b: usize, o: &Operand) -> R<Got> {
         },
         Operand::Const(Value::Int(a, t)) => return Ok(Got::Int(*a, *t)),
         Operand::Const(v) => v.clone(),
+        Operand::Int(c, t) => return Ok(Got::Int(c(it, b)? as i128, *t)),
         Operand::Code(c) => c(it, b)?,
     };
     Ok(match v {
