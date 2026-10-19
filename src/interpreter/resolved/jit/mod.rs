@@ -19,6 +19,12 @@ use cranelift_module::{FuncId, Linkage, Module};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+mod lower;
+mod lower_expr;
+pub(crate) mod osr;
+mod rt;
+mod kinds;
+
 type E = &'static Expression<'static>;
 type S = &'static Statement<'static>;
 
@@ -55,7 +61,7 @@ impl JitFn {
 }
 
 pub(crate) struct Jit {
-    module: JITModule,
+    pub(super) module: JITModule,
     done: HashMap<usize, Option<JitFn>>,
     /// Keeps every jitted `FuncDef` alive (its address is the cache key).
     keep: Vec<Rc<FuncDef>>,
@@ -78,6 +84,21 @@ impl Jit {
         let isa = cranelift_native::builder().ok()?.finish(settings::Flags::new(flags)).ok()?;
         let module = JITModule::new(JITBuilder::with_isa(isa, cranelift_module::default_libcall_names()));
         Some(Jit { module, done: HashMap::new(), keep: Vec::new() })
+    }
+}
+
+/// The interpreter's Cranelift module, taken out while code is added to it (put it back in
+/// `it.jit`); `None` when the host has no Cranelift backend (machine code is then off for the run).
+fn take_jit(it: &mut Interpreter) -> Option<Box<Jit>> {
+    if let Some(j) = it.jit.take() {
+        return Some(j);
+    }
+    match Jit::new() {
+        Some(j) => Some(Box::new(j)),
+        None => {
+            it.jit_enabled = false;
+            None
+        }
     }
 }
 

@@ -146,6 +146,11 @@ pub struct Interpreter {
     pub(crate) rstack: Vec<Value>,
     /// Machine code for hot integer functions is allowed (`--no-jit` / `WJ_JIT=0` clear it).
     pub(crate) jit_enabled: bool,
+    /// Closure-engine iterations after which a `while` loop enters machine code (`WJ_JIT_LOOP_HOT`
+    /// overrides it: 0 makes every loop try at its first iteration, which the jit stress tests use).
+    pub(crate) jit_loop_hot: u32,
+    /// Statement registries of compiled code (`resolved/osr.rs`), alive as long as the code is.
+    pub(crate) osr_regs: Vec<Rc<super::resolved::osr::Reg>>,
     /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
     #[cfg(feature = "jit")]
     pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
@@ -238,6 +243,8 @@ impl Interpreter {
             compiled_closures: HashMap::default(),
             rstack: Vec::new(),
             jit_enabled: true,
+            osr_regs: Vec::new(),
+            jit_loop_hot: std::env::var("WJ_JIT_LOOP_HOT").ok().and_then(|v| v.parse().ok()).unwrap_or(256),
             #[cfg(feature = "jit")]
             jit: None,
             subprocesses: HashMap::new(),

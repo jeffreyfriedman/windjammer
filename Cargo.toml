@@ -164,6 +164,12 @@ path = "tests/diagnostics_suite.rs"
 name = "all"
 path = "tests/all.rs"
 
+# Machine-code loops vs the tree walker (ADR-0020 round 3) also run standalone:
+#   cargo test --release --test jit_loops
+[[test]]
+name = "jit_loops"
+path = "tests/interpreter_jit_loops_test.rs"
+
 # Backend conformance (Rust/Go/JS) also runs standalone for fast iteration and CI sharding:
 #   cargo test --release --test backend_conformance
 [[test]]
