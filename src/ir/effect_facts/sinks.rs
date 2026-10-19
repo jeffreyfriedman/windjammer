@@ -6,8 +6,6 @@
 
 use super::kind::EffectKind;
 use super::kind::EffectKind::*;
-use std::collections::HashMap;
-use std::sync::OnceLock;
 
 /// Where the resource (path, host, variable name, program) of an effect comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,11 +144,6 @@ pub static NOT_SINKS: &[&str] = &[
 pub static AUTHORITY_MODULES: &[&str] =
     &["fs", "env", "process", "subprocess", "http", "net", "db", "time", "random", "uuid", "io", "log", "path", "Instant", "SystemTime"];
 
-fn index() -> &'static HashMap<&'static str, &'static [SinkUse]> {
-    static INDEX: OnceLock<HashMap<&'static str, &'static [SinkUse]>> = OnceLock::new();
-    INDEX.get_or_init(|| SINKS.iter().map(|(n, u)| (*n, *u)).collect())
-}
-
 /// Cheap pre-filter for hot paths: can `path` possibly be a sink? (a segment names a sink module, or the path is a
 /// console intrinsic). No hashing, no allocation; `lookup` decides.
 pub fn may_be_sink(path: &str) -> bool {
@@ -165,10 +158,9 @@ pub fn may_be_sink(path: &str) -> bool {
 
 /// Find the sink row for a call path, dropping leading segments (`std::fs::read` finds `fs::read`).
 pub fn lookup(path: &str) -> Option<&'static [SinkUse]> {
-    let idx = index();
     let mut p = path;
     loop {
-        if let Some(uses) = idx.get(p) {
+        if let Some((_, uses)) = SINKS.iter().find(|(n, _)| *n == p) {
             return Some(uses);
         }
         match p.split_once("::") {
