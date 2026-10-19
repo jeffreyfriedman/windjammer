@@ -48,11 +48,17 @@ enum E {
     Bin(char, Box<E>, Box<E>),
     If(Box<E>, &'static str, Box<E>, Box<E>, Box<E>),
     Match(Box<E>, Box<E>, Box<E>, Box<E>),
+    /// `pick(a, b)` = a - b: operands as call arguments
+    Pick(Box<E>, Box<E>),
 }
 
 enum S {
     Let(String, E),
     LetMatch(String, E, E, E, E),
+    /// `match <expr> { 0 => a, 1 => b, _ => c }`: the scrutinee itself is an expression-valued operand
+    LetMatchDirect(String, E, E, E, E),
+    /// `note(<expr>)`: a call statement whose argument is the operand
+    Note(E),
     Assign(E),
     Compound(char, E),
     If(E, &'static str, E, Vec<S>, Vec<S>),
@@ -86,6 +92,7 @@ fn eval(e: &E, env: &Env) -> i64 {
             };
             if c { eval(t, env) } else { eval(f, env) }
         }
+        E::Pick(a, b) => eval(a, env) - eval(b, env),
         E::Match(s, a, b, c) => match eval(s, env) % 3 {
             0 => eval(a, env),
             1 => eval(b, env),
@@ -113,6 +120,15 @@ fn run(stmts: &[S], env: &mut Env) {
                 };
                 env.push((n.clone(), v));
             }
+            S::LetMatchDirect(n, s, a, b, c) => {
+                let v = match eval(s, env) {
+                    0 => eval(a, env),
+                    1 => eval(b, env),
+                    _ => eval(c, env),
+                };
+                env.push((n.clone(), v));
+            }
+            S::Note(_) => {}
             S::Assign(e) => {
                 let v = lookup(env, "acc") + eval(e, env);
                 set(env, "acc", v);
@@ -151,6 +167,7 @@ fn render_e(e: &E) -> String {
         E::Var(v) => v.clone(),
         E::Bin(op, a, b) => format!("({} {} {})", render_e(a), op, render_e(b)),
         E::If(l, c, r, t, f) => format!("(if {} {} {} {{ {} }} else {{ {} }})", render_e(l), c, render_e(r), render_e(t), render_e(f)),
+        E::Pick(a, b) => format!("pick({}, {})", render_e(a), render_e(b)),
         E::Match(s, a, b, c) => format!("(match {} % 3 {{ 0 => {}, 1 => {}, _ => {} }})", render_e(s), render_e(a), render_e(b), render_e(c)),
     }
 }
@@ -164,6 +181,11 @@ fn render_s(stmts: &[S], ind: usize, out: &mut String) {
                 "{pad}let {n}: int = match {} % 3 {{\n{pad}    0 => {},\n{pad}    1 => {},\n{pad}    _ => {},\n{pad}}}\n",
                 render_e(s), render_e(a), render_e(b), render_e(c)
             )),
+            S::LetMatchDirect(n, s, a, b, c) => out.push_str(&format!(
+                "{pad}let {n}: int = match {} {{\n{pad}    0 => {},\n{pad}    1 => {},\n{pad}    _ => {},\n{pad}}}\n",
+                render_e(s), render_e(a), render_e(b), render_e(c)
+            )),
+            S::Note(e) => out.push_str(&format!("{pad}note({})\n", render_e(e))),
             S::Assign(e) => out.push_str(&format!("{pad}acc = acc + {}\n", render_e(e))),
             S::Compound(op, e) => out.push_str(&format!("{pad}acc {op}= {}\n", render_e(e))),
             S::If(l, c, r, t, f) => {
@@ -195,7 +217,7 @@ struct Gen {
 
 impl Gen {
     fn expr(&mut self, vars: &[String], depth: u32) -> E {
-        let k = if depth == 0 { self.r.below(2) } else { self.r.below(6) };
+        let k = if depth == 0 { self.r.below(2) } else { self.r.below(7) };
         match k {
             0 => E::Lit(self.r.below(9) as i64 - 4),
             1 => E::Var(vars[self.r.below(vars.len() as u64) as usize].clone()),
@@ -213,6 +235,7 @@ impl Gen {
                 Box::new(self.expr(vars, depth - 1)),
                 Box::new(self.expr(vars, depth - 1)),
             ),
+            6 => E::Pick(Box::new(self.expr(vars, depth - 1)), Box::new(self.expr(vars, depth - 1))),
             _ => E::Match(
                 Box::new(self.expr(vars, depth - 1)),
                 Box::new(self.expr(vars, depth - 1)),
@@ -226,6 +249,20 @@ impl Gen {
         let scope = vars.len();
         let mut out = Vec::new();
         for _ in 0..1 + self.r.below(3) {
+            match self.r.below(4) {
+                0 => {
+                    out.push(S::Note(self.expr(vars, 2)));
+                    continue;
+                }
+                1 => {
+                    let n = self.name();
+                    let (s, a, b, c) = (self.expr(vars, 2), self.expr(vars, 1), self.expr(vars, 1), self.expr(vars, 1));
+                    out.push(S::LetMatchDirect(n.clone(), s, a, b, c));
+                    vars.push(n);
+                    continue;
+                }
+                _ => {}
+            }
             let k = self.r.below(if depth == 0 { 4 } else { 7 });
             match k {
                 0 => {
@@ -286,7 +323,7 @@ impl Gen {
 /// Program with `count` generated functions, its Windjammer source and the oracle's output.
 fn program(seed: u64, count: usize) -> (String, String) {
     let mut g = Gen { r: Rng::new(seed), fresh: 0 };
-    let mut src = String::new();
+    let mut src = String::from("fn pick(a: int, b: int) -> int {\n    a - b\n}\n\nfn note(x: int) {\n}\n\n");
     let mut main = String::from("fn main() {\n");
     let mut expect = String::new();
     for i in 0..count {

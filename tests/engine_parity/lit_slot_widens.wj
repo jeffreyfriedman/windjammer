@@ -1,0 +1,28 @@
+// A literal-typed local later assigned a declared width: its type changes at run time.
+fn wide(n: i64) -> i64 {
+    let mut total = 0
+    let mut i = 0
+    while i < n {
+        total += n
+        i += 1
+    }
+    total
+}
+fn narrow(k: i32) -> i64 {
+    let mut x = 5
+    x = k
+    let mut y: i64 = 0
+    y += 1
+    y
+}
+fn main() {
+    println("${wide(9223372036854775)}")
+    println("${narrow(4)}")
+    let mut big: i32 = 1
+    let mut i = 0
+    while i < 40 {
+        big = big * 2
+        i += 1
+    }
+    println("${big}")
+}

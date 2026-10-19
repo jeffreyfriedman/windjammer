@@ -37,7 +37,10 @@ pub struct FuncDef {
 }
 
 pub struct StructDef {
-    pub fields: Vec<(&'static str, Type)>,
+    pub fields: Rc<[(&'static str, Type)]>,
+    /// The type and field names, interned: every instance built from a literal shares them.
+    pub rc_name: Rc<str>,
+    pub rc_fields: Rc<[Rc<str>]>,
     pub tuple: bool,
     pub copy: bool,
 }
@@ -128,9 +131,15 @@ pub struct Interpreter {
     /// `--engine=resolved`: run compiled functions where possible (see `resolved/`).
     pub(crate) engine_resolved: bool,
     /// Compiled forms by `FuncDef` address (`None` = not compilable).
-    pub(crate) compiled: HashMap<usize, Option<Rc<super::resolved::CompiledFn>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// The `FuncDef` is kept alive with its entry so its address is never reused (hot reload replaces bodies).
+    pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// Compiled closure bodies by body address (`None` = run in the walker).
+    pub(crate) compiled_closures: HashMap<usize, Option<Rc<super::resolved::CompiledClosure>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
+    /// Machine code of hot integer functions (ADR-0020 step 7, `--features jit`).
+    #[cfg(feature = "jit")]
+    pub(crate) jit: Option<Box<super::resolved::jit::Jit>>,
     /// `std::subprocess` children by handle id.
     pub(crate) subprocesses: HashMap<u64, super::builtins::std_proc::Session>,
     pub(crate) next_subprocess: u64,
@@ -215,7 +224,10 @@ impl Interpreter {
             vec_pool: Vec::new(),
             engine_resolved: false,
             compiled: HashMap::default(),
+            compiled_closures: HashMap::default(),
             rstack: Vec::new(),
+            #[cfg(feature = "jit")]
+            jit: None,
             subprocesses: HashMap::new(),
             next_subprocess: 0,
             sched: super::sched::Sched::new(),

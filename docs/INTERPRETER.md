@@ -265,9 +265,14 @@ Findings from running the same programs through the compiled path (compiler bugs
 - **Language**: Rust's slicing panic messages (`v[a..b]`, `s[a..b]`, char boundaries), `char::to_lowercase()` displays,
   top-level macro invocations are loud, `Type::default()` for `@derive(Default)` (Q-016), recursion bounded by stack bytes on
   the interpreter thread (Q-023), `wj test --interpret` shares `wj test` discovery.
-- **Performance**: call-site cache, frame-vector pool, fast paths (10-15% in release). `--engine=resolved` (ADR-0020 option B,
-  milestone 1): functions compiled to closures over slot-indexed locals, walker fallback per function; results in ADR-0020.
-  `scripts/interp_bench.py` is the benchmark ratchet (median of 5, load recorded).
+- **Performance**: `wj run` uses the resolved engine (ADR-0020): each function is compiled to closures over slot-indexed
+  locals the first time it is called, integer code with a statically known width runs unboxed, calls pass arguments in
+  place, field reads and method calls have inline caches, and a construct it does not lower runs in the tree walker as an
+  island inside the compiled function. `--engine walker` runs the tree walker alone (the reference semantics; the parity test
+  compares both engines on every corpus). `fib(30)` runs about 8x and a 5M-iteration loop about 12x faster than in the walker,
+  faster than CPython on both; `--features jit` adds a Cranelift tier for hot integer functions. `scripts/interp_bench.py`
+  is the ratchet (walker/resolved per kernel) and `scripts/interp_compare.sh` the table against Rust, Python and Node.
+  `wj test --interpret` uses the same engine.
 
 Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `tests/` and `examples/`: 585 of 723 exit 0
 (first interp-gaps measurement: 222 of 382 on the smaller tree then). Of the 138 that do not: 40 are `__SEED__` corpus templates,
@@ -290,7 +295,8 @@ Measured (release `wj`, Oct 2026): repository `.wj` files with `fn main` under `
   `OrderedMap`/`OrderedSet` iterate in insertion order (`remove` keeps the order of the rest, `swap_remove` does not).
 - `"${f(\"x\")}"` (escaped quotes inside an interpolation) is a lexer error (owned by the parser stream; ignored test
   `interpolation_escaped_quotes_test`).
-- Performance: release `wj` is roughly 200-400x slower than compiled Rust on call/loop-heavy code; see ADR-0020.
+- Performance: integer kernels run within a few times of Node; closure bodies, `match`, floats and collection methods still
+  run at walker speed or close to it (ADR-0020, "What is left").
 
 ## ADR-0007
 

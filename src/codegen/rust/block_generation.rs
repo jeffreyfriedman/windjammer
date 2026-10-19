@@ -13,8 +13,23 @@ use crate::parser::*;
 use super::{ast_utilities, pattern_analysis, string_utilities, CodeGenerator};
 
 impl<'ast> CodeGenerator<'ast> {
-    /// Generate an operand / condition whose value is used. A block expression there (`if` / `match`
-    /// as a value) must yield its tail even when the enclosing statement block is void.
+    /// Generate an expression in value position (compound-assignment right-hand side): an `if` /
+    /// `match` operand must keep its tail instead of being discarded as `{ if c { x; } else { y; } }`.
+    pub(in crate::codegen::rust) fn generate_value_expr(&mut self, e: &Expression<'ast>) -> String {
+        let prev_ctx = std::mem::replace(&mut self.in_expression_context, true);
+        let s = self.generate_expression(e);
+        self.in_expression_context = prev_ctx;
+        s
+    }
+
+    /// Left operand of a binary operator: a block there is parenthesised (`} + x` ends the statement in Rust).
+    pub(in crate::codegen::rust) fn generate_left_operand(&mut self, e: &Expression<'ast>) -> String {
+        let s = self.generate_value_operand(e);
+        if matches!(e, Expression::Block { .. }) { format!("({s})") } else { s }
+    }
+
+    /// Generate an operand / condition / argument whose value is used. A block expression there (`if` /
+    /// `match` as a value) must yield its tail even when the enclosing statement block is void.
     pub(in crate::codegen::rust) fn generate_value_operand(&mut self, e: &Expression<'ast>) -> String {
         if !matches!(e, Expression::Block { .. }) {
             return self.generate_expression(e);
@@ -767,8 +782,6 @@ impl<'ast> CodeGenerator<'ast> {
 
         // Unsafe blocks are always value-producing (e.g., `if unsafe { call() } { ... }`),
         // so reset in_void_block to allow implicit returns.
-        // A block in value position (`x = x + (if c { a } else { b })`) yields its tail even when the
-        // enclosing statement block is void (`if` without `else`, loop body).
         let saved_void_block = self.in_void_block;
         if is_unsafe || self.in_expression_context {
             self.in_void_block = false;

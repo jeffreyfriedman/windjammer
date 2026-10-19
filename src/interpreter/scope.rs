@@ -69,15 +69,7 @@ impl Interpreter {
             return;
         }
         for (_, slot) in self.scope.vars.iter().skip(from) {
-            if let Value::Ref(p) = &*slot.borrow() {
-                if let Some(t) = &p.guard {
-                    if t.poisons.get() && !t.released.get() {
-                        if let Some(st) = t.state() {
-                            st.poisoned.set(true);
-                        }
-                    }
-                }
-            }
+            poison_if_guard(&slot.borrow());
         }
     }
 
@@ -96,6 +88,19 @@ impl Interpreter {
         match (r, self.drop_unreachable(&vals, &keep_refs)) {
             (Ok(_), Err(e)) => Err(e),
             (r, _) => r,
+        }
+    }
+}
+
+/// A live lock guard held by a variable a panic unwinds past poisons its lock.
+pub(crate) fn poison_if_guard(v: &Value) {
+    if let Value::Ref(p) = v {
+        if let Some(t) = &p.guard {
+            if t.poisons.get() && !t.released.get() {
+                if let Some(st) = t.state() {
+                    st.poisoned.set(true);
+                }
+            }
         }
     }
 }

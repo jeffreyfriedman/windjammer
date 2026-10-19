@@ -1,0 +1,48 @@
+// `match`, `break`/`continue` and `return` inside walker islands unwind through compiled loops.
+enum Op {
+    Add(int),
+    Stop,
+    Skip,
+}
+
+fn run(ops: Vec<Op>) -> int {
+    let mut acc = 0
+    let mut i = 0
+    loop {
+        if i >= ops.len() {
+            break
+        }
+        let op = ops[i]
+        i += 1
+        match op {
+            Op::Add(n) => {
+                acc += n
+            }
+            Op::Skip => continue,
+            Op::Stop => return acc * 1000,
+        }
+        acc += 1
+    }
+    acc
+}
+
+fn parse_or(s: string) -> int {
+    let n: int = s.parse().unwrap_or(-1)
+    n
+}
+
+fn half(s: string) -> f64 {
+    let k = 2
+    let mut x = 0.0
+    if k > 1 {
+        x = 0.5
+    }
+    x * s.parse().unwrap_or(4.0)
+}
+
+fn main() {
+    let ops = [Op::Add(3), Op::Skip, Op::Add(4), Op::Stop, Op::Add(100)]
+    println("${run(ops)} ${run([Op::Add(1), Op::Add(2)])}")
+    println("${parse_or("42")} ${parse_or("x")}")
+    println("${half("5")} ${half("x")}")
+}

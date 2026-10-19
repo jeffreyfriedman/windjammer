@@ -481,6 +481,9 @@ impl Interpreter {
     pub(crate) fn call_callable(&mut self, c: &Rc<Callable>, mut args: Vec<Value>) -> R {
         match &**c {
             Callable::Closure { params, body, env, module, self_ty, tparams } => {
+                if let Some(r) = self.call_compiled_closure(c, &mut args) {
+                    return r;
+                }
                 self.depth_check()?;
                 let mut scope = Scope::new(*module);
                 scope.vars = env.clone();
@@ -622,7 +625,7 @@ impl Interpreter {
     fn call_func_run(
         &mut self,
         f: &Rc<FuncDef>,
-        mut args: Vec<Value>,
+        args: Vec<Value>,
         self_val: Option<Value>,
         targs: &[Type],
         expected: Option<Type>,
@@ -633,11 +636,23 @@ impl Interpreter {
         if self.hot.is_some() {
             self.hot_safe_point(); // ADR-0024: edits land between calls; this call keeps the body it resolved
         }
-        if self.engine_resolved && self_val.is_none() && targs.is_empty() {
+        if self.engine_resolved && targs.is_empty() && Self::compiled_call_ok(f, &self_val) {
             if let Some(c) = self.compiled_for(f) {
-                return self.run_compiled(f, &c, args);
+                return self.run_compiled(f, &c, args, self_val);
             }
         }
+        self.call_func_walk(f, args, self_val, targs, expected)
+    }
+
+    /// The tree walker's call (also the resolved engine's fallback when a compiled call deopts).
+    pub(crate) fn call_func_walk(
+        &mut self,
+        f: &Rc<FuncDef>,
+        mut args: Vec<Value>,
+        self_val: Option<Value>,
+        targs: &[Type],
+        expected: Option<Type>,
+    ) -> R {
         self.depth_check()?;
         self.backtrace.push((f.qual.clone(), self.cur));
         let mut scope = Scope::new(f.module);
@@ -825,7 +840,7 @@ impl Interpreter {
         self.methods.get(&(tn, method.to_string())).cloned()
     }
 
-    fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
+    pub(crate) fn call_user_method(&mut self, f: &Rc<FuncDef>, recv: Value, place: Option<Place>, args: Vec<Value>) -> R {
         let has_self = f.params.first().map(|p| p.name == "self").unwrap_or(false);
         if !has_self {
             // `fn render() -> T` written without `self` but called on an instance: the body may

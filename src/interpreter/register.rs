@@ -119,9 +119,10 @@ impl Interpreter {
                     } else {
                         decl.fields.iter().map(|f| (f.name.as_str(), f.field_type.clone())).collect()
                     };
+                    let rc_fields = fields.iter().map(|(n, _)| Rc::from(*n)).collect();
                     self.structs.insert(
                         decl.name.clone(),
-                        StructDef { fields, tuple, copy: has_copy_derive(decl) },
+                        StructDef { fields: fields.into(), rc_name: Rc::from(decl.name.as_str()), rc_fields, tuple, copy: has_copy_derive(decl) },
                     );
                 }
                 Item::Enum { decl, .. } => {
