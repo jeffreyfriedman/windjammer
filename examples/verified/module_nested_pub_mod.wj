@@ -1,0 +1,13 @@
+// tags: modules, nested, pub mod
+// rust: ok
+// expect: 9
+pub mod geo {
+    pub mod area {
+        pub fn square(x: int) -> int {
+            x * x
+        }
+    }
+}
+fn main() {
+    println("${geo::area::square(3)}")
+}

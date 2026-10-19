@@ -226,18 +226,15 @@ impl ErrorMapper {
             }
         }
 
-        // Add "did you mean?" for field typos when we have "no field X" and notes list fields
-        if message.contains("No field `") && !notes.is_empty() {
-            if let Some(field_name) = self.extract_between(&message, "No field `", "`") {
-                for note in &notes {
-                    if note.contains("has fields") {
-                        let fields = Self::parse_struct_fields_from_note(note);
-                        if let Some(suggestion) = Self::fuzzy_match_field(&field_name, &fields) {
-                            help.push(format!("did you mean `{}`?", suggestion));
-                            break;
-                        }
-                    }
-                }
+        // Add "did you mean?" for field typos when rustc says "no field X" and its note lists the fields
+        // (the note itself is kept below: it is the struct's field list, not Rust-specific advice).
+        let field_note = notes.iter().find(|n| n.contains("has fields")).cloned();
+        if let (Some(note), Some(field_name)) =
+            (&field_note, self.extract_between(&rustc_diag.message.replace("no field", "No field"), "No field `", "`"))
+        {
+            let fields = Self::parse_struct_fields_from_note(note);
+            if let Some(suggestion) = Self::fuzzy_match_field(&field_name, &fields) {
+                help.push(format!("did you mean `{}`?", suggestion));
             }
         }
 
@@ -266,8 +263,9 @@ impl ErrorMapper {
                 primary_span.label.as_deref(),
             );
             // rustc's own help/notes are phrased in Rust terms; only the translated help is kept.
-            let mut help: Vec<String> = Vec::new();
-            notes.clear();
+            let did_you_mean: Vec<String> = help.iter().filter(|h| h.starts_with("did you mean")).cloned().collect();
+            let mut help: Vec<String> = did_you_mean;
+            notes.retain(|n| n.contains("has fields"));
             if tr.code == "WJ0099" {
                 notes.push(format!(
                     "untranslated rustc code: {}",
@@ -276,6 +274,9 @@ impl ErrorMapper {
             }
             if let Some(h) = tr.help {
                 help.insert(0, h);
+            }
+            if tr.code == "WJ0003" && tr.message.contains("`int`") && tr.message.contains("`float`") {
+                help.push("convert with `x as int` / `x as float`".to_string());
             }
             (tr.message, Some(tr.code.to_string()), help)
         } else {

@@ -616,4 +616,32 @@ impl<'ast> Item<'ast> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Program<'ast> {
     pub items: Vec<Item<'ast>>,
+    /// Keeps the arenas `items` borrow from alive (see `owner.rs`). Not part of equality or printing.
+    pub(crate) owner: super::owner::AstOwner,
+}
+
+impl<'ast> Program<'ast> {
+    /// A program whose items borrow from no arena (empty programs, hand-built test fixtures).
+    pub fn new(items: Vec<Item<'ast>>) -> Self {
+        Program { items, owner: super::owner::AstOwner::none() }
+    }
+
+    /// A program built from items that borrow from the arenas `owner` keeps alive.
+    pub fn with_owner(items: Vec<Item<'ast>>, owner: super::owner::AstOwner) -> Self {
+        Program { items, owner }
+    }
+
+    /// A program assembled from the items of `sources` (merged modules, filtered copies): it co-owns every
+    /// arena the sources own, so the items cannot outlive their storage.
+    pub fn from_items_of<'p>(items: Vec<Item<'ast>>, sources: impl IntoIterator<Item = &'p Program<'ast>>) -> Self
+    where
+        'ast: 'p,
+    {
+        Program { items, owner: super::owner::AstOwner::merge(sources.into_iter().map(|p| &p.owner)) }
+    }
+
+    /// The owner handle; clone it to keep this program's arenas alive past the program itself.
+    pub fn owner(&self) -> &super::owner::AstOwner {
+        &self.owner
+    }
 }

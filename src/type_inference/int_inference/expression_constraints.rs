@@ -187,7 +187,7 @@ impl IntInference {
                 arguments,
                 ..
             } => {
-                self.collect_expression_constraints(function, return_type);
+                self.collect_callee_constraints(function, arguments, return_type);
 
                 let func_name = match function {
                     Expression::Identifier { name, .. } => Some(name.clone()),

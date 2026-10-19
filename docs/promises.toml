@@ -561,6 +561,16 @@ statement = "Transpile to Rust and run with cargo (the release path), skipping t
 pending = "no acceptance cases yet"
 
 [[promise]]
+id = "wj run --engine"
+statement = "Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj run --hash-seed"
+statement = "Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6)"
+pending = "no acceptance cases yet"
+
+[[promise]]
 id = "wj run --hot"
 statement = "Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021)"
 pending = "no acceptance cases yet"
@@ -573,6 +583,16 @@ pending = "no acceptance cases yet"
 [[promise]]
 id = "wj run --watch"
 statement = "Re-run on every source change (restarts long-running programs)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj test --compiled"
+statement = "Also build and run each doctest through the Rust backend (default: interpreter only)"
+pending = "no acceptance cases yet"
+
+[[promise]]
+id = "wj test --doc"
+statement = "Run only the doctests (```wj examples in `///` doc comments)"
 pending = "no acceptance cases yet"
 
 [[promise]]

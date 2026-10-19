@@ -215,6 +215,6 @@ impl<'m> Js<'m> {
 
     pub fn method_name(&self, name: &str) -> String {
         let n = ident(name);
-        if self.fields.contains(name) { format!("{n}$m") } else { n }
+        if self.field_names.contains(name) { format!("{n}$m") } else { n }
     }
 }

@@ -6,7 +6,7 @@ last_verified: 3406ef05bb35
 
 - **Status:** Proposed
 - **Date:** 2026-10-10
-- **Related:** [ADR-0021](0021-effects-and-capabilities.md) (the effects and capabilities mechanism this level applies to); RFCs [WJ-SEC-01..04](../proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md); `src/ir/effects.rs`, `src/ir/taint.rs`, `src/ir/capability_lock.rs`, `src/ir/capability_profiles.rs`, `src/output_generation.rs`, `src/cli/json_diagnostics.rs`, `src/config.rs`
+- **Related:** [ADR-0021](0021-effects-and-capabilities.md) (the effects and capabilities mechanism this level applies to); RFCs [WJ-SEC-01..04](../proposals/rfcs/SECURITY-FRAMEWORK-OVERVIEW.md); `src/ir/effects.rs`, `src/ir/taint.rs`, `src/ir/capability_lock.rs`, `src/ir/capability_profiles.rs`, `src/output_generation.rs`, `src/diagnostics/`, `src/config.rs`
 
 ## Context
 Four security RFCs are "Draft" but CHANGELOG 0.50.0 lists them as added. What is actually enforced:
@@ -14,7 +14,7 @@ Four security RFCs are "Draft" but CHANGELOG 0.50.0 lists them as added. What is
   "capability violation(s)" only when `wj.toml` has an `[app_capabilities]` section. Without it there is no check. Applies to the
   application, not per dependency.
 - **Taint (SEC-02):** `TaintSolver` runs by default and produces error-severity diagnostics, but the only consumer of
-  `taint_errors` outside the pipeline is `cli/json_diagnostics.rs`. No build-failing path was found, so the CHANGELOG line
+  `taint_errors` outside the pipeline is `src/diagnostics/`. No build-failing path was found, so the CHANGELOG line
   "compile-time errors for unsanitized data" is not true for the normal `wj build`.
 - **Lock file (SEC-03):** `src/ir/capability_lock.rs` defines the format; nothing outside `src/ir/mod.rs` references it. No `.wj-capabilities.lock` is read or written by the CLI.
 - **Profiles (SEC-04):** `capability_profiles.rs` has five built-in profiles; not wired to anything.

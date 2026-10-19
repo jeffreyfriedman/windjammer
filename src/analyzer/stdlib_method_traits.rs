@@ -34,6 +34,11 @@ pub(crate) fn stdlib_receiver_lookup_candidates(receiver_type: &str) -> Vec<Stri
     if matches!(leaf, "Map") {
         push("HashMap");
     }
+    // Fixed-size arrays and slices use the `Vec` methods (`[1, 2].contains(&1)`); without this the lookup
+    // fell through to an arbitrary homonym (`HashSet::contains`), which made codegen differ between runs.
+    if matches!(leaf, "Array" | "Slice" | "slice") {
+        push("Vec");
+    }
     out
 }
 

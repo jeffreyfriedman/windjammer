@@ -124,8 +124,8 @@ impl<'e> Lowerer<'e> {
             }
             _ => {}
         }
-        let name = &crate::codegen::portable::alias::strip_modules(name).unwrap_or_else(|| name.to_string());
-        let nominal = crate::codegen::portable::alias::nominal(name).unwrap_or_else(|| if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() });
+        let name = &self.env.aliases.strip_modules(name).unwrap_or_else(|| name.to_string());
+        let nominal = self.env.aliases.nominal(name).unwrap_or_else(|| if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() });
         if self.env.structs.contains_key(&nominal) {
             return self.struct_pattern(&nominal, binding, ty);
         }

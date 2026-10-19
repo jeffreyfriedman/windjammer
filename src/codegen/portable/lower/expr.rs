@@ -50,7 +50,11 @@ impl<'e> Lowerer<'e> {
     fn expr_inner(&mut self, e: &Expression, want: Option<&Ty>) -> PResult<PExpr> {
         match e {
             Expression::Literal { value, .. } => self.literal(value, want),
-            Expression::Identifier { name, .. } => self.identifier(name, want),
+            Expression::Identifier { name, .. } => {
+                let mut r = self.identifier(name, want)?;
+                r.last_use = self.last_uses.contains(&crate::ir::numeric_defaults::node_id(e));
+                Ok(r)
+            }
             Expression::Binary { left, op, right, .. } => self.binary(left, op, right, want),
             Expression::Unary { op, operand, .. } => self.unary(op, operand, want),
             Expression::Call { function, arguments, .. } => self.call(function, arguments, want),
@@ -62,7 +66,7 @@ impl<'e> Lowerer<'e> {
             Expression::Closure { parameters, body, .. } => self.closure(parameters, body, want),
             Expression::Cast { expr, type_, .. } => {
                 let inner = self.expr(expr, None)?;
-                let ty = from_ast(type_, &self.generics);
+                let ty = from_ast(type_, &self.generics, &self.env.aliases);
                 // Constant integer casts are folded with Rust `as` semantics (wrap to the target
                 // width): Go rejects `uint8(-1)` as a constant overflow.
                 if let (Some(v), Some(k)) = (const_int(&inner), ty.int_kind()) {
@@ -152,7 +156,7 @@ impl<'e> Lowerer<'e> {
         if let Some(t) = self.env.consts.get(name) {
             return Ok(PExpr::new(t.clone(), PK::Local(name.to_string())));
         }
-        if let Some(last) = crate::codegen::portable::alias::strip_modules(name) {
+        if let Some(last) = self.env.aliases.strip_modules(name) {
             return self.identifier(&last, want);
         }
         if let Some((owner, member)) = name.rsplit_once("::") {
@@ -172,8 +176,8 @@ impl<'e> Lowerer<'e> {
     /// `Owner::member` used as a value: unit variant, associated const, or function reference.
     fn path_value(&mut self, owner: &str, member: &str, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
-        let owner = crate::codegen::portable::alias::strip_modules(&owner).unwrap_or(owner);
-        let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
+        let owner = self.env.aliases.strip_modules(&owner).unwrap_or(owner);
+        let owner = self.env.aliases.nominal(&owner).unwrap_or(owner);
         if let Some(v) = self.env.variant(&owner, member) {
             if v.fields.is_empty() {
                 let args = self.enum_args_from_want(&owner, want);
@@ -377,8 +381,8 @@ impl<'e> Lowerer<'e> {
 
     fn struct_literal(&mut self, name: &str, fields: &[(String, &Expression)], want: Option<&Ty>) -> PResult<PExpr> {
         let name = if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() };
-        let name = crate::codegen::portable::alias::strip_modules(&name).unwrap_or(name);
-        let name = crate::codegen::portable::alias::nominal(&name).unwrap_or(name);
+        let name = self.env.aliases.strip_modules(&name).unwrap_or(name);
+        let name = self.env.aliases.nominal(&name).unwrap_or(name);
         if let Some((en, var)) = name.split_once("::") {
             return self.variant_struct_literal(en, var, fields, want);
         }
@@ -431,7 +435,7 @@ impl<'e> Lowerer<'e> {
                 continue;
             }
             let (name, declared) = match raw.split_once(':') {
-                Some((n, t)) => (n.trim().to_string(), Some(from_ast(&type_from_str(t), &self.generics))),
+                Some((n, t)) => (n.trim().to_string(), Some(from_ast(&type_from_str(t), &self.generics, &self.env.aliases))),
                 None => (raw.trim().to_string(), None),
             };
             let t = declared.or(hint).unwrap_or_else(|| self.new_var());

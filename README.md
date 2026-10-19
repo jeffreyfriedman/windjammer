@@ -243,9 +243,9 @@ Windjammer is pre-1.0 and moving quickly. Every backend runs the shared conforma
 <!-- wj:gen name=targets_summary -->
 | Backend | Conformance programs passing | Known unsupported |
 |---|---|---|
-| `rust` | 121 | 33 |
-| `go` | 154 | 0 |
-| `js` | 154 | 0 |
+| `rust` | 128 | 28 |
+| `go` | 156 | 0 |
+| `js` | 156 | 0 |
 <!-- wj:end -->
 
 | Area | Tier |

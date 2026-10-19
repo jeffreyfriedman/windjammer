@@ -170,7 +170,7 @@ impl<'e> Lowerer<'e> {
         match s {
             Statement::Let { pattern, mutable, type_, value, else_block, .. } => self.let_stmt(pattern, *mutable, type_.as_ref(), value, else_block.as_deref()),
             Statement::Const { name, type_, value, .. } | Statement::Static { name, type_, value, .. } => {
-                let ty = from_ast(type_, &self.generics);
+                let ty = from_ast(type_, &self.generics, &self.env.aliases);
                 let init = self.expr(value, Some(&ty))?;
                 let out = self.declare(name, ty.clone(), false);
                 Ok(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }])
@@ -245,8 +245,18 @@ impl<'e> Lowerer<'e> {
                 return Ok(stmts);
             }
         }
-        let declared = ty.map(|t| from_ast(t, &self.generics)).map(|t| self.freshen(&t));
+        let declared = ty.map(|t| from_ast(t, &self.generics, &self.env.aliases)).map(|t| self.freshen(&t));
         let mut init = self.expr(value, declared.as_ref())?;
+        // `let p = arena.get_mut(h)`: `p` aliases the arena slot (the prelude's `get_mut` lowers to a place).
+        if let (Expression::MethodCall { method, .. }, Pattern::Identifier(name) | Pattern::MutBinding(name)) = (value, pattern) {
+            if method == "get_mut" && init.is_place() && super::arena::is_slot_place(&init) {
+                let ty = init.ty.clone();
+                let out = self.declare(name, ty.clone(), true);
+                let line = init.line;
+                let init = PExpr::new(ty.clone(), PK::BorrowMut(init)).at(line);
+                return Ok(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }]);
+            }
+        }
         if let Some(d) = &declared {
             self.constrain(d, &init.ty);
         }
@@ -263,6 +273,7 @@ impl<'e> Lowerer<'e> {
         match pattern {
             Pattern::Identifier(name) | Pattern::MutBinding(name) => {
                 let out = self.declare(name, ty.clone(), false);
+                self.set_fresh(name);
                 let m = mutable || matches!(pattern, Pattern::MutBinding(_));
                 Ok(vec![PStmt::Let { name: out, ty, mutable: m, init: Some(init) }])
             }

@@ -1,7 +1,7 @@
 //! Rejects Rust-leakage patterns before analysis runs.
 //!
 //! Forbidden patterns include:
-//! - `.as_str()` calls (compiler handles String → &str automatically)
+//! (`.as_str()` is no longer rejected: it is the W0012 lint with a `wj fix` rewrite.)
 //! - `@derive(Copy)`, `@derive(Clone)`, etc. for standard traits
 //!   (compiler auto-infers derivable traits from struct field types)
 
@@ -21,21 +21,6 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                 arguments,
                 ..
             } => {
-                if method == "as_str" && arguments.is_empty() {
-                    return Err("error: `.as_str()` is forbidden in Windjammer source\n\
-                         \n\
-                         Windjammer automatically handles string conversions based on context.\n\
-                         You don't need to call `.as_str()` - the compiler will generate the\n\
-                         correct Rust code automatically.\n\
-                         \n\
-                         Example:\n\
-                         ❌ match name.as_str() { ... }  // Don't do this\n\
-                         ✅ match name { ... }            // Do this instead\n\
-                         \n\
-                         This keeps Windjammer code clean and backend-agnostic (Go/JS/etc\n\
-                         don't have .as_str())."
-                        .to_string());
-                }
                 check_expr(object)?;
                 for (_label, arg) in arguments {
                     check_expr(arg)?;
@@ -46,23 +31,6 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                 arguments,
                 ..
             } => {
-                if let Expression::FieldAccess { field, .. } = &**function {
-                    if field == "as_str" && arguments.is_empty() {
-                        return Err("error: `.as_str()` is forbidden in Windjammer source\n\
-                             \n\
-                             Windjammer automatically handles string conversions based on context.\n\
-                             You don't need to call `.as_str()` - the compiler will generate the\n\
-                             correct Rust code automatically.\n\
-                             \n\
-                             Example:\n\
-                             ❌ match name.as_str() { ... }  // Don't do this\n\
-                             ✅ match name { ... }            // Do this instead\n\
-                             \n\
-                             This keeps Windjammer code clean and backend-agnostic (Go/JS/etc\n\
-                             don't have .as_str()).".to_string());
-                    }
-                }
-
                 check_expr(function)?;
                 for (_label, arg) in arguments {
                     check_expr(arg)?;
@@ -249,9 +217,7 @@ pub(in crate::analyzer) fn check_forbidden_rust_patterns<'ast>(
                 check_expr(value)?;
             }
             Item::Mod { items, .. } => {
-                let mod_program = Program {
-                    items: items.clone(),
-                };
+                let mod_program = Program::new(items.clone());
                 check_forbidden_rust_patterns(&mod_program)?;
             }
             _ => {}
@@ -268,9 +234,7 @@ fn check_forbidden_decorators<'ast>(program: &Program<'ast>) -> Result<(), Strin
                 check_struct_decorators(&decl.name, &decl.decorators)?;
             }
             Item::Mod { items, .. } => {
-                let mod_program = Program {
-                    items: items.clone(),
-                };
+                let mod_program = Program::new(items.clone());
                 check_forbidden_decorators(&mod_program)?;
             }
             _ => {}

@@ -38,6 +38,8 @@ pub struct ParamReport {
     pub solver: Option<String>,
     pub ir_final: Option<String>,
     pub emitted: Option<String>,
+    /// IR stages that changed the mode, in order (`stage=mode`), from `IrFunction::ownership_trail`.
+    pub trail: Vec<String>,
     /// The mode the generated program actually has (`emitted`, else `ir_final`).
     pub effective: String,
     pub reasons: Vec<Reason>,

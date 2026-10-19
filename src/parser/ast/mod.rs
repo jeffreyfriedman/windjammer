@@ -12,6 +12,7 @@ pub mod builders;
 pub mod literals;
 pub mod operators;
 pub mod ownership;
+pub mod owner;
 pub mod types;
 
 // Re-export from domain modules
@@ -19,6 +20,7 @@ pub use builders::*;
 pub use literals::*;
 pub use operators::*;
 pub use ownership::*;
+pub use owner::{ArenaLedger, AstArenas, AstOwner};
 pub use types::*;
 
 // Re-export circular types from core module

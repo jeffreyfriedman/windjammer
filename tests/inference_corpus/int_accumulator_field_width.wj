@@ -1,0 +1,23 @@
+// D-NUM-ACC-FIELD (P0): an untyped `let mut total = 0` accumulated over `int` struct fields is `int`
+// (i64). The compiler used to paint it i32 and truncate with `as i32`. Expected output: -1 / -5000000000.
+pub struct Line {
+    pub amount: int,
+}
+
+pub fn shift_by_total(lines: Vec<Line>) -> Vec<Line> {
+    let mut total = 0
+    for line in &lines {
+        total = total + line.amount
+    }
+    let mut out: Vec<Line> = vec![]
+    for line in lines {
+        out.push(Line { amount: line.amount - total })
+    }
+    out
+}
+
+fn main() {
+    let out = shift_by_total(vec![Line { amount: 5000000000 }, Line { amount: 1 }])
+    println(out[0].amount)
+    println(out[1].amount)
+}

@@ -2294,6 +2294,19 @@
   {
     "kind": "example",
     "module": "",
+    "name": "intrinsic_user_shadow",
+    "signature": "",
+    "source": "examples/verified/intrinsic_user_shadow.wj",
+    "summary": "verified program; first output line: custom: hi",
+    "tags": [
+      "intrinsics",
+      "shadowing",
+      "println"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
     "name": "iter_any_all_count",
     "signature": "",
     "source": "examples/verified/iter_any_all_count.wj",
@@ -2566,6 +2579,19 @@
       "mod",
       "use",
       "pub"
+    ]
+  },
+  {
+    "kind": "example",
+    "module": "",
+    "name": "module_nested_pub_mod",
+    "signature": "",
+    "source": "examples/verified/module_nested_pub_mod.wj",
+    "summary": "verified program; first output line: 9",
+    "tags": [
+      "modules",
+      "nested",
+      "pub mod"
     ]
   },
   {
@@ -4405,7 +4431,18 @@
     "name": "hash_password",
     "signature": "fn hash_password(password: string) -> Result<string, string>",
     "source": "std/crypto.wj",
-    "summary": "Password Hashing (bcrypt)",
+    "summary": "Password Hashing (argon2id preferred; bcrypt verified for migration)",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "hash_password_argon2id",
+    "signature": "fn hash_password_argon2id(password: string) -> Result<string, string>",
+    "source": "std/crypto.wj",
+    "summary": "/ Argon2id with OWASP defaults (19 MiB, 2 iterations, 1 lane) and a random salt; returns a PHC string.",
     "tags": [
       "fn"
     ]
@@ -4417,6 +4454,17 @@
     "signature": "fn hash_password_with_cost(password: string, cost: int) -> Result<string, string>",
     "source": "std/crypto.wj",
     "summary": "",
+    "tags": [
+      "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::crypto",
+    "name": "password_hash_is_argon2id",
+    "signature": "fn password_hash_is_argon2id(hash: string) -> bool",
+    "source": "std/crypto.wj",
+    "summary": "/ True for `$argon2id$...` hashes. After a successful `verify_password` on a hash where this is / false, call `hash_password_argon2id` and store the result to m",
     "tags": [
       "fn"
     ]
@@ -4493,7 +4541,7 @@
     "name": "verify_password",
     "signature": "fn verify_password(password: string, hash: string) -> Result<bool, string>",
     "source": "std/crypto.wj",
-    "summary": "",
+    "summary": "/ Verify against a stored hash: bcrypt (`$2b$...`) or Argon2 PHC (`$argon2id$...`).",
     "tags": [
       "fn"
     ]
@@ -4603,7 +4651,7 @@
     "name": "connect",
     "signature": "fn connect(url: string) -> Result<Connection, string>",
     "source": "std/db.wj",
-    "summary": "/ Open postgres://, postgresql://, or sqlite path (:memory:, file.db).",
+    "summary": "/ Open postgres://, postgresql://, or sqlite path (:memory:, file.db). / Postgres connections share one process-wide pool per URL; each handle pins one pooled s",
     "tags": [
       "fn"
     ]
@@ -4848,6 +4896,17 @@
     "summary": "/ URL encode a component (more aggressive than url_encode)",
     "tags": [
       "fn"
+    ]
+  },
+  {
+    "kind": "stdlib",
+    "module": "std::enumerable",
+    "name": "Enumerable",
+    "signature": "trait Enumerable<T>",
+    "source": "std/enumerable.wj",
+    "summary": "std/enumerable - the enumerable collection methods (ADR-0018 feature 1, spec: docs/spec/collections.md). These methods are built in: every List, Set, Map (as (k",
+    "tags": [
+      "trait"
     ]
   },
   {

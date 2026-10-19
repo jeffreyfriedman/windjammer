@@ -2,7 +2,7 @@
 //! (empty-bodied) analysis must not override.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::analyzer::{FunctionSignature, OwnershipMode, SignatureRegistry};
@@ -13,7 +13,7 @@ use crate::parser::Type;
 #[derive(Default)]
 pub(crate) struct StdStubs {
     files: HashSet<PathBuf>,
-    contracts: HashMap<String, FunctionSignature>,
+    contracts: BTreeMap<String, FunctionSignature>,
 }
 
 impl StdStubs {

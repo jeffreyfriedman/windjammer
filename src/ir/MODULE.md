@@ -8,11 +8,14 @@ In: analyzed program (`analyzer`) and `parser` AST. Out: `IrModule` with solved 
 
 ## Invariants
 - Every compilation runs the pipeline; solvers must be deterministic and idempotent.
-- The IR is meant to be the single owner of ownership/clone/numeric decisions (`solver.rs`, `numeric_solver.rs`), but legacy analyzer/codegen paths still decide too.
+- The IR is meant to be the single owner of ownership/clone/numeric decisions (`solver.rs`; the unused `numeric_solver.rs` was deleted in C4, widths now flow through the unified solver and the legacy collectors until WP 8 finishes), but legacy analyzer/codegen paths still decide too.
 - `ir` must not depend on `codegen`; the current imports are tracked debt (WP 4: neutral `ir_contract`).
 
 ## Owns
 IR node types, lowering (`lower.rs`), constraints/solver, effects, taint, capability profiles/lock, execution mode, numeric bridge/solver, coercion encoding.
+
+## Semantic facts (ADR-0017)
+`liveness.rs` (`last_use`, by AST node identity) and `numeric_defaults.rs` (NUM-DEFAULT-INT, by the literal's source position) are target-independent facts stored on `IrFunction`; backends consume them and never re-decide. Both are deliberately conservative: a use they do not model opens the class / blocks the claim.
 
 ## Reporting
 `explain/` (`wj explain-ownership`) only reports: it re-reads the constraint set (with provenance rule IDs, `ConstraintOrigin`), the IR result and the emitted Rust, and shows where analyzer / solver / IR / codegen disagree. It never feeds a decision back. Rule IDs: `explain/rules.rs` <-> `docs/spec/inference.md`.

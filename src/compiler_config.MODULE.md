@@ -14,7 +14,7 @@ environment variables and process-global flags so tests and production run ident
 - `from_env()` is the ONLY place behavior-changing env vars are interpreted
   (`WJ_IR_CUTOVER_DISABLE_*`, `WJ_IR_COERCION_ENGINE`, `WJ_LEGACY_MULTIPASS`,
   `WJ_EMIT_AOSOA_HINTS`, `WJ_CACHE_LOCALITY_JSON`, `WINDJAMMER_STDLIB`,
-  `WINDJAMMER_RUNTIME_PATH`, `game-host_PATH`); call it only from the CLI driver.
+  `WINDJAMMER_RUNTIME_PATH`, `game-host_PATH`, `WJ_AUTO_ARENA`); call it only from the CLI driver.
 - Diagnostics-only variables (`WJ_DEBUG_*`, `*_TRACE`, `WJ_PROFILE`) live in `debug_env`
   and must never influence generated output.
 - Guarded by `tests/compiler_config_env_isolation_test.rs` (greps `src/` for `env::var`).

@@ -181,6 +181,11 @@ fn arg_str_emits_i64(arg_str: &str) -> bool {
 }
 
 fn append_int_cast(arg: &Expression, arg_str: &mut String, suffix: &str) {
+    // An explicit literal suffix always wins: `0u32` is never re-cast to a formal's width. A formal
+    // that disagrees is the callee lookup's mistake (or the user's, which rustc reports).
+    if matches!(arg, Expression::Literal { value: Literal::IntSuffixed(..), .. }) {
+        return;
+    }
     if arg_str.contains(&format!(" as {suffix}")) {
         return;
     }

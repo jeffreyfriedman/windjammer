@@ -1,0 +1,76 @@
+use std::collections::HashMap;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct P {
+    lo: i64,
+}
+impl P {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.lo.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+
+struct T {
+    n: i64,
+}
+impl T {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut __bytes = Vec::with_capacity(8);
+        __bytes.extend_from_slice(&self.n.to_ne_bytes());
+        __bytes
+    }
+}
+
+
+impl T {
+#[inline]
+fn collect(&self, out: &mut Vec<i64>) {
+        out.push(self.n);
+}
+}
+
+#[inline]
+fn pick(flag: bool) -> String {
+    if flag {
+        return {
+            if flag {
+                String::from("yes")
+            } else {
+                String::from("no")
+            }
+        };
+    }
+    String::from("none")
+}
+
+fn main() {
+    let mut v: Vec<P> = vec![P { lo: 2_i64 }, P { lo: 1_i64 }];
+    v.sort_by(|a, b| a.lo.cmp(&b.lo));
+    println!("{}", v[0].lo);
+    let s: String = String::from("hello world");
+    let t = &s[6..s.len()];
+    println!("{}", t);
+    let text: String = String::from("a b");
+    for tok in text.split(" ") {
+        if tok == "a" {
+            let _ = println!("a");
+        }
+    }
+    let mut it = "5\n6".lines();
+    let first = it.next().unwrap_or("0");
+    println!("{}", first);
+    let mut m: HashMap<String, i64> = HashMap::new();
+    m.insert(String::from("a"), 1_i64);
+    let n = m.get("a").copied().unwrap_or(0_i64);
+    println!("{}", n);
+    println!("{}", pick(true));
+    let mut out: Vec<i64> = Vec::new();
+    let tt = T { n: 4_i64 };
+    tt.collect(&mut out);
+}
+

@@ -10,7 +10,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 |---|---|
 | `wj new` | Create a new Windjammer project |
 | `wj build` | Build a Windjammer project |
-| `wj run` | Compile and run a Windjammer file |
+| `wj run` | Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be |
 | `wj repl` | Start the Windjammerscript REPL (interactive interpreter) |
 | `wj test` | Run tests |
 | `wj fmt` | Format Windjammer code |
@@ -21,7 +21,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj remove` | Remove a dependency from wj.toml |
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
-| `wj errors` | Interactive error navigator (TUI) |
+| `wj errors` | Browse the diagnostics of a file or project (summary by code, filterable) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain` | Explain an error code |
@@ -65,11 +65,8 @@ Usage: wj build [OPTIONS] <FILE>
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
-| `--minify` | MINIFY |  | Minify JavaScript output (JS target only) |
 | `--tree-shake` | TREE_SHAKE |  | Enable tree shaking (dead code elimination) |
 | `--source-maps` | SOURCE_MAPS |  | Generate source maps |
-| `--polyfills` | POLYFILLS |  | Include polyfills for older browsers (JS target only) |
-| `--v8-optimize` | V8_OPTIMIZE |  | Apply V8 optimizations (JS target only) |
 | `--check` | CHECK |  | Run cargo build after transpilation and show errors |
 | `--raw-errors` | RAW_ERRORS |  | Show raw Rust errors instead of translated Windjammer errors |
 | `--fix` | FIX |  | Automatically apply fixes for fixable errors |
@@ -88,24 +85,29 @@ Usage: wj build [OPTIONS] <FILE>
 
 ## `wj run`
 
-Compile and run a Windjammer file
+Run a Windjammer program: interpreted by default (instant start), compiled when it needs to be
 
 ```text
-Usage: wj run [OPTIONS] <FILE> [ARGS]...
+Usage: wj run [OPTIONS] [PATH] [ARGS]...
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<PATH>` | FILE |  | Path to .wj file |
+| `<PATH>` | PATH |  | A .wj file or a directory; omitted: the project containing the current directory (wj.toml) |
 | `<ARGS>` | ARGS |  | Arguments to pass to the program |
-| `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
-| `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
-| `--sched-seed` | N | 0 | With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
-| `--hash-seed` | N | 0 | With --interpret: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
-| `--deterministic-time` | DETERMINISTIC_TIME |  | With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it |
-| `--engine` | ENGINE | walker | With --interpret: `walker` (default) or `resolved` (compiled closures, ADR-0020) |
-| `--allow-network` | ALLOW_NETWORK |  | With --interpret: allow plain http:// client requests (default: the http client refuses) |
-| `--mock-http` | FILE |  | With --interpret: answer http client calls from a JSON file of canned responses |
+| `--bin` | NAME |  | Binary to run (`[[bin]]` in wj.toml, cmd/<NAME>/main.wj or src/bin/<NAME>.wj) |
+| `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm); non-rust targets always compile |
+| `--interpret` | INTERPRET |  | Interpreter only: never fall back to the compiled path (exit 2 on an unsupported feature) |
+| `--compiled` | COMPILED |  | Transpile to Rust and run with cargo (the release path), skipping the interpreter |
+| `--release` | RELEASE |  | Like --compiled, with optimizations |
+| `--watch` | WATCH |  | Re-run on every source change (restarts long-running programs) |
+| `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
+| `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
+| `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
+| `--engine` | ENGINE | walker | Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020) |
+| `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
+| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow plain http:// client requests (default: the http client refuses) |
+| `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -144,6 +146,9 @@ Usage: wj test [OPTIONS] [PATH]
 | `--list` | LIST |  | List discovered test files and functions, then exit without compiling |
 | `--allow-empty` | ALLOW_EMPTY |  | Exit 0 when no tests are found (default: finding none is an error) |
 | `--interpret` | INTERPRET |  | Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc |
+| `--watch` | WATCH |  | Re-run the tests on every source change |
+| `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
+| `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
 
 ## `wj fmt`
 
@@ -255,16 +260,17 @@ Usage: wj stats [OPTIONS]
 
 ## `wj errors`
 
-Interactive error navigator (TUI)
+Browse the diagnostics of a file or project (summary by code, filterable)
 
 ```text
-Usage: wj errors [OPTIONS] <FILE>
+Usage: wj errors [OPTIONS] [PATH]
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<FILE>` | FILE |  | File to check |
-| `-o`, `--output` | OUTPUT | ./build | Output directory |
+| `<PATH>` | PATH |  | .wj file or project directory (default: current directory) |
+| `--code` | CODE |  | Show only this diagnostic code (e.g. WJ0010, W0002) |
+| `--severity` | SEVERITY |  | Show only this severity (error, warning) |
 
 ## `wj docs`
 

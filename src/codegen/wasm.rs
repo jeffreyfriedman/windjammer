@@ -410,7 +410,7 @@ mod tests {
     fn test_generates_html_harness() {
         let backend = WasmBackend::new();
         let files = backend
-            .generate_additional_files(&Program { items: vec![] }, &CodegenConfig::default());
+            .generate_additional_files(&Program::new(vec![]), &CodegenConfig::default());
         assert!(files.iter().any(|(name, _)| name == "index.html"));
     }
 }

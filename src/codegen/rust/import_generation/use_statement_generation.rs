@@ -330,17 +330,7 @@ impl CodeGenerator<'_> {
                     )
                 }
             } else if is_actual_module_file {
-                if !self.is_module {
-                    // crate-root `main.wj`: a sibling file is a crate-level module, never `super::`
-                    format!("{}use crate::{} as {};\n", pub_prefix, rust_path, alias_name)
-                } else if self.is_output_mod_rs() {
-                    format!("{}use self::{} as {};\n", pub_prefix, rust_path, alias_name)
-                } else {
-                    format!(
-                        "{}use super::{} as {};\n",
-                        pub_prefix, rust_path, alias_name
-                    )
-                }
+                format!("{}use {}::{} as {};\n", pub_prefix, self.sibling_module_scope(), rust_path, alias_name)
             } else {
                 format!("{}use {} as {};\n", pub_prefix, rust_path, alias_name)
             }
@@ -354,13 +344,7 @@ impl CodeGenerator<'_> {
                 format!("{}use {}{};\n", pub_prefix, import_prefix, rp)
             }
         } else if is_actual_module_file {
-            if !self.is_module {
-                format!("{}use crate::{};\n", pub_prefix, rust_path)
-            } else if self.is_output_mod_rs() {
-                format!("{}use self::{};\n", pub_prefix, rust_path)
-            } else {
-                format!("{}use super::{};\n", pub_prefix, rust_path)
-            }
+            format!("{}use {}::{};\n", pub_prefix, self.sibling_module_scope(), rust_path)
         } else if rust_path.starts_with("crate::") {
             let path_without_crate = rust_path.strip_prefix("crate::").unwrap();
             let pwc = self.expand_bare_module_path_for_type(path_without_crate);
@@ -408,6 +392,21 @@ impl CodeGenerator<'_> {
             } else {
                 format!("{}use {}::*;\n", pub_prefix, rust_path)
             }
+        }
+    }
+}
+
+impl CodeGenerator<'_> {
+    /// Path root under which a sibling `.wj` module file is reachable from the file being generated:
+    /// the crate root for `main.wj` (a sibling is a crate-level module, never `super::`), `self` from a
+    /// `mod.rs`, `super` from any other module file.
+    fn sibling_module_scope(&self) -> &'static str {
+        if !self.is_module {
+            "crate"
+        } else if self.is_output_mod_rs() {
+            "self"
+        } else {
+            "super"
         }
     }
 }
