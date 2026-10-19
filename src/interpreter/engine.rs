@@ -128,7 +128,8 @@ pub struct Interpreter {
     /// `--engine=resolved`: run compiled functions where possible (see `resolved/`).
     pub(crate) engine_resolved: bool,
     /// Compiled forms by `FuncDef` address (`None` = not compilable).
-    pub(crate) compiled: HashMap<usize, Option<Rc<super::resolved::CompiledFn>>, std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
+    /// The `FuncDef` is kept alive with its entry so its address is never reused (hot reload replaces bodies).
+    pub(crate) compiled: HashMap<usize, (Rc<FuncDef>, Option<Rc<super::resolved::CompiledFn>>), std::hash::BuildHasherDefault<super::fasthash::AddrHasher>>,
     /// Locals of active compiled calls (one window per call).
     pub(crate) rstack: Vec<Value>,
     /// `std::subprocess` children by handle id.
