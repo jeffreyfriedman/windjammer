@@ -20,6 +20,7 @@ pub mod auto_clone;
 pub mod auto_fix;
 pub mod cargo_toml;
 pub mod check;
+pub mod reduce; // `wj reduce`: automatic test-case reducer
 pub mod diagnostics;
 pub mod codegen;
 pub mod component_analyzer;
