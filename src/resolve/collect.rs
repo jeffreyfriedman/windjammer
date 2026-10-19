@@ -64,6 +64,8 @@ pub struct Collected<'a> {
     /// Function def -> its declaration (attributes, parameters, `extern`); data for fact passes.
     pub decls: HashMap<DefId, &'a FunctionDecl<'a>>,
     pub diagnostics: Vec<Diagnostic>,
+    /// Roots of dependency crates mounted under the program root: `crate::` inside one means that root.
+    pub crate_roots: std::collections::HashSet<DefId>,
 }
 
 pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
@@ -80,6 +82,7 @@ pub fn collect<'a>(files: &[ParsedFile<'a>]) -> Collected<'a> {
         methods_by_name: HashMap::new(),
         decls: HashMap::new(),
         diagnostics: Vec::new(),
+        crate_roots: std::collections::HashSet::new(),
     };
     for f in files {
         let m = c.module_for_path(&f.module_path);
@@ -123,7 +126,7 @@ impl<'a> Collected<'a> {
         &self.defs.get(module).path
     }
 
-    fn module_for_path(&mut self, path: &[String]) -> DefId {
+    pub(crate) fn module_for_path(&mut self, path: &[String]) -> DefId {
         let mut cur = self.root;
         for seg in path {
             cur = self.child_module(cur, seg, true, None);

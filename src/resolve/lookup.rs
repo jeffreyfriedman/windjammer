@@ -68,14 +68,31 @@ impl<'a> Collected<'a> {
         if found.is_empty() {
             found = self.lookup_globs(module, name, ns, guard);
         }
+        if found.is_empty() {
+            found = self.lookup_child_reexports(module, name, ns, guard);
+        }
         guard.pop();
         dedupe(found)
+    }
+
+    /// The root `crate::` names from inside `module`: its dependency crate's root, else the program root.
+    pub fn crate_root_of(&self, module: DefId) -> DefId {
+        let mut cur = module;
+        loop {
+            if self.crate_roots.contains(&cur) {
+                return cur;
+            }
+            match self.parent_of(cur) {
+                Some(p) if p != cur => cur = p,
+                _ => return self.root,
+            }
+        }
     }
 
     fn special_segment(&self, module: DefId, name: &str) -> Option<Vec<Found>> {
         let target = match name {
             "self" => Some(module),
-            "crate" => Some(self.root),
+            "crate" => Some(self.crate_root_of(module)),
             "super" => self.parent_of(module),
             _ => return None,
         };
@@ -97,6 +114,39 @@ impl<'a> Collected<'a> {
                 out.extend(self.resolve_use_path(module, &u.segments, ns, guard));
             }
         }
+        out
+    }
+
+    /// A module re-exports the public items of its child modules (`pub mod http` makes `crate::adapters::serve`
+    /// the same function as `crate::adapters::http::serve`): the generated Rust module declares
+    /// `pub use self::child::*` for every child, and the interpreter binds the same names.
+    fn lookup_child_reexports(&self, module: DefId, name: &str, ns: Ns, guard: &mut Guard) -> Vec<Found> {
+        let mut out = Vec::new();
+        let mut children: Vec<DefId> = self.modules[&module]
+            .items
+            .values()
+            .flatten()
+            .copied()
+            .filter(|d| {
+                let def = self.defs.get(*d);
+                def.kind == DefKind::Module && def.is_pub && self.parent_of(*d) == Some(module)
+            })
+            .collect();
+        children.sort();
+        for child in children {
+            let scope = &self.modules[&child];
+            if let Some(defs) = scope.items.get(name) {
+                out.extend(
+                    defs.iter()
+                        .filter(|d| {
+                            let def = self.defs.get(**d);
+                            def.is_pub && def.kind != DefKind::Module && accepts(def, ns)
+                        })
+                        .map(|d| Found::Def(*d)),
+                );
+            }
+        }
+        let _ = guard;
         out
     }
 

@@ -51,6 +51,41 @@ impl<'ast> Analyzer<'ast> {
         }
     }
 
+    /// The name is assigned as a whole (`h = f(h)`) somewhere in `statements`.
+    pub(crate) fn is_rebound(&self, name: &str, statements: &[&'ast Statement<'ast>]) -> bool {
+        statements.iter().any(|s| Self::stmt_rebinds(name, s))
+    }
+
+    fn stmt_rebinds(name: &str, stmt: &Statement<'ast>) -> bool {
+        match stmt {
+            Statement::Assignment { target, .. } => {
+                matches!(target, Expression::Identifier { name: id, .. } if id == name)
+            }
+            Statement::If { then_block, else_block, .. } => {
+                then_block.iter().any(|s| Self::stmt_rebinds(name, s))
+                    || else_block.as_ref().is_some_and(|b| b.iter().any(|s| Self::stmt_rebinds(name, s)))
+            }
+            Statement::While { body, .. } | Statement::Loop { body, .. } | Statement::For { body, .. } => {
+                body.iter().any(|s| Self::stmt_rebinds(name, s))
+            }
+            _ => false,
+        }
+    }
+
+    /// Mutated in place (fields, `&mut self` methods), not merely rebound as a whole.
+    pub(crate) fn is_mutated_in_place(
+        &self,
+        name: &str,
+        statements: &[&'ast Statement<'ast>],
+        registry: &SignatureRegistry,
+        param_type_hint: Option<&Type>,
+    ) -> bool {
+        self.rebind_is_mutation.set(false);
+        let r = self.is_mutated(name, statements, registry, param_type_hint);
+        self.rebind_is_mutation.set(true);
+        r
+    }
+
     pub(super) fn is_mutated(
         &self,
         name: &str,
@@ -62,7 +97,7 @@ impl<'ast> Analyzer<'ast> {
             match stmt {
                 Statement::Assignment { target, .. } => {
                     if let Expression::Identifier { name: id, .. } = target {
-                        if id == name {
+                        if id == name && self.rebind_is_mutation.get() {
                             return true;
                         }
                     }

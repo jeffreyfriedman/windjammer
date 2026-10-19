@@ -275,6 +275,18 @@ name = "ecosystem_findings"
 path = "tests/ecosystem_findings_test.rs"
 
 [[test]]
+name = "std_interpreter_agreement"
+path = "tests/std_interpreter_agreement_test.rs"
+
+[[test]]
+name = "ecosystem_findings2_interp"
+path = "tests/ecosystem_findings2_interp_test.rs"
+
+[[test]]
+name = "ecosystem_findings2"
+path = "tests/ecosystem_findings2_test.rs"
+
+[[test]]
 name = "ecosystem_findings_handoff"
 path = "tests/ecosystem_findings_handoff_test.rs"
 

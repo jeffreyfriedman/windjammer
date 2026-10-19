@@ -319,6 +319,9 @@ pub struct Analyzer<'ast> {
     pub(crate) trait_receiver_widened_by_impl: std::collections::HashSet<(String, String)>,
     // Track which local variables are mutated (for automatic mut inference)
     mutated_variables: HashSet<String>,
+    /// `false` while asking "is this parameter mutated other than by rebinding the whole name"
+    /// (`h = step(h)` moves a value through the parameter; it does not write through a borrow).
+    pub(crate) rebind_is_mutation: std::cell::Cell<bool>,
     // Track functions in the current impl block (for cross-method analysis)
     current_impl_functions: Option<HashMap<String, crate::parser::ast::FunctionDecl<'ast>>>,
     /// Set while analyzing methods inside an `impl` block (inherent or trait impl body).
@@ -358,6 +361,7 @@ impl<'ast> Analyzer<'ast> {
             analyzed_trait_methods: HashMap::new(),
             trait_receiver_widened_by_impl: std::collections::HashSet::new(),
             mutated_variables: HashSet::new(),
+            rebind_is_mutation: std::cell::Cell::new(true),
             current_impl_functions: None,
             self_impl_context: None,
             global_struct_field_types: Arc::new(HashMap::new()),

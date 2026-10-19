@@ -184,7 +184,10 @@ impl Interpreter {
                 self.scope.defers.push(statement);
                 Ok(Value::Unit)
             }
-            Statement::Use { .. } => Ok(Value::Unit),
+            Statement::Use { path, alias, .. } => {
+                self.bind_body_use(s, path, alias.as_deref())?;
+                Ok(Value::Unit)
+            }
             Statement::Thread { .. } | Statement::Async { .. } => Err(unsupported("`thread {}` / `async {}` blocks (ADR-0004: surface not settled; use `async fn` + `.await`)")),
         }
     }

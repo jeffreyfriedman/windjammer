@@ -292,6 +292,7 @@ impl Interpreter {
                     format!("dependency `{}` has the same name as a module of this program", name),
                 ));
             }
+            self.dep_crates.insert(name.clone());
             crate_paths.push(vec![name.clone()]);
             for mut f in lib {
                 f.module_path.insert(0, name.clone());
@@ -313,7 +314,8 @@ impl Interpreter {
             .iter()
             .map(|f| crate::resolve::ParsedFile::new(f.module_path.clone(), f.file.clone(), f.program))
             .collect();
-        let resolved = crate::resolve::resolve_program(&inputs);
+        let dep_names: Vec<String> = crate_paths.iter().filter_map(|p| p.first().cloned()).collect();
+        let resolved = crate::resolve::resolve_program_with_crates(&inputs, &dep_names);
         self.reject_shadowed_type_names(&resolved)?;
         let module_ids = self.module_ids(&resolved.collected);
         let crate_roots: HashSet<DefId> = crate_paths
@@ -427,8 +429,18 @@ impl Interpreter {
                     crate::resolve::Binding::Named(local) => {
                         // a module or type binding wins over a value of the same name (tuple-struct ctor)
                         let pick = defs.iter().find(|d| d.kind == DefKind::Module).or_else(|| defs.first());
-                        let imp = match pick {
-                            Some(d) => self.import_for(c, ids, d),
+                        let value = defs.iter().find(|d| matches!(d.kind, DefKind::Fn | DefKind::Const | DefKind::Static));
+                        let imp = match (pick, value) {
+                            (Some(m), Some(v)) if m.kind == DefKind::Module => match (self.import_for(c, ids, m), self.import_for(c, ids, v)) {
+                                (Some(Import::Module(mi)), Some(Import::Item(im, name))) => Some(Import::Both(mi, im, name)),
+                                (a, _) => a,
+                            },
+                            (Some(d), _) => self.import_for(c, ids, d),
+                            (None, _) => None,
+                        };
+                        let imp = match imp {
+                            Some(i) => Some(i),
+                            None if pick.is_some() => None,
                             None => found.iter().find_map(|f| match f {
                                 Found::External(p) => Some(Import::Std(p.join("::"))),
                                 _ => None,
@@ -441,6 +453,13 @@ impl Interpreter {
                         }
                     }
                     crate::resolve::Binding::Glob => {
+                        for f in &found {
+                            if let Found::External(p) = f {
+                                if p.first().is_some_and(|s| s == "std" || s == "core" || s == "alloc") {
+                                    self.modules[m].std_globs.push(p.join("::"));
+                                }
+                            }
+                        }
                         for d in defs.iter().filter(|d| matches!(d.kind, DefKind::Module | DefKind::Enum)) {
                             self.bind_glob(c, ids, vis, d, m, *mdef);
                         }

@@ -146,6 +146,19 @@ fn classify(root: &Path) -> DepKind {
     }
 }
 
+/// `path = "../pkg/build"` names the generated output of the Windjammer package `../pkg`: the package is the
+/// dependency (its `src/` and `wj.toml`), not the Rust crate that was transpiled from it.
+fn package_of_build_output(dir: PathBuf) -> PathBuf {
+    if dir.file_name().is_some_and(|n| n == "build") && classify(&dir) == DepKind::Rust {
+        if let Some(parent) = dir.parent() {
+            if classify(parent) == DepKind::Windjammer {
+                return parent.to_path_buf();
+            }
+        }
+    }
+    dir
+}
+
 /// Direct dependencies of the project at `root` (`[dependencies]`), git ones fetched and locked.
 /// The lockfile is (re)written only when a git dependency was resolved without a pin.
 pub fn resolve(root: &Path) -> Result<Vec<DepNode>, String> {
@@ -160,6 +173,7 @@ pub fn resolve(root: &Path) -> Result<Vec<DepNode>, String> {
         let s = |k: &str| spec.get(k).and_then(|x| x.as_str()).map(str::to_string);
         if let Some(p) = s("path") {
             let dir = if Path::new(&p).is_absolute() { PathBuf::from(&p) } else { root.join(&p) };
+            let dir = package_of_build_output(dir);
             out.push(DepNode { name: name.clone(), kind: classify(&dir), root: Some(dir), rev: None, source: format!("path+{p}") });
         } else if let Some(url) = s("git") {
             let pinned = s("rev").or_else(|| lock.get(name).filter(|e| e.source == format!("git+{url}")).map(|e| e.rev.clone()));
@@ -189,6 +203,23 @@ mod tests {
         let p = root.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, s).unwrap();
+    }
+
+    #[test]
+    fn build_output_path_resolves_to_its_windjammer_package() {
+        let d = tempfile::tempdir().unwrap();
+        let r = d.path();
+        write(r, "app/wj.toml", "[package]\nname = \"app\"\n\n[dependencies]\nwj_x = { path = \"../pkg/build\" }\nraw = { path = \"../raw/build\" }\n");
+        write(r, "pkg/wj.toml", "[package]\nname = \"pkg\"\n");
+        write(r, "pkg/src/lib.wj", "pub fn f() -> int { 1 }\n");
+        write(r, "pkg/build/Cargo.toml", "[package]\nname = \"pkg\"\n");
+        write(r, "raw/build/Cargo.toml", "[package]\nname = \"raw\"\n");
+        let g = resolve(&r.join("app")).unwrap();
+        let x = g.iter().find(|n| n.name == "wj_x").unwrap();
+        assert_eq!(x.kind, DepKind::Windjammer);
+        assert!(x.root.as_ref().unwrap().ends_with("pkg"));
+        assert!(x.lib_entry().is_some());
+        assert_eq!(g.iter().find(|n| n.name == "raw").unwrap().kind, DepKind::Rust);
     }
 
     #[test]
