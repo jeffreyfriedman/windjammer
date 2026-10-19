@@ -34,6 +34,43 @@ pub fn program_files(entry: &Path) -> Result<Vec<super::project::LoadedFile>, Ru
     super::project::parse_files(&files)
 }
 
+/// The program a test file runs in, and the module path of the file inside it.
+///
+/// A test file of a project (`wj.toml` above it, crate root `lib.wj`/`main.wj` in its source root) runs
+/// against the whole project, exactly as `wj run` and the compiled `wj test` see it, so `use crate::a::P`
+/// reaches sibling modules. The source root is `<project>/src` when it exists, else the project directory
+/// (the same layout `module_system::project` uses). A file outside any project is a script.
+pub fn test_program_files(file: &Path) -> Result<(Vec<super::project::LoadedFile>, Vec<String>, PathBuf), RuntimeError> {
+    use crate::module_system::{project, sources::SourceFile};
+    let file = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+    let crate_entry = project::find_manifest_dir(&file).and_then(|proj| {
+        let root = if proj.join("src").is_dir() { proj.join("src") } else { proj };
+        ["lib.wj", "main.wj", "mod.wj"].iter().map(|n| root.join(n)).find(|e| e.is_file()).map(|e| (root, e))
+    });
+    let Some((root, entry)) = crate_entry.filter(|(_, e)| !same_file(e, &file)) else {
+        return Ok((program_files(&file)?, Vec::new(), file));
+    };
+    let mut sources = crate::module_system::sources::program_sources(&root, &entry)
+        .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", root.display(), e)))?;
+    let module_path = match sources.iter().find(|s| same_file(&s.file, &file)) {
+        Some(s) => s.module_path.clone(),
+        None => {
+            // test sources are not modules of the program: mount the file at its path under the root
+            let mut path = if file.starts_with(&root) {
+                crate::resolve::module_path_from_file(&root, &file)
+            } else {
+                file.file_stem().map(|s| vec![s.to_string_lossy().to_string()]).unwrap_or_default()
+            };
+            if path.is_empty() || sources.iter().any(|s| s.module_path == path) {
+                path = vec![file.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default()];
+            }
+            sources.push(SourceFile { module_path: path.clone(), file: file.clone() });
+            path
+        }
+    };
+    Ok((super::project::parse_files(&sources)?, module_path, entry))
+}
+
 fn same_file(a: &Path, b: &Path) -> bool {
     a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y)
 }
@@ -46,6 +83,14 @@ impl Interpreter {
         let files = program_files(entry)?;
         let deps = super::deps::dependency_sources(entry)?;
         self.load_sources(files, deps.windjammer, deps.rust)
+    }
+
+    /// Load the program a test file runs in (see [`test_program_files`]); returns the file's module path.
+    pub fn load_test_program(&mut self, file: &Path) -> Result<Vec<String>, RuntimeError> {
+        let (files, module_path, entry) = test_program_files(file)?;
+        let deps = super::deps::dependency_sources(&entry)?;
+        self.load_sources(files, deps.windjammer, deps.rust)?;
+        Ok(module_path)
     }
 
     /// Load and run an entry file (with its transitive module files).
