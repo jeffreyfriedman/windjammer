@@ -26,7 +26,7 @@ pub fn signature_targets_local_struct(name: &str, local_struct_names: &HashSet<S
 /// alphabetical codegen order can visit call sites before the defining module, and
 /// those paths disambiguate homonyms like bare `VoxelScene::new`.
 pub fn drop_dependency_signatures_for_local_types<T>(
-    signatures: &mut std::collections::HashMap<String, T>,
+    signatures: &mut std::collections::BTreeMap<String, T>,
     local_struct_names: &HashSet<String>,
 ) {
     signatures.retain(|name, _| {
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn drop_keeps_module_qualified_local_type_metadata() {
         let locals: HashSet<String> = ["VoxelScene".to_string()].into_iter().collect();
-        let mut sigs = std::collections::HashMap::from([
+        let mut sigs = std::collections::BTreeMap::from([
             ("VoxelScene::new".to_string(), "bare_homonym"),
             (
                 "quick_start::voxel_scene::VoxelScene::new".to_string(),

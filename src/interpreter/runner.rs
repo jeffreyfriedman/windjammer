@@ -186,8 +186,11 @@ pub fn run_specs(specs: Vec<TestSpec>) -> Vec<TestResult> {
         for spec in specs {
             let mut it = Interpreter::new_capturing();
             it.guard_stack();
-            let outcome = match it.load_program_at(&spec.file) {
-                Ok(_) => it.run_test(&spec.mods, spec.assoc.as_deref(), &spec.name),
+            let outcome = match it.load_test_program(&spec.file) {
+                Ok(mut path) => {
+                    path.extend(spec.mods.iter().cloned());
+                    it.run_test(&path, spec.assoc.as_deref(), &spec.name)
+                }
                 Err(e) => Err(e),
             };
             let (passed, message) = match outcome {

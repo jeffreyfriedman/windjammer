@@ -25,6 +25,9 @@ pub struct CompilerConfig {
     pub shadow_validate_strict: bool,
     /// Do not write Cargo.toml for single-file builds (`--no-generate-cargo-toml`).
     pub skip_cargo_toml_generation: bool,
+    /// Write `<out>/<file>.rs.map` (the `.wj` -> `.rs` line map) next to each generated Rust file
+    /// (`--source-maps`; `--check` turns it on because rustc error translation reads it).
+    pub emit_source_maps: bool,
     /// Override the Windjammer stdlib directory (default: `./std` / bundled).
     pub stdlib_path: Option<PathBuf>,
     /// Override the `windjammer-runtime` crate path used in generated Cargo.toml.
@@ -45,6 +48,7 @@ impl Default for CompilerConfig {
             cache_locality_json: None,
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
+            emit_source_maps: false,
             stdlib_path: None,
             runtime_path: None,
             game_path: None,
@@ -79,6 +83,7 @@ impl CompilerConfig {
             cache_locality_json: path("WJ_CACHE_LOCALITY_JSON"),
             shadow_validate_strict: false,
             skip_cargo_toml_generation: false,
+            emit_source_maps: false,
             stdlib_path: path("WINDJAMMER_STDLIB"),
             runtime_path: path("WINDJAMMER_RUNTIME_PATH"),
             game_path: path("game-host_PATH"),
@@ -91,23 +96,8 @@ impl CompilerConfig {
         self
     }
 
-    pub fn with_ir_coercion_engine(mut self, on: bool) -> Self {
-        self.ir_coercion_engine = on;
-        self
-    }
-
-    pub fn with_legacy_multipass(mut self, on: bool) -> Self {
-        self.legacy_multipass = on;
-        self
-    }
-
     pub fn with_emit_aosoa_hints(mut self, on: bool) -> Self {
         self.emit_aosoa_hints = on;
-        self
-    }
-
-    pub fn with_cache_locality_json(mut self, path: impl Into<PathBuf>) -> Self {
-        self.cache_locality_json = Some(path.into());
         self
     }
 
@@ -121,6 +111,11 @@ impl CompilerConfig {
         self
     }
 
+    pub fn with_emit_source_maps(mut self, on: bool) -> Self {
+        self.emit_source_maps = on;
+        self
+    }
+
     pub fn with_stdlib_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.stdlib_path = Some(path.into());
         self
@@ -131,8 +126,4 @@ impl CompilerConfig {
         self
     }
 
-    pub fn with_game_path(mut self, path: impl Into<PathBuf>) -> Self {
-        self.game_path = Some(path.into());
-        self
-    }
 }

@@ -1,0 +1,3 @@
+# Defensive copies in Go/JS lowering over tests/conformance_programs (with semantic facts). May only fall.
+# without facts: 23
+20

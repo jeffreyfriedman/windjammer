@@ -135,10 +135,6 @@ pub(crate) fn generate_main_rust_code<'ast>(
         }
         generator.set_output_file(&output_file_path);
 
-        if let Ok(cwd) = std::env::current_dir() {
-            generator.set_workspace_root(cwd);
-        }
-
         let auto_arena = generator.config.auto_arena;
         let result = crate::optimizer::run_with_auto_arena(auto_arena, &generator.generate_program(program, analyzed));
         let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
@@ -148,10 +144,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
             .global_signatures
             .merge(&generator.signature_registry);
 
-        let source_map_path = output_file_path.with_extension("rs.map");
-        if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
-            eprintln!("Warning: Failed to save source map: {}", e);
-        }
+        codegen::rust::source_map_align::write_if_enabled(module_compiler.config.emit_source_maps, input_path, source, &output_file_path, &result);
 
         return Ok(MainCodegenOutcome::RustCode(result));
     }
@@ -254,10 +247,6 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
     generator.set_output_file(&output_file_path);
 
-    if let Ok(cwd) = std::env::current_dir() {
-        generator.set_workspace_root(cwd);
-    }
-
     let auto_arena = generator.config.auto_arena;
     let result = crate::optimizer::run_with_auto_arena(auto_arena, &generator.generate_program(program, analyzed));
     let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
@@ -267,10 +256,7 @@ pub(crate) fn generate_main_rust_code<'ast>(
         .global_signatures
         .merge(&generator.signature_registry);
 
-    let source_map_path = output_file_path.with_extension("rs.map");
-    if let Err(e) = generator.get_source_map().save_to_file(&source_map_path) {
-        eprintln!("Warning: Failed to save source map: {}", e);
-    }
+    codegen::rust::source_map_align::write_if_enabled(module_compiler.config.emit_source_maps, input_path, source, &output_file_path, &result);
 
     Ok(MainCodegenOutcome::RustCode(result))
 }

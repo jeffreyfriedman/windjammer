@@ -7,30 +7,30 @@ use colored::*;
 use std::path::Path;
 
 /// `--metadata NAME=PATH` is repeatable; one flag may also list `NAME=PATH,NAME=PATH`.
-fn parse_external_metadata_args(metadata: &[String]) -> Vec<(&str, &Path)> {
-    metadata
-        .iter()
-        .flat_map(|s| s.split(','))
-        .filter_map(|part| {
-            let part = part.trim();
-            let (name, path_str) = part.split_once('=')?;
-            let name = name.trim();
-            let path_str = path_str.trim();
-            if name.is_empty() || path_str.is_empty() {
-                return None;
-            }
-            Some((name, Path::new(path_str)))
-        })
-        .collect()
+/// Malformed entries and paths that do not exist are errors (they used to be dropped silently).
+fn parse_external_metadata_args(metadata: &[String]) -> Result<Vec<(&str, &Path)>> {
+    let mut out = Vec::new();
+    for part in metadata.iter().flat_map(|s| s.split(',')) {
+        let part = part.trim();
+        let Some((name, path_str)) = part.split_once('=') else {
+            anyhow::bail!("invalid --metadata '{part}': expected NAME=PATH (e.g. --metadata mylib=../mylib/build/metadata.json)");
+        };
+        let (name, path_str) = (name.trim(), path_str.trim());
+        if name.is_empty() || path_str.is_empty() {
+            anyhow::bail!("invalid --metadata '{part}': both NAME and PATH must be non-empty (expected NAME=PATH)");
+        }
+        if !Path::new(path_str).exists() {
+            anyhow::bail!("--metadata {name}: path not found: {path_str}");
+        }
+        out.push((name, Path::new(path_str)));
+    }
+    Ok(out)
 }
 
 /// Build options for JavaScript target
 pub struct BuildOptions {
-    pub minify: bool,
     pub tree_shake: bool,
     pub source_maps: bool,
-    pub polyfills: bool,
-    pub v8_optimize: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -59,14 +59,15 @@ pub fn execute(
     // Driver edge: the one place the environment is turned into explicit configuration.
     let config = crate::compiler_config::CompilerConfig::from_env()
         .with_shadow_validate_strict(ir_shadow_validate)
-        .with_skip_cargo_toml_generation(no_generate_cargo_toml);
+        .with_skip_cargo_toml_generation(no_generate_cargo_toml)
+        .with_emit_source_maps(options.source_maps || check);
     let output_dir = output.unwrap_or_else(|| Path::new("./build"));
     if !path.exists() {
         anyhow::bail!("path not found: {}", path.display());
     }
 
     if json_output {
-        let external_metadata = parse_external_metadata_args(metadata);
+        let external_metadata = parse_external_metadata_args(metadata)?;
         return super::build_json::run(super::build_json::JsonBuild {
             path,
             output_dir,
@@ -96,10 +97,7 @@ pub fn execute(
             let config = CodegenConfig {
                 target,
                 output_dir: output_dir.to_path_buf(),
-                minify: options.minify,
                 tree_shake: options.tree_shake,
-                polyfills: options.polyfills,
-                v8_optimize: options.v8_optimize,
                 ..Default::default()
             };
             return build_portable(path, &config, options.source_maps);
@@ -123,7 +121,7 @@ pub fn execute(
         }
     };
 
-    let external_metadata = parse_external_metadata_args(metadata);
+    let external_metadata = parse_external_metadata_args(metadata)?;
 
     crate::build_project_with_config(
         path,
