@@ -270,15 +270,17 @@ impl<'m> Go<'m> {
             Ty::Map(..) => {
                 let (k, v) = (self.fresh("k"), self.fresh("v"));
                 let tt = self.ty(&elem_ty)?;
-                let mut pre = vec![format!("{item} := {tt}{{F0: {k}, F1: {v}}}"), format!("_ = {item}")];
+                let m = self.fresh("m");
+                self.line(&format!("{m} := {it}"));
+                let mut pre = vec![format!("{v} := {m}[{k}]"), format!("{item} := {tt}{{F0: {k}, F1: {v}}}"), format!("_ = {item}")];
                 pre.extend(prelude);
-                self.looped(&format!("for {k}, {v} := range {it}"), body, &pre)
+                self.looped(&format!("for _, {k} := range wjSortedKeys({m})"), body, &pre)
             }
             Ty::Set(_) => {
                 let k = self.fresh("k");
                 let mut pre = vec![format!("{item} := {k}"), format!("_ = {item}")];
                 pre.extend(prelude);
-                self.looped(&format!("for {k} := range {it}"), body, &pre)
+                self.looped(&format!("for _, {k} := range wjSortedKeys({it})"), body, &pre)
             }
             _ if by_ref => {
                 let PPat::Bind { name, .. } = pat else { return self.unsupported("iter_mut with a destructuring pattern") };

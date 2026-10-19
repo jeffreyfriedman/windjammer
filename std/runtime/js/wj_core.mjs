@@ -703,9 +703,14 @@ export function $dbgStruct(name, fields, o) {
   if (o && o.alt) return `${name} ${$dbgList("{", "}", items, o)}`;
   return `${name} { ${items.join(", ")} }`;
 }
+// Map and set iteration is in ascending key order: HashMap order is unspecified (SPEC-EXEC-005),
+// and BTreeMap/BTreeSet (which share this representation) require it.
+export const $sortedEntries = (m) => Array.from(m).sort((a, b) => $cmp(a[0], b[0]));
+export const $sortedKeys = (m) => Array.from(m.keys()).sort($cmp);
+export const $sortedValues = (m) => $sortedEntries(m).map((e) => e[1]);
 export const $dbgVec = (f) => (v, o) => $dbgList("[", "]", v.map((x) => f(x, o)), o);
-export const $dbgSet = (f) => (s, o) => $dbgList("{", "}", Array.from(s, (x) => f(x, o)), o);
-export const $dbgMap = (kf, vf) => (m, o) => $dbgList("{", "}", Array.from(m, ([k, v]) => `${kf(k, o)}: ${vf(v, o)}`), o);
+export const $dbgSet = (f) => (s, o) => $dbgList("{", "}", $sortedKeys(s).map((x) => f(x, o)), o);
+export const $dbgMap = (kf, vf) => (m, o) => $dbgList("{", "}", $sortedEntries(m).map(([k, v]) => `${kf(k, o)}: ${vf(v, o)}`), o);
 export const $dbgOpt = (f) => (x, o) => (x === null ? "None" : $dbgTupleS("Some", [f(x.v, o)], o));
 export const $dbgRes = (fa, fb) => (r, o) => (r.ok ? $dbgTupleS("Ok", [fa(r.v, o)], o) : $dbgTupleS("Err", [fb(r.v, o)], o));
 export const $dbgTuple = (fs) => (t, o) => $dbgTupleS("", t.map((x, i) => fs[i](x, o)), o);

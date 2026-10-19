@@ -151,7 +151,7 @@ impl<'m> Js<'m> {
             (format!("for (let {k} = 0; {k} < {src}.length; {k}++)"), format!("$cellOf({src}, {k})"))
         } else {
             let x = self.fresh("x");
-            (format!("for (const {k} of Array.from({src}.keys()))"), format!("{{ get v() {{ return {src}.get({k}); }}, set v({x}) {{ {src}.set({k}, {x}); }} }}"))
+            (format!("for (const {k} of $sortedKeys({src}))"), format!("{{ get v() {{ return {src}.get({k}); }}, set v({x}) {{ {src}.set({k}, {x}); }} }}"))
         };
         self.line(&format!("{prefix}{head} {{"));
         self.ind += 1;

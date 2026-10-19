@@ -1532,7 +1532,14 @@ func wjToMap[K comparable, V any](v []Tuple2[K, V]) map[K]V {
 func wjCollectStr[T ~int32 | ~string](v []T) string {
 	var b strings.Builder
 	for _, x := range v {
-		b.WriteString(fmt.Sprint(any(x)))
+		switch c := any(x).(type) {
+		case Char:
+			b.WriteRune(rune(c))
+		case string:
+			b.WriteString(c)
+		default:
+			b.WriteString(fmt.Sprint(c))
+		}
 	}
 	return b.String()
 }
@@ -1699,26 +1706,54 @@ func wjHas[K comparable, V any](m map[K]V, k K) bool {
 	return ok
 }
 
-func wjKeys[K comparable, V any](m map[K]V) []K {
+// Map and set iteration is in ascending key order: HashMap order is unspecified (SPEC-EXEC-005),
+// and BTreeMap/BTreeSet (which share this representation) require it.
+func wjSortedKeys[K comparable, V any](m map[K]V) []K {
 	out := make([]K, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
+	switch ks := any(out).(type) {
+	case []string:
+		slices.Sort(ks)
+	case []int64:
+		slices.Sort(ks)
+	case []int:
+		slices.Sort(ks)
+	case []int32:
+		slices.Sort(ks)
+	case []uint64:
+		slices.Sort(ks)
+	case []uint:
+		slices.Sort(ks)
+	case []uint32:
+		slices.Sort(ks)
+	case []uint8:
+		slices.Sort(ks)
+	case []Char:
+		slices.Sort(ks)
+	default:
+		slices.SortFunc(out, func(a, b K) int { return int(wjCmp(a, b)) })
+	}
 	return out
 }
 
+func wjKeys[K comparable, V any](m map[K]V) []K { return wjSortedKeys(m) }
+
 func wjValues[K comparable, V any](m map[K]V) []V {
-	out := make([]V, 0, len(m))
-	for _, v := range m {
-		out = append(out, v)
+	ks := wjSortedKeys(m)
+	out := make([]V, 0, len(ks))
+	for _, k := range ks {
+		out = append(out, m[k])
 	}
 	return out
 }
 
 func wjEntries[K comparable, V any](m map[K]V) []Tuple2[K, V] {
-	out := make([]Tuple2[K, V], 0, len(m))
-	for k, v := range m {
-		out = append(out, Tuple2[K, V]{F0: k, F1: v})
+	ks := wjSortedKeys(m)
+	out := make([]Tuple2[K, V], 0, len(ks))
+	for _, k := range ks {
+		out = append(out, Tuple2[K, V]{F0: k, F1: m[k]})
 	}
 	return out
 }

@@ -372,9 +372,9 @@ impl<'m> Js<'m> {
             "contains_key" => format!("{r}.has({})", a[0]),
             "remove" => format!("$mapRemove({r}, {})", a[0]),
             "clear" => format!("{r}.clear()"),
-            "keys" | "into_keys" => format!("Array.from({r}.keys())"),
-            "values" | "values_mut" | "into_values" => format!("Array.from({r}.values())"),
-            "iter" | "iter_mut" | "into_iter" => format!("Array.from({r})"),
+            "keys" | "into_keys" => format!("$sortedKeys({r})"),
+            "values" | "values_mut" | "into_values" => format!("$sortedValues({r})"),
+            "iter" | "iter_mut" | "into_iter" => format!("$sortedEntries({r})"),
             _ => return self.unsupported(format!("HashMap method `{name}`")),
         })
     }
@@ -387,7 +387,7 @@ impl<'m> Js<'m> {
             "contains" => format!("{r}.has({})", a[0]),
             "remove" => format!("{r}.delete({})", a[0]),
             "clear" => format!("{r}.clear()"),
-            "iter" | "into_iter" => format!("Array.from({r})"),
+            "iter" | "into_iter" => format!("$sortedKeys({r})"),
             _ => return self.unsupported(format!("HashSet method `{name}`")),
         })
     }
