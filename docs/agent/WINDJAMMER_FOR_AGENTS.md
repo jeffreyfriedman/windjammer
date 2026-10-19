@@ -327,8 +327,9 @@ fn main() {
 `examples/verified` compiles and matches (`// rust: ok`); the rest carry a recorded `// rust: gap` reason in the
 header. Known classes: adapter chains on a collection without `.iter()` (emitted as `v.map(..)` on a `Vec`),
 integer-width inference between `i32` and `i64` in mixed expressions, `HashMap` indexing with `&str` keys,
-inline `mod` plus `use` duplicates. If `wj build` fails on code the interpreter runs, report it with the
-smallest repro; do not contort the source.
+inline `mod` plus `use` duplicates. Annotate numeric accumulators that start as a bare literal and later mix with `int` values (`let mut v: int = 0`, `let mut n: int = 0`): an
+unannotated `let mut v = 0` can be emitted as `i32` and fail `wj build` with `mismatched types ... expected i64, found i32` while the
+interpreter runs it. If `wj build` fails on other code the interpreter runs, report it with the smallest repro; do not contort the source.
 
 ## Where to look next
 

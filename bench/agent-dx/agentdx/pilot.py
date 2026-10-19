@@ -89,6 +89,16 @@ def default_grader(task, ws):
     return {"compiled": G.grade("wj", task, ws, hidden=True), "interp": G.grade("wj-interp", task, ws, hidden=True)}
 
 
+def error_excerpt(out, limit=600):
+    """Error lines with a little context; cargo progress lines ("Compiling ...") are dropped."""
+    lines = [l for l in out.splitlines() if not l.lstrip().startswith(("Compiling", "Finished", "Downloaded", "Blocking", "Running"))]
+    idx = [i for i, l in enumerate(lines) if "error" in l.lower() or "panicked" in l]
+    keep = []
+    for i in idx[:4]:
+        keep += lines[max(0, i - 0): i + 4]
+    return ("\n".join(keep) if keep else "\n".join(lines))[:limit]
+
+
 def _slim(g):
     return {"status": g["status"], "passed": g["passed"], "total": g["total"], "categories": g["categories"]}
 
@@ -126,7 +136,8 @@ def run_trial(task, arm, agent, trial, out_dir, grader=default_grader, real_wj=N
           "verify_calls_to_green": an["verify_calls_to_green"], "diagnostic_categories": an["categories"],
           "mode_violations": violations(arm, an["invocations"]),
           "first_source": an["first_source"], "final_source": final,
-          "diag_samples": [e["out"][:600] for e in S.read_log(log) if e["exit"] != 0 and e["verb"] in S.VERIFY_VERBS][:12]}
+          "final_build_diag": [d["message"] for d in g["compiled"].get("build", {}).get("diagnostics", [])][:3],
+          "diag_samples": [error_excerpt(e["out"]) for e in S.read_log(log) if e["exit"] != 0 and e["verb"] in S.VERIFY_VERBS][:12]}
     for name in os.listdir(ws):     # build outputs can be large; the record keeps first and final sources
         if name not in ("main.wj",):
             q = os.path.join(ws, name)
@@ -204,3 +215,28 @@ def run_pilot(agent, tasks, arm_ids, trials, out_dir, guard, grader=default_grad
         with ThreadPoolExecutor(workers) as ex:
             list(ex.map(one, todo))
     return {"completed": len(done), "aborted_reason": reasons[0] if reasons else None, "spent_usd": round(guard.spent, 4)}
+
+
+def regrade_failures(out_dir, grader=default_grader, say=print):
+    """Re-grade every non-passing trial from its recorded final source (sequentially). Passing trials are kept as is:
+    a pass cannot come from a wrong binary. Original grades are preserved under `original_*`."""
+    changed = 0
+    for tr in load_trials(out_dir):
+        if tr["pass_final"] or tr.get("regraded"):
+            continue
+        ws = os.path.join(out_dir, "regrade", f"{tr['task']}.{tr['arm']}.{tr['trial']}")
+        os.makedirs(ws, exist_ok=True)
+        with open(os.path.join(ws, "main.wj"), "w") as f:
+            f.write(tr["final_source"])
+        g = grader(tr["task"], ws)
+        shutil.rmtree(ws, ignore_errors=True)
+        tr["original_final_grade"], tr["original_interp_grade"] = tr["final_grade"], tr["interp_grade"]
+        cpass, ipass = g["compiled"]["status"] == "pass", g["interp"]["status"] == "pass"
+        tr["final_grade"], tr["interp_grade"], tr["pass_final"] = _slim(g["compiled"]), _slim(g["interp"]), cpass
+        tr["divergence"] = {"interp_pass": ipass, "compiled_pass": cpass, "diverged": ipass != cpass, "silent": ipass and not cpass}
+        tr["final_build_diag"] = [d["message"] + "\n" + (d.get("detail") or "")[:300] for d in g["compiled"].get("build", {}).get("diagnostics", [])][:3]
+        tr["regraded"] = True
+        changed += tr["original_final_grade"] != tr["final_grade"]
+        save(tr, out_dir)
+        say(f"regraded {tr['task']} {tr['arm']} {tr['trial']}: pass={cpass} (was {tr['original_final_grade']['status']})")
+    return changed

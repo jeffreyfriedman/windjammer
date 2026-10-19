@@ -10,6 +10,13 @@ from collections import defaultdict
 
 # id, regex, title, fix kind, fix location
 RULES = [
+    ("int-width", r"expected `i64`, found `i32`|expected `i32`, found `i64`|expected `usize`, found `i64`|_i32 as i32",
+     "untyped integer literal emitted as i32 and mixed with int (i64)", "codegen (literal defaulting) + pack tip",
+     "codegen integer-literal typing; docs/known-issues/agent-dx-compiled-untyped-int-accumulator.md; pack 'Compiled path gaps'"),
+    ("method-parity", r"no method named `\w+` (exists|found)", "method accepted by the interpreter is missing on the compiled path", "stdlib parity / check",
+     "`wj check` must reject what rustc will (R5 check-vs-build gate); alias or implement the std method; `wj docs` entry"),
+    ("collect-type", r"cannot be built from an iterator|collect", "collect/iterator element type mismatch in generated Rust", "codegen",
+     "iterator lowering (borrowed vs owned element types); known-issues agent-dx-compiled-str-literal-and-option-default-codegen.md"),
     ("lint-leakage", r"W00(0[1-9]|1\d)", "Rust-leakage lint rejected idiomatic-looking code", "lint rule",
      "src/lint (rule text + `wj fix` autofix); docs/agent pack section 'Core idioms'"),
     ("stdin-api", r"read_line|read_to_string|stdin", "stdin API differs between interpreter and compiled path", "stdlib API",
@@ -40,6 +47,7 @@ KNOWN_SEEDS = [  # from docs/known-issues/agent-dx-*.md; shown with zero observe
 
 
 def normalise(text):
+    text = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith(("Compiling", "Finished", "Downloaded")))
     first = next((ln for ln in text.splitlines() if re.search(r"error|Error|panick|warning", ln)), text.strip().split("\n")[0] if text.strip() else "")
     first = re.sub(r"\b\d+\b", "N", first)
     first = re.sub(r"`[^`]*`", "`X`", first)
@@ -77,13 +85,13 @@ def build(trials, tokens_per_turn=None):
 
     for t in trials:
         arm = t["arm"]
-        for s in t.get("diag_samples", []):
+        for s in list(t.get("diag_samples", [])) + [m for m in t.get("final_build_diag", [])]:
             m = _match(s)
             if m:
                 add(m[0], m[1], m[2], m[3], t, 1, arm, s)
             else:
                 n = normalise(s)
-                if n:
+                if n and re.search(r"error|panick", s, re.I):
                     add("other:" + n, "unclassified failure: " + n, "diagnostic text (triage)", "inspect example, then file under a rule", t, 1, arm, s)
         d = t.get("divergence", {})
         if d.get("silent"):

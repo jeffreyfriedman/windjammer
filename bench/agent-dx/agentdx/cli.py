@@ -83,6 +83,8 @@ def main(argv=None):
     pl.add_argument("--workers", type=int, default=2)
     pl.add_argument("--yes", action="store_true", help="proceed after the estimate is printed")
     pl.add_argument("--estimate-only", action="store_true")
+    prg = sub.add_parser("pilot-regrade", help="re-grade non-passing pilot trials from their recorded final source")
+    prg.add_argument("--trials-dir", required=True)
     pr = sub.add_parser("pilot-report")
     pr.add_argument("--trials-dir", required=True)
     pr.add_argument("--md")
@@ -121,6 +123,8 @@ def main(argv=None):
                     print(f"{tid} {lang} trial={k} green={m['green']} iters={m['iterations_used']} -> {path}", flush=True)
     elif a.cmd == "pilot":
         return _pilot(a)
+    elif a.cmd == "pilot-regrade":
+        print("changed:", PL.regrade_failures(a.trials_dir))
     elif a.cmd == "pilot-report":
         trs = PL.load_trials(a.trials_dir)
         md, js = PR.build_report(trs)
