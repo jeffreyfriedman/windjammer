@@ -110,11 +110,11 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--engine` | ENGINE | resolved | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
-| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow plain http:// client requests (default: the http client refuses) |
+| `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow network access, http client and server (same as `--allow net.connect=* --allow net.listen=*`) |
 | `--mock-http` | FILE |  | Interpreted runs: answer http client calls from a JSON file of canned responses |
 | `--sandbox` | SANDBOX |  | Interpreted runs: ignore the project's grants and start from an empty one (only time, random and console); add authority with --allow (ADR-0021) |
 | `--allow` | EFFECT[=RESOURCE] |  | Interpreted runs: grant an effect, e.g. `--allow net.connect=api.example.com`, `--allow fs.read=./data/**`, `--allow env.read=HOME`, `--allow process=git` (repeatable) |
-| `--caps` | MODE | warn | Interpreted runs without a [capabilities] table: `warn` (default) runs outside-the-profile calls with a warning, `enforce` stops them (exit 126), `off` disables the gate |
+| `--caps` | MODE | enforce | Interpreted runs without a [capabilities] table: `enforce` (default) stops calls outside the project directory with exit status 126 and prints the exact fix, `warn` runs them with a warning, `off` disables the gate |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 

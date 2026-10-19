@@ -34,7 +34,7 @@ struct RngCap(Grant);
 cap_native!(NetCap, "CapNet");
 cap_native!(FsCap, "CapFs");
 cap_native!(EnvCap, "CapEnv");
-cap_native!(ProcCap, "Process");
+cap_native!(ProcCap, "CapProcess");
 cap_native!(ClockCap, "CapClock");
 cap_native!(RngCap, "CapRng");
 
