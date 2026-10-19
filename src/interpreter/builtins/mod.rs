@@ -24,6 +24,7 @@ mod std_data;
 mod std_extra;
 mod std_fns;
 pub(crate) mod std_proc;
+mod std_runtime_gaps;
 mod test_assert;
 pub mod std_http;
 mod std_http_server;
@@ -159,6 +160,7 @@ impl Registry {
         std_sys::register(&mut r);
         std_data::register(&mut r);
         std_proc::register(&mut r);
+        std_runtime_gaps::register(&mut r);
         std_extra::register(&mut r);
         std_http::register(&mut r);
         std_http_server::register(&mut r);

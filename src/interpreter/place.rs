@@ -211,7 +211,14 @@ impl Interpreter {
             Expression::Identifier { name, .. } => {
                 let Some(slot) = self.lookup_var(name) else {
                     // `static mut` / module-level state
-                    let module = self.scope.module;
+                    let mut module = self.scope.module;
+                    // a function-body `use` overlay keeps the module's statics where they are
+                    while !self.modules[module].consts.contains_key(name.as_str()) {
+                        match self.modules[module].fallback {
+                            Some(fb) => module = fb,
+                            None => break,
+                        }
+                    }
                     if self.modules[module].consts.contains_key(name.as_str()) {
                         self.global_value(module, name)?;
                         return Ok(self.globals.get(&(module, name.clone())).cloned().map(Place::of_slot));

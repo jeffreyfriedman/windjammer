@@ -401,6 +401,11 @@ impl Interpreter {
                     .ok_or_else(|| semantic(format!("no field `{}`", field))),
                 _ => Err(semantic(format!("no field `{}` on enum `{}`", field, e.ty))),
             },
+            // `mime.APPLICATION_JSON`: a constant of a standard-library module imported by name
+            Value::Func(f) if matches!(&**f, Callable::Path(p) if self.builtins.constant(&format!("{p}::{field}")).is_some()) => {
+                let Callable::Path(p) = &**f else { unreachable!() };
+                Ok(self.builtins.constant(&format!("{p}::{field}")).expect("checked"))
+            }
             other => Err(semantic(format!("no field `{}` on value of type `{}`", field, other.type_name()))),
         }
     }

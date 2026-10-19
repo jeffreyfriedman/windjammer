@@ -214,7 +214,14 @@ impl Parser {
                 while self.current_token() == &Token::ColonColon {
                     // Look ahead to see if there's an identifier after ::
                     if self.position + 1 < self.tokens.len() {
-                        if let Token::Ident(next_name) = &self.tokens[self.position + 1].token {
+                        // `thread` and `async` are keywords, and also std module names (`std::thread::spawn`)
+                        let segment = match &self.tokens[self.position + 1].token {
+                            Token::Ident(next_name) => Some(next_name.as_str()),
+                            Token::Thread => Some("thread"),
+                            Token::Async => Some("async"),
+                            _ => None,
+                        };
+                        if let Some(next_name) = segment {
                             // This is a qualified path segment
                             qualified_name.push_str("::");
                             qualified_name.push_str(next_name);

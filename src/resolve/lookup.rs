@@ -68,6 +68,9 @@ impl<'a> Collected<'a> {
         if found.is_empty() {
             found = self.lookup_globs(module, name, ns, guard);
         }
+        if found.is_empty() {
+            found = self.lookup_child_reexports(module, name, ns, guard);
+        }
         guard.pop();
         dedupe(found)
     }
@@ -97,6 +100,39 @@ impl<'a> Collected<'a> {
                 out.extend(self.resolve_use_path(module, &u.segments, ns, guard));
             }
         }
+        out
+    }
+
+    /// A module re-exports the public items of its child modules (`pub mod http` makes `crate::adapters::serve`
+    /// the same function as `crate::adapters::http::serve`): the generated Rust module declares
+    /// `pub use self::child::*` for every child, and the interpreter binds the same names.
+    fn lookup_child_reexports(&self, module: DefId, name: &str, ns: Ns, guard: &mut Guard) -> Vec<Found> {
+        let mut out = Vec::new();
+        let mut children: Vec<DefId> = self.modules[&module]
+            .items
+            .values()
+            .flatten()
+            .copied()
+            .filter(|d| {
+                let def = self.defs.get(*d);
+                def.kind == DefKind::Module && def.is_pub && self.parent_of(*d) == Some(module)
+            })
+            .collect();
+        children.sort();
+        for child in children {
+            let scope = &self.modules[&child];
+            if let Some(defs) = scope.items.get(name) {
+                out.extend(
+                    defs.iter()
+                        .filter(|d| {
+                            let def = self.defs.get(**d);
+                            def.is_pub && def.kind != DefKind::Module && accepts(def, ns)
+                        })
+                        .map(|d| Found::Def(*d)),
+                );
+            }
+        }
+        let _ = guard;
         out
     }
 

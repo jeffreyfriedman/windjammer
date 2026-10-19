@@ -69,6 +69,9 @@ pub enum Import {
     Item(usize, String),
     /// A builtin (native) std path such as `std::fs`.
     Std(String),
+    /// A name that is both a module and a value (`pub use version::version` next to `mod version`):
+    /// the module for paths (`version::f`), the item `name` of `module` for a bare use.
+    Both(usize, usize, String),
 }
 
 pub struct Module {
@@ -80,6 +83,10 @@ pub struct Module {
     pub children: HashMap<String, usize>,
     pub consts: HashMap<String, &'static crate::parser::Expression<'static>>,
     pub const_types: HashMap<String, &'static Type>,
+    /// Names a function-body `use` added on top of this module (lookups fall through to `fallback`).
+    pub fallback: Option<usize>,
+    /// Standard-library modules glob-imported here (`use std::log::*`), as `std::log`.
+    pub std_globs: Vec<String>,
 }
 
 pub struct Scope {
@@ -174,6 +181,10 @@ pub struct Interpreter {
     pub(crate) expected: Option<(usize, Type)>,
     /// (module, name) pairs already probed on disk and not found.
     pub(crate) missing_modules: HashSet<(usize, String)>,
+    /// `(module, address of the `use` statement)` -> the module that adds that function-body import.
+    /// Names of the dependency crates mounted as top-level modules (reachable by name from any module).
+    pub(crate) dep_crates: HashSet<String>,
+    pub(crate) body_use_modules: HashMap<(usize, usize), usize>,
     /// Set while a whole program is loaded through the shared resolver (`project.rs`): `use` items
     /// are then bound after every module is registered, instead of one at a time.
     pub(crate) project_loading: bool,
@@ -241,6 +252,8 @@ impl Interpreter {
             retained: Vec::new(),
             expected: None,
             missing_modules: HashSet::new(),
+            dep_crates: HashSet::new(),
+            body_use_modules: HashMap::new(),
             project_loading: false,
             host: None,
             hot: None,
@@ -393,6 +406,8 @@ impl Module {
             children: HashMap::new(),
             consts: HashMap::new(),
             const_types: HashMap::new(),
+            fallback: None,
+            std_globs: Vec::new(),
         }
     }
 }
