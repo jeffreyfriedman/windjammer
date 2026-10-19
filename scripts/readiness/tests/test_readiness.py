@@ -185,6 +185,28 @@ class R2Tests(unittest.TestCase):
         self.assertEqual([k for k, _ in r2.judge_pair("p", i, c)], ["stdout", "exit", "stderr"])
 
 
+class PilotTests(unittest.TestCase):
+    def _add(self, fx, name, silent, green=True):
+        t = {"arm": "A", "task": name, "trial": 0, "final_source": "fn main() { println(\"x\") }\n",
+             "divergence": {"interp_pass": green, "silent": silent}}
+        write(os.path.join(fx.root, f"bench/agent-dx/results/pilot/trials/{name}.A.0.json"), json.dumps(t))
+
+    @with_fixture({})
+    def test_silent_divergences_are_r2_blockers_and_check_misses_r5_blockers(self, fx):
+        self._add(fx, "t_bad", True)
+        self._add(fx, "t_ok", False)
+        self._add(fx, "t_red", False, green=False)
+        out = r2.measure(fx.ctx(core.FULL), {}, [])
+        names = [b["program"] for b in out["blockers"]]
+        self.assertIn("pilot/t_bad.A.0", names)
+        self.assertNotIn("pilot/t_ok.A.0", names)
+        s = out["detail"]["agent_pilot"]
+        self.assertEqual((s["interpreter_green"], s["silent_divergences_recorded"], s["silent_divergence_rate"]), (2, 1, 0.5))
+        r = r5.measure(fx.ctx(core.FULL))
+        self.assertEqual(r["detail"]["agent_pilot_check_misses"], 1)
+        self.assertTrue(any(b["program"] == "pilot/t_bad.A.0" for b in r["blockers"]))
+
+
 class R3Tests(unittest.TestCase):
     def test_notice_parsing(self):
         fb, why, loud = r3.parse_notice("wj: running compiled (cargo): extern fn foo at line 12 (a.wj:3:1); use `wj run --compiled` to skip this check\n")
