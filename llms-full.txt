@@ -353,7 +353,7 @@ Generated from the clap definitions in `src/bin/wj_cli_args.rs`.
 | `wj remove` | Remove a dependency from wj.toml |
 | `wj update` | Update Windjammer to the latest version |
 | `wj stats` | Show error statistics |
-| `wj errors` | Interactive error navigator (TUI) |
+| `wj errors` | Browse the diagnostics of a file or project (summary by code, filterable) |
 | `wj docs` | Search the offline docs index (stdlib signatures, built-in methods, idioms, verified examples, error codes); with no query, generate error documentation |
 | `wj explain-ownership` | Explain inferred ownership, clones and numeric widths for a file (rule IDs and use sites) |
 | `wj explain` | Explain an error code |
@@ -397,11 +397,8 @@ Usage: wj build [OPTIONS] <FILE>
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
-| `--minify` | MINIFY |  | Minify JavaScript output (JS target only) |
 | `--tree-shake` | TREE_SHAKE |  | Enable tree shaking (dead code elimination) |
 | `--source-maps` | SOURCE_MAPS |  | Generate source maps |
-| `--polyfills` | POLYFILLS |  | Include polyfills for older browsers (JS target only) |
-| `--v8-optimize` | V8_OPTIMIZE |  | Apply V8 optimizations (JS target only) |
 | `--check` | CHECK |  | Run cargo build after transpilation and show errors |
 | `--raw-errors` | RAW_ERRORS |  | Show raw Rust errors instead of translated Windjammer errors |
 | `--fix` | FIX |  | Automatically apply fixes for fixable errors |
@@ -432,6 +429,10 @@ Usage: wj run [OPTIONS] <FILE> [ARGS]...
 | `<ARGS>` | ARGS |  | Arguments to pass to the program |
 | `-t`, `--target` | TARGET | rust | Target platform (rust, javascript, wasm) |
 | `--interpret` | INTERPRET |  | Interpret directly (Windjammerscript mode): no cargo, no rustc, instant start. Accepts a file or a project directory. Same source compiles with `wj build` for release |
+| `--sched-seed` | N | 0 | With --interpret: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
+| `--deterministic-time` | DETERMINISTIC_TIME |  | With --interpret: no real clock; time starts at a fixed instant and only `sleep` moves it |
+| `--allow-network` | ALLOW_NETWORK |  | With --interpret: allow plain http:// client requests (default: the http client refuses) |
+| `--mock-http` | FILE |  | With --interpret: answer http client calls from a JSON file of canned responses |
 | `--defer-drop` | MODE | auto | Defer drop optimization mode (auto, always, never) |
 | `--defer-drop-threshold` | BYTES |  | Defer drop threshold in bytes (default: 102400 = 100KB) |
 
@@ -470,6 +471,8 @@ Usage: wj test [OPTIONS] [PATH]
 | `--list` | LIST |  | List discovered test files and functions, then exit without compiling |
 | `--allow-empty` | ALLOW_EMPTY |  | Exit 0 when no tests are found (default: finding none is an error) |
 | `--interpret` | INTERPRET |  | Run tests (`@test` / `test_*` in `*_test.wj`) in the interpreter: no cargo, no rustc |
+| `--doc` | DOC |  | Run only the doctests (```wj examples in `///` doc comments) |
+| `--compiled` | COMPILED |  | Also build and run each doctest through the Rust backend (default: interpreter only) |
 
 ### `wj fmt`
 
@@ -523,7 +526,9 @@ Usage: wj check [OPTIONS] [PATH]
 | Argument | Value | Default | Description |
 |---|---|---|---|
 | `<PATH>` | PATH |  | Path to .wj file or directory (default: current directory) |
-| `--json` | JSON |  | Output diagnostics as machine-readable JSON (for agent/IDE consumption) |
+| `--json` | JSON |  | Output diagnostics as machine-readable JSON (docs/diagnostics-schema.json) |
+| `--watch` | WATCH |  | Re-check whenever a .wj file changes |
+| `--fix` | FIX |  | Apply machine-applicable fixes (W0007/W0008 rewrites, `.as_str()` removal, ...) |
 
 ### `wj add`
 
@@ -579,16 +584,17 @@ Usage: wj stats [OPTIONS]
 
 ### `wj errors`
 
-Interactive error navigator (TUI)
+Browse the diagnostics of a file or project (summary by code, filterable)
 
 ```text
-Usage: wj errors [OPTIONS] <FILE>
+Usage: wj errors [OPTIONS] [PATH]
 ```
 
 | Argument | Value | Default | Description |
 |---|---|---|---|
-| `<FILE>` | FILE |  | File to check |
-| `-o`, `--output` | OUTPUT | ./build | Output directory |
+| `<PATH>` | PATH |  | .wj file or project directory (default: current directory) |
+| `--code` | CODE |  | Show only this diagnostic code (e.g. WJ0010, W0002) |
+| `--severity` | SEVERITY |  | Show only this severity (error, warning) |
 
 ### `wj docs`
 
@@ -734,8 +740,12 @@ Usage: wj cache setup
 Install wj and plugins to ~/.wj/bin/ and ensure PATH
 
 ```text
-Usage: wj self-install
+Usage: wj self-install [OPTIONS]
 ```
+
+| Argument | Value | Default | Description |
+|---|---|---|---|
+| `--dry-run` | DRY_RUN |  | Print what would be installed (binary, plugins, embedded std/ files) without writing anything |
 
 
 ---
@@ -748,10 +758,10 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 
 | Backend | Corpus programs | Passing | Known unsupported |
 |---|---|---|---|
-| `rust` | 135 | 110 | 25 |
-| `go` | 135 | 130 | 5 |
-| `js` | 135 | 130 | 5 |
-| `ts` | 135 | 133 | 2 |
+| `rust` | 142 | 115 | 27 |
+| `go` | 142 | 137 | 5 |
+| `js` | 142 | 137 | 5 |
+| `ts` | 142 | 140 | 2 |
 
 ### Known-unsupported pairs by cause
 
@@ -768,6 +778,8 @@ Generated from `tests/conformance_programs/SUPPORT.toml` and the program corpus 
 | `js` | portable-type-aliases | 1 |
 | `js` | pretty Debug `{:#?}` of an aggregate is not implemented by the portabl | 1 |
 | `rust` | mut-ref-to-int-parameters | 1 |
+| `rust` | rust-closure-field-move | 1 |
+| `rust` | rust-closure-if-tail | 1 |
 | `rust` | rust-closure-returned-as-fn-pointer | 1 |
 | `rust` | rust-int-literal-width-inference | 14 |
 | `rust` | rust-into-bound-param-borrowed | 1 |
@@ -898,6 +910,7 @@ Every punctuation string of up to three characters that the lexer turns into exa
 | `=>` | FatArrow |
 | `>=` | Ge |
 | `>>` | Shr |
+| `??` | QuestionQuestion |
 | `^=` | XorAssign |
 | `\|=` | OrAssign |
 | `\|>` | PipeOp |
@@ -955,7 +968,7 @@ Status values: **Open** (nothing wired), **Partial** (some of it works), **Decis
 | 1 | Ownership, clone and numeric-width correctness is not owned by one component; blocks every dogfood project | Partial | Analyzer, IR solver and post-IR patches all decide ownership; width decided in 11 places; Rust-only solver consumption | Plan WP 6-9; [ADR-0001](adr/0001-ownership-truth.md) |
 | 2 | No native diagnostics: type/borrow errors come from rustc and are translated; `compile_error!` emitted for unresolved boundary signatures | Partial | `src/error_mapper.rs`; IR doc "missing boundary signature" | [ADR-0005](adr/0005-error-strategy.md); needs name resolution (WP 6-7) |
 | 3a | `.wj` formatter | Open | `wj fmt` runs `cargo fmt --all` (`src/cli/fmt.rs`) | Formatter work package (in progress elsewhere) |
-| 3b | Real `wj check` | Open | `wj check` runs `cargo check` (`src/cli/check.rs`) | ADR-0005 |
+| 3b | Real `wj check` | Partial | `wj check [--json] [--watch] [--fix]` runs the front end only (`src/check/`); catches names, arity, literal types, fields, mutability, lints; moves, borrows, traits, unknown methods, match exhaustiveness and operand types still need rustc and are translated (`src/diagnostics/rustc_text.rs`) | ADR-0005; [DIAGNOSTICS.md](DIAGNOSTICS.md) |
 | 3c | `wj watch`, `wj doc`, `wj publish` | Open | No such subcommands in `src/bin/wj_cli_args.rs` (`wj docs` generates error docs only) | Roadmap "Then" list |
 | 3d | `wj eject` on the main CLI | Partial | `eject` exists only on the older `windjammer` binary (`src/cli_args.rs`, `src/ejector.rs`) | ADR-0012 (move into `wj` or drop the promise) |
 | 4 | Dependencies: path/git build in dependency order, lock file; registry deferred | Partial | `DependencySpec` has path/git; `src/package/` is a stub; no `wj.lock` | [ADR-0010](adr/0010-package-source-of-truth.md), [WJ-PKG-01](proposals/rfcs/WJ-PKG-01-package-management.md) |
