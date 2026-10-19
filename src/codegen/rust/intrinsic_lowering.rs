@@ -27,7 +27,7 @@ impl<'ast> CodeGenerator<'ast> {
             .get_signature(func_name)
             .map(|sig| !sig.is_extern)
             .unwrap_or(false);
-        if user_defined {
+        if user_defined || self.idiom.imported_std_fn_names.contains(func_name) {
             return None;
         }
 

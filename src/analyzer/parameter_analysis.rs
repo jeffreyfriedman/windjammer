@@ -11,14 +11,6 @@ use super::{Analyzer, OwnershipMode, SignatureRegistry};
 impl<'ast> Analyzer<'ast> {
     #[allow(clippy::too_many_arguments)] // Inference needs full function context
     pub(crate) fn infer_parameter_ownership(
-        &self, param_name: &str, param_type: &Type, body: &[&'ast Statement<'ast>], return_type: &Option<Type>, registry: &SignatureRegistry, current_func_name: &str, func: &FunctionDecl<'ast>,
-    ) -> Result<OwnershipMode, String> {
-        let r = self.infer_parameter_ownership_inner(param_name, param_type, body, return_type, registry, current_func_name, func);
-        if crate::debug_env::enabled("WJ_DEBUG_PARAMS") { eprintln!("[PARAM] {}::{} ({:?}) -> {:?}", current_func_name, param_name, param_type, r); }
-        r
-    }
-
-    pub(crate) fn infer_parameter_ownership_inner(
         &self,
         param_name: &str,
         param_type: &Type,
