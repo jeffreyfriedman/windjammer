@@ -163,7 +163,7 @@
 "src/codegen/rust/ir_call_site.rs::reconcile_post_ir_mut_borrow_and_owned_peel" = 1236
 "src/codegen/rust/item_generation.rs::generate_impl" = 401
 "src/codegen/rust/item_generation.rs::generate_trait_with_analysis" = 308
-"src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1178
+"src/codegen/rust/let_statement_generation.rs::generate_let_statement" = 1177
 "src/codegen/rust/match_statement_generation.rs::generate_match_statement" = 1249
 "src/codegen/rust/method_call_analyzer/mod.rs::should_add_ref" = 302
 "src/codegen/rust/method_call_expression_generation/arguments.rs::mc_build_method_call_arg_strings" = 999
@@ -179,7 +179,7 @@
 "src/file_compilation_pipeline.rs::compile_file_impl" = 403
 "src/interpreter/builtins/option.rs::register" = 316
 "src/interpreter/builtins/seq.rs::register_vec" = 360
-"src/ir/constraint_gen.rs::walk_expression" = 362
+"src/ir/constraint_gen.rs::walk_expression" = 353
 "src/ir/signature_bridge.rs::safety_type_from_signature_param" = 743
 "src/lexer/mod.rs::next_token" = 301
 "src/parser/call_expression_parser.rs::parse_postfix_chain" = 483

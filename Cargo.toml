@@ -160,6 +160,22 @@ path = "tests/all.rs"
 name = "backend_conformance"
 path = "tests/backend_conformance_test.rs"
 
+# Convergence gates (golden emitted Rust, rustc-accepts, explain ratchet) also run standalone:
+#   cargo test --release --test convergence_gates
+[[test]]
+name = "convergence_gates"
+path = "tests/convergence_gates_test.rs"
+
+# ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
+[[test]]
+name = "semantic_facts_portable"
+path = "tests/semantic_facts_portable_test.rs"
+
+# Inference differential harness standalone: cargo test --release --test inference_differential
+[[test]]
+name = "inference_differential"
+path = "tests/inference_differential_test.rs"
+
 # Language specification (docs/spec): executable rule examples. The grammar is checked by docs_truth.
 #   cargo test --release --test spec_conformance
 [[test]]

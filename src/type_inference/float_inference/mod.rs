@@ -49,7 +49,7 @@ pub struct FloatInference {
     /// Errors detected during inference
     pub errors: Vec<String>,
     /// Function signature registry: name → (param_types, return_type)
-    function_signatures: HashMap<String, (Vec<Type>, Option<Type>)>,
+    function_signatures: std::collections::BTreeMap<String, (Vec<Type>, Option<Type>)>,
     /// Variable assignment tracking: variable name → initial value ExprId
     var_assignments: HashMap<String, ExprId>,
     /// Variable type tracking: variable name → explicit Type (for let x: Type = ...)
@@ -102,7 +102,7 @@ impl FloatInference {
             inferred_types: HashMap::new(),
             constraints: Vec::new(),
             errors: Vec::new(),
-            function_signatures: HashMap::new(),
+            function_signatures: std::collections::BTreeMap::new(),
             var_assignments: HashMap::new(),
             var_types: HashMap::new(),
             next_seq_id: 1, // Start at 1, 0 reserved for "unknown"
