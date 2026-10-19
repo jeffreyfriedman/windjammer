@@ -228,6 +228,11 @@ name = "interpreter_program_lifetime"
 path = "tests/interpreter_program_lifetime_test.rs"
 
 [[test]]
+name = "arena_backends"
+path = "tests/arena_backends_test.rs"
+required-features = ["unstable_arenas"]
+
+[[test]]
 name = "parser_arena_memory"
 path = "tests/parser_arena_memory_test.rs"
 
