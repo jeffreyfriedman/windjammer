@@ -17,6 +17,14 @@ output, and a hand-derived expectation must agree). Open items are listed in
 | `interpreter_test_assertions_and_typed_json_parse` | fixed |
 | `closure_char_param_passed_to_str_find` | fixed |
 | `value_moved_into_vec_macro_then_used_again_is_cloned`, `concat_temp_passed_to_read_only_string_formal`, `loop_var_field_move_then_second_loop_over_same_collection`, `range_loop_index_over_len_used_as_counter` | pass on this tip with the minimal shapes; the original failures need larger programs |
+| `module_alias_call_*`, `super_qualified_call_*`, `self_qualified_call_*` (`tests/compiler_findings_test.rs`) | fixed: calls through `use crate::m as alias`, `self::` and `super::` resolve to the same-crate definition (`resolve::same_crate_callee_key`) |
+| `map_get_unwrap_or_ref_literal_yields_value` | fixed: `map.get(k).unwrap_or(&0)` keeps the `&T` result instead of copying the receiver |
+| `interpreted_test_*`, `interpreted_doctests_in_library_module_run`, `compiled_test_on_crate_with_crate_use_passes` | fixed: a test file runs against its whole project (interpreted and compiled), including tests in sub-directories |
+| `untyped_float_local_min_max_chain_stays_f32`, `push_typed_literal_width_does_not_leak` | open, numeric solver (step C4) |
+| `trait_receiver_widens_to_mutating_impl_across_modules` | open, ownership (convergence): single-file form is correct, the three-module form emits `&self` for a mutating impl |
+| `mutated_by_value_param_moved_into_field_stays_owned` | open, ownership (convergence), single file |
+| `by_value_scalar_forwarded_through_indexed_receiver_across_modules`, `owned_vec_and_struct_args_across_modules_reused_after_call` | guards; the original failures were not reproduced in minimal projects |
+
 
 ## Open: untyped integer accumulator becomes `i32`
 
