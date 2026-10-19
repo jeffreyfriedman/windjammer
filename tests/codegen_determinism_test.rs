@@ -38,16 +38,16 @@ fn corpus() -> Vec<PathBuf> {
     v
 }
 
-fn hash_tree(dir: &Path, base: &Path, out: &mut BTreeMap<String, u64>) {
+fn hash_tree(dir: &Path, base: &Path, scratch: &str, out: &mut BTreeMap<String, u64>) {
     let Ok(rd) = std::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let p = e.path();
         if p.is_dir() {
-            hash_tree(&p, base, out);
+            hash_tree(&p, base, scratch, out);
         } else {
             let text = std::fs::read(&p).unwrap_or_default();
             // Normalize the per-run temp dir so only real content differences count.
-            let text = String::from_utf8_lossy(&text).replace(base.to_str().unwrap(), "<OUT>");
+            let text = String::from_utf8_lossy(&text).replace(base.to_str().unwrap(), "<OUT>").replace(scratch, "<TMP>");
             let h = text.bytes().fold(1469598103934665603u64, |h, b| (h ^ b as u64).wrapping_mul(1099511628211));
             out.insert(p.strip_prefix(base).unwrap().to_string_lossy().into_owned(), h);
         }
@@ -59,10 +59,19 @@ fn build_once(src: &Path, target: &str, threads: usize) -> Option<BTreeMap<Strin
     let tmp = tempfile::TempDir::new().unwrap();
     let base = tmp.path().canonicalize().unwrap();
     let out = base.join("out");
+    // Hermetic input: `wj build` loads peer metadata from `<project root>/.wj-cache/` (the nearest dir with a
+    // Cargo.toml/wj.toml above the source), a cache that every earlier build of any file in the checkout
+    // writes. Building in place made a program's output depend on which builds ran before it (cold vs warm
+    // cache; concurrent tests). A private copy under its own project root has no shared state.
+    let proj = base.join("proj");
+    std::fs::create_dir_all(proj.join("src")).unwrap();
+    std::fs::write(proj.join("wj.toml"), "[package]\nname = \"determinism_probe\"\nversion = \"0.0.0\"\n").unwrap();
+    let local = proj.join("src").join(src.file_name().unwrap());
+    std::fs::copy(src, &local).unwrap();
     let st = Command::new(WJ)
         .args(["build", "--target", target, "--no-cargo", "--no-lint", "-o"])
         .arg(&out)
-        .arg(src)
+        .arg(&local)
         .env("RAYON_NUM_THREADS", threads.to_string())
         .current_dir(&base)
         .output()
@@ -71,7 +80,7 @@ fn build_once(src: &Path, target: &str, threads: usize) -> Option<BTreeMap<Strin
         return None;
     }
     let mut h = BTreeMap::new();
-    hash_tree(&out, &out, &mut h);
+    hash_tree(&out, &out, base.to_str().unwrap(), &mut h);
     Some(h)
 }
 

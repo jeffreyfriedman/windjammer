@@ -99,38 +99,6 @@ backend = "rust"
 reason = "rust-std-runtime-crate-needed-by-rustc: see docs/known-issues/rust-std-runtime-crate-needed-by-rustc.md"
 
 [[unsupported]]
-program = "137_intr_format_sign_alt"
-backend = "go"
-reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "137_intr_format_sign_alt"
-backend = "js"
-reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "137_intr_format_sign_alt"
-backend = "ts"
-reason = "format flags `+` and `#` (sign / 0x prefix) are not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "138_intr_format_pretty_debug"
-backend = "go"
-reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "138_intr_format_pretty_debug"
-backend = "js"
-reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-[[unsupported]]
-program = "138_intr_format_pretty_debug"
-backend = "ts"
-reason = "pretty Debug `{:#?}` of an aggregate is not implemented by the portable emitters; build fails with an explicit `unsupported on this backend` error"
-
-# `&mut int` parameters / `let r = &mut z` locals: the Go and JS backends pass integers by value
-# and the Rust backend infers the parameter as an owned i64 (E0614 on `*c`).
-[[unsupported]]
 program = "159_deref_assign_ref_params"
 backend = "rust"
 reason = "mut-ref-to-int-parameters: Rust backend emits an owned i64 parameter so `*c = ..` fails with E0614"

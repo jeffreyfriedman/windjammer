@@ -18,7 +18,7 @@ README and what to do when the owner is ready.
    command that serves it, and make the sample a test in that repository (compile plus an assertion on rendered HTML),
    the same way this repository's README samples are tested.
 3. A "run it in 60 seconds" block: clone, one build command, open a URL. If that needs `wasm-pack` or a pinned compiler
-   (`WJ_PIN`), say so in the block.
+   version, say so in the block.
 4. Replace "about 120 component sources" with a generated count (script plus CI check) or drop the number.
 5. Add an agent section: link to this repository's `llms.txt` and `docs/agent/WINDJAMMER_FOR_AGENTS.md`, state which
    component API an agent should treat as stable, and ship an `AGENTS.md` (it has one; link it).

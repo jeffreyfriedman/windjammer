@@ -35,6 +35,19 @@ struct Outcome {
     files: Vec<(String, u64)>,
 }
 
+/// `wj check: 0 error(s), 0 warning(s) in 1 file(s) (57 ms)` -> drop the wall-clock suffix.
+fn strip_elapsed(line: &str) -> String {
+    if let Some(i) = line.rfind(" (") {
+        let tail = &line[i + 2..];
+        if let Some(n) = tail.strip_suffix(" ms)") {
+            if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit() || c == '.') {
+                return line[..i].to_string();
+            }
+        }
+    }
+    line.to_string()
+}
+
 fn normalize(s: &str, subs: &[(String, &str)]) -> String {
     let mut out = s.to_string();
     for (from, to) in subs {
@@ -59,6 +72,7 @@ fn normalize(s: &str, subs: &[(String, &str)]) -> String {
         .filter(|l| {
             !l.contains("finished in") && !l.contains("Finished") && !l.contains("Compiling")
         })
+        .map(strip_elapsed)
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -242,7 +256,7 @@ fn cases() -> Vec<Case> {
             args: vec!["check".into(), src.clone()],
             stdin: None,
             expect_code: 0,
-            expect_in_output: Some("No errors found"),
+            expect_in_output: Some("0 error(s)"),
         });
         v.push(Case {
             name: Box::leak(format!("build --no-cargo {name}").into_boxed_str()),
@@ -607,10 +621,16 @@ fn source_tree_has_no_runtime_checkout_reads() {
         "Path::new(\"crates/windjammer-runtime",
     ];
     // Reviewed exceptions (file suffix, reason). Keep this list tiny.
-    let allow: [(&str, &str); 1] = [(
-        "agent_index/mod.rs",
-        "maintainer-only: `wj agent-index` regenerates repo artifacts from a checkout",
-    )];
+    let allow: [(&str, &str); 2] = [
+        (
+            "agent_index/mod.rs",
+            "maintainer-only: `wj agent-index` regenerates repo artifacts from a checkout",
+        ),
+        (
+            "bin/wj-docs.rs",
+            "maintainer-only: `wj-docs` checks and regenerates the checkout's documentation; never installed",
+        ),
+    ];
     let mut hits = Vec::new();
     fn walk(d: &Path, out: &mut Vec<PathBuf>) {
         for e in fs::read_dir(d).unwrap().flatten() {

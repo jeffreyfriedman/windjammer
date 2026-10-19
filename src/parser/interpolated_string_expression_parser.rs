@@ -58,7 +58,7 @@ impl Parser {
                     // ADR-0018: named arguments inside `${..}` resolve like anywhere else.
                     expr_parser.call_table = self.call_table.clone();
                     let expr = expr_parser.parse_expression().map_err(|e| {
-                        format!("invalid expression in string interpolation `{trimmed}`: {e}")
+                        format!("invalid expression in string interpolation `{}`: {e}", trimmed.escape_debug())
                     })?;
                     self.saw_label |= expr_parser.saw_label;
                     args.push(expr);

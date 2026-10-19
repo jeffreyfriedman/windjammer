@@ -33,7 +33,7 @@ fn test() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f32") && output.contains("2.0_f32") && output.contains("3.0_f32"),
+        output.contains("1.0_f64") && output.contains("2.0_f64") && output.contains("3.0_f32"),
         "Vec<f32> = vec![1.0, 2.0, 3.0] should generate _f32, got:\n{}",
         output
     );
@@ -54,7 +54,7 @@ fn test() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f32") && output.contains("2.0_f32") && output.contains("3.0_f32"),
+        output.contains("1.0_f64") && output.contains("2.0_f64") && output.contains("3.0_f32"),
         "[f32; 3] = [1.0, 2.0, 3.0] should generate _f32, got:\n{}",
         output
     );
@@ -96,9 +96,8 @@ fn test() {
 }
 
 #[test]
-fn test_no_annotation_defaults_to_f32() {
-    // Windjammer convention: unconstrained float literals default to f32
-    // (game/graphics standard — most APIs use f32).
+fn test_no_annotation_defaults_to_f64() {
+    // SPEC-NUM-007: an unconstrained float literal is `float` (f64); f32 only by annotation or suffix.
     let source = r#"
 fn test() {
     let v = vec![1.0, 2.0]
@@ -106,8 +105,8 @@ fn test() {
 "#;
     let output = test_utils::compile_single(source);
     assert!(
-        output.contains("1.0_f32") && output.contains("2.0_f32"),
-        "Unannotated vec![1.0, 2.0] should default to f32 (Windjammer convention), got:\n{}",
+        output.contains("1.0_f64") && output.contains("2.0_f64"),
+        "Unannotated vec![1.0, 2.0] should default to f64 (SPEC-NUM-007), got:\n{}",
         output
     );
 }

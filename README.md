@@ -60,7 +60,7 @@ $ wj run --interpret hello.wj
 Hello, World!
 $ wj check --json hello.wj
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "windjammer_version": "0.50.0",
   "success": true,
   "diagnostics": []

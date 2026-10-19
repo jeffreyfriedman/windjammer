@@ -81,7 +81,7 @@ Gate: `tests/codegen_correctness_test.rs` (also `cargo test --test codegen_corre
 independent `// expect:` oracle live in `tests/codegen_correctness_corpus/`; seeded generated programs per class
 (`gate_*`, `WJ_CODEGEN_GATE_SEEDS=n`) run both `wj run --interpret` and `wj build --no-cargo` + `rustc` and shrink a failing
 program unit by unit. `// interp-gap:` marks a program the interpreter evaluates wrongly; the compiled output must still equal
-the expectation. The verified corpus (`examples/verified`, `// rust: gap`) is the second gate: 13 gap programs now compile
+the expectation. The verified corpus (`examples/verified`, `// rust: gap`) is the second gate: the gap programs now compile
 and match (the header was flipped to `// rust: ok`).
 
 Fixed (each with a corpus program): by-reference closure capture for let-bound closures that never escape
@@ -105,3 +105,19 @@ Still open (needs the numeric/ownership convergence, not another local heuristic
 * the interpreter copies loop elements (`for i in self.list { i.c.inc() }` mutates nothing); and has no threads/channels.
 * `ExprId` is `(line, column)` of the token *after* an expression, so `x`, `x * 2` and an enclosing closure can share an id;
   interpolation sub-expressions are now rebased onto unique columns. Keying by node identity is part of WP 8.
+
+## Cross-module trait field access keeps an owned parameter (`cross_module_ownership_test::cross_module_trait_field_access_inferred_borrowed`)
+
+```windjammer
+// composition/login.wj
+pub fn login(deps: AppDeps, token: string) -> Result<string, string> {
+    let claims = match deps.verifier.verify(token) { Ok(v) => v, Err(m) => return Err(m) }
+    deps.issuer.issue(claims.sub, claims.email)
+}
+```
+
+`deps` is only read (a field access and two `&self` trait-method calls) but is emitted as `deps: AppDeps` instead of
+`deps: &AppDeps`. The trait methods are declared in another module (`ports/auth.wj`), so at analysis time the callee's
+receiver mode is unknown and the conservative answer is "owned". Same class as the multi-file ownership demotion
+entries above: the call-site and defining-module analyses need the trait method receiver modes before parameter
+ownership is decided.

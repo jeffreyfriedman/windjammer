@@ -226,6 +226,10 @@ impl Parser {
         if self.current_token() == &Token::QuestionQuestion {
             return Err(format!("`{}??` is not a type: write `Option<{}?>` for a nested option (at {})", self.type_to_string(&ty), self.type_to_string(&ty), self.pos_desc()));
         }
+        self.parse_option_suffix(ty)
+    }
+
+    fn parse_option_suffix(&mut self, ty: Type) -> Result<Type, String> {
         if self.current_token() == &Token::Question {
             self.advance();
             if self.current_token() == &Token::Question {
@@ -234,6 +238,16 @@ impl Parser {
             return Ok(Type::Option(Box::new(ty)));
         }
         Ok(ty)
+    }
+
+    /// The target type of `expr as T`. A following `??` is the ADR-0018 default operator applied to the cast
+    /// (`x as i64 ?? 0` is `(x as i64) ?? 0`), not a doubled `T?` suffix.
+    pub fn parse_cast_type(&mut self) -> Result<Type, String> {
+        let ty = self.parse_type_core()?;
+        if self.current_token() == &Token::QuestionQuestion {
+            return Ok(ty);
+        }
+        self.parse_option_suffix(ty)
     }
 
     fn parse_type_core(&mut self) -> Result<Type, String> {

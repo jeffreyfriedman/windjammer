@@ -236,7 +236,7 @@ pub static ERRORS: &[CodeInfo] = &[
         category: C::Ownership,
         origin: O::RustcMapped,
         maturity: "high_confidence",
-        rust_codes: &["E0499", "E0502", "E0505", "E0506"],
+        rust_codes: &["E0499", "E0502", "E0505", "E0506", "E0507"],
         explanation: "A value is borrowed in a way that conflicts with another live borrow (two writers, or a reader and a writer).",
         cause: "A reference stays alive while the same value is changed or lent out again.",
         fix: "End the first borrow before starting the second (use the reference earlier, or restructure).",
