@@ -336,9 +336,9 @@ digraph deps {
   "interpreter" -> "lexer" [label="5"];
   "interpreter" -> "module_system" [label="8"];
   "interpreter" -> "package" [label="1"];
-  "interpreter" -> "parser" [label="85"];
+  "interpreter" -> "parser" [label="93"];
   "interpreter" -> "resolve" [label="13"];
-  "interpreter" -> "source_map" [label="8"];
+  "interpreter" -> "source_map" [label="10"];
   "interpreter" -> "stdlib_surface" [label="1"];
   "interpreter" -> "test_module_gate" [label="1"];
   "interpreter" -> "type_display" [label="1"];
@@ -364,9 +364,9 @@ digraph deps {
   "linter" -> "parser" [label="26"];
   "linter" -> "source_map" [label="4"];
   "linter" -> "type_classification" [label="1"];
-  "metadata" -> "analyzer" [label="28"];
+  "metadata" -> "analyzer" [label="29"];
   "metadata" -> "codegen" [label="5"];
-  "metadata" -> "compiler" [label="1",color=red,fontcolor=red];
+  "metadata" -> "compiler" [label="5",color=red,fontcolor=red];
   "metadata" -> "parser" [label="19"];
   "metadata" -> "type_classification" [label="2"];
   "module_system" -> "project_paths" [label="1"];

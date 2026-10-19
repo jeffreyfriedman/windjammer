@@ -637,7 +637,7 @@ pending = "no acceptance cases yet"
 
 [[promise]]
 id = "wj run --engine"
-statement = "Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020)"
+statement = "Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics)"
 
 [[promise]]
 id = "wj run --hash-seed"

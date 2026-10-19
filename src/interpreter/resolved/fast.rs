@@ -20,6 +20,8 @@ type Loc = Option<&'static Location>;
 pub(super) enum Operand {
     Slot(usize),
     Const(Value),
+    /// A typed integer expression (`typed.rs`).
+    Int(super::typed::ICode, IntTy),
     Code(Code),
 }
 
@@ -47,6 +49,7 @@ fn get(it: &mut Interpreter, b: usize, o: &Operand) -> R<Got> {
         },
         Operand::Const(Value::Int(a, t)) => return Ok(Got::Int(*a, *t)),
         Operand::Const(v) => v.clone(),
+        Operand::Int(c, t) => return Ok(Got::Int(c(it, b)? as i128, *t)),
         Operand::Code(c) => c(it, b)?,
     };
     Ok(match v {
@@ -110,6 +113,8 @@ pub(super) fn binary(l: Operand, r: Operand, op: BinaryOp, loc: Loc) -> Code {
         it.mark(loc);
         match (x, y) {
             (Got::Int(a, at), Got::Int(c, ct)) => int_op(op, a, at, c, ct),
+            // what `binary` does for two floats, without the dispatch
+            (Got::Val(Value::Float(a, at)), Got::Val(Value::Float(c, ct))) => crate::interpreter::ops::float_binary(op, a, at, c, ct),
             (x, y) => it.binary(op, x.value(), y.value()),
         }
     })

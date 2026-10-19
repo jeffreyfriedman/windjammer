@@ -107,7 +107,7 @@ Usage: wj run [OPTIONS] [PATH] [ARGS]...
 | `--hot` | HOT |  | Interpret and apply edits to function bodies while the program runs, keeping its state (preview, ADR-0021) |
 | `--sched-seed` | N | 0 | Interpreted runs: thread schedule seed (0 = FIFO run-to-block; N explores another reproducible interleaving at every synchronisation point) |
 | `--hash-seed` | N | 0 | Interpreted runs: perturb HashMap/HashSet iteration order (0 = key order; N = a reproducible shuffle) to expose programs that depend on Rust's unspecified hash order (ADR-0021 D6) |
-| `--engine` | ENGINE | walker | Interpreted runs: `walker` (default) or `resolved` (compiled closures, ADR-0020) |
+| `--engine` | ENGINE | resolved | Interpreted runs: `resolved` (default: compiled closures, ADR-0020; functions outside its subset run in the tree walker) or `walker` (the tree walker only, the reference semantics) |
 | `--no-lint` | NO_LINT |  | Interpreted runs: do not refuse the program for Rust-leakage lints (W####, such as `.unwrap()`); real compile errors still refuse it |
 | `--deterministic-time` | DETERMINISTIC_TIME |  | Interpreted runs: no real clock; time starts at a fixed instant and only `sleep` moves it |
 | `--allow-network` | ALLOW_NETWORK |  | Interpreted runs: allow plain http:// client requests (default: the http client refuses) |

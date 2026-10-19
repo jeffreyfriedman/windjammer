@@ -76,6 +76,8 @@ default = ["cli", "safety_typed_ir"]
 cli = ["dep:syntect", "dep:tempfile", "dep:salsa", "dep:env_logger", "highlighting"]
 highlighting = ["dep:syntect"]
 optimizer-soak = []
+# Interpreter: Cranelift tier for hot integer functions (ADR-0020 step 7 spike).
+jit = ["dep:cranelift-codegen", "dep:cranelift-frontend", "dep:cranelift-jit", "dep:cranelift-module", "dep:cranelift-native"]
 # std::arena (ADR-0016): arena types, escape check, interpreter support. Unstable surface.
 unstable_arenas = []
 # Safety-Typed IR: next-gen compiler pipeline with unified constraint solving,
@@ -128,6 +130,11 @@ syn = { version = "2", default-features = false, features = ["full", "parsing", 
 proc-macro2 = { version = "1", features = ["span-locations"] }
 quote = "1"
 libloading = "0.8"
+cranelift-codegen = { version = "0.130", optional = true }
+cranelift-frontend = { version = "0.130", optional = true }
+cranelift-jit = { version = "0.130", optional = true }
+cranelift-module = { version = "0.130", optional = true }
+cranelift-native = { version = "0.130", optional = true }
 
 tempfile = { version = "3.10", optional = true }
 syntect = { version = "5.2", optional = true }
@@ -167,6 +174,11 @@ path = "tests/backend_conformance_test.rs"
 [[test]]
 name = "convergence_gates"
 path = "tests/convergence_gates_test.rs"
+
+# Stale .wj.meta sidecars must not change answers: cargo test --release --test meta_sidecar_consistency
+[[test]]
+name = "meta_sidecar_consistency"
+path = "tests/meta_sidecar_consistency_test.rs"
 
 # ADR-0017 portable consumption of semantic facts: cargo test --release --test semantic_facts_portable
 [[test]]
