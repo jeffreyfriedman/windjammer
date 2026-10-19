@@ -271,7 +271,7 @@ fn from_json(it: &mut Interpreter, j: &serde_json::Value, t: &Type) -> Result<Va
                 for (k, x) in o {
                     m.insert(Key(s(k)), from_json(it, x, &vt)?);
                 }
-                Ok(Value::Map(Rc::new(m)))
+                Ok(Value::btree_map(m))
             }
             _ => Err(format!("invalid type: {}, expected a map", kind_name(j))),
         },
@@ -510,7 +510,7 @@ fn captures_val(re: &regex::Regex, c: &regex::Captures) -> Value {
             named.insert(Key(s(n)), s(m.as_str()));
         }
     }
-    struct_val("Captures", vec![("groups", Value::vec(groups)), ("named", Value::Map(Rc::new(named)))])
+    struct_val("Captures", vec![("groups", Value::vec(groups)), ("named", Value::btree_map(named))])
 }
 
 fn build(pattern: &str, ci: bool) -> Value {
@@ -592,6 +592,14 @@ fn register_regex(r: &mut Registry) {
 // ================================================================ csv/url/mime
 
 fn register_csv_url_mime(r: &mut Registry) {
+    // std declares these as returning the Rust `csv` crate's builder types, which have no
+    // Windjammer surface (and no runtime counterpart): loud, pointing at the supported API
+    r.func("csv::reader_with_delimiter", |_, _| {
+        Err(unsupported("`csv::reader_with_delimiter` returns the Rust csv crate's builder, which has no Windjammer API; use `csv::parse`"))
+    });
+    r.func("csv::writer_with_delimiter", |_, _| {
+        Err(unsupported("`csv::writer_with_delimiter` returns the Rust csv crate's builder, which has no Windjammer API; use `csv::write`"))
+    });
     r.func("csv::parse", |it, a| csv_parse(it, &arg_str(&a, 0, "parse")?, b',', false));
     r.func("csv::parse_bytes", |it, a| {
         let b = bytes_of(it, arg(&a, 0, "parse_bytes")?)?;

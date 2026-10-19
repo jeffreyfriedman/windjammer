@@ -217,7 +217,10 @@ pub fn from_ast(t: &Type, generics: &[String]) -> Ty {
         Type::Float => Ty::F64,
         Type::Bool => Ty::Bool,
         Type::String => Ty::Str,
-        Type::Custom(n) => from_name(n, generics),
+        Type::Custom(n) => match super::alias::strip_modules(n) {
+            Some(last) => from_name(&last, generics),
+            None => from_name(n, generics),
+        },
         Type::Generic(n) => Ty::Param(n.clone()),
         Type::Parameterized(n, args) => from_parameterized(n, args, generics),
         Type::Option(t) => Ty::Option(Box::new(rec(t))),
@@ -249,11 +252,13 @@ fn from_name(n: &str, generics: &[String]) -> Ty {
         "char" => Ty::Char,
         "()" | "unit" => Ty::Unit,
         _ if generics.iter().any(|g| g == n) => Ty::Param(n.to_string()),
-        _ => Ty::Adt(n.to_string(), vec![]),
+        _ => super::alias::expand(n, &[], generics).unwrap_or_else(|| Ty::Adt(n.to_string(), vec![])),
     }
 }
 
 fn from_parameterized(n: &str, args: &[Type], generics: &[String]) -> Ty {
+    let stripped = super::alias::strip_modules(n);
+    let n = stripped.as_deref().unwrap_or(n);
     let a: Vec<Ty> = args.iter().map(|t| from_ast(t, generics)).collect();
     let arg = |i: usize| Box::new(a.get(i).cloned().unwrap_or(Ty::Unknown));
     match n {
@@ -263,7 +268,10 @@ fn from_parameterized(n: &str, args: &[Type], generics: &[String]) -> Ty {
         "Option" => Ty::Option(arg(0)),
         "Result" => Ty::Result(arg(0), arg(1)),
         "Box" | "Rc" | "Arc" => *arg(0),
-        _ => Ty::Adt(n.to_string(), a),
+        _ => match super::alias::expand(n, &a, generics) {
+            Some(t) => t,
+            None => Ty::Adt(n.to_string(), a),
+        },
     }
 }
 

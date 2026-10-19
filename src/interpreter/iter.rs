@@ -80,6 +80,7 @@ pub fn as_iter(it: &mut Interpreter, v: Value) -> R<Iter> {
             Some(Value::Iter(i)) => i,
             _ => return Err(semantic("not a receiver")),
         },
+        Value::Native(ref n) if n.iter_items().is_some() => IterState::from_items(n.iter_items().unwrap_or_default()),
         other => IterState::from_items(it.to_items(other)?),
     })
 }

@@ -81,6 +81,15 @@ impl<'m> Go<'m> {
 
     pub fn stmt(&mut self, s: &PStmt) -> PResult<()> {
         match s {
+            PStmt::Let { name, ty, init: Some(e), .. } if matches!(&*e.kind, PK::BorrowMut(_)) && !self.is_ref_type(ty) => {
+                // `let r = &mut place`: a pointer; uses of `r` dereference it (`ptr_locals`).
+                let PK::BorrowMut(place) = &*e.kind else { unreachable!() };
+                let (t, n) = (self.ty(ty)?, ident(name));
+                let p = self.addr(place)?;
+                self.line(&format!("var {n} *{t} = {p}"));
+                self.line(&format!("_ = {n}"));
+                self.ptr_locals.insert(name.clone(), ty.clone());
+            }
             PStmt::Let { name, ty, init, .. } => {
                 let t = self.ty(ty)?;
                 let n = ident(name);
@@ -261,15 +270,17 @@ impl<'m> Go<'m> {
             Ty::Map(..) => {
                 let (k, v) = (self.fresh("k"), self.fresh("v"));
                 let tt = self.ty(&elem_ty)?;
-                let mut pre = vec![format!("{item} := {tt}{{F0: {k}, F1: {v}}}"), format!("_ = {item}")];
+                let m = self.fresh("m");
+                self.line(&format!("{m} := {it}"));
+                let mut pre = vec![format!("{v} := {m}[{k}]"), format!("{item} := {tt}{{F0: {k}, F1: {v}}}"), format!("_ = {item}")];
                 pre.extend(prelude);
-                self.looped(&format!("for {k}, {v} := range {it}"), body, &pre)
+                self.looped(&format!("for _, {k} := range wjSortedKeys({m})"), body, &pre)
             }
             Ty::Set(_) => {
                 let k = self.fresh("k");
                 let mut pre = vec![format!("{item} := {k}"), format!("_ = {item}")];
                 pre.extend(prelude);
-                self.looped(&format!("for {k} := range {it}"), body, &pre)
+                self.looped(&format!("for _, {k} := range wjSortedKeys({it})"), body, &pre)
             }
             _ if by_ref => {
                 let PPat::Bind { name, .. } = pat else { return self.unsupported("iter_mut with a destructuring pattern") };

@@ -1,0 +1,42 @@
+// Rust format flags on every backend: sign `+`, alternate `#` (0x/0b/0o), `0` padding after the sign
+// and prefix, fill/align, precision, NaN/-0.0/inf, and Formatter options reaching the elements of
+// Debug aggregates (`{:5?}` pads each number). Expected output produced by rustc from a line-by-line
+// Rust transliteration (independent of every Windjammer backend).
+// expect: [00005] [  +5   ] [+0] [-3] [0xff] [0xFF] [0o10] [0b101]
+// expect: [0x000000ff] [-0000042] [+ffffffffffffffff] [0xffffffff] [+0b101] [7]
+// expect: [+1.5] [-0] [+0] [NaN] [+2.00] [-0003.14] [+inf]
+// expect: [s] [true ] [+3] [4]
+// expect: [[    1,     2]] [[+1, -2]] [[1.0, 2.2]] [Some(7   )]
+// expect: ["ab"] ['c'] [P { x:      1, y:      2 }]
+// expect: [ab   ] [true ] [00NaN] [+1.5e3] [-00002.5e0] [c    ]
+// expect: [   1.000] [-0.0] [2] [-0.00]
+// expect: [-0003] [-3   ] [  7  ] [****+9]
+// expect: [0x00ff] [0x0] [00000101] [0o0]
+// expect: [Some("ab")]
+struct P {
+    x: int,
+    y: int,
+}
+
+fn main() {
+    let nan = 0.0 / 0.0
+    let inf = 1.0 / 0.0
+    let neg0 = -0.0
+    println("[{:<05}] [{:^+7}] [{:+}] [{:+}] [{:#x}] [{:#X}] [{:#o}] [{:#b}]", 5, 5, 0, -3, 255, 255, 8, 5)
+    let m1: i64 = -1
+    let m2: i32 = -1
+    println("[{:#010x}] [{:+08}] [{:+x}] [{:#x}] [{:+#06b}] [{:#}]", 255, -42, m1, m2, 5, 7)
+    println("[{:+}] [{:+}] [{:+}] [{:+}] [{:+.2}] [{:+08.2}] [{:+}]", 1.5, neg0, 0.0, nan, 2.0, -3.14159, inf)
+    println("[{:+}] [{:+5}] [{:+?}] [{:#?}]", "s", true, 3, 4)
+    let fv: Vec<f64> = vec![1.0, 2.25]
+    println("[{:5?}] [{:+?}] [{:.1?}] [{:<4?}]", vec![1, 2], vec![1, -2], fv, Some(7))
+    println("[{:6?}] [{:6?}] [{:>6?}]", "ab", 'c', P { x: 1, y: 2 })
+    println("[{:05}] [{:05}] [{:05}] [{:+e}] [{:010e}] [{:5}]", "ab", true, nan, 1500.0, -2.5, 'c')
+    println("[{:8.3?}] [{:+.1}] [{:.0}] [{:.2}]", 1.0, -0.04, 2.5, -0.004)
+    println("[{:05?}] [{:<5}] [{:^5}] [{:*>+6}]", -3, -3, 7, 9)
+    let b: i8 = -1
+    let z: u8 = 0
+    let f: u8 = 5
+    println("[{:#06x}] [{:#x}] [{:08b}] [{:#o}]", b, z, f, 0)
+    println("[{:>8?}]", Some("ab"))
+}

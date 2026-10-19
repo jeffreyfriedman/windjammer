@@ -104,9 +104,10 @@ fn corpus_conforms_on_every_backend() {
     assert!(failures.is_empty(), "{}\n{} conformance failure(s):\n{}", report.summary(), failures.len(), failures.join("\n"));
 }
 
-/// ADR-0014 intrinsics (`NNN_intr_*` programs) must behave identically on the TypeScript flavour.
+/// The whole corpus must behave identically on the TypeScript flavour (it shares the JS emitter,
+/// but annotations, cells and class layouts differ).
 #[test]
-fn intrinsic_corpus_conforms_on_typescript() {
+fn corpus_conforms_on_typescript() {
     let probe = probe_all();
     if !probe.has(Tool::Node) {
         return;
@@ -122,13 +123,13 @@ fn intrinsic_corpus_conforms_on_typescript() {
     let work = work_dir("ts");
     let mut failures = Vec::new();
     let mut ran = 0;
-    for p in program::discover(&root()).iter().filter(|p| p.name.contains("_intr_")) {
+    for p in program::discover(&root()).iter() {
         ran += 1;
         if let Verdict::Fail(msg) = eval_program(&wj(), p, Backend::Ts, &support, &work) {
             failures.push(format!("{} [ts]: {msg}", p.name));
         }
     }
-    assert!(ran >= 10, "intrinsic corpus went missing ({ran} programs)");
+    assert!(ran >= 100, "corpus went missing ({ran} programs)");
     assert!(failures.is_empty(), "{} typescript failure(s):\n{}", failures.len(), failures.join("\n"));
 }
 

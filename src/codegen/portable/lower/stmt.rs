@@ -240,6 +240,11 @@ impl<'e> Lowerer<'e> {
     }
 
     fn let_stmt(&mut self, pattern: &Pattern, mutable: bool, ty: Option<&crate::parser::Type>, value: &Expression, els: Option<&[&Statement]>) -> PResult<Vec<PStmt>> {
+        if let (Expression::Unary { op: UnaryOp::MutRef, operand, .. }, Pattern::Identifier(name) | Pattern::MutBinding(name)) = (value, pattern) {
+            if let Some(stmts) = self.let_mut_borrow(name, operand)? {
+                return Ok(stmts);
+            }
+        }
         let declared = ty.map(|t| from_ast(t, &self.generics)).map(|t| self.freshen(&t));
         let mut init = self.expr(value, declared.as_ref())?;
         if let Some(d) = &declared {
@@ -260,9 +265,6 @@ impl<'e> Lowerer<'e> {
                 let out = self.declare(name, ty.clone(), false);
                 self.set_fresh(name);
                 let m = mutable || matches!(pattern, Pattern::MutBinding(_));
-                if m {
-                    self.set_mutable(name);
-                }
                 Ok(vec![PStmt::Let { name: out, ty, mutable: m, init: Some(init) }])
             }
             Pattern::Wildcard => Ok(vec![PStmt::Expr(init)]),
@@ -272,6 +274,23 @@ impl<'e> Lowerer<'e> {
                 Ok(vec![PStmt::LetPat { pat, init, els }])
             }
         }
+    }
+
+    /// `let r = &mut place`: `r` aliases the place (never a copy). A `&mut` of a temporary is an
+    /// unaliased value and takes the ordinary path (`None`).
+    fn let_mut_borrow(&mut self, name: &str, operand: &Expression) -> PResult<Option<Vec<PStmt>>> {
+        if !matches!(operand, Expression::Identifier { .. } | Expression::FieldAccess { .. } | Expression::Index { .. }) {
+            return Ok(None);
+        }
+        let place = self.expr(operand, None)?;
+        if !place.is_place() {
+            return self.err("`&mut` of an expression that is not a place");
+        }
+        let ty = place.ty.clone();
+        let out = self.declare(name, ty.clone(), true);
+        let line = place.line;
+        let init = PExpr::new(ty.clone(), PK::BorrowMut(place)).at(line);
+        Ok(Some(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }]))
     }
 
     fn assignment(&mut self, target: &Expression, value: &Expression, op: Option<&CompoundOp>) -> PResult<Vec<PStmt>> {

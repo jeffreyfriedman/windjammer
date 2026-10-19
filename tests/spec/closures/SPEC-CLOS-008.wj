@@ -1,0 +1,14 @@
+// spec: SPEC-CLOS-008
+// mode: parse-error
+// expect-error: shorthand makes a closure here
+fn key(s: string) -> string {
+    s
+}
+
+fn group(f: fn(string) -> string, s: string) -> string {
+    f(s)
+}
+
+fn main() {
+    let r = group(key(_.clone()), "a")
+}

@@ -1,4 +1,4 @@
-// `{:#?}` of an aggregate is multi-line pretty Debug: Rust only, explicit error elsewhere.
+// `{:#?}` of an aggregate is multi-line pretty Debug on every backend (wider coverage: 172).
 // expect: [
 // expect:     1,
 // expect:     2,

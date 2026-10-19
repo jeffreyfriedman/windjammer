@@ -135,6 +135,10 @@ impl Interpreter {
         if matches!(e, Call { .. } | MethodCall { .. }) {
             let t = subst(t, &self.scope.tparams);
             self.expected = Some((e as *const _ as usize, t));
+        } else if let Some(call) = typed_parse_source(e) {
+            // `let x: T = json.parse_string(s)?` / `let x: T = match json.parse_string(s) { Ok(v) => v, .. }`:
+            // the declared type is the success type of the parse call.
+            self.expect_type_of(call, t);
         }
     }
 
@@ -170,5 +174,39 @@ impl Interpreter {
         if let (Some(ret), Some(crate::parser::Statement::Expression { expr, .. })) = (f.ret, f.body.last()) {
             self.expect_type_of(expr, ret);
         }
+    }
+}
+
+/// The `parse_string` call under a `?` or an `Ok(v) => v` match, whose target type comes from the
+/// enclosing `let` annotation (compiled code infers it; the interpreter needs it handed over).
+fn typed_parse_source(e: &'static crate::parser::Expression<'static>) -> Option<&'static crate::parser::Expression<'static>> {
+    use crate::parser::{Expression as E, Pattern};
+    fn is_parse(e: &crate::parser::Expression<'_>) -> bool {
+        match e {
+            E::MethodCall { method, .. } => method == "parse_string",
+            E::Call { function, .. } => match function {
+                E::Identifier { name, .. } => name.ends_with("parse_string"),
+                E::FieldAccess { field, .. } => field == "parse_string",
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+    match e {
+        E::TryOp { expr, .. } if is_parse(expr) => Some(*expr),
+        E::Block { statements, .. } => {
+            let [crate::parser::Statement::Match { value, arms, .. }] = statements.as_slice() else { return None };
+            if !is_parse(value) {
+                return None;
+            }
+            let passes_ok = arms.iter().any(|a| match (&a.pattern, a.body) {
+                (Pattern::EnumVariant(name, crate::parser::EnumPatternBinding::Single(bound)), E::Identifier { name: body, .. }) => {
+                    name == "Ok" && bound == body
+                }
+                _ => false,
+            });
+            if passes_ok { Some(*value) } else { None }
+        }
+        _ => None,
     }
 }

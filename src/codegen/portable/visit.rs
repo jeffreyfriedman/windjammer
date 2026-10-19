@@ -39,6 +39,10 @@ fn types_in_pat(p: &mut PPat, v: TyFn) {
         }
         PPat::Tuple(ps) | PPat::Or(ps) => ps.iter_mut().for_each(|p| types_in_pat(p, v)),
         PPat::Variant { fields, .. } => fields.iter_mut().for_each(|(_, p)| types_in_pat(p, v)),
+        PPat::Struct { fields, .. } => fields.iter_mut().for_each(|(_, t, p)| {
+            v(t);
+            types_in_pat(p, v)
+        }),
         PPat::Some(p) | PPat::Ok(p) | PPat::Err(p) => types_in_pat(p, v),
         PPat::Wild | PPat::Bind { .. } | PPat::None => {}
     }
@@ -109,7 +113,7 @@ fn types_in_arm(a: &mut PArm, v: TyFn) {
 
 pub fn children_mut(k: &mut PK) -> Vec<&mut PExpr> {
     match k {
-        PK::Unary(_, a) | PK::Cast(a, _) | PK::Field(a, _) | PK::TupleIdx(a, _) | PK::Some(a) | PK::Ok(a) | PK::Err(a) | PK::Copy(a) | PK::Panic(a) => vec![a],
+        PK::Unary(_, a) | PK::Cast(a, _) | PK::Field(a, _) | PK::TupleIdx(a, _) | PK::Some(a) | PK::Ok(a) | PK::Err(a) | PK::Copy(a) | PK::BorrowMut(a) | PK::Panic(a) => vec![a],
         PK::Try { expr, .. } => vec![expr],
         PK::Binary(_, a, b) | PK::Index(a, b) | PK::VecRepeat(a, b) => vec![a, b],
         PK::Range { start, end, .. } => vec![start, end],
@@ -128,9 +132,8 @@ pub fn types_in_expr(e: &mut PExpr, v: TyFn) {
     v(&mut e.ty);
     match &mut *e.kind {
         PK::Cast(_, t) => v(t),
-        PK::Closure { params, ret, body, captures } => {
+        PK::Closure { params, ret, body } => {
             params.iter_mut().for_each(|(_, t)| v(t));
-            captures.iter_mut().for_each(|(_, t)| v(t));
             v(ret);
             types_in_block(body, v);
         }

@@ -1,0 +1,8 @@
+pub struct Point {
+    pub x: int,
+    pub y: int,
+}
+
+pub fn manhattan(p: Point) -> int {
+    super::metric::abs(p.x) + crate::geo::metric::abs(p.y)
+}

@@ -156,6 +156,9 @@ impl<'e> Lowerer<'e> {
         if let Some(t) = self.env.consts.get(name) {
             return Ok(PExpr::new(t.clone(), PK::Local(name.to_string())));
         }
+        if let Some(last) = crate::codegen::portable::alias::strip_modules(name) {
+            return self.identifier(&last, want);
+        }
         if let Some((owner, member)) = name.rsplit_once("::") {
             return self.path_value(owner, member, want);
         }
@@ -173,6 +176,8 @@ impl<'e> Lowerer<'e> {
     /// `Owner::member` used as a value: unit variant, associated const, or function reference.
     fn path_value(&mut self, owner: &str, member: &str, want: Option<&Ty>) -> PResult<PExpr> {
         let owner = if owner == "Self" { self.owner.clone().unwrap_or_default() } else { owner.to_string() };
+        let owner = crate::codegen::portable::alias::strip_modules(&owner).unwrap_or(owner);
+        let owner = crate::codegen::portable::alias::nominal(&owner).unwrap_or(owner);
         if let Some(v) = self.env.variant(&owner, member) {
             if v.fields.is_empty() {
                 let args = self.enum_args_from_want(&owner, want);
@@ -276,12 +281,16 @@ impl<'e> Lowerer<'e> {
         Unsupported { what, line: self.line }
     }
 
+    /// An index or count operand: `int` is accepted (SPEC-NUM-014), so an index whose type is still
+    /// open is not forced to `usize`; it is converted (a no-op once it resolves to `usize`).
     pub(super) fn ensure_usize(&mut self, e: PExpr) -> PExpr {
-        self.constrain(&Ty::usize(), &e.ty);
         match self.resolve(&e.ty) {
             Ty::Int(IntKind::Usize) => e,
-            Ty::Int(_) => PExpr::new(Ty::usize(), PK::Cast(e, Ty::usize())),
-            _ => e,
+            Ty::Int(_) | Ty::Var(_) => PExpr::new(Ty::usize(), PK::Cast(e, Ty::usize())),
+            _ => {
+                self.constrain(&Ty::usize(), &e.ty);
+                e
+            }
         }
     }
 
@@ -372,6 +381,8 @@ impl<'e> Lowerer<'e> {
 
     fn struct_literal(&mut self, name: &str, fields: &[(String, &Expression)], want: Option<&Ty>) -> PResult<PExpr> {
         let name = if name == "Self" { self.owner.clone().unwrap_or_default() } else { name.to_string() };
+        let name = crate::codegen::portable::alias::strip_modules(&name).unwrap_or(name);
+        let name = crate::codegen::portable::alias::nominal(&name).unwrap_or(name);
         if let Some((en, var)) = name.split_once("::") {
             return self.variant_struct_literal(en, var, fields, want);
         }
@@ -443,8 +454,7 @@ impl<'e> Lowerer<'e> {
         blk.stmts = prologue;
         let ret = blk.tail.as_ref().map(|t| t.ty.clone()).unwrap_or(Ty::Unit);
         let ty = Ty::Fn(ps.iter().map(|p| p.1.clone()).collect(), Box::new(ret.clone()));
-        let captures = self.closure_captures(&mut blk);
-        Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk, captures }))
+        Ok(PExpr::new(ty, PK::Closure { params: ps, ret, body: blk }))
     }
 
     /// `|(a, b)|`: a hidden tuple parameter plus a destructuring `let` at the top of the body.
@@ -466,24 +476,6 @@ impl<'e> Lowerer<'e> {
         Ok(((hidden, tup_ty), PStmt::LetPat { pat: PPat::Tuple(binds), init, els: None }))
     }
 
-    /// Outer `mut` locals referenced by the closure body: Rust `move` closures own a snapshot.
-    fn closure_captures(&self, body: &mut PBlock) -> Vec<(String, Ty)> {
-        let mut seen = std::collections::BTreeSet::new();
-        crate::codegen::portable::visit::exprs_in_block(body, &mut |e| {
-            if let PK::Local(n) = &*e.kind {
-                seen.insert(n.clone());
-            }
-        });
-        let mut out = Vec::new();
-        for name in seen {
-            let hit = self.scopes.iter().flat_map(|s| s.values()).find(|l| l.out == name && l.mutable && !l.alias);
-            if let Some(l) = hit {
-                out.push((name, l.ty.clone()));
-            }
-        }
-        out
-    }
-
     fn try_op(&mut self, inner: &Expression) -> PResult<PExpr> {
         let e = self.expr(inner, None)?;
         let fn_ret = self.rets.last().cloned().unwrap_or(Ty::Unknown);
@@ -492,7 +484,25 @@ impl<'e> Lowerer<'e> {
             Ty::Result(t, _) => (**t).clone(),
             other => return self.err(format!("`?` applied to `{}`", other.describe())),
         };
-        Ok(PExpr::new(ty, PK::Try { expr: e, fn_ret }))
+        let conv = self.try_conversion(&e.ty, &fn_ret)?;
+        Ok(PExpr::new(ty, PK::Try { expr: e, fn_ret, conv }))
+    }
+
+    /// `?` converts the error with `From` when the function's error type differs (Rust semantics).
+    fn try_conversion(&mut self, inner: &Ty, fn_ret: &Ty) -> PResult<Option<(String, String)>> {
+        let (Ty::Result(_, from), Ty::Result(_, to)) = (self.resolve(inner), self.resolve(fn_ret)) else { return Ok(None) };
+        let Ty::Adt(owner, _) = &*to else {
+            self.constrain(&to, &from);
+            return Ok(None);
+        };
+        if matches!(&*from, Ty::Adt(n, _) if n == owner) || from.is_unknown() || matches!(*from, Ty::Var(_)) {
+            self.constrain(&to, &from);
+            return Ok(None);
+        }
+        match self.pick_impl(owner, "from", Some((*from).clone())) {
+            Some(m) => Ok(Some((owner.clone(), m))),
+            None => self.err(format!("`?` needs `impl From<{}> for {owner}`", from.describe())),
+        }
     }
 
     /// Lower a statement list as a value-producing block (`let x = { ... }`, arm bodies, closures).

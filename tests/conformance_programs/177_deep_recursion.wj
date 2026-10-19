@@ -1,0 +1,28 @@
+// Recursion as deep as a Rust main thread (8 MiB) allows must not overflow on any backend
+// (SPEC-EXEC-006): Node's default ~1 MiB stack overflowed at about 10k frames. Expected values
+// are closed forms: sum 1..n = n(n+1)/2, depth = n.
+// expect: 50005000
+// expect: 1250025000
+// expect: 30000
+fn sum_to(n: int) -> int {
+    if n == 0 {
+        0
+    } else {
+        n + sum_to(n - 1)
+    }
+}
+
+fn depth(v: Vec<int>, i: int) -> int {
+    if i == 0 {
+        v.len()
+    } else {
+        depth(v, i - 1) + 1
+    }
+}
+
+fn main() {
+    println("${sum_to(10000)}")
+    println("${sum_to(50000)}")
+    let v: Vec<int> = vec![]
+    println("${depth(v, 30000)}")
+}

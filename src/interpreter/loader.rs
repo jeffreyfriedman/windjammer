@@ -19,7 +19,35 @@ pub fn parse_source(source: &str, file: &str) -> Result<Program<'static>, String
     parse.parse()
 }
 
+/// The files of the program whose entry is `entry` (entry first), with their module paths.
+pub fn program_files(entry: &Path) -> Result<Vec<super::project::LoadedFile>, RuntimeError> {
+    use crate::module_system::project;
+    let project_root = project::find_manifest_dir(entry);
+    let is_crate_root = entry.file_name().is_some_and(|n| n == "main.wj" || n == "lib.wj")
+        || project_root.as_deref().is_some_and(|r| project::bin_targets(r).iter().any(|b| same_file(&b.entry, entry)));
+    if !is_crate_root {
+        return super::project::script_sources(entry);
+    }
+    let root = project::source_root_for(entry, project_root.as_deref());
+    let files = crate::module_system::sources::program_sources(&root, entry)
+        .map_err(|e| RuntimeError::new(ErrorKind::Semantic, format!("cannot read {}: {}", root.display(), e)))?;
+    super::project::parse_files(&files)
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y)
+}
+
 impl Interpreter {
+    /// Load a program the way `wj run` sees it: a `main.wj` (or declared binary) owns its source tree and
+    /// every module in it is loaded (like the compiled build); a loose script loads what it `use`s.
+    /// Names are bound by the compiler's resolver either way (`project.rs`).
+    pub fn load_program_at(&mut self, entry: &Path) -> Result<(), RuntimeError> {
+        let files = program_files(entry)?;
+        let deps = super::deps::dependency_sources(entry)?;
+        self.load_sources(files, deps.windjammer, deps.rust)
+    }
+
     /// Load and run an entry file (with its transitive module files).
     pub fn load_entry_file(&mut self, path: &Path) -> Result<(), RuntimeError> {
         let src = std::fs::read_to_string(path)
@@ -67,7 +95,8 @@ impl Interpreter {
         if let Some(&m) = self.modules[from].children.get(name) {
             return Ok(Some(m));
         }
-        if self.missing_modules.contains(&(from, name.to_string())) {
+        if self.project_loading || self.missing_modules.contains(&(from, name.to_string())) {
+            // whole-program loads know every file up front (module_system::sources)
             return Ok(None);
         }
         let Some(file) = self.find_module_file(from, name) else {
@@ -99,6 +128,10 @@ impl Interpreter {
         path: &[String],
         alias: Option<&str>,
     ) -> Result<(), RuntimeError> {
+        if self.project_loading {
+            // bound later, all at once, by the shared resolver (project.rs)
+            return Ok(());
+        }
         // Braced imports arrive as one segment "a::b::{X, Y}".
         if path.len() == 1 && path[0].contains("::{") {
             let (prefix, rest) = path[0].split_once("::{").unwrap();
@@ -145,8 +178,16 @@ impl Interpreter {
         while i < segs.len() {
             let seg = segs[i].clone();
             let last = i + 1 == segs.len();
+            // `use a::name::name`: when the module already defines an item called `name`, the last
+            // segment is that item, not the module file `name.wj` found again by the search path.
+            let item_shadows_module = last
+                && !glob
+                && i > start
+                && (self.modules[cur].funcs.contains_key(&seg) || self.modules[cur].consts.contains_key(&seg));
             // Is it a module?
-            let child = if cur == 0 && i == start && self.modules[0].children.get(&seg).is_none() {
+            let child = if item_shadows_module {
+                None
+            } else if cur == 0 && i == start && self.modules[0].children.get(&seg).is_none() {
                 self.load_child_module(0, &seg)?
             } else {
                 self.load_child_module(cur, &seg)?

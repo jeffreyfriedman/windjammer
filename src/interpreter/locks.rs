@@ -16,6 +16,8 @@ impl std::fmt::Debug for GuardToken {
 pub struct GuardToken {
     state: Weak<CellState>,
     pub exclusive: bool,
+    /// Lock guards poison on panic; `RefCell` borrows do not.
+    pub poisons: Cell<bool>,
     /// `Condvar::wait` releases the lock while the guard value is still alive.
     pub released: Cell<bool>,
 }
@@ -29,6 +31,8 @@ impl std::fmt::Debug for CellState {
 #[derive(Default)]
 pub struct CellState {
     holders: RefCell<Vec<Weak<GuardToken>>>,
+    /// A `Mutex`/`RwLock` whose guard was held by a panicking thread (Rust's lock poisoning).
+    pub poisoned: Cell<bool>,
 }
 
 impl GuardToken {
@@ -75,7 +79,7 @@ impl CellState {
     }
 
     pub fn acquire(self: &Rc<Self>, exclusive: bool) -> Rc<GuardToken> {
-        let t = Rc::new(GuardToken { state: Rc::downgrade(self), exclusive, released: Cell::new(false) });
+        let t = Rc::new(GuardToken { state: Rc::downgrade(self), exclusive, poisons: Cell::new(false), released: Cell::new(false) });
         self.holders.borrow_mut().push(Rc::downgrade(&t));
         t
     }

@@ -1,0 +1,15 @@
+// spec: SPEC-OPT-005
+// expect: 5 true
+// expect: 0 true
+struct Item {
+    qty: int,
+}
+
+fn main() {
+    let a: Item? = Some(Item { qty: 5 })
+    let b: Item? = None
+    let qa = a?.qty
+    let qb = b?.qty
+    println("${qa ?? 0} ${qa.is_some()}")
+    println("${qb ?? 0} ${qb.is_none()}")
+}

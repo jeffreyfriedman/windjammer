@@ -40,6 +40,10 @@ impl<'m> Js<'m> {
 
     pub fn stmt(&mut self, s: &PStmt) -> PResult<()> {
         match s {
+            PStmt::Let { name, init: Some(e), .. } if matches!(&*e.kind, PK::BorrowMut(_)) => {
+                let PK::BorrowMut(place) = &*e.kind else { unreachable!() };
+                self.let_borrow(name, place)?;
+            }
             PStmt::Let { name, ty, init, .. } => {
                 let ann = self.ty_ann(ty);
                 match init {
@@ -130,6 +134,10 @@ impl<'m> Js<'m> {
             }
         }
         let t = self.place(target)?;
+        if op.is_none() && self.is_obj_alias(target) {
+            self.line(&format!("$replace({t}, {v});"));
+            return Ok(());
+        }
         let rhs = match op {
             Some(op) => self.binary_js(op, &target.ty, &t, &v, value)?,
             None => v,
@@ -157,7 +165,15 @@ impl<'m> Js<'m> {
     }
 
     fn for_in(&mut self, pat: &PPat, iter: &PExpr, body: &[PStmt]) -> PResult<()> {
+        if self.for_in_mut(pat, iter, body)? {
+            return Ok(());
+        }
         let it = self.expr(iter)?;
+        let it = match &iter.ty {
+            Ty::Map(..) => format!("$sortedEntries({it})"),
+            Ty::Set(_) => format!("$sortedKeys({it})"),
+            _ => it,
+        };
         let (mut conds, mut binds) = (Vec::new(), Vec::new());
         let item = self.fresh("it");
         self.pat(pat, &item, &mut conds, &mut binds)?;

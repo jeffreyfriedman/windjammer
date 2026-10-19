@@ -52,6 +52,7 @@ impl<'m> Js<'m> {
             PK::Str(s) => Ok(js_string(s)),
             PK::Char(c) => Ok(js_string(&c.to_string())),
             PK::Unit => Ok("undefined".into()),
+            PK::Local(n) if self.cells.contains(n) => Ok(format!("{}.v", ident(n))),
             PK::Local(n) => Ok(if n == "self" { "this".into() } else { ident(n) }),
             PK::FnRef(n) => Ok(ident(n)),
             PK::Unary(op, a) => self.unary(*op, a),
@@ -63,7 +64,10 @@ impl<'m> Js<'m> {
             PK::Field(a, f) => Ok(format!("{}.{}", self.expr_paren(a)?, prop(f))),
             PK::TupleIdx(a, i) => Ok(format!("{}[{i}]", self.expr_paren(a)?)),
             PK::Index(a, i) => self.index(a, i),
-            PK::Call { name, args } => Ok(format!("{}({})", ident(name), self.args(args)?)),
+            PK::Call { name, args } => {
+                let f = self.find_fn(None, name);
+                Ok(format!("{}({})", ident(name), self.args_for(f, args)?))
+            }
             PK::StdCall { module, name, args } => Ok(format!("$std_{module}_{name}({})", self.args(args)?)),
             PK::StaticCall { owner, name, args } => self.static_call(owner, name, args, &e.ty),
             PK::CallValue { f, args } => Ok(format!("{}({})", self.expr_paren(f)?, self.args(args)?)),
@@ -88,11 +92,12 @@ impl<'m> Js<'m> {
                 Ok(format!("new Map([{}])", parts?.join(", ")))
             }
             PK::Tuple(es) => Ok(format!("[{}]", self.args(es)?)),
-            PK::Closure { params, body, captures, .. } => self.closure(params, body, captures),
+            PK::Closure { params, body, .. } => self.closure_arrow(params, body),
             PK::Copy(a) => {
                 let v = self.expr(a)?;
                 Ok(self.clone_js(&a.ty, &v))
             }
+            PK::BorrowMut(_) => self.unsupported("`&mut` outside a `let` initializer"),
             PK::Format(pieces) => self.format(pieces),
             PK::Print { newline, to_stderr, pieces } => {
                 let s = self.format(pieces)?;
@@ -188,16 +193,6 @@ impl<'m> Js<'m> {
         Ok(format!("new {}({})", ident(name), vals.join(", ")))
     }
 
-    fn closure(&mut self, params: &[(String, Ty)], body: &PBlock, captures: &[(String, Ty)]) -> PResult<String> {
-        let arrow = self.closure_arrow(params, body)?;
-        if captures.is_empty() {
-            return Ok(arrow);
-        }
-        let names: Vec<String> = captures.iter().map(|(n, _)| ident(n)).collect();
-        let vals: Vec<String> = captures.iter().map(|(n, t)| self.clone_js(t, &ident(n))).collect();
-        Ok(format!("(({}) => {arrow})({})", names.join(", "), vals.join(", ")))
-    }
-
     fn closure_arrow(&mut self, params: &[(String, Ty)], body: &PBlock) -> PResult<String> {
         let ps: Vec<String> = params.iter().map(|(n, t)| if self.ts { format!("{}: {}", ident(n), self.ts_type(t)) } else { ident(n) }).collect();
         let saved = std::mem::take(&mut self.out);
@@ -211,7 +206,7 @@ impl<'m> Js<'m> {
 
     fn static_call(&mut self, owner: &str, name: &str, args: &[PExpr], ty: &Ty) -> PResult<String> {
         let user = self.m.structs.iter().any(|s| s.name == owner) || self.m.enums.iter().any(|e| e.name == owner) || self.m.traits.iter().any(|t| t.name == owner);
-        let a = self.args(args)?;
+        let a = if user { self.args_for(self.find_fn(Some(owner), name), args)? } else { self.args(args)? };
         if user {
             return Ok(format!("{}.{}({a})", ident(owner), self.method_name(name)));
         }

@@ -18,6 +18,7 @@
 //! * interpolation specifier splitting (`"${x:.2}"`)
 //! * Rust `{}` template -> Windjammer interpolation conversion
 
+pub mod option_fix;
 pub mod surface_fix;
 pub mod template;
 

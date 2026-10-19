@@ -156,7 +156,35 @@ fn lock(it: &mut Interpreter, v: &Value, exclusive: bool) -> R {
     let (_, slot, st) = cell_parts(v)?;
     it.preempt()?;
     it.block_on(Wait::Lock(st.clone(), exclusive))?;
-    Ok(Value::ok(guard(slot, st.acquire(exclusive))))
+    let tok = st.acquire(exclusive);
+    tok.poisons.set(exclusive);
+    let g = guard(slot, tok);
+    // a lock whose holder panicked still hands out the guard, wrapped in `PoisonError`
+    Ok(if st.poisoned.get() { Value::err(poison_error(g)) } else { Value::ok(g) })
+}
+
+/// `PoisonError<Guard>`: Debug `PoisonError { .. }`; `into_inner`/`get_ref`/`get_mut` give the guard.
+struct PoisonErrorObj(Value);
+impl crate::interpreter::native::Native for PoisonErrorObj {
+    fn type_name(&self) -> &'static str {
+        "PoisonError"
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn for_each_value(&self, f: &mut dyn FnMut(&Value)) {
+        f(&self.0)
+    }
+    fn debug(&self) -> String {
+        "PoisonError { .. }".into()
+    }
+    fn display(&self) -> Option<String> {
+        Some("poisoned lock: another task failed inside".into())
+    }
+}
+
+fn poison_error(inner: Value) -> Value {
+    Value::Native(Rc::new(PoisonErrorObj(inner)))
 }
 
 fn register_cells(r: &mut Registry) {
@@ -181,7 +209,14 @@ fn register_cells(r: &mut Registry) {
     r.pure(Kind::Cell, "try_lock", |_, v, _| {
         let (_, slot, st) = cell_parts(v)?;
         Ok(if st.can_acquire(true) {
-            Value::ok(guard(slot, st.acquire(true)))
+            let tok = st.acquire(true);
+            tok.poisons.set(true);
+            let g = guard(slot, tok);
+            if st.poisoned.get() {
+                Value::err(Value::enum_val("TryLockError", "Poisoned", 1, Payload::Tuple(vec![poison_error(g)])))
+            } else {
+                Value::ok(g)
+            }
         } else {
             Value::err(Value::enum_val("TryLockError", "WouldBlock", 0, Payload::Unit))
         })
@@ -212,10 +247,24 @@ fn register_cells(r: &mut Registry) {
         Ok(old)
     });
     r.pure(Kind::Cell, "into_inner", |_, v, _| {
-        let (k, slot) = cell_slot(v)?;
+        let (k, slot, st) = cell_parts(v)?;
         let inner = slot.borrow().clone();
-        Ok(if matches!(k, CellKind::Mutex | CellKind::RwLock) { Value::ok(inner) } else { inner })
+        Ok(match k {
+            CellKind::Mutex | CellKind::RwLock if st.poisoned.get() => Value::err(poison_error(inner)),
+            CellKind::Mutex | CellKind::RwLock => Value::ok(inner),
+            _ => inner,
+        })
     });
+    r.pure(Kind::Cell, "is_poisoned", |_, v, _| Ok(Value::Bool(cell_parts(v)?.2.poisoned.get())));
+    r.pure(Kind::Cell, "clear_poison", |_, v, _| {
+        cell_parts(v)?.2.poisoned.set(false);
+        Ok(Value::Unit)
+    });
+    for n in ["into_inner", "get_ref", "get_mut"] {
+        r.native("PoisonError", n, |_, v, _| {
+            Ok(crate::interpreter::native::downcast::<PoisonErrorObj>(v).map(|p| p.0.clone()).unwrap_or(Value::Unit))
+        });
+    }
     // cloning a cell copies its contents into a new, unshared cell
     r.pure(Kind::Cell, "clone", |it, v, _| {
         let (k, slot) = cell_slot(v)?;

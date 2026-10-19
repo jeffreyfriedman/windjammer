@@ -60,6 +60,8 @@ pub fn cast(from: &Ty, to: &Ty, e: &str) -> String {
         (Ty::Bool, Ty::Int(b)) => format!("wjB2I[{}]({e})", int_name(*b)),
         (Ty::Char, Ty::Int(b)) => format!("{}({e})", int_name(*b)),
         (Ty::Int(_), Ty::Char) => format!("Char({e})"),
+        // A generic value converted to a concrete type (`T: Into<string>`): checked assertion.
+        (Ty::Param(_), Ty::Str) => format!("any({e}).(string)"),
         _ => e.to_string(),
     }
 }

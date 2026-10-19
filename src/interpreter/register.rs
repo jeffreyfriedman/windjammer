@@ -30,7 +30,7 @@ fn has_copy_derive(decl: &crate::parser::StructDecl<'static>) -> bool {
 }
 
 impl Interpreter {
-    fn func_from_decl(
+    pub(crate) fn func_from_decl(
         &self,
         decl: &'static FunctionDecl<'static>,
         module: usize,
@@ -174,9 +174,16 @@ impl Interpreter {
                     self.type_aliases.insert(name.clone(), target.clone());
                 }
                 Item::Mod { name, items, .. } => {
-                    let file = self.modules[module].file.clone();
-                    let child = self.new_module(name, file, Some(module));
-                    self.modules[module].children.insert(name.clone(), child);
+                    // `mod x` (file module) reuses the module the loader created for `x.wj`;
+                    // `mod x { ... }` is an inline module of this file.
+                    let child = match self.modules[module].children.get(name) {
+                        Some(&c) => c,
+                        None if items.is_empty() => match self.load_child_module(module, name)? {
+                            Some(c) => c,
+                            None => self.inline_module(module, name),
+                        },
+                        None => self.inline_module(module, name),
+                    };
                     self.register_items(child, items)?;
                 }
                 Item::Use { path, alias, .. } => {
@@ -197,6 +204,13 @@ impl Interpreter {
             }
         }
         Ok(())
+    }
+
+    fn inline_module(&mut self, parent: usize, name: &str) -> usize {
+        let file = self.modules[parent].file.clone();
+        let child = self.new_module(name, file, Some(parent));
+        self.modules[parent].children.insert(name.to_string(), child);
+        child
     }
 
     pub(crate) fn new_module(
