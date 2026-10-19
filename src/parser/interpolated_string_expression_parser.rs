@@ -54,7 +54,8 @@ impl Parser {
                         line: outer_line,
                         column: end_column,
                     });
-                    let expr_parser = Box::leak(Box::new(Parser::new(expr_tokens)));
+                    // Allocate into this parser's arena bundle so the nodes are sealed into the same Program.
+                    let mut expr_parser = Parser::new_sharing_arenas(expr_tokens, self);
                     // ADR-0018: named arguments inside `${..}` resolve like anywhere else.
                     expr_parser.call_table = self.call_table.clone();
                     let expr = expr_parser.parse_expression().map_err(|e| {

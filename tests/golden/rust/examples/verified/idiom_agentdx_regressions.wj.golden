@@ -66,7 +66,7 @@ fn main() {
     println!("{}", first);
     let mut m: HashMap<String, i64> = HashMap::new();
     m.insert(String::from("a"), 1_i64);
-    let n = m.get("a").copied().copied().unwrap_or(0_i64);
+    let n = m.get("a").copied().unwrap_or(0_i64);
     println!("{}", n);
     println!("{}", pick(true));
     let mut out: Vec<i64> = Vec::new();

@@ -7,9 +7,6 @@
 "src/ejector.rs" = "only the legacy `windjammer eject` reaches it; wt/eject restores `wj eject`"
 "src/error_handling.rs" = "legacy `windjammer lint` path (WP13); `wj lint` uses src/cli/lint.rs"
 "src/ir/capability_lock.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
-"src/ir/cost_model.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
-"src/ir/numeric_solver.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
-"src/ir/numeric_types.rs" = "unreferenced from every driver: wire it, declare it in MODULE_MAP [library_api], or delete it"
 "src/main.rs" = "legacy `windjammer` binary (WP13: single driver; retire after `wj` covers eject)"
 
 [dead_pub_fns]
@@ -64,7 +61,6 @@
 "src/ir/safety_type.rs" = 4
 "src/ir/shadow.rs" = 2
 "src/ir/signature_bridge.rs" = 1
-"src/ir/solver.rs" = 1
 "src/ir/taint.rs" = 1
 "src/ir/target_encodings.rs" = 4
 "src/metadata/crate_metadata.rs" = 1

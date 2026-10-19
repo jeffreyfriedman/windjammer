@@ -15,7 +15,6 @@ examples/verified/enum_methods.wj | error[E0308]: arguments to this enum variant
 examples/verified/error_map_err_ok.wj | error[E0308]: mismatched types
 examples/verified/generics_function.wj | error[E0599]: no method named `clone` found for type parameter `T` in the current scope
 examples/verified/hashset_basics.wj | error[E0308]: mismatched types
-examples/verified/idiom_agentdx_regressions.wj | error[E0599]: no method named `copied` found for enum `Option<i64>` in the current scope
 examples/verified/iter_any_all_count.wj | error[E0308]: mismatched types
 examples/verified/iter_collect_hashmap.wj | error[E0277]: a value of type `HashMap<String, i64>` cannot be built from an iterator over elements of type `(String, usize)`
 examples/verified/iter_flat_map_chain.wj | error[E0271]: type mismatch resolving `<[i64; 2] as IntoIterator>::Item == &i64`
@@ -24,7 +23,6 @@ examples/verified/iter_min_max_by.wj | error[E0061]: this method takes 1 argumen
 examples/verified/iter_partition_unzip.wj | error[E0277]: the trait bound `Vec<i64>: Extend<i32>` is not satisfied
 examples/verified/iter_take_skip_rev.wj | error[E0308]: mismatched types
 examples/verified/loops_labeled_nested.wj | error[E0308]: arguments to this function are incorrect
-examples/verified/module_inline.wj | error: missing boundary signature for `geometry::circle::half`
 examples/verified/numbers_min_max_abs.wj | error[E0308]: mismatched types
 examples/verified/operators_overload.wj | error[E0046]: not all trait items implemented, missing: `Output`
 examples/verified/option_basics.wj | error[E0308]: mismatched types
@@ -49,8 +47,6 @@ examples/verified/testing_struct_methods_test.wj | error[E0433]: cannot find mod
 examples/verified/trait_dyn_dispatch.wj | error[E0308]: mismatched types
 examples/verified/trait_generic_bound.wj | error[E0507]: cannot move out of `*x` which is behind a shared reference
 examples/verified/vec_2d_grid.wj | error[E0277]: the trait bound `Vec<i32>: Copy` is not satisfied
-examples/verified/vec_contains_position.wj | error[E0308]: mismatched types
-examples/verified/vec_insert_remove.wj | error[E0308]: mismatched types
 examples/verified/vec_of_structs.wj | error[E0599]: no method named `max_by_key` found for struct `Vec<Person>` in the current scope
 tests/asi_paren_expression_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope
 tests/basic_test.wj | error[E0433]: cannot find module or crate `windjammer_runtime` in this scope

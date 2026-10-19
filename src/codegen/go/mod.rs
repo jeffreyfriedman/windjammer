@@ -39,6 +39,8 @@ impl CodegenBackend for GoBackend {
     }
 
     fn generate(&self, program: &Program, _config: &CodegenConfig) -> Result<CodegenOutput> {
+        let merged = portable::prelude::with_arena_prelude(program);
+        let program = merged.as_ref().unwrap_or(program);
         let ctx = crate::ir::analyze_and_lower(program)?;
         let mut m = portable::lower::lower_program(program, Some(&ctx.registry)).map_err(|e| anyhow!("{e}"))?;
         flatten::flatten_module(&mut m);
@@ -68,7 +70,7 @@ mod tests {
 
     #[test]
     fn emits_runtime_and_go_mod() {
-        let files = GoBackend::new().generate_additional_files(&Program { items: vec![] }, &CodegenConfig::default());
+        let files = GoBackend::new().generate_additional_files(&Program::new(vec![]), &CodegenConfig::default());
         assert!(files.iter().any(|(n, _)| n == "go.mod"));
         assert!(files.iter().any(|(n, c)| n == "wj_core.go" && c.contains("package main")));
     }

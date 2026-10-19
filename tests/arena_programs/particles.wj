@@ -1,0 +1,39 @@
+// Per-frame particle pool: alloc, integrate through handles, reset; stale handles are rejected.
+// expect: frame 0: n=4 sum=64
+// expect: frame 1: n=4 sum=68
+// expect: frame 2: n=4 sum=72
+// expect: stale handle rejected
+// expect: generation 4
+use std::arena::Arena
+
+struct Particle {
+    x: int,
+    v: int,
+}
+
+fn main() {
+    let mut pool = Arena::new()
+    for frame in 0..3 {
+        pool.reset()
+        let mut handles = Vec::new()
+        for i in 0..4 {
+            handles.push(pool.alloc(Particle { x: i * 10, v: frame + 1 }))
+        }
+        for h in handles {
+            let p = pool.get_mut(h)
+            p.x = p.x + p.v
+        }
+        let mut sum = 0
+        for p in pool.iter() {
+            sum = sum + p.x
+        }
+        println("frame ${frame}: n=${pool.len()} sum=${sum}")
+    }
+    let keep = pool.alloc(Particle { x: 5, v: 0 })
+    pool.reset()
+    match pool.try_get(keep) {
+        Some(p) => println("alive ${p.x}"),
+        None => println("stale handle rejected"),
+    }
+    println("generation ${pool.generation()}")
+}

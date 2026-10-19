@@ -1,0 +1,10 @@
+# Compiler-inserted narrowing casts in goldens of programs without a user `as`. May only fall.
+14
+# examples/verified/algo_binary_tree.wj 1
+# examples/verified/closures_counter.wj 1
+# examples/verified/vec_2d_grid.wj 1
+# tests/bug_function_arg_deref.wj 1
+# tests/for_loop_patterns.wj 2
+# tests/pattern_matching_consistency.wj 4
+# tests/tuple_enum_variants.wj 3
+# tests/vector_indexing_ownership.wj 1

@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+mod arena;
 pub(crate) mod channel;
 mod enumerable;
 mod iter;
@@ -154,6 +155,7 @@ impl Registry {
         std_fns::register(&mut r);
         test_assert::register(&mut r);
         shared::register(&mut r);
+        arena::register(&mut r);
         std_sys::register(&mut r);
         std_data::register(&mut r);
         std_proc::register(&mut r);

@@ -247,6 +247,16 @@ impl<'e> Lowerer<'e> {
         }
         let declared = ty.map(|t| from_ast(t, &self.generics, &self.env.aliases)).map(|t| self.freshen(&t));
         let mut init = self.expr(value, declared.as_ref())?;
+        // `let p = arena.get_mut(h)`: `p` aliases the arena slot (the prelude's `get_mut` lowers to a place).
+        if let (Expression::MethodCall { method, .. }, Pattern::Identifier(name) | Pattern::MutBinding(name)) = (value, pattern) {
+            if method == "get_mut" && init.is_place() && super::arena::is_slot_place(&init) {
+                let ty = init.ty.clone();
+                let out = self.declare(name, ty.clone(), true);
+                let line = init.line;
+                let init = PExpr::new(ty.clone(), PK::BorrowMut(init)).at(line);
+                return Ok(vec![PStmt::Let { name: out, ty, mutable: false, init: Some(init) }]);
+            }
+        }
         if let Some(d) = &declared {
             self.constrain(d, &init.ty);
         }

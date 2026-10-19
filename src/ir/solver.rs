@@ -6,7 +6,6 @@
 //! Key improvements in Phase 1B:
 //!   - IsNumeric/IsInteger/IsFloat **infer** (not just validate) numeric class
 //!   - SharesRegion performs real region unification via a region union-find
-//!   - NumericSolver results can be imported via `import_numeric_results`
 
 use crate::ir::constraints::{Constraint, ConstraintSet, ConstraintVar};
 #[cfg(test)]
@@ -466,23 +465,6 @@ impl Solver {
             }
         }
     }
-
-    /// Import results from the NumericSolver, mapping ConstraintVars to BaseTypes.
-    ///
-    /// This bridges the specialized numeric inference engine into the unified solver.
-    /// Call after `solve()` on the numeric solver, before `solve()` on this solver.
-    pub fn import_numeric_type(
-        &mut self,
-        var: ConstraintVar,
-        numeric_type: &crate::ir::numeric_types::NumericType,
-    ) {
-        if let Some(base) = numeric_type_to_base(numeric_type) {
-            let root = self.uf.find(var.0);
-            if self.types[root as usize].is_none() {
-                self.types[root as usize] = Some(base);
-            }
-        }
-    }
 }
 
 /// Position in the ownership lattice `&` < `&mut` < owned (OWN-LATTICE). Regions do not matter.
@@ -503,28 +485,6 @@ pub fn join_ownership(existing: OwnedType, new: OwnedType) -> OwnedType {
         new
     } else {
         existing
-    }
-}
-
-/// Convert a NumericType to a BaseType.
-fn numeric_type_to_base(nt: &crate::ir::numeric_types::NumericType) -> Option<BaseType> {
-    use crate::ir::numeric_types::NumericType;
-    match nt {
-        NumericType::I8 => Some(BaseType::I8),
-        NumericType::I16 => Some(BaseType::I16),
-        NumericType::I32 => Some(BaseType::I32),
-        NumericType::I64 => Some(BaseType::I64),
-        NumericType::I128 => Some(BaseType::I128),
-        NumericType::U8 => Some(BaseType::U8),
-        NumericType::U16 => Some(BaseType::U16),
-        NumericType::U32 => Some(BaseType::U32),
-        NumericType::U64 => Some(BaseType::U64),
-        NumericType::U128 => Some(BaseType::U128),
-        NumericType::Usize => Some(BaseType::U64),
-        NumericType::Isize => Some(BaseType::I64),
-        NumericType::F32 => Some(BaseType::F32),
-        NumericType::F64 => Some(BaseType::F64),
-        NumericType::Unknown => None,
     }
 }
 
@@ -987,23 +947,5 @@ mod tests {
             matches!(result.ownership[0], Some(OwnedType::MutRef(_))),
             "should be upgraded to MutRef"
         );
-    }
-
-    // --- Phase 1B: Numeric bridge integration test ---
-
-    #[test]
-    fn test_import_numeric_type() {
-        let mut cs = ConstraintSet::new();
-        let a = cs.fresh_var();
-        let b = cs.fresh_var();
-
-        cs.add(Constraint::TypeEquals(a, b));
-
-        let mut solver = Solver::new(&cs);
-        solver.import_numeric_type(a, &crate::ir::numeric_types::NumericType::U32);
-        let result = solver.solve(&cs);
-
-        assert!(result.diagnostics.is_empty());
-        assert_eq!(result.types[0], Some(BaseType::U32));
     }
 }

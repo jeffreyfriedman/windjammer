@@ -114,7 +114,7 @@ impl Interpreter {
             eprintln!("[wj hot] {}: parse error; keeping the running code", file.display());
             return;
         };
-        let program: &'static crate::parser::Program<'static> = Box::leak(Box::new(program));
+        let program = self.retain_program(program);
         let new_shape = shape(&program.items);
         let restart = self.hot.as_mut().map(|h| h.shapes.insert(file.clone(), new_shape.clone()) != Some(new_shape)).unwrap_or(false);
         let mut swapped = 0;
