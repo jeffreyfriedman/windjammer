@@ -35,13 +35,15 @@ pub(crate) enum Body {
 
 pub(crate) struct CompiledFn {
     nslots: usize,
-    /// Slots of the parameters, in order.
+    /// Slots of the parameters, in order (always `0..n`: parameters are declared first).
     params: Vec<usize>,
     /// Integer width of each parameter / the return type, when declared (skip `coerce` for exact matches).
     param_int: Vec<Option<IntTy>>,
     /// Parameters whose slot is typed: their argument must be an integer (else the call deopts).
     param_typed: Vec<bool>,
     ret_int: Option<IntTy>,
+    /// Every slot is typed: once the parameters are bound the frame holds only integers (and `Unit`).
+    scalar: bool,
     body: Body,
 }
 
@@ -64,13 +66,14 @@ impl Interpreter {
         for (slot, a) in c.params.iter().zip(args) {
             self.rstack[base + slot] = a;
         }
-        self.run_compiled_at(f, c, base)
+        self.run_compiled_at(f, c, base, false)
     }
 
-    /// Run `c` on the frame at `base`, whose parameter slots already hold the arguments.
-    pub(crate) fn run_compiled_at(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize) -> R {
+    /// Run `c` on the frame at `base`, whose parameter slots already hold the arguments (`bound`:
+    /// already of the declared widths, see `expr::call`).
+    pub(crate) fn run_compiled_at(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, bound: bool) -> R {
         let own = self.enter_compiled(f, base)?;
-        let r = match self.bind_params(f, c, base) {
+        let r = match if bound { Ok(true) } else { self.bind_params(f, c, base) } {
             Ok(true) => match &c.body {
                 Body::V(code) => {
                     let r = code(self, base);
@@ -85,16 +88,20 @@ impl Interpreter {
                 let args = self.deopt_args(c, base, own);
                 return self.call_func_walk(f, args, None, &[], None);
             }
-            Err(e) => self.finish_value(f, c, Err(e)),
+            Err(e) => {
+                let r = self.finish_value(f, c, Err(e));
+                self.leave_compiled(base, own, false);
+                return r;
+            }
         };
-        self.leave_compiled(base, own);
+        self.leave_compiled(base, own, c.scalar);
         r
     }
 
     /// `run_compiled_at` for a function declared to return the `small` width `t`: the result unboxed.
-    pub(crate) fn run_compiled_int(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, t: IntTy) -> R<i64> {
+    pub(crate) fn run_compiled_int(&mut self, f: &Rc<FuncDef>, c: &CompiledFn, base: usize, t: IntTy, bound: bool) -> R<i64> {
         let own = self.enter_compiled(f, base)?;
-        let r = match self.bind_params(f, c, base) {
+        let r = match if bound { Ok(true) } else { self.bind_params(f, c, base) } {
             Ok(true) => match &c.body {
                 Body::I(code, u, _) => {
                     let r = code(self, base);
@@ -109,9 +116,13 @@ impl Interpreter {
                 let args = self.deopt_args(c, base, own);
                 return self.call_func_walk(f, args, None, &[], None).and_then(|v| typed::unbox(v, t));
             }
-            Err(e) => self.finish_value(f, c, Err(e)).and_then(|v| typed::unbox(v, t)),
+            Err(e) => {
+                let r = self.finish_value(f, c, Err(e)).and_then(|v| typed::unbox(v, t));
+                self.leave_compiled(base, own, false);
+                return r;
+            }
         };
-        self.leave_compiled(base, own);
+        self.leave_compiled(base, own, c.scalar);
         r
     }
 
@@ -136,9 +147,16 @@ impl Interpreter {
         Ok(own)
     }
 
+    /// `scalar`: the frame holds no value with a destructor (popped without drop glue).
     #[inline(always)]
-    fn leave_compiled(&mut self, base: usize, own: bool) {
-        self.rstack.truncate(base);
+    fn leave_compiled(&mut self, base: usize, own: bool, scalar: bool) {
+        if scalar {
+            while self.rstack.len() > base {
+                std::mem::forget(self.rstack.pop());
+            }
+        } else {
+            self.rstack.truncate(base);
+        }
         self.depth -= 1;
         if own {
             self.scope = self.frames.pop().expect("frame stack");
@@ -150,7 +168,7 @@ impl Interpreter {
     #[cold]
     fn deopt_args(&mut self, c: &CompiledFn, base: usize, own: bool) -> Vec<Value> {
         let args = c.params.iter().map(|s| std::mem::replace(&mut self.rstack[base + s], Value::Unit)).collect();
-        self.leave_compiled(base, own);
+        self.leave_compiled(base, own, false);
         args
     }
 
