@@ -21,4 +21,4 @@ fn main() {
 `c.clone()`). A parameter that is moved into a constructor/container must stay owned. The same shape appears in a server
 entry point (`fn serve(port: int, app: App)` that wraps `app` in `Arc<Mutex<..>>`).
 
-Status: handed to the convergence stream. Ratchet: `ecosystem_findings_handoff_test::param_moved_into_mutex_new_stays_owned`, listed in `.config/known-test-failures.txt`. Blocks the ecosystem `wj-taskflow` app (`fn serve(port: int, app: Taskflow)` emitted as `app: &Taskflow`).
+Status: handed to the convergence stream. The repro above only fails when the struct is not `Copy` (an all-`int` struct is passed by value); the ratchet adds a `label: string` field. Ratchet: `ecosystem_findings_handoff_test::param_moved_into_mutex_new_stays_owned`, listed in `.config/known-test-failures.txt`. Blocks the ecosystem `wj-taskflow` app (`fn serve(port: int, app: Taskflow)` emitted as `app: &Taskflow`).
