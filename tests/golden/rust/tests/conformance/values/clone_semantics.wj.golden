@@ -21,7 +21,7 @@ fn test_clone_vec() {
     let mut cloned = original.clone();
     println!("[clone_vec] original len={}", original.len());
     println!("[clone_vec] cloned len={}", cloned.len());
-    cloned.push(4);
+    cloned.push(4_i64);
     println!("[clone_vec] after push to clone: original len={}, cloned len={}", original.len(), cloned.len());
 }
 

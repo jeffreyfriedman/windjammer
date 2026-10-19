@@ -34,6 +34,7 @@ owner edits its status and adds the date and any amendments; until then its reco
 | [0022](0022-interpret-by-default.md) | `wj run` interprets by default; compiled is the release path | Accepted |
 | [0023](0023-interpreter-rust-crate-bridge.md) | Interpreter host bridge for Rust code and Rust-crate dependencies | Proposed |
 | [0024](0024-hot-reload.md) | `wj run --watch` and hot reload of function bodies | Proposed |
+| [0025](0025-arenas.md) | Arenas as a user capability | Proposed |
 <!-- wj:end -->
 
 ## Template

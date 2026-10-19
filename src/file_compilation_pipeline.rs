@@ -305,7 +305,7 @@ fn compile_file_impl(
     // ARENA FIX: ALWAYS store the parser to keep arena alive
     // The shared analyzer accumulates AST references from all files,
     // so we must keep all parsers alive for the entire compilation
-    module_compiler._parsers.push(wj_parser);
+    module_compiler._arena_owners.push(program.owner().clone());
     // Note: wj_parser has been moved and can't be used after this
 
     // Compile dependencies first (both use statements and mod declarations)
@@ -418,12 +418,10 @@ fn compile_file_impl(
 
     // Register any newly discovered traits
     for trait_decl in module_compiler.trait_registry.values() {
-        let dummy_program = parser::Program {
-            items: vec![parser::Item::Trait {
-                decl: trait_decl.clone(),
-                location: parser::SourceLocation::default(),
-            }],
-        };
+        let dummy_program = parser::Program::new(vec![parser::Item::Trait {
+            decl: trait_decl.clone(),
+            location: parser::SourceLocation::default(),
+        }]);
         module_compiler
             .analyzer
             .register_traits_from_program(&dummy_program)

@@ -88,6 +88,8 @@ impl Interpreter {
         module: usize,
         program: &'static Program<'static>,
     ) -> Result<(), RuntimeError> {
+        // `std::arena` (ADR-0025): the compiler's feature gate and escape check apply here too.
+        crate::analyzer::arena_escape::gate(program).map_err(|e| RuntimeError::new(super::error::ErrorKind::Semantic, e))?;
         self.register_items(module, &program.items)?;
         self.finish_registration()?;
         Ok(())

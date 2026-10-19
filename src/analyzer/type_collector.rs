@@ -199,9 +199,7 @@ pub fn collect_referenced_type_paths<'ast>(program: &Program<'ast>) -> HashSet<S
             }
             Item::TypeAlias { target, .. } => collect_type_references(target, &mut out),
             Item::Mod { items, .. } => {
-                let nested = Program {
-                    items: items.clone(),
-                };
+                let nested = Program::new(items.clone());
                 out.extend(collect_referenced_type_paths(&nested));
             }
             Item::Use { .. } | Item::BoundAlias { .. } => {}

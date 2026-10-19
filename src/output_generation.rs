@@ -135,7 +135,8 @@ pub(crate) fn generate_main_rust_code<'ast>(
         }
         generator.set_output_file(&output_file_path);
 
-        let result = crate::optimizer::run_default(&generator.generate_program(program, analyzed));
+        let auto_arena = generator.config.auto_arena;
+        let result = crate::optimizer::run_with_auto_arena(auto_arena, &generator.generate_program(program, analyzed));
         let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
 
         generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);
@@ -246,7 +247,8 @@ pub(crate) fn generate_main_rust_code<'ast>(
     }
     generator.set_output_file(&output_file_path);
 
-    let result = crate::optimizer::run_default(&generator.generate_program(program, analyzed));
+    let auto_arena = generator.config.auto_arena;
+    let result = crate::optimizer::run_with_auto_arena(auto_arena, &generator.generate_program(program, analyzed));
     let result = rewrite_bin_crate_imports(result, source_root, is_crate_root_main);
 
     generator.apply_self_receiver_upgrades(&mut module_compiler.global_signatures);

@@ -1,0 +1,16 @@
+[package]
+name = "wj-arena-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone (not a workspace member): `cargo run --release` here. See README.md.
+[workspace]
+
+[dependencies]
+windjammer-runtime = { path = "../../crates/windjammer-runtime", default-features = false }
+bumpalo = { version = "3.19", features = ["collections"] }
+
+[profile.release]
+opt-level = 3
+codegen-units = 1

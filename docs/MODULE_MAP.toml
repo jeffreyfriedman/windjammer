@@ -413,7 +413,7 @@ known_violations = []
 [modules.stdlib_scanner]
 layer = "resolve"
 owner_stage = "stdlib discovery (stage 2)"
-module_md = ""
+module_md = "src/stdlib_scanner/MODULE.md"
 allowed_imports = ["compiler_config", "config", "debug_env", "decorator_registry", "embedded_assets", "error", "error_codes", "errors", "ffi", "fuzzy_matcher", "lexer", "parser", "parser_impl", "project_paths", "source_map", "test_module_gate", "test_utils", "stdlib_surface"]
 known_violations = ["analyzer", "cargo_toml", "codegen"]
 

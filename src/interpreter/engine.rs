@@ -108,6 +108,8 @@ impl Scope {
 }
 
 pub struct Interpreter {
+    // SAFETY note for `retained`: it is declared last, so it is dropped after every field that holds `&'static` AST
+    // references (fields drop in declaration order); see `retain_program`.
     pub(crate) modules: Vec<Module>,
     pub(crate) structs: HashMap<String, StructDef>,
     pub(crate) enums: HashMap<String, EnumDef>,
@@ -179,6 +181,10 @@ pub struct Interpreter {
     pub(crate) host: Option<std::rc::Rc<super::host_bridge::HostLib>>,
     /// `wj run --hot`: pending file edits applied at function entry (`hot.rs`).
     pub(crate) hot: Option<Box<super::hot::HotState>>,
+    /// Programs loaded into this interpreter (files, REPL inputs, hot-reload revisions). Every `&'static` AST node the
+    /// definitions above point at lives in one of these (or in the arenas its `Program` owns), so they are kept for the
+    /// interpreter's lifetime and freed when it is dropped, instead of being leaked for the life of the process.
+    pub(crate) retained: Vec<Box<Program<'static>>>,
 }
 
 impl Default for Interpreter {
@@ -232,6 +238,7 @@ impl Interpreter {
             closure_counter: 0,
             mutating_analysis: HashSet::new(),
             type_hint: None,
+            retained: Vec::new(),
             expected: None,
             missing_modules: HashSet::new(),
             project_loading: false,
@@ -318,7 +325,7 @@ impl Interpreter {
 
     /// Run a program, keeping the structured error (kind, span, backtrace).
     pub fn run_checked(&mut self, program: &Program<'static>) -> Result<Value, RuntimeError> {
-        let prog: &'static Program<'static> = Box::leak(Box::new(program.clone()));
+        let prog = self.retain_program(program.clone());
         self.load_program(0, prog)?;
         self.call_main()
     }
@@ -392,3 +399,18 @@ impl Module {
 
 #[allow(dead_code)]
 pub(crate) type SharedCell<T> = Rc<RefCell<T>>;
+
+impl Interpreter {
+    /// Keep `program` alive as long as this interpreter and hand out the `&'static` view the evaluator uses.
+    ///
+    /// SAFETY: the box is never moved or dropped before the interpreter (`retained` is the last field, programs are
+    /// only pushed), so the reference is valid for every use inside the interpreter. The `'static` is a promise
+    /// scoped to the interpreter: a `Value` holding a function must not be called after the interpreter is dropped
+    /// (it cannot be: calling needs `&mut Interpreter`).
+    pub(crate) fn retain_program(&mut self, program: Program<'static>) -> &'static Program<'static> {
+        let boxed = Box::new(program);
+        let ptr: *const Program<'static> = &*boxed;
+        self.retained.push(boxed);
+        unsafe { &*ptr }
+    }
+}

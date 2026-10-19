@@ -332,7 +332,7 @@ fn build_project_single_crate(
             }
             // ARENA FIX: Keep parser alive if we stored trait definitions
             if has_traits {
-                module_compiler._trait_parsers.push(parser);
+                module_compiler._arena_owners.push(program.owner().clone());
             }
         }
     }

@@ -1,0 +1,138 @@
+// Portable `std::arena` for the Go and JavaScript/TypeScript backends (ADR-0025).
+//
+// The same API and the same panics as `windjammer_runtime::arena` in a debug build, written in Windjammer so both
+// emitters lower it like user code. Memory comes from the target's garbage collector: `reset` drops the
+// references and bumps the generation, so a stale handle is rejected exactly like on the Rust target.
+
+static ARENA_IDS: Vec<int> = Vec::new()
+
+struct Handle<T> {
+    index: int,
+    generation: int,
+    arena_id: int,
+}
+
+struct Arena<T> {
+    items: Vec<T>,
+    generation: int,
+    id: int,
+}
+
+impl<T> Arena<T> {
+    fn new() -> Arena<T> {
+        ARENA_IDS.push(0)
+        Arena { items: Vec::new(), generation: 0, id: ARENA_IDS.len() }
+    }
+
+    fn with_capacity(capacity: int) -> Arena<T> {
+        ARENA_IDS.push(0)
+        Arena { items: Vec::new(), generation: 0, id: ARENA_IDS.len() }
+    }
+
+    fn alloc(self, value: T) -> Handle<T> {
+        self.items.push(value)
+        Handle { index: self.items.len() - 1, generation: self.generation, arena_id: self.id }
+    }
+
+    fn check(self, h: Handle<T>) {
+        if h.arena_id != self.id {
+            panic("arena handle used with a different arena")
+        }
+        if h.generation != self.generation {
+            panic("stale arena handle: allocated before reset (generation ${h.generation}, arena is at generation ${self.generation})")
+        }
+    }
+
+    fn checked(self, h: Handle<T>) -> int {
+        self.check(h)
+        h.index
+    }
+
+    fn get(self, h: Handle<T>) -> T {
+        self.check(h)
+        self.items[h.index]
+    }
+
+    // `get_mut` is lowered by the compiler to the place `items[checked(h)]` (lower/arena.rs); this body is only
+    // used to give the method a signature.
+    fn get_mut(self, h: Handle<T>) -> T {
+        self.items[self.checked(h)]
+    }
+
+    fn try_get(self, h: Handle<T>) -> Option<T> {
+        if h.arena_id != self.id || h.generation != self.generation {
+            return None
+        }
+        Some(self.items[h.index])
+    }
+
+    fn reset(self) {
+        self.items.clear()
+        self.generation = self.generation + 1
+    }
+
+    fn len(self) -> int {
+        self.items.len()
+    }
+
+    fn is_empty(self) -> bool {
+        self.items.len() == 0
+    }
+
+    fn generation(self) -> int {
+        self.generation
+    }
+
+    fn iter(self) -> Vec<T> {
+        self.items
+    }
+
+    fn iter_mut(self) -> Vec<T> {
+        self.items
+    }
+}
+
+impl<T> Handle<T> {
+    fn index(self) -> int {
+        self.index
+    }
+}
+
+// `Scratch` on a garbage-collected target: strings and lists are ordinary heap values, `reset` only counts.
+struct Scratch {
+    generation: int,
+}
+
+impl Scratch {
+    fn new() -> Scratch {
+        Scratch { generation: 0 }
+    }
+
+    fn with_capacity(bytes: int) -> Scratch {
+        Scratch { generation: 0 }
+    }
+
+    fn str(self, s: string) -> string {
+        s
+    }
+
+    fn new_string(self) -> string {
+        ""
+    }
+
+    fn new_list<T>(self) -> Vec<T> {
+        Vec::new()
+    }
+
+    fn alloc<T>(self, value: T) -> T {
+        value
+    }
+
+    fn reset(self) {
+        self.generation = self.generation + 1
+    }
+
+    fn generation(self) -> int {
+        self.generation
+    }
+}

@@ -18,6 +18,7 @@ table is `src/codegen/portable/stdlib.rs`). Calls into any other module fail at 
 |------|---------|----------------|
 | **portable** (same API, shims + conformance programs) | `math` (sqrt, pow, floor/ceil/round/trunc, trig, exp/ln/log, hypot, min/max/clamp, abs, is_nan...), `strings` (case, trim, split/join, contains/replace, len/char_count, repeat, substring, byte_at), `fs` (read_to_string, write, append, exists, remove_file, create_dir_all, is_file, is_dir), `time` (now_millis, now_unix, timestamp, sleep_millis) | WORKS (programs 110-113) |
 | **built into the language** (no `use` needed or `use std::collections::...`) | `collections` (`HashMap`, `HashSet`, `Vec`, `Option`, `Result`, iterators, string methods) | WORKS for integer/string/char/bool map keys |
+| **unstable, all targets** (`--features unstable_arenas`, ADR-0025) | `arena` (`Arena<T>`, `Handle<T>`, `Scratch`) | WORKS (Windjammer-source prelude; same panics as Rust debug builds) |
 | **partial shim** | `json` (`std/runtime/{go,js}/wj_json.*` exist; not wired through the portable lowering), `subprocess` (shims exist; not wired) | ABSENT from compiled output |
 | **Rust-only** | `http`, `net`, `db`, `crypto`, `jwt`, `compress`, `csv`, `yaml`, `regex`, `url`, `uuid`, `mime`, `random`, `log`, `cli`, `config`, `env`, `process`, `sync`, `async`, `testing`, `test`, `storage`, `dialog`, `compute`, `path` | not available; use the Rust target |
 
