@@ -175,15 +175,6 @@ pub(crate) fn class_of(v: &Value) -> Class {
 
 /// Test-only mutants (debug builds, `WJ_JIT_MUTANT=<name>`): a check of the machine code is left
 /// out so the differential tests can show they would catch its absence. Always off in release.
-pub(crate) fn mutant(name: &str) -> bool {
-    #[cfg(debug_assertions)]
-    {
-        static M: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
-        M.get_or_init(|| std::env::var("WJ_JIT_MUTANT").ok()).as_deref() == Some(name)
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        let _ = name;
-        false
-    }
+pub(crate) fn mutant(it: &crate::interpreter::engine::Interpreter, name: &str) -> bool {
+    cfg!(debug_assertions) && it.jit_mutant.as_deref() == Some(name)
 }

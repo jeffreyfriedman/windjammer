@@ -153,7 +153,7 @@ impl Lo<'_, '_> {
     fn flt(&mut self, op: BinaryOp, x: V, y: V, t: FloatTy) -> Option<Val> {
         let cc = match op {
             BinaryOp::Eq => Some(FloatCC::Equal),
-            BinaryOp::Ne if mutant("nan") => Some(FloatCC::OrderedNotEqual),
+            BinaryOp::Ne if mutant(self.it, "nan") => Some(FloatCC::OrderedNotEqual),
             BinaryOp::Ne => Some(FloatCC::NotEqual),
             BinaryOp::Lt => Some(FloatCC::LessThan),
             BinaryOp::Le => Some(FloatCC::LessThanOrEqual),
@@ -198,7 +198,7 @@ impl Lo<'_, '_> {
 
     /// Leave unless `r` is in the range of `t` (widths narrower than 64 bits).
     fn range(&mut self, r: V, t: IntTy) {
-        if full_i64(t) || unsigned_repr(t) || mutant("range") {
+        if full_i64(t) || unsigned_repr(t) || mutant(self.it, "range") {
             return;
         }
         let lo = self.b.ins().icmp_imm(IntCC::SignedLessThan, r, t.min() as i64);
@@ -222,14 +222,14 @@ impl Lo<'_, '_> {
                         BinaryOp::Sub => self.b.ins().ssub_overflow(x, y),
                         _ => self.b.ins().smul_overflow(x, y),
                     };
-                    if !mutant("overflow") {
+                    if !mutant(self.it, "overflow") {
                         self.bail_if(of);
                     }
                     r
                 }
                 BinaryOp::Div | BinaryOp::Mod => {
                     let z = self.b.ins().icmp_imm(IntCC::Equal, y, 0);
-                    if !mutant("divzero") {
+                    if !mutant(self.it, "divzero") {
                         self.bail_if(z);
                     }
                     let m = self.b.ins().icmp_imm(IntCC::Equal, x, i64::MIN);
@@ -415,7 +415,7 @@ impl Lo<'_, '_> {
         Some(match (old, v.ty) {
             (Ty::Int(ot), Ty::Int(IntTy::Lit)) if ot != IntTy::Lit => {
                 // a literal that does not fit stays a literal: that is the closure engine's
-                if mutant("retag") {
+                if mutant(self.it, "retag") {
                 } else if unsigned_repr(ot) {
                     let neg = self.b.ins().icmp_imm(IntCC::SignedLessThan, v.v, 0);
                     self.bail_if(neg);

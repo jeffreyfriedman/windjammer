@@ -127,14 +127,7 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
         15 => format!("ps[(i + 1) % 4].n = {} % 997", int_expr(r, 1)),
         16 => format!("if {} {{\n{}\n}} else {{\n{}\n}}", cond(r), stmt(r, depth + 1, iters, inner), stmt(r, depth + 1, iters, inner)),
         // planted edges, late enough that the loop is in machine code
-        17 => match r.below(6) {
-            0 => format!("if i == {late} {{ b = b / (i - {late}) }}"),
-            1 => format!("if i == {late} {{ b = v[i + {LEN}] }}"),
-            2 => format!("if i == {late} {{ c = c - 1000000 }}"),
-            3 => format!("if i == {late} {{ a = a * 100000 * 100000 }}"),
-            4 => format!("if i == {late} {{ u = u + 255 }}"),
-            _ => format!("if i == {late} {{ v[{late} % {LEN} + {LEN}] = 1 }}"),
-        },
+        17 => planted(r.below(6), late),
         18 => format!("let t = {}\nb = (b + t) % 1000003", int_expr(r, 2)),
         19 => format!("if {} {{ continue }}", cond_leaf(r)),
         20 => format!("if i == {late} {{ break }}"),
@@ -152,12 +145,30 @@ fn stmt(r: &mut Rng, depth: u32, iters: u64, inner: bool) -> String {
     }
 }
 
+/// An edge reached at a late iteration (`late`), when the loop runs as machine code: a zero divisor,
+/// an index past the end (read and write), `usize` underflow, `i32` and `u8` overflow.
+fn planted(kind: u64, late: u64) -> String {
+    match kind {
+        0 => format!("if i == {late} {{ b = b / (i - {late}) }}"),
+        1 => format!("if i == {late} {{ b = v[i + {LEN}] }}"),
+        2 => format!("if i == {late} {{ c = c - 1000000 }}"),
+        3 => format!("if i == {late} {{ a = a * 100000 * 100000 }}"),
+        4 => format!("if i == {late} {{ u = u + 255 }}"),
+        _ => format!("if i == {late} {{ v[{late} % {LEN} + {LEN}] = 1 }}"),
+    }
+}
+
 fn program(seed: u64) -> String {
     let mut r = Rng(seed.wrapping_mul(0x9e3779b97f4a7c15) | 1);
     let iters = 400 + r.below(1500);
     let mut body = String::new();
     for _ in 0..2 + r.below(5) {
         body += &stmt(&mut r, 0, iters, false);
+        body.push('\n');
+    }
+    // every third program has one edge of each kind in turn, so each kind is exercised
+    if seed % 3 == 0 {
+        body += &planted((seed / 3) % 6, iters - 1 - r.below(iters / 4));
         body.push('\n');
     }
     format!(

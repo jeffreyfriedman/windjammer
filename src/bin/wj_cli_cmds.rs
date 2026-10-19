@@ -77,6 +77,9 @@ pub fn run(cli: Cli) -> Result<()> {
             engine,
             no_jit,
             jit,
+            jit_loop_hot,
+            jit_debug,
+            jit_mutant,
             no_lint,
             deterministic_time,
             allow_network,
@@ -108,7 +111,7 @@ pub fn run(cli: Cli) -> Result<()> {
                 other => anyhow::bail!("unknown --engine {other:?}: use walker or resolved"),
             };
             let jit_on = jit_setting(&jit, no_jit)?;
-            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, no_jit: !jit_on };
+            let interp = windjammer::interpreter::runner::RunOptions { sched_seed, hash_seed, deterministic_time, allow_network, mock_http, engine_resolved, sandbox, allow, caps_mode: caps, no_jit: !jit_on, jit_loop_hot, jit_debug, jit_mutant };
             let code = execute(&RunOptions { path, bin, args, mode, target, hot, interp, lint: Some(lint), no_lint });
             if code != 0 {
                 std::process::exit(code);

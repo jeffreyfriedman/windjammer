@@ -125,6 +125,22 @@ pub(super) struct Lo<'a, 'i> {
     sigs: HashMap<&'static str, SigRef>,
     /// The innermost construct that refused the loop (`WJ_JIT_DEBUG`).
     pub(super) why: Option<String>,
+    /// The loops being lowered, innermost last (targets of `break` / `continue`).
+    loops: Vec<LoopCtx>,
+    /// The unit loop's label.
+    unit_label: Option<&'static str>,
+}
+
+/// A loop being lowered: where `continue` goes (the head, or a `for` loop's increment), where `break`
+/// goes (`None` for the unit's own loop: an exit, so the closure engine leaves its loop), and the
+/// variable types at its head (both jumps must arrive with them).
+struct LoopCtx {
+    label: Option<&'static str>,
+    cont: Block,
+    brk: Option<Block>,
+    tys: Vec<Ty>,
+    /// Some jump reached `cont` (a `for` loop's increment block is emitted only then).
+    cont_used: bool,
 }
 
 pub(crate) fn signature(ptr: CTy, call_conv: cranelift_codegen::isa::CallConv) -> cranelift_codegen::ir::Signature {
@@ -165,6 +181,11 @@ pub(crate) fn lower(
         pending: Vec::new(),
         sigs: HashMap::new(),
         why: None,
+        loops: Vec::new(),
+        unit_label: match stmt {
+            Statement::While { label, .. } | Statement::For { label, .. } => label.as_deref(),
+            _ => None,
+        },
     };
     let mut live = Vec::new();
     for (name, slot, class) in refs {
@@ -364,7 +385,10 @@ impl Lo<'_, '_> {
         self.exit_now(true);
         self.b.switch_to_block(bb);
         self.b.seal_block(bb);
-        if !self.block(body)? {
+        self.loops.push(LoopCtx { label: self.unit_label, cont: head, brk: None, tys: tys0.clone(), cont_used: false });
+        let ended = self.block(body)?;
+        self.loops.pop();
+        if !ended {
             if !self.same_tys(&tys0) {
                 return None;
             }
@@ -372,6 +396,29 @@ impl Lo<'_, '_> {
         }
         self.b.seal_block(head);
         Some(())
+    }
+
+    /// `break` / `continue` (with an optional label): a jump when the target loop is being lowered
+    /// here, an exit (the closure engine runs the statement) when it is the unit's own `break`.
+    fn jump_out(&mut self, label: Option<&str>, is_break: bool) -> Option<bool> {
+        let k = match label {
+            None => self.loops.len().checked_sub(1)?,
+            Some(l) => self.loops.iter().rposition(|c| c.label == Some(l))?,
+        };
+        if is_break && self.loops[k].brk.is_none() {
+            self.exit_now(true);
+            return Some(true);
+        }
+        let tys = self.loops[k].tys.clone();
+        if !self.same_tys(&tys) {
+            return None;
+        }
+        let target = if is_break { self.loops[k].brk? } else { self.loops[k].cont };
+        if !is_break {
+            self.loops[k].cont_used = true;
+        }
+        self.b.ins().jump(target, &[]);
+        Some(true)
     }
 
     /// Every statement of `list` can be resumed at (registered code, a location) and the block's scope is known.
@@ -414,7 +461,7 @@ impl Lo<'_, '_> {
 
     /// Note what refused the loop (the first, innermost construct).
     pub(super) fn refused(&mut self, what: impl FnOnce() -> String) {
-        if self.why.is_none() && std::env::var_os("WJ_JIT_DEBUG").is_some() {
+        if self.why.is_none() && self.it.jit_debug {
             let mut w = what();
             w.truncate(300);
             self.why = Some(w);
@@ -440,11 +487,13 @@ impl Lo<'_, '_> {
             Statement::Assignment { target, value, compound_op, .. } => self.assign(target, value, *compound_op)?,
             Statement::Expression { expr, .. } => self.effect(expr)?,
             Statement::If { condition, then_block, else_block, .. } => return self.if_stmt(condition, then_block, else_block.as_deref()),
-            Statement::While { condition, body, .. } => self.while_stmt(condition, body)?,
-            Statement::For { pattern, iterable: Expression::Range { start, end, inclusive, .. }, body, .. } => {
-                self.for_stmt(s, pattern, (start, end, *inclusive), body)?
+            Statement::While { condition, body, label, .. } => self.while_stmt(condition, body, label.as_deref())?,
+            Statement::For { pattern, iterable: Expression::Range { start, end, inclusive, .. }, body, label, .. } => {
+                self.for_stmt(s, pattern, (start, end, *inclusive), body, label.as_deref())?
             }
-            Statement::Break { .. } | Statement::Continue { .. } | Statement::Return { .. } => {
+            Statement::Break { label, value: None, .. } => return self.jump_out(label.as_deref(), true),
+            Statement::Continue { label, .. } => return self.jump_out(label.as_deref(), false),
+            Statement::Break { .. } | Statement::Return { .. } => {
                 self.exit_now(true);
                 return Some(true);
             }
@@ -486,7 +535,7 @@ impl Lo<'_, '_> {
         Some(false)
     }
 
-    fn while_stmt(&mut self, cond: E, body: &'static [S]) -> Option<()> {
+    fn while_stmt(&mut self, cond: E, body: &'static [S], label: Option<&'static str>) -> Option<()> {
         let head = self.b.create_block();
         self.b.ins().jump(head, &[]);
         self.b.switch_to_block(head);
@@ -496,7 +545,10 @@ impl Lo<'_, '_> {
         self.b.ins().brif(c, bb, &[], out, &[]);
         self.b.switch_to_block(bb);
         self.b.seal_block(bb);
-        if !self.block(body)? {
+        self.loops.push(LoopCtx { label, cont: head, brk: Some(out), tys: tys0.clone(), cont_used: false });
+        let ended = self.block(body);
+        self.loops.pop();
+        if !ended? {
             if !self.same_tys(&tys0) {
                 return None;
             }
@@ -571,12 +623,20 @@ impl Lo<'_, '_> {
         self.b.switch_to_block(bb);
         self.b.seal_block(bb);
         self.loop_var(s, pattern, t, cv)?;
-        let ended = self.block(body)?;
+        let latch = self.b.create_block();
+        self.loops.push(LoopCtx { label: self.unit_label, cont: latch, brk: None, tys: tys0.clone(), cont_used: false });
+        let ended = self.block(body);
+        let ctx = self.loops.pop()?;
         self.scopes.pop();
-        if !ended {
+        if !ended? {
             if !self.same_tys(&tys0) {
                 return None;
             }
+            self.b.ins().jump(latch, &[]);
+        }
+        if !ended? || ctx.cont_used {
+            self.b.switch_to_block(latch);
+            self.b.seal_block(latch);
             let cv = self.b.use_var(self.vars[c].var);
             let next = self.b.ins().iadd_imm(cv, 1);
             self.b.def_var(self.vars[c].var, next);
@@ -587,7 +647,7 @@ impl Lo<'_, '_> {
     }
 
     /// `for x in a..b` / `a..=b` inside a unit.
-    fn for_stmt(&mut self, s: S, pattern: &'static Pattern<'static>, (start, end, inclusive): (E, E, bool), body: &'static [S]) -> Option<()> {
+    fn for_stmt(&mut self, s: S, pattern: &'static Pattern<'static>, (start, end, inclusive): (E, E, bool), body: &'static [S], label: Option<&'static str>) -> Option<()> {
         let (a, z) = (self.expr(start)?, self.expr(end)?);
         let (Ty::Int(ta), Ty::Int(tz)) = (a.ty, z.ty) else { return None };
         let ty = IntTy::unify(ta, tz);
@@ -617,12 +677,20 @@ impl Lo<'_, '_> {
         self.b.switch_to_block(bb);
         self.b.seal_block(bb);
         self.loop_var(s, pattern, t, cv)?;
-        let ended = self.block(body)?;
+        let latch = self.b.create_block();
+        self.loops.push(LoopCtx { label, cont: latch, brk: Some(out), tys: tys0.clone(), cont_used: false });
+        let ended = self.block(body);
+        let ctx = self.loops.pop()?;
         self.scopes.pop();
-        if !ended {
+        if !ended? {
             if !self.same_tys(&tys0) {
                 return None;
             }
+            self.b.ins().jump(latch, &[]);
+        }
+        if !ended? || ctx.cont_used {
+            self.b.switch_to_block(latch);
+            self.b.seal_block(latch);
             let (cv, ev) = (self.b.use_var(self.vars[c].var), self.b.use_var(self.vars[e].var));
             let next = self.b.ins().iadd_imm(cv, 1);
             self.b.def_var(self.vars[c].var, next);
