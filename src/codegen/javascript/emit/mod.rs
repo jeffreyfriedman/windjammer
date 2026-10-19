@@ -5,6 +5,7 @@
 //! tagged variant classes, Option is `null | {v}`, Result is `{ok, v}`.
 
 mod builtin;
+mod enumerable;
 mod expr;
 mod fmt;
 mod items;

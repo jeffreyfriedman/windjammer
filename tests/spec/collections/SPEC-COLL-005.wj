@@ -1,0 +1,9 @@
+// spec: SPEC-COLL-005
+// expect: 3 2 3
+// expect: 3 1 5
+fn main() {
+    let runs = [1, 1, 2, 3, 3, 3].chunk_by(|x| x)
+    println("${runs.len()} ${runs[0].len()} ${runs[2].len()}")
+    let s = [1, 2, 3, 4, 5].each_slice(2)
+    println("${s.len()} ${s[2].len()} ${s[2][0]}")
+}

@@ -161,3 +161,15 @@ reason = "rust-into-bound-param-borrowed: see docs/known-issues/rust-into-bound-
 program = "180_modules_paths"
 backend = "rust"
 reason = "rust-module-impl-self-type: `impl Sq` inside `mod shapes` emits `fn new(..) -> Sq` where `Sq` is not in scope of the generated nested module (E0425)"
+
+# ---- ADR-0018 expressiveness programs: generic Rust closure-codegen gaps (not specific to the new syntax;
+# the explicit-closure spellings fail the same way) ------------------------------------------------------
+[[unsupported]]
+program = "170_coll_grouping"
+backend = "rust"
+reason = "rust-closure-if-tail: a closure whose body is an if/else expression and whose result type comes from a generic callee (`sum_by`) is emitted with `;` arms (value lost)"
+
+[[unsupported]]
+program = "172_clos_shorthand"
+backend = "rust"
+reason = "rust-closure-field-move: `map(|u| u.name)` over a borrowed list moves a String out of `&User` (no clone inserted by the ownership pass)"

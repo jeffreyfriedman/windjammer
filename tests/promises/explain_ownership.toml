@@ -1,0 +1,34 @@
+# Acceptance cases for `wj explain-ownership` (tests/promise_registry_test.rs).
+
+[[case]]
+name = "explain-ownership shows the inferred borrow and its rule"
+polarity = "positive"
+covers = ["feature ownership-inferred"]
+files = { "m.wj" = "struct Big {\n    items: Vec<int>,\n}\n\nfn count(b: Big) -> int {\n    b.items.len() as int\n}\n\nfn main() {\n    let b = Big { items: [1, 2, 3] }\n    println(\"${count(b)} ${count(b)}\")\n}\n" }
+args = ["explain-ownership", "{w}/m.wj"]
+stdout_has = ["fn count", "param b: Big  ->  &", "OWN-READ-FIELD"]
+
+[[case]]
+name = "explain-ownership reports a parse error"
+polarity = "negative"
+files = { "m.wj" = "fn main( {\n" }
+args = ["explain-ownership", "{w}/m.wj"]
+exit = 1
+output_has = ["Expected parameter name"]
+
+[[case]]
+name = "explain-ownership --fn --json limits output to one function"
+polarity = "positive"
+files = { "m.wj" = "fn count(v: Vec<int>) -> int {\n    v.len() as int\n}\n\nfn main() {\n    let v = [1]\n    println(\"${count(v)}\")\n}\n" }
+args = ["explain-ownership", "{w}/m.wj", "--fn", "count", "--json"]
+json = true
+stdout_has = ["\"name\": \"count\""]
+output_lacks = ["\"name\": \"main\""]
+
+[[case]]
+name = "explain-ownership --fn rejects an unknown function"
+polarity = "negative"
+files = { "m.wj" = "fn main() {\n}\n" }
+args = ["explain-ownership", "{w}/m.wj", "--fn", "nope", "--json"]
+exit = 1
+output_has = ["no function named `nope`"]

@@ -1,0 +1,13 @@
+// spec: SPEC-CLOS-004
+// expect: 15
+// expect: 4 6
+fn apply(f: fn(int) -> int, x: int) -> int {
+    f(x)
+}
+
+fn main() {
+    println("${5 |> apply(_ * 3, _)}")
+    let xs = [1, 2]
+    let z = xs |> .zip_with([3, 4], _ + _)
+    println("${z[0]} ${z[1]}")
+}

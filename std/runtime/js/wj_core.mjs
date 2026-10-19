@@ -816,3 +816,82 @@ export function $fixed(x, p) {
   const out = p === 0 ? digits : `${digits.slice(0, digits.length - p)}.${digits.slice(digits.length - p)}`;
   return (neg ? "-" : "") + out;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Enumerable collection methods (ADR-0018 feature 1; surface table: src/stdlib_surface/enumerable.rs)
+// Map keys are compared like any HashMap key (primitives by value).
+// ---------------------------------------------------------------------------------------------
+export function $groupBy(v, f) {
+  const m = new Map();
+  for (const x of v) {
+    const k = f(x);
+    if (m.has(k)) m.get(k).push(x);
+    else m.set(k, [x]);
+  }
+  return m;
+}
+export function $countBy(v, f) {
+  const m = new Map();
+  for (const x of v) {
+    const k = f(x);
+    m.set(k, (m.has(k) ? m.get(k) : 0n) + 1n);
+  }
+  return m;
+}
+export function $uniqueBy(v, f) {
+  const seen = [];
+  const out = [];
+  for (const x of v) {
+    const k = f(x);
+    if (!seen.some((s) => $eq(s, k))) {
+      seen.push(k);
+      out.push(x);
+    }
+  }
+  return out;
+}
+export function $chunkBy(v, f) {
+  const out = [];
+  let last;
+  v.forEach((x, i) => {
+    const k = f(x);
+    if (i > 0 && $eq(last, k)) out[out.length - 1].push(x);
+    else out.push([x]);
+    last = k;
+  });
+  return out;
+}
+export function $partitionBy(v, f) {
+  const yes = [];
+  const no = [];
+  for (const x of v) (f(x) ? yes : no).push(x);
+  return [yes, no];
+}
+export const $intersperse = (v, sep) => v.flatMap((x, i) => (i > 0 ? [sep, x] : [x]));
+export function $zipWith(a, b, f) {
+  const out = [];
+  for (let i = 0; i < Math.min(a.length, b.length); i++) out.push(f(a[i], b[i]));
+  return out;
+}
+export function $indexOf(v, x) {
+  const i = v.findIndex((y) => $eq(x, y));
+  return i < 0 ? null : { v: BigInt(i) };
+}
+export const $sortedByKey = (v, f, desc) => v.slice().sort((a, b) => (desc ? $cmp(f(b), f(a)) : $cmp(f(a), f(b))));
+export function $sortByKeyInPlace(v, f, desc) {
+  const s = $sortedByKey(v, f, desc);
+  for (let i = 0; i < v.length; i++) v[i] = s[i];
+}
+// Rust semantics: min_by_key returns the first minimum, max_by_key the last maximum.
+export function $minByKey(v, f) {
+  if (v.length === 0) return null;
+  let best = v[0];
+  for (const x of v.slice(1)) if ($cmp(f(x), f(best)) < 0) best = x;
+  return { v: best };
+}
+export function $maxByKey(v, f) {
+  if (v.length === 0) return null;
+  let best = v[0];
+  for (const x of v.slice(1)) if ($cmp(f(x), f(best)) >= 0) best = x;
+  return { v: best };
+}

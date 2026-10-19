@@ -5,6 +5,7 @@
 
 pub mod alias;
 pub mod builtins;
+pub mod enumerable;
 pub mod env;
 pub mod flatten;
 pub mod ir;
