@@ -1,0 +1,48 @@
+use std::fs
+
+struct Rec {
+    name: string,
+    age: int,
+    city: string,
+    line: string,
+}
+
+fn cmp_field(a: Rec, b: Rec, field: string) -> int {
+    match {
+        field == "age" => if a.age < b.age { -1 } else if a.age > b.age { 1 } else { 0 },
+        field == "name" => if a.name < b.name { -1 } else if a.name > b.name { 1 } else { 0 },
+        _ => if a.city < b.city { -1 } else if a.city > b.city { 1 } else { 0 },
+    }
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin") ?? ""
+    let lines: Vec<string> = text.lines().map(_.to_string()).collect()
+    let spec: Vec<(string, bool)> = (lines.first() ?? "".to_string())
+        .split(",")
+        .map(|p| {
+            let parts: Vec<string> = p.split(":").map(_.to_string()).collect()
+            (parts[0].clone(), parts.get(1).map(_ == "desc") ?? false)
+        })
+        .collect()
+    let mut recs: Vec<Rec> = Vec::new()
+    for l in lines.skip(1) {
+        let f: Vec<string> = l.split_whitespace().map(_.to_string()).collect()
+        if f.len() == 3 {
+            recs.push(Rec { name: f[0].clone(), age: f[1].parse::<int>() ?? 0, city: f[2].clone(), line: l.clone() })
+        }
+    }
+    recs.sort_by(|a, b| {
+        let mut r = 0
+        for (field, desc) in spec.iter() {
+            if r == 0 {
+                let c = cmp_field(a.clone(), b.clone(), field.clone())
+                r = if *desc { -c } else { c }
+            }
+        }
+        r.cmp(&0)
+    })
+    for r in recs {
+        println(r.line)
+    }
+}

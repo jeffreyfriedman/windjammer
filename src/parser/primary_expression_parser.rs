@@ -9,21 +9,8 @@ impl Parser {
         &mut self,
     ) -> Result<&'static Expression<'static>, String> {
         let expr = match self.current_token() {
-            Token::Underscore if self.in_pipe_stage => {
-                self.pipe_placeholders.push(self.position);
-                let location = self.current_location();
-                self.advance();
-                self.alloc_expr(Expression::Identifier {
-                    name: "_".to_string(),
-                    location,
-                })
-            }
-            Token::Underscore => {
-                return Err(self.pipe_error(
-                    self.position,
-                    "placeholder `_` is only valid as a direct argument of a `|>` stage (e.g. `x |> f(a, _)`)",
-                ));
-            }
+            // `_`: a shorthand-closure parameter or a `|>` placeholder (parser/shorthand_closure.rs).
+            Token::Underscore => self.shorthand_hole()?,
             Token::Thread => {
                 // Check if this is a thread block or a module path
                 if self.peek(1) == Some(&Token::LBrace) {
@@ -434,8 +421,8 @@ impl Parser {
                 }
             }
             Token::Match => self.parse_primary_match()?,
-            Token::Pipe => self.parse_primary_closure_pipe()?,
-            Token::Or => self.parse_primary_closure_or()?,
+            Token::Pipe => self.with_explicit_closure(|p| p.parse_primary_closure_pipe())?,
+            Token::Or => self.with_explicit_closure(|p| p.parse_primary_closure_or())?,
             Token::If => self.parse_primary_if()?,
             Token::Unsafe => self.parse_primary_unsafe_block()?,
             Token::LBrace => {

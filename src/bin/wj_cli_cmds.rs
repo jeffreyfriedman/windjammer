@@ -109,7 +109,15 @@ pub fn run(cli: Cli) -> Result<()> {
             list,
             allow_empty,
             interpret,
+            doc,
+            compiled,
         } => {
+            // ADR-0018: doctests run first (interpreter; `--compiled` also through Rust). Not in `--list`/`--json`.
+            let doc_count = if list || json { 0 } else { run_doctests(path.as_deref(), filter.as_deref(), compiled)? };
+            if doc {
+                return Ok(());
+            }
+            let allow_empty = allow_empty || doc_count > 0;
             if interpret {
                 return windjammer::test_runner::interpreted::run_interpreted(path.as_deref(), filter.as_deref(), list, allow_empty, json);
             }
@@ -454,5 +462,19 @@ fn interpret_file(file: &std::path::Path, args: Vec<String>, opts: windjammer::i
 fn run_repl() -> Result<()> {
     windjammer::interpreter::repl::run_repl_stdio();
     Ok(())
+}
+
+/// Run the doctests under `path`; exits non-zero on a failure. Returns how many ran.
+fn run_doctests(path: Option<&std::path::Path>, filter: Option<&str>, compiled: bool) -> Result<usize> {
+    let root = path.unwrap_or_else(|| std::path::Path::new("."));
+    let exe = std::env::current_exe()?;
+    let results = windjammer::doctest::run::run_doctests(root, filter, compiled.then_some(exe.as_path()));
+    if results.is_empty() {
+        return Ok(0);
+    }
+    if windjammer::doctest::run::report(&results) > 0 {
+        std::process::exit(1);
+    }
+    Ok(results.len())
 }
 

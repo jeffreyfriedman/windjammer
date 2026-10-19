@@ -21,6 +21,9 @@ impl<'m> Js<'m> {
         if name == "to_string" {
             return self.display(recv, &FmtSpec::default());
         }
+        if let Some(js) = self.enumerable_method(recv, name, &r, &a, args)? {
+            return Ok(js);
+        }
         match &recv.ty {
             Ty::Vec(t) => self.vec_method(recv, t, name, &r, &a, args, ty),
             Ty::Iter(t) | Ty::Range(t) => self.iter_method(t, name, &r, &a, args, ty),
@@ -80,7 +83,7 @@ impl<'m> Js<'m> {
         })
     }
 
-    fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
+    pub(super) fn sum_op(&self, t: &Ty, name: &str) -> PResult<(String, String)> {
         let mul = name == "product";
         match t {
             Ty::Int(k) => {

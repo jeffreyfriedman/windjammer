@@ -1,0 +1,35 @@
+use std::fs
+
+fn words(line: string) -> Vec<string> {
+    let mut out: Vec<string> = Vec::new()
+    let mut cur = ""
+    for c in line.chars() {
+        if c.is_ascii_alphanumeric() {
+            cur = cur + c.to_string()
+        } else if cur.len() > 0 {
+            out.push(cur)
+            cur = ""
+        }
+    }
+    if cur.len() > 0 {
+        out.push(cur)
+    }
+    out
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin") ?? ""
+    let lines: Vec<string> = text.lines().map(_.to_string()).collect()
+    let k = lines.first().map(_.trim().parse::<int>().ok()).flatten() ?? 0
+    let mut all: Vec<string> = Vec::new()
+    for line in lines.skip(1) {
+        all.extend(words(line.to_lowercase()))
+    }
+    let counts = all.tally()
+    let mut pairs: Vec<(string, int)> = counts.into_iter().collect()
+    pairs.sort_by_key(_.0.clone())
+    pairs.sort_by_key_desc(_.1)
+    for (w, n) in pairs.take(k as usize) {
+        println("${w} ${n}")
+    }
+}

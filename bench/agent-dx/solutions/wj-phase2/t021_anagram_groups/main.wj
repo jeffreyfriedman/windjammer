@@ -1,0 +1,20 @@
+use std::fs
+
+fn key(w: string) -> string {
+    let cs: Vec<char> = w.chars().collect()
+    cs.sorted().map(_.to_string()).collect::<Vec<string>>().join("")
+}
+
+fn main() {
+    let text = fs::read_to_string("/dev/stdin") ?? ""
+    let words: Vec<string> = text.split_whitespace().map(_.to_lowercase()).collect()
+    let groups = words.unique().group_by(key(_.clone()))
+    let lines: Vec<string> = groups.values().filter(_.len() >= 2).map(_.sorted().join(" ")).collect()
+    if lines.is_empty() {
+        println("none")
+    } else {
+        for l in lines.sorted() {
+            println(l)
+        }
+    }
+}

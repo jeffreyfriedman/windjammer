@@ -7,6 +7,12 @@ what is in the tree beyond the 2026-07-07 0.50.0 snapshot.
 ## [Unreleased]
 
 ### Added
+- **Expressiveness Phase 2** (ADR-0018): enumerable collection methods (`group_by`, `count_by`, `tally`, `sum_by`,
+  `unique`, `chunk_by`, `each_slice`, `partition_by`, `intersperse`, `zip_with`, `index_of`, `sorted*`,
+  `sort_by_key_desc`, `to_list`) on every backend; `_` shorthand closures (`xs.map(_ * 2)`); named arguments with
+  parameter defaults; trailing block arguments (`run() { .. }`); `T?` and `x ?? default`; guard-only
+  `match { cond => .. }`; doctests (`wj test`, `wj test --doc`, `--compiled`). Spec chapters COLL, CLOS, ARGS, BLOCK,
+  OPT, MATCH, DOC.
 - **`wj check` is a real front-end check** (no cargo/rustc): `wj check [PATH] [--json] [--watch] [--fix]`.
 - **Diagnostics schema v2** (`docs/diagnostics-schema.json`): stable codes, spans with byte ranges, fixes with
   applicability, `wj explain` links; shared by `wj check/build/test --json`, the LSP and the MCP `check_code` tool.
